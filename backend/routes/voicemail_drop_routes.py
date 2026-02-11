@@ -755,12 +755,44 @@ async def create_voicemail_drop(
         # Send voicemail via configured delivery method
         try:
             if delivery_method == "ringless":
-                vapi_result = await send_voicemail_ringless(
+                rvm_result = await send_voicemail_ringless(
                     phone_number=phone_number,
                     message=message,
                     audio_url=audio_url,
                     voicemail_drop_id=voicemail_drop.id,
+                    voice=voice_id or "nova",
+                    voice_speed=float(voice_speed or 1.0),
                 )
+
+                # Update with RVM-specific fields
+                voicemail_drop.rvm_session_id = rvm_result.get("session_id")
+                voicemail_drop.rvm_provider = rvm_result.get("provider")
+                voicemail_drop.status = 'sending'
+                voicemail_drop.delivery_attempts = 1
+                voicemail_drop.last_attempt_at = datetime.now(timezone.utc)
+                db.commit()
+
+                sending_event = VoicemailEvent(
+                    voicemail_drop_id=voicemail_drop.id,
+                    event_type='sending',
+                    event_data={
+                        "rvm_session_id": rvm_result.get("session_id"),
+                        "provider": rvm_result.get("provider"),
+                    }
+                )
+                db.add(sending_event)
+                db.commit()
+
+                logger.info(f"RVM drop {voicemail_drop.id} submitted to {rvm_result.get('provider')}")
+
+                return {
+                    "success": True,
+                    "voicemail_drop_id": voicemail_drop.id,
+                    "rvm_session_id": rvm_result.get("session_id"),
+                    "provider": rvm_result.get("provider"),
+                    "status": "sending",
+                    "message": "Ringless voicemail submitted for delivery"
+                }
             else:
                 vapi_result = await send_voicemail_via_vapi(
                     phone_number=phone_number,
@@ -775,31 +807,31 @@ async def create_voicemail_drop(
                     audio_url=audio_url,
                 )
 
-            # Update voicemail drop with Vapi call ID
-            voicemail_drop.vapi_call_id = vapi_result.get("call_id")
-            voicemail_drop.status = 'calling'
-            voicemail_drop.delivery_attempts = 1
-            voicemail_drop.last_attempt_at = datetime.now(timezone.utc)
-            db.commit()
+                # Update voicemail drop with Vapi call ID
+                voicemail_drop.vapi_call_id = vapi_result.get("call_id")
+                voicemail_drop.status = 'calling'
+                voicemail_drop.delivery_attempts = 1
+                voicemail_drop.last_attempt_at = datetime.now(timezone.utc)
+                db.commit()
 
-            # Create calling event
-            calling_event = VoicemailEvent(
-                voicemail_drop_id=voicemail_drop.id,
-                event_type='calling',
-                event_data={"vapi_call_id": vapi_result.get("call_id")}
-            )
-            db.add(calling_event)
-            db.commit()
+                # Create calling event
+                calling_event = VoicemailEvent(
+                    voicemail_drop_id=voicemail_drop.id,
+                    event_type='calling',
+                    event_data={"vapi_call_id": vapi_result.get("call_id")}
+                )
+                db.add(calling_event)
+                db.commit()
 
-            logger.info(f"Voicemail drop {voicemail_drop.id} initiated successfully")
+                logger.info(f"Voicemail drop {voicemail_drop.id} initiated via Vapi")
 
-            return {
-                "success": True,
-                "voicemail_drop_id": voicemail_drop.id,
-                "vapi_call_id": vapi_result.get("call_id"),
-                "status": "calling",
-                "message": "Voicemail is being delivered"
-            }
+                return {
+                    "success": True,
+                    "voicemail_drop_id": voicemail_drop.id,
+                    "vapi_call_id": vapi_result.get("call_id"),
+                    "status": "calling",
+                    "message": "Voicemail is being delivered"
+                }
 
         except Exception as e:
             # Update voicemail drop with error (truncate to prevent DB bloat)
@@ -1080,6 +1112,8 @@ async def get_voicemail_history(
                     "phone_number": vm.phone_number,
                     "message_text": vm.message_text,
                     "status": vm.status,
+                    "delivery_method": vm.delivery_method,
+                    "rvm_provider": getattr(vm, "rvm_provider", None),
                     "created_at": vm.created_at.isoformat(),
                     "delivered_at": vm.delivered_at.isoformat() if vm.delivered_at else None,
                     "call_duration": vm.call_duration,
@@ -1182,7 +1216,7 @@ async def get_voicemail_analytics(
 
 
 # =============================================================================
-# Ringless Voicemail Delivery (Stub)
+# Ringless Voicemail Delivery (Slybroadcast / Drop Cowboy)
 # =============================================================================
 
 async def send_voicemail_ringless(
@@ -1190,88 +1224,180 @@ async def send_voicemail_ringless(
     message: str,
     audio_url: str = None,
     voicemail_drop_id: int = None,
+    voice: str = "nova",
+    voice_speed: float = 1.0,
 ) -> dict:
     """
     Send voicemail via ringless voicemail (RVM) provider.
 
-    Requires an RVM provider API key (e.g., Drop Cowboy, Stratics, SlyBroadcast).
-    Set RINGLESS_VM_API_KEY and RINGLESS_VM_PROVIDER env vars to enable.
+    Supported providers:
+      - slybroadcast: https://www.slybroadcast.com/gateway/vmb.json.php
+        Auth: c_uid (email) + c_password
+      - dropcowboy: https://api.dropcowboy.com/v1/rvm
+        Auth: x-team-id + x-secret headers
 
-    Falls back to error if no provider is configured.
+    If no audio_url is provided, generates one from message text via OpenAI TTS.
+
+    Env vars:
+      RINGLESS_VM_PROVIDER   - "slybroadcast" or "dropcowboy"
+      SLYBROADCAST_EMAIL     - Slybroadcast account email (c_uid)
+      SLYBROADCAST_PASSWORD  - Slybroadcast password
+      DROPCOWBOY_TEAM_ID     - Drop Cowboy team ID
+      DROPCOWBOY_SECRET      - Drop Cowboy API secret
+      RINGLESS_VM_CALLER_ID  - Caller ID for RVM (e.g., +18438838956)
+      API_BASE_URL           - Public URL for audio file serving
     """
     import httpx
 
-    provider = os.getenv("RINGLESS_VM_PROVIDER", "")
-    api_key = os.getenv("RINGLESS_VM_API_KEY", "")
+    provider = os.getenv("RINGLESS_VM_PROVIDER", "").lower().strip()
     caller_id = os.getenv("RINGLESS_VM_CALLER_ID", "")
 
-    if not api_key or not provider:
+    if not provider:
         raise HTTPException(
             status_code=503,
-            detail="Ringless voicemail provider not configured. Set RINGLESS_VM_PROVIDER and RINGLESS_VM_API_KEY."
+            detail="Ringless voicemail provider not configured. Set RINGLESS_VM_PROVIDER env var."
         )
 
+    # Auto-generate audio from text if no pre-recorded audio
     if not audio_url:
-        raise HTTPException(
-            status_code=400,
-            detail="Ringless voicemail requires a pre-recorded audio file. Upload audio to the template first."
+        if not message or not message.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Either audio_url or message text is required for ringless voicemail."
+            )
+        filename = await _generate_audio_from_text(
+            message=message,
+            voice=voice,
+            speed=voice_speed,
+            voicemail_drop_id=voicemail_drop_id,
         )
+        audio_url = _get_public_audio_url(filename)
+        logger.info(f"Auto-generated TTS audio for RVM drop {voicemail_drop_id}: {audio_url}")
 
     clean_number = ''.join(filter(str.isdigit, phone_number))
     if len(clean_number) == 10:
         clean_number = f"1{clean_number}"
 
-    # Provider-specific implementations
+    # ---- Slybroadcast ----
     if provider == "slybroadcast":
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.slybroadcast.com/v1/vmb",
-                data={
-                    "c_uid": api_key,
-                    "c_password": os.getenv("RINGLESS_VM_PASSWORD", ""),
-                    "c_callerID": caller_id,
-                    "c_phone": clean_number,
-                    "c_url": audio_url,
-                    "c_date": "now",
-                },
-            )
-            if response.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"SlyBroadcast error: {response.text}")
-            result = response.json()
-            return {"success": True, "call_id": result.get("session_id", ""), "provider": "slybroadcast"}
+        sb_email = os.getenv("SLYBROADCAST_EMAIL", "")
+        sb_password = os.getenv("SLYBROADCAST_PASSWORD", "")
 
-    elif provider == "dropcowboy":
-        # Drop Cowboy API: $0.004/msg, AI voice cloning, auto-TCPA compliance
-        # Docs: https://app.dropcowboy.com/api
+        if not sb_email or not sb_password:
+            raise HTTPException(
+                status_code=503,
+                detail="Slybroadcast credentials not configured. Set SLYBROADCAST_EMAIL and SLYBROADCAST_PASSWORD."
+            )
+
+        # Build webhook URL for delivery status callback
+        base_url = os.getenv("API_BASE_URL", os.getenv("RAILWAY_PUBLIC_DOMAIN", ""))
+        if base_url and not base_url.startswith("http"):
+            base_url = f"https://{base_url}"
+        dispo_url = f"{base_url}/api/v1/voicemail/webhook/rvm" if base_url else ""
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             payload = {
-                "api_key": api_key,
-                "phone_number": clean_number,
-                "caller_id": caller_id,
-                "audio_url": audio_url,
+                "c_uid": sb_email,
+                "c_password": sb_password,
+                "c_callerID": caller_id.replace("+", ""),  # Slybroadcast wants digits only
+                "c_phone": clean_number,
+                "c_url": audio_url,
+                "c_date": "now",
+                "c_audio": "mp3",
+                "c_method": "new_campaign",
             }
-            # Optional: per-contact personalization
+            if dispo_url:
+                payload["c_dession_url"] = dispo_url  # Slybroadcast param name (not a typo)
             if voicemail_drop_id:
-                payload["reference_id"] = str(voicemail_drop_id)
+                payload["c_tag"] = str(voicemail_drop_id)  # Tag for webhook correlation
 
             response = await client.post(
-                "https://api.dropcowboy.com/v1/ringless-voicemail",
-                json=payload,
+                "https://www.slybroadcast.com/gateway/vmb.json.php",
+                data=payload,
             )
-            if response.status_code not in (200, 201):
-                raise HTTPException(status_code=500, detail=f"Drop Cowboy error: {response.text}")
-            result = response.json()
+
+            if response.status_code != 200:
+                logger.error(f"Slybroadcast HTTP error {response.status_code}: {response.text[:500]}")
+                raise HTTPException(status_code=502, detail="Slybroadcast API returned an error")
+
+            try:
+                result = response.json()
+            except Exception:
+                logger.error(f"Slybroadcast non-JSON response: {response.text[:500]}")
+                raise HTTPException(status_code=502, detail="Slybroadcast returned invalid response")
+
+            # Slybroadcast returns {"OK": "...", "session_id": "..."} on success
+            # or {"ERROR": "..."} on failure
+            if "ERROR" in result:
+                error_msg = result["ERROR"]
+                logger.error(f"Slybroadcast error for drop {voicemail_drop_id}: {error_msg}")
+                raise HTTPException(status_code=502, detail=f"Slybroadcast: {error_msg}")
+
+            session_id = str(result.get("session_id", ""))
+            logger.info(f"Slybroadcast RVM sent: session_id={session_id}, drop={voicemail_drop_id}")
+
             return {
                 "success": True,
-                "call_id": result.get("id", result.get("message_id", "")),
+                "session_id": session_id,
+                "provider": "slybroadcast",
+            }
+
+    # ---- Drop Cowboy ----
+    elif provider == "dropcowboy":
+        team_id = os.getenv("DROPCOWBOY_TEAM_ID", "")
+        secret = os.getenv("DROPCOWBOY_SECRET", "")
+
+        if not team_id or not secret:
+            raise HTTPException(
+                status_code=503,
+                detail="Drop Cowboy credentials not configured. Set DROPCOWBOY_TEAM_ID and DROPCOWBOY_SECRET."
+            )
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            payload = {
+                "phone_number": clean_number,
+                "caller_id": caller_id.replace("+", ""),
+                "audio_url": audio_url,
+                "brand_id": os.getenv("DROPCOWBOY_BRAND_ID", "default"),
+                "forwarding_number": caller_id.replace("+", ""),
+            }
+            if voicemail_drop_id:
+                payload["foreign_id"] = str(voicemail_drop_id)
+
+            response = await client.post(
+                "https://api.dropcowboy.com/v1/rvm",
+                headers={
+                    "x-team-id": team_id,
+                    "x-secret": secret,
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+
+            if response.status_code not in (200, 201):
+                logger.error(f"Drop Cowboy HTTP error {response.status_code}: {response.text[:500]}")
+                raise HTTPException(status_code=502, detail="Drop Cowboy API returned an error")
+
+            try:
+                result = response.json()
+            except Exception:
+                logger.error(f"Drop Cowboy non-JSON response: {response.text[:500]}")
+                raise HTTPException(status_code=502, detail="Drop Cowboy returned invalid response")
+
+            msg_id = str(result.get("id", result.get("message_id", "")))
+            logger.info(f"Drop Cowboy RVM sent: id={msg_id}, drop={voicemail_drop_id}")
+
+            return {
+                "success": True,
+                "session_id": msg_id,
                 "provider": "dropcowboy",
             }
 
-    # Generic stub for other providers
-    logger.warning(f"RVM provider '{provider}' not implemented — falling back to error")
+    # Unsupported provider
+    logger.warning(f"RVM provider '{provider}' not implemented")
     raise HTTPException(
         status_code=503,
-        detail=f"RVM provider '{provider}' is not yet supported. Supported: slybroadcast, dropcowboy"
+        detail=f"RVM provider '{provider}' is not supported. Supported: slybroadcast, dropcowboy"
     )
 
 
@@ -1402,6 +1528,137 @@ async def serve_voicemail_audio(
         data = f.read()
 
     return Response(content=data, media_type=content_type)
+
+
+# =============================================================================
+# Public Audio Serving (for RVM providers that fetch audio via URL)
+# =============================================================================
+
+def _get_public_audio_url(filename: str) -> str:
+    """Generate a signed public URL for an audio file.
+
+    RVM providers like Slybroadcast need to download the audio from a
+    publicly-accessible URL (no Bearer auth).  We sign the filename with
+    an HMAC so that only URLs we generate are valid.
+    """
+    import hashlib
+    import hmac
+
+    secret = os.getenv("SECRET_KEY", "fallback-secret")
+    token = hmac.new(
+        secret.encode(), filename.encode(), hashlib.sha256
+    ).hexdigest()[:32]
+
+    base_url = os.getenv(
+        "API_BASE_URL",
+        os.getenv("RAILWAY_PUBLIC_DOMAIN", ""),
+    )
+    # Normalise: ensure https:// prefix
+    if base_url and not base_url.startswith("http"):
+        base_url = f"https://{base_url}"
+
+    if not base_url:
+        base_url = "https://localhost:8000"
+
+    return f"{base_url}/api/v1/voicemail/audio/public/{token}/{filename}"
+
+
+@router.get("/audio/public/{token}/{filename}")
+async def serve_public_voicemail_audio(
+    token: str,
+    filename: str,
+):
+    """Serve voicemail audio without auth, validated by HMAC token.
+
+    Used by RVM providers (Slybroadcast, Drop Cowboy) to fetch audio files.
+    """
+    import hashlib
+    import hmac
+
+    # Validate HMAC token
+    secret = os.getenv("SECRET_KEY", "fallback-secret")
+    expected = hmac.new(
+        secret.encode(), filename.encode(), hashlib.sha256
+    ).hexdigest()[:32]
+
+    if not hmac.compare_digest(token, expected):
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+    safe_name = os.path.basename(filename)
+    upload_dir = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio"
+    )
+    file_path = os.path.join(upload_dir, safe_name)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    ext = os.path.splitext(safe_name)[1].lower()
+    mime_types = {
+        ".mp3": "audio/mpeg", ".wav": "audio/wav",
+        ".ogg": "audio/ogg", ".m4a": "audio/mp4",
+    }
+    content_type = mime_types.get(ext, "audio/mpeg")
+
+    with open(file_path, "rb") as f:
+        data = f.read()
+
+    return Response(content=data, media_type=content_type)
+
+
+async def _generate_audio_from_text(
+    message: str,
+    voice: str = "nova",
+    speed: float = 1.0,
+    voicemail_drop_id: int = None,
+) -> str:
+    """Generate MP3 audio from text using OpenAI TTS.
+
+    Saves to uploads/voicemail_audio/ and returns the filename.
+    """
+    import httpx
+
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured for TTS")
+
+    speed = max(0.25, min(4.0, float(speed)))
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/audio/speech",
+            headers={
+                "Authorization": f"Bearer {openai_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": "tts-1",
+                "input": message[:4096],  # OpenAI TTS limit
+                "voice": voice,
+                "speed": speed,
+                "response_format": "mp3",
+            },
+        )
+
+        if response.status_code != 200:
+            logger.error(f"OpenAI TTS error: {response.status_code}")
+            raise HTTPException(status_code=500, detail="TTS audio generation failed")
+
+        # Save to disk
+        upload_dir = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio"
+        )
+        os.makedirs(upload_dir, exist_ok=True)
+
+        suffix = f"_drop{voicemail_drop_id}" if voicemail_drop_id else ""
+        filename = f"rvm_tts_{uuid.uuid4().hex[:12]}{suffix}.mp3"
+        file_path = os.path.join(upload_dir, filename)
+
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+
+        logger.info(f"TTS audio generated: {filename} ({len(response.content)} bytes)")
+        return filename
 
 
 @router.delete("/templates/{template_id}/audio")
@@ -1927,22 +2184,34 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
         voice_speed = template.voice_speed if template else 1.0
         audio_url = template.audio_url if template else None
 
-        async def _dispatch_one(drop_id, phone, msg_text, contact_name):
-            """Send a single drop via Vapi (no DB access — returns result or exception)."""
-            return await send_voicemail_via_vapi(
-                phone_number=phone,
-                message=msg_text,
-                recipient_name=contact_name or "",
-                user_name=user_name,
-                voicemail_drop_id=drop_id,
-                db=db,
-                voice_provider=voice_provider or "deepgram",
-                voice_id=voice_id or "asteria",
-                voice_speed=voice_speed or 1.0,
-                audio_url=audio_url,
-            )
+        use_ringless = delivery_method == "ringless"
 
-        # Process drops in batches for parallel Vapi calls
+        async def _dispatch_one(drop_id, phone, msg_text, contact_name):
+            """Send a single drop via the configured delivery method."""
+            if use_ringless:
+                return await send_voicemail_ringless(
+                    phone_number=phone,
+                    message=msg_text,
+                    audio_url=audio_url,
+                    voicemail_drop_id=drop_id,
+                    voice=voice_id or "nova",
+                    voice_speed=float(voice_speed or 1.0),
+                )
+            else:
+                return await send_voicemail_via_vapi(
+                    phone_number=phone,
+                    message=msg_text,
+                    recipient_name=contact_name or "",
+                    user_name=user_name,
+                    voicemail_drop_id=drop_id,
+                    db=db,
+                    voice_provider=voice_provider or "deepgram",
+                    voice_id=voice_id or "asteria",
+                    voice_speed=voice_speed or 1.0,
+                    audio_url=audio_url,
+                )
+
+        # Process drops in batches for parallel calls
         for batch_start in range(0, len(queued_drops), DISPATCH_BATCH_SIZE):
             db.refresh(campaign)
             if campaign.status in ("paused", "cancelled"):
@@ -1967,7 +2236,7 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
             if not claimed_drops:
                 continue
 
-            # Fire Vapi calls concurrently for the batch
+            # Fire calls concurrently for the batch
             tasks = [
                 _dispatch_one(d.id, d.phone_number, d.message_text, d.contact_name)
                 for d in claimed_drops
@@ -1983,7 +2252,11 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
                     failed += 1
                     logger.error(f"Campaign {campaign_id} drop {drop.id} failed: {result}")
                 else:
-                    drop.vapi_call_id = result.get("call_id")
+                    if use_ringless:
+                        drop.rvm_session_id = result.get("session_id")
+                        drop.rvm_provider = result.get("provider")
+                    else:
+                        drop.vapi_call_id = result.get("call_id")
                     sent += 1
             db.commit()
 
@@ -2366,3 +2639,168 @@ async def revoke_consent(
     except Exception as e:
         logger.error(f"Error processing consent revocation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
+# RVM Provider Webhooks (delivery status callbacks)
+# =============================================================================
+
+# Slybroadcast disposition codes → VoicemailDrop status
+_SLYBROADCAST_DISPO_MAP = {
+    "SENT": "delivered",
+    "DELIVERED": "delivered",
+    "VM": "delivered",          # Voicemail detected and message left
+    "NOANSWER": "failed",
+    "BUSY": "failed",
+    "FAILED": "failed",
+    "DNC": "failed",
+    "INVALID": "failed",
+}
+
+# Drop Cowboy status → VoicemailDrop status
+_DROPCOWBOY_STATUS_MAP = {
+    "delivered": "delivered",
+    "completed": "delivered",
+    "failed": "failed",
+    "rejected": "failed",
+    "invalid": "failed",
+}
+
+
+@router.post("/webhook/rvm")
+async def rvm_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Receive delivery status callbacks from RVM providers.
+
+    Slybroadcast: sends pipe-delimited body, expects plain-text "OK" response.
+      Format: session_id|phone|status|tag
+    Drop Cowboy: sends JSON with foreign_id for correlation.
+      Format: {"foreign_id": "123", "status": "delivered", ...}
+
+    This endpoint requires no auth — providers can't send Bearer tokens.
+    Validation is done via session_id / foreign_id matching existing records.
+    """
+    VoicemailDrop = get_voicemail_drop_model()
+    VoicemailEvent = get_voicemail_event_model()
+
+    try:
+        content_type = request.headers.get("content-type", "")
+        body = await request.body()
+        body_text = body.decode("utf-8", errors="replace").strip()
+
+        if not body_text:
+            logger.warning("RVM webhook received empty body")
+            return Response(content="OK", media_type="text/plain")
+
+        # --- Slybroadcast: pipe-delimited format ---
+        if "|" in body_text and "application/json" not in content_type:
+            parts = body_text.split("|")
+            # Expected: session_id|phone|dispo_code|tag  (tag = voicemail_drop_id)
+            session_id = parts[0].strip() if len(parts) > 0 else ""
+            phone = parts[1].strip() if len(parts) > 1 else ""
+            dispo_code = parts[2].strip().upper() if len(parts) > 2 else ""
+            tag = parts[3].strip() if len(parts) > 3 else ""
+
+            new_status = _SLYBROADCAST_DISPO_MAP.get(dispo_code, "failed")
+
+            # Find the drop by session_id or tag (drop ID)
+            drop = None
+            if session_id:
+                drop = db.query(VoicemailDrop).filter(
+                    VoicemailDrop.rvm_session_id == session_id
+                ).first()
+            if not drop and tag:
+                try:
+                    drop = db.query(VoicemailDrop).filter(
+                        VoicemailDrop.id == int(tag)
+                    ).first()
+                except (ValueError, TypeError):
+                    pass
+
+            if drop:
+                drop.status = new_status
+                drop.rvm_dispo_code = dispo_code
+                if new_status == "delivered":
+                    drop.delivered_at = datetime.now(timezone.utc)
+
+                event = VoicemailEvent(
+                    voicemail_drop_id=drop.id,
+                    event_type=new_status,
+                    event_data={
+                        "provider": "slybroadcast",
+                        "session_id": session_id,
+                        "phone": phone,
+                        "dispo_code": dispo_code,
+                    }
+                )
+                db.add(event)
+                db.commit()
+                logger.info(
+                    f"Slybroadcast webhook: drop {drop.id} → {new_status} (dispo={dispo_code})"
+                )
+            else:
+                logger.warning(
+                    f"Slybroadcast webhook: no matching drop for session={session_id} tag={tag}"
+                )
+
+            # Slybroadcast requires plain "OK" response
+            return Response(content="OK", media_type="text/plain")
+
+        # --- Drop Cowboy / JSON format ---
+        try:
+            data = await request.json()
+        except Exception:
+            logger.warning(f"RVM webhook: non-JSON, non-pipe body: {body_text[:200]}")
+            return Response(content="OK", media_type="text/plain")
+
+        foreign_id = str(data.get("foreign_id", ""))
+        dc_status = str(data.get("status", "")).lower()
+        new_status = _DROPCOWBOY_STATUS_MAP.get(dc_status, "failed")
+
+        drop = None
+        if foreign_id:
+            try:
+                drop = db.query(VoicemailDrop).filter(
+                    VoicemailDrop.id == int(foreign_id)
+                ).first()
+            except (ValueError, TypeError):
+                # Try matching by rvm_session_id
+                drop = db.query(VoicemailDrop).filter(
+                    VoicemailDrop.rvm_session_id == foreign_id
+                ).first()
+
+        if drop:
+            drop.status = new_status
+            drop.rvm_dispo_code = dc_status
+            if new_status == "delivered":
+                drop.delivered_at = datetime.now(timezone.utc)
+
+            event = VoicemailEvent(
+                voicemail_drop_id=drop.id,
+                event_type=new_status,
+                event_data={
+                    "provider": "dropcowboy",
+                    "foreign_id": foreign_id,
+                    "raw_status": dc_status,
+                    "raw_data": {k: v for k, v in data.items() if k != "foreign_id"},
+                }
+            )
+            db.add(event)
+            db.commit()
+            logger.info(
+                f"Drop Cowboy webhook: drop {drop.id} → {new_status} (status={dc_status})"
+            )
+        else:
+            logger.warning(
+                f"Drop Cowboy webhook: no matching drop for foreign_id={foreign_id}"
+            )
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        logger.error(f"RVM webhook error: {e}", exc_info=True)
+        # Always return 200 to prevent provider retries flooding logs
+        return Response(content="OK", media_type="text/plain")

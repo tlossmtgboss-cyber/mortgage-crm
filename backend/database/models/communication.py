@@ -348,6 +348,11 @@ class VoicemailDrop(Base):
     vapi_call_id = Column(String(255), index=True)
     vapi_assistant_id = Column(String(255))
 
+    # Ringless voicemail (RVM) provider fields
+    rvm_session_id = Column(String(255), index=True)  # Slybroadcast session_id / Drop Cowboy message_id
+    rvm_provider = Column(String(50))                  # slybroadcast, dropcowboy
+    rvm_dispo_code = Column(String(50))                # Provider disposition code
+
     # Status
     status = Column(String(50), default='pending')  # pending, queued, calling, delivered, failed, no_voicemail, human_answered
     delivery_attempts = Column(Integer, default=0)

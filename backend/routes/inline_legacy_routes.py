@@ -786,6 +786,10 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_id VARCHAR(100) DEFAULT 'asteria'",
                 "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS voice_speed NUMERIC(3,2) DEFAULT 1.0",
                 "ALTER TABLE voicemail_templates ADD COLUMN IF NOT EXISTS delivery_method VARCHAR(50) DEFAULT 'vapi_ai'",
+                # RVM (ringless voicemail) provider tracking columns
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_session_id VARCHAR(255)",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_provider VARCHAR(50)",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_dispo_code VARCHAR(50)",
             ]
             with _vm_engine.connect() as _vm_conn:
                 for _stmt in _alter_stmts:
@@ -794,6 +798,15 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                         _vm_conn.commit()
                     except Exception:
                         _vm_conn.rollback()
+                # Index for RVM session lookups (used by webhook)
+                try:
+                    _vm_conn.execute(_vm_text(
+                        "CREATE INDEX IF NOT EXISTS ix_voicemail_drops_rvm_session_id "
+                        "ON voicemail_drops (rvm_session_id)"
+                    ))
+                    _vm_conn.commit()
+                except Exception:
+                    _vm_conn.rollback()
                 # Copy contact_phone -> phone_number for rows that used old column name
                 try:
                     _vm_conn.execute(_vm_text(
