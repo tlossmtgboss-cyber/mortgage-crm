@@ -20,7 +20,18 @@ from services.financial_intelligence_service import FinancialIntelligenceService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/financial-intelligence", tags=["Financial Intelligence"])
+
+def _get_current_user_dep():
+    """Lazy import to avoid circular imports."""
+    import main
+    return main.get_current_user
+
+
+router = APIRouter(
+    prefix="/api/v1/financial-intelligence",
+    tags=["Financial Intelligence"],
+    dependencies=[Depends(_get_current_user_dep())],
+)
 
 
 # ================================================================
@@ -496,7 +507,7 @@ async def create_loan_sale(
     except Exception as e:
         logger.error(f"Error recording loan sale: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/cash-position", response_model=SuccessResponse)
@@ -530,7 +541,7 @@ async def update_cash_position(
     except Exception as e:
         logger.error(f"Error updating cash position: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/warehouse-lines", response_model=SuccessResponse)
@@ -566,7 +577,7 @@ async def create_warehouse_line(
     except Exception as e:
         logger.error(f"Error creating warehouse line: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/msr-valuation", response_model=SuccessResponse)
@@ -600,7 +611,7 @@ async def update_msr_valuation(
     except Exception as e:
         logger.error(f"Error updating MSR valuation: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/compliance-risk", response_model=SuccessResponse)
@@ -636,7 +647,7 @@ async def add_compliance_risk(
     except Exception as e:
         logger.error(f"Error recording compliance risk: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/lost-deal", response_model=SuccessResponse)
@@ -670,7 +681,7 @@ async def record_lost_deal(
     except Exception as e:
         logger.error(f"Error recording lost deal: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ================================================================

@@ -188,7 +188,7 @@ async def start_conversation(
     except SQLAlchemyError as e:
         logger.error(f"Error starting conversation: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/webhook/inbound")
@@ -544,7 +544,7 @@ async def list_conversations(
 
     except Exception as e:
         logger.error(f"Error listing conversations: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[dict])
@@ -592,7 +592,7 @@ async def get_conversation_messages(
         raise
     except Exception as e:
         logger.error(f"Error getting conversation messages: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/conversations/{conversation_id}/reply", response_model=dict)
@@ -682,7 +682,7 @@ async def send_manual_reply(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error sending manual reply: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.patch("/conversations/{conversation_id}/close", response_model=dict)
@@ -710,7 +710,7 @@ async def close_conversation(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error closing conversation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/conversations/{conversation_id}", response_model=dict)
@@ -751,7 +751,7 @@ async def delete_conversation(
     except SQLAlchemyError as e:
         logger.error(f"Error deleting conversation: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================

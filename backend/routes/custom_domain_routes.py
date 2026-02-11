@@ -22,7 +22,18 @@ from database import get_db
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-router = APIRouter(prefix="/api/admin/domains", tags=["Custom Domains"])
+
+def _get_current_user():
+    """Lazy import to avoid circular imports."""
+    import main
+    return main.get_current_user
+
+
+router = APIRouter(
+    prefix="/api/admin/domains",
+    tags=["Custom Domains"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # ============================================================================
@@ -100,7 +111,7 @@ async def list_domains(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list domains: {str(e)}"
+            detail="Failed to list domains"
         )
 
 
@@ -186,7 +197,7 @@ async def add_domain(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to add domain: {str(e)}"
+            detail="Failed to add domain"
         )
 
 
@@ -216,7 +227,7 @@ async def remove_domain(domain: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to remove domain: {str(e)}"
+            detail="Failed to remove domain"
         )
 
 
@@ -298,7 +309,7 @@ async def get_verification_instructions(domain: str, db: Session = Depends(get_d
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get verification instructions: {str(e)}"
+            detail="Failed to get verification instructions"
         )
 
 
@@ -367,7 +378,7 @@ async def verify_domain_dns(domain: str, db: Session = Depends(get_db)):
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to verify domain: {str(e)}"
+            detail="Failed to verify domain"
         )
 
 
@@ -406,7 +417,7 @@ async def verify_domain_manual(domain: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to verify domain: {str(e)}"
+            detail="Failed to verify domain"
         )
 
 
@@ -472,7 +483,7 @@ async def get_domain_status(domain: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get domain status: {str(e)}"
+            detail="Failed to get domain status"
         )
 
 

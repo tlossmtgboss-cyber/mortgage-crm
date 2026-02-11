@@ -344,11 +344,18 @@ def _parse_process_flow_async(document_id: int):
             document_content = ""
             if document.file_url:
                 try:
-                    response = requests.get(document.file_url, timeout=30)
-                    response.raise_for_status()
-                    document_content = response.text
+                    from urllib.parse import urlparse
+                    parsed_url = urlparse(document.file_url)
+                    if parsed_url.scheme not in ("https", "http"):
+                        logger.warning(f"Rejected non-HTTP URL scheme: {parsed_url.scheme}")
+                    elif any(h in (parsed_url.hostname or "") for h in ("localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]", "metadata.google")):
+                        logger.warning(f"Rejected internal URL: {document.file_url}")
+                    else:
+                        response = requests.get(document.file_url, timeout=30, allow_redirects=False)
+                        response.raise_for_status()
+                        document_content = response.text
                 except Exception as fetch_err:
-                    logger.warning(f"Could not fetch document from URL {document.file_url}: {fetch_err}")
+                    logger.warning(f"Could not fetch document from URL: {fetch_err}")
                     # Fall back to empty content - parse_document_basic will handle it
 
             # Parse the document

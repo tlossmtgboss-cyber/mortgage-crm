@@ -56,11 +56,13 @@ async def import_from_retr(
     # Get raw body for signature verification
     body = await request.body()
 
-    # Verify signature if configured
-    if RETR_WEBHOOK_SECRET and x_webhook_signature:
-        if not verify_webhook_signature(body, x_webhook_signature):
-            logger.warning("Invalid webhook signature received")
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    # Verify webhook signature — fail closed if secret not configured
+    if not RETR_WEBHOOK_SECRET:
+        logger.error("RETR_WEBHOOK_SECRET not configured — rejecting webhook")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    if not x_webhook_signature or not verify_webhook_signature(body, x_webhook_signature):
+        logger.warning("Invalid or missing webhook signature")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     # Parse JSON payload
     try:
@@ -384,15 +386,17 @@ async def inbound_webhook(
             detail=f"Unknown event type: {event_type}. Supported: {sorted(INBOUND_EVENT_TYPES)}"
         )
 
-    # Verify API key
-    if INBOUND_WEBHOOK_SECRET:
-        if not x_api_key or not hmac.compare_digest(x_api_key, INBOUND_WEBHOOK_SECRET):
-            logger.warning(f"Invalid API key for inbound webhook: {event_type}")
-            raise HTTPException(status_code=401, detail="Invalid API key")
+    # Verify API key — fail closed if secret not configured
+    if not INBOUND_WEBHOOK_SECRET:
+        logger.error("INBOUND_WEBHOOK_SECRET not configured — rejecting inbound webhook")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    if not x_api_key or not hmac.compare_digest(x_api_key, INBOUND_WEBHOOK_SECRET):
+        logger.warning(f"Invalid API key for inbound webhook: {event_type}")
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
     # Get raw body and verify optional HMAC signature
     body = await request.body()
-    if x_webhook_signature and INBOUND_WEBHOOK_SECRET:
+    if x_webhook_signature:
         if not _verify_inbound_signature(body, x_webhook_signature, INBOUND_WEBHOOK_SECRET):
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
 

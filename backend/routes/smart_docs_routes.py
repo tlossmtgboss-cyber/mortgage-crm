@@ -235,7 +235,7 @@ async def generate_needs_list(
         return result
     except Exception as e:
         logger.exception(f"Failed to generate needs list: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/needs-list/{loan_id}")
@@ -424,7 +424,7 @@ async def sync_documents_from_application(
     except SQLAlchemyError as e:
         logger.exception(f"Failed to sync documents from application: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/needs-list/{loan_id}/custom-request")
@@ -492,7 +492,7 @@ async def waive_request(
             waived_by=body.waived_by,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 # =============================================================================
@@ -922,7 +922,7 @@ async def merge_and_email_documents(
         }
     except Exception as e:
         logger.error(f"Failed to send merged documents email: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
 
 
 @router.post("/document/{document_id}/manual-review")
@@ -941,7 +941,7 @@ async def manual_review_document(
             notes=body.notes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.post("/document/{document_id}/reprocess")
@@ -966,9 +966,9 @@ async def reprocess_document(
         result = pipeline.reprocess_document(document_id)
         return pipeline.result_to_dict(result)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="Not found")
     except RuntimeError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Bad request")
 
 
 # =============================================================================
@@ -1867,7 +1867,7 @@ async def get_smart_docs_loans(
         }
     except SQLAlchemyError as e:
         logger.exception(f"Error fetching loans for Smart Docs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -1916,7 +1916,7 @@ async def get_queue_summary(
         return queue_service.get_queue_summary()
     except Exception as e:
         logger.error(f"Queue summary error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Queue service error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Queue service error")
 
 
 @router.get("/queue/{loan_id}")
