@@ -61,6 +61,10 @@ def maybe_promote_loan_to_mum(
                 savepoint.commit()
                 return existing.id
 
+        # Determine the owner: use the loan officer, fall back to the triggering user
+        owner_user_id = loan.loan_officer_id or user_id
+        org_id = getattr(loan, 'organization_id', None)
+
         # Determine funded date
         funded_date = loan.funded_date or loan.closing_date or datetime.now(timezone.utc)
         if funded_date.tzinfo is None:
@@ -125,7 +129,8 @@ def maybe_promote_loan_to_mum(
             underwriter_email=loan.underwriter_email,
             closer=loan.closer,
             closer_email=loan.closer_email,
-            user_id=user_id,
+            user_id=owner_user_id,
+            organization_id=org_id,
         )
 
         db.add(mum_client)
@@ -156,7 +161,7 @@ Loan Details:
 - Close Date: {funded_date.strftime('%Y-%m-%d')}""",
             priority="high",
             loan_id=loan.id,
-            owner_id=user_id,
+            owner_id=owner_user_id,
             related_contact_name=client_name,
             related_type="post_close",
             due_date=datetime.now(timezone.utc) + timedelta(days=1),
@@ -182,7 +187,7 @@ Original Loan:
 - Rate: {loan_rate}%""",
             priority="medium",
             loan_id=loan.id,
-            owner_id=user_id,
+            owner_id=owner_user_id,
             related_contact_name=client_name,
             related_type="amr",
             due_date=datetime.now(timezone.utc) + timedelta(days=335),

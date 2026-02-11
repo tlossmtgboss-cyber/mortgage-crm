@@ -10,8 +10,16 @@ import io
 import json
 from datetime import datetime
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_column_name(col: str) -> str:
+    """Validate column name contains only safe characters for SQL interpolation."""
+    if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
+        return col
+    return ''
 
 router = APIRouter(prefix="/api/v1/data-import", tags=["Data Import"])
 
@@ -632,8 +640,8 @@ def get_table_columns(conn, table_name: str) -> set:
 
 
 def filter_valid_columns(row_dict: dict, valid_columns: set) -> dict:
-    """Filter row_dict to only include columns that exist in the table"""
-    return {k: v for k, v in row_dict.items() if k in valid_columns}
+    """Filter row_dict to only include columns that exist in the table and pass sanitization"""
+    return {k: v for k, v in row_dict.items() if k in valid_columns and _safe_column_name(k)}
 
 
 def ensure_import_columns_exist(conn, destination: str):
@@ -788,8 +796,9 @@ async def execute_import(
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
-                                    if col not in ['created_at'] and val is not None:
-                                        update_cols.append(f"{col} = %s")
+                                    safe_col = _safe_column_name(col)
+                                    if safe_col and safe_col not in ['created_at'] and val is not None:
+                                        update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
                                 if update_cols:
                                     update_vals.append(existing_lead[0])
@@ -819,13 +828,15 @@ async def execute_import(
                             columns.append('owner_id')
                             values.append(user_id)
 
-                        # Create placeholders
-                        placeholders = ', '.join(['%s'] * len(columns))
-                        columns_str = ', '.join(columns)
+                        # Create placeholders — sanitize column names for SQL safety
+                        safe_cols = [c for c in columns if _safe_column_name(c)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        placeholders = ', '.join(['%s'] * len(safe_cols))
+                        columns_str = ', '.join(safe_cols)
 
                         cursor.execute(
                             f"INSERT INTO leads ({columns_str}) VALUES ({placeholders})",
-                            values
+                            safe_vals
                         )
                         imported += 1
 
@@ -874,8 +885,9 @@ async def execute_import(
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
-                                    if col not in ['loan_number', 'created_at'] and val is not None:
-                                        update_cols.append(f"{col} = %s")
+                                    safe_col = _safe_column_name(col)
+                                    if safe_col and safe_col not in ['loan_number', 'created_at'] and val is not None:
+                                        update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
                                 if update_cols:
                                     update_vals.append(existing_loan[0])
@@ -907,12 +919,14 @@ async def execute_import(
                             columns.append('loan_officer_id')
                             values.append(user_id)
 
-                        placeholders = ', '.join(['%s'] * len(columns))
-                        columns_str = ', '.join(columns)
+                        safe_cols = [c for c in columns if _safe_column_name(c)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        placeholders = ', '.join(['%s'] * len(safe_cols))
+                        columns_str = ', '.join(safe_cols)
 
                         cursor.execute(
                             f"INSERT INTO loans ({columns_str}) VALUES ({placeholders})",
-                            values
+                            safe_vals
                         )
                         imported += 1
 
@@ -925,12 +939,14 @@ async def execute_import(
                             columns.append('created_at')
                             values.append(datetime.utcnow())
 
-                        placeholders = ', '.join(['%s'] * len(columns))
-                        columns_str = ', '.join(columns)
+                        safe_cols = [c for c in columns if _safe_column_name(c)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        placeholders = ', '.join(['%s'] * len(safe_cols))
+                        columns_str = ', '.join(safe_cols)
 
                         cursor.execute(
                             f"INSERT INTO portfolio_loans ({columns_str}) VALUES ({placeholders})",
-                            values
+                            safe_vals
                         )
                         imported += 1
 
@@ -994,8 +1010,9 @@ async def execute_import(
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
-                                    if col not in ['loan_number', 'created_at'] and val is not None:
-                                        update_cols.append(f"{col} = %s")
+                                    safe_col = _safe_column_name(col)
+                                    if safe_col and safe_col not in ['loan_number', 'created_at'] and val is not None:
+                                        update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
                                 if update_cols:
                                     update_vals.append(existing_client[0])
@@ -1069,16 +1086,18 @@ async def execute_import(
                             columns.append('user_id')
                             values.append(user_id)
 
-                        placeholders = ', '.join(['%s'] * len(columns))
-                        columns_str = ', '.join(columns)
+                        safe_cols = [c for c in columns if _safe_column_name(c)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        placeholders = ', '.join(['%s'] * len(safe_cols))
+                        columns_str = ', '.join(safe_cols)
 
                         # Log what we're about to insert for debugging
                         logger.info(f"MUM insert - columns: {columns_str[:200]}")
-                        logger.info(f"MUM insert - values count: {len(values)}, client_name: {values[columns.index('client_name')] if 'client_name' in columns else 'N/A'}")
+                        logger.info(f"MUM insert - values count: {len(safe_vals)}, client_name: {safe_vals[safe_cols.index('client_name')] if 'client_name' in safe_cols else 'N/A'}")
 
                         cursor.execute(
                             f"INSERT INTO mum_clients ({columns_str}) VALUES ({placeholders})",
-                            values
+                            safe_vals
                         )
                         imported += 1
                         logger.info(f"MUM insert successful - row {idx + 1}")

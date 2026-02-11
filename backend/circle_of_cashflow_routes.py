@@ -9,6 +9,22 @@ from sqlalchemy import text
 from datetime import datetime, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
+import re
+
+# Whitelist of allowed columns for referral_partners updates
+_ALLOWED_PARTNER_COLUMNS = {
+    'name', 'email', 'phone', 'company', 'role', 'status', 'notes',
+    'partner_type', 'relationship_strength', 'last_contact_date',
+    'address', 'city', 'state', 'zip_code', 'website', 'license_number',
+    'specialty', 'commission_rate', 'referral_count', 'total_revenue',
+}
+
+
+def _safe_column_name(col: str) -> str:
+    """Validate column name contains only safe characters for SQL interpolation."""
+    if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
+        return col
+    return ''
 
 router = APIRouter(prefix="/api/v1/circle-of-cashflow", tags=["circle-of-cashflow"])
 
@@ -280,14 +296,16 @@ async def get_partner(partner_id: int, db: Session = Depends(get_db)):
 @router.patch("/partners/{partner_id}")
 async def update_partner(partner_id: int, data: dict, db: Session = Depends(get_db)):
     """Update partner details"""
-    # Build dynamic update query
+    # Build dynamic update query with column whitelist validation
     updates = []
     params = {"partner_id": partner_id}
 
     for key, value in data.items():
-        if key not in ['id', 'created_at']:
-            updates.append(f"{key} = :{key}")
-            params[key] = value
+        safe_key = _safe_column_name(key)
+        if not safe_key or safe_key not in _ALLOWED_PARTNER_COLUMNS:
+            continue
+        updates.append(f"{safe_key} = :{safe_key}")
+        params[safe_key] = value
 
     if updates:
         query = f"UPDATE referral_partners SET {', '.join(updates)}, updated_at = NOW() WHERE id = :partner_id"

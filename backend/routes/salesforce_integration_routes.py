@@ -3011,7 +3011,7 @@ async def admin_run_all_syncs(
             }
 
         except Exception as e:
-            profile_result["error"] = str(e)[:200]
+            profile_result["error"] = "Sync failed — check server logs"
             logger.error(f"Sync failed for profile {profile.id}: {e}")
 
         results.append(profile_result)

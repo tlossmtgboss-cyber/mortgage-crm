@@ -308,7 +308,8 @@ async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_d
             "frontend_should_allow": user.permission_role == 'admin' or user.permission_role == 'management',
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error checking permissions: {e}")
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.post("/admin/fix-user-permission-role")
@@ -346,7 +347,8 @@ async def fix_user_permission_role(request: dict, db: Session = Depends(get_db))
         }
     except Exception as e:
         db.rollback()
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Error fixing permission role: {e}")
+        return {"status": "error", "message": "Internal server error"}
 
 
 @router.get("/api/v1/duplicates/check/{record_type}/{record_id}")

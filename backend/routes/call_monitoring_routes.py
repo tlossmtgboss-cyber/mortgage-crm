@@ -2433,7 +2433,7 @@ async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
     except Exception as e:
         logger.error(f"[AudioStream] Error: {e}")
         try:
-            await websocket.send_json({"type": "error", "message": str(e)})
+            await websocket.send_json({"type": "error", "message": "Audio stream error"})
         except Exception:
             pass
     finally:

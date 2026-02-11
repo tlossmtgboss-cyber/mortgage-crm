@@ -948,7 +948,7 @@ async def dequeue_webhook(
 
     except SQLAlchemyError as e:
         logger.error(f"Error in dequeue webhook: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Database error processing webhook"}
 
 
 # ============================================================================

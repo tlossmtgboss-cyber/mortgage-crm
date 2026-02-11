@@ -132,7 +132,7 @@ async def vapi_webhook(
         logger.error(f"Webhook error: {str(e)}")
         return JSONResponse(
             status_code=200,
-            content={"status": "error", "message": str(e)}
+            content={"status": "error", "message": "Webhook processing error"}
         )
 
 

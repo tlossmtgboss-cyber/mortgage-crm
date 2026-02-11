@@ -988,7 +988,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Essential migrations failed: {e}")
             return {
                 "success": False,
-                "message": str(e),
+                "message": "Migration failed — check server logs",
                 "details": results
             }
 
@@ -1024,7 +1024,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to create api_keys table: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/add-coborrower-columns")
@@ -1066,7 +1066,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to add co-borrower columns: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/add-task-related-columns")
@@ -1156,7 +1156,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to add task columns: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/add-dre-columns")
@@ -1211,7 +1211,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to add DRE columns: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/add-appraisal-columns")
@@ -1251,7 +1251,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to add appraisal columns: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/rematch-extracted-data")
@@ -1308,7 +1308,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to rematch extracted data: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/create-dre-tables")
@@ -1379,7 +1379,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to create DRE tables: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/create-microsoft-oauth-table")
@@ -1415,7 +1415,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to create Microsoft OAuth tokens table: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/api/v1/loans/setup-team-members-table")
@@ -1510,7 +1510,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to populate loan team members: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     @app.post("/admin/create-zapier-api-key")
@@ -1565,7 +1565,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Failed to create Zapier API key: {e}")
             return JSONResponse(
                 status_code=500,
-                content={"status": "error", "message": str(e)}
+                content={"status": "error", "message": "Internal server error"}
             )
 
     # ========================================================================

@@ -22,6 +22,48 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
+
+
+def _sanitize_hex_color(color: str) -> str:
+    """Validate and return a safe hex color string for FFmpeg."""
+    if isinstance(color, str) and re.match(r'^#[0-9A-Fa-f]{3,8}$', color):
+        return color
+    return "#1a365d"  # default fallback
+
+
+def _sanitize_float_param(value, min_val: float = 0.0, max_val: float = 1.0, default: float = 0.5) -> float:
+    """Validate a numeric parameter is within safe bounds for FFmpeg."""
+    try:
+        val = float(value)
+        if min_val <= val <= max_val:
+            return val
+    except (TypeError, ValueError):
+        pass
+    return default
+
+
+def _sanitize_ffmpeg_text(text: str) -> str:
+    """Escape text for safe use in FFmpeg drawtext filter."""
+    if not isinstance(text, str):
+        return ""
+    # FFmpeg drawtext special chars: ' : \ % { }
+    text = text.replace("\\", "\\\\")
+    text = text.replace("'", "\\'")
+    text = text.replace(":", "\\:")
+    text = text.replace("%", "%%")
+    text = text.replace("{", "\\{")
+    text = text.replace("}", "\\}")
+    # Remove any control characters
+    text = re.sub(r'[\x00-\x1f\x7f]', '', text)
+    return text
+
+
+def _sanitize_font_name(font: str) -> str:
+    """Validate font name contains only safe characters."""
+    if isinstance(font, str) and re.match(r'^[a-zA-Z0-9_-]+$', font):
+        return font
+    return "Roboto"
 
 logger = logging.getLogger(__name__)
 
@@ -626,7 +668,7 @@ class VideoRenderWorker:
         brand_template: Dict[str, Any]
     ) -> str:
         """Create a placeholder image with brand colors."""
-        bg_color = brand_template.get("background_color", "#1a365d")
+        bg_color = _sanitize_hex_color(brand_template.get("background_color", "#1a365d"))
 
         # Use FFmpeg to create a solid color image
         cmd = [
@@ -727,7 +769,7 @@ class VideoRenderWorker:
     ) -> Path:
         """Add watermark to video."""
         position = ctx.brand_template.get("watermark_position", "bottom_right")
-        opacity = ctx.brand_template.get("watermark_opacity", 0.7)
+        opacity = _sanitize_float_param(ctx.brand_template.get("watermark_opacity", 0.7), 0.0, 1.0, 0.7)
 
         # Position mapping
         positions = {
@@ -755,7 +797,7 @@ class VideoRenderWorker:
     def _add_background_music(self, ctx: RenderContext, video_path: Path) -> Path:
         """Add background music to video."""
         music_url = ctx.brand_template.get("background_music_url")
-        music_volume = ctx.brand_template.get("music_volume", 0.15)
+        music_volume = _sanitize_float_param(ctx.brand_template.get("music_volume", 0.15), 0.0, 2.0, 0.15)
 
         music_path = self._download_asset(music_url, ctx.work_dir / "music.mp3")
         output_path = ctx.output_dir / "with_music.mp4"
@@ -831,11 +873,11 @@ class VideoRenderWorker:
         """Build FFmpeg drawtext filter for captions."""
         text = scene.get("voiceover_text", "")
         style = ctx.brand_template.get("caption_style", "pop")
-        font = ctx.brand_template.get("caption_font", "Roboto")
+        font = _sanitize_font_name(ctx.brand_template.get("caption_font", "Roboto"))
         max_words = ctx.brand_template.get("caption_max_words", 3)
 
-        # Escape special characters
-        text = text.replace("'", "\\'").replace(":", "\\:")
+        # Escape special characters for FFmpeg drawtext filter
+        text = _sanitize_ffmpeg_text(text)
 
         # Truncate to max words
         words = text.split()
