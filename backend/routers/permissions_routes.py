@@ -22,6 +22,20 @@ from auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/permissions", tags=["permissions"])
 
+
+def _authorize_user_access(current_user: dict, target_user_id: int, db: Session) -> None:
+    """Verify current_user can access target_user_id's permission data.
+
+    Allows self-access or users with team.manage_permissions.
+    """
+    if current_user.get("id") == target_user_id:
+        return
+    has_perm = db.execute(text(
+        "SELECT user_has_permission(:actor_id, 'team.manage_permissions')"
+    ), {"actor_id": current_user["id"]}).scalar()
+    if not has_perm:
+        raise HTTPException(status_code=403, detail="Not authorized to view other users' permissions")
+
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
@@ -97,11 +111,11 @@ class UserPermissionProfileResponse(BaseModel):
     overrides: List[PermissionOverrideResponse]
 
 class GrantStageAccessRequest(BaseModel):
-    stage_code: str
-    template_code: Optional[str] = None
-    data_scope: Optional[str] = "assigned"
+    stage_code: str = Field(..., max_length=50)
+    template_code: Optional[str] = Field(None, max_length=50)
+    data_scope: Optional[str] = Field("assigned", max_length=50)
     expires_at: Optional[datetime] = None
-    reason: Optional[str] = None
+    reason: Optional[str] = Field(None, max_length=2000)
 
 class ApplyTemplateRequest(BaseModel):
     template_code: str
@@ -110,21 +124,21 @@ class UpdateDataScopeRequest(BaseModel):
     data_scope: str
 
 class AddOverrideRequest(BaseModel):
-    permission_key: str
+    permission_key: str = Field(..., max_length=100)
     granted: bool
-    scope_override: Optional[str] = None
+    scope_override: Optional[str] = Field(None, max_length=50)
     is_temporary: bool = False
     expires_at: Optional[datetime] = None
-    reason: Optional[str] = None
+    reason: Optional[str] = Field(None, max_length=2000)
 
 class PermissionRequestCreate(BaseModel):
-    request_type: str  # 'stage_access', 'permission', 'template_change', 'scope_upgrade'
-    stage_code: Optional[str] = None
-    permission_key: Optional[str] = None
+    request_type: str = Field(..., max_length=50)  # 'stage_access', 'permission', 'template_change', 'scope_upgrade'
+    stage_code: Optional[str] = Field(None, max_length=50)
+    permission_key: Optional[str] = Field(None, max_length=100)
     template_id: Optional[int] = None
-    requested_scope: Optional[str] = None
-    justification: str = Field(..., min_length=50)
-    urgency: str = "medium"
+    requested_scope: Optional[str] = Field(None, max_length=50)
+    justification: str = Field(..., min_length=50, max_length=5000)
+    urgency: str = Field("medium", max_length=20)
     is_temporary: bool = False
     duration_days: Optional[int] = None
 
@@ -148,13 +162,13 @@ class PermissionRequestResponse(BaseModel):
     updated_at: datetime
 
 class ApproveRequestPayload(BaseModel):
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=2000)
 
 class DenyRequestPayload(BaseModel):
-    reason: str
+    reason: str = Field(..., max_length=2000)
 
 class MoreInfoRequestPayload(BaseModel):
-    questions: str
+    questions: str = Field(..., max_length=5000)
 
 # ============================================================================
 # STAGE MANAGEMENT ENDPOINTS
@@ -530,6 +544,7 @@ async def get_user_stage_access(
     db: Session = Depends(get_db)
 ):
     """Get user's stage access records."""
+    _authorize_user_access(current_user, user_id, db)
     result = db.execute(text("""
         SELECT usa.*, spt.code as template_code, spt.name as template_name
         FROM user_stage_access usa
@@ -716,6 +731,7 @@ async def get_user_overrides(
     db: Session = Depends(get_db)
 ):
     """Get user's permission overrides."""
+    _authorize_user_access(current_user, user_id, db)
     result = db.execute(text("""
         SELECT * FROM user_permission_overrides
         WHERE user_id = :user_id
@@ -808,9 +824,11 @@ async def remove_override(
 async def check_permission(
     user_id: int,
     permission_key: str,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Check if user has a specific permission."""
+    _authorize_user_access(current_user, user_id, db)
     result = db.execute(text("""
         SELECT user_has_permission(:user_id, :permission_key) as has_permission
     """), {"user_id": user_id, "permission_key": permission_key})
@@ -842,9 +860,11 @@ async def check_permission(
 async def check_any_permission(
     user_id: int,
     permission_keys: List[str],
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Check if user has any of the specified permissions."""
+    _authorize_user_access(current_user, user_id, db)
     for key in permission_keys:
         result = db.execute(text("""
             SELECT user_has_permission(:user_id, :permission_key)
@@ -859,9 +879,11 @@ async def check_any_permission(
 async def check_all_permissions(
     user_id: int,
     permission_keys: List[str],
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Check if user has all of the specified permissions."""
+    _authorize_user_access(current_user, user_id, db)
     missing = []
     for key in permission_keys:
         result = db.execute(text("""
@@ -883,6 +905,7 @@ async def get_effective_permissions(
     db: Session = Depends(get_db)
 ):
     """Get all permissions the user currently has."""
+    _authorize_user_access(current_user, user_id, db)
     # Get all template permissions from user's stage access
     template_result = db.execute(text("""
         SELECT spt.permissions
