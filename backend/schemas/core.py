@@ -425,8 +425,16 @@ class LoanUpdate(BaseModel):
 
     # Appraisal Phase
     appraisal_ordered_date: Optional[datetime] = None
+    appraisal_scheduled_date: Optional[datetime] = None
+    appraisal_completed_date: Optional[datetime] = None
     appraisal_received_date: Optional[datetime] = None
     appraisal_docs_expire_date: Optional[datetime] = None
+
+    # Title & Insurance Phase
+    title_ordered_date: Optional[datetime] = None
+    title_received_date: Optional[datetime] = None
+    insurance_ordered_date: Optional[datetime] = None
+    insurance_received_date: Optional[datetime] = None
 
     # Closing Disclosure Phase
     cd_requested_date: Optional[datetime] = None
@@ -503,8 +511,16 @@ class LoanResponse(BaseModel):
 
     # Appraisal Phase
     appraisal_ordered_date: Optional[datetime] = None
+    appraisal_scheduled_date: Optional[datetime] = None
+    appraisal_completed_date: Optional[datetime] = None
     appraisal_received_date: Optional[datetime] = None
     appraisal_docs_expire_date: Optional[datetime] = None
+
+    # Title & Insurance Phase
+    title_ordered_date: Optional[datetime] = None
+    title_received_date: Optional[datetime] = None
+    insurance_ordered_date: Optional[datetime] = None
+    insurance_received_date: Optional[datetime] = None
 
     # Closing Disclosure Phase
     cd_requested_date: Optional[datetime] = None

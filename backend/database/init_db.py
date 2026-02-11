@@ -475,6 +475,19 @@ def init_db():
                             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_expiration_date') THEN
                                 ALTER TABLE loans ADD COLUMN lock_expiration_date TIMESTAMP;
                             END IF;
+                            -- Title & Insurance tracking columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='title_ordered_date') THEN
+                                ALTER TABLE loans ADD COLUMN title_ordered_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='title_received_date') THEN
+                                ALTER TABLE loans ADD COLUMN title_received_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='insurance_ordered_date') THEN
+                                ALTER TABLE loans ADD COLUMN insurance_ordered_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='insurance_received_date') THEN
+                                ALTER TABLE loans ADD COLUMN insurance_received_date TIMESTAMP;
+                            END IF;
                             -- Rate Lock Intelligence columns
                             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='rate_lock_status') THEN
                                 ALTER TABLE loans ADD COLUMN rate_lock_status VARCHAR;

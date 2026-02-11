@@ -1859,6 +1859,38 @@ function ClientProfile() {
                   <label>Appraisal Docs Expire Date</label>
                   <input type="date" value={formData.appraisal_docs_expire_date || ''} onChange={(e) => handleFieldChange('appraisal_docs_expire_date', e.target.value)} />
                 </div>
+                <div className="date-field">
+                  <label>Appraisal Scheduled Date</label>
+                  <input type="date" value={formData.appraisal_scheduled_date || ''} onChange={(e) => handleFieldChange('appraisal_scheduled_date', e.target.value)} />
+                </div>
+                <div className="date-field">
+                  <label>Appraisal Completed Date</label>
+                  <input type="date" value={formData.appraisal_completed_date || ''} onChange={(e) => handleFieldChange('appraisal_completed_date', e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {/* Title & Insurance Phase */}
+            <div className="info-section" style={{ marginTop: '1.5rem' }}>
+              <h2>Title & Insurance</h2>
+              <p className="section-subtitle">Title and insurance order tracking</p>
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>Title Ordered Date</label>
+                  <input type="date" value={formData.title_ordered_date || ''} onChange={(e) => handleFieldChange('title_ordered_date', e.target.value)} />
+                </div>
+                <div className="date-field">
+                  <label>Title Received Date</label>
+                  <input type="date" value={formData.title_received_date || ''} onChange={(e) => handleFieldChange('title_received_date', e.target.value)} />
+                </div>
+                <div className="date-field">
+                  <label>Insurance Ordered Date</label>
+                  <input type="date" value={formData.insurance_ordered_date || ''} onChange={(e) => handleFieldChange('insurance_ordered_date', e.target.value)} />
+                </div>
+                <div className="date-field">
+                  <label>Insurance Received Date</label>
+                  <input type="date" value={formData.insurance_received_date || ''} onChange={(e) => handleFieldChange('insurance_received_date', e.target.value)} />
+                </div>
               </div>
             </div>
 

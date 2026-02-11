@@ -193,8 +193,16 @@ DEFAULT_FIELD_MAPPING = {
 
     # Appraisal Phase
     "MtgPlanner_CRM__Appraisal_Ordered_Date__c": ("appraisal_ordered_date", "date"),
+    "MtgPlanner_CRM__Appraisal_Scheduled_Date__c": ("appraisal_scheduled_date", "date"),
+    "MtgPlanner_CRM__Appraisal_Completed_Date__c": ("appraisal_completed_date", "date"),
     "MtgPlanner_CRM__Appraisal_Received_Date__c": ("appraisal_received_date", "date"),
     "MtgPlanner_CRM__Appraisal_Docs_Expire_Date__c": ("appraisal_docs_expire_date", "date"),
+
+    # Title & Insurance Phase
+    "MtgPlanner_CRM__Title_Ordered_Date__c": ("title_ordered_date", "date"),
+    "MtgPlanner_CRM__Title_Received_Date__c": ("title_received_date", "date"),
+    "MtgPlanner_CRM__Insurance_Ordered_Date__c": ("insurance_ordered_date", "date"),
+    "MtgPlanner_CRM__Insurance_Received_Date__c": ("insurance_received_date", "date"),
 
     # Closing Disclosure Phase
     "MtgPlanner_CRM__CD_Requested_Date__c": ("cd_requested_date", "date"),

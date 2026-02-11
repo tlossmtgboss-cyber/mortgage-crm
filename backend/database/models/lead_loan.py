@@ -302,6 +302,12 @@ class Loan(Base):
     appraisal_received_date = Column(DateTime)
     appraisal_docs_expire_date = Column(DateTime)
 
+    # Title & Insurance tracking
+    title_ordered_date = Column(DateTime)
+    title_received_date = Column(DateTime)
+    insurance_ordered_date = Column(DateTime)
+    insurance_received_date = Column(DateTime)
+
     # Rate lock fields
     lock_expiration_date = Column(DateTime)
     rate_lock_status = Column(SQLEnum(RateLockStatus), default=RateLockStatus.NOT_ELIGIBLE)
