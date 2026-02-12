@@ -28,6 +28,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+
+def _get_current_user():
+    """Lazy import to avoid circular dependency."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
 # Initialize OpenAI client lazily
 _openai_client = None
 _openai_enabled = False
@@ -109,7 +115,8 @@ class ChatMessageResponse(BaseModel):
 @router.post("/sessions")
 async def create_chat_session(
     session_data: ChatSessionCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Create a new chat session with an agent."""
     try:
@@ -153,24 +160,25 @@ async def create_chat_session(
 @router.get("/sessions")
 async def list_chat_sessions(
     agent_id: Optional[int] = Query(None),
-    user_id: Optional[int] = Query(None),
     is_active: Optional[bool] = Query(None),
     days: int = Query(30, le=90),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
-    """List chat sessions with filtering."""
+    """List chat sessions with filtering (scoped to current user)."""
     try:
         query = db.query(AgentChatSession)
 
         cutoff = datetime.utcnow() - timedelta(days=days)
         query = query.filter(AgentChatSession.created_at >= cutoff)
 
+        # Scope to current user's sessions
+        query = query.filter(AgentChatSession.user_id == current_user.id)
+
         if agent_id:
             query = query.filter(AgentChatSession.agent_id == agent_id)
-        if user_id:
-            query = query.filter(AgentChatSession.user_id == user_id)
         if is_active is not None:
             query = query.filter(AgentChatSession.is_active == is_active)
 
@@ -207,10 +215,14 @@ async def list_chat_sessions(
 @router.get("/sessions/{session_id}")
 async def get_chat_session(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
-    """Get a chat session with its messages."""
-    session = db.query(AgentChatSession).filter(AgentChatSession.id == session_id).first()
+    """Get a chat session with its messages (scoped to current user)."""
+    session = db.query(AgentChatSession).filter(
+        AgentChatSession.id == session_id,
+        AgentChatSession.user_id == current_user.id,
+    ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -253,11 +265,15 @@ async def send_message(
     session_id: int,
     message: ChatMessageCreate,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Send a message in a chat session and get agent response."""
     try:
-        session = db.query(AgentChatSession).filter(AgentChatSession.id == session_id).first()
+        session = db.query(AgentChatSession).filter(
+            AgentChatSession.id == session_id,
+            AgentChatSession.user_id == current_user.id,
+        ).first()
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 

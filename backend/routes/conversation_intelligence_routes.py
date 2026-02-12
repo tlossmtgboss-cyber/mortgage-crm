@@ -41,6 +41,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/conversation-intelligence", tags=["Conversation Intelligence"])
 
 
+def _get_current_user():
+    """Lazy import to avoid circular dependency."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+
 # =============================================================================
 # REQUEST/RESPONSE MODELS
 # =============================================================================
@@ -116,7 +122,8 @@ class CreateLeadRequest(BaseModel):
 async def process_message(
     request: ProcessMessageRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """
     Process an inbound message through the QualificationAgent.
@@ -182,7 +189,10 @@ async def process_message(
 
 
 @router.post("/analyze-tone", response_model=ToneAnalysisResponse)
-async def analyze_tone_endpoint(request: ToneAnalysisRequest):
+async def analyze_tone_endpoint(
+    request: ToneAnalysisRequest,
+    current_user=Depends(_get_current_user()),
+):
     """
     Analyze the tone of a text message.
 
@@ -202,7 +212,10 @@ async def analyze_tone_endpoint(request: ToneAnalysisRequest):
 
 
 @router.get("/conversation/{conversation_id}", response_model=ConversationSummaryResponse)
-async def get_conversation_summary(conversation_id: str):
+async def get_conversation_summary(
+    conversation_id: str,
+    current_user=Depends(_get_current_user()),
+):
     """
     Get a summary of a conversation's current state.
 
@@ -228,7 +241,10 @@ async def get_conversation_summary(conversation_id: str):
 
 
 @router.post("/extract-data")
-async def extract_data_from_text(request: ExtractDataRequest):
+async def extract_data_from_text(
+    request: ExtractDataRequest,
+    current_user=Depends(_get_current_user()),
+):
     """
     Extract qualification data from text without conversation context.
 
@@ -253,7 +269,8 @@ async def extract_data_from_text(request: ExtractDataRequest):
 async def create_lead_from_conversation(
     conversation_id: str,
     owner_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """
     Create a lead record from the qualification data collected in a conversation.
@@ -405,7 +422,8 @@ async def create_lead_from_conversation(
 @router.post("/conversation/{conversation_id}/toggle-ai")
 async def toggle_conversation_ai(
     conversation_id: str,
-    enabled: bool = True
+    enabled: bool = True,
+    current_user=Depends(_get_current_user()),
 ):
     """
     Enable or disable AI responses for a conversation.
@@ -435,7 +453,9 @@ async def toggle_conversation_ai(
 
 
 @router.get("/stats")
-async def get_conversation_stats():
+async def get_conversation_stats(
+    current_user=Depends(_get_current_user()),
+):
     """
     Get statistics about active conversations.
     """
