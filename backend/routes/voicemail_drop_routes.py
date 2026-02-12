@@ -1339,8 +1339,9 @@ async def send_voicemail_ringless(
                 logger.error(f"Slybroadcast error for drop {voicemail_drop_id}: {error_msg}")
                 raise HTTPException(status_code=502, detail=f"Slybroadcast: {error_msg}")
 
-            # Second line is the session_id
-            session_id = lines[1] if len(lines) > 1 else ""
+            # Second line is session_id (may be "session_id=12345" or just "12345")
+            raw_session = lines[1] if len(lines) > 1 else ""
+            session_id = raw_session.split("=", 1)[-1].strip() if "=" in raw_session else raw_session
 
             logger.info(f"Slybroadcast RVM sent: session_id={session_id}, drop={voicemail_drop_id}")
 
