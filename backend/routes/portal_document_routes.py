@@ -387,16 +387,29 @@ async def get_document_preview(
 
     Uses CloudFront signed URLs if configured, otherwise S3 presigned URLs.
     """
-    # Get document and verify workspace access
+    # SEC DOC-008: Verify document belongs to the requested workspace
     document = db.execute(text("""
         SELECT d.id, d.file_name, d.mime_type, d.original_storage_key,
-               d.preview_storage_key, d.status
+               d.preview_storage_key, d.status, d.workspace_id
         FROM perennia_documents d
         WHERE d.id = :document_id
     """), {"document_id": document_id}).fetchone()
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # DOC-008: Verify workspace ownership — document must belong to requested workspace
+    doc_workspace_id = document[6]
+    if doc_workspace_id is not None and doc_workspace_id != workspace_id:
+        logger.warning(f"Document access denied: doc {document_id} belongs to workspace {doc_workspace_id}, requested {workspace_id}")
+        raise HTTPException(status_code=403, detail="Access denied: document does not belong to this workspace")
+
+    # Also verify the workspace exists and is active
+    workspace = db.execute(text("""
+        SELECT id, status FROM purl_workspaces WHERE id = :workspace_id
+    """), {"workspace_id": workspace_id}).fetchone()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
 
     if document[5] == 'pending_upload':
         raise HTTPException(status_code=400, detail="Document upload not complete")
@@ -470,14 +483,28 @@ async def get_document_download_url(
     db: Session = Depends(get_db)
 ):
     """Get a signed URL for document download."""
+    # SEC DOC-008: Verify document belongs to the requested workspace
     document = db.execute(text("""
-        SELECT d.id, d.file_name, d.original_storage_key
+        SELECT d.id, d.file_name, d.original_storage_key, d.workspace_id
         FROM perennia_documents d
         WHERE d.id = :document_id
     """), {"document_id": document_id}).fetchone()
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # DOC-008: Verify workspace ownership — document must belong to requested workspace
+    doc_workspace_id = document[3]
+    if doc_workspace_id is not None and doc_workspace_id != workspace_id:
+        logger.warning(f"Document download denied: doc {document_id} belongs to workspace {doc_workspace_id}, requested {workspace_id}")
+        raise HTTPException(status_code=403, detail="Access denied: document does not belong to this workspace")
+
+    # Also verify the workspace exists
+    workspace = db.execute(text("""
+        SELECT id FROM purl_workspaces WHERE id = :workspace_id
+    """), {"workspace_id": workspace_id}).fetchone()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
 
     s3_client = get_s3_client()
     if s3_client:

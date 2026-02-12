@@ -401,12 +401,12 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
         if _USE_SECURE_TOKENS and token_blacklist and token_blacklist._enabled:
             # Add token to blacklist
             token_blacklist.add(token, reason="user_logout")
-            logger.info(f"User {current_user.email} logged out, token blacklisted")
+            logger.info(f"User ID {current_user.id} logged out, token blacklisted")
             return {"message": "Successfully logged out"}
         else:
             # Without Redis, we can't truly invalidate the token
             # Client should discard the token
-            logger.info(f"User {current_user.email} logged out (token not blacklisted - no Redis)")
+            logger.info(f"User ID {current_user.id} logged out (token not blacklisted - no Redis)")
             return {"message": "Successfully logged out (token should be discarded by client)"}
 
     @app.post("/logout/all")
@@ -424,7 +424,7 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
 
         if _USE_SECURE_TOKENS and token_blacklist and token_blacklist._enabled:
             token_blacklist.revoke_all_for_user(current_user.id)
-            logger.info(f"All sessions revoked for user {current_user.email}")
+            logger.info(f"All sessions revoked for user ID {current_user.id}")
             return {"message": "All sessions have been logged out"}
         else:
             return {"message": "Session revocation not available (no Redis)"}
@@ -507,14 +507,14 @@ async def forgot_password(http_request: Request, request: ForgotPasswordRequest,
                     plain_text_body=f"Reset your password by visiting: {reset_url}"
                 )
                 if email_sent:
-                    logger.info(f"Password reset email sent successfully to {request.email}")
+                    logger.info("Password reset email sent successfully")
                 else:
-                    logger.warning(f"Password reset email FAILED to send to {request.email} - Check SENDGRID_API_KEY or SMTP credentials")
+                    logger.warning("Password reset email FAILED to send - Check SENDGRID_API_KEY or SMTP credentials")
             except Exception as e:
                 logger.error(f"Failed to send password reset email: {str(e)}")
                 # Still return success to prevent email enumeration
         else:
-            logger.info(f"Password reset requested for non-existent email: {request.email}")
+            logger.info("Password reset requested for non-existent account")
 
         # Always return success to prevent email enumeration
         return {
@@ -589,7 +589,7 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
             user.password_changed_at = datetime.now(timezone.utc)
         db.commit()
 
-        logger.info(f"Password reset successful for {email}")
+        logger.info(f"Password reset successful for user ID {user.id}")
 
         return {
             "message": "Password has been reset successfully. You can now log in with your new password.",
@@ -619,7 +619,7 @@ async def admin_force_password_reset(request: AdminPasswordResetRequest, db: Ses
     # Verify admin key
     expected_key = os.getenv("ADMIN_RESET_KEY", "")
     if not expected_key or request.admin_key != expected_key:
-        logger.warning(f"Invalid admin reset attempt for {request.email}")
+        logger.warning("Invalid admin reset attempt (bad admin key)")
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     # Find user
@@ -635,11 +635,11 @@ async def admin_force_password_reset(request: AdminPasswordResetRequest, db: Ses
     user.hashed_password = auth_funcs['get_password_hash'](request.new_password)
     db.commit()
 
-    logger.info(f"Admin forced password reset for {request.email}")
+    logger.info(f"Admin forced password reset for user ID {user.id}")
 
     return {
         "success": True,
-        "message": f"Password reset successful for {request.email}"
+        "message": "Password reset successful"
     }
 
 
@@ -892,7 +892,7 @@ async def register_account(
         # Generate access token
         access_token = auth_funcs['create_access_token'](data={"sub": new_user.email})
 
-        logger.info(f"New account registered: {request.email} (org: {request.company_name})")
+        logger.info(f"New account registered: user ID {new_user.id} (org ID: {organization.id if organization else 'none'})")
 
         return {
             "success": True,
@@ -1017,7 +1017,7 @@ def create_admin_promo_routes(app, get_current_user):
         db.commit()
         db.refresh(promo)
 
-        logger.info(f"Promo code updated: {promo.code} by {current_user.email}")
+        logger.info(f"Promo code updated: {promo.code} by user ID {current_user.id}")
 
         return {
             "success": True,
@@ -1068,7 +1068,7 @@ def create_admin_promo_routes(app, get_current_user):
         db.commit()
         db.refresh(promo)
 
-        logger.info(f"Promo code created: {promo.code} by {current_user.email}")
+        logger.info(f"Promo code created: {promo.code} by user ID {current_user.id}")
 
         return {
             "success": True,
@@ -1270,7 +1270,7 @@ def create_security_dashboard_routes(app, get_current_user):
 
         security_stats = get_security_stats()
         if security_stats and security_stats.unblock_ip(ip):
-            logger.info(f"IP {ip} unblocked by {current_user.email}")
+            logger.info(f"IP {ip} unblocked by user ID {current_user.id}")
             return {"message": f"IP {ip} has been unblocked", "success": True}
         else:
             return {"message": f"Could not unblock IP {ip}", "success": False}

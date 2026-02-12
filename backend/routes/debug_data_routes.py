@@ -1717,9 +1717,13 @@ def register_debug_data_routes(
             existing_loan_cols = {row[0] for row in loan_cols_result}
 
             # Add missing columns to LOANS
+            # SEC-006: Validate column names against hardcoded whitelist
+            _allowed_loan_cols = {c[0] for c in loan_columns}
             for col_name, col_type in loan_columns:
                 if col_name in existing_loan_cols:
                     results["loans_skipped"].append(col_name)
+                elif col_name not in _allowed_loan_cols or not col_name.isidentifier():
+                    results["errors"].append(f"loans.{col_name}: invalid column name")
                 else:
                     try:
                         db.execute(text(f"ALTER TABLE loans ADD COLUMN {col_name} {col_type}"))
@@ -1734,9 +1738,13 @@ def register_debug_data_routes(
             existing_lead_cols = {row[0] for row in lead_cols_result}
 
             # Add missing columns to LEADS
+            # SEC-006: Validate column names against hardcoded whitelist
+            _allowed_lead_cols = {c[0] for c in lead_columns}
             for col_name, col_type in lead_columns:
                 if col_name in existing_lead_cols:
                     results["leads_skipped"].append(col_name)
+                elif col_name not in _allowed_lead_cols or not col_name.isidentifier():
+                    results["errors"].append(f"leads.{col_name}: invalid column name")
                 else:
                     try:
                         db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))

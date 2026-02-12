@@ -54,6 +54,19 @@ def ensure_salesforce_tables():
         return False
 
 
+def _validate_identifier(name: str, allowed: set) -> bool:
+    """Validate that a SQL identifier is in the allowed whitelist. Prevents SQL injection in DDL."""
+    return name in allowed
+
+
+# Whitelists for DDL operations — only these tables/columns may be used in dynamic SQL
+_ALLOWED_SF_TABLES = frozenset({
+    "integration_profiles", "sf_user_schemas", "field_mappings",
+    "oauth_states", "sync_queue", "integration_events",
+    "integration_record_tracking", "calendar_sync_settings",
+})
+
+
 def fix_salesforce_schema(db: Session) -> dict:
     """Fix missing columns in Salesforce integration tables"""
     fixes = []
@@ -86,8 +99,15 @@ def fix_salesforce_schema(db: Session) -> dict:
         logger.info(f"Found NOT NULL columns in field_mappings: {not_null_columns}")
 
         # Fix columns that are NOT NULL but not in our model
+        # SEC-006: Validate col_name against known columns before using in DDL
+        valid_fm_columns = {c.lower() for c in model_columns} | {
+            c[0].lower() for c in field_mappings_columns  # defined below
+        }
         for col_name in not_null_columns:
             if col_name.lower() not in {c.lower() for c in model_columns}:
+                if not col_name.isidentifier() or col_name.lower() not in valid_fm_columns:
+                    logger.warning(f"Skipping unrecognized column: {col_name}")
+                    continue
                 try:
                     sql = f"ALTER TABLE field_mappings ALTER COLUMN {col_name} DROP NOT NULL"
                     logger.info(f"Executing: {sql}")
@@ -116,7 +136,12 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
     ]
 
+    # SEC-006: Build allowed column whitelist from the hardcoded list above
+    _allowed_sf_user_schema_cols = {c[0] for c in sf_user_schemas_columns}
     for col_name, col_type in sf_user_schemas_columns:
+        if col_name not in _allowed_sf_user_schema_cols or not col_name.isidentifier():
+            logger.warning(f"Skipping invalid column name: {col_name}")
+            continue
         try:
             db.execute(text(f"""
                 ALTER TABLE sf_user_schemas
@@ -148,7 +173,10 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
     ]
+    _allowed_fm_cols = {c[0] for c in field_mappings_columns}
     for col_name, col_type in field_mappings_columns:
+        if col_name not in _allowed_fm_cols or not col_name.isidentifier():
+            continue
         try:
             db.execute(text(f"ALTER TABLE field_mappings ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
@@ -176,7 +204,10 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("event_data", "JSONB"),
         ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
     ]
+    _allowed_ie_cols = {c[0] for c in integration_events_columns}
     for col_name, col_type in integration_events_columns:
+        if col_name not in _allowed_ie_cols or not col_name.isidentifier():
+            continue
         try:
             db.execute(text(f"ALTER TABLE integration_events ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
@@ -204,7 +235,10 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
     ]
+    _allowed_sq_cols = {c[0] for c in sync_queue_columns}
     for col_name, col_type in sync_queue_columns:
+        if col_name not in _allowed_sq_cols or not col_name.isidentifier():
+            continue
         try:
             db.execute(text(f"ALTER TABLE sync_queue ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
@@ -226,7 +260,10 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
     ]
+    _allowed_rt_cols = {c[0] for c in record_tracking_columns}
     for col_name, col_type in record_tracking_columns:
+        if col_name not in _allowed_rt_cols or not col_name.isidentifier():
+            continue
         try:
             db.execute(text(f"ALTER TABLE integration_record_tracking ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
             db.commit()
@@ -270,12 +307,16 @@ async def ensure_tables_endpoint(
                   "integration_record_tracking", "calendar_sync_settings"]
 
         for table in tables:
+            # SEC-006: Validate table name against allowed whitelist
+            if table not in _ALLOWED_SF_TABLES:
+                tables_status[table] = {"exists": False, "error": "Table not in allowed list"}
+                continue
             try:
                 result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 count = result.scalar()
                 tables_status[table] = {"exists": True, "count": count}
             except SQLAlchemyError as e:
-                tables_status[table] = {"exists": False, "error": "Internal server error"[:100]}
+                tables_status[table] = {"exists": False, "error": "Internal server error"}
 
         return {
             "status": "success" if success else "partial",
@@ -1287,8 +1328,12 @@ async def get_debug_status(
         return debug_info
 
     # Check if tables exist
+    # SEC-006: All table names are hardcoded and validated against whitelist
     tables_to_check = ["integration_profiles", "sf_user_schemas", "field_mappings", "oauth_states", "sync_queue"]
     for table in tables_to_check:
+        if table not in _ALLOWED_SF_TABLES:
+            debug_info["tables_exist"][table] = {"exists": False, "error": "Table not in allowed list"}
+            continue
         try:
             result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
             count = result.scalar()
