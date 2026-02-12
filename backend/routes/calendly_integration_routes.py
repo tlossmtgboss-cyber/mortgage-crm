@@ -14,11 +14,15 @@ All endpoints require authentication except for the webhook endpoint.
 
 import os
 import logging
+import hmac
+import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Callable
 
 import asyncio
 import requests
+
+CALENDLY_WEBHOOK_SECRET = os.getenv("CALENDLY_WEBHOOK_SECRET", "")
 
 
 async def _async_get(*args, **kwargs):
@@ -278,8 +282,34 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
     """
     User, Lead, Task, IntegrationCredential, CalendarMapping = get_models()
 
+    # Read body once for both signature validation and JSON parsing
+    body = await request.body()
+
+    # Validate Calendly webhook signature
+    if CALENDLY_WEBHOOK_SECRET:
+        signature = request.headers.get("Calendly-Webhook-Signature", "")
+        # Calendly signature format: "t=timestamp,v1=signature"
+        sig_parts = {}
+        for part in signature.split(","):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                sig_parts[k] = v
+        timestamp = sig_parts.get("t", "")
+        provided_sig = sig_parts.get("v1", "")
+        expected = hmac.new(
+            CALENDLY_WEBHOOK_SECRET.encode(),
+            f"{timestamp}.{body.decode()}".encode(),
+            hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(provided_sig, expected):
+            logger.warning(f"Invalid Calendly webhook signature from {request.client.host}")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    else:
+        logger.warning("CALENDLY_WEBHOOK_SECRET not configured — skipping webhook verification")
+
     try:
-        payload = await request.json()
+        import json as _json
+        payload = _json.loads(body)
         event_type = payload.get("event")
 
         logger.info(f"Calendly webhook received: {event_type}")

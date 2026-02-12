@@ -13,10 +13,14 @@ import logging
 import os
 import httpx
 
+import hmac
+
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+VAPI_WEBHOOK_SECRET = os.getenv("VAPI_WEBHOOK_SECRET", "")
 
 router = APIRouter(prefix="/api/v1/call-routing", tags=["call-routing"])
 
@@ -231,6 +235,15 @@ async def route_inbound_call(
     Configure your Vapi phone number to use this URL:
     https://your-domain.com/api/v1/call-routing/webhook/route-call
     """
+    # Validate Vapi webhook secret
+    if VAPI_WEBHOOK_SECRET:
+        vapi_secret = request.headers.get("X-Vapi-Secret", "")
+        if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
+            logger.warning(f"Invalid Vapi secret on route-call webhook from {request.client.host}")
+            raise HTTPException(status_code=401, detail="Invalid webhook authentication")
+    else:
+        logger.warning("VAPI_WEBHOOK_SECRET not configured — skipping webhook verification")
+
     try:
         payload = await request.json()
         message = payload.get("message", {})

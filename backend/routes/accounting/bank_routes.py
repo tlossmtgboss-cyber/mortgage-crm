@@ -59,6 +59,7 @@ PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID", "")
 PLAID_SECRET = os.getenv("PLAID_SECRET", "")
 PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")  # sandbox, development, production
 PLAID_WEBHOOK_URL = os.getenv("PLAID_WEBHOOK_URL", "")
+PLAID_WEBHOOK_VERIFY_KEY = os.getenv("PLAID_WEBHOOK_VERIFY_KEY", "")
 
 def get_plaid_client():
     """Get configured Plaid client."""
@@ -744,8 +745,21 @@ async def handle_plaid_webhook(
     db: Session = Depends(get_db),
 ):
     """Handle Plaid webhook notifications."""
-    # Verify webhook signature in production
     body = await request.body()
+
+    # Verify webhook signature
+    if PLAID_WEBHOOK_VERIFY_KEY:
+        provided_sig = request.headers.get("Plaid-Verification", "")
+        expected = hmac.new(
+            PLAID_WEBHOOK_VERIFY_KEY.encode(),
+            body,
+            hashlib.sha256
+        ).hexdigest()
+        if not provided_sig or not hmac.compare_digest(provided_sig, expected):
+            logger.warning(f"Invalid Plaid webhook signature from {request.client.host}")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    else:
+        logger.warning("PLAID_WEBHOOK_VERIFY_KEY not configured — skipping webhook verification")
 
     try:
         payload = json.loads(body)

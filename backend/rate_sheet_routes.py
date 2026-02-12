@@ -5,9 +5,10 @@ API endpoints for rate sheet upload, parsing, and refinance opportunity manageme
 
 import os
 import logging
+import hmac
 from datetime import datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from decimal import Decimal
@@ -15,6 +16,8 @@ from decimal import Decimal
 from database import get_db
 
 logger = logging.getLogger(__name__)
+
+VAPI_WEBHOOK_SECRET = os.getenv("VAPI_WEBHOOK_SECRET", "")
 
 router = APIRouter(prefix="/api/v1/rate-monitor", tags=["rate-monitor-sheets"])
 
@@ -491,13 +494,23 @@ async def mark_converted(
 
 @router.post("/webhooks/call-completed")
 async def webhook_call_completed(
-    call_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
     Webhook endpoint for VAPI call completion.
     Updates opportunity status based on call outcome.
     """
+    # Validate Vapi webhook secret
+    if VAPI_WEBHOOK_SECRET:
+        vapi_secret = request.headers.get("X-Vapi-Secret", "")
+        if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
+            logger.warning(f"Invalid Vapi secret on call-completed webhook from {request.client.host}")
+            raise HTTPException(status_code=401, detail="Invalid webhook authentication")
+    else:
+        logger.warning("VAPI_WEBHOOK_SECRET not configured — skipping webhook verification")
+
+    call_data = await request.json()
     from services.refinance_outreach_service import RefinanceOutreachService
 
     vapi_call_id = call_data.get('call_id') or call_data.get('id')
