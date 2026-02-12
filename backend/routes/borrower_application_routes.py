@@ -1088,10 +1088,9 @@ async def upload_document(
 
     # Validate file size and type
     MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
-    ALLOWED_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/jpg",
-                     "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+    ALLOWED_TYPES = {"application/pdf", "image/png", "image/jpeg", "image/jpg"}
     if file.content_type and file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=400, detail="Invalid file type. Allowed: PDF, images, Word documents.")
+        raise HTTPException(status_code=400, detail="Invalid file type. Allowed: PDF and images only.")
     contents = await file.read()
     if len(contents) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Maximum size is 20MB.")

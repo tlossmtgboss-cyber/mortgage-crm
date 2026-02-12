@@ -26,8 +26,32 @@ import os
 from typing import Optional, Any, Dict
 from pydantic import BaseModel, EmailStr
 
+import time
+from collections import defaultdict
+
 from database import get_db
 from email_service import email_service
+
+# Rate limiting for public borrower endpoints
+_borrower_rate_store: dict = defaultdict(list)
+_BORROWER_RATE_WINDOW = 3600  # 1 hour
+_BORROWER_RATE_MAX = 5  # max requests per window per IP
+_BORROWER_RATE_MAX_KEYS = 10000
+
+
+def _check_borrower_rate_limit(client_ip: str) -> bool:
+    """Check if client IP is within rate limit for borrower auth endpoints."""
+    now = time.time()
+    key = f"borrower:{client_ip}"
+    _borrower_rate_store[key] = [t for t in _borrower_rate_store[key] if now - t < _BORROWER_RATE_WINDOW]
+    if len(_borrower_rate_store) > _BORROWER_RATE_MAX_KEYS:
+        stale = [k for k, v in _borrower_rate_store.items() if not v or now - v[-1] > _BORROWER_RATE_WINDOW]
+        for k in stale:
+            del _borrower_rate_store[k]
+    if len(_borrower_rate_store[key]) >= _BORROWER_RATE_MAX:
+        return False
+    _borrower_rate_store[key].append(now)
+    return True
 import hmac
 import hashlib
 
@@ -81,7 +105,7 @@ if not JWT_SECRET:
     logger.critical("JWT_SECRET environment variable is not set! Authentication will fail.")
     JWT_SECRET = None  # Will cause explicit failures rather than silent insecurity
 JWT_ALGORITHM = "HS256"
-BORROWER_TOKEN_EXPIRY_DAYS = 90
+BORROWER_TOKEN_EXPIRY_DAYS = 14
 
 # Google OAuth
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -1019,10 +1043,17 @@ async def apple_callback(
 
 @router.post("/email/request")
 async def request_email_login(
+    http_request: Request,
     request: EmailLoginRequest,
     db: Session = Depends(get_db),
 ):
     """Request email-based login (sends magic link)."""
+
+    # Rate limit magic link requests
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    if not _check_borrower_rate_limit(client_ip):
+        logger.warning(f"Magic link rate limit exceeded for {client_ip}")
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
     # Generate magic link token
     magic_token = secrets.token_urlsafe(32)
@@ -1094,30 +1125,36 @@ async def verify_email_login(
 ):
     """Verify magic link and complete login."""
 
-    result = db.execute(text("""
-        SELECT ml.borrower_id, ml.expires_at, ml.used_at, bp.email
-        FROM borrower_magic_links ml
-        JOIN borrower_profiles bp ON bp.id = ml.borrower_id
-        WHERE ml.token = :token
-    """), {"token": token}).fetchone()
+    # Atomic token consumption: UPDATE ... WHERE used_at IS NULL prevents race conditions
+    now = datetime.utcnow()
+    update_result = db.execute(text("""
+        UPDATE borrower_magic_links
+        SET used_at = :used_at
+        WHERE token = :token AND used_at IS NULL
+        RETURNING borrower_id, expires_at
+    """), {"token": token, "used_at": now})
+    updated_row = update_result.fetchone()
 
-    if not result:
+    if not updated_row:
+        # Either token doesn't exist or was already used
+        check = db.execute(text("""
+            SELECT used_at FROM borrower_magic_links WHERE token = :token
+        """), {"token": token}).fetchone()
+        if check and check[0]:
+            return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=link_already_used")
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=invalid_link")
 
-    borrower_id, expires_at, used_at, email = result
-    # Ensure borrower_id is a string for JWT encoding
+    borrower_id, expires_at = updated_row
     borrower_id = str(borrower_id)
 
-    if used_at:
-        return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=link_already_used")
-
-    if expires_at < datetime.utcnow():
+    if expires_at < now:
         return RedirectResponse(url=f"{FRONTEND_URL}/apply/login?error=link_expired")
 
-    # Mark as used
-    db.execute(text("""
-        UPDATE borrower_magic_links SET used_at = :used_at WHERE token = :token
-    """), {"used_at": datetime.utcnow(), "token": token})
+    # Get email for JWT
+    email_row = db.execute(text("""
+        SELECT email FROM borrower_profiles WHERE id = :id
+    """), {"id": borrower_id}).fetchone()
+    email = email_row[0] if email_row else None
 
     # Log event
     db.execute(text("""
@@ -1643,7 +1680,7 @@ async def submit_application(
 
         # Fallback to default application email if no LO assigned
         if not lo_email:
-            lo_email = os.getenv("DEFAULT_APPLICATION_EMAIL", "tloss@cmgfi.com")
+            lo_email = os.getenv("DEFAULT_APPLICATION_EMAIL", "applications@perenniaai.com")
             logger.info(f"No LO assigned, using default email: {lo_email}")
 
         # Send email to loan officer with all application documents (non-critical)
