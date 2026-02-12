@@ -20,7 +20,16 @@ from models.accounting.core import (
     AccountingPeriod, AccountingSettings, AccountingAuditLog
 )
 
-router = APIRouter(prefix="/api/v1/accounting/journal-entries", tags=["Journal Entries"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/accounting/journal-entries", tags=["Journal Entries"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # =============================================================================

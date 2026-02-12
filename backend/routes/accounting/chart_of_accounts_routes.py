@@ -17,7 +17,16 @@ import uuid
 from database import get_db
 from models.accounting.core import ChartOfAccounts, JournalEntryLine, JournalEntry, AccountingSettings, AccountingAuditLog
 
-router = APIRouter(prefix="/api/v1/accounting/accounts", tags=["Chart of Accounts"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/accounting/accounts", tags=["Chart of Accounts"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # =============================================================================

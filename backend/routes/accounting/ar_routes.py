@@ -23,7 +23,16 @@ from models.accounting.accounts_receivable import (
     ARCustomer, ARInvoice, ARInvoiceLine, ARPayment, ARPaymentApplication
 )
 
-router = APIRouter(prefix="/api/v1/accounting/ar", tags=["Accounts Receivable"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/accounting/ar", tags=["Accounts Receivable"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # =============================================================================

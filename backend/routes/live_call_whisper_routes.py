@@ -27,7 +27,16 @@ from services.live_call_whisper_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/call-whisper", tags=["Live Call Whisper"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/call-whisper", tags=["Live Call Whisper"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 # Global service instance and connection manager
 whisper_service = LiveCallWhisperService()

@@ -35,7 +35,16 @@ from models.call_monitoring_models import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/underwriting-guidelines", tags=["Underwriting Guidelines"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/underwriting-guidelines", tags=["Underwriting Guidelines"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 # Storage configuration
 UPLOAD_DIR = os.getenv("GUIDELINE_UPLOAD_DIR", "/tmp/guidelines")

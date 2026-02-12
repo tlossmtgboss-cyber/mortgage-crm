@@ -25,7 +25,16 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/state-recording-rules", tags=["state-recording-rules"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/state-recording-rules", tags=["state-recording-rules"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # =============================================================================

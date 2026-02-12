@@ -8,7 +8,7 @@ Endpoints for:
 - Twilio webhooks for call status
 """
 
-from fastapi import APIRouter, HTTPException, Query, Form, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Form, Response
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -33,7 +33,16 @@ def get_db_connection():
     finally:
         db.close()
 
-router = APIRouter(prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # =============================================================================

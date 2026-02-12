@@ -27,7 +27,16 @@ from models.accounting.core import (
 )
 from models.accounting.budgeting import BudgetTemplate, BudgetItem
 
-router = APIRouter(prefix="/api/v1/accounting/reports", tags=["Financial Reports"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/accounting/reports", tags=["Financial Reports"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # =============================================================================

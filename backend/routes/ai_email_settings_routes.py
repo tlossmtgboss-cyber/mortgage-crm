@@ -15,7 +15,16 @@ from database import get_db, Base
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/ai-email-settings", tags=["AI Email Settings"])
+
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/ai-email-settings", tags=["AI Email Settings"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # Database Model

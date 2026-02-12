@@ -28,7 +28,16 @@ logger = logging.getLogger(__name__)
 # ROUTER
 # ============================================================================
 
-router = APIRouter(prefix="/api/v1", tags=["Workflow Operations"])
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["Workflow Operations"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # ============================================================================

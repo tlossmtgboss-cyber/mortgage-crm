@@ -26,7 +26,16 @@ from services.proactive_deal_alerts_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/deal-alerts", tags=["Deal Alerts"])
+def _get_current_user():
+    """Lazy import auth dependency for router-level protection."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(
+    prefix="/api/v1/deal-alerts",
+    tags=["Deal Alerts"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 
 # =============================================================================
