@@ -2166,7 +2166,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 if table_name == 'users':
                     continue
                 try:
-                    count_query = f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = :user_id"
+                    count_query = f"SELECT COUNT(*) FROM {_safe_identifier(table_name)} WHERE {_safe_identifier(column_name)} = :user_id"
                     count_result = db.execute(text(count_query), {"user_id": user_id}).scalar()
                     if count_result > 0:
                         blockers.append({
