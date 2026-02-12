@@ -792,6 +792,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_dispo_code VARCHAR(50)",
                 # Lead SLA milestone column
                 "ALTER TABLE leads ADD COLUMN IF NOT EXISTS initial_consultation_date TIMESTAMP",
+                # Multi-tenant column for API keys
+                "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS organization_id INTEGER",
             ]
             with _vm_engine.connect() as _vm_conn:
                 for _stmt in _alter_stmts:

@@ -1014,6 +1014,7 @@ def register_health_routes(app, get_db, **kwargs):
         results = []
         stmts = [
             "ALTER TABLE leads ADD COLUMN IF NOT EXISTS initial_consultation_date TIMESTAMP",
+            "ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS organization_id INTEGER",
         ]
         for stmt in stmts:
             try:
