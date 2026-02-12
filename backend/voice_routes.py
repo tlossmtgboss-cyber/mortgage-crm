@@ -39,6 +39,27 @@ from services.call_screening_service import (
 
 logger = logging.getLogger(__name__)
 
+
+async def _validate_twilio_signature(request: Request, form_data: dict) -> bool:
+    """Validate Twilio X-Twilio-Signature header. Returns True if valid or not configured."""
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    if not auth_token:
+        logger.warning("TWILIO_AUTH_TOKEN not set — skipping Twilio signature validation")
+        return True
+    try:
+        from twilio.request_validator import RequestValidator
+        validator = RequestValidator(auth_token)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        url = str(request.url)
+        return validator.validate(url, form_data, signature)
+    except ImportError:
+        logger.warning("twilio package not installed — skipping signature validation")
+        return True
+    except Exception as e:
+        logger.error(f"Twilio signature validation error: {e}")
+        return False
+
+
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
 
 
@@ -73,6 +94,13 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
     """
     try:
         form_data = await request.form()
+        form_dict = {k: v for k, v in form_data.items()}
+
+        # Validate Twilio signature
+        if not await _validate_twilio_signature(request, form_dict):
+            logger.warning("Invalid Twilio signature on incoming call webhook")
+            return Response(content="<Response><Hangup/></Response>", media_type="application/xml")
+
         caller_number = form_data.get("From", "Unknown")
         called_number = form_data.get("To", "")
         call_sid = form_data.get("CallSid", "")
@@ -3235,6 +3263,13 @@ async def amd_callback(request: Request):
     """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
     try:
         form_data = await request.form()
+        form_dict = {k: v for k, v in form_data.items()}
+
+        # Validate Twilio signature
+        if not await _validate_twilio_signature(request, form_dict):
+            logger.warning("Invalid Twilio signature on AMD callback")
+            return {"status": "rejected"}
+
         amd_status = form_data.get("AnsweredBy")
         call_sid = form_data.get("CallSid")
         logger.info(f"AMD Callback - CallSid: {call_sid}, AnsweredBy: {amd_status}")

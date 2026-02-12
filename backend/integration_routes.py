@@ -27,6 +27,27 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
+async def _validate_twilio_signature(request: Request, form_data: dict) -> bool:
+    """Validate Twilio X-Twilio-Signature header. Returns True if valid or not configured."""
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    if not auth_token:
+        logger.warning("TWILIO_AUTH_TOKEN not set — skipping Twilio signature validation")
+        return True
+    try:
+        from twilio.request_validator import RequestValidator
+        validator = RequestValidator(auth_token)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        url = str(request.url)
+        return validator.validate(url, form_data, signature)
+    except ImportError:
+        logger.warning("twilio package not installed — skipping signature validation")
+        return True
+    except Exception as e:
+        logger.error(f"Twilio signature validation error: {e}")
+        return False
+
+
 # Initialize OpenAI conversation service for SMS
 _openai_sms_service = None
 def get_openai_sms_service():
@@ -327,6 +348,13 @@ async def sms_webhook(
 
     try:
         form_data = await request.form()
+        form_dict = {k: v for k, v in form_data.items()}
+
+        # Validate Twilio signature
+        if not await _validate_twilio_signature(request, form_dict):
+            logger.warning("Invalid Twilio signature on SMS webhook")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+
         from_number = form_data.get("From")
         to_number = form_data.get("To")
         body = form_data.get("Body")

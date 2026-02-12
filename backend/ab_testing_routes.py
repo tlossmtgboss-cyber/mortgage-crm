@@ -145,9 +145,7 @@ async def create_experiment(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        error_detail = f"{str(e)}"
-        logger.error(f"Error creating experiment: {error_detail}")
+        logger.error(f"Error creating experiment: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
