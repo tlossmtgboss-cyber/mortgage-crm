@@ -278,7 +278,7 @@ async def connect_microsoft365(
             try:
                 error_data = response.json()
                 error_desc = error_data.get("error_description", error_data.get("error", ""))
-                logger.error(f"Microsoft token exchange failed: {error_desc} - Full response: {response.text}")
+                logger.error(f"Microsoft token exchange failed: {error_desc[:200]}")
                 if "AADSTS" in str(error_desc):
                     if "AADSTS65001" in str(error_desc):
                         error_detail = "Admin consent required. Please have an administrator approve this app in Azure AD."
@@ -293,7 +293,7 @@ async def connect_microsoft365(
                 else:
                     error_detail = f"Microsoft error: {error_desc[:200]}" if error_desc else "Failed to connect to Microsoft 365"
             except Exception as parse_err:
-                logger.error(f"Microsoft token exchange failed (non-JSON): {response.text}")
+                logger.error(f"Microsoft token exchange failed (non-JSON): status={response.status_code}")
             raise HTTPException(status_code=400, detail=error_detail)
 
         token_data = response.json()

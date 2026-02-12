@@ -5,6 +5,7 @@ Handles OAuth and messaging operations for Slack
 import os
 import logging
 from typing import Optional, Callable, List
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -16,6 +17,8 @@ from utils.responses import success_response, error_response
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_REDIRECT_HOSTS = {"perenniaai.com", "www.perenniaai.com", "app.perenniaai.com", "localhost", "127.0.0.1"}
 
 router = APIRouter(prefix="/api/v1/slack", tags=["slack"])
 
@@ -214,9 +217,21 @@ async def slack_callback(
             url=f"{frontend_url}/settings/integrations?error=slack_storage_failed"
         )
 
-    # Redirect back to integrations page with success
+    # Validate redirect_url to prevent open redirect
+    safe_redirect = frontend_url + "/settings/integrations"
+    if redirect_url:
+        try:
+            parsed = urlparse(redirect_url)
+            hostname = (parsed.hostname or "").lower()
+            if hostname in _ALLOWED_REDIRECT_HOSTS or hostname.endswith(".perenniaai.com") or hostname.endswith(".railway.app"):
+                safe_redirect = redirect_url
+            else:
+                logger.warning(f"Rejected Slack OAuth redirect to: {hostname}")
+        except Exception:
+            pass
+
     return RedirectResponse(
-        url=f"{redirect_url or frontend_url + '/settings/integrations'}?success=slack_connected"
+        url=f"{safe_redirect}?success=slack_connected"
     )
 
 

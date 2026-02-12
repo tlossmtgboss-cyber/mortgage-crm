@@ -22,7 +22,9 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
+import time
+from collections import defaultdict
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -35,6 +37,29 @@ from db import get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Authentication"])
+
+# In-memory rate limiter for auth endpoints
+_auth_rate_store: dict = defaultdict(list)
+_AUTH_RATE_WINDOW = 60  # seconds
+_AUTH_RATE_MAX_LOGIN = 5  # max login attempts per window per IP
+_AUTH_RATE_MAX_RESET = 3  # max password reset requests per window per IP
+_AUTH_RATE_MAX_REGISTER = 3  # max registration attempts per window per IP
+_AUTH_RATE_MAX_KEYS = 10000  # max tracked IPs before forced cleanup
+
+
+def _check_auth_rate_limit(client_ip: str, max_requests: int) -> bool:
+    """Check if client IP is within auth rate limit. Returns True if allowed."""
+    now = time.time()
+    key = f"auth:{client_ip}"
+    _auth_rate_store[key] = [t for t in _auth_rate_store[key] if now - t < _AUTH_RATE_WINDOW]
+    if len(_auth_rate_store) > _AUTH_RATE_MAX_KEYS:
+        stale = [k for k, v in _auth_rate_store.items() if not v or now - v[-1] > _AUTH_RATE_WINDOW]
+        for k in stale:
+            del _auth_rate_store[k]
+    if len(_auth_rate_store[key]) >= max_requests:
+        return False
+    _auth_rate_store[key].append(now)
+    return True
 
 
 # =============================================================================
@@ -197,7 +222,13 @@ class PushRegisterRequest(BaseModel):
 # =============================================================================
 
 @router.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # Rate limit login attempts
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_LOGIN):
+        logger.warning(f"Login rate limit exceeded for {client_ip}")
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
+
     try:
         models = get_models()
         User = models['User']
@@ -404,11 +435,17 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
 # =============================================================================
 
 @router.post("/api/v1/auth/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(http_request: Request, request: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """
     Request a password reset email.
     Always returns success to prevent email enumeration attacks.
     """
+    # Rate limit password reset requests
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_RESET):
+        logger.warning(f"Forgot-password rate limit exceeded for {client_ip}")
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     try:
         models = get_models()
         User = models['User']
@@ -498,10 +535,15 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
 
 
 @router.post("/api/v1/auth/reset-password")
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(http_request: Request, request: ResetPasswordRequest, db: Session = Depends(get_db)):
     """
     Reset password using a valid reset token.
     """
+    # Rate limit password reset attempts
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_RESET):
+        logger.warning(f"Reset-password rate limit exceeded for {client_ip}")
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
     try:
         models = get_models()
         User = models['User']
@@ -700,6 +742,7 @@ async def normalize_loan_stages(db: Session = Depends(get_db)):
 
 @router.post("/api/v1/auth/register")
 async def register_account(
+    http_request: Request,
     request: RegisterRequest,
     db: Session = Depends(get_db)
 ):
@@ -707,6 +750,12 @@ async def register_account(
     Public registration endpoint for new accounts.
     Creates a new organization and admin user.
     """
+    # Rate limit registration attempts
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_REGISTER):
+        logger.warning(f"Registration rate limit exceeded for {client_ip}")
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     try:
         models = get_models()
         User = models['User']

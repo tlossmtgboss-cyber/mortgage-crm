@@ -14,6 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field, validator, EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from urllib.parse import urlparse
+import ipaddress
 import re
 
 router = APIRouter(prefix="/api/v1/company-branding", tags=["Company & Branding Settings"])
@@ -125,6 +127,32 @@ class BrandTypography(BaseModel):
     line_height: float = Field(1.5, ge=1.0, le=2.5)
 
 
+def _validate_asset_url(url: Optional[str]) -> Optional[str]:
+    """Validate asset URL to prevent SSRF. Blocks internal/private IPs."""
+    if not url:
+        return url
+    parsed = urlparse(url)
+    if parsed.scheme not in ("https", "http"):
+        raise ValueError(f"URL must use http or https scheme")
+    hostname = parsed.hostname or ""
+    # Block obvious internal hostnames
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "metadata.google.internal"):
+        raise ValueError("Internal URLs are not allowed")
+    # Block private/link-local IP ranges (SSRF targets)
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise ValueError("Internal IP addresses are not allowed")
+    except ValueError as ve:
+        if "not allowed" in str(ve):
+            raise
+        # hostname is not an IP — that's fine
+    # Block cloud metadata endpoints
+    if hostname == "169.254.169.254" or hostname.endswith(".internal"):
+        raise ValueError("Cloud metadata URLs are not allowed")
+    return url
+
+
 class BrandAssets(BaseModel):
     """Brand asset URLs"""
     logo_url: Optional[str] = None
@@ -135,6 +163,12 @@ class BrandAssets(BaseModel):
     email_footer_url: Optional[str] = None
     document_letterhead_url: Optional[str] = None
     watermark_url: Optional[str] = None
+
+    @validator("logo_url", "logo_dark_url", "icon_url", "favicon_url",
+               "email_header_url", "email_footer_url", "document_letterhead_url",
+               "watermark_url", pre=True)
+    def check_url_ssrf(cls, v):
+        return _validate_asset_url(v)
 
 
 class EmailBranding(BaseModel):
