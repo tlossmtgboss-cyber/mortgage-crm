@@ -2531,7 +2531,8 @@ async def get_ai_receptionist_config():
 
 @router.post("/ai-receptionist-config")
 async def update_ai_receptionist_config(
-    request: Request
+    request: Request,
+    current_user=Depends(get_current_user_flexible()),
 ):
     """Update AI receptionist configuration"""
     try:
@@ -2558,7 +2559,9 @@ async def update_ai_receptionist_config(
 # ============================================================================
 
 @router.get("/voice-os/config")
-async def get_voice_os_config():
+async def get_voice_os_config(
+    current_user=Depends(get_current_user_flexible()),
+):
     """Get Voice OS configuration for dashboard"""
     return {
         "status": "running",
@@ -2629,7 +2632,10 @@ async def get_voice_os_config():
 
 
 @router.post("/voice-os/config")
-async def update_voice_os_config(request: Request):
+async def update_voice_os_config(
+    request: Request,
+    current_user=Depends(get_current_user_flexible()),
+):
     """Update Voice OS configuration"""
     try:
         data = await request.json()
@@ -2668,7 +2674,9 @@ async def update_voice_os_config(request: Request):
 
 
 @router.get("/voice-os/status")
-async def get_voice_os_status():
+async def get_voice_os_status(
+    current_user=Depends(get_current_user_flexible()),
+):
     """Get Voice OS system status and health"""
     # Voice OS runs through the main Python backend with Twilio + OpenAI integration
     # Check if the essential services are configured and enabled
@@ -2708,6 +2716,7 @@ async def get_voice_os_status():
 @router.post("/transcribe")
 async def transcribe_audio(
     file: UploadFile = File(...),
+    current_user=Depends(get_current_user_flexible()),
 ):
     """
     Proxy to OpenAI Whisper API for audio transcription.
@@ -2753,7 +2762,10 @@ async def transcribe_audio(
 # ============================================================================
 
 @router.post("/voice-os/test-voice")
-async def test_voice_sample(request: Request):
+async def test_voice_sample(
+    request: Request,
+    current_user=Depends(get_current_user_flexible()),
+):
     """Generate a voice sample for testing different voices"""
     try:
         data = await request.json()
@@ -2781,7 +2793,7 @@ async def test_voice_sample(request: Request):
             logger.error(f"OpenAI TTS error: {tts_error}")
             return {
                 "success": False,
-                "error": f"TTS generation failed: {str(tts_error)}"
+                "error": "TTS generation failed"
             }
 
     except Exception as e:
@@ -2794,7 +2806,10 @@ async def test_voice_sample(request: Request):
 # ============================================================================
 
 @router.post("/intelligence/setup")
-async def setup_intelligence_service(request: Request):
+async def setup_intelligence_service(
+    request: Request,
+    current_user=Depends(get_current_user_flexible()),
+):
     """
     One-time setup for Twilio Voice Intelligence Service.
 

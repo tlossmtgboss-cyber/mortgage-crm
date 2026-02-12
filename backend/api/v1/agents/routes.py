@@ -13,6 +13,12 @@ import time
 import logging
 import uuid
 
+
+def _get_current_user():
+    """Lazy import auth dependency to avoid circular imports."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
 from .schemas import (
     AgentExecuteRequest,
     AgentExecuteResponse,
@@ -54,7 +60,11 @@ from agents.orchestration.config.agent_configs import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/agents", tags=["Agent Orchestration"])
+router = APIRouter(
+    prefix="/agents",
+    tags=["Agent Orchestration"],
+    dependencies=[Depends(_get_current_user())],
+)
 
 # Initialize components
 PROMPTS_DIR = Path(__file__).parent.parent.parent.parent / "agents" / "perennia-prompts"
