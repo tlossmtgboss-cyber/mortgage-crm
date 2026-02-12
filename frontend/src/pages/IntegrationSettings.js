@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
-import SalesforceFieldMapping from '../components/integrations/SalesforceFieldMapping';
+import SalesforceFieldMapper from '../components/integrations/SalesforceFieldMapper';
 import SalesforceSetupWizard from '../components/integrations/SalesforceSetupWizard';
 import FollowUpBossSettings from '../components/integrations/FollowUpBossSettings';
 import ElevenLabsSettings from '../components/integrations/ElevenLabsSettings';
@@ -670,7 +670,7 @@ const IntegrationSettings = () => {
                 {/* Show field mapping only when connected */}
                 {selectedIntegration.status === 'connected' && (
                   <div className="field-mapping-section">
-                    <SalesforceFieldMapping
+                    <SalesforceFieldMapper
                       isConnected={true}
                       onMappingSaved={() => {
                         toast.success('Field mapping updated');

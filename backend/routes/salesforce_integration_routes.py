@@ -70,7 +70,7 @@ def fix_salesforce_schema(db: Session) -> dict:
     model_columns = {
         'id', 'integration_profile_id', 'source_object', 'source_field',
         'target_entity', 'target_field', 'transform_type', 'transform_config',
-        'data_type', 'required', 'default_value', 'sync_direction',
+        'mapping_category', 'data_type', 'required', 'default_value', 'sync_direction',
         'enabled', 'validation_status', 'validation_message', 'created_at', 'updated_at'
     }
 
@@ -144,6 +144,7 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("enabled", "BOOLEAN DEFAULT TRUE"),
         ("validation_status", "VARCHAR(50) DEFAULT 'pending'"),
         ("validation_message", "TEXT"),
+        ("mapping_category", "VARCHAR(50)"),
         ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
     ]
@@ -1526,7 +1527,8 @@ async def get_mappings(
                 "sync_direction": m.sync_direction,
                 "enabled": m.enabled,
                 "validation_status": m.validation_status,
-                "validation_message": m.validation_message
+                "validation_message": m.validation_message,
+                "mapping_category": getattr(m, 'mapping_category', None)
             }
             for m in mappings
         ]
@@ -1730,6 +1732,59 @@ async def get_mapping_stats(
 
     stats = field_mapping.get_mapping_stats(db, profile.id)
     return stats
+
+
+@router.post("/mappings/save-all")
+async def save_all_mappings(
+    request: Request,
+    body: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Bulk save all field mappings (SLA milestones + CRM fields)."""
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    mappings_data = body.get("mappings", {})
+    # mappings_data format: { "sla_new_lead": "Lead.Lead_Received_Date__c", "borrower_email": "Contact.Email", ... }
+
+    # Delete existing mappings for this profile
+    db.query(FieldMapping).filter(FieldMapping.integration_profile_id == profile.id).delete()
+
+    # Create new mappings
+    created = 0
+    for key, sf_value in mappings_data.items():
+        if not sf_value:
+            continue
+        parts = sf_value.split(".", 1)
+        if len(parts) != 2:
+            continue
+        source_object, source_field = parts
+
+        # Determine category
+        mapping_category = "sla_milestone" if key.startswith("sla_") else "crm_field"
+        target_field = key[4:] if key.startswith("sla_") else key
+
+        mapping = FieldMapping(
+            integration_profile_id=profile.id,
+            source_object=source_object,
+            source_field=source_field,
+            target_entity="loan",
+            target_field=target_field,
+            mapping_category=mapping_category,
+            transform_type="date_format" if mapping_category == "sla_milestone" else "direct",
+            data_type="date" if mapping_category == "sla_milestone" else "string",
+            sync_direction="bidirectional",
+            enabled=True,
+            validation_status="valid",
+        )
+        db.add(mapping)
+        created += 1
+
+    db.commit()
+    return {"status": "success", "mappings_saved": created}
 
 
 # ============ Activation Endpoint ============

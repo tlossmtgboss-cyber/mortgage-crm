@@ -205,6 +205,7 @@ class LeadUpdate(BaseModel):
     preapproval_expiration_date: Optional[datetime] = None
     realtor_referral_date: Optional[datetime] = None
     rate_watch_enrollment_date: Optional[datetime] = None
+    initial_consultation_date: Optional[datetime] = None
     # Referral Partner
     referral_partner_id: Optional[int] = None
     # Metadata (for assets, etc.)
@@ -272,6 +273,7 @@ class LeadResponse(BaseModel):
     preapproval_expiration_date: Optional[datetime] = None
     realtor_referral_date: Optional[datetime] = None
     rate_watch_enrollment_date: Optional[datetime] = None
+    initial_consultation_date: Optional[datetime] = None
     # Referral Partner
     referral_partner_id: Optional[int] = None
 

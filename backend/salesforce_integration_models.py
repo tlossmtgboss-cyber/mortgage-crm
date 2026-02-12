@@ -105,6 +105,9 @@ class FieldMapping(Base):
     transform_type = Column(String(50))  # direct, picklist_map, stage_map, date_format, currency_convert, phone_format
     transform_config = Column(JSON)  # Configuration for the transform
 
+    # Mapping categorization (field mapper v2)
+    mapping_category = Column(String(50))  # sla_milestone, crm_field
+
     # Validation
     data_type = Column(String(50))  # string, number, date, boolean, picklist, etc.
     required = Column(Boolean, default=False)

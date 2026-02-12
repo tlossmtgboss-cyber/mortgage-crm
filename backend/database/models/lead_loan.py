@@ -129,19 +129,20 @@ class Lead(Base):
     status_date = Column(DateTime)
 
     # SLA Milestone Dates
-    lead_received_date = Column(DateTime)
-    first_contact_attempt_date = Column(DateTime)
+    lead_received_date = Column(DateTime)                # New Lead
+    first_contact_attempt_date = Column(DateTime)        # Attempted Contact
     first_contact_successful_date = Column(DateTime)
-    lead_qualification_date = Column(DateTime)
+    lead_qualification_date = Column(DateTime)           # Pre-Qualified
     application_link_sent_date = Column(DateTime)
     application_started_date = Column(DateTime)
-    application_completed_date = Column(DateTime)
+    application_completed_date = Column(DateTime)        # Application Complete
     credit_pulled_date = Column(DateTime)
     preapproval_submission_date = Column(DateTime)
-    preapproval_issued_date = Column(DateTime)
+    preapproval_issued_date = Column(DateTime)           # Pre-Approved
     preapproval_expiration_date = Column(DateTime)
     realtor_referral_date = Column(DateTime)
     rate_watch_enrollment_date = Column(DateTime)
+    initial_consultation_date = Column(DateTime)         # Initial Consultation
     property_address = Column(String)
 
     # PRD Section 4.1 - Rate Lock Intelligence

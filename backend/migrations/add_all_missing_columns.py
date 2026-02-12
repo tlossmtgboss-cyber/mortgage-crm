@@ -63,6 +63,7 @@ def run_migration():
             "preapproval_expiration_date",
             "realtor_referral_date",
             "rate_watch_enrollment_date",
+            "initial_consultation_date",
             "expected_purchase_date",
             "last_workflow_action",
             "stage_changed_at",

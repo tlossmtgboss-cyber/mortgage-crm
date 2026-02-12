@@ -1,0 +1,413 @@
+{
+  "_description": "Canonical SLA milestone registry for Perennia AI CRM ↔ Salesforce mapping. Source of truth extracted from CRM SLA Measures Configuration.",
+  "_version": "2.0.0",
+  "_updated": "2026-02-11",
+  "_total_milestones": 27,
+
+  "sla_milestones": {
+    "lead_phase": {
+      "description": "Lead qualification milestones",
+      "milestones": {
+        "new_lead": {
+          "label": "New Lead",
+          "subtitle": "Lead Received",
+          "target": "4 hours",
+          "target_type": "hours",
+          "target_value": 4,
+          "trigger_from": "Lead Created",
+          "expected_sf_field": "Lead_Received_Date__c",
+          "alt_sf_fields": ["CreatedDate", "Lead_Created_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Speed-to-lead timer starts, notify assigned LO"
+        },
+        "attempted_contact": {
+          "label": "Attempted Contact",
+          "subtitle": "Lead Received",
+          "target": "2 hours",
+          "target_type": "hours",
+          "target_value": 2,
+          "trigger_from": "Lead Created",
+          "expected_sf_field": "Attempted_Contact_Date__c",
+          "alt_sf_fields": ["First_Contact_Attempt__c", "Last_Contacted_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Contact attempt SLA — escalate if no attempt within 2hrs"
+        },
+        "application_complete": {
+          "label": "Application Complete",
+          "subtitle": null,
+          "target": "2 business days",
+          "target_type": "business_days",
+          "target_value": 2,
+          "trigger_from": "Lead Created",
+          "expected_sf_field": "Application_Complete_Date__c",
+          "alt_sf_fields": ["App_Complete__c", "Application_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Application completion follow-up task"
+        },
+        "initial_consultation": {
+          "label": "Initial Consultation",
+          "subtitle": "In for Consultation",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Initial_Consultation_Date__c",
+          "alt_sf_fields": ["Consultation_Date__c", "First_Meeting_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Schedule initial consultation, send prep materials"
+        },
+        "pre_qualified": {
+          "label": "Pre-Qualified",
+          "subtitle": "Prequalified",
+          "target": "1 hour",
+          "target_type": "hours",
+          "target_value": 1,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Pre_Qualified_Date__c",
+          "alt_sf_fields": ["Prequalification_Date__c", "PQ_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Generate PQ letter, notify borrower"
+        },
+        "pre_approved": {
+          "label": "Pre-Approved",
+          "subtitle": "Preapproved",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Pre_Approved_Date__c",
+          "alt_sf_fields": ["Preapproval_Date__c", "PA_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Generate pre-approval letter, update lead stage"
+        }
+      }
+    },
+
+    "processing_phase": {
+      "description": "Loan processing and document collection milestones",
+      "milestones": {
+        "contract_received": {
+          "label": "Contract Received",
+          "subtitle": "Contract Received",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Contract_Received_Date__c",
+          "alt_sf_fields": ["Contract_Date__c", "Purchase_Contract_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Contract review task, trigger disclosure timeline"
+        },
+        "contact_received": {
+          "label": "Contact Received",
+          "subtitle": "Contact Received",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Disclosed Received",
+          "expected_sf_field": "Contact_Received_Date__c",
+          "alt_sf_fields": ["Borrower_Contact_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Borrower contact confirmation follow-up"
+        },
+        "submitted_to_processing": {
+          "label": "Submitted to Processing",
+          "subtitle": null,
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Submitted_To_Processing_Date__c",
+          "alt_sf_fields": ["Processing_Start_Date__c", "File_Submitted_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Assign processor, create processing checklist"
+        },
+        "application_submission": {
+          "label": "Application Submission",
+          "subtitle": null,
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Application_Submission_Date__c",
+          "alt_sf_fields": ["App_Submitted_Date__c", "Application_Submitted__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Formal application submission confirmation"
+        },
+        "document_collection": {
+          "label": "Document Collection",
+          "subtitle": null,
+          "target": "5 business days",
+          "target_type": "business_days",
+          "target_value": 5,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Document_Collection_Date__c",
+          "alt_sf_fields": ["Docs_Collected_Date__c", "Document_Package_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Document collection checklist, borrower reminders"
+        },
+        "documents_requested": {
+          "label": "Documents Requested",
+          "subtitle": null,
+          "target": "1 business day",
+          "target_type": "business_days",
+          "target_value": 1,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Documents_Requested_Date__c",
+          "alt_sf_fields": ["Doc_Request_Date__c", "Stips_Requested_Date__c"],
+          "status": "inactive",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Send document request to borrower"
+        },
+        "documents_received": {
+          "label": "Documents Received",
+          "subtitle": "Documents Received",
+          "target": "5 business days",
+          "target_type": "business_days",
+          "target_value": 5,
+          "trigger_from": "Documents Requested",
+          "expected_sf_field": "Documents_Received_Date__c",
+          "alt_sf_fields": ["Docs_Received_Date__c", "Doc_Package_Received__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Document review task, verify completeness"
+        }
+      }
+    },
+
+    "third_party_phase": {
+      "description": "Third-party orders — appraisal, insurance, title",
+      "milestones": {
+        "appraisal_ordered": {
+          "label": "Appraisal Ordered",
+          "subtitle": "Appraisal Ordered",
+          "target": "1 business day",
+          "target_type": "business_days",
+          "target_value": 1,
+          "trigger_from": "Disclosed",
+          "expected_sf_field": "Appraisal_Ordered_Date__c",
+          "alt_sf_fields": ["Appraisal_Order_Date__c", "AMC_Order_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Place appraisal order, set follow-up"
+        },
+        "appraisal_received": {
+          "label": "Appraisal Received",
+          "subtitle": "Appraisal Received",
+          "target": "7 business days",
+          "target_type": "business_days",
+          "target_value": 7,
+          "trigger_from": "Appraisal Ordered",
+          "expected_sf_field": "Appraisal_Received_Date__c",
+          "alt_sf_fields": ["Appraisal_Complete_Date__c", "Appraisal_Report_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Appraisal review, update property value, trigger UW"
+        },
+        "insurance_ordered": {
+          "label": "Insurance Ordered",
+          "subtitle": null,
+          "target": "10 business days",
+          "target_type": "business_days",
+          "target_value": 10,
+          "trigger_from": "Disclosed",
+          "expected_sf_field": "Insurance_Ordered_Date__c",
+          "alt_sf_fields": ["HOI_Ordered_Date__c", "Insurance_Order_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "HOI order placed, follow-up task"
+        },
+        "insurance_received": {
+          "label": "Insurance Received",
+          "subtitle": "Insurance Received",
+          "target": "10 business days before closing",
+          "target_type": "business_days_before",
+          "target_value": 10,
+          "target_reference": "closing_date",
+          "trigger_from": "Closing Date",
+          "expected_sf_field": "Insurance_Received_Date__c",
+          "alt_sf_fields": ["HOI_Received_Date__c", "Insurance_Binder_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Insurance binder received, verify coverage amounts"
+        },
+        "title_ordered": {
+          "label": "Title Ordered",
+          "subtitle": "Title Ordered",
+          "target": "1 business day",
+          "target_type": "business_days",
+          "target_value": 1,
+          "trigger_from": "Disclosed",
+          "expected_sf_field": "Title_Ordered_Date__c",
+          "alt_sf_fields": ["Title_Order_Date__c", "Title_Request_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Title search ordered, set follow-up"
+        },
+        "title_received": {
+          "label": "Title Received",
+          "subtitle": null,
+          "target": "10 business days before closing",
+          "target_type": "business_days_before",
+          "target_value": 10,
+          "target_reference": "closing_date",
+          "trigger_from": "Closing Date",
+          "expected_sf_field": "Title_Received_Date__c",
+          "alt_sf_fields": ["Title_Report_Date__c", "Title_Commitment_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Title commitment review, clear title exceptions"
+        }
+      }
+    },
+
+    "underwriting_phase": {
+      "description": "Underwriting submission, decision, and conditions",
+      "milestones": {
+        "submit_to_underwriting": {
+          "label": "Submit to Underwriting",
+          "subtitle": "Submitted To UW",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Submitted_To_UW_Date__c",
+          "alt_sf_fields": ["UW_Submit_Date__c", "Submit_To_UW__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "UW submission confirmation, set follow-up timer"
+        },
+        "underwriting_decision": {
+          "label": "Underwriting Decision",
+          "subtitle": "UW Decision",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "UW_Decision_Date__c",
+          "alt_sf_fields": ["Underwriting_Decision_Date__c", "Decision_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "UW decision received, route based on outcome"
+        },
+        "approved": {
+          "label": "Approved",
+          "subtitle": "Approved",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Approved_Date__c",
+          "alt_sf_fields": ["Approval_Date__c", "UW_Approved_Date__c", "Conditional_Approval_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Approval notification, generate conditions list"
+        },
+        "conditions_cleared": {
+          "label": "Conditions Cleared",
+          "subtitle": "Conditions Cleared",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Conditions_Cleared_Date__c",
+          "alt_sf_fields": ["Conditions_Met_Date__c", "Stips_Cleared_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "All conditions satisfied, trigger final UW review"
+        }
+      }
+    },
+
+    "closing_phase": {
+      "description": "Clear to close through funding",
+      "milestones": {
+        "clear_to_close": {
+          "label": "Clear to Close",
+          "subtitle": "Clear To Close",
+          "target": "3 business days",
+          "target_type": "business_days",
+          "target_value": 3,
+          "trigger_from": "Clear To Close",
+          "expected_sf_field": "Clear_To_Close_Date__c",
+          "alt_sf_fields": ["CTC_Date__c", "CTC__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "CTC notification, schedule closing, generate CD"
+        },
+        "closing_docs_out": {
+          "label": "Closing Docs Out",
+          "subtitle": null,
+          "target": "1 business day",
+          "target_type": "business_days",
+          "target_value": 1,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Closing_Docs_Out_Date__c",
+          "alt_sf_fields": ["CD_Sent_Date__c", "Docs_Out_Date__c", "Closing_Package_Sent__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Closing package sent to title, confirm receipt"
+        },
+        "closing_date": {
+          "label": "Closing Date",
+          "subtitle": null,
+          "target": "45 days",
+          "target_type": "calendar_days",
+          "target_value": 45,
+          "trigger_from": "Clear To Close",
+          "expected_sf_field": "Closing_Date__c",
+          "alt_sf_fields": ["Close_Date__c", "CloseDate", "Settlement_Date__c"],
+          "status": "inactive",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Closing day tasks, final verifications"
+        },
+        "loan_funded": {
+          "label": "Loan Funded",
+          "subtitle": null,
+          "target": "1 business day",
+          "target_type": "business_days",
+          "target_value": 1,
+          "trigger_from": "Previous Milestone",
+          "expected_sf_field": "Funding_Date__c",
+          "alt_sf_fields": ["Funded_Date__c", "Fund_Date__c", "Loan_Funded_Date__c"],
+          "status": "active",
+          "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
+          "workflow_trigger": "Funding confirmed, trigger post-close task queue, notify borrower"
+        }
+      }
+    }
+  },
+
+  "summary": {
+    "total_milestones": 27,
+    "by_phase": {
+      "lead": 6,
+      "processing": 7,
+      "third_party": 6,
+      "underwriting": 4,
+      "closing": 4
+    },
+    "by_status": {
+      "active": 25,
+      "inactive": 2
+    },
+    "by_target_type": {
+      "hours": 3,
+      "business_days": 20,
+      "business_days_before": 2,
+      "calendar_days": 2
+    },
+    "inactive_milestones": ["documents_requested", "closing_date"]
+  }
+}
