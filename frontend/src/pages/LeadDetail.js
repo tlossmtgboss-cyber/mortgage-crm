@@ -4355,7 +4355,7 @@ function LeadDetail() {
               <div className="sla-section-header">SLA Milestone Dates</div>
               <div className="dates-grid">
                 <div className="date-field">
-                  <label>Lead Received</label>
+                  <label>New Lead</label>
                   <input
                     type="datetime-local"
                     value={formData.lead_received_date ? formData.lead_received_date.slice(0, 16) : ''}
@@ -4363,7 +4363,7 @@ function LeadDetail() {
                   />
                 </div>
                 <div className="date-field">
-                  <label>First Contact</label>
+                  <label>Attempted Contact</label>
                   <input
                     type="datetime-local"
                     value={formData.first_contact_attempt_date ? formData.first_contact_attempt_date.slice(0, 16) : ''}
@@ -4371,91 +4371,35 @@ function LeadDetail() {
                   />
                 </div>
                 <div className="date-field">
-                  <label>Successful Contact</label>
+                  <label>Application Complete</label>
                   <input
                     type="datetime-local"
-                    value={formData.first_contact_successful_date ? formData.first_contact_successful_date.slice(0, 16) : ''}
-                    onChange={(e) => handleFieldChange('first_contact_successful_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>Lead Qualified</label>
-                  <input
-                    type="date"
-                    value={formData.lead_qualification_date || ''}
-                    onChange={(e) => handleFieldChange('lead_qualification_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>App Link Sent</label>
-                  <input
-                    type="date"
-                    value={formData.application_link_sent_date || ''}
-                    onChange={(e) => handleFieldChange('application_link_sent_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>App Started</label>
-                  <input
-                    type="date"
-                    value={formData.application_started_date || ''}
-                    onChange={(e) => handleFieldChange('application_started_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>App Completed</label>
-                  <input
-                    type="date"
-                    value={formData.application_completed_date || ''}
+                    value={formData.application_completed_date ? formData.application_completed_date.slice(0, 16) : ''}
                     onChange={(e) => handleFieldChange('application_completed_date', e.target.value)}
                   />
                 </div>
                 <div className="date-field">
-                  <label>Credit Pulled</label>
+                  <label>Initial Consultation</label>
                   <input
-                    type="date"
-                    value={formData.credit_pulled_date || ''}
-                    onChange={(e) => handleFieldChange('credit_pulled_date', e.target.value)}
+                    type="datetime-local"
+                    value={formData.initial_consultation_date ? formData.initial_consultation_date.slice(0, 16) : ''}
+                    onChange={(e) => handleFieldChange('initial_consultation_date', e.target.value)}
                   />
                 </div>
                 <div className="date-field">
-                  <label>Pre-Approval Sub</label>
+                  <label>Pre-Qualified</label>
                   <input
-                    type="date"
-                    value={formData.preapproval_submission_date || ''}
-                    onChange={(e) => handleFieldChange('preapproval_submission_date', e.target.value)}
+                    type="datetime-local"
+                    value={formData.lead_qualification_date ? formData.lead_qualification_date.slice(0, 16) : ''}
+                    onChange={(e) => handleFieldChange('lead_qualification_date', e.target.value)}
                   />
                 </div>
                 <div className="date-field">
-                  <label>Pre-Approval Issued</label>
+                  <label>Pre-Approved</label>
                   <input
-                    type="date"
-                    value={formData.preapproval_issued_date || ''}
+                    type="datetime-local"
+                    value={formData.preapproval_issued_date ? formData.preapproval_issued_date.slice(0, 16) : ''}
                     onChange={(e) => handleFieldChange('preapproval_issued_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>Realtor Referral</label>
-                  <input
-                    type="date"
-                    value={formData.realtor_referral_date || ''}
-                    onChange={(e) => handleFieldChange('realtor_referral_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>Pre-Approval Exp</label>
-                  <input
-                    type="date"
-                    value={formData.preapproval_expiration_date || ''}
-                    onChange={(e) => handleFieldChange('preapproval_expiration_date', e.target.value)}
-                  />
-                </div>
-                <div className="date-field">
-                  <label>Rate Watch</label>
-                  <input
-                    type="date"
-                    value={formData.rate_watch_enrollment_date || ''}
-                    onChange={(e) => handleFieldChange('rate_watch_enrollment_date', e.target.value)}
                   />
                 </div>
               </div>

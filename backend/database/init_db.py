@@ -361,6 +361,9 @@ def init_db():
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='user_metadata') THEN
                             ALTER TABLE leads ADD COLUMN user_metadata JSON;
                         END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='initial_consultation_date') THEN
+                            ALTER TABLE leads ADD COLUMN initial_consultation_date TIMESTAMP;
+                        END IF;
                     END $$;
                     """))
 
