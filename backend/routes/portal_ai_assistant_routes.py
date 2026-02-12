@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -431,6 +431,7 @@ What would you like to know?"""
 @router.post("/chat", response_model=ChatResponse)
 async def chat_with_assistant(
     request: ChatRequest,
+    http_request: Request = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -439,15 +440,24 @@ async def chat_with_assistant(
     Provides contextual help based on the borrower's workspace status,
     application progress, and document needs.
     """
+    # Validate portal session — caller must have access to this workspace
+    from routes.portal_auth_routes import validate_portal_session
+    session = await validate_portal_session(http_request, db) if http_request else None
+    if not session or session.get("workspace_id") != request.workspace_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
     # Get workspace context
     context = await get_workspace_context(db, request.workspace_id)
 
     if not context:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    # Merge with request context if provided
+    # Merge only safe keys from request context (prevent overwriting system context)
+    _MERGEABLE_CONTEXT_KEYS = {'custom_message', 'user_preference', 'locale'}
     if request.context:
-        context.update(request.context)
+        for key in _MERGEABLE_CONTEXT_KEYS:
+            if key in request.context:
+                context[key] = request.context[key]
 
     # Generate response
     response = await generate_ai_response(
@@ -486,6 +496,7 @@ async def chat_with_assistant(
 @router.get("/quick-actions/{workspace_id}")
 async def get_quick_actions(
     workspace_id: int = Path(..., description="Workspace ID"),
+    http_request: Request = None,
     db: Session = Depends(get_db)
 ) -> List[QuickAction]:
     """
@@ -494,6 +505,12 @@ async def get_quick_actions(
     Returns a list of suggested actions based on the current
     state of the application, documents, and tasks.
     """
+    # Validate portal session
+    from routes.portal_auth_routes import validate_portal_session
+    session = await validate_portal_session(http_request, db) if http_request else None
+    if not session or session.get("workspace_id") != workspace_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
     context = await get_workspace_context(db, workspace_id)
 
     if not context:

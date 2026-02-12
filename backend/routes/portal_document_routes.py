@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, BackgroundTasks, UploadFile, File, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -146,6 +146,7 @@ class DocumentStatusUpdate(BaseModel):
 @router.post("/upload/initiate", response_model=InitiateUploadResponse)
 async def initiate_document_upload(
     request: InitiateUploadRequest,
+    http_request: Request = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -157,6 +158,12 @@ async def initiate_document_upload(
     3. Client uploads directly to S3 using presigned URL
     4. Client calls /upload/confirm when complete
     """
+    # Validate portal session
+    from routes.portal_auth_routes import validate_portal_session
+    session = await validate_portal_session(http_request, db) if http_request else None
+    if not session or session.get("workspace_id") != request.workspace_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
     # Validate mime type
     if request.mime_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(
@@ -284,6 +291,7 @@ async def initiate_document_upload(
 async def confirm_document_upload(
     request: ConfirmUploadRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -296,6 +304,12 @@ async def confirm_document_upload(
     4. Compression (if applicable)
     5. Thumbnail/preview generation
     """
+    # Validate portal session
+    from routes.portal_auth_routes import validate_portal_session
+    session = await validate_portal_session(http_request, db) if http_request else None
+    if not session or session.get("workspace_id") != request.workspace_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
     # Get document record
     document = db.execute(text("""
         SELECT id, loan_id, lead_id, request_id, original_storage_key, file_name, file_size
@@ -380,6 +394,7 @@ async def confirm_document_upload(
 async def get_document_preview(
     document_id: int = Path(..., description="Document ID"),
     workspace_id: int = Query(..., description="Workspace ID for authorization"),
+    http_request: Request = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -387,6 +402,12 @@ async def get_document_preview(
 
     Uses CloudFront signed URLs if configured, otherwise S3 presigned URLs.
     """
+    # Validate portal session
+    from routes.portal_auth_routes import validate_portal_session
+    session = await validate_portal_session(http_request, db) if http_request else None
+    if not session or session.get("workspace_id") != workspace_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
     # SEC DOC-008: Verify document belongs to the requested workspace
     document = db.execute(text("""
         SELECT d.id, d.file_name, d.mime_type, d.original_storage_key,
@@ -400,7 +421,7 @@ async def get_document_preview(
 
     # DOC-008: Verify workspace ownership — document must belong to requested workspace
     doc_workspace_id = document[6]
-    if doc_workspace_id is not None and doc_workspace_id != workspace_id:
+    if doc_workspace_id != workspace_id:
         logger.warning(f"Document access denied: doc {document_id} belongs to workspace {doc_workspace_id}, requested {workspace_id}")
         raise HTTPException(status_code=403, detail="Access denied: document does not belong to this workspace")
 
@@ -480,9 +501,16 @@ async def get_document_preview(
 async def get_document_download_url(
     document_id: int = Path(..., description="Document ID"),
     workspace_id: int = Query(..., description="Workspace ID for authorization"),
+    http_request: Request = None,
     db: Session = Depends(get_db)
 ):
     """Get a signed URL for document download."""
+    # Validate portal session
+    from routes.portal_auth_routes import validate_portal_session
+    session = await validate_portal_session(http_request, db) if http_request else None
+    if not session or session.get("workspace_id") != workspace_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
     # SEC DOC-008: Verify document belongs to the requested workspace
     document = db.execute(text("""
         SELECT d.id, d.file_name, d.original_storage_key, d.workspace_id
@@ -495,7 +523,7 @@ async def get_document_download_url(
 
     # DOC-008: Verify workspace ownership — document must belong to requested workspace
     doc_workspace_id = document[3]
-    if doc_workspace_id is not None and doc_workspace_id != workspace_id:
+    if doc_workspace_id != workspace_id:
         logger.warning(f"Document download denied: doc {document_id} belongs to workspace {doc_workspace_id}, requested {workspace_id}")
         raise HTTPException(status_code=403, detail="Access denied: document does not belong to this workspace")
 
@@ -537,6 +565,7 @@ async def review_document(
     document_id: int,
     review: DocumentReviewRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -544,6 +573,18 @@ async def review_document(
 
     Admin-only endpoint for document reviewers.
     """
+    # Require CRM user auth (not portal session) for admin actions
+    from main import get_current_user_flexible
+    try:
+        auth_header = http_request.headers.get("Authorization", "") if http_request else ""
+        token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+        current_user = await get_current_user_flexible(token=token, request=http_request, db=db)
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Authentication required")
     document = db.execute(text("""
         SELECT id, loan_id, lead_id, request_id, status
         FROM perennia_documents
@@ -649,6 +690,7 @@ def _update_request_completion(db: Session, request_id: int):
 @router.get("/workspace/{workspace_id}")
 async def list_workspace_documents(
     workspace_id: int,
+    http_request: Request,
     status: Optional[str] = Query(None),
     doc_type: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
@@ -656,6 +698,12 @@ async def list_workspace_documents(
     db: Session = Depends(get_db)
 ):
     """List all documents for a workspace."""
+    # Validate portal session
+    from routes.portal_auth_routes import validate_portal_session
+    session = await validate_portal_session(http_request, db)
+    if not session or session.get("workspace_id") != workspace_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
     # Get loan_id and lead_id for workspace
     workspace = db.execute(text("""
         SELECT w.meta_data,

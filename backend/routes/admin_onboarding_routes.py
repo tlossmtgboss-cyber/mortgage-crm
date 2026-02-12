@@ -198,13 +198,11 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
     # Parse the stored data
     try:
         if isinstance(audit_result.new_values, str):
-            # Use ast.literal_eval for safe parsing (NOT eval which is dangerous)
-            import ast
             try:
-                data = ast.literal_eval(audit_result.new_values)
-            except (ValueError, SyntaxError):
-                # Try JSON parsing as fallback
                 data = json.loads(audit_result.new_values)
+            except (json.JSONDecodeError, ValueError):
+                logger.warning("Invalid JSON in audit_result.new_values")
+                return None
         else:
             data = audit_result.new_values
     except Exception:
@@ -435,11 +433,16 @@ async def start_onboarding(
         # Generate auth token
         try:
             import jwt
-            token = jwt.encode(
-                {'sub': request.email, 'exp': datetime.utcnow() + timedelta(hours=24)},
-                os.getenv('JWT_SECRET', 'your-secret-key'),
-                algorithm='HS256'
-            )
+            jwt_secret = os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY')
+            if not jwt_secret:
+                logger.error("JWT_SECRET/SECRET_KEY not configured for onboarding token")
+                token = session_id  # Fallback to session_id if no secret
+            else:
+                token = jwt.encode(
+                    {'sub': request.email, 'exp': datetime.utcnow() + timedelta(hours=24)},
+                    jwt_secret,
+                    algorithm='HS256'
+                )
         except Exception:
             token = session_id  # Fallback
 

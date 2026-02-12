@@ -758,10 +758,17 @@ async def update_application_by_token(
     if application.expires_at and application.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=410, detail="Application link has expired")
 
-    # Update fields
+    # Update fields — whitelist to prevent mass assignment of sensitive attrs
+    _ALLOWED_UPDATE_FIELDS = {
+        'current_step', 'step_data', 'completed_steps',
+        'borrower_first_name', 'borrower_last_name',
+        'borrower_email', 'borrower_phone',
+        'has_coborrower', 'coborrower_email',
+        'notes', 'time_spent_seconds',
+    }
     update_data = data.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if hasattr(application, field):
+        if field in _ALLOWED_UPDATE_FIELDS and hasattr(application, field):
             setattr(application, field, value)
 
     # Update status to in_progress if still draft
