@@ -5,8 +5,8 @@ import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
-import { PermissionProvider } from './contexts/PermissionContext';
-import { ModuleProvider } from './contexts/ModuleContext';
+import { PermissionProvider, usePermissions } from './contexts/PermissionContext';
+import { ModuleProvider, useModules } from './contexts/ModuleContext';
 import { getUserEffectiveRole, getDefaultRouteForRole } from './config/roleConfig';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
@@ -278,7 +278,7 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // Data is fresh for 5 minutes
       gcTime: 1000 * 60 * 30, // Cache persists for 30 minutes (formerly cacheTime)
       refetchOnWindowFocus: false, // Don't refetch on tab focus
-      refetchOnMount: false, // Use cached data on mount
+      refetchOnMount: true, // Refetch stale/failed data on mount (staleTime still prevents unnecessary refetches)
       retry: 1, // Only retry once on failure
     },
   },
@@ -305,8 +305,16 @@ const API_BASE_URL = isProduction
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function PrivateRoute({ children }) {
+  const { loading: permissionsLoading } = usePermissions();
+  const { loading: modulesLoading } = useModules();
+
   if (!isAuthenticated()) {
     return <Navigate to="/login" />;
+  }
+
+  // Block rendering until permissions and modules are loaded to prevent partial-load flicker
+  if (permissionsLoading || modulesLoading) {
+    return <PageLoader />;
   }
 
   return children;

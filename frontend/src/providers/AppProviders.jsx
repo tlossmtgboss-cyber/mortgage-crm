@@ -11,7 +11,7 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // Data is fresh for 5 minutes
       gcTime: 1000 * 60 * 30, // Cache persists for 30 minutes (formerly cacheTime)
       refetchOnWindowFocus: false, // Don't refetch on tab focus
-      refetchOnMount: false, // Use cached data on mount
+      refetchOnMount: true, // Refetch stale/failed data on mount (staleTime still prevents unnecessary refetches)
       retry: 1, // Only retry once on failure
     },
   },

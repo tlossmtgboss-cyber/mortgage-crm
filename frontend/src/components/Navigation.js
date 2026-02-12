@@ -16,7 +16,7 @@ import './Navigation.css';
  */
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
-  const { effectiveRole, userRole, hasAnyPermission } = usePermissions();
+  const { effectiveRole, userRole, viewAsRole, hasAnyPermission } = usePermissions();
   const { hasModule, getModule, loading: modulesLoading } = useModules();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
@@ -76,14 +76,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     return isMasterAdmin(userEmail);
   }, [userEmail]);
 
-  // Get viewAsRole from localStorage for master admin preview mode
-  const viewAsRole = useMemo(() => {
-    try {
-      return localStorage.getItem('viewAsRole') || null;
-    } catch {
-      return null;
-    }
-  }, []);
+  // viewAsRole comes from PermissionContext (reactive when admin switches roles)
 
   // Get navigation items for the current role, with module lock status
   // Don't show locked state while modules are still loading to avoid flash of upgrade badges
