@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
+import SalesforceFieldMapper from '../components/integrations/SalesforceFieldMapper';
 import './SalesforceIntegrationPage.css';
 
 const API_URL = API_BASE_URL;
@@ -1001,7 +1002,15 @@ function SalesforceIntegrationPage() {
         {activeSection === 'overview' && renderOverview()}
         {activeSection === 'connection' && renderConnection()}
         {activeSection === 'schema' && renderSchema()}
-        {activeSection === 'mappings' && renderMappings()}
+        {activeSection === 'mappings' && (
+          <SalesforceFieldMapper
+            isConnected={connectionStatus?.status === 'connected' || connectionStatus?.status === 'active'}
+            onMappingSaved={() => {
+              toast.success('Field mapping updated');
+              loadMappingStats();
+            }}
+          />
+        )}
         {activeSection === 'sync' && renderSync()}
         {activeSection === 'history' && renderHistory()}
       </div>
