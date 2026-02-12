@@ -790,6 +790,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_session_id VARCHAR(255)",
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_provider VARCHAR(50)",
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_dispo_code VARCHAR(50)",
+                # Lead SLA milestone column
+                "ALTER TABLE leads ADD COLUMN IF NOT EXISTS initial_consultation_date TIMESTAMP",
             ]
             with _vm_engine.connect() as _vm_conn:
                 for _stmt in _alter_stmts:
