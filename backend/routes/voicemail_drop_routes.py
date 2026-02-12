@@ -1279,6 +1279,10 @@ async def send_voicemail_ringless(
         clean_number = f"1{clean_number}"
 
     # ---- Slybroadcast ----
+    # API docs: https://www.slybroadcast.com/docs/Slybroadcast_API.pdf
+    # URL: https://www.mobile-sphere.com/gateway/vmb.php  (form POST)
+    # Response: plain text — "OK\n<session_id>\nNumber of Phone #s = N"
+    # Webhook: POST with $_POST['var'] = pipe-delimited with quotes
     if provider == "slybroadcast":
         sb_email = os.getenv("SLYBROADCAST_EMAIL", "")
         sb_password = os.getenv("SLYBROADCAST_PASSWORD", "")
@@ -1295,24 +1299,26 @@ async def send_voicemail_ringless(
             base_url = f"https://{base_url}"
         dispo_url = f"{base_url}/api/v1/voicemail/webhook/rvm" if base_url else ""
 
+        # URL-encode the audio_url as required by docs
+        from urllib.parse import quote
+        encoded_audio_url = quote(audio_url, safe="")
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             payload = {
                 "c_uid": sb_email,
                 "c_password": sb_password,
-                "c_callerID": caller_id.replace("+", ""),  # Slybroadcast wants digits only
+                "c_callerID": caller_id.replace("+", ""),
                 "c_phone": clean_number,
-                "c_url": audio_url,
+                "c_url": encoded_audio_url,
                 "c_date": "now",
                 "c_audio": "mp3",
-                "c_method": "new_campaign",
+                "mobile_only": "1",
             }
             if dispo_url:
-                payload["c_dession_url"] = dispo_url  # Slybroadcast param name (not a typo)
-            if voicemail_drop_id:
-                payload["c_tag"] = str(voicemail_drop_id)  # Tag for webhook correlation
+                payload["c_dispo_url"] = dispo_url
 
             response = await client.post(
-                "https://www.slybroadcast.com/gateway/vmb.json.php",
+                "https://www.mobile-sphere.com/gateway/vmb.php",
                 data=payload,
             )
 
@@ -1320,20 +1326,22 @@ async def send_voicemail_ringless(
                 logger.error(f"Slybroadcast HTTP error {response.status_code}: {response.text[:500]}")
                 raise HTTPException(status_code=502, detail="Slybroadcast API returned an error")
 
-            try:
-                result = response.json()
-            except Exception:
-                logger.error(f"Slybroadcast non-JSON response: {response.text[:500]}")
-                raise HTTPException(status_code=502, detail="Slybroadcast returned invalid response")
+            # Response is plain text:
+            #   Success: "OK\n912345678\nNumber of Phone #s = 1"
+            #   Error:   any line not starting with "OK"
+            body = response.text.strip()
+            lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
 
-            # Slybroadcast returns {"OK": "...", "session_id": "..."} on success
-            # or {"ERROR": "..."} on failure
-            if "ERROR" in result:
-                error_msg = result["ERROR"]
+            logger.info(f"Slybroadcast response for drop {voicemail_drop_id}: {body[:300]}")
+
+            if not lines or lines[0].upper() != "OK":
+                error_msg = body[:300]
                 logger.error(f"Slybroadcast error for drop {voicemail_drop_id}: {error_msg}")
                 raise HTTPException(status_code=502, detail=f"Slybroadcast: {error_msg}")
 
-            session_id = str(result.get("session_id", ""))
+            # Second line is the session_id
+            session_id = lines[1] if len(lines) > 1 else ""
+
             logger.info(f"Slybroadcast RVM sent: session_id={session_id}, drop={voicemail_drop_id}")
 
             return {
@@ -2651,15 +2659,10 @@ async def revoke_consent(
 # =============================================================================
 
 # Slybroadcast disposition codes → VoicemailDrop status
+# Per API docs: Status field is "OK" (delivered) or "Failure" (failed)
 _SLYBROADCAST_DISPO_MAP = {
-    "SENT": "delivered",
-    "DELIVERED": "delivered",
-    "VM": "delivered",          # Voicemail detected and message left
-    "NOANSWER": "failed",
-    "BUSY": "failed",
-    "FAILED": "failed",
-    "DNC": "failed",
-    "INVALID": "failed",
+    "OK": "delivered",
+    "FAILURE": "failed",
 }
 
 # Drop Cowboy status → VoicemailDrop status
@@ -2680,8 +2683,11 @@ async def rvm_webhook(
     """
     Receive delivery status callbacks from RVM providers.
 
-    Slybroadcast: sends pipe-delimited body, expects plain-text "OK" response.
-      Format: session_id|phone|status|tag
+    Slybroadcast: form POST with $_POST['var'] containing 6 pipe-delimited
+      quoted fields. Must respond with plain-text "OK".
+      Format: "Session ID"|"Call To"|"Status"|"Reason for Failure"|"Delivery Time"|"Carrier"
+      Status: "OK" (delivered) or "Failure" (failed)
+
     Drop Cowboy: sends JSON with foreign_id for correlation.
       Format: {"foreign_id": "123", "status": "delivered", ...}
 
@@ -2693,41 +2699,46 @@ async def rvm_webhook(
 
     try:
         content_type = request.headers.get("content-type", "")
-        body = await request.body()
-        body_text = body.decode("utf-8", errors="replace").strip()
 
-        if not body_text:
-            logger.warning("RVM webhook received empty body")
-            return Response(content="OK", media_type="text/plain")
+        # --- Slybroadcast: form POST with 'var' field ---
+        # Per API docs: disposition callback sends $_POST['var'] as
+        # "Session ID"|"Call To"|"OK or Failure"|"Reason"|"Delivery Time"|"Carrier"
+        if "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+            form = await request.form()
+            var_field = form.get("var", "")
 
-        # --- Slybroadcast: pipe-delimited format ---
-        if "|" in body_text and "application/json" not in content_type:
-            parts = body_text.split("|")
-            # Expected: session_id|phone|dispo_code|tag  (tag = voicemail_drop_id)
-            session_id = parts[0].strip() if len(parts) > 0 else ""
-            phone = parts[1].strip() if len(parts) > 1 else ""
-            dispo_code = parts[2].strip().upper() if len(parts) > 2 else ""
-            tag = parts[3].strip() if len(parts) > 3 else ""
+            if not var_field:
+                # Fallback: read raw body in case form parsing missed it
+                body = await request.body()
+                var_field = body.decode("utf-8", errors="replace").strip()
 
-            new_status = _SLYBROADCAST_DISPO_MAP.get(dispo_code, "failed")
+            if not var_field:
+                logger.warning("Slybroadcast webhook: empty 'var' field")
+                return Response(content="OK", media_type="text/plain")
 
-            # Find the drop by session_id or tag (drop ID)
+            # Strip quotes from each field and split on |
+            # Format: "session_id"|"phone"|"OK"|""|"2026-02-11 10:30:00"|"T-Mobile"
+            parts = [p.strip().strip('"') for p in var_field.split("|")]
+
+            session_id = parts[0] if len(parts) > 0 else ""
+            phone = parts[1] if len(parts) > 1 else ""
+            status_str = parts[2].upper() if len(parts) > 2 else ""
+            failure_reason = parts[3] if len(parts) > 3 else ""
+            delivery_time = parts[4] if len(parts) > 4 else ""
+            carrier = parts[5] if len(parts) > 5 else ""
+
+            new_status = _SLYBROADCAST_DISPO_MAP.get(status_str, "failed")
+
+            # Find the drop by session_id
             drop = None
             if session_id:
                 drop = db.query(VoicemailDrop).filter(
                     VoicemailDrop.rvm_session_id == session_id
                 ).first()
-            if not drop and tag:
-                try:
-                    drop = db.query(VoicemailDrop).filter(
-                        VoicemailDrop.id == int(tag)
-                    ).first()
-                except (ValueError, TypeError):
-                    pass
 
             if drop:
                 drop.status = new_status
-                drop.rvm_dispo_code = dispo_code
+                drop.rvm_dispo_code = status_str
                 if new_status == "delivered":
                     drop.delivered_at = datetime.now(timezone.utc)
 
@@ -2738,27 +2749,55 @@ async def rvm_webhook(
                         "provider": "slybroadcast",
                         "session_id": session_id,
                         "phone": phone,
-                        "dispo_code": dispo_code,
+                        "dispo_code": status_str,
+                        "failure_reason": failure_reason,
+                        "delivery_time": delivery_time,
+                        "carrier": carrier,
                     }
                 )
                 db.add(event)
                 db.commit()
                 logger.info(
-                    f"Slybroadcast webhook: drop {drop.id} → {new_status} (dispo={dispo_code})"
+                    f"Slybroadcast webhook: drop {drop.id} → {new_status} "
+                    f"(status={status_str}, carrier={carrier})"
                 )
             else:
                 logger.warning(
-                    f"Slybroadcast webhook: no matching drop for session={session_id} tag={tag}"
+                    f"Slybroadcast webhook: no matching drop for session={session_id}"
                 )
 
             # Slybroadcast requires plain "OK" response
             return Response(content="OK", media_type="text/plain")
 
         # --- Drop Cowboy / JSON format ---
+        body = await request.body()
+        body_text = body.decode("utf-8", errors="replace").strip()
+
+        # Check if this is actually a Slybroadcast callback sent without
+        # proper content-type (pipe-delimited with quotes)
+        if "|" in body_text and "application/json" not in content_type:
+            # Same parsing as above, treat as Slybroadcast
+            parts = [p.strip().strip('"') for p in body_text.split("|")]
+            session_id = parts[0] if len(parts) > 0 else ""
+            status_str = parts[2].upper() if len(parts) > 2 else ""
+            new_status = _SLYBROADCAST_DISPO_MAP.get(status_str, "failed")
+            if session_id:
+                drop = db.query(VoicemailDrop).filter(
+                    VoicemailDrop.rvm_session_id == session_id
+                ).first()
+                if drop:
+                    drop.status = new_status
+                    drop.rvm_dispo_code = status_str
+                    if new_status == "delivered":
+                        drop.delivered_at = datetime.now(timezone.utc)
+                    db.commit()
+                    logger.info(f"Slybroadcast webhook (raw): drop {drop.id} → {new_status}")
+            return Response(content="OK", media_type="text/plain")
+
         try:
             data = await request.json()
         except Exception:
-            logger.warning(f"RVM webhook: non-JSON, non-pipe body: {body_text[:200]}")
+            logger.warning(f"RVM webhook: unrecognized body format: {body_text[:200]}")
             return Response(content="OK", media_type="text/plain")
 
         foreign_id = str(data.get("foreign_id", ""))
