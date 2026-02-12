@@ -194,7 +194,7 @@ const TypeBadge = ({ type }) => {
   return <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: c.bg, color: c.fg, letterSpacing: "0.03em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{c.t}</span>;
 };
 
-const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled }) => {
+const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled, placeholderText }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
@@ -232,7 +232,7 @@ const SearchableSelect = ({ value, onChange, suggestedSF, sfFields, disabled }) 
         opacity: disabled ? 0.5 : 1,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {sel ? (<><span style={{ color: "#9ca3af", fontSize: 11 }}>{sel.object}.</span><span style={{ fontWeight: 600, color: "#065f46" }}>{sel.apiName}</span></>) : (disabled ? "Loading fields..." : "Select Salesforce field...")}
+          {sel ? (<><span style={{ color: "#9ca3af", fontSize: 11 }}>{sel.object}.</span><span style={{ fontWeight: 600, color: "#065f46" }}>{sel.apiName}</span></>) : (disabled ? (placeholderText || "Loading fields...") : "Select Salesforce field...")}
         </span>
         <span style={{ fontSize: 9, marginLeft: 4, flexShrink: 0, color: "#9ca3af" }}>{open ? "\u25B2" : "\u25BC"}</span>
       </button>
@@ -305,7 +305,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
         });
         if (!objectsRes.ok) throw new Error('Failed to load SF objects');
         const objectsData = await objectsRes.json();
-        const relevantObjects = objectsData.relevant_objects || [];
+        const relevantObjects = objectsData.objects || objectsData.relevant_objects || [];
 
         // Fetch fields for each relevant object in parallel
         const allFields = [];
@@ -504,6 +504,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
   }
 
   const fieldsDisabled = loadingSfFields || sfFields.length === 0;
+  const fieldsPlaceholder = loadingSfFields ? "Loading fields..." : (sfFields.length === 0 ? "Run Schema Discovery first" : "Select Salesforce field...");
 
   return (
     <div style={{ fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif" }}>
@@ -669,6 +670,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                           suggestedSF={m.suggestedSF}
                           sfFields={sfFields}
                           disabled={fieldsDisabled}
+                          placeholderText={fieldsPlaceholder}
                         />
                       </div>
                     );
@@ -773,7 +775,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                           <TypeBadge type={f.type} />
                         </div>
                         <div style={{ color: isMapped ? "#059669" : "#d1d5db", fontSize: 13, flexShrink: 0 }}>{"\u2192"}</div>
-                        <SearchableSelect value={mappings[f.key] || null} onChange={val => setMapping(f.key, val)} suggestedSF={f.suggestedSF} sfFields={sfFields} disabled={fieldsDisabled} />
+                        <SearchableSelect value={mappings[f.key] || null} onChange={val => setMapping(f.key, val)} suggestedSF={f.suggestedSF} sfFields={sfFields} disabled={fieldsDisabled} placeholderText={fieldsPlaceholder} />
                       </div>
                     );
                   })}
