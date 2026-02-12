@@ -1007,3 +1007,20 @@ def register_health_routes(app, get_db, **kwargs):
             return {"status": "disabled", "message": "Cache module not available"}
         except Exception as e:
             return {"status": "error", "error": "Internal server error"}
+
+    @app.get("/health/fix-columns")
+    async def fix_missing_columns(db: Session = Depends(get_db)):
+        """One-time migration to add missing columns. Safe to call multiple times."""
+        results = []
+        stmts = [
+            "ALTER TABLE leads ADD COLUMN IF NOT EXISTS initial_consultation_date TIMESTAMP",
+        ]
+        for stmt in stmts:
+            try:
+                db.execute(text(stmt))
+                db.commit()
+                results.append({"sql": stmt, "status": "ok"})
+            except Exception as e:
+                db.rollback()
+                results.append({"sql": stmt, "status": "error", "error": str(e)})
+        return {"results": results}
