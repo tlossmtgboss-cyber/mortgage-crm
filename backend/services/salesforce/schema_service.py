@@ -27,7 +27,7 @@ CANONICAL_MAPPINGS = {
     'last_name': {'entity': 'borrower', 'field': 'last_name', 'aliases': ['lastname', 'lname', 'last', 'borrowerlastname']},
     'email': {'entity': 'borrower', 'field': 'email', 'aliases': ['emailaddress', 'email__c', 'borroweremail']},
     'phone': {'entity': 'borrower', 'field': 'phone', 'aliases': ['mobilephone', 'phone__c', 'cellphone', 'mobile']},
-    'ssn': {'entity': 'borrower', 'field': 'ssn', 'aliases': ['socialsecuritynumber', 'ssn__c', 'social']},
+    'ssn': {'entity': 'borrower', 'field': 'ssn', 'aliases': ['socialsecuritynumber', 'ssn__c', 'social', 'social_security_number__c', 'social_security__c', 'borrower_ssn__c', 'ssn_encrypted__c', 'tax_id__c', 'taxid']},
 
     # Loan fields
     'loan_amount': {'entity': 'loan', 'field': 'loan_amount', 'aliases': ['loanamount__c', 'amount', 'requestedamount']},
