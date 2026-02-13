@@ -1446,7 +1446,8 @@ async def check_email_verification(
     try:
         # Find token in verification_codes
         for key, data in verification_codes.items():
-            if key.startswith("email_") and data.get("token") == token:
+            import hmac as _hmac
+            if key.startswith("email_") and _hmac.compare_digest(data.get("token") or "", token):
                 if datetime.utcnow() > data["expires"]:
                     del verification_codes[key]
                     return {"valid": False, "message": "Token expired"}

@@ -37,7 +37,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     from database.models import User
 
     @app.get("/api/v1/debug/purl-routes-status")
-    async def debug_purl_routes_status():
+    async def debug_purl_routes_status(current_user: User = Depends(get_current_user)):
         """Debug endpoint to check PURL routes loading status"""
         return {
             "purl_routes_loaded": route_errors.get("purl") is None,
@@ -45,7 +45,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         }
 
     @app.get("/api/v1/debug/purl-tables-status")
-    async def debug_purl_tables_status(db: Session = Depends(get_db)):
+    async def debug_purl_tables_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Debug endpoint to check if PURL tables exist in database"""
         from sqlalchemy import inspect
         inspector = inspect(db.bind)
@@ -82,7 +82,8 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     @app.get("/api/v1/debug/user-delete-diagnosis")
     async def debug_user_delete_diagnosis(
         user_id: int,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
     ):
         """Debug endpoint to diagnose user deletion blockers (no actual deletion)"""
         # Check if user exists
@@ -135,7 +136,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         }
 
     @app.get("/api/v1/debug/list-test-users")
-    async def debug_list_test_users(db: Session = Depends(get_db)):
+    async def debug_list_test_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """List users available for testing (non-admin only)"""
         users = db.execute(text("""
             SELECT id, email, full_name, is_active, role
@@ -153,6 +154,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     async def debug_purl_token_verify(
         token: str,
         workspace_slug: str,
+        current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
     ):
         """Debug endpoint to test PURL token verification"""
@@ -232,7 +234,8 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     @app.post("/api/v1/debug/purl-create-test-workspace")
     async def debug_create_test_workspace(
         test_name: str = "debug-test",
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
     ):
         """Debug endpoint to create a test PURL workspace with token"""
         import hashlib
@@ -306,7 +309,8 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     @app.get("/api/v1/debug/purl-auth-flow")
     async def debug_purl_auth_flow(
         token: str,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
     ):
         """Debug endpoint to test the full PURL auth flow"""
         import traceback
@@ -421,7 +425,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
 
     @app.get("/api/v1/debug/appointments-status", tags=["Debug"])
-    async def debug_appointments_status(db: Session = Depends(get_db)):
+    async def debug_appointments_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Debug endpoint to check recent appointments and reminder status"""
         result = {
             "scheduler_appointments": [],
@@ -610,6 +614,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     async def create_test_appointment(
         attendee_email: str = "tloss@me.com",
         attendee_phone: str = "8438345251",
+        current_user: User = Depends(get_current_user),
         attendee_name: str = "Test Reminder",
         hours_from_now: int = 24,
         db: Session = Depends(get_db)
@@ -673,7 +678,8 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     @app.post("/api/v1/debug/send-test-sms", tags=["Debug"])
     async def send_test_sms(
         phone: str = "8438345251",
-        message: str = "Test reminder from Perennia AI - your appointment is coming up!"
+        message: str = "Test reminder from Perennia AI - your appointment is coming up!",
+        current_user: User = Depends(get_current_user)
     ):
         """Send a test SMS to verify Twilio is working"""
         import os
@@ -719,7 +725,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
 
     @app.post("/api/v1/debug/trigger-appointment-reminders", tags=["Debug"])
-    async def trigger_appointment_reminders():
+    async def trigger_appointment_reminders(current_user: User = Depends(get_current_user)):
         """Manually trigger the appointment reminder job"""
         try:
             from services.scheduler_service import scheduler_service
@@ -730,7 +736,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
 
     @app.get("/api/v1/debug/cache-stats", tags=["Debug"])
-    async def debug_cache_stats():
+    async def debug_cache_stats(current_user: User = Depends(get_current_user)):
         """
         Debug endpoint to monitor Redis LLM cache statistics.
 
@@ -780,7 +786,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
     # DataDog monitoring status endpoint
     @app.get("/api/v1/debug/datadog-status", tags=["Debug"])
-    async def debug_datadog_status():
+    async def debug_datadog_status(current_user: User = Depends(get_current_user)):
         """
         Debug endpoint to check DataDog monitoring status.
 
@@ -825,7 +831,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
 
     @app.get("/api/v1/debug/datadog-dashboard-config", tags=["Debug"])
-    async def get_datadog_dashboard_config():
+    async def get_datadog_dashboard_config(current_user: User = Depends(get_current_user)):
         """
         Get DataDog dashboard configuration JSON.
 
@@ -877,7 +883,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
 
     @app.get("/api/v1/debug/cdn-status", tags=["Debug"])
-    async def get_cdn_status():
+    async def get_cdn_status(current_user: User = Depends(get_current_user)):
         """
         Get CloudFront CDN status and configuration.
 

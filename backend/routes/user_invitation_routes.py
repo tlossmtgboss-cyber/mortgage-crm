@@ -387,7 +387,8 @@ def get_user_invitation_routes(
 
         for user in users:
             user_meta = user.user_metadata or {}
-            if user_meta.get("invitation_token") == token:
+            import hmac
+            if hmac.compare_digest(user_meta.get("invitation_token") or "", token):
                 # Check expiration
                 expires_at = user_meta.get("invitation_expires_at")
                 if expires_at:
@@ -441,7 +442,8 @@ def get_user_invitation_routes(
 
         for user in users:
             user_meta = user.user_metadata or {}
-            if user_meta.get("invitation_token") == request.token:
+            import hmac
+            if hmac.compare_digest(user_meta.get("invitation_token") or "", request.token):
                 # Check expiration
                 expires_at = user_meta.get("invitation_expires_at")
                 if expires_at:

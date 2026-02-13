@@ -737,7 +737,7 @@ def register_health_routes(app, get_db, **kwargs):
             tables_created.append("oauth_states")
         except Exception as e:
             db.rollback()
-            tables_created.append(f"oauth_states error: {str(e)[:50]}")
+            tables_created.append("oauth_states error: table creation failed")
 
         try:
             db.execute(text("""
@@ -768,7 +768,7 @@ def register_health_routes(app, get_db, **kwargs):
             tables_created.append("integration_profiles")
         except Exception as e:
             db.rollback()
-            tables_created.append(f"integration_profiles error: {str(e)[:50]}")
+            tables_created.append("integration_profiles error: table creation failed")
 
         return {"ping": "pong", "status": "ok", "tables": tables_created}
 
@@ -844,19 +844,19 @@ def register_health_routes(app, get_db, **kwargs):
             from smart_scheduler_models import create_smart_scheduler_models
             status["smart_scheduler_models_module"] = True
         except Exception as e:
-            status["errors"].append(f"smart_scheduler_models: {str(e)}")
+            status["errors"].append("smart_scheduler_models: import failed")
 
         try:
             from services.notification_service import notification_service
             status["notification_service"] = True
         except Exception as e:
-            status["errors"].append(f"notification_service: {str(e)}")
+            status["errors"].append("notification_service: import failed")
 
         try:
             from services.microsoft_graph import create_event_via_graph, CalendarResult
             status["microsoft_graph"] = True
         except Exception as e:
-            status["errors"].append(f"microsoft_graph: {str(e)}")
+            status["errors"].append("microsoft_graph: import failed")
 
         try:
             from smart_scheduler_routes import router as smart_scheduler_router
@@ -869,7 +869,7 @@ def register_health_routes(app, get_db, **kwargs):
                     status["public_slots_route"] = True
                     break
         except Exception as e:
-            status["errors"].append(f"smart_scheduler_routes: {str(e)}")
+            status["errors"].append("smart_scheduler_routes: import failed")
 
         # Check if route is registered in app
         for route in app.routes:
@@ -918,7 +918,7 @@ def register_health_routes(app, get_db, **kwargs):
             db.close()
             checks["database"] = True
         except Exception as e:
-            errors.append(f"Database: {str(e)}")
+            errors.append("Database: connection failed")
 
         # Check Redis (required in production)
         try:
@@ -936,7 +936,7 @@ def register_health_routes(app, get_db, **kwargs):
                 r.ping()
                 checks["redis"] = True
             except Exception as e:
-                errors.append(f"Redis: {str(e)}")
+                errors.append("Redis: connection failed")
 
         # Determine readiness based on environment
         from config import is_production

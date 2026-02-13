@@ -18,6 +18,7 @@ import logging
 import csv
 import io
 import re
+import hmac
 
 logger = logging.getLogger(__name__)
 
@@ -1084,7 +1085,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                     except Exception:
                         continue
 
-                if user_metadata and user_metadata.get("invitation_token") == token:
+                if user_metadata and hmac.compare_digest(user_metadata.get("invitation_token") or "", token):
                     # Check expiration
                     expires_at_str = user_metadata.get("invitation_expires_at")
                     if expires_at_str:
@@ -1204,7 +1205,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                 else:
                     user_metadata = user_metadata_raw
 
-                if user_metadata and user_metadata.get("invitation_token") == token:
+                if user_metadata and hmac.compare_digest(user_metadata.get("invitation_token") or "", token):
                     # Check expiration
                     expires_at_str = user_metadata.get("invitation_expires_at")
                     if expires_at_str:

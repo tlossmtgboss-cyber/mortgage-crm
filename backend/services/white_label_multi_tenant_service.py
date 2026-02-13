@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import json
 import hashlib
+import hmac
 
 logger = logging.getLogger(__name__)
 
@@ -931,7 +932,7 @@ class WhiteLabelMultiTenantService:
 
         # Search cached tenants
         for tenant in self._tenant_cache.values():
-            if tenant.api_key_hash == api_key_hash:
+            if hmac.compare_digest(tenant.api_key_hash or "", api_key_hash):
                 if tenant.status in [TenantStatus.ACTIVE, TenantStatus.TRIAL]:
                     return tenant.id
                 return None
