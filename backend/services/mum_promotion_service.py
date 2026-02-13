@@ -99,6 +99,14 @@ def maybe_promote_loan_to_mum(
         if first_payment.tzinfo is None:
             first_payment = first_payment.replace(tzinfo=timezone.utc)
 
+        # Copy term and property location from loan
+        loan_term = getattr(loan, 'term', None) or 360
+        prop_state = getattr(loan, 'property_state', None)
+        prop_zip = getattr(loan, 'property_zip', None)
+
+        # Compute maturity date from first payment + term
+        maturity = first_payment + timedelta(days=loan_term * 30)  # Approximate
+
         # Create MUM client
         mum_client = MUMClient(
             client_name=client_name,
@@ -131,6 +139,10 @@ def maybe_promote_loan_to_mum(
             closer_email=loan.closer_email,
             user_id=owner_user_id,
             organization_id=org_id,
+            term=loan_term,
+            maturity_date=maturity,
+            property_state=prop_state,
+            property_zip=prop_zip,
         )
 
         db.add(mum_client)

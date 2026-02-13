@@ -222,6 +222,61 @@ def _ensure_loans_columns():
                     logger.info(f"✅ Backfilled {fixed} 'Unknown Borrower' loan names from leads")
             except Exception as bf_err:
                 logger.warning(f"⚠️ Borrower name backfill skipped: {bf_err}")
+
+            # Backfill: Mark loans with past closing_date or funded_date as FUNDED
+            try:
+                result = conn.execute(text("""
+                    UPDATE loans
+                    SET stage = 'FUNDED',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE (
+                        (funded_date IS NOT NULL AND funded_date < CURRENT_TIMESTAMP)
+                        OR (closing_date IS NOT NULL AND closing_date < CURRENT_TIMESTAMP)
+                    )
+                    AND UPPER(stage::text) NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN')
+                """))
+                conn.commit()
+                fixed_stages = result.rowcount
+                if fixed_stages > 0:
+                    logger.info(f"✅ Corrected {fixed_stages} closed loans to FUNDED stage")
+            except Exception as stage_err:
+                logger.warning(f"⚠️ Loan stage correction skipped: {stage_err}")
+
+            # Auto-promote funded loans without MUM clients
+            try:
+                eligible = conn.execute(text("""
+                    SELECT l.id, l.loan_number, l.loan_officer_id
+                    FROM loans l
+                    LEFT JOIN mum_clients mc ON mc.loan_number = l.loan_number
+                    WHERE mc.id IS NULL
+                      AND (
+                        l.funded_date IS NOT NULL
+                        OR l.closing_date IS NOT NULL
+                        OR UPPER(l.stage::text) = 'FUNDED'
+                      )
+                """)).fetchall()
+                if eligible:
+                    logger.info(f"🔄 Found {len(eligible)} funded loans without MUM clients — promoting...")
+                    promoted = 0
+                    for row in eligible:
+                        loan_id, loan_number, lo_id = row[0], row[1], row[2]
+                        try:
+                            from services.mum_promotion_service import maybe_promote_loan_to_mum
+                            from database import SessionLocal
+                            session = SessionLocal()
+                            try:
+                                mum_id = maybe_promote_loan_to_mum(session, loan_id, lo_id or 1)
+                                if mum_id:
+                                    promoted += 1
+                                session.commit()
+                            finally:
+                                session.close()
+                        except Exception as promo_err:
+                            logger.warning(f"⚠️ Could not promote loan {loan_id}: {promo_err}")
+                    if promoted:
+                        logger.info(f"✅ Auto-promoted {promoted} funded loans to MUM clients")
+            except Exception as promo_err:
+                logger.warning(f"⚠️ Auto-promotion skipped: {promo_err}")
     except Exception as e:
         logger.warning(f"⚠️ Could not sync loans columns: {e}")
 
