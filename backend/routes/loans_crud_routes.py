@@ -198,6 +198,30 @@ def _ensure_loans_columns():
                     pass  # Column might already exist or type conflict
             conn.commit()
             logger.info(f"✅ Loans table column sync complete ({len(columns)} checked)")
+
+            # Backfill: Fix "Unknown Borrower" names from leads with matching email
+            try:
+                result = conn.execute(text("""
+                    UPDATE loans l
+                    SET borrower_name = COALESCE(
+                        (SELECT TRIM(CONCAT(ld.first_name, ' ', ld.last_name))
+                         FROM leads ld
+                         WHERE ld.email = l.borrower_email
+                           AND ld.first_name IS NOT NULL
+                           AND ld.first_name != ''
+                         LIMIT 1),
+                        l.borrower_name
+                    ),
+                    updated_at = CURRENT_TIMESTAMP
+                    WHERE (l.borrower_name IS NULL OR l.borrower_name = 'Unknown Borrower')
+                      AND l.borrower_email IS NOT NULL
+                """))
+                conn.commit()
+                fixed = result.rowcount
+                if fixed > 0:
+                    logger.info(f"✅ Backfilled {fixed} 'Unknown Borrower' loan names from leads")
+            except Exception as bf_err:
+                logger.warning(f"⚠️ Borrower name backfill skipped: {bf_err}")
     except Exception as e:
         logger.warning(f"⚠️ Could not sync loans columns: {e}")
 

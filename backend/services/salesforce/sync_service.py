@@ -541,12 +541,32 @@ class SalesforceSyncService:
 
     # Valid columns on the loans table that can be set from Salesforce sync
     VALID_LOAN_COLUMNS = {
+        # Core borrower info
         'borrower_name', 'borrower_email', 'borrower_phone',
-        'amount', 'interest_rate', 'loan_type', 'loan_purpose', 'program',
-        'loan_number', 'ltv', 'property_address', 'property_city',
-        'property_state', 'property_zip', 'property_type', 'property_value',
+        # Core loan details
+        'amount', 'rate', 'loan_type', 'loan_purpose', 'program',
+        'loan_number', 'ltv', 'term', 'stage',
+        # Core property info
+        'property_address', 'property_city', 'property_state',
+        'property_zip', 'property_type', 'property_value',
+        # Core dates
         'closing_date', 'funded_date', 'application_date', 'lock_expiration_date',
-        'stage',
+        # Extended - property details
+        'occupancy_type', 'property_county', 'property_ownership_type',
+        'property_units', 'appraisal_value', 'purchase_price',
+        # Extended - financial details
+        'rate_type', 'monthly_payment', 'property_tax', 'hazard_insurance',
+        'mortgage_insurance', 'hoa_amount', 'origination_fee',
+        'estimated_prepaid_interest', 'points', 'index_rate', 'margin',
+        # Extended - loan ratios
+        'cltv', 'dti', 'apr', 'file_state',
+        # Extended - 2nd loan
+        'second_loan_amount', 'second_loan_rate', 'second_loan_payment',
+        # Extended - housing expenses
+        'present_monthly_payment', 'proposed_monthly_payment',
+        'present_housing_expense', 'proposed_housing_expense',
+        # Additional
+        'down_payment', 'credit_score', 'lock_date', 'lender',
     }
 
     async def _upsert_loan(
@@ -1686,6 +1706,7 @@ class SalesforceSyncService:
         # Try to get borrower contact info from related Account/Contact
         borrower_email = None
         borrower_phone = None
+        borrower_name = None
         account_id = sf_opp.get('AccountId')
         if account_id:
             try:
@@ -1694,8 +1715,13 @@ class SalesforceSyncService:
                 )
                 borrower_email = contact_info.get('email')
                 borrower_phone = contact_info.get('phone')
+                borrower_name = contact_info.get('full_name')
             except Exception:
                 pass  # Best-effort
+
+        # Use contact name if available, otherwise fall back to Opportunity Name
+        if not borrower_name:
+            borrower_name = name
 
         db.execute(text("""
             INSERT INTO loans (
@@ -1704,14 +1730,14 @@ class SalesforceSyncService:
                 salesforce_id, loan_officer_id, organization_id,
                 created_at, updated_at
             ) VALUES (
-                :loan_number, :name, :borrower_email, :borrower_phone,
+                :loan_number, :borrower_name, :borrower_email, :borrower_phone,
                 :amount, :stage, :close_date, :funded_date, :loan_type,
                 :sf_id, :user_id, :org_id,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
         """), {
             "loan_number": loan_number,
-            "name": name,
+            "borrower_name": borrower_name,
             "borrower_email": borrower_email,
             "borrower_phone": borrower_phone,
             "amount": amount,
@@ -1724,7 +1750,7 @@ class SalesforceSyncService:
             "org_id": org_id,
         })
 
-        logger.info(f"Created CRM loan from Salesforce Opportunity {sf_id}: {name} (${amount:,.0f}, stage={stage})")
+        logger.info(f"Created CRM loan from Salesforce Opportunity {sf_id}: {borrower_name} (${amount:,.0f}, stage={stage})")
         return True
 
     async def _get_contact_for_account(
@@ -1745,7 +1771,7 @@ class SalesforceSyncService:
             """), {"user_id": user_id}).fetchone().id
         )
 
-        soql = f"SELECT Email, Phone, MobilePhone FROM Contact WHERE AccountId = '{account_id}' AND Email != null ORDER BY LastModifiedDate DESC LIMIT 1"
+        soql = f"SELECT FirstName, LastName, Email, Phone, MobilePhone FROM Contact WHERE AccountId = '{account_id}' AND Email != null ORDER BY LastModifiedDate DESC LIMIT 1"
 
         async with get_sf_client() as client:
             response = await client.get(
@@ -1759,7 +1785,13 @@ class SalesforceSyncService:
                 data = response.json()
                 if data.get('totalSize', 0) > 0:
                     record = data['records'][0]
+                    first = record.get('FirstName') or ''
+                    last = record.get('LastName') or ''
+                    full_name = f"{first} {last}".strip()
                     return {
+                        'first_name': first,
+                        'last_name': last,
+                        'full_name': full_name,
                         'email': record.get('Email'),
                         'phone': record.get('Phone') or record.get('MobilePhone'),
                     }

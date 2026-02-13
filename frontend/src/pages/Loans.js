@@ -803,7 +803,7 @@ function Loans() {
                 </td>
                 <td className="borrower-name">
                   <div className="borrower-info">
-                    <span>{loan.borrower || loan.borrower_name}</span>
+                    <span>{(loan.borrower_name && loan.borrower_name !== 'Unknown Borrower') ? loan.borrower_name : loan.borrower || loan.borrower_email || 'Unknown Borrower'}</span>
                     {hasDuplicate(loan.id) && (
                       <span
                         className="duplicate-badge"
