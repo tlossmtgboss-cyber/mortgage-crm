@@ -8,11 +8,13 @@ Endpoints for:
 - Production calculator
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
 from typing import Optional
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 import os
+from database import get_db
 from services.recruit_assessment_service import recruit_assessment_service
 from sqlalchemy.exc import SQLAlchemyError
 from models.recruit_assessment_models import (
@@ -128,9 +130,15 @@ async def get_calculator_config(organization_id: int = 1):
 @router.put("/calculator/config", response_model=CalculatorConfig)
 async def update_calculator_config(
     config: CalculatorConfig,
-    organization_id: int = 1
+    organization_id: int = 1,
+    request: Request = None,
+    db: Session = Depends(get_db)
 ):
-    """Update production calculator configuration."""
+    """Update production calculator configuration (admin only)."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     return recruit_assessment_service.update_calculator_config(config, organization_id)
 
 
@@ -166,8 +174,12 @@ class QuizTemplateCreate(BaseModel):
 
 
 @router.get("/quiz/templates/all")
-async def get_all_quiz_templates():
+async def get_all_quiz_templates(request: Request = None, db: Session = Depends(get_db)):
     """Get all quiz templates (admin only)."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     from database import engine
     from sqlalchemy import text
 
@@ -199,8 +211,12 @@ async def get_all_quiz_templates():
 
 
 @router.post("/quiz/templates")
-async def create_quiz_template(template: QuizTemplateCreate):
+async def create_quiz_template(template: QuizTemplateCreate, request: Request = None, db: Session = Depends(get_db)):
     """Create a new quiz template (admin only)."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     from database import engine
     from sqlalchemy import text
 
@@ -228,8 +244,12 @@ async def create_quiz_template(template: QuizTemplateCreate):
 
 
 @router.delete("/quiz/templates/{template_id}")
-async def delete_quiz_template(template_id: int):
+async def delete_quiz_template(template_id: int, request: Request = None, db: Session = Depends(get_db)):
     """Soft delete a quiz template (admin only)."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     from database import engine
     from sqlalchemy import text
 
@@ -248,10 +268,12 @@ async def delete_quiz_template(template_id: int):
 # =============================================================================
 
 @router.post("/admin/run-assessment-migration")
-async def run_assessment_migration(admin_key: str = Query(...)):
+async def run_assessment_migration(request: Request = None, db: Session = Depends(get_db)):
     """Run the assessment tables migration (admin only)."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
 
     try:
         from migrations.add_recruit_assessment_tables import run_migration

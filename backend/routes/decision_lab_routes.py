@@ -712,7 +712,11 @@ async def create_overlay(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Create a new education overlay."""
+    """Create a new education overlay (admin only)."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     data = await request.json()
 
     result = db.execute(text("""
@@ -748,7 +752,11 @@ async def update_overlay(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Update an existing education overlay."""
+    """Update an existing education overlay (admin only)."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     data = await request.json()
 
     # Check if overlay exists
@@ -796,9 +804,14 @@ async def update_overlay(
 @router.delete("/education/overlay/{overlay_id}")
 async def delete_overlay(
     overlay_id: int,
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
-    """Delete an education overlay."""
+    """Delete an education overlay (admin only)."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     # Check if overlay exists
     existing = db.execute(text(
         "SELECT id FROM education_overlays WHERE id = :id"
@@ -916,15 +929,14 @@ async def get_lesson(
 
 @router.post("/admin/seed-questions")
 async def seed_questions(
-    admin_key: str = Query(...),
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Seed initial confidence questions and education content (admin only)."""
-    import os
-
-    expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key != expected_key:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
 
     try:
         from migrations.add_borrower_confidence_engine import seed_initial_data
@@ -946,16 +958,15 @@ async def seed_questions(
 
 @router.get("/admin/debug-tables")
 async def debug_tables(
-    admin_key: str = Query(...),
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Debug endpoint to check table state (admin only)."""
-    import os
     import json
-
-    expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key != expected_key:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
 
     result = {"errors": []}
 
@@ -1014,15 +1025,14 @@ async def debug_tables(
 
 @router.post("/admin/run-migration")
 async def run_migration(
-    admin_key: str = Query(...),
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Run the Borrower Confidence Engine migration (admin only)."""
-    import os
-
-    expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key != expected_key:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
 
     try:
         from migrations.add_borrower_confidence_engine import run_migration as do_migration, seed_initial_data

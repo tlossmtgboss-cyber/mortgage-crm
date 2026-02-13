@@ -12,7 +12,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, HTTPException, Query, Body, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -811,11 +811,14 @@ async def list_assessments():
 
 
 @router.post("/admin/run-migration")
-async def run_disc_migration(admin_key: str = Query(...)):
+async def run_disc_migration(request: Request = None):
     """Run DISC migration (admin only)."""
-    expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key != expected_key:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    from database import get_db as _get_db
+    from main import get_current_user_flexible
+    db = next(_get_db())
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
 
     try:
         from migrations.add_disc_motivators_assessment import run_migration
