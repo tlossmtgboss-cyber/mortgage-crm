@@ -797,12 +797,16 @@ DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON."""
 # HELPER FUNCTIONS
 # ================================================================
 
-def get_current_user_id(db: Session) -> int:
-    """Get current user ID - placeholder for auth integration"""
-    # In production, this would come from JWT token
-    # For now, return demo user
-    result = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1")).fetchone()
-    return result[0] if result else 1
+async def get_current_user_id(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> int:
+    """Extract authenticated user ID from JWT token."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    user = await get_current_user_flexible(token=token, request=request, db=db)
+    return user.id
 
 
 # ================================================================
@@ -818,12 +822,12 @@ async def get_email_queue(
     priority_only: bool = Query(False, description="Only priority emails"),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
     Get emails in reconciliation queue
     """
-    user_id = get_current_user_id(db)
 
     # Build query
     query = """
@@ -917,10 +921,10 @@ async def get_email_queue(
 @router.get("/queue/{email_id}")
 async def get_email_detail(
     email_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Get single email with full details"""
-    user_id = get_current_user_id(db)
 
     result = db.execute(text("""
         SELECT
@@ -987,10 +991,10 @@ async def get_email_detail(
 @router.delete("/queue/{email_id}")
 async def delete_email_from_queue(
     email_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Delete an email from the queue"""
-    user_id = get_current_user_id(db)
 
     # Check if email exists and belongs to user
     result = db.execute(text("""
@@ -1014,10 +1018,10 @@ async def delete_email_from_queue(
 @router.post("/queue/{email_id}/analyze")
 async def analyze_email(
     email_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Run AI analysis on email"""
-    user_id = get_current_user_id(db)
 
     # Get email
     result = db.execute(text("""
@@ -1081,12 +1085,12 @@ async def analyze_email(
 async def disposition_email(
     email_id: int,
     action: ReconciliationActionRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
     Process email disposition - save to conversation log, import data, etc.
     """
-    user_id = get_current_user_id(db)
 
     # Get email
     result = db.execute(text("""
@@ -1223,10 +1227,10 @@ async def get_conversation_log(
     entity_type: Literal["contact", "loan", "lead"],
     entity_id: int,
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Get conversation log for an entity"""
-    user_id = get_current_user_id(db)
 
     if entity_type == "contact":
         filter_col = "contact_id"
@@ -1277,10 +1281,10 @@ async def get_document_tracking(
     entity_type: Literal["loan", "lead"],
     entity_id: int,
     status: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Get document tracking for an entity"""
-    user_id = get_current_user_id(db)
 
     filter_col = "loan_id" if entity_type == "loan" else "lead_id"
 
@@ -1324,10 +1328,10 @@ async def get_all_document_tracking(
     status: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Get all document tracking records for the current user"""
-    user_id = get_current_user_id(db)
 
     # First get total count
     count_query = "SELECT COUNT(*) FROM email_document_tracking WHERE user_id = :user_id"
@@ -1383,10 +1387,10 @@ async def get_all_document_tracking(
 async def mark_document_received(
     doc_id: int,
     received_email_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Mark a tracked document as received"""
-    user_id = get_current_user_id(db)
 
     db.execute(text("""
         UPDATE email_document_tracking
@@ -1411,10 +1415,10 @@ async def mark_document_received(
 @router.get("/stats")
 async def get_email_intelligence_stats(
     days: int = Query(7, le=90),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Get email intelligence statistics"""
-    user_id = get_current_user_id(db)
     since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Queue stats by disposition
@@ -1516,14 +1520,14 @@ async def get_email_intelligence_stats(
 async def import_email_to_queue(
     email_data: Dict[str, Any],
     auto_analyze: bool = Query(True),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
     Import an email into the reconciliation queue
 
     Used by email sync services to add emails for processing
     """
-    user_id = get_current_user_id(db)
 
     # Check for duplicate
     if email_data.get("provider_message_id"):
@@ -1667,14 +1671,14 @@ async def import_email_to_queue(
 
 @router.post("/sync-known-clients")
 async def sync_known_client_emails(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
     Sync all known client emails from leads, loans, and contacts
 
     This builds the known_client_emails lookup table for email matching
     """
-    user_id = get_current_user_id(db)
 
     synced = 0
 
@@ -2148,14 +2152,14 @@ async def queue_email_for_intelligence(
 async def batch_import_emails(
     emails: List[Dict[str, Any]],
     auto_analyze: bool = Query(False),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
     Import multiple emails to the queue in batch.
 
     This is the primary endpoint for email sync services.
     """
-    user_id = get_current_user_id(db)
 
     results = {
         "queued": 0,
@@ -2192,7 +2196,7 @@ async def batch_import_emails(
 async def cron_sync_emails_to_queue(
     api_key: str = Query(..., description="API key for cron authentication"),
     days_back: int = Query(1, le=7),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Cron endpoint to sync ALL emails from connected providers to the intelligence queue.
@@ -2201,9 +2205,10 @@ async def cron_sync_emails_to_queue(
     this queues ALL emails for intelligent disposition.
     """
     import os
+    import hmac
 
     expected_key = os.getenv("CRON_API_KEY")
-    if not expected_key or api_key != expected_key:
+    if not expected_key or not hmac.compare_digest(api_key, expected_key):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     # First, refresh known client emails
@@ -2927,7 +2932,8 @@ async def process_email_with_intelligence(
     create_task: bool = Query(False, description="Create follow-up task"),
     task_title: Optional[str] = Query(None, description="Task title if creating"),
     task_due_days: int = Query(3, description="Days until task due"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
     Process email with full conversation intelligence.
@@ -2939,7 +2945,6 @@ async def process_email_with_intelligence(
     - Follow-up task (optional)
     """
     try:
-        user_id = get_current_user_id(db)
 
         service = ConversationIntelligenceService(db)
 
@@ -2966,14 +2971,14 @@ async def process_email_with_intelligence(
 async def batch_process_emails_with_intelligence(
     limit: int = Query(50, le=200),
     auto_disposition: bool = Query(True, description="Auto-determine disposition"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
     Batch process pending emails with conversation intelligence.
 
     Processes emails that have entity matches (loan/lead).
     """
-    user_id = get_current_user_id(db)
 
     # Get pending emails with matches
     pending = db.execute(text("""
@@ -3065,10 +3070,10 @@ def _auto_determine_disposition(direction: str, has_attachments: bool, analysis:
 async def get_loan_conversation_log(
     loan_id: int,
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Get conversation log entries for a loan"""
-    user_id = get_current_user_id(db)
 
     result = db.execute(text("""
         SELECT id, email_subject, email_date, direction, summary,
@@ -3104,10 +3109,10 @@ async def get_loan_conversation_log(
 async def get_sla_tracking(
     status: Optional[str] = Query(None, description="Filter by status"),
     include_breached: bool = Query(True),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Get SLA tracking records"""
-    user_id = get_current_user_id(db)
 
     try:
         # Check if table exists first
@@ -3181,10 +3186,10 @@ async def get_sla_tracking(
 async def mark_sla_responded(
     sla_id: int,
     response_email_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
     """Mark SLA as responded"""
-    user_id = get_current_user_id(db)
 
     db.execute(text("""
         UPDATE email_sla_tracking
@@ -3212,13 +3217,9 @@ async def mark_sla_responded(
 @router.get("/debug/schema")
 async def debug_email_queue_schema(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
-    # Auth check
-    from main import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
     """
     Debug endpoint to check the email_reconciliation_queue table schema.
     Shows all columns and their types.
@@ -3267,18 +3268,13 @@ async def debug_email_queue_schema(
 async def debug_test_identity_resolution(
     email_data: Dict[str, Any],
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
-    # Auth check
-    from main import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
     """
     Debug endpoint to test the EmailIdentityResolver without creating a queue record.
     Pass email data and see what match result would be returned.
     """
-    user_id = get_current_user_id(db)
 
     try:
         from services.email_identity_resolver import get_email_identity_resolver
@@ -3307,13 +3303,9 @@ async def debug_test_identity_resolution(
 @router.post("/debug/add-missing-columns")
 async def debug_add_missing_columns(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user_id: int = Depends(get_current_user_id),
 ):
-    # Auth check
-    from main import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
     """
     Add missing identity resolution columns to email_reconciliation_queue.
     """
