@@ -410,6 +410,17 @@ class SalesforceClosedLoansImporter:
         else:
             return 'Funded'  # Default for closed loans
 
+    def _get_valid_columns(self, db) -> set:
+        """Get actual column names from the loans table"""
+        if not hasattr(self, '_valid_columns') or not self._valid_columns:
+            rows = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'loans'
+            """)).fetchall()
+            self._valid_columns = {row[0] for row in rows}
+            logger.info(f"Loans table has {len(self._valid_columns)} columns")
+        return self._valid_columns
+
     async def import_loan(self, db, loan_data: Dict[str, Any]) -> Optional[int]:
         """Import a single loan to the CRM"""
         salesforce_id = loan_data.get('salesforce_id')
@@ -427,11 +438,9 @@ class SalesforceClosedLoansImporter:
                 SELECT id FROM loans WHERE loan_number = :loan_num
             """), {"loan_num": loan_number}).fetchone()
 
-        # Remove fields that don't exist in DB or are read-only
-        fields_to_remove = ['salesforce_account_id', 'notes', 'referral_source', 'credit_score',
-                           'property_type']
-        for field in fields_to_remove:
-            loan_data.pop(field, None)
+        # Remove fields that don't exist in the actual DB table
+        valid_columns = self._get_valid_columns(db)
+        loan_data = {k: v for k, v in loan_data.items() if k in valid_columns}
 
         if existing:
             # Update existing loan
@@ -444,8 +453,6 @@ class SalesforceClosedLoansImporter:
                     set_parts.append(f"{key} = :{key}")
 
             if set_parts:
-                set_parts.append("salesforce_last_synced_at = CURRENT_TIMESTAMP")
-                set_parts.append("salesforce_sync_status = 'synced'")
                 set_clause = ", ".join(set_parts)
 
                 loan_data['loan_id'] = loan_id
@@ -461,15 +468,15 @@ class SalesforceClosedLoansImporter:
             # Create new loan
             if not loan_data.get('loan_officer_id'):
                 loan_data['loan_officer_id'] = self.user_id
-
-            loan_data['salesforce_sync_status'] = 'synced'
+            if not loan_data.get('organization_id') and getattr(self, 'organization_id', None):
+                loan_data['organization_id'] = self.organization_id
 
             columns = ", ".join(loan_data.keys())
             placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
 
             result = db.execute(text(f"""
-                INSERT INTO loans ({columns}, salesforce_last_synced_at, created_at, updated_at)
-                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO loans ({columns}, created_at, updated_at)
+                VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id, loan_number
             """), loan_data)
 
@@ -492,6 +499,15 @@ class SalesforceClosedLoansImporter:
         try:
             logger.info("Starting Salesforce closed loans import...")
 
+            # Get organization_id from user for multi-tenant isolation
+            self.organization_id = None
+            if self.user_id:
+                user_row = db.execute(text(
+                    "SELECT organization_id FROM users WHERE id = :uid"
+                ), {"uid": self.user_id}).fetchone()
+                if user_row:
+                    self.organization_id = user_row[0]
+
             # Get access token
             self.access_token, self.instance_url = await self.get_access_token(db)
             logger.info(f"Connected to Salesforce: {self.instance_url}")
@@ -506,6 +522,9 @@ class SalesforceClosedLoansImporter:
             opportunities = await self.query_closed_opportunities(soql)
             self.results['total_found'] = len(opportunities)
 
+            # Pre-fetch valid columns to avoid per-record queries
+            self._get_valid_columns(db)
+
             # Import each opportunity
             for i, opp in enumerate(opportunities):
                 try:
@@ -518,12 +537,17 @@ class SalesforceClosedLoansImporter:
 
                 except Exception as e:
                     self.results['failed'] += 1
-                    self.results['errors'].append({
-                        'salesforce_id': opp.get('Id'),
-                        'name': opp.get('Name'),
-                        'error': str(e)
-                    })
+                    if len(self.results['errors']) < 20:
+                        self.results['errors'].append({
+                            'salesforce_id': opp.get('Id'),
+                            'name': opp.get('Name'),
+                            'error': str(e)
+                        })
                     logger.error(f"Failed to import {opp.get('Id')}: {e}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             db.commit()
 
