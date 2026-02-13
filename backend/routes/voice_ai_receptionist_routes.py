@@ -382,8 +382,8 @@ async def drop_voicemail(
                     "voicemail_id": voicemail_drop.id
                 }
 
-                logger.info(f"Sending to Zapier webhook: {zapier_webhook_url}")
-                logger.info(f"Zapier payload: {dict(phone_number=clean_number, recipient_name=recipient_name)}")
+                logger.info("Sending to Zapier webhook")
+                logger.info("Zapier payload prepared")
 
                 zapier_response = await client.post(
                     zapier_webhook_url,

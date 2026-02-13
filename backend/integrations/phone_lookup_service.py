@@ -207,7 +207,7 @@ class TwilioLookupProvider(PhoneLookupProvider):
             return result
 
         except Exception as e:
-            logger.error(f"Twilio Lookup failed for {phone_number}: {e}")
+            logger.error(f"Twilio Lookup failed: {type(e).__name__}")
             return LookupResult(
                 phone_number=phone_number,
                 valid=False,
@@ -315,7 +315,7 @@ class TelnyxLookupProvider(PhoneLookupProvider):
             return result
 
         except Exception as e:
-            logger.error(f"Telnyx Lookup failed for {phone_number}: {e}")
+            logger.error(f"Telnyx Lookup failed: {type(e).__name__}")
             return LookupResult(
                 phone_number=phone_number,
                 valid=False,

@@ -84,6 +84,8 @@ ALLOWED_MIME_TYPES = [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]
 
+ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'doc', 'docx'}
+
 
 # =============================================================================
 # REQUEST/RESPONSE MODELS
@@ -194,8 +196,10 @@ async def initiate_document_upload(
 
     loan_id = loan[0] if loan else None
 
-    # Generate unique storage key
-    file_ext = request.file_name.split('.')[-1].lower() if '.' in request.file_name else 'bin'
+    # Generate unique storage key with validated extension
+    file_ext = request.file_name.rsplit('.', 1)[-1].lower() if '.' in request.file_name else ''
+    if file_ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File extension '.{file_ext}' not allowed")
     unique_id = str(uuid.uuid4())
     storage_key = f"workspaces/{request.workspace_id}/documents/{unique_id}.{file_ext}"
 

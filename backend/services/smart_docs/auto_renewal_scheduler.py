@@ -291,7 +291,7 @@ class AutoRenewalScheduler:
                     loan_officer_name=context["loan_officer_name"],
                     portal_url=context["portal_url"],
                 )
-                logger.info(f"Sent renewal request notification to {context['borrower_email']}")
+                logger.info("Sent renewal request notification")
             except Exception as e:
                 logger.error(f"Failed to send renewal request notification: {e}")
 
@@ -378,7 +378,7 @@ class AutoRenewalScheduler:
                     loan_officer_name=context["loan_officer_name"],
                     portal_url=context["portal_url"],
                 )
-                logger.info(f"Sent renewal reminder email to {context['borrower_email']}")
+                logger.info("Sent renewal reminder email")
             except Exception as e:
                 logger.error(f"Failed to send renewal reminder email: {e}")
 

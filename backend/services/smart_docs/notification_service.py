@@ -91,9 +91,9 @@ class SmartDocsNotificationService:
             )
 
             if success:
-                logger.info(f"Document request notification sent to {borrower_email} for request {request.id}")
+                logger.info(f"Document request notification sent for request {request.id}")
             else:
-                logger.warning(f"Failed to send document request notification to {borrower_email}")
+                logger.warning("Failed to send document request notification")
 
             return success
 
@@ -159,7 +159,7 @@ class SmartDocsNotificationService:
             )
 
             if success:
-                logger.info(f"Bulk document request notification sent to {borrower_email} ({len(requests)} requests)")
+                logger.info(f"Bulk document request notification sent ({len(requests)} requests)")
 
             return success
 

@@ -296,7 +296,8 @@ async def make_outbound_call(
         elif not phone.startswith("+"):
             phone = f"+{phone}"
 
-        logger.info(f"Initiating outbound call to {phone} (name: {caller_name}, purpose: {purpose})")
+        from utils.pii_mask import mask_phone
+        logger.info(f"Initiating outbound call to {mask_phone(phone)} (purpose: {purpose})")
 
         # Make the call using Twilio
         call_sid = await voice_client.make_outbound_call(
@@ -865,7 +866,7 @@ async def voice_stream_websocket(websocket: WebSocket):
                             greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling! How can I help you today?"
                         else:
                             greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling. How can I help you today?"
-                        logger.info(f"🎯 Using personalized greeting for {caller_name} ({caller_category})")
+                        logger.info(f"Using personalized greeting ({caller_category})")
                     else:
                         # Unknown caller - generic greeting
                         greeting = "Hi, this is Sam with CMG Home Loans! Thanks for calling. How can I help you today?"
@@ -901,7 +902,7 @@ async def voice_stream_websocket(websocket: WebSocket):
                         call_context['caller_category'] = custom_params.get('caller_category')
 
                         logger.info(f"📞 Call started: {call_context['call_sid']}, stream: {call_context['stream_sid']}")
-                        logger.info(f"👤 Caller: {call_context['caller_name'] or 'Unknown'} ({call_context['caller_number']}), Category: {call_context['caller_category']}")
+                        logger.info(f"Caller identified, Category: {call_context['caller_category']}")
 
                         # Mark Twilio as ready, try to trigger greeting
                         call_context['twilio_ready'] = True
@@ -1250,7 +1251,7 @@ async def handle_ai_function_call(func_name: str, args: dict, call_context: dict
             db.commit()
 
             formatted_time = appointment_datetime.strftime("%A, %B %d at %I:%M %p")
-            logger.info(f"📅 Appointment scheduled: {caller_name} on {formatted_time}")
+            logger.info(f"Appointment scheduled on {formatted_time}")
 
             return {
                 "success": True,
@@ -1290,7 +1291,7 @@ async def handle_ai_function_call(func_name: str, args: dict, call_context: dict
             })
             db.commit()
 
-            logger.info(f"📞 Transfer requested: {caller_name} - {reason} ({urgency})")
+            logger.info(f"Transfer requested - {reason} ({urgency})")
 
             return {
                 "success": True,
@@ -1377,7 +1378,7 @@ async def save_call_summary(call_context: dict, db: Session):
                     notes=f"Inbound call. Conversation summary:\n{json.dumps(call_context['conversation_history'], indent=2)}"
                 )
                 db.add(lead)
-                logger.info(f"Created new lead from call: {phone}")
+                logger.info("Created new lead from call")
 
             # Log activity
             activity = Activity(
@@ -1441,7 +1442,7 @@ async def save_call_summary(call_context: dict, db: Session):
             db.add(activity_update)
 
             db.commit()
-            logger.info(f"Saved call summary for {phone}")
+            logger.info("Saved call summary")
 
     except Exception as e:
         logger.error(f"Error saving call summary: {e}")

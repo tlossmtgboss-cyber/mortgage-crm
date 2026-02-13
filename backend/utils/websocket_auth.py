@@ -233,7 +233,7 @@ def authenticate_websocket(
     if not user:
         return None, "User not found"
 
-    logger.info(f"[WebSocketAuth] Authenticated: {user.email} (ID: {user.id})")
+    logger.info(f"[WebSocketAuth] Authenticated user ID: {user.id}")
     return user, None
 
 

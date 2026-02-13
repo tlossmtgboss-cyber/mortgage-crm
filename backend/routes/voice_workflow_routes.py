@@ -608,7 +608,7 @@ async def debug_test_session(
                 result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
                 if result:
                     user_id = result[0]
-                    results["steps"].append({"step": "auth", "status": "ok", "user_id": user_id, "email": email})
+                    results["steps"].append({"step": "auth", "status": "ok", "user_id": user_id})
         except SQLAlchemyError as e:
             results["steps"].append({"step": "auth", "status": "error", "error": "Internal server error"})
 
@@ -669,8 +669,9 @@ async def debug_test_session(
 async def debug_test_noauth(
     user_id: int = Query(None, description="User ID to test with (if not provided, finds first valid user)"),
     db: Session = Depends(get_db),
+    authenticated_user_id: int = Depends(get_current_user_id),
 ):
-    """Debug endpoint without auth to test voice workflow components directly."""
+    """Debug endpoint to test voice workflow components (requires auth)."""
     import traceback
 
     results = {"steps": []}
@@ -678,10 +679,9 @@ async def debug_test_noauth(
     # Find a valid user if not provided
     if user_id is None:
         try:
-            user_result = db.execute(text("SELECT id, email FROM users LIMIT 5")).fetchall()
+            user_result = db.execute(text("SELECT id FROM users LIMIT 1")).fetchone()
             if user_result:
-                user_id = user_result[0][0]
-                results["available_users"] = [{"id": u[0], "email": u[1]} for u in user_result]
+                user_id = user_result[0]
                 results["steps"].append({"step": "find_user", "status": "ok", "selected_user_id": user_id})
             else:
                 return {"success": False, "error": "No users found in database", "results": results}

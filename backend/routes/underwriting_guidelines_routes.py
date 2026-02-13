@@ -98,8 +98,10 @@ async def upload_guideline(
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     # Generate unique filename — sanitize original filename to prevent path traversal
+    import re as _re
     file_id = str(uuid.uuid4())[:8]
-    safe_original = os.path.basename(file.filename or "upload").replace("..", "")
+    safe_original = os.path.basename(file.filename or "upload")
+    safe_original = _re.sub(r'[^a-zA-Z0-9._-]', '_', safe_original)  # Only allow safe chars
     stored_filename = f"{file_id}_{safe_original}"
     file_path = os.path.join(UPLOAD_DIR, stored_filename)
 

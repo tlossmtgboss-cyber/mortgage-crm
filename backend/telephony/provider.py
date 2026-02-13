@@ -267,7 +267,7 @@ class TwilioProvider(TelephonyProvider):
                 friendly_name=friendly_name
             )
 
-            logger.info(f"Caller ID verification initiated for {phone_number}")
+            logger.info("Caller ID verification initiated")
 
             return {
                 "success": True,
@@ -484,7 +484,7 @@ class TelnyxProvider(TelephonyProvider):
 
         # Telnyx uses phone numbers directly from your account
         # No separate verification process needed for owned numbers
-        logger.info(f"Telnyx caller ID check for {phone_number} (verification not required for owned numbers)")
+        logger.info("Telnyx caller ID check (verification not required for owned numbers)")
 
         return {
             "success": True,

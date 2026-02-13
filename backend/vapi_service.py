@@ -133,7 +133,7 @@ Or just reply to this text with any questions!
                     message_sid=message_sid
                 )
 
-                logger.info(f"Post-call SMS sent to {phone_number}. SID: {message_sid}")
+                logger.info(f"Post-call SMS sent. SID: {message_sid}")
                 return {
                     "success": True,
                     "message_sid": message_sid,
@@ -199,7 +199,7 @@ Pick a time that works best for you!
                     message_sid=message_sid
                 )
 
-                logger.info(f"Calendly link SMS sent to {phone_number}. SID: {message_sid}")
+                logger.info(f"Calendly link SMS sent. SID: {message_sid}")
                 return {
                     "success": True,
                     "message_sid": message_sid,
@@ -929,11 +929,11 @@ class VapiCRMIntegration:
                 from routes.voicemail_drop_routes import check_dnc_status, check_calling_hours
                 is_blocked, _ = check_dnc_status(vapi_call.phone_number, self.db)
                 if is_blocked:
-                    logger.info(f"Post-call SMS blocked by DNC for {vapi_call.phone_number}")
+                    logger.info("Post-call SMS blocked by DNC")
                     return
                 is_allowed, _ = check_calling_hours(vapi_call.phone_number)
                 if not is_allowed:
-                    logger.info(f"Post-call SMS blocked by calling hours for {vapi_call.phone_number}")
+                    logger.info("Post-call SMS blocked by calling hours")
                     return
             except ImportError:
                 logger.warning("Could not import TCPA checks for post-call SMS")
@@ -987,7 +987,7 @@ class VapiCRMIntegration:
                     include_calendly=True
                 )
 
-            logger.info(f"Post-call SMS sent to {vapi_call.phone_number}")
+            logger.info("Post-call SMS sent")
 
         except Exception as e:
             # Don't fail the whole process if SMS fails

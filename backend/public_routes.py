@@ -321,7 +321,7 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
             registration.plan = "professional"
             plan_info = stripe_service.get_plan_info("professional")
 
-        logger.info(f"Starting registration for: {registration.email}")
+        logger.info("Starting registration for new user")
 
         # Create user in database (auto-verified and activated)
         db_user = User(
@@ -382,7 +382,7 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
             logger.error(f"Token generation failed: {str(token_error)}")
             raise HTTPException(status_code=500, detail="Failed to generate authentication token")
 
-        logger.info(f"Registration successful for: {registration.email}")
+        logger.info("Registration successful for new user")
 
         return {
             "message": "Registration successful! Redirecting to dashboard...",
@@ -446,7 +446,7 @@ async def verify_email(verification: EmailVerification, db: Session = Depends(ge
     # Send welcome email
     email_service.send_welcome_email(user.email, user.full_name)
 
-    logger.info(f"Email verified for user: {user.email}")
+    logger.info(f"Email verified for user ID: {user.id}")
 
     return {
         "message": "Email verified successfully!",
@@ -1327,7 +1327,7 @@ async def resend_email_verification(
             html_content=html_content
         )
 
-        logger.info(f"Email verification sent to {request.email}: {result}")
+        logger.info(f"Email verification sent: {result}")
 
         return {
             "success": result.get("success", False),

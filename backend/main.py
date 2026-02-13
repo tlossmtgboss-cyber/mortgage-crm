@@ -676,7 +676,7 @@ async def get_current_user(
                 ).first()
 
                 if impersonated_user:
-                    logger.info(f"Impersonation active: {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                    logger.info(f"Impersonation active: user {actual_user.id} → user {impersonated_user.id} (mode: {session.mode})")
                     # PHASE 3: Store impersonation info on request state for middleware
                     request.state.impersonation_session = session
                     request.state.impersonation_mode = session.mode
@@ -748,7 +748,7 @@ async def get_current_user_flexible(
                         ).first()
 
                         if impersonated_user:
-                            logger.info(f"Impersonation active (API key): {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                            logger.info(f"Impersonation active (API key): user {actual_user.id} → user {impersonated_user.id} (mode: {session.mode})")
                             # PHASE 3: Store impersonation info on request state for middleware
                             request.state.impersonation_session = session
                             request.state.impersonation_mode = session.mode
@@ -803,7 +803,7 @@ async def get_current_user_flexible(
                 ).first()
 
                 if impersonated_user:
-                    logger.info(f"Impersonation active (Bearer API key): {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                    logger.info(f"Impersonation active (Bearer API key): user {actual_user.id} → user {impersonated_user.id} (mode: {session.mode})")
                     # PHASE 3: Store impersonation info on request state for middleware
                     request.state.impersonation_session = session
                     request.state.impersonation_mode = session.mode
@@ -843,7 +843,7 @@ async def get_current_user_flexible(
             ).first()
 
             if impersonated_user:
-                logger.info(f"Impersonation active (flexible): {actual_user.email} → {impersonated_user.email} (mode: {session.mode})")
+                logger.info(f"Impersonation active (flexible): user {actual_user.id} → user {impersonated_user.id} (mode: {session.mode})")
                 # PHASE 3: Store impersonation info on request state for middleware
                 request.state.impersonation_session = session
                 request.state.impersonation_mode = session.mode

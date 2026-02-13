@@ -167,7 +167,7 @@ async def assistant_request_webhook(
         call_data = payload.get("message", {}).get("call", {})
         phone_number = call_data.get("phoneNumber")
 
-        logger.info(f"Assistant request for phone: {phone_number}")
+        logger.info("Assistant request received for inbound call")
 
         # Customize assistant behavior based on caller
         try:
@@ -451,9 +451,9 @@ async def create_task_function(
 
                         if message_sid:
                             sms_sent = True
-                            logger.info(f"Urgent task SMS sent to {owner_phone}. SID: {message_sid}")
+                            logger.info(f"Urgent task SMS sent. SID: {message_sid}")
                         else:
-                            logger.warning(f"Failed to send urgent task SMS to {owner_phone}")
+                            logger.warning("Failed to send urgent task SMS")
             except Exception as sms_error:
                 # Log error but don't fail the task creation
                 logger.error(f"Error sending urgent task SMS: {sms_error}")

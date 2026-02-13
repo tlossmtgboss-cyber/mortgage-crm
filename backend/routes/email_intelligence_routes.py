@@ -10,7 +10,7 @@ This system provides enterprise-grade email intelligence:
 5. Data import & mapping to leads/loans
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, Numeric, ForeignKey, JSON, text, desc, and_, or_, func
 from pydantic import BaseModel, Field
@@ -3210,7 +3210,15 @@ async def mark_sla_responded(
 # ================================================================
 
 @router.get("/debug/schema")
-async def debug_email_queue_schema(db: Session = Depends(get_db)):
+async def debug_email_queue_schema(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    # Auth check
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     """
     Debug endpoint to check the email_reconciliation_queue table schema.
     Shows all columns and their types.
@@ -3258,8 +3266,14 @@ async def debug_email_queue_schema(db: Session = Depends(get_db)):
 @router.post("/debug/test-identity-resolution")
 async def debug_test_identity_resolution(
     email_data: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db)
 ):
+    # Auth check
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     """
     Debug endpoint to test the EmailIdentityResolver without creating a queue record.
     Pass email data and see what match result would be returned.
@@ -3291,7 +3305,15 @@ async def debug_test_identity_resolution(
 
 
 @router.post("/debug/add-missing-columns")
-async def debug_add_missing_columns(db: Session = Depends(get_db)):
+async def debug_add_missing_columns(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    # Auth check
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    await get_current_user_flexible(token=token, request=request, db=db)
     """
     Add missing identity resolution columns to email_reconciliation_queue.
     """

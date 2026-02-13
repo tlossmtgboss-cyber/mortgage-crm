@@ -134,14 +134,14 @@ class EmailService:
             response = sg.send(message)
 
             if response.status_code in [200, 201, 202]:
-                logger.info(f"Email sent successfully via SendGrid to {to_email} (status: {response.status_code})")
+                logger.info(f"Email sent successfully via SendGrid (status: {response.status_code})")
                 return True
             else:
                 logger.error(f"SendGrid returned status {response.status_code}: {response.body}")
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to send email via SendGrid to {to_email}: {str(e)}")
+            logger.error(f"Failed to send email via SendGrid: {type(e).__name__}")
             # Try SMTP fallback if SendGrid fails
             if self.smtp_user:
                 logger.info("Attempting SMTP fallback...")
@@ -211,11 +211,11 @@ class EmailService:
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
 
-            logger.info(f"Email sent successfully via SMTP to {to_email}")
+            logger.info("Email sent successfully via SMTP")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email via SMTP to {to_email}: {str(e)}")
+            logger.error(f"Failed to send email via SMTP: {type(e).__name__}")
             return False
 
     def format_daily_priorities_email(

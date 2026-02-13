@@ -2519,7 +2519,7 @@ async def resend_portal_invite_by_slug(
                 detail=f"Contact {borrower.first_name} has no email address"
             )
 
-        logger.info(f"Found borrower: {borrower.first_name} {borrower.last_name}, email={borrower.email}")
+        logger.info(f"Found borrower ID: {borrower.id}")
 
         # Create new token
         token_service = PURLTokenService(db)

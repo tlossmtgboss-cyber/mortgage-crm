@@ -442,7 +442,8 @@ async def inbound_email_webhook(
 
 @router.get("/debug/history")
 async def debug_conversation_history(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep())
 ):
     """Debug endpoint to view all conversation history (temporary)"""
     try:
