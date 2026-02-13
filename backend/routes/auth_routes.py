@@ -47,6 +47,17 @@ _AUTH_RATE_MAX_REGISTER = 3  # max registration attempts per window per IP
 _AUTH_RATE_MAX_KEYS = 10000  # max tracked IPs before forced cleanup
 
 
+def _get_real_client_ip(request: Request) -> str:
+    """Get real client IP, accounting for reverse proxies (Railway, etc.)."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    return request.client.host if request.client else "unknown"
+
+
 def _check_auth_rate_limit(client_ip: str, max_requests: int) -> bool:
     """Check if client IP is within auth rate limit. Returns True if allowed."""
     now = time.time()
@@ -224,7 +235,7 @@ class PushRegisterRequest(BaseModel):
 @router.post("/token")
 async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # Rate limit login attempts
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    client_ip = _get_real_client_ip(http_request)
     if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_LOGIN):
         logger.warning(f"Login rate limit exceeded for {client_ip}")
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
@@ -441,7 +452,7 @@ async def forgot_password(http_request: Request, request: ForgotPasswordRequest,
     Always returns success to prevent email enumeration attacks.
     """
     # Rate limit password reset requests
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    client_ip = _get_real_client_ip(http_request)
     if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_RESET):
         logger.warning(f"Forgot-password rate limit exceeded for {client_ip}")
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
@@ -540,7 +551,7 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
     Reset password using a valid reset token.
     """
     # Rate limit password reset attempts
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    client_ip = _get_real_client_ip(http_request)
     if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_RESET):
         logger.warning(f"Reset-password rate limit exceeded for {client_ip}")
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
@@ -751,7 +762,7 @@ async def register_account(
     Creates a new organization and admin user.
     """
     # Rate limit registration attempts
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    client_ip = _get_real_client_ip(http_request)
     if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_REGISTER):
         logger.warning(f"Registration rate limit exceeded for {client_ip}")
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
