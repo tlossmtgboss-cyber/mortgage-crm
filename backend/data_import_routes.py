@@ -34,8 +34,9 @@ async def get_current_user(*args, **kwargs):
             from main import get_current_user as _gcu
             _get_current_user = _gcu
         except Exception:
-            async def fallback():
-                return {"email": "admin@perenniaai.com"}
+            from fastapi import HTTPException as _HTTPException
+            async def fallback(*a, **kw):
+                raise _HTTPException(status_code=503, detail="Authentication service not initialized")
             _get_current_user = fallback
     return await _get_current_user(*args, **kwargs)
 

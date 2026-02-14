@@ -33,8 +33,9 @@ from database import get_db, SessionLocal
 try:
     from main import get_current_user
 except Exception:
+    from fastapi import HTTPException as _HTTPException
     async def get_current_user():
-        return {"email": "admin@perenniaai.com", "id": str(uuid.uuid4())}
+        raise _HTTPException(status_code=503, detail="Authentication service not initialized")
 
 
 def get_db_connection():

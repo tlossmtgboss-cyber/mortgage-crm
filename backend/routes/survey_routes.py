@@ -18,9 +18,9 @@ from database import get_db
 try:
     from main import get_current_user
 except ImportError:
-    # Fallback for testing or standalone execution
+    from fastapi import HTTPException as _HTTPException
     async def get_current_user():
-        return type('User', (), {'id': 1, 'organization_id': 1, 'permission_role': 'admin'})()
+        raise _HTTPException(status_code=503, detail="Authentication service not initialized")
 
 logger = logging.getLogger(__name__)
 

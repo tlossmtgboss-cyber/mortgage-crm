@@ -77,13 +77,6 @@ async def get_current_user(
     from jose import jwt
 
     if not credentials:
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": "admin@perenniaai.com"}
-        )
-        user_row = result.fetchone()
-        if user_row:
-            return UserProxy(user_row)
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:

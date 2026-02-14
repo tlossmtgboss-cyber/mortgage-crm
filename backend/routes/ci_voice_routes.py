@@ -68,24 +68,21 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
         )
 
     if _get_current_user is None:
-        # Development fallback - return mock user
-        return {"id": 1, "email": "admin@perenniaai.com", "role": "admin"}
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service not initialized",
+        )
 
-    # Call the main app's get_current_user with the extracted token
     try:
         return await _get_current_user(token=token, request=request, db=db)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-
-def get_current_user_id(db: Session) -> int:
-    """Get current user ID - simplified fallback."""
-    result = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1")).fetchone()
-    return result[0] if result else 1
 
 
 # =============================================================================

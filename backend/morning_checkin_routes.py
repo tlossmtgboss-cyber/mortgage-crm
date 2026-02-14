@@ -3,7 +3,7 @@ Morning Check-in AI Routes
 Captures daily business data and calculates referral partner ROI
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from pydantic import BaseModel
@@ -72,11 +72,23 @@ class CheckinSettings(BaseModel):
 # Helper Functions
 # ============================================================================
 
-def get_current_user_id(db: Session) -> int:
-    """Get current user ID (simplified for demo)"""
-    result = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1"))
-    row = result.fetchone()
-    return row[0] if row else 1
+async def get_current_user_id(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> int:
+    """Extract authenticated user ID from JWT token."""
+    from main import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        user = await get_current_user_flexible(token=token, request=request, db=db)
+        return user.id
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 
 def get_or_create_partner(db: Session, user_id: int, partner_name: str) -> int:
@@ -108,10 +120,11 @@ def get_or_create_partner(db: Session, user_id: int, partner_name: str) -> int:
 @router.post("/start")
 async def start_checkin(
     request: CheckinStart,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Start or get today's check-in session"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
     checkin_date = date.fromisoformat(request.date) if request.date else date.today()
 
     # Check for existing check-in
@@ -156,10 +169,11 @@ async def start_checkin(
 @router.post("/log-hours")
 async def log_hours_worked(
     request: LogHours,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Log hours worked for today's check-in"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
     today = date.today()
 
     db.execute(text("""
@@ -175,10 +189,11 @@ async def log_hours_worked(
 @router.post("/add-lead")
 async def add_lead_from_checkin(
     request: AddLead,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Add a new lead during morning check-in"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
     today = date.today()
 
     # Get or create referral partner
@@ -231,10 +246,11 @@ async def add_lead_from_checkin(
 @router.post("/log-partner-interaction")
 async def log_partner_interaction(
     request: LogPartnerInteraction,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Log a conversation/interaction with a referral partner"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
     today = date.today()
 
     # Get partner ID
@@ -291,9 +307,12 @@ async def log_partner_interaction(
 
 
 @router.post("/complete")
-async def complete_checkin(db: Session = Depends(get_db)):
+async def complete_checkin(
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
+):
     """Mark today's check-in as complete"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
     today = date.today()
 
     db.execute(text("""
@@ -314,9 +333,12 @@ async def complete_checkin(db: Session = Depends(get_db)):
 # ============================================================================
 
 @router.get("/partners/roi")
-async def get_all_partners_roi(db: Session = Depends(get_db)):
+async def get_all_partners_roi(
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
+):
     """Get ROI metrics for all referral partners"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
 
     result = db.execute(text("""
         SELECT
@@ -404,10 +426,11 @@ async def get_all_partners_roi(db: Session = Depends(get_db)):
 @router.get("/partners/{partner_id}/roi")
 async def get_partner_roi_detail(
     partner_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Get detailed ROI metrics for a specific partner"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
 
     # Get partner info
     result = db.execute(text("""
@@ -478,10 +501,11 @@ async def get_partner_roi_detail(
 async def update_partner_roi_data(
     partner_id: int,
     request: UpdatePartnerROI,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Update ROI data for a partner (from AI conversation)"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
     today = date.today()
     month_start = today.replace(day=1)
 
@@ -518,9 +542,12 @@ async def update_partner_roi_data(
 
 
 @router.get("/settings")
-async def get_checkin_settings(db: Session = Depends(get_db)):
+async def get_checkin_settings(
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
+):
     """Get user's check-in settings"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
 
     result = db.execute(text("""
         SELECT hourly_rate, checkin_reminder_time, checkin_enabled, auto_calculate_roi
@@ -548,10 +575,11 @@ async def get_checkin_settings(db: Session = Depends(get_db)):
 @router.put("/settings")
 async def update_checkin_settings(
     request: CheckinSettings,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Update user's check-in settings"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
 
     db.execute(text("""
         INSERT INTO user_checkin_settings (user_id, hourly_rate, checkin_reminder_time, checkin_enabled)
@@ -575,10 +603,11 @@ async def update_checkin_settings(
 @router.get("/history")
 async def get_checkin_history(
     days: int = 30,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
 ):
     """Get check-in history for the past N days"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
 
     result = db.execute(text("""
         SELECT
@@ -615,9 +644,12 @@ async def get_checkin_history(
 # ============================================================================
 
 @router.get("/ai/insights")
-async def get_ai_insights(db: Session = Depends(get_db)):
+async def get_ai_insights(
+    db: Session = Depends(get_db),
+    _auth_user_id: int = Depends(get_current_user_id),
+):
     """Get AI-generated insights about partner performance"""
-    user_id = get_current_user_id(db)
+    user_id = _auth_user_id
 
     insights = []
 

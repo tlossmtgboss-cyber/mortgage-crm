@@ -46,15 +46,7 @@ async def get_current_user(
     """Get current user from JWT token."""
     from jose import jwt
 
-    # For testing without auth, return demo user
     if not credentials:
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": "admin@perenniaai.com"}
-        )
-        user_row = result.fetchone()
-        if user_row:
-            return UserProxy(user_row)
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
@@ -77,15 +69,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
 
     except SQLAlchemyError as e:
-        logger.warning(f"Auth error: {e}")
-        # Fallback to demo user for development
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": "admin@perenniaai.com"}
-        )
-        user_row = result.fetchone()
-        if user_row:
-            return UserProxy(user_row)
+        logger.warning(f"Auth DB error in ai_email_search")
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 

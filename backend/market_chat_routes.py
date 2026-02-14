@@ -82,15 +82,7 @@ async def get_current_user(
     import os
     from jose import jwt
 
-    # Fallback for no credentials
     if not credentials:
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": "admin@perenniaai.com"}
-        )
-        row = result.fetchone()
-        if row:
-            return UserProxy(id=row[0], email=row[1], name=row[2])
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
@@ -115,15 +107,7 @@ async def get_current_user(
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning(f"Auth error: {e}")
-        # Fallback to demo user for development
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": "admin@perenniaai.com"}
-        )
-        row = result.fetchone()
-        if row:
-            return UserProxy(id=row[0], email=row[1], name=row[2])
+        logger.warning(f"Auth error in market_chat")
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 
