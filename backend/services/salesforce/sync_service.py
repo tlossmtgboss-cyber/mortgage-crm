@@ -453,6 +453,54 @@ class SalesforceSyncService:
             logger.warning(f"Unknown target entity: {target_entity}")
             return None
 
+    # Valid columns on the leads table that can be set from Salesforce sync
+    VALID_LEAD_COLUMNS = {
+        # Core identity
+        'first_name', 'last_name', 'name', 'email', 'phone',
+        'co_applicant_name', 'co_applicant_email', 'co_applicant_phone',
+        'preferred_communication',
+        # Pipeline
+        'stage', 'source',
+        # Loan qualification
+        'loan_type', 'preapproval_amount', 'credit_score', 'debt_to_income',
+        # Assignment
+        'loan_number', 'notes',
+        # Property
+        'address', 'city', 'state', 'zip_code', 'property_type',
+        'property_value', 'down_payment', 'property_address',
+        # Financial
+        'employment_status', 'annual_income', 'monthly_debts', 'first_time_buyer',
+        'employer_name', 'industry',
+        # Loan details
+        'loan_amount', 'interest_rate', 'loan_term', 'apr', 'points',
+        'lock_date', 'lock_expiration', 'closing_date', 'lender',
+        'loan_officer', 'processor', 'underwriter', 'appraisal_value',
+        'ltv', 'cltv', 'dti', 'dti_front', 'dti_back', 'program',
+        'loan_purpose', 'file_state',
+        # SLA milestones
+        'lead_received_date', 'first_contact_attempt_date',
+        'first_contact_successful_date', 'lead_qualification_date',
+        'application_link_sent_date', 'application_started_date',
+        'application_completed_date', 'credit_pulled_date',
+        'preapproval_submission_date', 'preapproval_issued_date',
+        'preapproval_expiration_date', 'realtor_referral_date',
+        'rate_watch_enrollment_date', 'initial_consultation_date',
+        # Property details (extended)
+        'occupancy_type', 'property_county', 'property_ownership_type',
+        'property_units',
+        # Financial details (extended)
+        'rate_type', 'monthly_payment', 'property_tax', 'hazard_insurance',
+        'mortgage_insurance', 'hoa_amount', 'origination_fee',
+        'estimated_prepaid_interest', 'index_rate', 'margin',
+        # 2nd loan
+        'second_loan_amount', 'second_loan_rate', 'second_loan_payment',
+        # Housing expenses
+        'present_housing_expense', 'proposed_housing_expense',
+        'present_monthly_payment', 'proposed_monthly_payment',
+        # Referral
+        'referral_score',
+    }
+
     async def _upsert_lead(
         self,
         db: Session,
@@ -486,21 +534,33 @@ class SalesforceSyncService:
                 LIMIT 1
             """), {"email": data.get('email'), "user_id": user_id}).fetchone()
 
-        # Map Salesforce fields to CRM fields
+        # Build core identity fields with Salesforce fallbacks
         first_name = data.get('first_name') or data.get('FirstName', '')
         last_name = data.get('last_name') or data.get('LastName', '')
-        lead_data = {
-            "first_name": first_name,
-            "last_name": last_name,
-            "name": f"{first_name} {last_name}".strip() or 'Unknown',
-            "email": data.get('email') or data.get('Email', ''),
-            "phone": data.get('phone') or data.get('Phone', ''),
-            "company": data.get('company') or data.get('Company', ''),
-            "source": data.get('source') or data.get('LeadSource', 'Salesforce'),
-        }
+        data['first_name'] = first_name
+        data['last_name'] = last_name
+        data['name'] = f"{first_name} {last_name}".strip() or 'Unknown'
+        if not data.get('email'):
+            data['email'] = data.get('Email', '')
+        if not data.get('phone'):
+            data['phone'] = data.get('Phone', '')
+        if not data.get('source'):
+            data['source'] = data.get('LeadSource', 'Salesforce')
 
-        # Remove empty values but keep 'name'
-        lead_data = {k: v for k, v in lead_data.items() if v}
+        # Filter to valid lead columns, drop empty values (keep 'name')
+        lead_data = {}
+        dropped = []
+        for k, v in data.items():
+            if k in self.VALID_LEAD_COLUMNS and (v or v == 0 or k == 'name'):
+                lead_data[k] = v
+            elif k not in self.VALID_LEAD_COLUMNS and k not in (
+                'FirstName', 'LastName', 'Email', 'Phone', 'Company',
+                'LeadSource', 'target_entity', 'mapping_category',
+            ):
+                dropped.append(k)
+
+        if dropped:
+            logger.warning(f"SF→Lead sync dropped unmapped fields: {dropped}")
 
         if existing:
             # Update existing lead — also backfill organization_id if missing
@@ -517,13 +577,14 @@ class SalesforceSyncService:
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = :lead_id
                 """), lead_data)
-            logger.info(f"Updated lead {lead_id} from Salesforce {salesforce_id}")
+            logger.info(f"Updated lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
             return lead_id
         else:
             # Create new lead
             lead_data['owner_id'] = user_id
             lead_data['salesforce_id'] = salesforce_id
-            lead_data['stage'] = 'New'
+            if not lead_data.get('stage'):
+                lead_data['stage'] = 'New'
             lead_data['organization_id'] = org_id
 
             columns = ", ".join(lead_data.keys())
@@ -536,7 +597,7 @@ class SalesforceSyncService:
             """), lead_data)
 
             lead_id = result.fetchone()[0]
-            logger.info(f"Created lead {lead_id} from Salesforce {salesforce_id}")
+            logger.info(f"Created lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
             return lead_id
 
     # Valid columns on the loans table that can be set from Salesforce sync
@@ -616,9 +677,18 @@ class SalesforceSyncService:
 
         # Filter to only valid loan columns, drop empty values (keep amount even if 0)
         loan_data = {}
+        dropped = []
         for k, v in data.items():
             if k in self.VALID_LOAN_COLUMNS and (v or v == 0 or k == 'amount'):
                 loan_data[k] = v
+            elif k not in self.VALID_LOAN_COLUMNS and k not in (
+                'borrower_first_name', 'borrower_last_name',
+                'target_entity', 'mapping_category',
+            ):
+                dropped.append(k)
+
+        if dropped:
+            logger.warning(f"SF→Loan sync dropped unmapped fields: {dropped}")
 
         if existing:
             # Update existing loan — also backfill organization_id if missing

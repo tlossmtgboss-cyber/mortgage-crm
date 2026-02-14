@@ -1779,6 +1779,71 @@ async def get_mapping_stats(
     return stats
 
 
+# ---- Field name translation: UI CRM keys → DB column names ----
+# Active Loan UI keys that differ from loans table column names
+_LOAN_KEY_TO_COLUMN = {
+    "loan_amount": "amount",
+    "interest_rate": "rate",
+    "loan_term": "term",
+    "loan_stage": "stage",
+    "loan_lead_status": "stage",
+    "estimated_value": "property_value",
+}
+
+# Lead UI keys (after stripping "lead_" prefix) that differ from leads table column names
+_LEAD_KEY_TO_COLUMN = {
+    "company": "employer_name",
+    "status": "stage",
+    "loan_stage": "stage",
+    "property_city": "city",
+    "property_state": "state",
+    "property_zip": "zip_code",
+    "occupancy": "occupancy_type",
+}
+
+# MUM UI keys (after stripping "mum_" prefix) that differ from mum_clients table column names
+_MUM_KEY_TO_COLUMN = {
+    "loan_type": "loan_type",
+    "servicer": "servicer_name",
+}
+
+
+def _resolve_mapping_target(key: str):
+    """Convert a UI CRM field key to (target_entity, target_field, mapping_category).
+
+    UI keys follow these patterns:
+      - "sla_*"       → SLA milestone dates (target_entity="lead")
+      - "lead_*"      → Lead CRM fields  (target_entity="lead")
+      - "mum_*"       → MUM client fields (target_entity="loan")  # synced via loan pipeline
+      - "borrower_*"  → Active Loan borrower fields (target_entity="loan")
+      - everything else → Active Loan fields (target_entity="loan")
+    """
+    if key.startswith("sla_"):
+        # SLA milestones — stored on leads as date columns
+        target_field = key[4:]  # strip "sla_"
+        return "lead", target_field, "sla_milestone"
+
+    if key.startswith("lead_"):
+        # Lead-stage fields — strip prefix, then translate to leads column names
+        stripped = key[5:]  # strip "lead_"
+        target_field = _LEAD_KEY_TO_COLUMN.get(stripped, stripped)
+        return "lead", target_field, "crm_field"
+
+    if key.startswith("mum_"):
+        # MUM client fields — keep as-is for now (MUM sync is separate)
+        stripped = key[4:]  # strip "mum_"
+        target_field = _MUM_KEY_TO_COLUMN.get(stripped, stripped)
+        return "loan", target_field, "crm_field"
+
+    if key.startswith("borrower_"):
+        # Borrower fields go to the loan entity (special handling in _upsert_loan)
+        return "loan", key, "crm_field"
+
+    # Active Loan fields — translate to loans table column names
+    target_field = _LOAN_KEY_TO_COLUMN.get(key, key)
+    return "loan", target_field, "crm_field"
+
+
 @router.post("/mappings/save-all")
 async def save_all_mappings(
     request: Request,
@@ -1808,19 +1873,19 @@ async def save_all_mappings(
             continue
         source_object, source_field = parts
 
-        # Determine category
-        mapping_category = "sla_milestone" if key.startswith("sla_") else "crm_field"
-        target_field = key[4:] if key.startswith("sla_") else key
+        # Resolve target entity, translated field name, and category
+        target_entity, target_field, mapping_category = _resolve_mapping_target(key)
 
+        is_date = mapping_category == "sla_milestone" or key.endswith("_date")
         mapping = FieldMapping(
             integration_profile_id=profile.id,
             source_object=source_object,
             source_field=source_field,
-            target_entity="loan",
+            target_entity=target_entity,
             target_field=target_field,
             mapping_category=mapping_category,
-            transform_type="date_format" if mapping_category == "sla_milestone" else "direct",
-            data_type="date" if mapping_category == "sla_milestone" else "string",
+            transform_type="date_format" if is_date else "direct",
+            data_type="date" if is_date else "string",
             sync_direction="bidirectional",
             enabled=True,
             validation_status="valid",
@@ -1829,6 +1894,7 @@ async def save_all_mappings(
         created += 1
 
     db.commit()
+    logger.info(f"Saved {created} field mappings for profile {profile.id}")
     return {"status": "success", "mappings_saved": created}
 
 
@@ -2536,12 +2602,12 @@ TRANSACTION_PROPERTY_MAPPINGS = [
     {"source_field": "Name", "target_entity": "loan", "target_field": "borrower_name", "transform_type": "direct"},
     # Loan details
     {"source_field": "MtgPlanner_CRM__Loan_Amount__c", "target_entity": "loan", "target_field": "amount", "transform_type": "direct"},
-    {"source_field": "MtgPlanner_CRM__Interest_Rate__c", "target_entity": "loan", "target_field": "interest_rate", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Interest_Rate__c", "target_entity": "loan", "target_field": "rate", "transform_type": "direct"},
     {"source_field": "MtgPlanner_CRM__Loan_Type__c", "target_entity": "loan", "target_field": "loan_type", "transform_type": "direct"},
     {"source_field": "MtgPlanner_CRM__Loan_Purpose__c", "target_entity": "loan", "target_field": "loan_purpose", "transform_type": "direct"},
     {"source_field": "MtgPlanner_CRM__Loan_Number__c", "target_entity": "loan", "target_field": "loan_number", "transform_type": "direct"},
     {"source_field": "MtgPlanner_CRM__LTV__c", "target_entity": "loan", "target_field": "ltv", "transform_type": "direct"},
-    {"source_field": "MtgPlanner_CRM__Term_Months__c", "target_entity": "loan", "target_field": "term_months", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Term_Months__c", "target_entity": "loan", "target_field": "term", "transform_type": "direct"},
     # Dates
     {"source_field": "MtgPlanner_CRM__Close_Date__c", "target_entity": "loan", "target_field": "closing_date", "transform_type": "date_format"},
     {"source_field": "MtgPlanner_CRM__Funded_Date__c", "target_entity": "loan", "target_field": "funded_date", "transform_type": "date_format"},
@@ -2556,6 +2622,44 @@ TRANSACTION_PROPERTY_MAPPINGS = [
     {"source_field": "MtgPlanner_CRM__Property_Value__c", "target_entity": "loan", "target_field": "property_value", "transform_type": "direct"},
     # Status
     {"source_field": "MtgPlanner_CRM__Status__c", "target_entity": "loan", "target_field": "stage", "transform_type": "stage_map"},
+    # Property details (extended)
+    {"source_field": "MtgPlanner_CRM__Occupancy_Type__c", "target_entity": "loan", "target_field": "occupancy_type", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_County__c", "target_entity": "loan", "target_field": "property_county", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_Ownership_Type__c", "target_entity": "loan", "target_field": "property_ownership_type", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_Units__c", "target_entity": "loan", "target_field": "property_units", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Appraised_Value__c", "target_entity": "loan", "target_field": "appraisal_value", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Purchase_Price__c", "target_entity": "loan", "target_field": "purchase_price", "transform_type": "direct"},
+    # 1st loan financial details
+    {"source_field": "MtgPlanner_CRM__Rate_Type_1st_TD__c", "target_entity": "loan", "target_field": "rate_type", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Monthly_Payment_1st_TD__c", "target_entity": "loan", "target_field": "monthly_payment", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Property_Tax_1st_TD__c", "target_entity": "loan", "target_field": "property_tax", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Hazard_Ins_1st_TD__c", "target_entity": "loan", "target_field": "hazard_insurance", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Mortgage_Ins_1st_TD__c", "target_entity": "loan", "target_field": "mortgage_insurance", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__HOA_1st_TD__c", "target_entity": "loan", "target_field": "hoa_amount", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Origination_1st_TD__c", "target_entity": "loan", "target_field": "origination_fee", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Est_Prepaid_Int_1st_TD__c", "target_entity": "loan", "target_field": "estimated_prepaid_interest", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Points_1st_TD__c", "target_entity": "loan", "target_field": "points", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Index_1st_TD__c", "target_entity": "loan", "target_field": "index_rate", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Margin_1st_TD__c", "target_entity": "loan", "target_field": "margin", "transform_type": "direct"},
+    # Loan ratios / additional
+    {"source_field": "MtgPlanner_CRM__CLTV__c", "target_entity": "loan", "target_field": "cltv", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__DTI__c", "target_entity": "loan", "target_field": "dti", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__APR__c", "target_entity": "loan", "target_field": "apr", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__File_State__c", "target_entity": "loan", "target_field": "file_state", "transform_type": "direct"},
+    # 2nd loan details
+    {"source_field": "MtgPlanner_CRM__Loan_Amount_2nd_TD__c", "target_entity": "loan", "target_field": "second_loan_amount", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Rate_2nd_TD__c", "target_entity": "loan", "target_field": "second_loan_rate", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Monthly_Payment_2nd_TD__c", "target_entity": "loan", "target_field": "second_loan_payment", "transform_type": "direct"},
+    # Present vs proposed housing expenses
+    {"source_field": "MtgPlanner_CRM__Present_Monthly_Payment__c", "target_entity": "loan", "target_field": "present_monthly_payment", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Proposed_Monthly_Payment_1st_TD__c", "target_entity": "loan", "target_field": "proposed_monthly_payment", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Present_Total_Expenses__c", "target_entity": "loan", "target_field": "present_housing_expense", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Proposed_Total_Expenses__c", "target_entity": "loan", "target_field": "proposed_housing_expense", "transform_type": "direct"},
+    # Additional basics
+    {"source_field": "MtgPlanner_CRM__Down_Payment__c", "target_entity": "loan", "target_field": "down_payment", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Credit_Score__c", "target_entity": "loan", "target_field": "credit_score", "transform_type": "direct"},
+    {"source_field": "MtgPlanner_CRM__Lock_Date__c", "target_entity": "loan", "target_field": "lock_date", "transform_type": "date_format"},
+    {"source_field": "MtgPlanner_CRM__Lender__c", "target_entity": "loan", "target_field": "lender", "transform_type": "direct"},
 ]
 
 

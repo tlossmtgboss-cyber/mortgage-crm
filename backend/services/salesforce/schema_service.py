@@ -34,6 +34,11 @@ CANONICAL_MAPPINGS = {
     'loan_purpose': {'entity': 'loan', 'field': 'loan_purpose', 'aliases': ['purpose__c', 'loanpurpose__c', 'purpose']},
     'property_value': {'entity': 'loan', 'field': 'property_value', 'aliases': ['propertyvalue__c', 'homevalue', 'purchaseprice']},
     'loan_type': {'entity': 'loan', 'field': 'loan_type', 'aliases': ['loantype__c', 'producttype', 'program']},
+    'loan_term': {'entity': 'loan', 'field': 'loan_term', 'aliases': ['term__c', 'loanterm__c', 'terminmonths', 'loantermmonths']},
+    'ltv': {'entity': 'loan', 'field': 'ltv', 'aliases': ['ltv__c', 'sltv__c', 'loantovalue', 'ltvratio']},
+    'cltv': {'entity': 'loan', 'field': 'cltv', 'aliases': ['cltv__c', 'scltv__c', 'combinedltv', 'combinedloantovalue']},
+    'dti': {'entity': 'loan', 'field': 'dti', 'aliases': ['dti__c', 'sdti__c', 'debttoincome', 'dtiratio', 'backendratio']},
+    'interest_rate': {'entity': 'loan', 'field': 'interest_rate', 'aliases': ['interestrate__c', 'rate__c', 'noterate', 'srate1sttd']},
 
     # Stage/Status
     'stage': {'entity': 'loan', 'field': 'stage', 'aliases': ['status', 'stage__c', 'leadstatus', 'opportunitystage']},
@@ -148,7 +153,16 @@ class SalesforceSchemaService:
         mortgage_keywords = [
             'loan', 'mortgage', 'application', 'borrower',
             'property', 'appraisal', 'underwriting', 'closing',
-            'refinance', 'preapproval', 'credit', 'income'
+            'refinance', 'preapproval', 'credit', 'income',
+            'ltv', 'dti', 'fico', 'escrow', 'title', 'lien',
+            'servicing', 'servicer', 'investor', 'funding',
+            'disclosure', 'compliance', 'condition',
+        ]
+
+        # Common mortgage industry Salesforce package namespaces
+        mortgage_namespaces = [
+            'jungo__', 'mtgplanner_crm__', 'encompass__',
+            'velocify__', 'floify__', 'surefire__',
         ]
 
         custom_objects = []
@@ -159,7 +173,12 @@ class SalesforceSchemaService:
             name = obj.get('name', '').lower()
             label = obj.get('label', '').lower()
 
-            # Check if related to mortgage/lending
+            # Check if from a known mortgage industry package
+            if any(name.startswith(ns) for ns in mortgage_namespaces):
+                custom_objects.append(obj['name'])
+                continue
+
+            # Check if related to mortgage/lending by keyword
             if any(keyword in name or keyword in label for keyword in mortgage_keywords):
                 custom_objects.append(obj['name'])
 

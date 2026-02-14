@@ -704,6 +704,22 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load MUM Client Portal routes: {e}")
 
+    # Include MUM API routes (client list, metrics)
+    try:
+        from routes.mum_api_routes import router as mum_api_router
+        app.include_router(mum_api_router, tags=["MUM API"])
+        logger.info("✅ MUM API routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load MUM API routes: {e}")
+
+    # Include MUM Valuation batch recalculation routes
+    try:
+        from routes.mum_valuation_routes import router as mum_valuation_router
+        app.include_router(mum_valuation_router, tags=["MUM Valuation"])
+        logger.info("✅ MUM Valuation routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load MUM Valuation routes: {e}")
+
     # Include Voice AI Receptionist sub-routes (webhooks, SMS, debug)
     # NOTE: The main voice_router is NOT included here — voice_routes.py (line ~492)
     # is the canonical /api/v1/voice router. Including both caused duplicate route conflicts.

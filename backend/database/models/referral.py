@@ -141,6 +141,15 @@ class MUMClient(Base):
     closer_email = Column(String)
 
     user_id = Column(Integer, ForeignKey("users.id"))
+    # Valuation & Refinance fields (computed by agents)
+    term = Column(Integer, default=360)
+    maturity_date = Column(DateTime)
+    estimated_equity = Column(Float)
+    current_ltv = Column(Float)
+    refi_score = Column(Integer, default=0)
+    property_state = Column(String)
+    property_zip = Column(String)
+
     salesforce_id = Column(String(100), index=True, nullable=True)  # Salesforce record ID
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

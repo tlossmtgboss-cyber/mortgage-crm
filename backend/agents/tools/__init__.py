@@ -87,6 +87,10 @@ from . import notifications
 from . import subscription
 from . import onboarding
 
+# Valuation & Refinance Tools (2 agents, 16 tools)
+from . import home_valuation
+from . import refinance
+
 # Analytics Tools
 from . import historical
 
@@ -116,6 +120,9 @@ AGENT_MODULES = {
     "task_automation": tasks,
     "sla_tracker": sla,
     "integrations": integrations,
+    # Valuation & Refinance Agents
+    "home_valuation": home_valuation,
+    "refinance_advisor": refinance,
     # Business Agents
     "reporting_engine": reporting,
     "notification_center": notifications,
@@ -352,6 +359,29 @@ ONBOARDING_TOOLS = [
     "track_progress",
 ]
 
+# Valuation & Refinance Tools
+HOME_VALUATION_TOOLS = [
+    "calculate_home_value",
+    "get_appreciation_rates",
+    "calculate_equity_position",
+    "calculate_amortization",
+    "get_maturity_date",
+    "batch_update_valuations",
+    "get_value_history",
+    "compare_market_appreciation",
+]
+
+REFINANCE_TOOLS = [
+    "score_refi_opportunity",
+    "calculate_refi_savings",
+    "get_refi_candidates",
+    "analyze_breakeven",
+    "compare_refi_scenarios",
+    "get_refi_portfolio_summary",
+    "recommend_refi_action",
+    "batch_update_refi_scores",
+]
+
 # Analytics Tools
 HISTORICAL_TOOLS = [
     "get_performance_by_period",
@@ -389,6 +419,9 @@ ALL_TOOLS = {
     "notifications": NOTIFICATION_TOOLS,
     "subscription": SUBSCRIPTION_TOOLS,
     "onboarding": ONBOARDING_TOOLS,
+    # Valuation & Refinance
+    "home_valuation": HOME_VALUATION_TOOLS,
+    "refinance": REFINANCE_TOOLS,
     # Analytics
     "historical": HISTORICAL_TOOLS,
 }
@@ -481,6 +514,17 @@ AGENT_CONFIGS = {
         "description": "Manages LOS, credit, AUS, and vendor integrations",
         "tools": INTEGRATION_TOOLS,
         "category": "operations",
+    },
+    # Valuation & Refinance Agents
+    "home_valuation": {
+        "description": "Calculates home values, equity positions, amortization, and maturity dates using state-level appreciation",
+        "tools": HOME_VALUATION_TOOLS,
+        "category": "valuation",
+    },
+    "refinance_advisor": {
+        "description": "Scores refinance opportunities, calculates savings, identifies candidates, and compares scenarios",
+        "tools": REFINANCE_TOOLS,
+        "category": "valuation",
     },
     # Business Agents
     "reporting_engine": {
@@ -623,6 +667,10 @@ __all__ = [
     "subscription",
     "onboarding",
 
+    # Valuation & Refinance Modules
+    "home_valuation",
+    "refinance",
+
     # Analytics Modules
     "historical",
 
@@ -658,6 +706,10 @@ __all__ = [
     "NOTIFICATION_TOOLS",
     "SUBSCRIPTION_TOOLS",
     "ONBOARDING_TOOLS",
+
+    # Valuation & Refinance Tool Lists
+    "HOME_VALUATION_TOOLS",
+    "REFINANCE_TOOLS",
 
     # Analytics Tool Lists
     "HISTORICAL_TOOLS",

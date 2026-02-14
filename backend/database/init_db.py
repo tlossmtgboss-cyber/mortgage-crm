@@ -1057,6 +1057,23 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Schema migration note: {e}")
 
+        # Add valuation/refi columns to mum_clients table
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS term INTEGER DEFAULT 360;
+                    ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS maturity_date TIMESTAMP;
+                    ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS estimated_equity FLOAT;
+                    ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS current_ltv FLOAT;
+                    ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS refi_score INTEGER DEFAULT 0;
+                    ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS property_state VARCHAR;
+                    ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS property_zip VARCHAR;
+                """))
+                conn.commit()
+                logger.info("✅ MUM client valuation/refi columns added")
+        except Exception as e:
+            logger.warning(f"⚠️ MUM valuation columns migration note: {e}")
+
         # Run comprehensive column migration for all missing columns
         try:
             from migrations.add_all_missing_columns import run_migration

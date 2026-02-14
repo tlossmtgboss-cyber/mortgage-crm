@@ -18,6 +18,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
+from agents.utils.financial_calcs import (
+    calculate_remaining_balance,
+    estimate_current_property_value,
+    get_appreciation_rate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,16 +135,17 @@ async def get_mum_clients_portfolio(
                     close_dt = close_dt.replace(tzinfo=timezone.utc)
                 days_since = (datetime.now(timezone.utc) - close_dt).days
 
-            # Calculate estimated current balance (simple amortization approximation)
+            # Calculate estimated current balance using proper amortization
             original_balance = float(client.loan_balance or client.original_loan_amount or 0)
             months_passed = days_since // 30
-            principal_paid = (original_balance / 360) * months_passed * 0.3  # Simplified
-            current_balance = max(0, original_balance - principal_paid)
+            loan_rate = float(client.interest_rate or client.original_rate or 6.5) / 100
+            loan_term = getattr(client, 'term', None) or 360
+            current_balance = calculate_remaining_balance(original_balance, loan_rate, loan_term, months_passed)
 
-            # Estimate property appreciation (3% annually)
+            # Estimate property value using state-level compound appreciation
             original_value = float(client.appraisal_value_at_closing or original_balance * 1.25)
-            years_passed = days_since / 365
-            current_value = original_value * (1 + 0.03 * years_passed)
+            client_state = getattr(client, 'property_state', None)
+            current_value = estimate_current_property_value(original_value, months_passed, state=client_state)
 
             # Calculate equity
             equity_amount = current_value - current_balance
@@ -204,16 +210,17 @@ async def get_mum_clients_portfolio(
                     close_dt = close_dt.replace(tzinfo=timezone.utc)
                 days_since = (datetime.now(timezone.utc) - close_dt).days
 
-            # Get loan amount
+            # Get loan amount — proper amortization
             original_balance = float(loan.amount or 0)
             months_passed = max(0, days_since // 30)
-            principal_paid = (original_balance / 360) * months_passed * 0.3 if original_balance > 0 else 0
-            current_balance = max(0, original_balance - principal_paid)
+            loan_rate_raw = float(loan.rate or 6.5)
+            loan_term = getattr(loan, 'term', None) or 360
+            loan_state = getattr(loan, 'property_state', None)
+            current_balance = calculate_remaining_balance(original_balance, loan_rate_raw / 100, loan_term, months_passed)
 
-            # Estimate property value
+            # Estimate property value — compound appreciation
             original_value = float(loan.purchase_price or loan.appraisal_value or original_balance * 1.25)
-            years_passed = days_since / 365 if days_since > 0 else 0
-            current_value = original_value * (1 + 0.03 * years_passed)
+            current_value = estimate_current_property_value(original_value, months_passed, state=loan_state)
 
             # Calculate equity
             equity_amount = current_value - current_balance
@@ -343,17 +350,18 @@ async def get_mum_metrics(
                     getattr(client, 'current_loan_amount', 0) or 0
                 )
                 months_passed = max(0, days_since // 30)
-                principal_paid = (original_balance / 360) * months_passed * 0.3 if original_balance > 0 else 0
-                current_balance = max(0, original_balance - principal_paid)
+                m_rate = float(getattr(client, 'interest_rate', 0) or getattr(client, 'original_rate', 0) or 6.5) / 100
+                m_term = getattr(client, 'term', None) or 360
+                current_balance = calculate_remaining_balance(original_balance, m_rate, m_term, months_passed)
 
-                # Get property value with fallbacks
+                # Get property value with fallbacks — compound appreciation
                 original_value = float(
                     getattr(client, 'appraisal_value_at_closing', 0) or
                     getattr(client, 'current_property_value', 0) or
                     original_balance * 1.25
                 )
-                years_passed = days_since / 365 if days_since > 0 else 0
-                current_value = original_value * (1 + 0.03 * years_passed) if original_value > 0 else 0
+                m_state = getattr(client, 'property_state', None)
+                current_value = estimate_current_property_value(original_value, months_passed, state=m_state) if original_value > 0 else 0
 
                 total_upb += current_balance
                 total_revenue += current_balance * 0.0025  # Servicing revenue
@@ -408,12 +416,13 @@ async def get_mum_metrics(
 
             original_balance = float(loan.amount or 0)
             months_passed = max(0, days_since // 30)
-            principal_paid = (original_balance / 360) * months_passed * 0.3 if original_balance > 0 else 0
-            current_balance = max(0, original_balance - principal_paid)
+            fl_rate = float(loan.rate or 6.5) / 100
+            fl_term = getattr(loan, 'term', None) or 360
+            fl_state = getattr(loan, 'property_state', None)
+            current_balance = calculate_remaining_balance(original_balance, fl_rate, fl_term, months_passed)
 
             original_value = float(loan.purchase_price or loan.appraisal_value or original_balance * 1.25)
-            years_passed = days_since / 365 if days_since > 0 else 0
-            current_value = original_value * (1 + 0.03 * years_passed)
+            current_value = estimate_current_property_value(original_value, months_passed, state=fl_state)
 
             total_upb += current_balance
             total_revenue += current_balance * 0.0025
