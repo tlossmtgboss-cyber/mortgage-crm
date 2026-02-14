@@ -747,19 +747,22 @@ async def handle_plaid_webhook(
     """Handle Plaid webhook notifications."""
     body = await request.body()
 
-    # Verify webhook signature
-    if PLAID_WEBHOOK_VERIFY_KEY:
-        provided_sig = request.headers.get("Plaid-Verification", "")
-        expected = hmac.new(
-            PLAID_WEBHOOK_VERIFY_KEY.encode(),
-            body,
-            hashlib.sha256
-        ).hexdigest()
-        if not provided_sig or not hmac.compare_digest(provided_sig, expected):
-            logger.warning(f"Invalid Plaid webhook signature from {request.client.host}")
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
-    else:
-        logger.warning("PLAID_WEBHOOK_VERIFY_KEY not configured — skipping webhook verification")
+    # Verify webhook signature — fail-closed when key not configured
+    if not PLAID_WEBHOOK_VERIFY_KEY:
+        logger.error("PLAID_WEBHOOK_VERIFY_KEY not configured — rejecting webhook")
+        raise HTTPException(status_code=401, detail="Webhook verification not configured")
+    provided_sig = request.headers.get("Plaid-Verification", "")
+    if not provided_sig:
+        logger.warning("Missing Plaid-Verification header")
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
+    expected = hmac.new(
+        PLAID_WEBHOOK_VERIFY_KEY.encode(),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(provided_sig, expected):
+        logger.warning(f"Invalid Plaid webhook signature from {request.client.host}")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     try:
         payload = json.loads(body)

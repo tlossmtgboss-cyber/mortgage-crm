@@ -768,12 +768,17 @@ async def handle_call_webhook(
         body = await request.body()
         signature = request.headers.get("X-Retell-Signature", "")
 
-        # Verify signature (optional but recommended)
+        # Verify signature — fail-closed when not configured
         api_key = os.getenv("RETELL_API_KEY")
-        if api_key and signature:
-            if not RetellClient.verify_webhook_signature(body, signature, api_key):
-                logger.warning("Invalid webhook signature")
-                raise HTTPException(status_code=401, detail="Invalid signature")
+        if not api_key:
+            logger.error("RETELL_API_KEY not configured — rejecting webhook")
+            raise HTTPException(status_code=401, detail="Webhook verification not configured")
+        if not signature:
+            logger.warning("Missing X-Retell-Signature header")
+            raise HTTPException(status_code=401, detail="Missing webhook signature")
+        if not RetellClient.verify_webhook_signature(body, signature, api_key):
+            logger.warning("Invalid Retell webhook signature")
+            raise HTTPException(status_code=401, detail="Invalid signature")
 
         # Parse event
         event = await request.json()

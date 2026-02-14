@@ -970,6 +970,9 @@ async def participant_status_webhook(
     db: Session = Depends(get_db)
 ):
     """Webhook for participant call status updates"""
+    from services.webhook_security import verify_twilio_webhook
+    await verify_twilio_webhook(request)
+
     try:
         query_params = request.query_params
         form_data = await request.form()
@@ -1014,6 +1017,9 @@ async def conference_status_webhook(
     db: Session = Depends(get_db)
 ):
     """Webhook for conference status updates"""
+    from services.webhook_security import verify_twilio_webhook
+    await verify_twilio_webhook(request)
+
     try:
         query_params = request.query_params
         form_data = await request.form()

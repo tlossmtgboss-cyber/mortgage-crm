@@ -1082,6 +1082,9 @@ async def consultation_status_webhook(
     """
     Webhook for consultation call status updates.
     """
+    from services.webhook_security import verify_twilio_webhook
+    await verify_twilio_webhook(request)
+
     try:
         form_data = await request.form()
         query_params = request.query_params

@@ -11,7 +11,7 @@ This system provides enterprise-grade SMS intelligence:
 6. Fast SLA tracking (minutes, not hours)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text, desc, and_, or_, func
 from pydantic import BaseModel, Field
@@ -1503,11 +1503,15 @@ async def get_sms_stats(
 
 @router.post("/webhook/twilio")
 async def twilio_sms_webhook(
+    request: Request,
     request_data: Dict[str, Any],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Webhook endpoint for Twilio SMS"""
+    from services.webhook_security import verify_webhook_secret
+    verify_webhook_secret(request)
+
     try:
         # Extract Twilio webhook data
         message_sid = request_data.get("MessageSid")

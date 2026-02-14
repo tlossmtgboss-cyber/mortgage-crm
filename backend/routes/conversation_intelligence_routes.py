@@ -12,7 +12,7 @@ Provides endpoints for:
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -501,6 +501,7 @@ async def get_conversation_stats(
 
 @router.post("/webhook/email")
 async def process_email_webhook(
+    request: Request,
     email_data: Dict[str, Any],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -511,6 +512,9 @@ async def process_email_webhook(
     Integrates with Microsoft Graph webhooks to process
     inbound emails through the QualificationAgent.
     """
+    from services.webhook_security import verify_webhook_secret
+    verify_webhook_secret(request)
+
     try:
         # Extract email details
         subject = email_data.get("subject", "")
@@ -563,6 +567,7 @@ async def process_email_webhook(
 
 @router.post("/webhook/sms")
 async def process_sms_webhook(
+    request: Request,
     sms_data: Dict[str, Any],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
@@ -573,6 +578,9 @@ async def process_sms_webhook(
     Integrates with Twilio webhooks to process
     inbound SMS through the QualificationAgent.
     """
+    from services.webhook_security import verify_webhook_secret
+    verify_webhook_secret(request)
+
     try:
         # Extract SMS details (Twilio format)
         message_body = sms_data.get("Body", "")

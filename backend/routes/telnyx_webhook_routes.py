@@ -54,14 +54,17 @@ TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
 # =============================================================================
 
 async def validate_webhook(request: Request) -> bool:
-    """Validate incoming Telnyx webhook signature"""
+    """Validate incoming Telnyx webhook signature. Fail-closed when key not configured."""
     if not TELNYX_PUBLIC_KEY:
-        # In development, skip validation
-        logger.warning("Telnyx webhook validation skipped - no public key configured")
-        return True
+        logger.error("TELNYX_PUBLIC_KEY not configured — rejecting webhook")
+        return False
 
     signature = request.headers.get("telnyx-signature-ed25519", "")
     timestamp = request.headers.get("telnyx-timestamp", "")
+    if not signature or not timestamp:
+        logger.warning("Missing Telnyx signature headers")
+        return False
+
     body = await request.body()
 
     return validate_telnyx_webhook(body, signature, timestamp, TELNYX_PUBLIC_KEY)

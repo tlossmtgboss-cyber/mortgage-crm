@@ -363,6 +363,29 @@ async def handle_inbound_call(
     When configured as the voice URL for a Telnyx number,
     this will return TeXML to forward the call to the appropriate Retell agent.
     """
+    # Verify Telnyx webhook signature
+    telnyx_public_key = os.getenv("TELNYX_PUBLIC_KEY")
+    if not telnyx_public_key:
+        logger.error("TELNYX_PUBLIC_KEY not configured — rejecting webhook")
+        raise HTTPException(status_code=401, detail="Webhook verification not configured")
+    signature = request.headers.get("telnyx-signature-ed25519", "")
+    timestamp = request.headers.get("telnyx-timestamp", "")
+    if not signature or not timestamp:
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
+    try:
+        from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
+        raw_body = await request.body()
+        if not validate_telnyx_webhook(raw_body, signature, timestamp, telnyx_public_key):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    except HTTPException:
+        raise
+    except ImportError:
+        logger.error("Telnyx webhook validation module not available")
+        raise HTTPException(status_code=500, detail="Webhook verification unavailable")
+    except Exception as e:
+        logger.error(f"Telnyx signature validation error: {e}")
+        raise HTTPException(status_code=401, detail="Webhook signature validation failed")
+
     try:
         body = await request.json()
 
