@@ -29,6 +29,16 @@ from telephony.websocket import ws_manager
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_token(request) -> str:
+    """Extract Bearer token from Authorization header."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    from fastapi import HTTPException
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
+
 router = APIRouter(prefix="/api/v1", tags=["Power Dialer"])
 
 
@@ -663,7 +673,7 @@ async def get_dialer_call_tasks(
     """
     import main
 
-    current_user = await main.get_current_user(request, db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     # Immediate logging to confirm we entered the endpoint
     logger.info(f"[CALL-TASKS] Endpoint entered, user_id={current_user.id if current_user else 'None'}")

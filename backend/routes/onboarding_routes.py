@@ -15,6 +15,16 @@ from db import get_db
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_token(request) -> str:
+    """Extract Bearer token from Authorization header."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    from fastapi import HTTPException
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
+
 router = APIRouter(prefix="/api/v1/onboarding", tags=["Onboarding"])
 
 # Secondary router for team endpoints
@@ -182,6 +192,7 @@ def parse_document_basic(document_content: str, document_name: str = None):
 
 @router.get("/steps")
 async def get_onboarding_steps(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get onboarding step templates (customized or default)"""
@@ -191,7 +202,7 @@ async def get_onboarding_steps(
 
     # Import get_current_user at runtime
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Check if user has customized steps
@@ -278,7 +289,7 @@ async def get_onboarding_steps(
 
 @router.post("/steps")
 async def update_onboarding_steps(
-    request: dict,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Update/customize onboarding step templates"""
@@ -287,10 +298,11 @@ async def update_onboarding_steps(
     OnboardingStep = models['OnboardingStep']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
-        steps_data = request.get("steps", [])
+        body = await request.json()
+        steps_data = body.get("steps", [])
 
         # Delete existing custom steps
         db.query(OnboardingStep).filter(
@@ -322,6 +334,7 @@ async def update_onboarding_steps(
 
 @router.get("/progress")
 async def get_onboarding_progress(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get current user's onboarding progress"""
@@ -330,7 +343,7 @@ async def get_onboarding_progress(
     OnboardingProgress = models['OnboardingProgress']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         progress = db.query(OnboardingProgress).filter(
@@ -365,7 +378,7 @@ async def get_onboarding_progress(
 
 @router.post("/progress")
 async def update_onboarding_progress(
-    request: dict,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Update user's onboarding progress"""
@@ -374,9 +387,11 @@ async def update_onboarding_progress(
     OnboardingProgress = models['OnboardingProgress']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
+        body = await request.json()
+
         progress = db.query(OnboardingProgress).filter(
             OnboardingProgress.user_id == current_user.id
         ).first()
@@ -386,17 +401,17 @@ async def update_onboarding_progress(
             db.add(progress)
 
         # Update fields
-        if "current_step" in request:
-            progress.current_step = request["current_step"]
+        if "current_step" in body:
+            progress.current_step = body["current_step"]
 
-        if "steps_completed" in request:
-            progress.steps_completed = request["steps_completed"]
+        if "steps_completed" in body:
+            progress.steps_completed = body["steps_completed"]
 
-        if "uploaded_documents" in request:
-            progress.uploaded_documents = request["uploaded_documents"]
+        if "uploaded_documents" in body:
+            progress.uploaded_documents = body["uploaded_documents"]
 
-        if "team_members_added" in request:
-            progress.team_members_added = request["team_members_added"]
+        if "team_members_added" in body:
+            progress.team_members_added = body["team_members_added"]
 
         db.commit()
 
@@ -410,6 +425,7 @@ async def update_onboarding_progress(
 
 @router.post("/complete")
 async def complete_onboarding(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Mark onboarding as complete for user"""
@@ -418,7 +434,7 @@ async def complete_onboarding(
     OnboardingProgress = models['OnboardingProgress']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Update progress
@@ -445,6 +461,7 @@ async def complete_onboarding(
 
 @router.post("/reset")
 async def reset_onboarding(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Reset onboarding for current user"""
@@ -453,7 +470,7 @@ async def reset_onboarding(
     OnboardingProgress = models['OnboardingProgress']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Delete onboarding progress
@@ -495,7 +512,7 @@ async def parse_onboarding_documents(
     ProcessTaskResponse = schemas['ProcessTaskResponse']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
     openai_client = get_openai_client()
 
     try:
@@ -657,6 +674,7 @@ async def parse_onboarding_documents(
 
 @router.get("/roles")
 async def get_process_roles(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get all AI-extracted roles for current user"""
@@ -667,7 +685,7 @@ async def get_process_roles(
     ProcessRoleResponse = schemas['ProcessRoleResponse']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         roles = db.query(ProcessRole).filter(
@@ -684,6 +702,7 @@ async def get_process_roles(
 
 @router.get("/milestones")
 async def get_process_milestones(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get all AI-extracted milestones for current user"""
@@ -694,7 +713,7 @@ async def get_process_milestones(
     ProcessMilestoneResponse = schemas['ProcessMilestoneResponse']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         milestones = db.query(ProcessMilestone).filter(
@@ -711,6 +730,7 @@ async def get_process_milestones(
 
 @router.get("/tasks")
 async def get_process_tasks(
+    request: Request,
     role_id: Optional[int] = None,
     milestone_id: Optional[int] = None,
     db: Session = Depends(get_db)
@@ -723,7 +743,7 @@ async def get_process_tasks(
     ProcessTaskResponse = schemas['ProcessTaskResponse']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         query = db.query(ProcessTask).filter(
@@ -752,6 +772,7 @@ async def get_process_tasks(
 
 @team_router.get("/members")
 async def get_team_members(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get all team members with their assigned roles from onboarding
@@ -765,7 +786,7 @@ async def get_team_members(
     ProcessTask = models['ProcessTask']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Get all users in the same organization as current user
@@ -864,6 +885,7 @@ async def get_team_members(
 @team_router.get("/members/{user_id}")
 async def get_team_member_detail(
     user_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get detailed information about a specific team member"""
@@ -871,7 +893,7 @@ async def get_team_member_detail(
     User = models['User']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Get the user - no sample/demo data, only real users
@@ -937,6 +959,7 @@ async def get_team_member_detail(
 @team_router.get("/members/{user_id}/work-hours")
 async def get_team_member_work_hours(
     user_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get a team member's work hours for scheduling"""
@@ -944,7 +967,7 @@ async def get_team_member_work_hours(
     User = models['User']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         user = db.query(User).filter(User.id == user_id).first()
@@ -984,7 +1007,7 @@ async def create_team_member(
     get_password_hash = get_password_hash_func()
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Parse request body
@@ -1054,7 +1077,7 @@ async def update_team_member(
     User = models['User']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         user = db.query(User).filter(User.id == member_id).first()
@@ -1119,6 +1142,7 @@ async def update_team_member(
 @team_router.delete("/members/{member_id}")
 async def delete_team_member(
     member_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Delete a team member"""
@@ -1126,7 +1150,7 @@ async def delete_team_member(
     User = models['User']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         user = db.query(User).filter(User.id == member_id).first()
@@ -1163,7 +1187,7 @@ async def start_impersonation(
     ImpersonationSession = models['ImpersonationSession']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Parse request body
@@ -1242,7 +1266,7 @@ async def end_impersonation(
     ImpersonationSession = models['ImpersonationSession']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Get session token from header
@@ -1290,7 +1314,7 @@ async def get_current_impersonation(
     ImpersonationSession = models['ImpersonationSession']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
         # Get session token from header

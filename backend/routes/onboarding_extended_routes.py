@@ -28,6 +28,16 @@ from db import get_db
 
 logger = logging.getLogger(__name__)
 
+
+def _extract_token(request) -> str:
+    """Extract Bearer token from Authorization header."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    from fastapi import HTTPException
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
+
 # Main onboarding router with /api/v1/onboarding prefix
 router = APIRouter(prefix="/api/v1/onboarding", tags=["Onboarding Extended"])
 
@@ -129,6 +139,7 @@ def get_onboarding_crud():
 
 @router.post("/start")
 async def start_onboarding(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -142,7 +153,7 @@ async def start_onboarding(
 
     # Get current user
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         # Check if onboarding already exists
@@ -181,6 +192,7 @@ async def start_onboarding(
 
 @router.get("/progress")
 async def get_onboarding_progress(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -192,7 +204,7 @@ async def get_onboarding_progress(
     OnboardingProgressResponse = schemas['OnboardingProgressResponse']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         progress = db.query(OnboardingProgress).filter(
@@ -216,6 +228,7 @@ async def get_onboarding_progress(
 
 @router.get("/resume")
 async def should_resume_onboarding(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -225,7 +238,7 @@ async def should_resume_onboarding(
     OnboardingProgress = models['OnboardingProgress']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         progress = db.query(OnboardingProgress).filter(
@@ -251,6 +264,7 @@ async def should_resume_onboarding(
 
 @router.post("/step-1/save")
 async def save_step_1(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -262,7 +276,7 @@ async def save_step_1(
     Step1Data = schemas['Step1Data']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     # Parse request body manually to use Step1Data schema
     from fastapi import Request
@@ -296,7 +310,7 @@ async def auto_save_step(
     OnboardingProgress = models['OnboardingProgress']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         data = await request.json()
@@ -336,6 +350,7 @@ async def auto_save_step(
 @router.post("/step/{step_number}/complete")
 async def complete_step(
     step_number: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -345,7 +360,7 @@ async def complete_step(
     OnboardingProgress = models['OnboardingProgress']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         if step_number < 1 or step_number > 10:
@@ -397,6 +412,7 @@ async def complete_step(
 
 @router.post("/step-1/send-email-verification")
 async def send_email_verification(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -408,7 +424,7 @@ async def send_email_verification(
     onboarding_crud = get_onboarding_crud()
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     # Note: This needs request body with SendVerificationRequest schema
     # For the full implementation, the request parameter should be added
@@ -544,7 +560,7 @@ async def verify_email(
     onboarding_crud = get_onboarding_crud()
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         body = await request.json()
@@ -602,6 +618,7 @@ async def verify_email(
 
 @router.post("/step-1/send-sms-verification")
 async def send_sms_verification(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -611,7 +628,7 @@ async def send_sms_verification(
     onboarding_crud = get_onboarding_crud()
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         phone = current_user.phone
@@ -686,7 +703,7 @@ async def verify_sms(
     onboarding_crud = get_onboarding_crud()
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         body = await request.json()
@@ -747,11 +764,12 @@ async def verify_sms(
 
 @workflow_router.get("")
 async def get_workflow_stages(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get all workflow stages with their tasks"""
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     # Default workflow stages configuration
     stages = {
@@ -827,6 +845,7 @@ async def get_workflow_stages(
 @workflow_router.get("/{stage_key}/team-members")
 async def get_workflow_stage_team_members(
     stage_key: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get team members with their workflow progress for a specific stage"""
@@ -837,7 +856,7 @@ async def get_workflow_stage_team_members(
     LoanStage = models['LoanStage']
 
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     # Map stage to query criteria
     stage_map = {
@@ -939,7 +958,7 @@ async def update_workflow_stage(
 ):
     """Update workflow tasks for a specific stage"""
     import main
-    current_user = await main.get_current_user(db=db)
+    current_user = await main.get_current_user(_extract_token(request), request, db)
 
     valid_stages = ["lead", "active_loan", "portfolio"]
     if stage_key not in valid_stages:
@@ -1121,6 +1140,7 @@ def seed_permission_system(db: Session):
 @admin_router.get("/api/admin/users/check-email")
 async def check_email_availability(
     email: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Check if email is available for new invite."""
@@ -1130,7 +1150,7 @@ async def check_email_availability(
     InviteStatus = models['InviteStatus']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     existing_user = db.query(User).filter(User.email == email).first()
     existing_invite = db.query(EmployeeInvite).filter(
@@ -1146,6 +1166,7 @@ async def check_email_availability(
 
 @admin_router.get("/api/user-onboarding/options")
 async def get_onboarding_options(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get roles, branches, pages, and responsibilities for onboarding wizard."""
@@ -1155,7 +1176,7 @@ async def get_onboarding_options(
     Responsibility = models['Responsibility']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     roles = [
         {"value": "admin", "label": "Administrator", "description": "Full system access"},
@@ -1176,6 +1197,7 @@ async def get_onboarding_options(
 @admin_router.get("/api/user-onboarding/permissions-preview/{role}")
 async def get_role_permissions_preview(
     role: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get default permissions for a role."""
@@ -1184,7 +1206,7 @@ async def get_role_permissions_preview(
     RoleResponsibility = models['RoleResponsibility']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     role_perms = db.query(RolePagePermission).filter(RolePagePermission.role == role).all()
     role_resps = db.query(RoleResponsibility).filter(RoleResponsibility.role == role).all()
@@ -1197,7 +1219,8 @@ async def get_role_permissions_preview(
 
 @admin_router.post("/api/admin/users/onboarding")
 async def create_employee_invite(
-    request: EmployeeInviteCreate,
+    invite_data: EmployeeInviteCreate,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Create a new employee invite."""
@@ -1208,13 +1231,13 @@ async def create_employee_invite(
     InviteStatus = models['InviteStatus']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     # Check email availability
-    if db.query(User).filter(User.email == request.email).first():
+    if db.query(User).filter(User.email == invite_data.email).first():
         raise HTTPException(status_code=400, detail="Email already in use")
 
-    if db.query(EmployeeInvite).filter(EmployeeInvite.email == request.email, EmployeeInvite.status == InviteStatus.PENDING).first():
+    if db.query(EmployeeInvite).filter(EmployeeInvite.email == invite_data.email, EmployeeInvite.status == InviteStatus.PENDING).first():
         raise HTTPException(status_code=400, detail="Pending invite already exists for this email")
 
     # Generate invite token
@@ -1222,18 +1245,18 @@ async def create_employee_invite(
 
     # Create invite
     invite = EmployeeInvite(
-        email=request.email,
-        first_name=request.first_name,
-        last_name=request.last_name,
-        job_title=request.job_title,
-        permission_role=request.permission_role,
-        branch_id=request.branch_id,
+        email=invite_data.email,
+        first_name=invite_data.first_name,
+        last_name=invite_data.last_name,
+        job_title=invite_data.job_title,
+        permission_role=invite_data.permission_role,
+        branch_id=invite_data.branch_id,
         invite_token=invite_token,
         invited_by_user_id=current_user.id,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
         initial_config={
-            "page_permissions": request.page_permissions or [],
-            "responsibilities": request.responsibilities or []
+            "page_permissions": invite_data.page_permissions or [],
+            "responsibilities": invite_data.responsibilities or []
         }
     )
     db.add(invite)
@@ -1246,7 +1269,7 @@ async def create_employee_invite(
     try:
         from email_service import email_service
 
-        user_name = f"{request.first_name} {request.last_name}"
+        user_name = f"{invite_data.first_name} {invite_data.last_name}"
         inviter_name = current_user.name or current_user.email.split('@')[0]
 
         html_content = f"""
@@ -1264,10 +1287,10 @@ async def create_employee_invite(
                         <h1 style="color: #3b82f6; font-size: 28px; margin: 0;">Perennia AI</h1>
                     </div>
 
-                    <h2 style="color: #111827; margin: 0 0 16px; font-size: 22px;">Welcome to the Team, {request.first_name}!</h2>
+                    <h2 style="color: #111827; margin: 0 0 16px; font-size: 22px;">Welcome to the Team, {invite_data.first_name}!</h2>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        {inviter_name} has invited you to join Perennia AI as a <strong>{request.permission_role.title()}</strong>.
+                        {inviter_name} has invited you to join Perennia AI as a <strong>{invite_data.permission_role.title()}</strong>.
                     </p>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -1304,9 +1327,9 @@ async def create_employee_invite(
         </html>
         """
 
-        plain_text = f"""Welcome to the Team, {request.first_name}!
+        plain_text = f"""Welcome to the Team, {invite_data.first_name}!
 
-{inviter_name} has invited you to join Perennia AI as a {request.permission_role.title()}.
+{inviter_name} has invited you to join Perennia AI as a {invite_data.permission_role.title()}.
 
 Click the link below to set up your password and activate your account:
 
@@ -1326,22 +1349,22 @@ If you didn't expect this invitation, please contact your administrator.
 """
 
         email_sent = email_service.send_html_email(
-            to_email=request.email,
-            subject=f"You're Invited to Join Perennia AI - {request.permission_role.title()}",
+            to_email=invite_data.email,
+            subject=f"You're Invited to Join Perennia AI - {invite_data.permission_role.title()}",
             html_body=html_content,
             plain_text_body=plain_text
         )
 
         if email_sent:
-            logger.info(f"Employee invite email sent to {request.email}")
+            logger.info(f"Employee invite email sent to {invite_data.email}")
         else:
-            logger.warning(f"Failed to send invite email to {request.email}, invite still created")
+            logger.warning(f"Failed to send invite email to {invite_data.email}, invite still created")
 
     except Exception as email_err:
         logger.error(f"Error sending invite email: {email_err}")
         # Continue anyway - invite was created
 
-    logger.info(f"Employee invite created: {request.email}, URL: {invite_url}")
+    logger.info(f"Employee invite created: {invite_data.email}, URL: {invite_url}")
 
     return {
         "success": True,
@@ -1457,6 +1480,7 @@ async def accept_invite(request: InviteAcceptRequest, db: Session = Depends(get_
 
 @admin_router.get("/api/admin/invites")
 async def list_invites(
+    request: Request,
     status: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
@@ -1466,7 +1490,7 @@ async def list_invites(
     InviteStatus = models['InviteStatus']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     query = db.query(EmployeeInvite).order_by(EmployeeInvite.created_at.desc())
 
@@ -1494,6 +1518,7 @@ async def list_invites(
 @admin_router.post("/api/admin/invites/{invite_id}/revoke")
 async def revoke_invite(
     invite_id: int,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Revoke a pending invite."""
@@ -1502,7 +1527,7 @@ async def revoke_invite(
     InviteStatus = models['InviteStatus']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     invite = db.query(EmployeeInvite).filter(EmployeeInvite.id == invite_id).first()
 
@@ -1524,6 +1549,7 @@ async def revoke_invite(
 
 @ai_router.get("/quick-actions")
 async def get_ai_quick_actions(
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get AI quick actions available to the current user based on their role."""
@@ -1532,7 +1558,7 @@ async def get_ai_quick_actions(
     AIQuickActionRole = models['AIQuickActionRole']
 
     import main
-    current_user = await main.get_current_user_flexible(db=db)
+    current_user = await main.get_current_user_flexible(request, db)
 
     user_role = current_user.permission_role or "sales"
 
