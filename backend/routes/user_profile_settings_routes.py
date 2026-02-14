@@ -209,10 +209,15 @@ class FullProfileUpdate(BaseModel):
     bio: Optional[str] = Field(None, max_length=500)
     timezone: Optional[str] = None
 
-    # Work hours
+    # Work hours (legacy global start/end)
     work_hours_start: Optional[str] = None
     work_hours_end: Optional[str] = None
     work_days: Optional[List[str]] = None
+
+    # Per-day hours: {"monday": {"start": "09:00", "end": "17:00"}, ...}
+    daily_hours: Optional[Dict[str, Dict[str, str]]] = None
+    # Blocked time slots: [{"id": "abc", "label": "Lunch", "days": [...], "start": "12:00", "end": "13:00"}]
+    blocked_times: Optional[List[Dict[str, Any]]] = None
 
     # Notification preferences
     email_notifications: Optional[bool] = None
@@ -259,6 +264,38 @@ class FullProfileUpdate(BaseModel):
             raise ValueError(f'Invalid days: {", ".join(invalid_days)}')
         return [d.lower() for d in v]
 
+    @validator('daily_hours')
+    def validate_daily_hours(cls, v):
+        if v is None:
+            return v
+        time_re = re.compile(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
+        for day, hours in v.items():
+            if day.lower() not in VALID_DAYS:
+                raise ValueError(f'Invalid day: {day}')
+            if not isinstance(hours, dict) or 'start' not in hours or 'end' not in hours:
+                raise ValueError(f'Each day must have start and end times')
+            if not time_re.match(hours['start']) or not time_re.match(hours['end']):
+                raise ValueError(f'Invalid time format for {day}')
+        return {k.lower(): v for k, v in v.items()}
+
+    @validator('blocked_times')
+    def validate_blocked_times(cls, v):
+        if v is None:
+            return v
+        time_re = re.compile(r'^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$')
+        for block in v:
+            if not isinstance(block, dict):
+                raise ValueError('Each blocked time must be an object')
+            if 'start' not in block or 'end' not in block:
+                raise ValueError('Each blocked time must have start and end')
+            if not time_re.match(block['start']) or not time_re.match(block['end']):
+                raise ValueError('Invalid time format in blocked time')
+            if 'days' in block:
+                for d in block['days']:
+                    if d.lower() not in VALID_DAYS:
+                        raise ValueError(f'Invalid day in blocked time: {d}')
+        return v
+
 
 # =============================================================================
 # Helper Functions
@@ -294,6 +331,8 @@ def get_user_profile_data(user) -> Dict[str, Any]:
             "start": business_hours.get('start', '09:00'),
             "end": business_hours.get('end', '17:00'),
             "days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']),
+            "daily_hours": business_hours.get('daily_hours', {}),
+            "blocked_times": business_hours.get('blocked_times', []),
         },
         "notifications": {
             "email": notifications.get('email', True),
@@ -365,7 +404,7 @@ async def get_profile_settings(
                 "profile": profile_data,
                 "completeness": completeness,
             },
-            warnings=completeness.get("warnings", []),
+            # warnings included in completeness data
             message="Profile settings retrieved successfully"
         )
     except Exception as e:
@@ -398,7 +437,8 @@ async def update_profile_settings(
                 setattr(current_user, db_field, update_data[api_field])
 
         # Update work hours
-        if any(k in update_data for k in ['work_hours_start', 'work_hours_end', 'work_days']):
+        work_hour_keys = ['work_hours_start', 'work_hours_end', 'work_days', 'daily_hours', 'blocked_times']
+        if any(k in update_data for k in work_hour_keys):
             business_hours = getattr(current_user, 'business_hours', None) or {}
             if 'work_hours_start' in update_data:
                 business_hours['start'] = update_data['work_hours_start']
@@ -406,6 +446,10 @@ async def update_profile_settings(
                 business_hours['end'] = update_data['work_hours_end']
             if 'work_days' in update_data:
                 business_hours['days'] = update_data['work_days']
+            if 'daily_hours' in update_data:
+                business_hours['daily_hours'] = update_data['daily_hours']
+            if 'blocked_times' in update_data:
+                business_hours['blocked_times'] = update_data['blocked_times']
             current_user.business_hours = business_hours
 
         # Update notification preferences
@@ -439,7 +483,7 @@ async def update_profile_settings(
                 "profile": profile_data,
                 "completeness": completeness,
             },
-            warnings=completeness.get("warnings", []),
+            # warnings included in completeness data
             message="Profile updated successfully"
         )
     except ValidationException:
@@ -659,6 +703,8 @@ class UserMeUpdate(BaseModel):
     work_hours_start: Optional[str] = None
     work_hours_end: Optional[str] = None
     work_days: Optional[List[str]] = None
+    daily_hours: Optional[Dict[str, Dict[str, str]]] = None
+    blocked_times: Optional[List[Dict[str, Any]]] = None
 
 
 @users_router.get("/me")
@@ -687,6 +733,8 @@ async def get_current_user_profile(
             "work_hours_start": business_hours.get('start', '09:00'),
             "work_hours_end": business_hours.get('end', '17:00'),
             "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']),
+            "daily_hours": business_hours.get('daily_hours', {}),
+            "blocked_times": business_hours.get('blocked_times', []),
         }
     except Exception as e:
         logger.error(f"Error fetching user profile: {e}")
@@ -720,7 +768,8 @@ async def update_current_user_profile(
                 setattr(current_user, db_field, update_data[api_field])
 
         # Update work hours
-        if any(k in update_data for k in ['work_hours_start', 'work_hours_end', 'work_days']):
+        work_hour_keys = ['work_hours_start', 'work_hours_end', 'work_days', 'daily_hours', 'blocked_times']
+        if any(k in update_data for k in work_hour_keys):
             business_hours = getattr(current_user, 'business_hours', None) or {}
             if 'work_hours_start' in update_data:
                 business_hours['start'] = update_data['work_hours_start']
@@ -728,6 +777,10 @@ async def update_current_user_profile(
                 business_hours['end'] = update_data['work_hours_end']
             if 'work_days' in update_data:
                 business_hours['days'] = update_data['work_days']
+            if 'daily_hours' in update_data:
+                business_hours['daily_hours'] = update_data['daily_hours']
+            if 'blocked_times' in update_data:
+                business_hours['blocked_times'] = update_data['blocked_times']
             current_user.business_hours = business_hours
 
         db.commit()
@@ -746,6 +799,8 @@ async def update_current_user_profile(
             "work_hours_start": business_hours.get('start', '09:00'),
             "work_hours_end": business_hours.get('end', '17:00'),
             "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']),
+            "daily_hours": business_hours.get('daily_hours', {}),
+            "blocked_times": business_hours.get('blocked_times', []),
             "message": "Profile updated successfully",
         }
     except Exception as e:

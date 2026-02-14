@@ -1038,7 +1038,8 @@ async def create_team_member(
         new_user = User(
             email=email or f"{first_name.lower()}.{last_name.lower()}@temp.com",
             hashed_password=hashed_password,
-            full_name=full_name,
+            first_name=first_name,
+            last_name=last_name,
             role=role,
             user_metadata=user_metadata,
             is_active=True,
@@ -1105,11 +1106,11 @@ async def update_team_member(
         if title is not None:
             user_metadata["title"] = title
 
-        # Update full_name if first or last name changed
-        if first_name or last_name:
-            first = first_name or user_metadata.get("first_name", "")
-            last = last_name or user_metadata.get("last_name", "")
-            user.full_name = f"{first} {last}"
+        # Update first_name/last_name if changed (full_name is a computed hybrid property)
+        if first_name is not None:
+            user.first_name = first_name
+        if last_name is not None:
+            user.last_name = last_name
 
         if email is not None:
             user.email = email
