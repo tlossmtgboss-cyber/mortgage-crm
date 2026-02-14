@@ -13,7 +13,35 @@ import hmac
 import hashlib
 import logging
 
+from urllib.parse import urlparse
+import ipaddress
+
 logger = logging.getLogger(__name__)
+
+
+def _is_safe_url(url: str) -> bool:
+    """Validate URL is not targeting internal/private networks (SSRF protection)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        blocked = {"localhost", "127.0.0.1", "0.0.0.0", "[::1]",
+                   "169.254.169.254", "metadata.google.internal"}
+        if hostname in blocked:
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+        except ValueError:
+            pass  # Not an IP literal, allow
+        return True
+    except Exception:
+        return False
+
 
 # Recall.ai Configuration
 RECALLAI_API_KEY = os.getenv("RECALLAI_API_KEY", "")
@@ -177,7 +205,7 @@ async def get_bot_status(
 
         # Get transcript if available
         transcript_text = None
-        if bot_data.get("transcript_url"):
+        if bot_data.get("transcript_url") and _is_safe_url(bot_data["transcript_url"]):
             try:
                 transcript_response = requests.get(bot_data["transcript_url"], timeout=30)
                 if transcript_response.status_code == 200:

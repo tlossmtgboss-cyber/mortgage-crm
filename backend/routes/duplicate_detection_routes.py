@@ -154,8 +154,8 @@ async def create_duplicate_merge_tasks(
 
 
 @router.post("/admin/test-duplicate-task-creation")
-async def test_duplicate_task_creation(db: Session = Depends(get_db)):
-    """Debug endpoint to test duplicate task creation without auth."""
+async def test_duplicate_task_creation(db: Session = Depends(get_db), current_user=Depends(get_current_user_dep())):
+    """Debug endpoint to test duplicate task creation."""
     from services.duplicate_detection_service import get_duplicate_detection_service
 
     try:
@@ -209,7 +209,7 @@ async def test_duplicate_task_creation(db: Session = Depends(get_db)):
 
 
 @router.get("/admin/check-duplicate-tasks")
-async def check_duplicate_tasks(db: Session = Depends(get_db)):
+async def check_duplicate_tasks(db: Session = Depends(get_db), current_user=Depends(get_current_user_dep())):
     """Check for existing duplicate review tasks."""
     try:
         # Find all tasks with related_type like 'duplicate_%'
@@ -240,7 +240,7 @@ async def check_duplicate_tasks(db: Session = Depends(get_db)):
 
 
 @router.delete("/admin/clear-duplicate-tasks")
-async def clear_duplicate_tasks(db: Session = Depends(get_db)):
+async def clear_duplicate_tasks(db: Session = Depends(get_db), current_user=Depends(get_current_user_dep())):
     """Clear all existing duplicate review tasks so new ones can be created."""
     try:
         result = db.execute(text("""
@@ -262,8 +262,10 @@ async def clear_duplicate_tasks(db: Session = Depends(get_db)):
 
 
 @router.get("/admin/check-user-permissions/{user_id}")
-async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_db)):
-    """Debug endpoint to check a user's permissions without auth."""
+async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user_dep())):
+    """Debug endpoint to check a user's permissions (admin only)."""
+    if not getattr(current_user, 'permission_role', None) or current_user.permission_role not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
     User = get_user_model()
 
     try:
@@ -312,14 +314,18 @@ async def check_user_permissions_debug(user_id: int, db: Session = Depends(get_d
 
 
 @router.post("/admin/fix-user-permission-role")
-async def fix_user_permission_role(request: dict, db: Session = Depends(get_db)):
+async def fix_user_permission_role(request: dict, db: Session = Depends(get_db), current_user=Depends(get_current_user_dep())):
     """Admin endpoint to fix a user's permission_role.
     Usage: POST /admin/fix-user-permission-role with body: {"email": "user@example.com", "role": "admin"}
     """
+    # Only platform admins can change roles
+    if not getattr(current_user, 'permission_role', None) or current_user.permission_role not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     User = get_user_model()
 
     email = request.get("email")
-    new_role = request.get("role", "admin")
+    new_role = request.get("role")
 
     if not email:
         return {"status": "error", "message": "Email is required"}
@@ -1508,7 +1514,7 @@ async def setup_demo_impersonation(request: dict, db: Session = Depends(get_db))
 
 
 @router.get("/admin/verify-phase1-tables")
-async def verify_phase1_tables(db: Session = Depends(get_db)):
+async def verify_phase1_tables(db: Session = Depends(get_db), current_user=Depends(get_current_user_dep())):
     """
     Verify Phase 1 tables exist in the database.
     Returns list of Phase 1 tables that were successfully created.

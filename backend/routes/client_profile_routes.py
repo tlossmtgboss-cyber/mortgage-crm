@@ -350,11 +350,21 @@ def _parse_process_flow_async(document_id: int):
             if document.file_url:
                 try:
                     from urllib.parse import urlparse
+                    import ipaddress as _ipaddress
                     parsed_url = urlparse(document.file_url)
+                    _hostname = parsed_url.hostname or ""
+                    _blocked = {"localhost", "127.0.0.1", "0.0.0.0", "[::1]",
+                                "169.254.169.254", "metadata.google.internal"}
+                    _is_private_ip = False
+                    try:
+                        _ip = _ipaddress.ip_address(_hostname)
+                        _is_private_ip = _ip.is_private or _ip.is_loopback or _ip.is_link_local or _ip.is_reserved
+                    except ValueError:
+                        pass
                     if parsed_url.scheme not in ("https", "http"):
                         logger.warning(f"Rejected non-HTTP URL scheme: {parsed_url.scheme}")
-                    elif any(h in (parsed_url.hostname or "") for h in ("localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "[::1]", "metadata.google")):
-                        logger.warning(f"Rejected internal URL: {document.file_url}")
+                    elif _hostname in _blocked or _is_private_ip:
+                        logger.warning(f"Rejected internal URL for document {document_id}")
                     else:
                         response = requests.get(document.file_url, timeout=30, allow_redirects=False)
                         response.raise_for_status()
