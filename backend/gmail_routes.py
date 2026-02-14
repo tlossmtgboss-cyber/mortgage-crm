@@ -228,17 +228,28 @@ async def disconnect_gmail(
 ):
     """Disconnect Gmail account."""
     try:
-        if not current_user.settings:
-            current_user.settings = {}
+        # Make a copy to avoid in-place mutation issues
+        settings = dict(current_user.settings or {})
+        settings.pop('gmail_tokens', None)
+        settings.pop('gmail_email', None)
+        settings['gmail_connected'] = False
+        settings.pop('gmail_connected_at', None)
 
-        # Remove Gmail data
-        current_user.settings.pop('gmail_tokens', None)
-        current_user.settings.pop('gmail_email', None)
-        current_user.settings['gmail_connected'] = False
-        current_user.settings.pop('gmail_connected_at', None)
-
-        # Save settings
-        current_user.save_settings()
+        # Read current metadata, update settings, write back
+        result = db.execute(
+            text("SELECT user_metadata FROM users WHERE id = :id"),
+            {"id": current_user.id}
+        )
+        row = result.fetchone()
+        metadata = row[0] if row and row[0] else {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata)
+        metadata['settings'] = settings
+        db.execute(
+            text("UPDATE users SET user_metadata = :metadata WHERE id = :id"),
+            {"metadata": json.dumps(metadata), "id": current_user.id}
+        )
+        db.commit()
 
         return {"success": True, "message": "Gmail disconnected"}
     except Exception as e:
@@ -269,13 +280,29 @@ async def list_emails(
 
         # Check if tokens were refreshed
         if credentials.token != token_data.get('access_token'):
-            # Update stored tokens
-            current_user.settings['gmail_tokens']['access_token'] = credentials.token
+            # Make a copy to avoid in-place mutation issues
+            settings = dict(current_user.settings or {})
+            tokens = dict(settings.get('gmail_tokens', {}))
+            tokens['access_token'] = credentials.token
             if credentials.expiry:
-                current_user.settings['gmail_tokens']['expiry'] = credentials.expiry.isoformat()
+                tokens['expiry'] = credentials.expiry.isoformat()
+            settings['gmail_tokens'] = tokens
 
-            # Save settings
-            current_user.save_settings()
+            # Read current metadata, update settings, write back
+            result = db.execute(
+                text("SELECT user_metadata FROM users WHERE id = :id"),
+                {"id": current_user.id}
+            )
+            row = result.fetchone()
+            metadata = row[0] if row and row[0] else {}
+            if isinstance(metadata, str):
+                metadata = json.loads(metadata)
+            metadata['settings'] = settings
+            db.execute(
+                text("UPDATE users SET user_metadata = :metadata WHERE id = :id"),
+                {"metadata": json.dumps(metadata), "id": current_user.id}
+            )
+            db.commit()
 
         result = gmail_service.list_messages(
             credentials,

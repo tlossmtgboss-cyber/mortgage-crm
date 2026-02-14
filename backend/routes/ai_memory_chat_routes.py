@@ -345,7 +345,7 @@ async def send_task_summary_email(
         tasks = data.get("tasks", [])
 
         user_email = current_user.email
-        user_name = current_user.name or user_email.split('@')[0]
+        user_name = current_user.full_name or user_email.split('@')[0]
 
         if not tasks:
             task_list = "No tasks scheduled - great job staying ahead!"

@@ -1689,9 +1689,13 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             raise HTTPException(status_code=404, detail="User not found")
 
         # Update allowed fields
-        allowed_fields = ['is_active', 'role', 'permission_role', 'email_verified', 'onboarding_completed', 'full_name']
+        allowed_fields = ['is_active', 'role', 'permission_role', 'email_verified', 'onboarding_completed']
         for field, value in updates.items():
-            if field in allowed_fields:
+            if field == 'full_name' and value:
+                parts = str(value).strip().split(' ', 1)
+                user.first_name = parts[0]
+                user.last_name = parts[1] if len(parts) > 1 else ''
+            elif field in allowed_fields:
                 setattr(user, field, value)
 
         db.commit()

@@ -454,7 +454,7 @@ async def send_email_verification(
         try:
             from email_service import email_service
 
-            user_name = current_user.name or email.split('@')[0]
+            user_name = current_user.full_name or email.split('@')[0]
 
             html_content = f"""
             <!DOCTYPE html>
@@ -655,7 +655,7 @@ async def send_sms_verification(
         try:
             from services.notification_service import notification_service
 
-            user_name = current_user.name.split()[0] if current_user.name else "there"
+            user_name = current_user.full_name.split()[0] if current_user.full_name else "there"
 
             sms_message = (
                 f"Hi {user_name}, your Perennia AI verification code is: {token.token}. "
@@ -1270,7 +1270,7 @@ async def create_employee_invite(
         from email_service import email_service
 
         user_name = f"{invite_data.first_name} {invite_data.last_name}"
-        inviter_name = current_user.name or current_user.email.split('@')[0]
+        inviter_name = current_user.full_name or current_user.email.split('@')[0]
 
         html_content = f"""
         <!DOCTYPE html>

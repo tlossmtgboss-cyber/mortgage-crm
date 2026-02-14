@@ -73,12 +73,11 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
                 current_user.phone = data.phone
             if hasattr(current_user, 'timezone'):
                 current_user.timezone = data.timezone
-            if hasattr(current_user, 'job_title'):
-                current_user.job_title = data.job_title
+            if hasattr(current_user, 'title'):
+                current_user.title = data.job_title
             if hasattr(current_user, 'nmls_number'):
                 current_user.nmls_number = data.nmls_id
-            if hasattr(current_user, 'department'):
-                current_user.department = data.department
+            # department has no column on User; stored in user_metadata below
 
             # Store role and goals in user_metadata
             user_metadata = current_user.user_metadata or {}

@@ -219,7 +219,7 @@ async def send_message(
             RETURNING id
         """), {
             "user_id": current_user.id,
-            "user_name": current_user.name,
+            "user_name": current_user.full_name,
             "message": message_text,
             "created_at": datetime.now(timezone.utc)
         })
@@ -232,7 +232,7 @@ async def send_message(
         return SendMessageResponse(
             success=True,
             message_id=message_id,
-            user_name=current_user.name
+            user_name=current_user.full_name
         )
 
     except Exception as e:

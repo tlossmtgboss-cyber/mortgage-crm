@@ -28,7 +28,7 @@ import logging
 
 from database import get_db
 from services.chat_session_manager import ChatSessionManager
-from services.chat_prompt_constructor import ChatPromptConstructor
+from services.chat_prompt_constructor import PromptConstructor as ChatPromptConstructor
 from services.response_cache import ResponseCache
 from services.message_deduplication import MessageDeduplicator
 from services.conversation_quality import ConversationQualityAnalyzer, get_quality_summary

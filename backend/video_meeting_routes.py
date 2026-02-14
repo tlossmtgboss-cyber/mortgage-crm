@@ -1463,7 +1463,7 @@ async def add_participant(
     if data.send_invite and data.email:
         # Get host info
         host = db.query(User).filter(User.id == room.host_user_id).first() if User else None
-        host_name = host.name if host and hasattr(host, 'name') else current_user.name if hasattr(current_user, 'name') else "Host"
+        host_name = host.full_name if host and hasattr(host, 'full_name') else current_user.full_name if hasattr(current_user, 'full_name') else "Host"
 
         # Build join URL
         import os

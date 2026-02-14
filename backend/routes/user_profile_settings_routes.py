@@ -73,7 +73,7 @@ class ProfileUpdate(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError('Name cannot be empty')
-        if re.search(r'[<>"\'\\/]', v):
+        if re.search(r'[<>"\\/]', v):
             raise ValueError('Name contains invalid characters')
         return v
 
@@ -234,7 +234,7 @@ class FullProfileUpdate(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError('Name cannot be empty')
-        if re.search(r'[<>"\'\\/]', v):
+        if re.search(r'[<>"\\/]', v):
             raise ValueError('Name contains invalid characters')
         return v
 
@@ -304,7 +304,8 @@ class FullProfileUpdate(BaseModel):
 def get_user_profile_data(user) -> Dict[str, Any]:
     """Extract profile data from user object"""
     business_hours = getattr(user, 'business_hours', None) or {}
-    notifications = getattr(user, 'notification_preferences', None) or {}
+    user_meta = getattr(user, 'user_metadata', None) or {}
+    notifications = user_meta.get('notification_preferences', {})
 
     # Split full_name into first/last
     full_name = user.full_name or ''
@@ -456,7 +457,8 @@ async def update_profile_settings(
         notification_fields = ['email_notifications', 'sms_notifications', 'push_notifications',
                               'daily_digest', 'task_reminders', 'lead_alerts']
         if any(k in update_data for k in notification_fields):
-            notifications = getattr(current_user, 'notification_preferences', None) or {}
+            user_meta = getattr(current_user, 'user_metadata', None) or {}
+            notifications = user_meta.get('notification_preferences', {})
             field_mapping = {
                 'email_notifications': 'email',
                 'sms_notifications': 'sms',
@@ -468,7 +470,8 @@ async def update_profile_settings(
             for full_key, short_key in field_mapping.items():
                 if full_key in update_data:
                     notifications[short_key] = update_data[full_key]
-            current_user.notification_preferences = notifications
+            user_meta['notification_preferences'] = notifications
+            current_user.user_metadata = user_meta
 
         db.commit()
         db.refresh(current_user)
@@ -575,10 +578,7 @@ async def upload_profile_photo(
 
         # Update user's photo URL
         photo_url = f"/uploads/profiles/{filename}"
-        if hasattr(current_user, 'photo_url'):
-            current_user.photo_url = photo_url
-        elif hasattr(current_user, 'profile_photo'):
-            current_user.profile_photo = photo_url
+        current_user.headshot_url = photo_url
 
         db.commit()
 
@@ -609,10 +609,7 @@ async def delete_profile_photo(
         current_user = await get_current_user(_extract_token(request), request, db)
 
         # Clear photo URL
-        if hasattr(current_user, 'photo_url'):
-            current_user.photo_url = None
-        elif hasattr(current_user, 'profile_photo'):
-            current_user.profile_photo = None
+        current_user.headshot_url = None
 
         db.commit()
 
