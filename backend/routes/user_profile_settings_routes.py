@@ -15,6 +15,7 @@ import uuid
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import HTTPException
 from utils.error_handling import (
     ValidationException,
     PermissionException,
@@ -24,6 +25,14 @@ from utils.error_handling import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_token(request: Request) -> str:
+    """Extract Bearer token from Authorization header."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    raise HTTPException(status_code=401, detail="Not authenticated")
 router = APIRouter(prefix="/api/v1/user-profile-settings", tags=["User Profile Settings"])
 
 # Will be set by main.py
@@ -273,11 +282,11 @@ def get_user_profile_data(user) -> Dict[str, Any]:
         "last_name": last_name,
         "full_name": full_name,
         "phone": getattr(user, 'phone', None),
-        "job_title": getattr(user, 'job_title', None),
+        "job_title": getattr(user, 'title', None),
         "nmls_number": getattr(user, 'nmls_number', None),
-        "bio": getattr(user, 'bio', None),
+        "bio": None,
         "timezone": getattr(user, 'timezone', 'America/New_York'),
-        "photo_url": getattr(user, 'photo_url', None) or getattr(user, 'profile_photo', None),
+        "photo_url": getattr(user, 'headshot_url', None) or getattr(user, 'company_logo_url', None),
         "role": user.role,
         "is_active": user.is_active,
         "email_verified": user.email_verified,
@@ -314,7 +323,7 @@ def validate_profile_completeness(user) -> Dict[str, Any]:
         missing_fields.append("phone")
         completeness -= 10
 
-    if not getattr(user, 'job_title', None):
+    if not getattr(user, 'title', None):
         warnings.append("Job title is not set")
         missing_fields.append("job_title")
         completeness -= 10
@@ -323,7 +332,7 @@ def validate_profile_completeness(user) -> Dict[str, Any]:
         missing_fields.append("nmls_number")
         completeness -= 5
 
-    if not (getattr(user, 'photo_url', None) or getattr(user, 'profile_photo', None)):
+    if not (getattr(user, 'headshot_url', None) or getattr(user, 'company_logo_url', None)):
         warnings.append("Profile photo is not set")
         missing_fields.append("photo")
         completeness -= 10
@@ -346,7 +355,7 @@ async def get_profile_settings(
 ):
     """Get current user's profile settings"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         profile_data = get_user_profile_data(current_user)
         completeness = validate_profile_completeness(current_user)
@@ -372,21 +381,21 @@ async def update_profile_settings(
 ):
     """Update current user's profile settings"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         update_data = updates.dict(exclude_unset=True)
 
-        # Handle name fields
-        if 'first_name' in update_data or 'last_name' in update_data:
-            first = update_data.get('first_name') or get_user_profile_data(current_user)['first_name']
-            last = update_data.get('last_name') or get_user_profile_data(current_user)['last_name']
-            current_user.full_name = f"{first} {last}".strip()
+        # Handle name fields → write to first_name/last_name columns
+        if 'first_name' in update_data:
+            current_user.first_name = update_data['first_name']
+        if 'last_name' in update_data:
+            current_user.last_name = update_data['last_name']
 
-        # Update direct fields
-        direct_fields = ['phone', 'job_title', 'nmls_number', 'bio', 'timezone']
-        for field in direct_fields:
-            if field in update_data and hasattr(current_user, field):
-                setattr(current_user, field, update_data[field])
+        # Update direct fields (job_title maps to title column; bio not in model)
+        field_map = {'phone': 'phone', 'job_title': 'title', 'nmls_number': 'nmls_number', 'timezone': 'timezone'}
+        for api_field, db_field in field_map.items():
+            if api_field in update_data:
+                setattr(current_user, db_field, update_data[api_field])
 
         # Update work hours
         if any(k in update_data for k in ['work_hours_start', 'work_hours_end', 'work_days']):
@@ -449,7 +458,7 @@ async def change_password(
 ):
     """Change current user's password"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         # Verify current password
         if not pwd_context.verify(password_data.current_password, current_user.hashed_password):
@@ -484,7 +493,7 @@ async def upload_profile_photo(
 ):
     """Upload profile photo for current user"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         # Validate file type
         allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
@@ -553,7 +562,7 @@ async def delete_profile_photo(
 ):
     """Delete current user's profile photo"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         # Clear photo URL
         if hasattr(current_user, 'photo_url'):
@@ -659,7 +668,7 @@ async def get_current_user_profile(
 ):
     """Get current user's profile — flat JSON for frontend Settings.js"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         business_hours = getattr(current_user, 'business_hours', None) or {}
 
@@ -669,11 +678,11 @@ async def get_current_user_profile(
             "full_name": current_user.full_name or '',
             "email": current_user.email or '',
             "phone": getattr(current_user, 'phone', None) or '',
-            "job_title": getattr(current_user, 'job_title', None) or '',
+            "job_title": getattr(current_user, 'title', None) or '',
             "nmls_number": getattr(current_user, 'nmls_number', None) or '',
-            "bio": getattr(current_user, 'bio', None) or '',
+            "bio": '',
             "timezone": getattr(current_user, 'timezone', 'America/New_York'),
-            "photo_url": getattr(current_user, 'photo_url', None) or getattr(current_user, 'profile_photo', None),
+            "photo_url": getattr(current_user, 'headshot_url', None) or getattr(current_user, 'company_logo_url', None),
             "role": current_user.role,
             "work_hours_start": business_hours.get('start', '09:00'),
             "work_hours_end": business_hours.get('end', '17:00'),
@@ -693,18 +702,22 @@ async def update_current_user_profile(
 ):
     """Update current user's profile — accepts flat JSON from frontend Settings.js"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         update_data = updates.dict(exclude_unset=True)
 
-        # Handle full_name
+        # Handle full_name → split into first_name and last_name columns
         if 'full_name' in update_data and update_data['full_name']:
-            current_user.full_name = update_data['full_name'].strip()
+            name = update_data['full_name'].strip()
+            parts = name.split(' ', 1)
+            current_user.first_name = parts[0]
+            current_user.last_name = parts[1] if len(parts) > 1 else ''
 
-        # Update direct fields
-        for field in ['phone', 'job_title', 'nmls_number']:
-            if field in update_data and hasattr(current_user, field):
-                setattr(current_user, field, update_data[field])
+        # Update direct fields (job_title maps to title column)
+        field_map = {'phone': 'phone', 'job_title': 'title', 'nmls_number': 'nmls_number'}
+        for api_field, db_field in field_map.items():
+            if api_field in update_data:
+                setattr(current_user, db_field, update_data[api_field])
 
         # Update work hours
         if any(k in update_data for k in ['work_hours_start', 'work_hours_end', 'work_days']):
@@ -728,7 +741,7 @@ async def update_current_user_profile(
             "full_name": current_user.full_name or '',
             "email": current_user.email or '',
             "phone": getattr(current_user, 'phone', None) or '',
-            "job_title": getattr(current_user, 'job_title', None) or '',
+            "job_title": getattr(current_user, 'title', None) or '',
             "nmls_number": getattr(current_user, 'nmls_number', None) or '',
             "work_hours_start": business_hours.get('start', '09:00'),
             "work_hours_end": business_hours.get('end', '17:00'),
@@ -750,7 +763,7 @@ async def change_user_password(
 ):
     """Change password — frontend-compatible path at /api/v1/users/me/password"""
     try:
-        current_user = await get_current_user(request, db)
+        current_user = await get_current_user(_extract_token(request), request, db)
 
         if not pwd_context.verify(password_data.current_password, current_user.hashed_password):
             from fastapi import HTTPException

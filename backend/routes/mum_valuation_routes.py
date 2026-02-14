@@ -59,7 +59,9 @@ async def batch_recalculate(
     # Auth check — require platform admin or site admin
     try:
         from main import get_current_user
-        current_user = await get_current_user(db=db)
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+        current_user = await get_current_user(token, request, db)
         if not getattr(current_user, 'is_admin', False):
             raise HTTPException(status_code=403, detail="Admin access required")
     except ImportError:
