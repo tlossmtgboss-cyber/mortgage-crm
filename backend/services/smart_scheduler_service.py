@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 class SchedulingMethod(str, Enum):
+    DIRECT = "direct"
     ROUND_ROBIN = "round_robin"
     PRIORITY = "priority"
     AVAILABILITY = "availability"
@@ -276,7 +277,9 @@ class SmartSchedulerService:
 
         method = settings.scheduling_method
 
-        if method == SchedulingMethod.ROUND_ROBIN.value:
+        if method == SchedulingMethod.DIRECT.value:
+            return self._assign_direct(active_los)
+        elif method == SchedulingMethod.ROUND_ROBIN.value:
             return self._assign_round_robin(settings, active_los)
         elif method == SchedulingMethod.PRIORITY.value:
             return self._assign_by_priority(active_los, appointment_time)
@@ -287,6 +290,15 @@ class SmartSchedulerService:
         else:
             # Default to round robin
             return self._assign_round_robin(settings, active_los)
+
+    def _assign_direct(self, los: List[LoanOfficerSchedule]) -> Optional[LoanOfficerSchedule]:
+        """Direct booking — no routing, assign to the first (primary) LO.
+        Used when there's a single LO or routing is not desired."""
+        if not los:
+            return None
+        selected = los[0]
+        logger.info(f"Direct assigned: {selected.lo_name}")
+        return selected
 
     def _assign_round_robin(self, settings: SchedulerSettings,
                             los: List[LoanOfficerSchedule]) -> Optional[LoanOfficerSchedule]:

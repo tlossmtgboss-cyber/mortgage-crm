@@ -37,6 +37,7 @@ const DAY_LABELS = {
 
 // Scheduling methods
 const SCHEDULING_METHODS = [
+  { value: 'direct', label: 'Direct', description: 'Book directly with you — no routing' },
   { value: 'round_robin', label: 'Round Robin', description: 'Distribute appointments evenly' },
   { value: 'priority', label: 'Priority', description: 'Assign to highest priority LO' },
   { value: 'availability', label: 'First Available', description: 'Fastest booking' },
@@ -108,7 +109,7 @@ function SmartSchedulerSettings() {
   // State
   const [settings, setSettings] = useState({
     timezone: 'America/Chicago',
-    scheduling_method: 'round_robin',
+    scheduling_method: 'direct',
     business_hours: {
       monday: { start: '09:00', end: '17:00', enabled: true },
       tuesday: { start: '09:00', end: '17:00', enabled: true },

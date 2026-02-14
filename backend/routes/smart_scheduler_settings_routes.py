@@ -64,6 +64,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 # =============================================================================
 
 class SchedulingMethod(str, Enum):
+    DIRECT = "direct"
     ROUND_ROBIN = "round_robin"
     PRIORITY = "priority"
     AVAILABILITY = "availability"
@@ -710,6 +711,12 @@ async def get_scheduling_methods():
     Get available scheduling/routing methods with descriptions
     """
     methods = [
+        {
+            "value": "direct",
+            "label": "Direct",
+            "description": "Book directly with you — no routing or distribution",
+            "recommended_for": "Solo LOs or personal booking links",
+        },
         {
             "value": "round_robin",
             "label": "Round Robin",

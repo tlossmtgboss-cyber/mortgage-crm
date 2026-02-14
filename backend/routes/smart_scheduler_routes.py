@@ -213,6 +213,11 @@ def get_scheduling_methods():
     return {
         "methods": [
             {
+                "value": SchedulingMethod.DIRECT.value,
+                "label": "Direct",
+                "description": "Book directly with you — no routing or distribution"
+            },
+            {
                 "value": SchedulingMethod.ROUND_ROBIN.value,
                 "label": "Round Robin",
                 "description": "Distribute appointments evenly among all active loan officers"
