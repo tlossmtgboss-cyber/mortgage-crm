@@ -851,10 +851,13 @@ async def register_account(
             db.flush()
 
         # Create user
+        # Split full_name into first/last for User columns
+        _name_parts = (request.full_name or '').strip().split(' ', 1)
         new_user = User(
             email=request.email,
             hashed_password=auth_funcs['get_password_hash'](request.password),
-            full_name=request.full_name,
+            first_name=_name_parts[0] if _name_parts else '',
+            last_name=_name_parts[1] if len(_name_parts) > 1 else '',
             phone=request.phone,
             role="site_admin",
             permission_role="site_admin",

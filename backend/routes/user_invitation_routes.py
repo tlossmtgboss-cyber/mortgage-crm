@@ -142,10 +142,13 @@ def get_user_invitation_routes(
             expires_at = datetime.now(timezone.utc) + timedelta(days=7)
 
             # Create the user with pending status
+            # Split full_name into first/last for User columns
+            _name_parts = (request.full_name or '').strip().split(' ', 1)
             new_user = User(
                 email=request.email,
                 hashed_password="",  # Will be set during activation
-                full_name=request.full_name,
+                first_name=_name_parts[0] if _name_parts else '',
+                last_name=_name_parts[1] if len(_name_parts) > 1 else '',
                 role="pending",
                 permission_role=request.role,
                 is_active=False,

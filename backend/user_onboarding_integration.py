@@ -568,7 +568,8 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             new_user = User(
                 email=data.email,
                 hashed_password="",  # Will be set during activation
-                full_name=f"{data.first_name} {data.last_name}",
+                first_name=data.first_name,
+                last_name=data.last_name,
                 phone=data.phone,
                 role=role.name.lower().replace(" ", "_"),
                 permission_role="pending",
@@ -688,7 +689,8 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             new_user = User(
                 email=data.email,
                 hashed_password="",
-                full_name=f"{data.first_name} {data.last_name}",
+                first_name=data.first_name,
+                last_name=data.last_name,
                 phone=data.phone,
                 role="pending",
                 permission_role="pending",
@@ -1572,7 +1574,8 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                     new_user = User(
                         email=email,
                         hashed_password="",
-                        full_name=f"{first_name} {last_name}",
+                        first_name=first_name,
+                        last_name=last_name,
                         phone=phone,
                         role=default_role.name.lower().replace(" ", "_") if default_role else "loan_officer",
                         permission_role="pending",

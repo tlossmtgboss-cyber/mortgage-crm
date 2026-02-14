@@ -274,7 +274,8 @@ def get_user_creation_routes(
             new_user = User(
                 email=email,
                 hashed_password="",  # Will be set during activation
-                full_name=full_name,
+                first_name=first_name,
+                last_name=last_name,
                 phone=phone,
                 role="pending",
                 permission_role="pending",
@@ -421,7 +422,8 @@ def get_user_creation_routes(
             new_user = User(
                 email=data.email,
                 hashed_password="",  # Will be set during activation
-                full_name=f"{data.first_name} {data.last_name}",
+                first_name=data.first_name,
+                last_name=data.last_name,
                 phone=data.phone,
                 role="pending",
                 permission_role="pending",

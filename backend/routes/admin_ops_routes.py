@@ -1750,11 +1750,13 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         # Hash the password
         hashed_password = pwd_context.hash(password)
 
-        # Create the user
+        # Create the user — split full_name into first/last columns
+        _name_parts = (full_name or '').strip().split(' ', 1)
         new_user = User(
             email=email,
             hashed_password=hashed_password,
-            full_name=full_name,
+            first_name=_name_parts[0] if _name_parts else '',
+            last_name=_name_parts[1] if len(_name_parts) > 1 else '',
             role=role,
             is_active=is_active,
             email_verified=False,
@@ -1810,7 +1812,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         # Create the user
         new_user = User(
             email=test_email,
-            full_name=f"Test User {random_suffix}",
+            first_name="Test",
+            last_name=f"User {random_suffix}",
             hashed_password=pwd_context.hash("TestPassword123!"),
             role="loan_officer",
             is_active=True

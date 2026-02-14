@@ -159,7 +159,8 @@ async def create_demo_user(
     demo_user = User(
         email=demo_email,
         hashed_password=get_password_hash(demo_password),
-        full_name="Demo User",
+        first_name="Demo",
+        last_name="User",
         email_verified=True,
         is_active=True,
         role="loan_officer",
@@ -324,10 +325,12 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
         logger.info("Starting registration for new user")
 
         # Create user in database (auto-verified and activated)
+        _name_parts = (registration.full_name or '').strip().split(' ', 1)
         db_user = User(
             email=registration.email,
             hashed_password=get_password_hash(registration.password),
-            full_name=registration.full_name,
+            first_name=_name_parts[0] if _name_parts else '',
+            last_name=_name_parts[1] if len(_name_parts) > 1 else '',
             email_verified=True,  # Auto-verify all accounts
             is_active=True,  # Auto-activate all accounts
             user_metadata={
