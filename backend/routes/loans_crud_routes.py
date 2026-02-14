@@ -221,9 +221,40 @@ def _ensure_loans_columns():
                 conn.commit()
                 fixed = result.rowcount
                 if fixed > 0:
-                    logger.info(f"✅ Backfilled {fixed} 'Unknown Borrower' loan names from leads")
+                    logger.info(f"Backfilled {fixed} 'Unknown Borrower' loan names from leads")
             except Exception as bf_err:
-                logger.warning(f"⚠️ Borrower name backfill skipped: {bf_err}")
+                logger.warning(f"Borrower name backfill skipped: {bf_err}")
+
+            # Backfill: Fix first-name-only borrower names (no space = likely missing last name)
+            try:
+                result = conn.execute(text("""
+                    UPDATE loans l
+                    SET borrower_name = (
+                        SELECT TRIM(CONCAT(ld.first_name, ' ', ld.last_name))
+                        FROM leads ld
+                        WHERE ld.email = l.borrower_email
+                          AND ld.first_name IS NOT NULL AND ld.first_name != ''
+                          AND ld.last_name IS NOT NULL AND ld.last_name != ''
+                        LIMIT 1
+                    ),
+                    updated_at = CURRENT_TIMESTAMP
+                    WHERE l.borrower_name IS NOT NULL
+                      AND l.borrower_name != 'Unknown Borrower'
+                      AND l.borrower_name NOT LIKE '% %'
+                      AND l.borrower_email IS NOT NULL
+                      AND EXISTS (
+                          SELECT 1 FROM leads ld
+                          WHERE ld.email = l.borrower_email
+                            AND ld.first_name IS NOT NULL AND ld.first_name != ''
+                            AND ld.last_name IS NOT NULL AND ld.last_name != ''
+                      )
+                """))
+                conn.commit()
+                fixed = result.rowcount
+                if fixed > 0:
+                    logger.info(f"Backfilled {fixed} first-name-only loan borrower names from leads")
+            except Exception as bf_err:
+                logger.warning(f"First-name-only backfill skipped: {bf_err}")
 
             # Backfill: Mark loans with past closing_date or funded_date as FUNDED
             try:

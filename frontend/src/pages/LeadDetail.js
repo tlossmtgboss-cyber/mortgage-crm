@@ -417,10 +417,9 @@ function LeadDetail() {
         const timestamp = Date.now().toString(36).toUpperCase();
         const loanNumber = `LEAD-${id}-${timestamp}`;
 
-        // Build borrower name from available data
-        const borrowerName = lead?.name || formData?.name ||
-          `${formData?.first_name || lead?.first_name || ''} ${formData?.last_name || lead?.last_name || ''}`.trim() ||
-          'Unknown Borrower';
+        // Build borrower name from available data — prefer first+last over lead.name
+        const constructedName = `${formData?.first_name || lead?.first_name || ''} ${formData?.last_name || lead?.last_name || ''}`.trim();
+        const borrowerName = constructedName || lead?.name || formData?.name || 'Unknown Borrower';
 
         // Get loan amount - default to 1 if not set (required field)
         const loanAmount = parseFloat(lead?.loan_amount || formData?.loan_amount || lead?.amount || formData?.amount) || 1;

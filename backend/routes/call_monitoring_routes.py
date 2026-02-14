@@ -364,16 +364,17 @@ async def create_client_from_call(
         # Insert new lead
         insert_query = text("""
             INSERT INTO leads (
-                first_name, last_name, email, phone,
+                name, first_name, last_name, email, phone,
                 source, status, assigned_to, created_at, updated_at
             ) VALUES (
-                :first_name, :last_name, :email, :phone,
+                :name, :first_name, :last_name, :email, :phone,
                 :source, 'new', :assigned_to, NOW(), NOW()
             )
             RETURNING id, first_name, last_name, email, phone, source, status, created_at
         """)
 
         result = db.execute(insert_query, {
+            "name": f"{first_name} {last_name}".strip() or "Unknown",
             "first_name": first_name,
             "last_name": last_name,
             "email": request.email,
@@ -1563,16 +1564,17 @@ async def convert_to_application(
             # Create a lead
             result = db.execute(text("""
                 INSERT INTO leads (
-                    first_name, last_name, email, phone,
+                    name, first_name, last_name, email, phone,
                     source, status, loan_purpose, loan_amount,
                     property_type, notes, assigned_to, created_at, updated_at
                 ) VALUES (
-                    :first_name, :last_name, :email, :phone,
+                    :name, :first_name, :last_name, :email, :phone,
                     'call_conversion', 'new', :loan_purpose, :loan_amount,
                     :property_type, :notes, :assigned_to, NOW(), NOW()
                 )
                 RETURNING id
             """), {
+                "name": f"{data.get('first_name', '')} {data.get('last_name', '')}".strip() or "Unknown",
                 "first_name": data.get("first_name", ""),
                 "last_name": data.get("last_name", ""),
                 "email": data.get("email"),
