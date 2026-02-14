@@ -802,6 +802,7 @@ function Settings() {
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+      setProfileMessage({ type: 'error', text: 'Failed to load profile. Please try refreshing the page.' });
     } finally {
       setLoadingProfile(false);
     }

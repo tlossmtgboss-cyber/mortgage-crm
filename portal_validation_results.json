@@ -1,0 +1,412 @@
+{
+  "timestamp": "2026-02-13T11:01:46.255675+00:00",
+  "mode": "full",
+  "score": 70,
+  "exit_code": 2,
+  "summary": {
+    "total": 18,
+    "passed": 5,
+    "failed": 4,
+    "skipped": 9,
+    "errors": 0
+  },
+  "checks": [
+    {
+      "check_id": "PS-001",
+      "name": "Portal routes resolve",
+      "domain": "setup",
+      "severity": "CRITICAL",
+      "status": "PASSED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "borrower": {
+          "status_code": 200,
+          "passed": true,
+          "url": "https://app.perenniaai.com/portal/test-borrower"
+        },
+        "partner": {
+          "status_code": 200,
+          "passed": true,
+          "url": "https://app.perenniaai.com/partners/test-partner"
+        },
+        "lo": {
+          "status_code": 200,
+          "passed": true,
+          "url": "https://app.perenniaai.com/lo/test-lo"
+        }
+      },
+      "error_message": "",
+      "remediation": "Check deployment status. Verify routing config. Check DNS.",
+      "duration_ms": 221.0
+    },
+    {
+      "check_id": "PS-006",
+      "name": "SSL/TLS certificate valid (>30 days)",
+      "domain": "setup",
+      "severity": "CRITICAL",
+      "status": "PASSED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "days_remaining": 76,
+        "expiry_date": "2026-05-01T07:02:53",
+        "hostname": "app.perenniaai.com"
+      },
+      "error_message": "",
+      "remediation": "Renew SSL certificate. Check Vercel/Railway auto-renewal settings.",
+      "duration_ms": 84.3
+    },
+    {
+      "check_id": "PS-007",
+      "name": "CORS configuration restricts origins",
+      "domain": "setup",
+      "severity": "HIGH",
+      "status": "PASSED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "expected_origin_allowed": "",
+        "malicious_origin_allowed": "",
+        "no_wildcard": true,
+        "rejected_evil": true,
+        "ssl_warning": "SSL verification bypassed \u2014 API certificate has hostname mismatch"
+      },
+      "error_message": "",
+      "remediation": "Update CORS middleware. Remove wildcard '*' from allowed origins.",
+      "duration_ms": 807.0
+    },
+    {
+      "check_id": "PS-010",
+      "name": "HTTPS enforced (HTTP \u2192 HTTPS redirect)",
+      "domain": "setup",
+      "severity": "CRITICAL",
+      "status": "PASSED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "status_code": 308,
+        "redirect_location": "https://app.perenniaai.com/",
+        "redirects_to_https": true
+      },
+      "error_message": "",
+      "remediation": "Configure HTTP \u2192 HTTPS redirect in load balancer or web server.",
+      "duration_ms": 68.3
+    },
+    {
+      "check_id": "UA-001",
+      "name": "PURL token generation and authentication",
+      "domain": "access",
+      "severity": "CRITICAL",
+      "status": "FAILED",
+      "applies_to": [
+        "borrower"
+      ],
+      "details": {
+        "error": "admin_jwt or test_workspace_id not configured"
+      },
+      "error_message": "",
+      "remediation": "Check purl_token_service.py. Verify purl_access_tokens table. Check admin auth.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "UA-002",
+      "name": "Expired tokens rejected (HTTP 401)",
+      "domain": "access",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "expired_test_token not configured"
+      },
+      "error_message": "",
+      "remediation": "Check token expiry validation in purl_auth.py middleware.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "UA-006",
+      "name": "Read-only token cannot write (HTTP 403)",
+      "domain": "access",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower"
+      ],
+      "details": {
+        "skipped": "borrower_read_token not configured"
+      },
+      "error_message": "",
+      "remediation": "Check scope enforcement in purl_auth.py. Verify scope-to-method mapping.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "UA-011",
+      "name": "Multi-tenant isolation via API",
+      "domain": "access",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "Cross-tenant tokens not configured"
+      },
+      "error_message": "",
+      "remediation": "CRITICAL: Audit RLS policies. Check middleware tenant context. Verify session variable setting.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "SEC-006",
+      "name": "SQL injection protection",
+      "domain": "security",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "borrower_read_token not configured"
+      },
+      "error_message": "",
+      "remediation": "Ensure all queries use parameterized statements. Never interpolate user input into SQL.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "SEC-007",
+      "name": "Security headers present (CSP, X-Content-Type, etc.)",
+      "domain": "security",
+      "severity": "HIGH",
+      "status": "FAILED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "header_checks": {
+          "x-content-type-options": false,
+          "x-frame-options": false,
+          "strict-transport-security": false,
+          "referrer-policy": false
+        },
+        "headers_found": {
+          "x-content-type-options": "MISSING",
+          "x-frame-options": "MISSING",
+          "strict-transport-security": "MISSING",
+          "referrer-policy": "MISSING",
+          "content-security-policy": "MISSING",
+          "permissions-policy": "MISSING"
+        },
+        "ssl_warning": "SSL verification bypassed \u2014 API certificate has hostname mismatch"
+      },
+      "error_message": "",
+      "remediation": "Add security headers in middleware or reverse proxy configuration.",
+      "duration_ms": 222.6
+    },
+    {
+      "check_id": "SEC-008",
+      "name": "No API keys exposed in client bundles",
+      "domain": "security",
+      "severity": "CRITICAL",
+      "status": "PASSED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "bundles_scanned": 1,
+        "leaks_found": 0,
+        "leak_details": []
+      },
+      "error_message": "",
+      "remediation": "Move secrets to server-side only. Use NEXT_PUBLIC_ prefix only for safe public values.",
+      "duration_ms": 144.8
+    },
+    {
+      "check_id": "SEC-013",
+      "name": "OWASP security headers check",
+      "domain": "security",
+      "severity": "HIGH",
+      "status": "FAILED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "results_by_target": {
+          "frontend": {
+            "owasp_headers": {
+              "X-Frame-Options": false,
+              "X-Content-Type-Options": false,
+              "Referrer-Policy": false,
+              "Content-Security-Policy": false,
+              "Permissions-Policy": false,
+              "Strict-Transport-Security": true
+            },
+            "passed_count": 1
+          },
+          "api": {
+            "owasp_headers": {
+              "X-Frame-Options": false,
+              "X-Content-Type-Options": false,
+              "Referrer-Policy": false,
+              "Content-Security-Policy": false,
+              "Permissions-Policy": false,
+              "Strict-Transport-Security": false
+            },
+            "passed_count": 0
+          }
+        },
+        "best_passed_count": 1,
+        "total_checked": 6,
+        "pass_threshold": 4,
+        "ssl_warning": "SSL verification bypassed \u2014 API certificate has hostname mismatch"
+      },
+      "error_message": "",
+      "remediation": "Configure OWASP recommended headers in middleware or reverse proxy.",
+      "duration_ms": 430.7
+    },
+    {
+      "check_id": "SEC-015",
+      "name": "Admin endpoints require elevated privileges",
+      "domain": "security",
+      "severity": "CRITICAL",
+      "status": "FAILED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "admin_checks": [
+          {
+            "endpoint": "https://api.perenniaai.com/api/v1/purl-admin/workspaces/1/tokens",
+            "no_auth_status": 404,
+            "protected": false
+          },
+          {
+            "endpoint": "https://api.perenniaai.com/api/v1/purl-admin/workspaces/1",
+            "no_auth_status": 404,
+            "protected": false
+          }
+        ],
+        "ssl_warning": "SSL verification bypassed \u2014 API certificate has hostname mismatch"
+      },
+      "error_message": "",
+      "remediation": "Verify admin route middleware. Check role requirements on admin endpoints.",
+      "duration_ms": 182.2
+    },
+    {
+      "check_id": "SYNC-001",
+      "name": "Salesforce OAuth token valid",
+      "domain": "crm-sync",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "Salesforce credentials not configured"
+      },
+      "error_message": "",
+      "remediation": "User needs to re-authorize Salesforce. Check connected app settings.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "SYNC-002",
+      "name": "Field mapping configuration complete",
+      "domain": "crm-sync",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "admin_jwt not configured"
+      },
+      "error_message": "",
+      "remediation": "Navigate to Settings \u2192 Salesforce \u2192 Field Mapping to complete configuration.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "SYNC-013",
+      "name": "Sync watermark advancing (not stalled)",
+      "domain": "crm-sync",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "admin_jwt not configured"
+      },
+      "error_message": "",
+      "remediation": "Check sync worker status on Railway. Verify cron jobs running. Check worker logs.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "DOC-005",
+      "name": "Disallowed file types rejected",
+      "domain": "doc-sync",
+      "severity": "HIGH",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "borrower_write_token or test_workspace_id not configured"
+      },
+      "error_message": "",
+      "remediation": "Update file type whitelist in document upload validation.",
+      "duration_ms": 0.0
+    },
+    {
+      "check_id": "DOC-008",
+      "name": "Document download authorization enforced",
+      "domain": "doc-sync",
+      "severity": "CRITICAL",
+      "status": "SKIPPED",
+      "applies_to": [
+        "borrower",
+        "partner",
+        "lo"
+      ],
+      "details": {
+        "skipped": "borrower_a_document_id not configured"
+      },
+      "error_message": "",
+      "remediation": "Check document download endpoint auth. Verify workspace ownership check.",
+      "duration_ms": 0.0
+    }
+  ]
+}
