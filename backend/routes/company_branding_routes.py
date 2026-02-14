@@ -11,27 +11,59 @@ Comprehensive error handling pattern for company profile and branding:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator, EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from urllib.parse import urlparse
+from sqlalchemy.orm import Session
 import ipaddress
 import re
 
-router = APIRouter(prefix="/api/v1/company-branding", tags=["Company & Branding Settings"])
-
 # Dependency injection placeholders
 User = None
-get_current_user = None
-get_db = None
+_get_current_user_func = None
+_get_db_func = None
+
+# Auth dependency
+_security = HTTPBearer(auto_error=False)
+
+
+async def _require_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+):
+    """Require valid authentication for company branding endpoints."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not _get_current_user_func:
+        raise HTTPException(status_code=503, detail="Auth not configured")
+    from main import get_current_user_flexible
+    from database import get_db as db_getter
+    db = next(db_getter())
+    try:
+        user = await get_current_user_flexible(
+            token=credentials.credentials, request=None, db=db
+        )
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user
+    finally:
+        db.close()
+
+
+router = APIRouter(
+    prefix="/api/v1/company-branding",
+    tags=["Company & Branding Settings"],
+    dependencies=[Depends(_require_auth)],
+)
 
 
 def set_dependencies(user_model, current_user_func, db_func):
     """Set dependencies for this router"""
-    global User, get_current_user, get_db
+    global User, _get_current_user_func, _get_db_func
     User = user_model
-    get_current_user = current_user_func
-    get_db = db_func
+    _get_current_user_func = current_user_func
+    _get_db_func = db_func
 
 
 # =============================================================================
@@ -340,7 +372,7 @@ social_media_store = {
 # =============================================================================
 
 @router.get("/company")
-async def get_company_info(current_user = None):
+async def get_company_info():
     """Get company information"""
     try:
         return success_response(company_info_store, "Company information retrieved")
@@ -349,7 +381,7 @@ async def get_company_info(current_user = None):
 
 
 @router.put("/company")
-async def update_company_info(data: CompanyInfo, current_user = None):
+async def update_company_info(data: CompanyInfo):
     """Update company information"""
     try:
         global company_info_store
@@ -365,7 +397,7 @@ async def update_company_info(data: CompanyInfo, current_user = None):
 # =============================================================================
 
 @router.get("/colors")
-async def get_brand_colors(current_user = None):
+async def get_brand_colors():
     """Get brand colors"""
     try:
         return success_response(brand_colors_store, "Brand colors retrieved")
@@ -374,7 +406,7 @@ async def get_brand_colors(current_user = None):
 
 
 @router.put("/colors")
-async def update_brand_colors(data: BrandColors, current_user = None):
+async def update_brand_colors(data: BrandColors):
     """Update brand colors"""
     try:
         global brand_colors_store
@@ -386,7 +418,7 @@ async def update_brand_colors(data: BrandColors, current_user = None):
 
 
 @router.post("/colors/reset")
-async def reset_brand_colors(current_user = None):
+async def reset_brand_colors():
     """Reset brand colors to defaults"""
     try:
         global brand_colors_store
@@ -413,7 +445,7 @@ async def reset_brand_colors(current_user = None):
 # =============================================================================
 
 @router.get("/typography")
-async def get_typography(current_user = None):
+async def get_typography():
     """Get typography settings"""
     try:
         return success_response(brand_typography_store, "Typography settings retrieved")
@@ -422,7 +454,7 @@ async def get_typography(current_user = None):
 
 
 @router.put("/typography")
-async def update_typography(data: BrandTypography, current_user = None):
+async def update_typography(data: BrandTypography):
     """Update typography settings"""
     try:
         global brand_typography_store
@@ -438,7 +470,7 @@ async def update_typography(data: BrandTypography, current_user = None):
 # =============================================================================
 
 @router.get("/assets")
-async def get_brand_assets(current_user = None):
+async def get_brand_assets():
     """Get brand assets"""
     try:
         return success_response(brand_assets_store, "Brand assets retrieved")
@@ -447,7 +479,7 @@ async def get_brand_assets(current_user = None):
 
 
 @router.put("/assets")
-async def update_brand_assets(data: BrandAssets, current_user = None):
+async def update_brand_assets(data: BrandAssets):
     """Update brand assets"""
     try:
         global brand_assets_store
@@ -462,7 +494,6 @@ async def update_brand_assets(data: BrandAssets, current_user = None):
 async def upload_brand_asset(
     asset_type: str,
     file: UploadFile = File(...),
-    current_user = None
 ):
     """Upload a brand asset"""
     try:
@@ -512,7 +543,7 @@ async def upload_brand_asset(
 # =============================================================================
 
 @router.get("/email")
-async def get_email_branding(current_user = None):
+async def get_email_branding():
     """Get email branding settings"""
     try:
         return success_response(email_branding_store, "Email branding retrieved")
@@ -521,7 +552,7 @@ async def get_email_branding(current_user = None):
 
 
 @router.put("/email")
-async def update_email_branding(data: EmailBranding, current_user = None):
+async def update_email_branding(data: EmailBranding):
     """Update email branding settings"""
     try:
         global email_branding_store
@@ -533,7 +564,7 @@ async def update_email_branding(data: EmailBranding, current_user = None):
 
 
 @router.post("/email/preview")
-async def preview_email_branding(current_user = None):
+async def preview_email_branding():
     """Generate a preview of email branding"""
     try:
         preview_html = f"""
@@ -561,7 +592,7 @@ async def preview_email_branding(current_user = None):
 # =============================================================================
 
 @router.get("/documents")
-async def get_document_branding(current_user = None):
+async def get_document_branding():
     """Get document branding settings"""
     try:
         return success_response(document_branding_store, "Document branding retrieved")
@@ -570,7 +601,7 @@ async def get_document_branding(current_user = None):
 
 
 @router.put("/documents")
-async def update_document_branding(data: DocumentBranding, current_user = None):
+async def update_document_branding(data: DocumentBranding):
     """Update document branding settings"""
     try:
         global document_branding_store
@@ -586,7 +617,7 @@ async def update_document_branding(data: DocumentBranding, current_user = None):
 # =============================================================================
 
 @router.get("/white-label")
-async def get_white_label_settings(current_user = None):
+async def get_white_label_settings():
     """Get white-label settings"""
     try:
         return success_response(white_label_store, "White-label settings retrieved")
@@ -595,7 +626,7 @@ async def get_white_label_settings(current_user = None):
 
 
 @router.put("/white-label")
-async def update_white_label_settings(data: WhiteLabelSettings, current_user = None):
+async def update_white_label_settings(data: WhiteLabelSettings):
     """Update white-label settings"""
     try:
         global white_label_store
@@ -607,7 +638,7 @@ async def update_white_label_settings(data: WhiteLabelSettings, current_user = N
 
 
 @router.post("/white-label/verify-domain")
-async def verify_custom_domain(domain: str, current_user = None):
+async def verify_custom_domain(domain: str):
     """Verify custom domain DNS configuration"""
     try:
         # In production, this would verify DNS records
@@ -629,7 +660,7 @@ async def verify_custom_domain(domain: str, current_user = None):
 # =============================================================================
 
 @router.get("/social")
-async def get_social_media(current_user = None):
+async def get_social_media():
     """Get social media links"""
     try:
         return success_response(social_media_store, "Social media links retrieved")
@@ -638,7 +669,7 @@ async def get_social_media(current_user = None):
 
 
 @router.put("/social")
-async def update_social_media(data: SocialMedia, current_user = None):
+async def update_social_media(data: SocialMedia):
     """Update social media links"""
     try:
         global social_media_store
@@ -654,7 +685,7 @@ async def update_social_media(data: SocialMedia, current_user = None):
 # =============================================================================
 
 @router.get("/export")
-async def export_all_settings(current_user = None):
+async def export_all_settings():
     """Export all branding settings"""
     try:
         all_settings = {
@@ -674,7 +705,7 @@ async def export_all_settings(current_user = None):
 
 
 @router.post("/import")
-async def import_all_settings(settings: Dict[str, Any], current_user = None):
+async def import_all_settings(settings: Dict[str, Any]):
     """Import all branding settings"""
     try:
         global company_info_store, brand_colors_store, brand_typography_store

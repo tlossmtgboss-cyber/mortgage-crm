@@ -659,8 +659,10 @@ async def admin_force_password_reset(request: AdminPasswordResetRequest, db: Ses
 # =============================================================================
 
 @router.post("/api/v1/admin/kill-idle-connections")
-async def kill_idle_connections():
-    """Emergency endpoint to kill idle database connections. Temporary - remove after use."""
+async def kill_idle_connections(current_user=Depends(get_current_user_dep())):
+    """Emergency endpoint to kill idle database connections. Admin only."""
+    if not getattr(current_user, 'permission_role', None) or current_user.permission_role not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
     from sqlalchemy import create_engine as _ce
     from sqlalchemy.pool import NullPool
     try:
