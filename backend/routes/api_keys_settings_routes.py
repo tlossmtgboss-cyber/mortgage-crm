@@ -8,28 +8,56 @@ Comprehensive error handling pattern for API key management:
 - Access permissions and scopes
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
 import re
 import secrets
 import hashlib
 
-router = APIRouter(prefix="/api/v1/api-keys", tags=["API Keys Settings"])
-
 # Dependency injection placeholders
 User = None
-get_current_user = None
-get_db = None
+_get_current_user_func = None
+_get_db_func = None
+
+_security = HTTPBearer(auto_error=False)
+
+async def _require_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+):
+    """Require authentication for API key management endpoints."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not _get_current_user_func:
+        raise HTTPException(status_code=503, detail="Auth not configured")
+    # Lazy import to avoid circular imports
+    from main import get_current_user_flexible
+    from database import get_db as db_getter
+    db = next(db_getter())
+    try:
+        user = await get_current_user_flexible(token=credentials.credentials, request=None, db=db)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user
+    finally:
+        db.close()
+
+router = APIRouter(
+    prefix="/api/v1/api-keys",
+    tags=["API Keys Settings"],
+    dependencies=[Depends(_require_auth)],
+)
 
 
 def set_dependencies(user_model, current_user_func, db_func):
     """Set dependencies for this router"""
-    global User, get_current_user, get_db
+    global User, _get_current_user_func, _get_db_func
     User = user_model
-    get_current_user = current_user_func
-    get_db = db_func
+    _get_current_user_func = current_user_func
+    _get_db_func = db_func
 
 
 # =============================================================================
@@ -207,12 +235,9 @@ def mask_api_key(key: str) -> str:
 # =============================================================================
 
 @router.get("")
-async def get_api_keys(current_user = None):
+async def get_api_keys():
     """Get all API keys for the organization"""
     try:
-        if get_current_user:
-            current_user = Depends(get_current_user)
-
         keys = []
         for key_id, key_data in api_keys_store.items():
             keys.append({
@@ -237,12 +262,9 @@ async def get_api_keys(current_user = None):
 
 
 @router.post("")
-async def create_api_key(key_data: APIKeyCreate, current_user = None):
+async def create_api_key(key_data: APIKeyCreate):
     """Create a new API key"""
     try:
-        if get_current_user:
-            current_user = Depends(get_current_user)
-
         # Generate new key
         api_key, key_hash = generate_api_key()
         key_id = f"key_{secrets.token_hex(8)}"
@@ -276,7 +298,7 @@ async def create_api_key(key_data: APIKeyCreate, current_user = None):
 
 
 @router.get("/{key_id}")
-async def get_api_key(key_id: str, current_user = None):
+async def get_api_key(key_id: str):
     """Get a specific API key"""
     try:
         if key_id not in api_keys_store:
@@ -306,7 +328,7 @@ async def get_api_key(key_id: str, current_user = None):
 
 
 @router.put("/{key_id}")
-async def update_api_key(key_id: str, update_data: APIKeyUpdate, current_user = None):
+async def update_api_key(key_id: str, update_data: APIKeyUpdate):
     """Update an API key"""
     try:
         if key_id not in api_keys_store:
@@ -341,7 +363,7 @@ async def update_api_key(key_id: str, update_data: APIKeyUpdate, current_user = 
 
 
 @router.delete("/{key_id}")
-async def delete_api_key(key_id: str, current_user = None):
+async def delete_api_key(key_id: str):
     """Delete an API key"""
     try:
         if key_id not in api_keys_store:
@@ -357,7 +379,7 @@ async def delete_api_key(key_id: str, current_user = None):
 
 
 @router.post("/{key_id}/rotate")
-async def rotate_api_key(key_id: str, current_user = None):
+async def rotate_api_key(key_id: str):
     """Rotate an API key (generate new key, invalidate old)"""
     try:
         if key_id not in api_keys_store:
@@ -389,7 +411,7 @@ async def rotate_api_key(key_id: str, current_user = None):
 # =============================================================================
 
 @router.get("/{key_id}/usage")
-async def get_api_key_usage(key_id: str, days: int = 30, current_user = None):
+async def get_api_key_usage(key_id: str, days: int = 30):
     """Get usage statistics for an API key"""
     try:
         if key_id not in api_keys_store:
@@ -433,7 +455,7 @@ async def get_api_key_usage(key_id: str, days: int = 30, current_user = None):
 # =============================================================================
 
 @router.get("/webhooks/endpoints")
-async def get_webhook_endpoints(current_user = None):
+async def get_webhook_endpoints():
     """Get all webhook endpoints"""
     try:
         webhooks = list(webhooks_store.values())
@@ -443,7 +465,7 @@ async def get_webhook_endpoints(current_user = None):
 
 
 @router.post("/webhooks/endpoints")
-async def create_webhook_endpoint(webhook: WebhookEndpoint, current_user = None):
+async def create_webhook_endpoint(webhook: WebhookEndpoint):
     """Create a new webhook endpoint"""
     try:
         webhook_id = f"wh_{secrets.token_hex(8)}"
@@ -475,7 +497,7 @@ async def create_webhook_endpoint(webhook: WebhookEndpoint, current_user = None)
 
 
 @router.put("/webhooks/endpoints/{webhook_id}")
-async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint, current_user = None):
+async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint):
     """Update a webhook endpoint"""
     try:
         if webhook_id not in webhooks_store:
@@ -499,7 +521,7 @@ async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint, cur
 
 
 @router.delete("/webhooks/endpoints/{webhook_id}")
-async def delete_webhook_endpoint(webhook_id: str, current_user = None):
+async def delete_webhook_endpoint(webhook_id: str):
     """Delete a webhook endpoint"""
     try:
         if webhook_id not in webhooks_store:
@@ -515,7 +537,7 @@ async def delete_webhook_endpoint(webhook_id: str, current_user = None):
 
 
 @router.post("/webhooks/endpoints/{webhook_id}/test")
-async def test_webhook_endpoint(webhook_id: str, current_user = None):
+async def test_webhook_endpoint(webhook_id: str):
     """Send a test event to a webhook endpoint"""
     try:
         if webhook_id not in webhooks_store:
@@ -538,7 +560,7 @@ async def test_webhook_endpoint(webhook_id: str, current_user = None):
 
 
 @router.get("/webhooks/endpoints/{webhook_id}/logs")
-async def get_webhook_logs(webhook_id: str, limit: int = 50, current_user = None):
+async def get_webhook_logs(webhook_id: str, limit: int = 50):
     """Get delivery logs for a webhook endpoint"""
     try:
         if webhook_id not in webhooks_store:
@@ -585,7 +607,7 @@ async def get_webhook_logs(webhook_id: str, limit: int = 50, current_user = None
 # =============================================================================
 
 @router.get("/rate-limits")
-async def get_rate_limit_settings(current_user = None):
+async def get_rate_limit_settings():
     """Get global rate limit settings"""
     try:
         return success_response(rate_limit_settings, "Rate limit settings retrieved")
@@ -594,7 +616,7 @@ async def get_rate_limit_settings(current_user = None):
 
 
 @router.put("/rate-limits")
-async def update_rate_limit_settings(settings: RateLimitSettings, current_user = None):
+async def update_rate_limit_settings(settings: RateLimitSettings):
     """Update global rate limit settings"""
     try:
         global rate_limit_settings
@@ -619,7 +641,7 @@ async def update_rate_limit_settings(settings: RateLimitSettings, current_user =
 # =============================================================================
 
 @router.get("/scopes")
-async def get_available_scopes(current_user = None):
+async def get_available_scopes():
     """Get list of available API scopes"""
     try:
         scopes = [
@@ -652,7 +674,7 @@ async def get_available_scopes(current_user = None):
 # =============================================================================
 
 @router.get("/webhooks/events")
-async def get_available_events(current_user = None):
+async def get_available_events():
     """Get list of available webhook events"""
     try:
         events = [

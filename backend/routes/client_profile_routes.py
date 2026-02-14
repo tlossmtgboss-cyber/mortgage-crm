@@ -1544,7 +1544,10 @@ async def get_referral_partner(
     main = get_main_module()
     ReferralPartner = main.ReferralPartner
 
-    partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+    partner = db.query(ReferralPartner).filter(
+        ReferralPartner.id == partner_id,
+        ReferralPartner.organization_id == current_user.organization_id
+    ).first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
     return partner
@@ -1564,11 +1567,17 @@ async def update_referral_partner(
     if not isinstance(partner_update, main.ReferralPartnerUpdate):
         partner_update = ReferralPartnerUpdate(**partner_update)
 
-    partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+    partner = db.query(ReferralPartner).filter(
+        ReferralPartner.id == partner_id,
+        ReferralPartner.organization_id == current_user.organization_id
+    ).first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in partner_update.dict(exclude_unset=True).items():
+        if key in _protected:
+            continue
         setattr(partner, key, value)
 
     db.commit()
@@ -1587,7 +1596,10 @@ async def delete_referral_partner(
     main = get_main_module()
     ReferralPartner = main.ReferralPartner
 
-    partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+    partner = db.query(ReferralPartner).filter(
+        ReferralPartner.id == partner_id,
+        ReferralPartner.organization_id == current_user.organization_id
+    ).first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
 
@@ -1614,7 +1626,10 @@ async def get_partner_referrals(
 
     from models.purl import PURLApplication, PURLWorkspace, PURLLoan
 
-    partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+    partner = db.query(ReferralPartner).filter(
+        ReferralPartner.id == partner_id,
+        ReferralPartner.organization_id == current_user.organization_id
+    ).first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
 
