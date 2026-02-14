@@ -388,27 +388,31 @@ class SalesforceClosedLoansImporter:
         return loan_data
 
     def _map_stage(self, sf_stage: str) -> str:
-        """Map Salesforce stage to CRM stage"""
+        """Map Salesforce stage to CRM stage (UPPERCASE enum values required)"""
         stage_lower = sf_stage.lower() if sf_stage else ''
 
         if 'funded' in stage_lower or 'closed won' in stage_lower or 'shipped' in stage_lower or 'complete' in stage_lower:
-            return 'Funded'
+            return 'FUNDED'
         elif 'closing' in stage_lower:
-            return 'Closing'
+            return 'CLOSING'
         elif 'clear to close' in stage_lower or 'ctc' in stage_lower:
             return 'CTC'
         elif 'docs' in stage_lower:
-            return 'Docs Out'
+            return 'DOCS_OUT'
         elif 'approved' in stage_lower:
-            return 'Approved'
+            return 'APPROVED'
         elif 'underwriting' in stage_lower:
-            return 'Underwriting'
+            return 'UNDERWRITING'
         elif 'submitted' in stage_lower:
-            return 'Submitted'
+            return 'SUBMITTED'
         elif 'processing' in stage_lower:
-            return 'Processing'
+            return 'PROCESSING'
+        elif 'disclosed' in stage_lower:
+            return 'DISCLOSED'
+        elif 'application' in stage_lower:
+            return 'APPLICATION'
         else:
-            return 'Funded'  # Default for closed loans
+            return 'FUNDED'  # Default for closed loans
 
     def _get_valid_columns(self, db) -> set:
         """Get actual column names from the loans table"""
