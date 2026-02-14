@@ -10,6 +10,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 import logging
 import os
+from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ async def simple_chat(
     request: SimpleChatRequest,
     use_cache: bool = True,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_dep)
 ):
     """
     Simplified chat endpoint with response caching.
@@ -150,7 +151,7 @@ async def simple_chat(
 async def simple_chat_fresh(
     request: SimpleChatRequest,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_dep)
 ):
     """
     Force fresh response (bypass cache).
@@ -163,7 +164,7 @@ async def simple_chat_fresh(
 async def parse_screenshot(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_dep)
 ):
     """
     Parse a screenshot using OpenAI Vision to extract referral partner and lead information.
@@ -583,7 +584,7 @@ If you cannot identify a partner or lead, set those fields to null but still ret
 async def complete_lead_from_screenshot(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_dep)
 ):
     """
     Complete lead creation with user-provided missing information.

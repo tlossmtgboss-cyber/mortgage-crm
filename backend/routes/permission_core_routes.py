@@ -17,7 +17,7 @@ import json
 import logging
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import text, or_
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,14 @@ def _get_audit_log_model():
 def _get_current_user():
     from main import get_current_user
     return get_current_user
+
+
+async def _current_user_dep(request: Request, db: Session = Depends(get_db)):
+    """Proper FastAPI dependency that resolves to the actual user object."""
+    from main import get_current_user
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    return await get_current_user(token, request, db)
 
 
 # =============================================================================
@@ -589,7 +597,7 @@ def apply_role_template_to_user(user_id: int, role_name: str, granted_by_id: int
 async def assign_role_to_user(
     user_id: int,
     role: str,
-    current_user = Depends(lambda: _get_current_user()),
+    current_user = Depends(_current_user_dep),
     db: Session = Depends(get_db)
 ):
     """
@@ -637,7 +645,7 @@ async def assign_role_to_user(
 @router.get("/users/{user_id}/permissions")
 async def get_user_permissions_endpoint(
     user_id: int,
-    current_user = Depends(lambda: _get_current_user()),
+    current_user = Depends(_current_user_dep),
     db: Session = Depends(get_db)
 ):
     """
@@ -707,7 +715,7 @@ async def get_user_permissions_endpoint(
 
 @router.get("/permissions/templates")
 async def get_permission_templates(
-    current_user = Depends(lambda: _get_current_user()),
+    current_user = Depends(_current_user_dep),
     db: Session = Depends(get_db)
 ):
     """
@@ -755,7 +763,7 @@ async def get_permission_templates(
 @router.get("/users/{user_id}/permissions/template")
 async def get_user_permission_template(
     user_id: int,
-    current_user = Depends(lambda: _get_current_user()),
+    current_user = Depends(_current_user_dep),
     db: Session = Depends(get_db)
 ):
     """
@@ -791,7 +799,7 @@ async def get_user_permission_template(
 
 @router.get("/permissions/available")
 async def get_available_permissions(
-    current_user = Depends(lambda: _get_current_user()),
+    current_user = Depends(_current_user_dep),
     db: Session = Depends(get_db)
 ):
     """
@@ -936,7 +944,7 @@ async def get_available_permissions(
 async def apply_permission_template(
     user_id: int,
     template_data: dict,
-    current_user = Depends(lambda: _get_current_user()),
+    current_user = Depends(_current_user_dep),
     db: Session = Depends(get_db)
 ):
     """
@@ -1026,7 +1034,7 @@ async def apply_permission_template(
 async def update_user_permissions(
     user_id: int,
     permission_data: dict,
-    current_user = Depends(lambda: _get_current_user()),
+    current_user = Depends(_current_user_dep),
     db: Session = Depends(get_db)
 ):
     """

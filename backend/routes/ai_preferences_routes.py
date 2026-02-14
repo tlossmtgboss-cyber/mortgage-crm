@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
 import logging
+from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class AIPreferencesUpdate(BaseModel):
 @router.get("/user-context")
 async def get_ai_user_context(
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Get the current user's AI personalization context and preferences.
@@ -78,7 +79,7 @@ async def get_ai_user_context(
 async def update_ai_preferences(
     preferences: AIPreferencesUpdate,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Update user's AI interaction preferences.
@@ -117,7 +118,7 @@ async def update_ai_preferences(
 @router.get("/preferences")
 async def get_ai_preferences(
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Get user's current AI interaction preferences.

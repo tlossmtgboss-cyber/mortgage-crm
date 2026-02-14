@@ -10,6 +10,7 @@ from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 import logging
 import json
+from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class DocumentEmailImportRequest(BaseModel):
 async def import_document_notification_email(
     request: DocumentEmailImportRequest,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Import a document upload notification email and optionally create a review task.

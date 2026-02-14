@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
+from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
 
@@ -254,7 +255,7 @@ class ClientPortalSettingsUpdate(BaseModel):
 
 @router.get("")
 async def get_client_portal_settings(
-    current_user = Depends(lambda: get_current_user),
+    current_user = Depends(current_user_dep),
     db = Depends(lambda: get_db)
 ):
     """Get current client portal settings."""
@@ -369,7 +370,7 @@ async def get_client_portal_settings(
 @router.put("")
 async def update_client_portal_settings(
     settings: ClientPortalSettingsUpdate,
-    current_user = Depends(lambda: get_current_user),
+    current_user = Depends(current_user_dep),
     db = Depends(lambda: get_db)
 ):
     """Update client portal settings with validation."""
@@ -453,7 +454,7 @@ async def get_branding_preview(
     secondary_color: str = "#64748b",
     accent_color: str = "#10b981",
     header_style: str = "default",
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Generate a preview of branding settings."""
     try:
@@ -494,7 +495,7 @@ async def get_branding_preview(
 
 @router.get("/default-pages")
 async def get_default_portal_pages(
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Get list of default portal pages that can be configured."""
     pages = [
@@ -561,7 +562,7 @@ async def get_default_portal_pages(
 
 @router.get("/timezones")
 async def get_available_timezones(
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Get list of available timezones for portal settings."""
     timezones = [
@@ -583,7 +584,7 @@ async def test_notification(
     notification_type: str,
     recipient_email: Optional[str] = None,
     recipient_phone: Optional[str] = None,
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Send a test notification to verify configuration."""
     try:
@@ -618,7 +619,7 @@ async def test_notification(
 @router.get("/statistics")
 async def get_portal_statistics(
     days: int = 30,
-    current_user = Depends(lambda: get_current_user),
+    current_user = Depends(current_user_dep),
     db = Depends(lambda: get_db)
 ):
     """Get portal usage statistics."""
@@ -658,7 +659,7 @@ async def get_portal_statistics(
 @router.post("/reset-defaults")
 async def reset_to_defaults(
     section: Optional[str] = None,
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Reset portal settings to defaults."""
     try:

@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
 import re
+from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +253,7 @@ class CommunicationPreferencesUpdate(BaseModel):
 
 @router.get("")
 async def get_communication_preferences(
-    current_user = Depends(lambda: get_current_user),
+    current_user = Depends(current_user_dep),
     db = Depends(lambda: get_db)
 ):
     """Get current communication preferences."""
@@ -414,7 +415,7 @@ async def get_communication_preferences(
 @router.put("")
 async def update_communication_preferences(
     preferences: CommunicationPreferencesUpdate,
-    current_user = Depends(lambda: get_current_user),
+    current_user = Depends(current_user_dep),
     db = Depends(lambda: get_db)
 ):
     """Update communication preferences with validation."""
@@ -488,7 +489,7 @@ async def update_communication_preferences(
 
 @router.get("/template-variables")
 async def get_template_variables(
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Get available template variables."""
     variables = {
@@ -534,7 +535,7 @@ async def get_template_variables(
 
 @router.get("/event-types")
 async def get_event_types(
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Get available notification event types."""
     events = [
@@ -555,7 +556,7 @@ async def get_event_types(
 
 @router.get("/trigger-events")
 async def get_trigger_events(
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Get available outreach trigger events."""
     triggers = [
@@ -605,7 +606,7 @@ async def preview_template(
     template_type: str,  # email or sms
     template_id: str,
     sample_data: Optional[Dict[str, str]] = None,
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Preview a template with sample data."""
     try:
@@ -652,7 +653,7 @@ async def test_send(
     channel: str,  # email or sms
     template_id: str,
     recipient: str,
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Send a test message using a template."""
     try:
@@ -687,7 +688,7 @@ async def test_send(
 @router.get("/statistics")
 async def get_communication_statistics(
     days: int = 30,
-    current_user = Depends(lambda: get_current_user),
+    current_user = Depends(current_user_dep),
     db = Depends(lambda: get_db)
 ):
     """Get communication statistics."""
@@ -735,7 +736,7 @@ async def get_communication_statistics(
 @router.post("/reset-defaults")
 async def reset_to_defaults(
     section: Optional[str] = None,
-    current_user = Depends(lambda: get_current_user)
+    current_user = Depends(current_user_dep)
 ):
     """Reset communication settings to defaults."""
     try:

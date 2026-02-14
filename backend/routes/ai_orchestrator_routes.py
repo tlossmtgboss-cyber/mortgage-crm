@@ -12,6 +12,7 @@ import os
 import json
 import uuid
 import time
+from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def get_current_user_dep():
 async def orchestrator_chat(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     AI Chat powered by the AgentOrchestrator brain with Tool Execution
@@ -139,7 +140,7 @@ Be concise and helpful. When asked about data, provide specific numbers when ava
 async def orchestrator_chat_stream(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Streaming AI Chat - sends response tokens as they're generated

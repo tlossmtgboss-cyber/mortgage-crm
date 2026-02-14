@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import logging
 import os
+from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ def get_log_ai_action():
 async def voice_transcribe(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Transcribe audio to text using OpenAI Whisper
@@ -98,7 +99,7 @@ async def voice_transcribe(
 async def voice_chat(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Full voice chat: transcribe → process → generate speech
@@ -225,7 +226,7 @@ Be natural and helpful. Keep responses under 50 words for voice output."""
 async def voice_synthesize(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Text-to-speech synthesis

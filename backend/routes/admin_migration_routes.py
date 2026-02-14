@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 import logging
 import subprocess
+from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,7 @@ async def bootstrap_admin_user(
 @router.post("/api/v1/admin/set-admin-role")
 async def set_admin_role(
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_dep)
 ):
     """
     Set the current user's permission_role to admin.

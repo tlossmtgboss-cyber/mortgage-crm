@@ -7,8 +7,10 @@ import re
 import logging
 from typing import Optional, List
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, validator
+from sqlalchemy.orm import Session
+from db import get_db as _db_dep
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,15 @@ def get_current_user():
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Dependencies not configured")
     return Depends(_get_current_user)
+
+
+async def _resolve_current_user(request: Request, db: Session = Depends(_db_dep)):
+    """Proper FastAPI dependency that resolves to the actual user object."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Dependencies not configured")
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    return await _get_current_user(token, request, db)
 
 def get_db():
     if _get_db is None:
@@ -282,7 +293,7 @@ DEFAULT_SETTINGS = {
 
 @router.get("")
 async def get_document_upload_settings(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get document upload settings for the organization"""
     try:
@@ -313,7 +324,7 @@ async def get_document_upload_settings(
 @router.put("")
 async def update_document_upload_settings(
     settings: DocumentUploadSettingsUpdate,
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Update document upload settings"""
     try:
@@ -361,7 +372,7 @@ async def update_document_upload_settings(
 
 @router.get("/file-types")
 async def get_available_file_types(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get list of all available file types that can be enabled"""
     try:
@@ -403,7 +414,7 @@ async def get_available_file_types(
 
 @router.get("/document-categories")
 async def get_document_categories(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get list of document categories"""
     try:
@@ -434,7 +445,7 @@ async def get_document_categories(
 
 @router.get("/storage-providers")
 async def get_storage_providers(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get available storage providers"""
     try:
@@ -486,7 +497,7 @@ async def get_storage_providers(
 
 @router.post("/test-classification")
 async def test_classification_settings(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Test AI classification with sample files"""
     try:
@@ -537,7 +548,7 @@ async def test_classification_settings(
 @router.post("/validate-storage")
 async def validate_storage_connection(
     provider: str,
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Validate storage provider connection"""
     try:
@@ -574,7 +585,7 @@ async def validate_storage_connection(
 
 @router.get("/statistics")
 async def get_document_statistics(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get document upload statistics"""
     try:
@@ -624,7 +635,7 @@ async def get_document_statistics(
 
 @router.post("/reset-defaults")
 async def reset_to_defaults(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Reset document settings to defaults"""
     try:

@@ -7,9 +7,11 @@ import re
 import logging
 from typing import Optional, List
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+from db import get_db as _db_dep
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,15 @@ def get_current_user():
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Dependencies not configured")
     return Depends(_get_current_user)
+
+
+async def _resolve_current_user(request: Request, db: Session = Depends(_db_dep)):
+    """Proper FastAPI dependency that resolves to the actual user object."""
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Dependencies not configured")
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    return await _get_current_user(token, request, db)
 
 
 # =============================================================================
@@ -299,7 +310,7 @@ DEFAULT_SETTINGS = {
 
 @router.get("")
 async def get_lead_capture_settings(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get lead capture settings for the organization"""
     try:
@@ -326,7 +337,7 @@ async def get_lead_capture_settings(
 @router.put("")
 async def update_lead_capture_settings(
     settings: LeadCaptureSettingsUpdate,
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Update lead capture settings"""
     try:
@@ -386,7 +397,7 @@ async def update_lead_capture_settings(
 
 @router.get("/lead-sources")
 async def get_lead_source_options(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get available lead source categories and preset sources"""
     try:
@@ -420,7 +431,7 @@ async def get_lead_source_options(
 
 @router.get("/scoring-fields")
 async def get_scoring_field_options(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Get available fields for scoring rules"""
     try:
@@ -466,7 +477,7 @@ async def get_scoring_field_options(
 
 @router.get("/assignable-users")
 async def get_assignable_users(
-    current_user = Depends(lambda: _get_current_user),
+    current_user = Depends(_resolve_current_user),
     db = Depends(lambda: _get_db)
 ):
     """Get users that can be assigned leads"""
@@ -534,7 +545,7 @@ async def get_assignable_users(
 
 @router.get("/statistics")
 async def get_lead_statistics(
-    current_user = Depends(lambda: _get_current_user),
+    current_user = Depends(_resolve_current_user),
     db = Depends(lambda: _get_db)
 ):
     """Get lead capture statistics"""
@@ -613,7 +624,7 @@ async def get_lead_statistics(
 @router.post("/test-scoring")
 async def test_scoring_rules(
     test_lead: dict,
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Test scoring rules against a sample lead"""
     try:
@@ -684,7 +695,7 @@ async def test_scoring_rules(
 
 @router.post("/reset-defaults")
 async def reset_to_defaults(
-    current_user = Depends(lambda: _get_current_user)
+    current_user = Depends(_resolve_current_user)
 ):
     """Reset lead capture settings to defaults"""
     try:

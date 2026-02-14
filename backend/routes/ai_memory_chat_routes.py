@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 import logging
 import os
+from routes.auth_deps import current_user_dep, current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
 async def smart_chat_with_memory(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Enhanced AI chat with conversation memory and context retrieval
@@ -286,7 +287,7 @@ async def smart_chat_with_memory(
 @router.get("/ai/memory-stats")
 async def get_memory_stats(
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """Get AI memory statistics for the current user"""
     models = get_models()
@@ -335,7 +336,7 @@ async def get_memory_stats(
 async def send_task_summary_email(
     request: Request,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """Send an email to the user with their task summary for today or tomorrow"""
     try:
@@ -427,7 +428,7 @@ class GenericEmailRequest(BaseModel):
 @router.post("/email/send")
 async def send_generic_email(
     request: GenericEmailRequest,
-    current_user = Depends(lambda: get_current_user_strict())
+    current_user = Depends(current_user_dep)
 ):
     """Send a generic email using the email service (SendGrid/SMTP)."""
     try:

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timezone
 import logging
+from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class EmailProcessingSettingsResponse(BaseModel):
 
 @router.get("/email-processing", response_model=EmailProcessingSettingsResponse)
 async def get_email_processing_settings(
-    current_user = Depends(lambda: get_current_user_dep()),
+    current_user = Depends(current_user_dep),
     db: Session = Depends(lambda: get_db_dep())
 ):
     """Get user's email processing settings"""
@@ -69,7 +70,7 @@ async def get_email_processing_settings(
 @router.put("/email-processing", response_model=EmailProcessingSettingsResponse)
 async def update_email_processing_settings(
     settings: EmailProcessingSettingsRequest,
-    current_user = Depends(lambda: get_current_user_dep()),
+    current_user = Depends(current_user_dep),
     db: Session = Depends(lambda: get_db_dep())
 ):
     """Update user's email processing settings"""

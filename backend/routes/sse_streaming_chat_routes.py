@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
 import json
+from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ async def chat_stream(
     request: ChatStreamRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(current_user_flexible_dep)
 ):
     """
     Streaming chat endpoint - responses arrive in real-time via Server-Sent Events (SSE)
