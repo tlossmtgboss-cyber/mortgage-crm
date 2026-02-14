@@ -690,10 +690,11 @@ async def mobile_voice_websocket(
 
         if auth_user:
             user_id = auth_user.email
-            logger.info(f"[MobileVoice] Authenticated user: {user_id} (ID: {auth_user.id})")
+            logger.info(f"[MobileVoice] Authenticated user ID: {auth_user.id}")
         else:
-            user_id = "admin@perenniaai.com"  # Fallback for backwards compatibility
-            logger.warning(f"[MobileVoice] Auth failed ({auth_error}), using fallback user")
+            logger.warning(f"[MobileVoice] Auth failed: {auth_error}")
+            await websocket.close(code=4001, reason="Authentication required")
+            return
 
         # Create voice session
         session = MobileVoiceSession(websocket, user_id, db)

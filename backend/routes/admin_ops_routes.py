@@ -1553,7 +1553,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             db.commit()
             db.refresh(new_api_key)
 
-            logger.info(f"Zapier API key created for user {user.email}")
+            logger.info(f"Zapier API key created for user {user.id}")
             return {
                 "status": "success",
                 "message": "Zapier API key created successfully",
@@ -1882,7 +1882,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         try:
             db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
             db.commit()
-            logger.info(f"Debug delete: User {user_id} ({user_email}) deleted. Cleaned: {deleted_from}")
+            logger.info(f"Debug delete: User {user_id} deleted. Cleaned: {deleted_from}")
             return {
                 "success": True,
                 "message": f"User {user_id} ({user_email}) deleted successfully",
@@ -2010,7 +2010,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             db.execute(text("DELETE FROM users WHERE id = :user_id"), params)
             db.commit()
 
-            logger.info(f"User {user_id} ({user_email}) deleted by {current_user.email} - cleaned {cleaned} tables")
+            logger.info(f"User {user_id} deleted by user {current_user.id} - cleaned {cleaned} tables")
             return {"message": "User deleted successfully", "tables_cleaned": cleaned}
 
         except Exception as e:
@@ -2124,7 +2124,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
             db.commit()
 
-            logger.info(f"Sample user cleanup by {current_user.email}: {len(deleted_users)} deleted")
+            logger.info(f"Sample user cleanup by user {current_user.id}: {len(deleted_users)} deleted")
 
             return {
                 "message": f"Cleaned up {len(deleted_users)} sample users",

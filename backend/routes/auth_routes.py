@@ -257,7 +257,7 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             )
 
         if not user.hashed_password:
-            logger.warning(f"User {form_data.username} has no password set")
+            logger.warning("Login attempt for user with no password set")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",

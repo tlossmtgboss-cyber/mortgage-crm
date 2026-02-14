@@ -1553,7 +1553,9 @@ def _get_public_audio_url(filename: str) -> str:
     import hashlib
     import hmac
 
-    secret = os.getenv("SECRET_KEY", "fallback-secret")
+    secret = os.getenv("SECRET_KEY", "")
+    if not secret:
+        raise HTTPException(status_code=500, detail="Server configuration error")
     token = hmac.new(
         secret.encode(), filename.encode(), hashlib.sha256
     ).hexdigest()[:32]
@@ -1585,7 +1587,9 @@ async def serve_public_voicemail_audio(
     import hmac
 
     # Validate HMAC token
-    secret = os.getenv("SECRET_KEY", "fallback-secret")
+    secret = os.getenv("SECRET_KEY", "")
+    if not secret:
+        raise HTTPException(status_code=500, detail="Server configuration error")
     expected = hmac.new(
         secret.encode(), filename.encode(), hashlib.sha256
     ).hexdigest()[:32]

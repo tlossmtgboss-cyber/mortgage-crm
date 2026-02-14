@@ -1107,10 +1107,10 @@ async def request_email_login(
     email_sent = send_magic_link_email(request.email, first_name, magic_link)
 
     if not email_sent:
-        logger.error(f"Failed to send magic link email to {request.email}")
+        logger.error("Failed to send magic link email")
         # Still return success since link was created - user can request again
 
-    logger.info(f"Magic link created for {request.email}")
+    logger.info("Magic link created successfully")
 
     return {
         "success": True,

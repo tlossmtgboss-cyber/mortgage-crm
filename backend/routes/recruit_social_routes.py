@@ -3,7 +3,7 @@ Recruit Social Media Routes
 API endpoints for LinkedIn, Facebook, and Instagram integrations.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
@@ -550,11 +550,12 @@ async def run_social_migration(
 
 @router.post("/admin/seed-posts")
 async def seed_sample_posts(
-    admin_key: str = Query(...),
+    x_admin_key: str = Header(..., alias="X-Admin-Key"),
     db: Session = Depends(get_db)
 ):
     """Seed sample social posts for demo purposes."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
+    import hmac
+    if not _ADMIN_API_KEY or not hmac.compare_digest(x_admin_key, _ADMIN_API_KEY):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:

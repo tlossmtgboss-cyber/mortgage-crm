@@ -2305,42 +2305,6 @@ async def diagnostic_rubrics(db: Session = Depends(get_db)):
         }
 
 
-@router.get("/diagnostic/admin-user")
-async def diagnostic_admin_user(db: Session = Depends(get_db)):
-    """Diagnostic endpoint to check admin user status - no auth required."""
-    try:
-        result = db.execute(text("""
-            SELECT id, email, full_name, role, permission_role, is_active, email_verified, created_at
-            FROM users WHERE email = 'admin@perenniaai.com'
-        """))
-        user = result.fetchone()
-
-        if user:
-            return {
-                "status": "found",
-                "user": {
-                    "id": user[0],
-                    "email": user[1],
-                    "full_name": user[2],
-                    "role": user[3],
-                    "permission_role": user[4],
-                    "is_active": user[5],
-                    "email_verified": user[6],
-                    "created_at": str(user[7]) if user[7] else None
-                }
-            }
-        else:
-            return {
-                "status": "not_found",
-                "message": "Admin user does not exist"
-            }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": "Internal server error"
-        }
-
-
 # =============================================================================
 # AUTOMATED CALL SUMMARY ENDPOINTS
 # =============================================================================

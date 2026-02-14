@@ -595,9 +595,9 @@ async def add_test_video(
         # Use a public sample video URL for testing
         test_video_url = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 
-        # Get a recruiter (first admin user)
+        # Get a recruiter (first admin user by role)
         recruiter_result = db.execute(text("""
-            SELECT id, full_name FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1
+            SELECT id, full_name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1
         """))
         recruiter = recruiter_result.fetchone()
         recruiter_id = recruiter.id if recruiter else 1

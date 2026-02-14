@@ -1195,7 +1195,7 @@ async def invite_subscriber(
                 'ip': request.client.host if request.client else 'unknown'
             })
             db.commit()
-            logger.info(f"Invitation stored with token: {invitation_token[:8]}...")
+            logger.info("Invitation stored successfully")
         except Exception as store_err:
             logger.error(f"Could not store invitation: {store_err}")
             db.rollback()
@@ -1236,7 +1236,7 @@ async def invite_subscriber(
             # Continue anyway - audit logging failure shouldn't block invitation
 
         # Log the action
-        logger.info(f"Subscription invitation sent to {invite.email} by {current_user.email}")
+        logger.info(f"Subscription invitation sent by user {current_user.id}")
 
         # Send the invitation email
         email_sent = False
@@ -1253,9 +1253,9 @@ async def invite_subscriber(
                 promo_code=invite.promo_code
             )
             if email_sent:
-                logger.info(f"Invitation email sent successfully to {invite.email}")
+                logger.info("Invitation email sent successfully")
             else:
-                logger.warning(f"Failed to send invitation email to {invite.email}")
+                logger.warning("Failed to send invitation email")
         except Exception as email_err:
             logger.error(f"Error sending invitation email: {email_err}")
             # Continue anyway - email failure shouldn't block the invitation creation

@@ -39,6 +39,34 @@ CALENDLY_WEBHOOK_SECRET = os.getenv("CALENDLY_WEBHOOK_SECRET", "")
 
 
 # =============================================================================
+# AUTH DEPENDENCY
+# =============================================================================
+
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+_security = HTTPBearer(auto_error=False)
+
+
+async def _get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+    db: Session = Depends(get_db),
+):
+    """Get authenticated user. Rejects unauthenticated requests."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        from main import get_current_user_flexible
+        user = await get_current_user_flexible(
+            token=credentials.credentials, request=None, db=db
+        )
+        return user
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+
+# =============================================================================
 # DATABASE MODELS
 # =============================================================================
 
@@ -250,8 +278,8 @@ async def get_valid_access_token(
 # =============================================================================
 
 @router.get("/connect")
-def initiate_calendly_connect(
-    user_id: int = Query(..., description="User ID to connect"),
+async def initiate_calendly_connect(
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ) -> CalendlyConnectResponse:
     """
@@ -259,6 +287,7 @@ def initiate_calendly_connect(
     Returns authorization URL to redirect user to.
     """
     import uuid
+    user_id = current_user.id
 
     # Generate state for CSRF protection
     state = f"{user_id}:{uuid.uuid4().hex[:16]}"
@@ -344,7 +373,7 @@ async def calendly_oauth_callback(
 
     db.commit()
 
-    logger.info(f"Calendly connected for user {user_id}: {user_result['email']}")
+    logger.info(f"Calendly connected for user {user_id}")
 
     # Redirect to frontend settings page
     return RedirectResponse(
@@ -355,10 +384,11 @@ async def calendly_oauth_callback(
 
 @router.post("/disconnect")
 async def disconnect_calendly(
-    user_id: int = Query(..., description="User ID to disconnect"),
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Disconnect Calendly integration"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.is_connected:
@@ -398,11 +428,12 @@ async def disconnect_calendly(
 # =============================================================================
 
 @router.get("/status", response_model=CalendlyIntegrationResponse)
-def get_calendly_status(
-    user_id: int = Query(..., description="User ID"),
+async def get_calendly_status(
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get Calendly integration status for a user"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration:
@@ -430,11 +461,12 @@ def get_calendly_status(
 
 @router.put("/settings", response_model=CalendlyIntegrationResponse)
 async def update_calendly_settings(
-    user_id: int,
     settings: CalendlySettingsUpdate,
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update Calendly integration settings"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.is_connected:
@@ -485,10 +517,11 @@ async def update_calendly_settings(
 
 @router.get("/event-types", response_model=List[EventTypeResponse])
 async def get_event_types(
-    user_id: int = Query(..., description="User ID"),
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get available Calendly event types for selection"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.is_connected:
@@ -528,11 +561,12 @@ async def get_event_types(
 
 @router.post("/availability")
 async def get_availability(
-    user_id: int,
     request: AvailabilityRequest,
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get available time slots from Calendly"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.is_connected:
@@ -572,12 +606,13 @@ async def get_availability(
 
 @router.get("/bookings", response_model=List[BookingResponse])
 async def get_bookings(
-    user_id: int = Query(..., description="User ID"),
     status: Optional[str] = Query("active", description="Filter by status"),
     days_ahead: int = Query(30, description="Days to look ahead"),
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get bookings from Calendly"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.is_connected:
@@ -636,11 +671,12 @@ async def get_bookings(
 @router.post("/bookings/{event_uri}/cancel")
 async def cancel_booking(
     event_uri: str,
-    user_id: int = Query(..., description="User ID"),
     reason: Optional[str] = None,
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Cancel a Calendly booking"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.is_connected:
@@ -689,20 +725,23 @@ async def handle_calendly_webhook(
     - invitee.created: New booking made
     - invitee.canceled: Booking cancelled
     """
-    # Verify webhook signature
-    signature = request.headers.get("Calendly-Webhook-Signature")
+    # Verify webhook signature — fail-closed when secret not configured
     body = await request.body()
-
-    if CALENDLY_WEBHOOK_SECRET and signature:
-        expected_signature = hmac.new(
-            CALENDLY_WEBHOOK_SECRET.encode(),
-            body,
-            hashlib.sha256
-        ).hexdigest()
-
-        if not hmac.compare_digest(signature, expected_signature):
-            logger.warning("Invalid webhook signature")
-            raise HTTPException(status_code=401, detail="Invalid signature")
+    if not CALENDLY_WEBHOOK_SECRET:
+        logger.error("CALENDLY_WEBHOOK_SECRET not configured — rejecting webhook")
+        raise HTTPException(status_code=401, detail="Webhook verification not configured")
+    signature = request.headers.get("Calendly-Webhook-Signature")
+    if not signature:
+        logger.warning("Missing Calendly-Webhook-Signature header")
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
+    expected_signature = hmac.new(
+        CALENDLY_WEBHOOK_SECRET.encode(),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected_signature):
+        logger.warning("Invalid Calendly webhook signature")
+        raise HTTPException(status_code=401, detail="Invalid signature")
 
     try:
         payload = json.loads(body)
@@ -836,11 +875,12 @@ async def process_booking_canceled(db: Session, payload: Dict[str, Any]):
 
 @router.post("/webhook/subscribe")
 async def subscribe_to_webhooks(
-    user_id: int = Query(..., description="User ID"),
     webhook_url: str = Query(..., description="URL to receive webhooks"),
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Subscribe to Calendly webhook events"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.is_connected:
@@ -876,10 +916,11 @@ async def subscribe_to_webhooks(
 
 @router.delete("/webhook/unsubscribe")
 async def unsubscribe_from_webhooks(
-    user_id: int = Query(..., description="User ID"),
+    current_user=Depends(_get_current_user),
     db: Session = Depends(get_db)
 ):
     """Unsubscribe from Calendly webhook events"""
+    user_id = current_user.id
     integration = get_integration(db, user_id)
 
     if not integration or not integration.webhook_subscription_uri:
