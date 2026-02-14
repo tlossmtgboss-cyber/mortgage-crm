@@ -427,7 +427,7 @@ async def get_default_role_assignments(
                 r.name as role_name,
                 r.description as role_description,
                 dra.user_id,
-                u.full_name as user_name,
+                COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as user_name,
                 u.email as user_email
             FROM roles r
             LEFT JOIN default_role_assignments dra ON dra.role_id = r.id
