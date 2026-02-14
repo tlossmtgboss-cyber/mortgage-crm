@@ -72,6 +72,8 @@ WORKFLOW_ROLES = [
     {"name": "Production Assistant 1", "code": "PA1", "description": "First level production assistant"},
     {"name": "Production Assistant 2", "code": "PA2", "description": "Second level production assistant"},
     {"name": "Site Admin", "code": "SA", "description": "Site-level administrator"},
+    {"name": "Site Administrator", "code": "SA2", "description": "Site-level administrator with full site access"},
+    {"name": "Company Admin", "code": "CA", "description": "Company-level administrator"},
     {"name": "Underwriter", "code": "UND", "description": "Reviews and approves loan applications"},
 ]
 
@@ -378,6 +380,46 @@ async def get_default_role_assignments(
     current_user = await current_user
 
     try:
+        # Auto-seed: ensure roles table exists and is populated
+        try:
+            count = db.execute(text("SELECT COUNT(*) FROM roles WHERE is_active = true")).scalar()
+        except Exception:
+            count = 0
+
+        if count == 0:
+            logger.info("Roles table empty — auto-seeding workflow roles...")
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS roles (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL UNIQUE,
+                    code VARCHAR(10),
+                    description TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS default_role_assignments (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL DEFAULT 1,
+                    role_id INTEGER NOT NULL,
+                    user_id INTEGER,
+                    assigned_by_id INTEGER,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(organization_id, role_id)
+                )
+            """))
+            for role in WORKFLOW_ROLES:
+                db.execute(text("""
+                    INSERT INTO roles (name, code, description, is_active, created_at, updated_at)
+                    VALUES (:name, :code, :description, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT (name) DO NOTHING
+                """), role)
+            db.commit()
+            logger.info(f"Auto-seeded {len(WORKFLOW_ROLES)} workflow roles")
+
         # Get all roles with their default assignments
         result = db.execute(text("""
             SELECT
