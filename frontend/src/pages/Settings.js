@@ -553,7 +553,9 @@ function Settings() {
     job_title: '',
     work_hours_start: '09:00',
     work_hours_end: '17:00',
-    work_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    work_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+    daily_hours: {},
+    blocked_times: []
   });
   const [passwordData, setPasswordData] = useState({
     current_password: '',
@@ -797,7 +799,9 @@ function Settings() {
           job_title: data.job_title || '',
           work_hours_start: data.work_hours_start || '09:00',
           work_hours_end: data.work_hours_end || '17:00',
-          work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+          work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+          daily_hours: data.daily_hours || {},
+          blocked_times: data.blocked_times || []
         });
       }
     } catch (error) {
@@ -829,7 +833,9 @@ function Settings() {
           job_title: userProfile.job_title,
           work_hours_start: userProfile.work_hours_start,
           work_hours_end: userProfile.work_hours_end,
-          work_days: userProfile.work_days
+          work_days: userProfile.work_days,
+          daily_hours: userProfile.daily_hours,
+          blocked_times: userProfile.blocked_times
         })
       });
       if (response.ok) {
@@ -5044,6 +5050,7 @@ const API_BASE_URL = isProduction
                 <div className="loading-state">Loading work hours...</div>
               ) : (
                 <div className="work-hours-form">
+                  {/* Per-Day Schedule */}
                   <div className="work-hours-card" style={{
                     background: '#f9fafb',
                     borderRadius: '12px',
@@ -5052,91 +5059,271 @@ const API_BASE_URL = isProduction
                   }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1a1a1a' }}>Daily Schedule</h3>
                     <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
-                      Set the hours you're available for appointments each day
+                      Set different hours for each day
                     </p>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
-                      <div className="form-group">
-                        <label style={{ fontWeight: '500', marginBottom: '8px', display: 'block' }}>Start Time</label>
-                        <select
-                          value={userProfile.work_hours_start}
-                          onChange={(e) => setUserProfile({ ...userProfile, work_hours_start: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '12px 14px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '8px',
-                            fontSize: '15px',
-                            background: 'white'
-                          }}
-                        >
-                          {Array.from({ length: 24 }, (_, i) => {
-                            const hour = i.toString().padStart(2, '0');
-                            const display = i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`;
-                            return <option key={hour} value={`${hour}:00`}>{display}</option>;
-                          })}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label style={{ fontWeight: '500', marginBottom: '8px', display: 'block' }}>End Time</label>
-                        <select
-                          value={userProfile.work_hours_end}
-                          onChange={(e) => setUserProfile({ ...userProfile, work_hours_end: e.target.value })}
-                          style={{
-                            width: '100%',
-                            padding: '12px 14px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '8px',
-                            fontSize: '15px',
-                            background: 'white'
-                          }}
-                        >
-                          {Array.from({ length: 24 }, (_, i) => {
-                            const hour = i.toString().padStart(2, '0');
-                            const display = i === 0 ? '12:00 AM' : i < 12 ? `${i}:00 AM` : i === 12 ? '12:00 PM' : `${i - 12}:00 PM`;
-                            return <option key={hour} value={`${hour}:00`}>{display}</option>;
-                          })}
-                        </select>
-                      </div>
-                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
+                        const isEnabled = (userProfile.work_days || []).includes(day);
+                        const dayHours = (userProfile.daily_hours || {})[day] || {};
+                        const dayStart = dayHours.start || userProfile.work_hours_start || '09:00';
+                        const dayEnd = dayHours.end || userProfile.work_hours_end || '17:00';
 
-                    <div className="form-group">
-                      <label style={{ fontWeight: '500', marginBottom: '12px', display: 'block' }}>Work Days</label>
-                      <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>
-                        Select the days you're available for appointments
-                      </p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
-                          <button
-                            key={day}
-                            type="button"
-                            onClick={() => {
-                              const workDays = userProfile.work_days || [];
-                              if (workDays.includes(day)) {
-                                setUserProfile({ ...userProfile, work_days: workDays.filter(d => d !== day) });
-                              } else {
-                                setUserProfile({ ...userProfile, work_days: [...workDays, day] });
-                              }
-                            }}
-                            style={{
-                              padding: '10px 20px',
-                              borderRadius: '24px',
-                              border: '2px solid',
-                              borderColor: (userProfile.work_days || []).includes(day) ? '#217F8D' : '#d1d5db',
-                              background: (userProfile.work_days || []).includes(day) ? 'rgba(33, 127, 141, 0.1)' : 'white',
-                              color: (userProfile.work_days || []).includes(day) ? '#217F8D' : '#666',
-                              cursor: 'pointer',
+                        return (
+                          <div key={day} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '120px 44px 1fr 1fr',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '10px 14px',
+                            background: isEnabled ? 'white' : '#f3f4f6',
+                            borderRadius: '8px',
+                            border: '1px solid',
+                            borderColor: isEnabled ? '#d1d5db' : '#e5e7eb',
+                            transition: 'all 0.15s ease'
+                          }}>
+                            <span style={{
                               fontSize: '14px',
-                              fontWeight: (userProfile.work_days || []).includes(day) ? '600' : '400',
-                              textTransform: 'capitalize',
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            {day.charAt(0).toUpperCase() + day.slice(1)}
-                          </button>
+                              fontWeight: isEnabled ? '600' : '400',
+                              color: isEnabled ? '#1a1a1a' : '#9ca3af',
+                              textTransform: 'capitalize'
+                            }}>
+                              {day}
+                            </span>
+
+                            <label style={{ position: 'relative', display: 'inline-block', width: '36px', height: '20px', cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={isEnabled}
+                                onChange={() => {
+                                  const workDays = userProfile.work_days || [];
+                                  if (workDays.includes(day)) {
+                                    setUserProfile({ ...userProfile, work_days: workDays.filter(d => d !== day) });
+                                  } else {
+                                    setUserProfile({ ...userProfile, work_days: [...workDays, day] });
+                                  }
+                                }}
+                                style={{ opacity: 0, width: 0, height: 0 }}
+                              />
+                              <span style={{
+                                position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                                backgroundColor: isEnabled ? '#217F8D' : '#d1d5db',
+                                borderRadius: '20px', transition: 'background-color 0.2s'
+                              }}>
+                                <span style={{
+                                  position: 'absolute', height: '16px', width: '16px', left: isEnabled ? '18px' : '2px', bottom: '2px',
+                                  backgroundColor: 'white', borderRadius: '50%', transition: 'left 0.2s'
+                                }} />
+                              </span>
+                            </label>
+
+                            {isEnabled ? (
+                              <>
+                                <select
+                                  value={dayStart}
+                                  onChange={(e) => {
+                                    const newDailyHours = { ...(userProfile.daily_hours || {}) };
+                                    newDailyHours[day] = { ...(newDailyHours[day] || {}), start: e.target.value, end: dayEnd };
+                                    setUserProfile({ ...userProfile, daily_hours: newDailyHours });
+                                  }}
+                                  style={{
+                                    padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px',
+                                    fontSize: '13px', background: 'white'
+                                  }}
+                                >
+                                  {Array.from({ length: 48 }, (_, i) => {
+                                    const h = Math.floor(i / 2);
+                                    const m = i % 2 === 0 ? '00' : '30';
+                                    const val = `${h.toString().padStart(2, '0')}:${m}`;
+                                    const display = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                                    return <option key={val} value={val}>{display}</option>;
+                                  })}
+                                </select>
+                                <select
+                                  value={dayEnd}
+                                  onChange={(e) => {
+                                    const newDailyHours = { ...(userProfile.daily_hours || {}) };
+                                    newDailyHours[day] = { ...(newDailyHours[day] || {}), start: dayStart, end: e.target.value };
+                                    setUserProfile({ ...userProfile, daily_hours: newDailyHours });
+                                  }}
+                                  style={{
+                                    padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px',
+                                    fontSize: '13px', background: 'white'
+                                  }}
+                                >
+                                  {Array.from({ length: 48 }, (_, i) => {
+                                    const h = Math.floor(i / 2);
+                                    const m = i % 2 === 0 ? '00' : '30';
+                                    const val = `${h.toString().padStart(2, '0')}:${m}`;
+                                    const display = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                                    return <option key={val} value={val}>{display}</option>;
+                                  })}
+                                </select>
+                              </>
+                            ) : (
+                              <span style={{ gridColumn: 'span 2', fontSize: '13px', color: '#9ca3af', fontStyle: 'italic' }}>
+                                Day off
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Blocked Time Slots */}
+                  <div className="work-hours-card" style={{
+                    background: '#f9fafb',
+                    borderRadius: '12px',
+                    padding: '24px',
+                    marginBottom: '24px'
+                  }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px', color: '#1a1a1a' }}>Blocked Time Slots</h3>
+                    <p style={{ fontSize: '14px', color: '#666', marginBottom: '20px' }}>
+                      Protect specific times from being scheduled (e.g., lunch, meetings)
+                    </p>
+
+                    {(userProfile.blocked_times || []).length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                        {(userProfile.blocked_times || []).map((block, idx) => (
+                          <div key={block.id || idx} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr 120px 120px 36px',
+                            alignItems: 'center',
+                            gap: '10px',
+                            padding: '10px 14px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            border: '1px solid #d1d5db'
+                          }}>
+                            <input
+                              type="text"
+                              value={block.label || ''}
+                              placeholder="Label (e.g., Lunch)"
+                              onChange={(e) => {
+                                const updated = [...(userProfile.blocked_times || [])];
+                                updated[idx] = { ...updated[idx], label: e.target.value };
+                                setUserProfile({ ...userProfile, blocked_times: updated });
+                              }}
+                              style={{
+                                padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px',
+                                fontSize: '13px'
+                              }}
+                            />
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, di) => {
+                                const fullDay = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][di];
+                                const isSelected = (block.days || []).includes(fullDay);
+                                return (
+                                  <button
+                                    key={d}
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...(userProfile.blocked_times || [])];
+                                      const blockDays = updated[idx].days || [];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        days: isSelected ? blockDays.filter(x => x !== fullDay) : [...blockDays, fullDay]
+                                      };
+                                      setUserProfile({ ...userProfile, blocked_times: updated });
+                                    }}
+                                    style={{
+                                      padding: '2px 6px', fontSize: '11px', borderRadius: '4px', cursor: 'pointer',
+                                      border: '1px solid', transition: 'all 0.1s',
+                                      borderColor: isSelected ? '#217F8D' : '#d1d5db',
+                                      background: isSelected ? 'rgba(33, 127, 141, 0.1)' : 'white',
+                                      color: isSelected ? '#217F8D' : '#999',
+                                      fontWeight: isSelected ? '600' : '400'
+                                    }}
+                                  >
+                                    {d}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <select
+                              value={block.start || '12:00'}
+                              onChange={(e) => {
+                                const updated = [...(userProfile.blocked_times || [])];
+                                updated[idx] = { ...updated[idx], start: e.target.value };
+                                setUserProfile({ ...userProfile, blocked_times: updated });
+                              }}
+                              style={{
+                                padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px',
+                                fontSize: '13px', background: 'white'
+                              }}
+                            >
+                              {Array.from({ length: 48 }, (_, i) => {
+                                const h = Math.floor(i / 2);
+                                const m = i % 2 === 0 ? '00' : '30';
+                                const val = `${h.toString().padStart(2, '0')}:${m}`;
+                                const display = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                                return <option key={val} value={val}>{display}</option>;
+                              })}
+                            </select>
+                            <select
+                              value={block.end || '13:00'}
+                              onChange={(e) => {
+                                const updated = [...(userProfile.blocked_times || [])];
+                                updated[idx] = { ...updated[idx], end: e.target.value };
+                                setUserProfile({ ...userProfile, blocked_times: updated });
+                              }}
+                              style={{
+                                padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: '6px',
+                                fontSize: '13px', background: 'white'
+                              }}
+                            >
+                              {Array.from({ length: 48 }, (_, i) => {
+                                const h = Math.floor(i / 2);
+                                const m = i % 2 === 0 ? '00' : '30';
+                                const val = `${h.toString().padStart(2, '0')}:${m}`;
+                                const display = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                                return <option key={val} value={val}>{display}</option>;
+                              })}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (userProfile.blocked_times || []).filter((_, i) => i !== idx);
+                                setUserProfile({ ...userProfile, blocked_times: updated });
+                              }}
+                              style={{
+                                padding: '6px', background: 'none', border: '1px solid #e5e7eb', borderRadius: '6px',
+                                cursor: 'pointer', color: '#ef4444', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                              }}
+                              title="Remove"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                            </button>
+                          </div>
                         ))}
                       </div>
-                    </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newBlock = {
+                          id: Math.random().toString(36).substr(2, 8),
+                          label: '',
+                          days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+                          start: '12:00',
+                          end: '13:00'
+                        };
+                        setUserProfile({
+                          ...userProfile,
+                          blocked_times: [...(userProfile.blocked_times || []), newBlock]
+                        });
+                      }}
+                      style={{
+                        padding: '10px 18px', background: 'white', border: '2px dashed #d1d5db',
+                        borderRadius: '8px', cursor: 'pointer', fontSize: '14px', color: '#217F8D',
+                        fontWeight: '500', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: '8px'
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+                      Add Time Block
+                    </button>
                   </div>
 
                   <div style={{
@@ -5158,7 +5345,7 @@ const API_BASE_URL = isProduction
                         How this affects scheduling
                       </p>
                       <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
-                        When clients or team members schedule appointments with you, they'll only see available time slots within your work hours and on your selected work days.
+                        When clients or team members schedule appointments with you, they'll only see available time slots within your work hours and on your selected work days. Blocked time slots are excluded from availability.
                       </p>
                     </div>
                   </div>

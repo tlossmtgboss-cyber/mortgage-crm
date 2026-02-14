@@ -162,6 +162,8 @@ const UserProfileSettings = () => {
             work_hours_start: profile.work_hours?.start,
             work_hours_end: profile.work_hours?.end,
             work_days: profile.work_hours?.days,
+            daily_hours: profile.work_hours?.daily_hours,
+            blocked_times: profile.work_hours?.blocked_times,
             email_notifications: profile.notifications?.email,
             sms_notifications: profile.notifications?.sms,
             push_notifications: profile.notifications?.push,
@@ -271,6 +273,42 @@ const UserProfileSettings = () => {
       ? currentDays.filter(d => d !== day)
       : [...currentDays, day];
     updateWorkHours('days', newDays);
+  };
+
+  const updateDayHours = (day, field, value) => {
+    const currentDailyHours = profile.work_hours?.daily_hours || {};
+    const currentDay = currentDailyHours[day] || { start: profile.work_hours?.start || '09:00', end: profile.work_hours?.end || '17:00' };
+    updateWorkHours('daily_hours', { ...currentDailyHours, [day]: { ...currentDay, [field]: value } });
+  };
+
+  const addBlockedTime = () => {
+    const current = profile.work_hours?.blocked_times || [];
+    const newBlock = {
+      id: Math.random().toString(36).substr(2, 8),
+      label: '',
+      days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+      start: '12:00',
+      end: '13:00'
+    };
+    updateWorkHours('blocked_times', [...current, newBlock]);
+  };
+
+  const updateBlockedTime = (idx, field, value) => {
+    const updated = [...(profile.work_hours?.blocked_times || [])];
+    updated[idx] = { ...updated[idx], [field]: value };
+    updateWorkHours('blocked_times', updated);
+  };
+
+  const removeBlockedTime = (idx) => {
+    const updated = (profile.work_hours?.blocked_times || []).filter((_, i) => i !== idx);
+    updateWorkHours('blocked_times', updated);
+  };
+
+  const toggleBlockedDay = (idx, day) => {
+    const block = (profile.work_hours?.blocked_times || [])[idx];
+    const blockDays = block?.days || [];
+    const newDays = blockDays.includes(day) ? blockDays.filter(d => d !== day) : [...blockDays, day];
+    updateBlockedTime(idx, 'days', newDays);
   };
 
   const handleChangePassword = async () => {
@@ -595,41 +633,153 @@ const UserProfileSettings = () => {
               <h2>Work Hours</h2>
               <p className="section-description">Set your availability for scheduling</p>
 
-              <div className="form-row two-col">
-                <div className="form-group">
-                  <label>Start Time</label>
-                  <input
-                    type="time"
-                    value={profile.work_hours?.start || '09:00'}
-                    onChange={(e) => updateWorkHours('start', e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>End Time</label>
-                  <input
-                    type="time"
-                    value={profile.work_hours?.end || '17:00'}
-                    onChange={(e) => updateWorkHours('end', e.target.value)}
-                    className={fieldErrors.work_hours_end ? 'has-error' : ''}
-                  />
-                  {fieldErrors.work_hours_end && <span className="field-error">{fieldErrors.work_hours_end}</span>}
+              {/* Per-Day Schedule */}
+              <div className="form-group">
+                <label>Daily Schedule</label>
+                <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>Set different hours for each day</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {DAYS_OF_WEEK.map(day => {
+                    const isEnabled = (profile.work_hours?.days || []).includes(day.id);
+                    const dayHours = (profile.work_hours?.daily_hours || {})[day.id] || {};
+                    const dayStart = dayHours.start || profile.work_hours?.start || '09:00';
+                    const dayEnd = dayHours.end || profile.work_hours?.end || '17:00';
+
+                    return (
+                      <div key={day.id} style={{
+                        display: 'grid',
+                        gridTemplateColumns: '100px 40px 1fr 1fr',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '8px 12px',
+                        background: isEnabled ? '#fff' : '#f9fafb',
+                        borderRadius: '8px',
+                        border: '1px solid',
+                        borderColor: isEnabled ? '#d1d5db' : '#e5e7eb'
+                      }}>
+                        <span style={{ fontSize: '14px', fontWeight: isEnabled ? '600' : '400', color: isEnabled ? '#1a1a1a' : '#9ca3af' }}>
+                          {day.label.substring(0, 3)}
+                        </span>
+                        <label style={{ position: 'relative', display: 'inline-block', width: '34px', height: '18px', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={isEnabled} onChange={() => toggleWorkDay(day.id)} style={{ opacity: 0, width: 0, height: 0 }} />
+                          <span style={{
+                            position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundColor: isEnabled ? '#217F8D' : '#d1d5db', borderRadius: '18px', transition: 'background-color 0.2s'
+                          }}>
+                            <span style={{
+                              position: 'absolute', height: '14px', width: '14px', left: isEnabled ? '18px' : '2px', bottom: '2px',
+                              backgroundColor: 'white', borderRadius: '50%', transition: 'left 0.2s'
+                            }} />
+                          </span>
+                        </label>
+                        {isEnabled ? (
+                          <>
+                            <select value={dayStart} onChange={(e) => updateDayHours(day.id, 'start', e.target.value)}
+                              style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}>
+                              {Array.from({ length: 48 }, (_, i) => {
+                                const h = Math.floor(i / 2); const m = i % 2 === 0 ? '00' : '30';
+                                const val = `${h.toString().padStart(2, '0')}:${m}`;
+                                const disp = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                                return <option key={val} value={val}>{disp}</option>;
+                              })}
+                            </select>
+                            <select value={dayEnd} onChange={(e) => updateDayHours(day.id, 'end', e.target.value)}
+                              style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}>
+                              {Array.from({ length: 48 }, (_, i) => {
+                                const h = Math.floor(i / 2); const m = i % 2 === 0 ? '00' : '30';
+                                const val = `${h.toString().padStart(2, '0')}:${m}`;
+                                const disp = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                                return <option key={val} value={val}>{disp}</option>;
+                              })}
+                            </select>
+                          </>
+                        ) : (
+                          <span style={{ gridColumn: 'span 2', fontSize: '13px', color: '#9ca3af', fontStyle: 'italic' }}>Day off</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="form-group">
-                <label>Working Days</label>
-                <div className="days-grid">
-                  {DAYS_OF_WEEK.map(day => (
-                    <button
-                      key={day.id}
-                      type="button"
-                      className={`day-btn ${(profile.work_hours?.days || []).includes(day.id) ? 'active' : ''}`}
-                      onClick={() => toggleWorkDay(day.id)}
-                    >
-                      {day.label.substring(0, 3)}
-                    </button>
-                  ))}
-                </div>
+              {/* Blocked Time Slots */}
+              <div className="form-group" style={{ marginTop: '24px' }}>
+                <label>Blocked Time Slots</label>
+                <p style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>Protect specific times from being scheduled</p>
+
+                {(profile.work_hours?.blocked_times || []).length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                    {(profile.work_hours?.blocked_times || []).map((block, idx) => (
+                      <div key={block.id || idx} style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 110px 110px 32px',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        background: '#fff',
+                        borderRadius: '8px',
+                        border: '1px solid #d1d5db'
+                      }}>
+                        <input
+                          type="text"
+                          value={block.label || ''}
+                          placeholder="Label"
+                          onChange={(e) => updateBlockedTime(idx, 'label', e.target.value)}
+                          style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}
+                        />
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, di) => {
+                            const fullDay = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][di];
+                            const sel = (block.days || []).includes(fullDay);
+                            return (
+                              <button key={d} type="button" onClick={() => toggleBlockedDay(idx, fullDay)}
+                                style={{
+                                  padding: '1px 5px', fontSize: '10px', borderRadius: '3px', cursor: 'pointer',
+                                  border: '1px solid', borderColor: sel ? '#217F8D' : '#d1d5db',
+                                  background: sel ? 'rgba(33,127,141,0.1)' : '#fff', color: sel ? '#217F8D' : '#999',
+                                  fontWeight: sel ? '600' : '400'
+                                }}>
+                                {d}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <select value={block.start || '12:00'} onChange={(e) => updateBlockedTime(idx, 'start', e.target.value)}
+                          style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}>
+                          {Array.from({ length: 48 }, (_, i) => {
+                            const h = Math.floor(i / 2); const m = i % 2 === 0 ? '00' : '30';
+                            const val = `${h.toString().padStart(2, '0')}:${m}`;
+                            const disp = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                            return <option key={val} value={val}>{disp}</option>;
+                          })}
+                        </select>
+                        <select value={block.end || '13:00'} onChange={(e) => updateBlockedTime(idx, 'end', e.target.value)}
+                          style={{ padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px' }}>
+                          {Array.from({ length: 48 }, (_, i) => {
+                            const h = Math.floor(i / 2); const m = i % 2 === 0 ? '00' : '30';
+                            const val = `${h.toString().padStart(2, '0')}:${m}`;
+                            const disp = h === 0 ? `12:${m} AM` : h < 12 ? `${h}:${m} AM` : h === 12 ? `12:${m} PM` : `${h - 12}:${m} PM`;
+                            return <option key={val} value={val}>{disp}</option>;
+                          })}
+                        </select>
+                        <button type="button" onClick={() => removeBlockedTime(idx)}
+                          style={{ padding: '4px', background: 'none', border: '1px solid #e5e7eb', borderRadius: '4px', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Remove">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button type="button" onClick={addBlockedTime}
+                  style={{
+                    padding: '8px 16px', background: '#fff', border: '2px dashed #d1d5db', borderRadius: '8px',
+                    cursor: 'pointer', fontSize: '13px', color: '#217F8D', fontWeight: '500',
+                    display: 'flex', alignItems: 'center', gap: '6px'
+                  }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+                  Add Time Block
+                </button>
               </div>
 
               <div className="info-card">
