@@ -8,7 +8,8 @@ import os
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -24,14 +25,20 @@ from sqlalchemy.exc import SQLAlchemyError
 logger = logging.getLogger(__name__)
 
 
-def _get_current_user():
-    """Lazy import auth dependency for router-level protection."""
+_security = HTTPBearer(auto_error=False)
+
+async def _get_authenticated_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+    db: Session = Depends(get_db),
+):
+    """Get current authenticated user for Teams endpoints."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     from main import get_current_user_flexible
-    return get_current_user_flexible
+    return await get_current_user_flexible(token=credentials.credentials, request=None, db=db)
 
 router = APIRouter(
     prefix="/api/v1/teams", tags=["Teams Integration"],
-    dependencies=[Depends(_get_current_user())],
 )
 
 
@@ -84,7 +91,7 @@ class AvailabilityResponse(BaseModel):
 @router.post("/meetings", response_model=MeetingResponse)
 async def create_teams_meeting(
     request: CreateMeetingRequest,
-    user_id: int = Query(..., description="User ID creating the meeting"),
+    current_user=Depends(_get_authenticated_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -109,6 +116,7 @@ async def create_teams_meeting(
             body_html += f"<p><em>Loan ID: {request.loan_id}</em></p>"
 
         # Create the meeting using user-delegated service
+        user_id = current_user.id
         service = MicrosoftGraphUserService(user_id, db)
 
         result = await service.create_calendar_event(CalendarEventParams(
@@ -161,10 +169,10 @@ async def create_teams_meeting(
 
 @router.get("/availability", response_model=AvailabilityResponse)
 async def get_user_availability(
-    user_id: int = Query(..., description="User ID to check availability for"),
     start_date: datetime = Query(..., description="Start of date range"),
     end_date: datetime = Query(..., description="End of date range"),
     slot_duration_minutes: int = Query(default=30, ge=15, le=120),
+    current_user=Depends(_get_authenticated_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -173,6 +181,7 @@ async def get_user_availability(
     Returns busy time slots and suggests available slots.
     """
     try:
+        user_id = current_user.id
         service = MicrosoftGraphUserService(user_id, db)
         busy_slots = await service.get_availability(start_date, end_date)
 
@@ -232,7 +241,7 @@ async def get_user_availability(
 
 @router.get("/status")
 async def get_teams_integration_status(
-    user_id: int = Query(..., description="User ID to check"),
+    current_user=Depends(_get_authenticated_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -240,6 +249,7 @@ async def get_teams_integration_status(
     """
     try:
         from sqlalchemy import text
+        user_id = current_user.id
 
         result = db.execute(text("""
             SELECT id, expires_at, connected_email
@@ -277,8 +287,8 @@ async def get_teams_integration_status(
 @router.post("/meetings/{event_id}/cancel")
 async def cancel_teams_meeting(
     event_id: str,
-    user_id: int = Query(..., description="User ID who owns the meeting"),
     send_cancellation: bool = Query(default=True, description="Send cancellation to attendees"),
+    current_user=Depends(_get_authenticated_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -286,6 +296,7 @@ async def cancel_teams_meeting(
     """
     try:
         import httpx
+        user_id = current_user.id
 
         service = MicrosoftGraphUserService(user_id, db)
         if not await service.initialize():

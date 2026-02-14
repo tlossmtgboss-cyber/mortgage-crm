@@ -17,6 +17,7 @@ Endpoints:
 - GET    /avatars/jobs/{id}    - Get job details
 """
 
+import os
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
@@ -521,10 +522,17 @@ async def get_job(
 
 
 # =============================================================================
-# Test Endpoints (No Auth Required)
+# Test Endpoints (Development Only - disabled in production)
 # =============================================================================
 
-@router.post("/test/create", response_model=dict)
+_IS_PRODUCTION = os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production" or os.getenv("ENVIRONMENT", "").lower() == "production"
+
+def _check_dev_only():
+    """Block test endpoints in production."""
+    if _IS_PRODUCTION:
+        raise HTTPException(status_code=404, detail="Not found")
+
+@router.post("/test/create", response_model=dict, dependencies=[Depends(_check_dev_only)])
 async def test_create_avatar(
     name: str = Query(..., description="Avatar name"),
     description: str = Query("", description="Avatar description"),
@@ -547,7 +555,7 @@ async def test_create_avatar(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/test/list", response_model=dict)
+@router.get("/test/list", response_model=dict, dependencies=[Depends(_check_dev_only)])
 async def test_list_avatars(
     user_id: int = Query(1, description="User ID to list avatars for"),
     db: Session = Depends(get_db)
@@ -568,7 +576,7 @@ async def test_list_avatars(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/test/{avatar_id}", response_model=dict)
+@router.get("/test/{avatar_id}", response_model=dict, dependencies=[Depends(_check_dev_only)])
 async def test_get_avatar(
     avatar_id: int,
     db: Session = Depends(get_db)

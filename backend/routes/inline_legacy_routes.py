@@ -1308,7 +1308,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     async def debug_video_meetings_status():
         """Check if video meeting routes loaded successfully"""
         if _video_meeting_error:
-            return {"status": "failed", "error": _video_meeting_error}
+            return {"status": "failed"}
         return {"status": "loaded"}
 
     # Include Video Clip routes (UVIP - Async Video Messages)
@@ -1337,7 +1337,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     async def debug_video_clips_status():
         """Check if video clip routes loaded successfully"""
         if _video_clip_error:
-            return {"status": "failed", "error": _video_clip_error}
+            return {"status": "failed"}
         return {"status": "loaded"}
 
     # Include Market Chat routes
@@ -1657,7 +1657,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     async def debug_carousel_routes_status():
         """Check if carousel builder routes loaded successfully"""
         if _carousel_routes_error:
-            return {"status": "failed", "error": _carousel_routes_error}
+            return {"status": "failed"}
         return {"status": "loaded"}
 
 
@@ -2483,8 +2483,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     async def debug_perennia_docs_status():
         """Debug endpoint to check Perennia Docs AI routes loading status"""
         return {
-            "perennia_docs_loaded": perennia_docs_error is None,
-            "error": perennia_docs_error
+            "perennia_docs_loaded": perennia_docs_error is None
         }
 
     # E-Signature Routes - initialized
@@ -2511,8 +2510,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     async def debug_esign_status():
         """Debug endpoint to check E-Signature routes loading status"""
         return {
-            "esign_loaded": esign_error is None,
-            "error": esign_error
+            "esign_loaded": esign_error is None
         }
 
     # Portal AI Assistant Routes
@@ -2552,9 +2550,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         """Debug endpoint to check Portal AI and PURL Integration routes loading status"""
         return {
             "portal_ai_assistant_loaded": portal_ai_assistant_error is None,
-            "portal_ai_assistant_error": portal_ai_assistant_error,
-            "purl_integration_loaded": purl_integration_error is None,
-            "purl_integration_error": purl_integration_error
+            "purl_integration_loaded": purl_integration_error is None
         }
 
     # Portal Document Routes (presigned URLs, upload, preview)
@@ -2741,34 +2737,18 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     async def debug_portal_services_status():
         """Debug endpoint to check all portal-related routes loading status"""
         return {
-            "portal_ai_assistant": {
-                "loaded": portal_ai_assistant_error is None,
-                "error": portal_ai_assistant_error
-            },
-            "purl_integration": {
-                "loaded": purl_integration_error is None,
-                "error": purl_integration_error
-            },
-            "portal_documents": {
-                "loaded": portal_document_error is None,
-                "error": portal_document_error
-            },
-            "portal_auth": {
-                "loaded": portal_auth_error is None,
-                "error": portal_auth_error
-            },
-            "perennia_portal": {
-                "loaded": perennia_portal_error is None,
-                "error": perennia_portal_error
-            }
+            "portal_ai_assistant": {"loaded": portal_ai_assistant_error is None},
+            "purl_integration": {"loaded": purl_integration_error is None},
+            "portal_documents": {"loaded": portal_document_error is None},
+            "portal_auth": {"loaded": portal_auth_error is None},
+            "perennia_portal": {"loaded": perennia_portal_error is None}
         }
 
     @app.get("/api/v1/debug/intake-engine-status")
     async def debug_intake_engine_status():
         """Debug endpoint to check intake engine loading status"""
         status = {
-            "loaded": intake_engine_error is None,
-            "error": intake_engine_error
+            "loaded": intake_engine_error is None
         }
 
         # Try to get engine stats if loaded
@@ -2780,8 +2760,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                     "questions_loaded": len(engine.questions),
                     "sections": list(engine.section_order),
                 }
-            except Exception as e:
-                status["engine_init_error"] = str(e)
+            except Exception:
+                status["engine_available"] = False
 
         return status
 
@@ -2790,8 +2770,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     async def debug_tools_registry_status():
         """Debug endpoint to check tools registry loading status"""
         return {
-            "tools_router_loaded": tools_router_error is None,
-            "error": tools_router_error
+            "tools_router_loaded": tools_router_error is None
         }
 
 
