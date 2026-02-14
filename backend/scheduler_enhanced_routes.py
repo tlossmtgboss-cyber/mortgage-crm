@@ -290,8 +290,10 @@ async def update_resource(
         except ValueError:
             del update_fields["status"]
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_fields.items():
-        setattr(resource, field, value)
+        if field not in _protected:
+            setattr(resource, field, value)
 
     db.commit()
 

@@ -160,8 +160,11 @@ async def update_client_profile(
         raise HTTPException(status_code=404, detail="Client profile not found")
 
     # Update fields if provided
+    _protected = {'id', 'primary_user_id', 'organization_id', 'created_at', 'updated_at'}
     update_data = profile_update.dict(exclude_unset=True)
     for field, value in update_data.items():
+        if field in _protected:
+            continue
         if field == "user_profile" and value:
             setattr(profile, field, value.model_dump())
         elif field in ["integration_settings", "branding_settings", "automation_settings",
@@ -277,9 +280,11 @@ async def update_team_role(
     if not role:
         raise HTTPException(status_code=404, detail="Team role not found")
 
+    _protected = {'id', 'profile_id', 'organization_id', 'created_at', 'updated_at'}
     update_data = role_update.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(role, field, value)
+        if field not in _protected:
+            setattr(role, field, value)
 
     role.updated_at = datetime.now(timezone.utc)
     db.commit()

@@ -217,8 +217,10 @@ async def update_expense(
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(expense, key, value)
+        if key not in _protected:
+            setattr(expense, key, value)
 
     db.commit()
     db.refresh(expense)
@@ -378,8 +380,10 @@ async def update_employee_cost(
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(employee, key, value)
+        if key not in _protected:
+            setattr(employee, key, value)
 
     db.commit()
     db.refresh(employee)

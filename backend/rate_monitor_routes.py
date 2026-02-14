@@ -325,9 +325,10 @@ async def update_target(
         raise HTTPException(404, "Target not found")
 
     # Update fields
+    _protected = {'id', 'mum_client_id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     update_data = request.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if value is not None:
+        if value is not None and field not in _protected:
             if field in ['monthly_savings_threshold', 'rate_drop_percentage', 'target_rate']:
                 value = Decimal(str(value))
             setattr(target, field, value)
@@ -679,8 +680,10 @@ async def update_alert(
         elif new_status in ['converted', 'dismissed'] and not alert.resolved_at:
             alert.resolved_at = datetime.utcnow()
 
+    _protected = {'id', 'target_id', 'mum_client_id', 'organization_id', 'created_at', 'updated_at'}
     for field, value in update_data.items():
-        setattr(alert, field, value)
+        if field not in _protected:
+            setattr(alert, field, value)
 
     db.commit()
     db.refresh(alert)

@@ -830,9 +830,11 @@ async def update_meeting_room(
         raise HTTPException(status_code=403, detail="Only the host can update this meeting")
 
     # Update fields
+    _protected = {'id', 'host_user_id', 'organization_id', 'room_code', 'created_at', 'updated_at'}
     update_data = data.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(room, field, value)
+        if field not in _protected:
+            setattr(room, field, value)
 
     room.updated_at = datetime.utcnow()
     db.commit()
@@ -1521,9 +1523,11 @@ async def update_participant(
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
 
+    _protected = {'id', 'meeting_id', 'user_id', 'created_at', 'updated_at'}
     update_data = data.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(participant, field, value)
+        if field not in _protected:
+            setattr(participant, field, value)
 
     participant.updated_at = datetime.utcnow()
     db.commit()
@@ -1711,9 +1715,10 @@ async def update_template(
         raise HTTPException(status_code=404, detail="Template not found")
 
     # Update only provided fields
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     update_data = data.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if hasattr(template, field):
+        if field not in _protected and hasattr(template, field):
             setattr(template, field, value)
 
     db.commit()
@@ -3759,9 +3764,10 @@ async def update_org_video_settings(
         settings = OrganizationVideoSettings(organization_id=org_id)
         db.add(settings)
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     update_data = data.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if value is not None:
+        if value is not None and field not in _protected:
             setattr(settings, field, value)
 
     settings.updated_at = datetime.utcnow()

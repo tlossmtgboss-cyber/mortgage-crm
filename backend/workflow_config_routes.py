@@ -397,9 +397,10 @@ async def update_day_config(
         raise HTTPException(status_code=404, detail=f"Day config {day_id} not found")
 
     # Update fields that were provided
+    _protected = {'id', 'workflow_id', 'organization_id', 'created_at', 'updated_at'}
     update_data = day_update.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if value is not None:
+        if value is not None and field not in _protected:
             setattr(day, field, value)
 
     day.updated_at = datetime.utcnow()
