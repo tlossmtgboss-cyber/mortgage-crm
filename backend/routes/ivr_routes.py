@@ -749,6 +749,13 @@ async def execute_ivr_action(option, db: Session):
     action_target = option.action_target
     announcement = option.announcement_text
 
+    # Sanitize action_target to prevent path traversal / injection
+    import re
+    if action_target and not re.match(r'^[\w\-\.]+$', str(action_target)):
+        logger.warning(f"Invalid IVR action_target rejected")
+        response.say("An error occurred routing your call.", voice="Polly.Joanna")
+        return response
+
     # Play announcement if any
     if announcement:
         response.say(announcement, voice="Polly.Joanna")

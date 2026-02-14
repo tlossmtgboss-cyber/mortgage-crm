@@ -21,6 +21,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/hold-music", tags=["hold-music"])
 
 
+def _validate_audio_url(url: str) -> bool:
+    """Validate audio URL is safe for redirect (no open redirect / SSRF)."""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        # Must be HTTPS
+        if parsed.scheme != "https":
+            return False
+        # Block private/internal IPs
+        host = parsed.hostname or ""
+        if host in ("localhost", "127.0.0.1", "0.0.0.0", "::1", ""):
+            return False
+        if host.startswith("10.") or host.startswith("192.168.") or host.startswith("169.254."):
+            return False
+        if host.startswith("172.") and 16 <= int(host.split(".")[1]) <= 31:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def safe_isoformat(dt_value) -> Optional[str]:
     """Safely convert datetime to ISO format string, handling both datetime objects and strings"""
     if dt_value is None:
@@ -138,8 +159,12 @@ async def create_hold_music(
         if music.is_default:
             db.execute(text("UPDATE hold_music SET is_default = FALSE WHERE is_default = TRUE"))
 
-        # Handle twilio default music
+        # Validate audio URL if provided
         audio_url = music.audio_url
+        if audio_url and not _validate_audio_url(audio_url):
+            raise HTTPException(status_code=400, detail="Invalid audio URL. Must be HTTPS and point to an external host.")
+
+        # Handle twilio default music
         if music.source_type == "twilio_default" and music.twilio_music_name:
             twilio_music = TWILIO_DEFAULT_MUSIC.get(music.twilio_music_name)
             if twilio_music:
@@ -462,7 +487,7 @@ async def stream_default_hold_music(db: Session = Depends(get_db)):
             LIMIT 1
         """)).fetchone()
 
-        if result and result.audio_url:
+        if result and result.audio_url and _validate_audio_url(result.audio_url):
             return RedirectResponse(url=result.audio_url)
 
         # Fallback to Twilio default
@@ -488,7 +513,7 @@ async def stream_hold_music(
             WHERE id = :music_id AND is_active = TRUE
         """), {"music_id": music_id}).fetchone()
 
-        if result and result.audio_url:
+        if result and result.audio_url and _validate_audio_url(result.audio_url):
             return RedirectResponse(url=result.audio_url)
 
         # Fallback to default
