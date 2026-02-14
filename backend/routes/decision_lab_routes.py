@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from routes.auth_deps import require_auth
 from services.confidence_engine_service import (
     ConfidenceEngineService,
     LoanScenarioService,
@@ -30,7 +31,7 @@ from services.confidence_engine_service import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/decision-lab", tags=["Decision Lab"])
+router = APIRouter(prefix="/api/v1/decision-lab", tags=["Decision Lab"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

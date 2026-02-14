@@ -15,9 +15,10 @@ import json
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/automated-outreach", tags=["Automated Outreach"])
+router = APIRouter(prefix="/api/v1/automated-outreach", tags=["Automated Outreach"], dependencies=[Depends(require_auth)])
 
 
 # ============================================================================

@@ -10,12 +10,13 @@ from datetime import datetime
 import logging
 
 from database import get_db
+from routes.auth_deps import require_auth
 from ab_testing_models import ExperimentType, ExperimentStatus
 from ab_testing.experiment_service import ExperimentService
 from ab_testing.statistical_analysis import StatisticalAnalyzer
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/experiments", tags=["A/B Testing"])
+router = APIRouter(prefix="/api/v1/experiments", tags=["A/B Testing"], dependencies=[Depends(require_auth)])
 
 
 # ============================================================================

@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta, timezone
 import logging
 
 from database import get_db
+from routes.auth_deps import require_auth
 from ai_receptionist_dashboard_models import (
     AIReceptionistActivity,
     AIReceptionistMetricsDaily,
@@ -21,7 +22,7 @@ from ai_receptionist_dashboard_models import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/ai-receptionist/dashboard", tags=["AI Receptionist Dashboard"])
+router = APIRouter(prefix="/api/v1/ai-receptionist/dashboard", tags=["AI Receptionist Dashboard"], dependencies=[Depends(require_auth)])
 
 
 # ============================================================================

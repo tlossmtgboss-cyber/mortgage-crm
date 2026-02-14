@@ -10,15 +10,17 @@ Endpoints:
 - GET /health - Health check
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import logging
 
+from routes.auth_deps import require_auth
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/rate-lock-intelligence", tags=["rate-lock-intelligence"])
+router = APIRouter(prefix="/api/v1/rate-lock-intelligence", tags=["rate-lock-intelligence"], dependencies=[Depends(require_auth)])
 
 
 # ============================================================================

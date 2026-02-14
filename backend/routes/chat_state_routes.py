@@ -28,6 +28,7 @@ import logging
 
 from database import get_db
 from services.chat_session_manager import ChatSessionManager
+from routes.auth_deps import require_auth
 from services.chat_prompt_constructor import PromptConstructor as ChatPromptConstructor
 from services.response_cache import ResponseCache
 from services.message_deduplication import MessageDeduplicator
@@ -37,7 +38,7 @@ from middleware.structured_logging import StructuredLogger, get_structured_logge
 from models.chat_state_machine_models import ChatSession, ChatMessage, ConversationPhase
 from sqlalchemy.exc import SQLAlchemyError
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_auth)])
 logger = logging.getLogger(__name__)
 structured_logger = get_structured_logger()
 

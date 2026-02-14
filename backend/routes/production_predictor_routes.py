@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from routes.auth_deps import require_auth
 from services.production_predictor_service import (
     ProductionPredictorService,
     get_production_predictor,
@@ -25,7 +26,7 @@ from services.production_predictor_service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/production-predictor", tags=["Production Predictor"])
+router = APIRouter(prefix="/api/v1/production-predictor", tags=["Production Predictor"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

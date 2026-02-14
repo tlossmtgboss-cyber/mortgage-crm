@@ -20,12 +20,13 @@ import logging
 import uuid
 
 from database import get_db, engine
+from routes.auth_deps import require_auth
 
 from services.agent_governance_service import AgentGovernanceService
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/agents", tags=["agent-governance"])
+router = APIRouter(prefix="/api/v1/agents", tags=["agent-governance"], dependencies=[Depends(require_auth)])
 
 
 # ============================================================================

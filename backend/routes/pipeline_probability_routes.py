@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from routes.auth_deps import require_auth
 from services.pipeline_probability_service import (
     PipelineProbabilityService,
     ProbabilityScore,
@@ -22,7 +23,7 @@ from services.pipeline_probability_service import (
     ProbabilityTrend,
 )
 
-router = APIRouter(prefix="/api/v1/pipeline-probability", tags=["Pipeline Probability"])
+router = APIRouter(prefix="/api/v1/pipeline-probability", tags=["Pipeline Probability"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

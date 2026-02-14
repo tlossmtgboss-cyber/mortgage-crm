@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel, Field
 from database import get_db, Base
+from routes.auth_deps import require_auth
 
 # Import models using lazy loading to avoid circular imports
 from models.feature_flags import (
@@ -24,7 +25,7 @@ from models.feature_flags import (
     DEFAULT_FEATURES
 )
 
-router = APIRouter(prefix="/api/v1/features", tags=["features"])
+router = APIRouter(prefix="/api/v1/features", tags=["features"], dependencies=[Depends(require_auth)])
 
 # Create model classes with proper Base
 SystemFeature, CompanyFeatureAccess, FeatureAuditLog = create_feature_models(Base)

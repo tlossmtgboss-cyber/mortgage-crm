@@ -8,15 +8,16 @@ Endpoints for:
 - Email automation processing
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional, List
 from pydantic import BaseModel
 
 from workflows.recruiting_workflows import recruiting_workflow_service, RECRUITING_WORKFLOWS
 from services.recruiting_email_service import get_recruiting_email_service
 from sqlalchemy.exc import SQLAlchemyError
+from routes.auth_deps import require_auth
 
-router = APIRouter(prefix="/api/v1/recruiting/workflow", tags=["Recruiting Workflow"])
+router = APIRouter(prefix="/api/v1/recruiting/workflow", tags=["Recruiting Workflow"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

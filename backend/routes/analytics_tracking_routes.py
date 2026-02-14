@@ -18,9 +18,10 @@ from sqlalchemy.orm import Session
 
 from database import get_db, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
+from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics Tracking"])
+router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics Tracking"], dependencies=[Depends(require_auth)])
 
 
 # ============================================================================

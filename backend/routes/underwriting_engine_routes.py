@@ -22,10 +22,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
+from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/underwriting-engine", tags=["AI Underwriting Engine"])
+router = APIRouter(prefix="/api/v1/underwriting-engine", tags=["AI Underwriting Engine"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

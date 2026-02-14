@@ -18,8 +18,9 @@ from services.vidyard_service import (
     VidyardService,
     VidyardLanguage,
 )
+from routes.auth_deps import require_auth
 
-router = APIRouter(prefix="/api/v1/vidyard", tags=["Vidyard"])
+router = APIRouter(prefix="/api/v1/vidyard", tags=["Vidyard"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from database import get_db
+from routes.auth_deps import require_auth
 
 from models.business_operations import (
     ServiceProvider, ServiceUsageRecord, ServiceInvoice,
@@ -43,7 +44,7 @@ from schemas.business_operations import (
     CACAnalysis, LTVAnalysis, MarketingROI
 )
 
-router = APIRouter(prefix="/api/v1/business-ops", tags=["business-operations"])
+router = APIRouter(prefix="/api/v1/business-ops", tags=["business-operations"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

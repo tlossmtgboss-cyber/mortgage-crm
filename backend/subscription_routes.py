@@ -13,12 +13,13 @@ import json
 import logging
 
 from database import get_db
+from routes.auth_deps import require_auth
 from subscription_service import SubscriptionService
 from subscription_models import SUBSCRIPTION_TIERS, FEATURE_ADDONS
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"])
+router = APIRouter(prefix="/api/v1/subscriptions", tags=["subscriptions"], dependencies=[Depends(require_auth)])
 
 
 # === Pydantic Models ===

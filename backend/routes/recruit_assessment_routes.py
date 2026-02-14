@@ -26,10 +26,11 @@ from models.recruit_assessment_models import (
     CalculatorInput,
     CalculatorResult,
 )
+from routes.auth_deps import require_auth
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
-router = APIRouter(prefix="/api/v1/recruiting", tags=["Recruiting Assessment"])
+router = APIRouter(prefix="/api/v1/recruiting", tags=["Recruiting Assessment"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

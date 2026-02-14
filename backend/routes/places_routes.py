@@ -5,13 +5,14 @@ Provides endpoints for address autocomplete and place search.
 
 import logging
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services.places_service import get_places_service
+from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/places", tags=["Places"])
+router = APIRouter(prefix="/api/v1/places", tags=["Places"], dependencies=[Depends(require_auth)])
 
 
 # ============================================================================

@@ -2,6 +2,7 @@
 Salesforce Email Sync Service
 Syncs EmailMessage and Email Activity records from Salesforce to CRM client profiles
 """
+import html as html_module
 import json
 import logging
 import re
@@ -479,6 +480,27 @@ class SalesforceEmailSyncService:
 
         return None
 
+    def _strip_html(self, html: str) -> str:
+        """Convert HTML to clean plain text for Salesforce emailSimple.
+        emailSimple only supports plain text — HTML tags render as raw source."""
+        # Remove style and script blocks entirely
+        text = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Convert block elements to newlines
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</div>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</li>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'<li[^>]*>', '  - ', text, flags=re.IGNORECASE)
+        # Remove all remaining HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+        # Decode HTML entities
+        text = html_module.unescape(text)
+        # Clean up excessive whitespace
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
+
     async def send_email_via_salesforce(
         self,
         db: Session,
@@ -522,9 +544,11 @@ class SalesforceEmailSyncService:
             result["sf_contact_type"] = sf_record["type"]
 
         # Build emailSimple payload
+        # emailSimple only supports plain text — strip HTML tags
+        plain_body = self._strip_html(html_body)
         email_input = {
             "emailSubject": subject,
-            "emailBody": html_body,
+            "emailBody": plain_body,
             "emailAddresses": to_email,
             "senderType": "CurrentUser"
         }

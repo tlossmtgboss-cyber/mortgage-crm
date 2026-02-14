@@ -9,6 +9,7 @@ from sqlalchemy import text
 from datetime import datetime, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
+from routes.auth_deps import require_auth
 import re
 
 # Whitelist of allowed columns for referral_partners updates
@@ -26,7 +27,7 @@ def _safe_column_name(col: str) -> str:
         return col
     return ''
 
-router = APIRouter(prefix="/api/v1/circle-of-cashflow", tags=["circle-of-cashflow"])
+router = APIRouter(prefix="/api/v1/circle-of-cashflow", tags=["circle-of-cashflow"], dependencies=[Depends(require_auth)])
 
 # Pydantic Models
 class QuestionnaireCreate(BaseModel):

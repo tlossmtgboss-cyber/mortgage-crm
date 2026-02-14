@@ -4,15 +4,17 @@ Market Data Routes
 API endpoints for market data from scrapers (Treasury yields, mortgage rates, etc.)
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 import os
 import sys
 
+from routes.auth_deps import require_auth
+
 # Add scrapers to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-router = APIRouter(prefix="/api/v1/market", tags=["market-data"])
+router = APIRouter(prefix="/api/v1/market", tags=["market-data"], dependencies=[Depends(require_auth)])
 
 
 @router.get("/data")

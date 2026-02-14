@@ -8,7 +8,7 @@ import os
 import json
 import logging
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from services.quote_language_service import (
@@ -16,10 +16,11 @@ from services.quote_language_service import (
     select_quote_language,
     RateQuoteInput
 )
+from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/quote-language", tags=["Quote Language"])
+router = APIRouter(prefix="/api/v1/quote-language", tags=["Quote Language"], dependencies=[Depends(require_auth)])
 
 # Path to the presets config file
 CONFIG_PATH = os.path.join(

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 import math
 
 from database import get_db
+from routes.auth_deps import require_auth
 
 # Import models - these will be created by migration
 try:
@@ -25,7 +26,7 @@ except ImportError:
     # Models not yet created - will work after migration
     pass
 
-router = APIRouter(prefix="/api/presentation", tags=["Presentation Engine"])
+router = APIRouter(prefix="/api/presentation", tags=["Presentation Engine"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

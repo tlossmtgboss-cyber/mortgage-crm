@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
+from routes.auth_deps import require_auth
 from chat_state_machine_models import (
     ChatSession, ChatMessage, CallRequest,
     ChatPhase, UrgencyLevel, CTAType, CallStatus
@@ -64,7 +65,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/chat", tags=["Chat State Machine"])
+router = APIRouter(prefix="/api/v1/chat", tags=["Chat State Machine"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

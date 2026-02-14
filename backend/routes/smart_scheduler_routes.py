@@ -13,6 +13,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime, time
 from database import get_db
+from routes.auth_deps import require_auth
 import logging
 
 from services.smart_scheduler_service import (
@@ -25,7 +26,7 @@ from services.smart_scheduler_service import (
     ScheduledAppointment
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_auth)])
 logger = logging.getLogger(__name__)
 
 

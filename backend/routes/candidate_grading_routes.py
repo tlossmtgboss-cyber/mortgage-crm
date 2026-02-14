@@ -13,10 +13,11 @@ import logging
 from database import get_db
 from services.candidate_grading_service import CandidateGradingService
 from sqlalchemy.exc import SQLAlchemyError
+from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/recruiting/candidates", tags=["Candidate Grading"])
+router = APIRouter(prefix="/api/v1/recruiting/candidates", tags=["Candidate Grading"], dependencies=[Depends(require_auth)])
 
 
 # =============================================================================

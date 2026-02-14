@@ -10,6 +10,7 @@ from datetime import date
 import logging
 
 from database import get_db
+from routes.auth_deps import require_auth
 from workflow_service import (
     WorkflowEngine,
     ThemeDayService,
@@ -19,7 +20,7 @@ from workflow_service import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/workflow")
+router = APIRouter(prefix="/api/v1/workflow", dependencies=[Depends(require_auth)])
 
 
 # ============== Workflow Engine ==============

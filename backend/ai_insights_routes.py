@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from database import get_db
+from routes.auth_deps import require_auth
 
 from services.ai_insights_service import AIInsightsService
 
 
-router = APIRouter(prefix="/api/v1/profitability/ai", tags=["profitability-ai"])
+router = APIRouter(prefix="/api/v1/profitability/ai", tags=["profitability-ai"], dependencies=[Depends(require_auth)])
 
 
 # Helper to get organization (integrate with your auth)
