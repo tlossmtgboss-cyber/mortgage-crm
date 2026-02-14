@@ -431,8 +431,10 @@ class SalesforceClosedLoansImporter:
         loan_number = loan_data.get('loan_number')
 
         # Remove fields that don't exist in the actual DB table FIRST
+        # Also exclude created_at/updated_at — we set those explicitly in SQL
         valid_columns = self._get_valid_columns(db)
-        loan_data = {k: v for k, v in loan_data.items() if k in valid_columns}
+        exclude_keys = {'created_at', 'updated_at', 'id'}
+        loan_data = {k: v for k, v in loan_data.items() if k in valid_columns and k not in exclude_keys}
 
         # Check if loan already exists (use valid column checks)
         existing = None
