@@ -25,6 +25,25 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/mum/batch", tags=["mum-valuation"])
 
+# --- Startup migration: ensure new columns exist on mum_clients ----------
+try:
+    from db import engine as _engine
+    with _engine.connect() as _conn:
+        _conn.execute(text("""
+            ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS term INTEGER DEFAULT 360;
+            ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS maturity_date TIMESTAMP;
+            ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS estimated_equity FLOAT;
+            ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS current_ltv FLOAT;
+            ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS refi_score INTEGER DEFAULT 0;
+            ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS property_state VARCHAR;
+            ALTER TABLE mum_clients ADD COLUMN IF NOT EXISTS property_zip VARCHAR;
+        """))
+        _conn.commit()
+    logger.info("mum_clients: ensured 7 valuation columns exist")
+except Exception as _e:
+    logger.warning(f"mum_clients column migration skipped: {_e}")
+# -------------------------------------------------------------------------
+
 DEFAULT_MARKET_RATE = 6.5
 DEFAULT_CLOSING_COST_PCT = 0.02
 
