@@ -121,7 +121,7 @@ async def execute_email_response_action(
         if final_action in ["acknowledge_and_update", "reply", "send_reply"]:
             if final_response and queue_item.sender_email:
                 try:
-                    email_service = EmailService()
+                    from email_service import email_service
 
                     # Build reply subject
                     original_subject = queue_item.subject or "Your Email"
@@ -138,12 +138,14 @@ async def execute_email_response_action(
                     </div>
                     """
 
-                    # Send the reply
-                    email_sent = email_service.send_html_email(
+                    # Send the reply (routes through Salesforce when connected)
+                    email_sent = await email_service.send_html_email_sf(
                         to_email=queue_item.sender_email,
                         subject=reply_subject,
                         html_body=html_body,
-                        plain_text_body=final_response
+                        plain_text_body=final_response,
+                        db=db,
+                        user_id=user_id,
                     )
 
                     results["email_sent"] = email_sent

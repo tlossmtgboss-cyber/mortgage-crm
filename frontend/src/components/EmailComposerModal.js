@@ -62,6 +62,10 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
+  // Salesforce connection state
+  const [sfConnected, setSfConnected] = useState(false);
+  const [sendMethod, setSendMethod] = useState(null);
+
   // Insert Video state
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
@@ -83,12 +87,35 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
       setEmailBody('');
       setError(null);
       setSuccess(false);
+      setSendMethod(null);
       setShowVideoRecorder(false);
       setIsUploadingVideo(false);
       setVideoUploadProgress(0);
       setHasVideoAttached(false);
       setShowCalendarPicker(false);
       setHasCalendarAttached(false);
+    }
+  }, [isOpen]);
+
+  // Check Salesforce connection status on modal open
+  useEffect(() => {
+    if (isOpen) {
+      const checkSfStatus = async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/integrations/salesforce/status`, {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setSfConnected(data.connected === true);
+          } else {
+            setSfConnected(false);
+          }
+        } catch (err) {
+          setSfConnected(false);
+        }
+      };
+      checkSfStatus();
     }
   }, [isOpen]);
 
@@ -204,6 +231,8 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
         throw new Error(errorData.detail || 'Failed to send email');
       }
 
+      const responseData = await response.json();
+      setSendMethod(responseData.send_method || null);
       setSuccess(true);
       setStep(3);
 
@@ -424,15 +453,22 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
               >
                 ← Back to Templates
               </button>
-              {selectedTemplate?.id !== 'custom' && (
-                <button
-                  className="btn-regenerate"
-                  onClick={handleRegenerateEmail}
-                  disabled={isGenerating}
-                >
-                  🔄 Regenerate
-                </button>
-              )}
+              <div className="editor-toolbar-right">
+                {sfConnected && (
+                  <span className="sf-send-badge">
+                    ☁️ Sending via Salesforce
+                  </span>
+                )}
+                {selectedTemplate?.id !== 'custom' && (
+                  <button
+                    className="btn-regenerate"
+                    onClick={handleRegenerateEmail}
+                    disabled={isGenerating}
+                  >
+                    🔄 Regenerate
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="editor-form">
@@ -576,6 +612,11 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
             <div className="success-icon">✅</div>
             <h3>Email Sent Successfully!</h3>
             <p>Your email has been delivered to <strong>{recipient?.name || 'the recipient'}</strong></p>
+            {sendMethod === 'salesforce' && (
+              <p className="sf-success-note">
+                ☁️ Sent via Salesforce — activity logged to contact record
+              </p>
+            )}
             <p className="auto-close">This window will close automatically...</p>
           </div>
         )}

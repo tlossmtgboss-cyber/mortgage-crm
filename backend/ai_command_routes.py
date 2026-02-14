@@ -4653,13 +4653,15 @@ NMLS# {lo_nmls or settings.signature_nmls or 'N/A'}
             'type': 'application/pdf'
         }]
 
-        # Send email
-        success = email_service.send_html_email(
+        # Send email (SF routing skips automatically when attachments present)
+        success = await email_service.send_html_email_sf(
             to_email=recipient_email,
             subject=f"Pre-Approval Letter - {borrower_names}",
             html_body=html_content,
             plain_text_body=plain_text,
-            attachments=attachments
+            attachments=attachments,
+            db=db,
+            user_id=user_id,
         )
 
         if not success:
@@ -5328,46 +5330,82 @@ async def send_composed_email(
 </html>
 """
 
-        # Send the email
-        success = email_service.send_html_email(
-            to_email=request.to_email,
-            subject=request.subject,
-            html_body=html_body,
-            plain_text_body=request.body
-        )
+        # Try sending via Salesforce first if the user has a connected SF profile
+        send_method = "sendgrid"
+        sf_contact_linked = False
+        sf_send_attempted = False
 
-        if success:
-            # Log the email activity
-            try:
-                from models import Activity, Lead, Loan
+        try:
+            from salesforce_integration_models import IntegrationProfile
+            from services.salesforce.email_sync_service import salesforce_email_sync
 
-                activity_data = {
-                    "organization_id": 1,
-                    "activity_type": "email_sent",
-                    "subject": f"Email: {request.subject}",
-                    "description": f"Email sent to {request.to_name or request.to_email}: {request.subject}",
-                    "completed": True,
-                    "completed_at": datetime.utcnow(),
-                    "user_id": current_user.get("id"),
-                }
+            sf_profile = db.query(IntegrationProfile).filter(
+                IntegrationProfile.user_id == current_user.id,
+                IntegrationProfile.provider == "salesforce",
+                IntegrationProfile.status.in_(["connected", "active"])
+            ).first()
 
-                if request.entity_type == "lead" and request.entity_id:
-                    activity_data["lead_id"] = request.entity_id
-                elif request.entity_type == "loan" and request.entity_id:
-                    activity_data["loan_id"] = request.entity_id
+            if sf_profile:
+                sf_send_attempted = True
+                sf_result = await salesforce_email_sync.send_email_via_salesforce(
+                    db=db,
+                    integration_profile_id=sf_profile.id,
+                    to_email=request.to_email,
+                    subject=request.subject,
+                    html_body=html_body
+                )
 
-                activity = Activity(**activity_data)
-                db.add(activity)
-                db.commit()
-            except Exception as log_err:
-                logger.warning(f"Failed to log email activity: {log_err}")
+                if sf_result.get("success"):
+                    send_method = "salesforce"
+                    sf_contact_linked = sf_result.get("sf_contact_id") is not None
+                    logger.info(f"Email sent via Salesforce to {request.to_email} (contact_linked={sf_contact_linked})")
+                else:
+                    logger.warning(f"Salesforce email send failed, falling back to SendGrid: {sf_result.get('message')}")
+        except Exception as sf_err:
+            logger.warning(f"Salesforce email attempt failed, falling back to SendGrid: {sf_err}")
 
-            return {
-                "success": True,
-                "message": f"Email sent successfully to {request.to_email}"
+        # Fall back to SendGrid if Salesforce didn't send
+        if send_method != "salesforce":
+            success = email_service.send_html_email(
+                to_email=request.to_email,
+                subject=request.subject,
+                html_body=html_body,
+                plain_text_body=request.body
+            )
+            if not success:
+                raise HTTPException(status_code=500, detail="Failed to send email - email service returned error")
+
+        # Log the email activity
+        try:
+            from models import Activity, Lead, Loan
+
+            activity_data = {
+                "organization_id": 1,
+                "activity_type": "email_sent",
+                "subject": f"Email: {request.subject}",
+                "description": f"Email sent to {request.to_name or request.to_email}: {request.subject} (via {send_method})",
+                "completed": True,
+                "completed_at": datetime.utcnow(),
+                "user_id": current_user.id,
             }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to send email - email service returned error")
+
+            if request.entity_type == "lead" and request.entity_id:
+                activity_data["lead_id"] = request.entity_id
+            elif request.entity_type == "loan" and request.entity_id:
+                activity_data["loan_id"] = request.entity_id
+
+            activity = Activity(**activity_data)
+            db.add(activity)
+            db.commit()
+        except Exception as log_err:
+            logger.warning(f"Failed to log email activity: {log_err}")
+
+        return {
+            "success": True,
+            "message": f"Email sent successfully to {request.to_email}",
+            "send_method": send_method,
+            "sf_contact_linked": sf_contact_linked
+        }
 
     except HTTPException:
         raise

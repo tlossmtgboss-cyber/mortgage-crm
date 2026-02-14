@@ -14,7 +14,7 @@ async def process_drip_campaigns(db_session):
     """Process scheduled drip campaign messages"""
     try:
         from services.notification_service import notification_service
-        from email_service import EmailService
+        from email_service import email_service
 
         # Get assignments that are due
         result = db_session.execute(text("""
@@ -31,6 +31,7 @@ async def process_drip_campaigns(db_session):
                 l.first_name,
                 l.email,
                 l.phone,
+                l.owner_id,
                 oc.name as campaign_name
             FROM lead_campaign_assignments lca
             JOIN campaign_steps cs ON cs.campaign_id = lca.campaign_id
@@ -48,7 +49,6 @@ async def process_drip_campaigns(db_session):
             logger.debug("No drip campaign messages to send")
             return {"processed": 0}
 
-        email_service = EmailService()
         processed = 0
         errors = 0
 
@@ -70,13 +70,15 @@ async def process_drip_campaigns(db_session):
 {message.replace(chr(10), '<br>')}
 </body></html>"""
 
-                    success = email_service.send_html_email(
+                    success = await email_service.send_html_email_sf(
                         to_email=assignment["email"],
                         subject=subject or "Message from Perennia AI",
                         html_body=html_body,
                         plain_text_body=message,
                         from_email=ai_from_email,
-                        reply_to=ai_from_email
+                        reply_to=ai_from_email,
+                        db=db_session,
+                        user_id=assignment.get("owner_id"),
                     )
 
                 elif assignment["channel"] == "sms" and assignment["phone"]:

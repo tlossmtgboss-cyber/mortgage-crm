@@ -433,5 +433,169 @@ class SalesforceEmailSyncService:
             logger.error(f"Failed to log sync event: {e}")
 
 
+    async def find_contact_by_email(
+        self,
+        access_token: str,
+        instance_url: str,
+        email: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Look up a Salesforce Contact or Lead by email address.
+        Returns dict with 'id' and 'type' ('Contact' or 'Lead'), or None.
+        """
+        if not email:
+            return None
+
+        # Escape single quotes for SOQL injection prevention
+        safe_email = email.replace("'", "\\'")
+
+        # Try Contact first (preferred for Activity linking)
+        for sobject in ["Contact", "Lead"]:
+            soql = f"SELECT Id, Name FROM {sobject} WHERE Email = '{safe_email}' LIMIT 1"
+            try:
+                async with get_sf_client() as client:
+                    response = await client.get(
+                        f"{instance_url}/services/data/v59.0/query",
+                        params={"q": soql},
+                        headers={"Authorization": f"Bearer {access_token}"},
+                        timeout=15.0
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        records = data.get("records", [])
+                        if records:
+                            return {
+                                "id": records[0]["Id"],
+                                "name": records[0].get("Name", ""),
+                                "type": sobject
+                            }
+            except Exception as e:
+                logger.warning(f"SOQL lookup failed for {sobject} email={email[:30]}...: {e}")
+
+        return None
+
+    async def send_email_via_salesforce(
+        self,
+        db: Session,
+        integration_profile_id: int,
+        to_email: str,
+        subject: str,
+        html_body: str
+    ) -> Dict[str, Any]:
+        """
+        Send an email through Salesforce's emailSimple action.
+        The email is sent FROM the Salesforce user's address and
+        an Activity record is automatically created on the contact.
+
+        Returns dict with keys: success, message, sf_contact_id, send_method
+        """
+        result = {
+            "success": False,
+            "message": "",
+            "sf_contact_id": None,
+            "sf_contact_type": None,
+            "send_method": "salesforce"
+        }
+
+        try:
+            access_token, instance_url = await salesforce_oauth.get_access_token(
+                db, integration_profile_id
+            )
+        except Exception as e:
+            result["message"] = f"Failed to get Salesforce access token: {e}"
+            logger.warning(result["message"])
+            return result
+
+        if not access_token:
+            result["message"] = "No Salesforce access token available"
+            return result
+
+        # Look up the recipient in Salesforce
+        sf_record = await self.find_contact_by_email(access_token, instance_url, to_email)
+        if sf_record:
+            result["sf_contact_id"] = sf_record["id"]
+            result["sf_contact_type"] = sf_record["type"]
+
+        # Build emailSimple payload
+        email_input = {
+            "emailSubject": subject,
+            "emailBody": html_body,
+            "emailAddresses": to_email,
+            "senderType": "CurrentUser"
+        }
+        if sf_record:
+            email_input["relatedToId"] = sf_record["id"]
+
+        payload = {
+            "inputs": [email_input]
+        }
+
+        # Send via Salesforce emailSimple action
+        send_url = f"{instance_url}/services/data/v59.0/actions/standard/emailSimple"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            async with get_sf_client() as client:
+                response = await client.post(
+                    send_url, json=payload, headers=headers, timeout=30.0
+                )
+
+                # Handle 401 — token expired, refresh and retry once
+                if response.status_code == 401:
+                    logger.info("Salesforce token expired during email send, refreshing...")
+                    try:
+                        access_token, instance_url = await salesforce_oauth.get_access_token(
+                            db, integration_profile_id
+                        )
+                        # Force refresh by calling refresh directly
+                        access_token = await salesforce_oauth.refresh_access_token(
+                            db, integration_profile_id
+                        )
+                        profile = db.query(IntegrationProfile).filter(
+                            IntegrationProfile.id == integration_profile_id
+                        ).first()
+                        instance_url = profile.instance_url if profile else instance_url
+                    except Exception as refresh_err:
+                        result["message"] = f"Token refresh failed: {refresh_err}"
+                        return result
+
+                    headers["Authorization"] = f"Bearer {access_token}"
+                    send_url = f"{instance_url}/services/data/v59.0/actions/standard/emailSimple"
+                    response = await client.post(
+                        send_url, json=payload, headers=headers, timeout=30.0
+                    )
+
+                if response.status_code in (200, 201):
+                    resp_data = response.json()
+                    # emailSimple returns a list of results
+                    if isinstance(resp_data, list) and resp_data:
+                        first = resp_data[0]
+                        if first.get("isSuccess", False):
+                            result["success"] = True
+                            result["message"] = "Email sent via Salesforce"
+                            logger.info(f"Email sent via Salesforce to {to_email}")
+                        else:
+                            errors = first.get("errors", [])
+                            err_msg = errors[0].get("message", "Unknown error") if errors else "Unknown error"
+                            result["message"] = f"Salesforce email action failed: {err_msg}"
+                            logger.warning(result["message"])
+                    else:
+                        result["success"] = True
+                        result["message"] = "Email sent via Salesforce"
+                else:
+                    error_text = response.text[:500]
+                    result["message"] = f"Salesforce API error {response.status_code}: {error_text}"
+                    logger.warning(result["message"])
+
+        except Exception as e:
+            result["message"] = f"Salesforce email send error: {e}"
+            logger.error(result["message"], exc_info=True)
+
+        return result
+
+
 # Singleton instance
 salesforce_email_sync = SalesforceEmailSyncService()

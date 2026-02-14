@@ -1273,6 +1273,74 @@ This invitation was sent by Perennia AI
 
         return self.send_html_email(to_email, subject, html_body, plain_text)
 
+    async def send_html_email_sf(
+        self,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        db=None,
+        user_id: Optional[int] = None,
+        plain_text_body: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        reply_to: Optional[str] = None,
+        from_email: Optional[str] = None,
+    ) -> bool:
+        """
+        Send an email with Salesforce-first routing.
+        If user has a connected Salesforce integration, sends through SF emailSimple
+        (appears in SF Activity History, sent from user's SF address).
+        Falls back to SendGrid/SMTP if SF not connected or fails.
+
+        Note: SF emailSimple does not support attachments or custom headers.
+        When attachments or custom headers are provided, sends via SendGrid directly.
+        """
+        # If we have attachments or custom threading headers, skip SF
+        # (SF emailSimple doesn't support these)
+        skip_sf = bool(attachments) or bool(headers)
+
+        if db is not None and user_id is not None and not skip_sf:
+            try:
+                from salesforce_integration_models import IntegrationProfile
+                from services.salesforce.email_sync_service import salesforce_email_sync
+
+                sf_profile = db.query(IntegrationProfile).filter(
+                    IntegrationProfile.user_id == user_id,
+                    IntegrationProfile.provider == "salesforce",
+                    IntegrationProfile.status.in_(["connected", "active"])
+                ).first()
+
+                if sf_profile:
+                    sf_result = await salesforce_email_sync.send_email_via_salesforce(
+                        db=db,
+                        integration_profile_id=sf_profile.id,
+                        to_email=to_email,
+                        subject=subject,
+                        html_body=html_body,
+                    )
+
+                    if sf_result.get("success"):
+                        logger.info(f"Email to {to_email} sent via Salesforce (user_id={user_id})")
+                        return True
+                    else:
+                        logger.warning(
+                            f"SF email failed, falling back to SendGrid: {sf_result.get('message')}"
+                        )
+            except Exception as sf_err:
+                logger.warning(f"SF email routing error, falling back to SendGrid: {sf_err}")
+
+        # Fallback to SendGrid/SMTP
+        return self.send_html_email(
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
+            plain_text_body=plain_text_body,
+            attachments=attachments,
+            headers=headers,
+            reply_to=reply_to,
+            from_email=from_email,
+        )
+
 
 # Global instance
 email_service = EmailService()

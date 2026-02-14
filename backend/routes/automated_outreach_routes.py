@@ -790,26 +790,30 @@ async def execute_trigger(
         email = None
         phone = None
 
+        trigger_user_id = None
+
         if lead_id:
             lead_result = db.execute(text("""
-                SELECT first_name, last_name, email, phone FROM leads WHERE id = :id
+                SELECT first_name, last_name, email, phone, owner_id FROM leads WHERE id = :id
             """), {"id": lead_id})
             lead = lead_result.fetchone()
             if lead:
                 first_name = lead.first_name or "there"
                 email = lead.email
                 phone = lead.phone
+                trigger_user_id = lead.owner_id
 
         if loan_id:
             # Get borrower info from loan
             loan_result = db.execute(text("""
-                SELECT borrower_name, borrower_email, borrower_phone FROM loans WHERE id = :id
+                SELECT borrower_name, borrower_email, borrower_phone, loan_officer_id FROM loans WHERE id = :id
             """), {"id": loan_id})
             loan = loan_result.fetchone()
             if loan:
                 first_name = (loan.borrower_name or "").split()[0] if loan.borrower_name else "there"
                 email = loan.borrower_email or email
                 phone = loan.borrower_phone or phone
+                trigger_user_id = trigger_user_id or loan.loan_officer_id
 
         # Override with context if provided
         if context:
@@ -849,9 +853,8 @@ async def execute_trigger(
 
                 # Send based on channel
                 if trigger["channel"] == "email" and email:
-                    from email_service import EmailService
+                    from email_service import email_service
                     import os
-                    email_service = EmailService()
                     ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
 
                     html_body = f"""<!DOCTYPE html>
@@ -859,13 +862,15 @@ async def execute_trigger(
 {message.replace(chr(10), '<br>')}
 </body></html>"""
 
-                    email_service.send_html_email(
+                    await email_service.send_html_email_sf(
                         to_email=email,
                         subject=subject or "Message from Perennia AI",
                         html_body=html_body,
                         plain_text_body=message,
                         from_email=ai_from_email,
-                        reply_to=ai_from_email
+                        reply_to=ai_from_email,
+                        db=db,
+                        user_id=trigger_user_id,
                     )
                     executed += 1
                     logger.info(f"Trigger {trigger['id']} sent email to {email}")

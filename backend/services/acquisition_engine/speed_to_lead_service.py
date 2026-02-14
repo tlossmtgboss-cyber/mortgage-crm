@@ -447,11 +447,13 @@ class SpeedToLeadService:
             subject = template["subject"].format(**context)
             body = template["body"].format(**context)
 
-            # Send email
-            success = self.email_service.send_html_email(
+            # Send email (routes through Salesforce when connected)
+            success = await self.email_service.send_html_email_sf(
                 to_email=lead_info["email"],
                 subject=subject,
                 html_body=body,
+                db=self.db,
+                user_id=lead_info.get("assigned_to"),
             )
 
             if success:

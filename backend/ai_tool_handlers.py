@@ -381,31 +381,37 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
     lead_id = input_data.get("lead_id")
     is_html = input_data.get("is_html", False)
 
-    # Send the actual email with correct FROM address
+    # Send the actual email with correct FROM address (routes through Salesforce when connected)
     import os
     ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+    db = SessionLocal()
     try:
         if is_html:
-            success = email_service.send_html_email(
+            success = await email_service.send_html_email_sf(
                 to_email=to_email,
                 subject=subject,
                 html_body=body,
                 plain_text_body=input_data.get("plain_text_body"),
                 from_email=ai_from_email,
-                reply_to=ai_from_email
+                reply_to=ai_from_email,
+                db=db,
+                user_id=context.user_id,
             )
         else:
             # Convert plain text to simple HTML
             html_body = f"<html><body><p>{body.replace(chr(10), '<br>')}</p></body></html>"
-            success = email_service.send_html_email(
+            success = await email_service.send_html_email_sf(
                 to_email=to_email,
                 subject=subject,
                 html_body=html_body,
                 plain_text_body=body,
                 from_email=ai_from_email,
-                reply_to=ai_from_email
+                reply_to=ai_from_email,
+                db=db,
+                user_id=context.user_id,
             )
     except Exception as e:
+        db.close()
         return {
             "success": False,
             "message": "Failed to send email",
@@ -414,7 +420,6 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
 
     # Log the communication if associated with a lead
     if lead_id:
-        db = SessionLocal()
         try:
             query = text("""
                 INSERT INTO communications (
@@ -433,6 +438,8 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
             db.commit()
         finally:
             db.close()
+    else:
+        db.close()
 
     return {
         "success": success,
