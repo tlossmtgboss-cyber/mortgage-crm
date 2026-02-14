@@ -85,13 +85,10 @@ WORKFLOW_ROLES = [
 @router.get("/roles")
 async def get_available_roles(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get all available roles for workflow assignment."""
     from services.workflow_role_assignment import get_role_assignment_service
-
-    # Resolve the dependency
-    current_user = await current_user
 
     try:
         service = get_role_assignment_service(db)
@@ -106,13 +103,12 @@ async def get_available_roles(
 async def get_loan_role_assignments(
     loan_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get all role assignments for a loan."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
     Loan = get_loan_model()
 
     try:
@@ -142,13 +138,12 @@ async def assign_role_to_loan(
     role_id: int,
     user_id: int = Body(..., embed=True),
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Assign a user to a role for a specific loan."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         service = get_role_assignment_service(db)
@@ -175,13 +170,12 @@ async def remove_role_from_loan(
     loan_id: int,
     role_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Remove a role assignment from a loan."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         service = get_role_assignment_service(db)
@@ -202,13 +196,12 @@ async def remove_role_from_loan(
 async def get_lead_role_assignments(
     lead_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get all role assignments for a lead."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
     Lead = get_lead_model()
 
     try:
@@ -238,13 +231,12 @@ async def assign_role_to_lead(
     role_id: int,
     user_id: int = Body(..., embed=True),
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Assign a user to a role for a specific lead."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         service = get_role_assignment_service(db)
@@ -271,13 +263,12 @@ async def remove_role_from_lead(
     lead_id: int,
     role_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Remove a role assignment from a lead."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         service = get_role_assignment_service(db)
@@ -299,13 +290,12 @@ async def copy_role_assignments_to_loan(
     loan_id: int,
     lead_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Copy role assignments from a lead to a loan (when lead converts)."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         service = get_role_assignment_service(db)
@@ -328,13 +318,12 @@ async def resolve_user_for_loan_role(
     role_id: int,
     fallback: bool = True,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Resolve which user is assigned to a role for a loan."""
     from services.workflow_role_assignment import get_role_assignment_service
 
-    # Resolve the dependency
-    current_user = await current_user
+
     User = get_user_model()
 
     try:
@@ -373,11 +362,10 @@ async def resolve_user_for_loan_role(
 @router.get("/settings/team-roles")
 async def get_default_role_assignments(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Get default role assignments for the organization (Team Settings)."""
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         # Auto-seed: ensure roles table exists and is populated
@@ -463,11 +451,10 @@ async def set_default_role_assignment(
     role_id: int,
     user_id: int = Body(..., embed=True),
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Set default user for a role (Team Settings)."""
-    # Resolve the dependency
-    current_user = await current_user
+
     User = get_user_model()
 
     try:
@@ -545,11 +532,10 @@ async def set_default_role_assignment(
 async def remove_default_role_assignment(
     role_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Remove default user assignment for a role."""
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         org_id = current_user.organization_id or 1
@@ -578,11 +564,10 @@ async def remove_default_role_assignment(
 @router.post("/settings/seed-workflow-roles")
 async def seed_workflow_roles(
     db: Session = Depends(get_db),
-    current_user = Depends(lambda: get_current_user_dep())
+    current_user = Depends(get_current_user_dep())
 ):
     """Seed workflow roles into the database."""
-    # Resolve the dependency
-    current_user = await current_user
+
 
     try:
         # Ensure the roles table exists
