@@ -235,9 +235,8 @@ class FileUploadValidator:
                 detail=f"Invalid {file_type} type. Allowed: {', '.join(allowed_extensions)}"
             )
 
-        # Read file content
-        content = await file.read()
-        await file.seek(0)  # Reset for later use
+        # Read file content with bounded read to prevent memory exhaustion
+        content = await file.read(max_size + 1)
 
         # Check file size
         file_size = len(content)
@@ -247,9 +246,11 @@ class FileUploadValidator:
         if file_size > max_size:
             max_mb = max_size / (1024 * 1024)
             raise HTTPException(
-                status_code=400,
+                status_code=413,
                 detail=f"File too large. Maximum size: {max_mb:.0f}MB"
             )
+
+        await file.seek(0)  # Reset for later use
 
         # Verify MIME type using python-magic
         detected_mime = None

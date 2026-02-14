@@ -182,12 +182,15 @@ async def upload_document(
     """
     Upload a document and attach to borrower/loan
     """
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
     try:
         from main import Document, DocumentType, DocumentCategory
 
-        # Read file content
-        content = await file.read()
+        # Read file content with size limit
+        content = await file.read(MAX_FILE_SIZE + 1)
         file_size = len(content)
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"File too large. Maximum size is 50 MB.")
 
         # Generate unique filename
         ext = file.filename.split('.')[-1] if '.' in file.filename else ''
@@ -310,8 +313,11 @@ async def classify_document(
     """
     Classify a document using AI without uploading
     """
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
     try:
-        content = await file.read()
+        content = await file.read(MAX_FILE_SIZE + 1)
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 50 MB.")
 
         result = await classify_document_with_ai(file.filename, content)
 

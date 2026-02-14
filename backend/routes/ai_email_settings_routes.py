@@ -235,18 +235,21 @@ async def send_test_email(
         email_service.from_email = settings.assistant_email
         email_service.from_name = settings.from_name
 
+        import html as _html
+        import re as _re
+        _safe_color = settings.brand_color if settings.brand_color and _re.match(r'^#[0-9a-fA-F]{3,6}$', settings.brand_color) else '#333'
         html_body = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: {settings.brand_color};">Test Email from {settings.assistant_name}</h2>
+            <h2 style="color: {_safe_color};">Test Email from {_html.escape(settings.assistant_name or "")}</h2>
             <p>Hi there!</p>
             <p>This is a test email to verify your AI email settings are working correctly.</p>
             <p>If you received this email, your setup is complete!</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
             <p style="color: #666; font-size: 14px;">
-                <strong>{settings.from_name}</strong><br>
-                {settings.company_name}
+                <strong>{_html.escape(settings.from_name or "")}</strong><br>
+                {_html.escape(settings.company_name or "")}
             </p>
-            {f'<img src="{settings.logo_url}" alt="Logo" style="max-width: 150px; margin-top: 10px;">' if settings.logo_url else ''}
+            {f'<img src="{_html.escape(settings.logo_url)}" alt="Logo" style="max-width: 150px; margin-top: 10px;">' if settings.logo_url and settings.logo_url.startswith(('https://', 'http://')) else ''}
         </div>
         """
 

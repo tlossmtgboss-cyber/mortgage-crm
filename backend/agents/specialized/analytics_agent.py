@@ -1038,12 +1038,19 @@ class AnalyticsAgent(SpecializedAgent):
             output = io.StringIO()
             writer = csv.writer(output)
 
+            def _sanitize_csv(val):
+                """Prevent CSV formula injection by prefixing dangerous characters."""
+                s = str(val) if val is not None else ""
+                if s and s[0] in ('=', '+', '-', '@', '\t', '\r'):
+                    return "'" + s
+                return s
+
             # Flatten data for CSV
             if report_type == "pipeline" and "stages" in data:
                 writer.writerow(["Stage", "Count", "Volume", "Avg Days", "Percentage"])
                 for stage in data["stages"]:
                     writer.writerow([
-                        stage["stage"],
+                        _sanitize_csv(stage["stage"]),
                         stage["count"],
                         stage["volume"],
                         stage["avg_days"],
@@ -1054,7 +1061,7 @@ class AnalyticsAgent(SpecializedAgent):
                 for m in data["team_metrics"]:
                     writer.writerow([
                         m["rank"],
-                        m["name"],
+                        _sanitize_csv(m["name"]),
                         m["total_loans"],
                         m["total_volume"],
                         m["funded_count"],
@@ -1063,7 +1070,7 @@ class AnalyticsAgent(SpecializedAgent):
             else:
                 writer.writerow(["Key", "Value"])
                 for key, value in data.items():
-                    writer.writerow([key, str(value)])
+                    writer.writerow([_sanitize_csv(key), _sanitize_csv(str(value))])
 
             content = output.getvalue()
         else:

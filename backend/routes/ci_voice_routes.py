@@ -2233,6 +2233,13 @@ async def export_recordings(
             import csv
             import io
 
+            def _sanitize_csv(val):
+                """Prevent CSV formula injection by prefixing dangerous characters."""
+                s = str(val) if val is not None else ""
+                if s and s[0] in ('=', '+', '-', '@', '\t', '\r'):
+                    return "'" + s
+                return s
+
             output = io.StringIO()
             writer = csv.writer(output)
             writer.writerow([
@@ -2242,10 +2249,10 @@ async def export_recordings(
 
             for row in rows:
                 writer.writerow([
-                    str(row[0]), row[1], row[2], row[3],
-                    row[4], row[5],
+                    str(row[0]), _sanitize_csv(row[1]), _sanitize_csv(row[2]), _sanitize_csv(row[3]),
+                    row[4], _sanitize_csv(row[5]),
                     row[6].isoformat() if row[6] else "",
-                    row[7] or "", row[8] or ""
+                    _sanitize_csv(row[7] or ""), row[8] or ""
                 ])
 
             output.seek(0)

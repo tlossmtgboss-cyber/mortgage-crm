@@ -561,25 +561,28 @@ async def send_test_email(
 
         # Build test email
         if request.include_branding:
+            import html as _html
+            import re as _re
+            _safe_color = settings.brand_color if settings.brand_color and _re.match(r'^#[0-9a-fA-F]{3,6}$', settings.brand_color) else '#333'
             html_body = f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: {settings.brand_color};">Test Email from {settings.assistant_name}</h2>
+                <h2 style="color: {_safe_color};">Test Email from {_html.escape(settings.assistant_name or "")}</h2>
                 <p>Hi there!</p>
                 <p>This is a test email to verify your email integration settings are working correctly.</p>
                 <p>If you received this email, your setup is complete!</p>
                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
                 <p style="color: #666; font-size: 14px;">
-                    <strong>{settings.from_name or settings.assistant_name}</strong><br>
-                    {settings.company_name}
+                    <strong>{_html.escape(settings.from_name or settings.assistant_name or "")}</strong><br>
+                    {_html.escape(settings.company_name or "")}
                 </p>
-                {f'<img src="{settings.logo_url}" alt="Logo" style="max-width: 150px; margin-top: 10px;">' if settings.logo_url else ''}
-                {f'<div style="margin-top: 20px; color: #666; font-size: 12px;">{settings.email_signature}</div>' if settings.email_signature else ''}
+                {f'<img src="{__import__("html").escape(settings.logo_url)}" alt="Logo" style="max-width: 150px; margin-top: 10px;">' if settings.logo_url and settings.logo_url.startswith(('https://', 'http://')) else ''}
+                {f'<div style="margin-top: 20px; color: #666; font-size: 12px;">{__import__("html").escape(settings.email_signature)}</div>' if settings.email_signature else ''}
             </div>
             """
         else:
             html_body = f"""
             <div style="font-family: Arial, sans-serif;">
-                <p>Test email from {settings.assistant_name}</p>
+                <p>Test email from {__import__("html").escape(settings.assistant_name or "")}</p>
                 <p>Configuration is working correctly.</p>
             </div>
             """
@@ -709,17 +712,20 @@ async def preview_email_signature(db: Session = Depends(get_db)):
     try:
         settings = get_or_create_settings(db)
 
+        import html as _html
+        import re as _re
+        _safe_color = settings.brand_color if settings.brand_color and _re.match(r'^#[0-9a-fA-F]{3,6}$', settings.brand_color) else '#333'
         preview_html = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; border: 1px solid #eee; padding: 20px; border-radius: 8px;">
             <p style="color: #666; margin-bottom: 20px;">Sample email content would appear here...</p>
             <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
             <div style="color: #333;">
-                <strong style="color: {settings.brand_color};">{settings.from_name or settings.assistant_name}</strong><br>
-                <span style="color: #666;">{settings.assistant_title or 'AI Assistant'}</span><br>
-                <span style="color: #666;">{settings.company_name}</span>
+                <strong style="color: {_safe_color};">{_html.escape(settings.from_name or settings.assistant_name or "")}</strong><br>
+                <span style="color: #666;">{_html.escape(settings.assistant_title or 'AI Assistant')}</span><br>
+                <span style="color: #666;">{_html.escape(settings.company_name or "")}</span>
             </div>
-            {f'<img src="{settings.logo_url}" alt="Logo" style="max-width: 120px; margin-top: 15px;">' if settings.logo_url else ''}
-            {f'<div style="margin-top: 15px; color: #666; font-size: 12px; white-space: pre-wrap;">{settings.email_signature}</div>' if settings.email_signature else ''}
+            {f'<img src="{__import__("html").escape(settings.logo_url)}" alt="Logo" style="max-width: 120px; margin-top: 15px;">' if settings.logo_url and settings.logo_url.startswith(('https://', 'http://')) else ''}
+            {f'<div style="margin-top: 15px; color: #666; font-size: 12px; white-space: pre-wrap;">{__import__("html").escape(settings.email_signature)}</div>' if settings.email_signature else ''}
         </div>
         """
 

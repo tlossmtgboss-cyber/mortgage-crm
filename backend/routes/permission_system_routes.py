@@ -1116,12 +1116,19 @@ async def export_compliance_report(
             writer.writerow(['Overdue Certifications', overview['certifications']['overdue']])
             writer.writerow([])
 
+            def _sanitize_csv(val):
+                """Prevent CSV formula injection by prefixing dangerous characters."""
+                s = str(val) if val is not None else ""
+                if s and s[0] in ('=', '+', '-', '@', '\t', '\r'):
+                    return "'" + s
+                return s
+
             # Department breakdown
             writer.writerow(['DEPARTMENT BREAKDOWN'])
             writer.writerow(['Department', 'Employees', 'Certifications', 'Certified %', 'Overdue'])
             for dept in dept_data['departments']:
                 writer.writerow([
-                    dept['department'],
+                    _sanitize_csv(dept['department']),
                     dept['total_employees'],
                     dept['total_certifications'],
                     f"{dept['certified_percent']}%",
