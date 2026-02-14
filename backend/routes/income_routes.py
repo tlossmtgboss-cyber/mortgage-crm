@@ -10,6 +10,7 @@ import os
 from datetime import datetime, date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -25,7 +26,27 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/income", tags=["Income"])
+_security = HTTPBearer(auto_error=False)
+
+
+async def _require_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+    db: Session = Depends(get_db),
+):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    from main import get_current_user_flexible
+    user = await get_current_user_flexible(token=credentials.credentials, request=None, db=db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user
+
+
+router = APIRouter(
+    prefix="/api/v1/income",
+    tags=["Income"],
+    dependencies=[Depends(_require_auth)],
+)
 
 
 # =============================================================================

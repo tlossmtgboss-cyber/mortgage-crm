@@ -4,6 +4,7 @@ Capacity tracking, talent state, performance, and recruiting endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
@@ -20,7 +21,31 @@ import os
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
-router = APIRouter(prefix="/api/v1/master-manager", tags=["Master Manager"])
+_security = HTTPBearer(auto_error=False)
+
+
+async def _require_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    from main import get_current_user_flexible
+    from database import get_db as db_getter
+    db = next(db_getter())
+    try:
+        user = await get_current_user_flexible(token=credentials.credentials, request=None, db=db)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user
+    finally:
+        db.close()
+
+
+router = APIRouter(
+    prefix="/api/v1/master-manager",
+    tags=["Master Manager"],
+    dependencies=[Depends(_require_auth)],
+)
 
 
 # =============================================================================

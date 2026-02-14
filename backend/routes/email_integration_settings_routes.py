@@ -3,7 +3,8 @@ Email Integration Settings Routes
 Comprehensive error handling pattern for email configuration
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
 from pydantic import BaseModel, Field, EmailStr, validator, root_validator
@@ -24,7 +25,28 @@ from utils.error_handling import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/email-integration-settings", tags=["Email Integration Settings"])
+
+_security = HTTPBearer(auto_error=False)
+
+
+async def _require_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+    db: Session = Depends(get_db),
+):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    from main import get_current_user_flexible
+    user = await get_current_user_flexible(token=credentials.credentials, request=None, db=db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user
+
+
+router = APIRouter(
+    prefix="/api/v1/email-integration-settings",
+    tags=["Email Integration Settings"],
+    dependencies=[Depends(_require_auth)],
+)
 
 
 # =============================================================================
