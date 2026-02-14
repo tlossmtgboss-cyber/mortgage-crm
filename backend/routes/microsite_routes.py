@@ -568,16 +568,25 @@ async def serve_asset(
 ):
     """Serve uploaded microsite assets (logos, headshots, images)"""
     from fastapi.responses import FileResponse
+    from pathlib import Path
 
-    # Build file path
-    file_path = f"{STORAGE_PATH}/{org_id}/{microsite_id}/{filename}"
+    # Sanitize filename to prevent path traversal
+    safe_filename = os.path.basename(filename)
+    if not safe_filename or safe_filename != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    # Build file path and verify it's within the expected directory
+    base_dir = Path(STORAGE_PATH).resolve()
+    file_path = (base_dir / str(org_id) / str(microsite_id) / safe_filename).resolve()
+    if not str(file_path).startswith(str(base_dir)):
+        raise HTTPException(status_code=400, detail="Invalid path")
 
     # Check if file exists
-    if not os.path.exists(file_path):
+    if not file_path.exists():
         raise HTTPException(status_code=404, detail="Asset not found")
 
     # Determine content type from extension
-    ext = os.path.splitext(filename)[1].lower()
+    ext = os.path.splitext(safe_filename)[1].lower()
     content_types = {
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',

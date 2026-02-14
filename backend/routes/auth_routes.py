@@ -588,10 +588,10 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
                 )
 
         # Validate password strength
-        if len(request.new_password) < 6:
+        if len(request.new_password) < 8:
             raise HTTPException(
                 status_code=400,
-                detail="Password must be at least 6 characters long."
+                detail="Password must be at least 8 characters long."
             )
 
         # Update password and record timestamp to prevent token reuse
