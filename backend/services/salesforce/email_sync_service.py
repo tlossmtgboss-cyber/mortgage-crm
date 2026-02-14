@@ -4,6 +4,7 @@ Syncs EmailMessage and Email Activity records from Salesforce to CRM client prof
 """
 import json
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 import httpx
@@ -446,12 +447,16 @@ class SalesforceEmailSyncService:
         if not email:
             return None
 
-        # Escape single quotes for SOQL injection prevention
-        safe_email = email.replace("'", "\\'")
+        # Strict email validation to prevent SOQL injection
+        # Only allow standard email characters — reject anything suspicious
+        email = email.strip().lower()
+        if not re.match(r'^[\w.+-]+@[\w.-]+\.\w{2,}$', email):
+            logger.warning(f"Invalid email format rejected for SOQL lookup: {email[:50]}")
+            return None
 
         # Try Contact first (preferred for Activity linking)
         for sobject in ["Contact", "Lead"]:
-            soql = f"SELECT Id, Name FROM {sobject} WHERE Email = '{safe_email}' LIMIT 1"
+            soql = f"SELECT Id, Name FROM {sobject} WHERE Email = '{email}' LIMIT 1"
             try:
                 async with get_sf_client() as client:
                     response = await client.get(
@@ -547,10 +552,6 @@ class SalesforceEmailSyncService:
                 if response.status_code == 401:
                     logger.info("Salesforce token expired during email send, refreshing...")
                     try:
-                        access_token, instance_url = await salesforce_oauth.get_access_token(
-                            db, integration_profile_id
-                        )
-                        # Force refresh by calling refresh directly
                         access_token = await salesforce_oauth.refresh_access_token(
                             db, integration_profile_id
                         )

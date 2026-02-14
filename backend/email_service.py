@@ -3,6 +3,7 @@ Email Service for sending reports and notifications
 Supports SendGrid (primary) with SMTP fallback
 """
 
+import asyncio
 import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -1329,8 +1330,9 @@ This invitation was sent by Perennia AI
             except Exception as sf_err:
                 logger.warning(f"SF email routing error, falling back to SendGrid: {sf_err}")
 
-        # Fallback to SendGrid/SMTP
-        return self.send_html_email(
+        # Fallback to SendGrid/SMTP — run in thread to avoid blocking event loop
+        return await asyncio.to_thread(
+            self.send_html_email,
             to_email=to_email,
             subject=subject,
             html_body=html_body,
