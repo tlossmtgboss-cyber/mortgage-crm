@@ -153,6 +153,8 @@ def _ensure_loans_columns():
             ("first_payment_date", "TIMESTAMP"),
             ("investor_purchased_date", "TIMESTAMP"),
             ("withdrawn_date", "TIMESTAMP"),
+            # Salesforce Sync - Identity
+            ("salesforce_id", "VARCHAR"),
             # Salesforce Sync - Property
             ("property_type", "VARCHAR"),
             ("occupancy_type", "VARCHAR"),

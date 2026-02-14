@@ -927,9 +927,19 @@ function SalesforceIntegrationPage() {
           </div>
           {importResults && (
             <div className="sf-import-results">
-              <p>Found: {importResults.total_found} | Imported: {importResults.imported} | Updated: {importResults.updated}</p>
+              <p>Found: {importResults.total_found} | Imported: {importResults.imported} | Updated: {importResults.updated}{importResults.failed ? ` | Failed: ${importResults.failed}` : ''}</p>
               {importResults.mum_imported !== undefined && (
                 <p>MUM Clients: {importResults.mum_imported} added</p>
+              )}
+              {importResults.errors && importResults.errors.length > 0 && (
+                <details style={{marginTop: '8px', fontSize: '12px', color: '#c0392b'}}>
+                  <summary>Errors ({importResults.errors.length})</summary>
+                  <ul style={{maxHeight: '200px', overflow: 'auto', padding: '4px 16px'}}>
+                    {importResults.errors.map((err, i) => (
+                      <li key={i}>{typeof err === 'string' ? err : (err.error || err.name || JSON.stringify(err))}</li>
+                    ))}
+                  </ul>
+                </details>
               )}
             </div>
           )}

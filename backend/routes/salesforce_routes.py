@@ -2488,6 +2488,93 @@ async def get_import_job_status(job_id: str, request: Request, db: Session = Dep
     return job
 
 
+@router.post("/import-closed-loans/test-one")
+async def test_import_one_closed_loan(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Diagnostic: Try importing just ONE closed loan from Salesforce and return full details.
+    This runs synchronously so we can see exactly what happens.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        return {"error": "Authentication required"}
+
+    try:
+        from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
+        from database import SessionLocal
+
+        importer = SalesforceClosedLoansImporter(user_id=user_id)
+        test_db = SessionLocal()
+
+        try:
+            # Get org_id
+            user_row = test_db.execute(text(
+                "SELECT organization_id FROM users WHERE id = :uid"
+            ), {"uid": user_id}).fetchone()
+            importer.organization_id = user_row[0] if user_row else None
+
+            # Connect to Salesforce
+            importer.access_token, importer.instance_url = await importer.get_access_token(test_db)
+
+            # Discover fields
+            available_fields = await importer.discover_opportunity_fields()
+
+            # Build query but limit to 1
+            soql = importer.build_soql_query(available_fields)
+            soql = soql.replace('LIMIT 2000', 'LIMIT 1')
+
+            # Query one record
+            records = await importer.query_closed_opportunities(soql)
+            if not records:
+                return {"status": "no_records", "message": "No closed loans found in Salesforce"}
+
+            opp = records[0]
+
+            # Get valid columns
+            valid_cols = importer._get_valid_columns(test_db)
+
+            # Transform
+            loan_data = importer.transform_opportunity_to_loan(opp)
+            raw_keys = set(loan_data.keys())
+            filtered_data = {k: v for k, v in loan_data.items() if k in valid_cols}
+            removed_keys = raw_keys - set(filtered_data.keys())
+
+            # Try import
+            try:
+                loan_id = await importer.import_loan(test_db, loan_data)
+                test_db.commit()
+                result_status = "success"
+                result_error = None
+            except Exception as imp_err:
+                test_db.rollback()
+                result_status = "failed"
+                result_error = str(imp_err)
+                loan_id = None
+
+            return {
+                "status": result_status,
+                "sf_record_name": opp.get('Name'),
+                "sf_record_id": opp.get('Id'),
+                "sf_raw_fields": list(opp.keys())[:30],
+                "valid_db_columns_count": len(valid_cols),
+                "loan_data_keys": sorted(filtered_data.keys()),
+                "removed_keys": sorted(removed_keys),
+                "salesforce_id_in_valid_cols": 'salesforce_id' in valid_cols,
+                "loan_id": loan_id,
+                "error": result_error,
+                "importer_results": importer.results,
+            }
+
+        finally:
+            test_db.close()
+
+    except Exception as e:
+        logger.error(f"Test import failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 # ============ Diagnostic: Check Salesforce Imported Loans ============
 
 @router.get("/imported-loans-check")

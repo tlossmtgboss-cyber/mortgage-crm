@@ -426,9 +426,13 @@ class SalesforceClosedLoansImporter:
         salesforce_id = loan_data.get('salesforce_id')
         loan_number = loan_data.get('loan_number')
 
-        # Check if loan already exists
+        # Remove fields that don't exist in the actual DB table FIRST
+        valid_columns = self._get_valid_columns(db)
+        loan_data = {k: v for k, v in loan_data.items() if k in valid_columns}
+
+        # Check if loan already exists (use valid column checks)
         existing = None
-        if salesforce_id:
+        if salesforce_id and 'salesforce_id' in valid_columns:
             existing = db.execute(text("""
                 SELECT id FROM loans WHERE salesforce_id = :sf_id
             """), {"sf_id": salesforce_id}).fetchone()
@@ -438,18 +442,14 @@ class SalesforceClosedLoansImporter:
                 SELECT id FROM loans WHERE loan_number = :loan_num
             """), {"loan_num": loan_number}).fetchone()
 
-        # Remove fields that don't exist in the actual DB table
-        valid_columns = self._get_valid_columns(db)
-        loan_data = {k: v for k, v in loan_data.items() if k in valid_columns}
-
         if existing:
             # Update existing loan
             loan_id = existing[0]
 
-            # Build SET clause
+            # Build SET clause — exclude id and loan_number from updates
             set_parts = []
             for key in loan_data.keys():
-                if key != 'loan_number':  # Don't update loan_number
+                if key not in ('loan_number', 'id'):
                     set_parts.append(f"{key} = :{key}")
 
             if set_parts:
