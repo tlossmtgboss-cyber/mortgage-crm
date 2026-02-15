@@ -2214,87 +2214,58 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
         if also_import_to_mum:
             db = SessionLocal()
             try:
-                # Get funded loans not already in mum_clients (use flexible ILIKE matching)
-                funded_loans = db.execute(text("""
-                    SELECT l.id, l.loan_number, l.borrower_name,
-                           l.borrower_email, l.borrower_phone, l.amount, l.rate,
-                           l.funded_date, l.closing_date, l.property_address,
-                           l.property_city, l.property_state, l.property_zip,
-                           l.loan_type, l.stage
+                # Use atomic INSERT...SELECT to avoid rollback bug where per-row
+                # db.rollback() destroys ALL previous uncommitted inserts
+                mum_result = db.execute(text("""
+                    INSERT INTO mum_clients (
+                        client_name, loan_number, original_close_date,
+                        original_rate, loan_balance,
+                        original_loan_amount, current_loan_amount,
+                        interest_rate, appraisal_value_at_closing,
+                        current_property_value, closing_date, first_payment_date,
+                        status, engagement_score, created_at, user_id
+                    )
+                    SELECT
+                        COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
+                        l.loan_number,
+                        COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
+                        COALESCE(l.rate, 0),
+                        COALESCE(l.amount, 0),
+                        COALESCE(l.amount, 0),
+                        COALESCE(l.amount, 0),
+                        COALESCE(l.rate, 0),
+                        COALESCE(l.amount * 1.25, 0),
+                        COALESCE(l.amount * 1.25, 0),
+                        COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
+                        COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
+                        'active',
+                        50,
+                        CURRENT_TIMESTAMP,
+                        :user_id
                     FROM loans l
                     WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                            OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                            OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                            OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                            OR l.funded_date IS NOT NULL)
+                    AND l.loan_number IS NOT NULL
                     AND NOT EXISTS (
                         SELECT 1 FROM mum_clients m
                         WHERE m.loan_number = l.loan_number
                     )
-                """)).fetchall()
+                """), {'user_id': user_id})
 
-                logger.info(f"Found {len(funded_loans)} funded loans to import to MUM clients")
-
-                for loan in funded_loans:
-                    try:
-                        # Build client name (indices: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date)
-                        client_name = loan[2]  # borrower_name
-                        if not client_name:
-                            client_name = f"Client - {loan[1]}"  # loan_number
-
-                        # Get closing date
-                        close_date = loan[7] or loan[8]  # funded_date or closing_date
-
-                        # Insert into mum_clients
-                        loan_amount = float(loan[5]) if loan[5] else 0
-                        loan_rate = float(loan[6]) if loan[6] else 0
-                        db.execute(text("""
-                            INSERT INTO mum_clients (
-                                client_name, loan_number, original_close_date,
-                                original_rate, loan_balance,
-                                original_loan_amount, current_loan_amount,
-                                interest_rate, appraisal_value_at_closing,
-                                current_property_value, closing_date, first_payment_date,
-                                status, engagement_score, created_at, user_id
-                            ) VALUES (
-                                :client_name, :loan_number, :close_date,
-                                :rate, :balance,
-                                :original_loan_amount, :current_loan_amount,
-                                :interest_rate, :appraisal_value,
-                                :property_value, :closing_date, :first_payment_date,
-                                'active', 50, CURRENT_TIMESTAMP, :user_id
-                            )
-                        """), {
-                            'client_name': client_name,
-                            'loan_number': loan[1],
-                            'close_date': close_date,
-                            'rate': loan_rate,
-                            'balance': loan_amount,
-                            'original_loan_amount': loan_amount,
-                            'current_loan_amount': loan_amount,
-                            'interest_rate': loan_rate,
-                            'appraisal_value': loan_amount * 1.25,  # Estimate 80% LTV
-                            'property_value': loan_amount * 1.25,
-                            'closing_date': close_date,
-                            'first_payment_date': close_date,
-                            'user_id': user_id,
-                        })
-                        mum_results['imported'] += 1
-
-                    except Exception as e:
-                        mum_results['errors'].append(f"MUM import - Loan {loan[1]}: {str(e)}")
-                        logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
-                        try:
-                            db.rollback()  # Reset transaction so next insert can proceed
-                        except Exception:
-                            pass
-
+                mum_results['imported'] = mum_result.rowcount
                 db.commit()
                 logger.info(f"Imported {mum_results['imported']} loans to MUM clients")
 
             except Exception as e:
                 logger.error(f"MUM import phase failed: {e}")
                 mum_results['errors'].append(f"MUM import failed: {str(e)}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
             finally:
                 db.close()
 
@@ -3013,101 +2984,60 @@ async def import_funded_loans_to_mum(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     try:
-        results = {'imported': 0, 'skipped': 0, 'errors': []}
-
-        # Get funded loans not already in mum_clients
-        # Columns: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date
-        funded_loans = db.execute(text("""
-            SELECT l.id, l.loan_number, l.borrower_name,
-                   l.borrower_email, l.borrower_phone, l.amount, l.rate,
-                   l.funded_date, l.closing_date, l.property_address,
-                   l.property_city, l.property_state, l.property_zip,
-                   l.loan_type, l.stage
+        # Use a single atomic INSERT...SELECT to avoid the rollback bug where
+        # per-row exception handling with db.rollback() destroys ALL previous
+        # uncommitted inserts in the transaction (not just the failed row).
+        result = db.execute(text("""
+            INSERT INTO mum_clients (
+                client_name, loan_number, original_close_date,
+                original_rate, loan_balance,
+                original_loan_amount, current_loan_amount,
+                interest_rate, appraisal_value_at_closing,
+                current_property_value, closing_date, first_payment_date,
+                status, engagement_score, created_at, user_id
+            )
+            SELECT
+                COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
+                l.loan_number,
+                COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
+                COALESCE(l.rate, 0),
+                COALESCE(l.amount, 0),
+                COALESCE(l.amount, 0),
+                COALESCE(l.amount, 0),
+                COALESCE(l.rate, 0),
+                COALESCE(l.amount * 1.25, 0),
+                COALESCE(l.amount * 1.25, 0),
+                COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
+                COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
+                'active',
+                50,
+                CURRENT_TIMESTAMP,
+                :user_id
             FROM loans l
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
+            AND l.loan_number IS NOT NULL
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number
             )
-        """)).fetchall()
+        """), {'user_id': user_id})
 
-        logger.info(f"Found {len(funded_loans)} funded loans to import to MUM clients")
-
-        imported_clients = []
-
-        for loan in funded_loans:
-            try:
-                # Build client name
-                client_name = loan[2]  # borrower_name
-                if not client_name:
-                    client_name = f"Client - {loan[1]}"  # loan_number
-
-                # Get closing date
-                close_date = loan[7] or loan[8]  # funded_date or closing_date
-                loan_amount = float(loan[5]) if loan[5] else 0
-                loan_rate = float(loan[6]) if loan[6] else 0
-
-                # Insert into mum_clients
-                db.execute(text("""
-                    INSERT INTO mum_clients (
-                        client_name, loan_number, original_close_date,
-                        original_rate, loan_balance,
-                        original_loan_amount, current_loan_amount,
-                        interest_rate, appraisal_value_at_closing,
-                        current_property_value, closing_date, first_payment_date,
-                        status, engagement_score, created_at, user_id
-                    ) VALUES (
-                        :client_name, :loan_number, :close_date,
-                        :rate, :balance,
-                        :original_loan_amount, :current_loan_amount,
-                        :interest_rate, :appraisal_value,
-                        :property_value, :closing_date, :first_payment_date,
-                        'active', 50, CURRENT_TIMESTAMP, :user_id
-                    )
-                """), {
-                    'client_name': client_name,
-                    'loan_number': loan[1],
-                    'close_date': close_date,
-                    'rate': loan_rate,
-                    'balance': loan_amount,
-                    'original_loan_amount': loan_amount,
-                    'current_loan_amount': loan_amount,
-                    'interest_rate': loan_rate,
-                    'appraisal_value': loan_amount * 1.25,
-                    'property_value': loan_amount * 1.25,
-                    'closing_date': close_date,
-                    'first_payment_date': close_date,
-                    'user_id': user_id,
-                })
-
-                results['imported'] += 1
-                imported_clients.append({
-                    'name': client_name,
-                    'loan_number': loan[1],
-                    'amount': loan_amount
-                })
-
-            except Exception as e:
-                results['errors'].append(f"Loan {loan[1]}: {str(e)}")
-                logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
-                try:
-                    db.rollback()  # Reset transaction so next insert can proceed
-                except Exception:
-                    pass
-
+        imported_count = result.rowcount
         db.commit()
+
+        logger.info(f"Imported {imported_count} funded loans to MUM clients for user {user_id}")
 
         return {
             "status": "success",
-            "message": f"Imported {results['imported']} funded loans to MUM clients",
-            "imported": results['imported'],
-            "skipped": results['skipped'],
-            "errors": results['errors'][:20],
-            "clients": imported_clients[:50]
+            "message": f"Imported {imported_count} funded loans to MUM clients",
+            "imported": imported_count,
+            "skipped": 0,
+            "errors": [],
+            "clients": []
         }
 
     except SQLAlchemyError as e:

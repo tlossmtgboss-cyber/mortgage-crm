@@ -2994,38 +2994,43 @@ async def full_sync_pipeline(
         results["sync"] = {"status": "error", "error": "Internal server error"[:100]}
         results["success"] = False
 
-    # Step 3: Sync funded loans to MUM
+    # Step 3: Sync funded loans to MUM (with user_id so records are visible)
     try:
         mum_result = db.execute(text("""
             INSERT INTO mum_clients (
                 client_name, loan_number, original_close_date, closing_date,
                 first_payment_date, interest_rate, original_loan_amount,
                 current_loan_amount, appraisal_value_at_closing, current_property_value,
-                original_rate, loan_balance, status, engagement_score, salesforce_id, created_at
+                original_rate, loan_balance, status, engagement_score, salesforce_id,
+                created_at, user_id
             )
             SELECT
                 COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
                 l.loan_number,
                 COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                 COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
-                COALESCE(l.funded_date, l.closing_date, CURRENT_DATE) + INTERVAL '30 days',
+                COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                 COALESCE(l.rate, 0),
                 COALESCE(l.amount, 0),
                 COALESCE(l.amount, 0),
-                COALESCE(l.appraisal_value, l.amount, 0),
-                COALESCE(l.appraisal_value, l.amount, 0),
-                l.rate,
-                l.amount,
+                COALESCE(l.amount * 1.25, 0),
+                COALESCE(l.amount * 1.25, 0),
+                COALESCE(l.rate, 0),
+                COALESCE(l.amount, 0),
                 'active',
                 50,
                 l.salesforce_id,
-                CURRENT_TIMESTAMP
+                CURRENT_TIMESTAMP,
+                :user_id
             FROM loans l
-            WHERE (l.stage::text ILIKE '%fund%' OR l.stage::text ILIKE '%closed%' OR l.funded_date IS NOT NULL)
+            WHERE (l.stage::text ILIKE '%fund%'
+                   OR (l.stage::text ILIKE '%closed%' AND l.stage::text NOT ILIKE '%disclosed%')
+                   OR l.funded_date IS NOT NULL)
+            AND l.loan_number IS NOT NULL
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number
             )
-        """))
+        """), {'user_id': user_id})
         db.commit()
         results["mum_sync"] = {"status": "success", "imported": mum_result.rowcount}
     except SQLAlchemyError as e:
