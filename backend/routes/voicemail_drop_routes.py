@@ -598,14 +598,14 @@ async def send_voicemail_via_vapi(
                     # Don't retry client errors (4xx)
                     if 400 <= response.status_code < 500:
                         logger.error(f"Vapi API client error (no retry): {error_msg}")
-                        raise HTTPException(status_code=500, detail=f"Vapi error: {error_msg}")
+                        raise HTTPException(status_code=500, detail="Voice call initiation failed")
                     # Retry server errors (5xx)
                     logger.warning(f"Vapi API server error (attempt {attempt + 1}/{max_retries}): {error_msg}")
                     last_error = error_msg
                     if attempt < max_retries - 1:
                         await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
                         continue
-                    raise HTTPException(status_code=500, detail=f"Vapi error after {max_retries} attempts: {error_msg}")
+                    raise HTTPException(status_code=500, detail="Voice call initiation failed after retries")
 
                 result = response.json()
                 call_id = result.get("id")
@@ -939,7 +939,7 @@ async def transcribe_voice_message(
             if response.status_code != 200:
                 error_msg = response.text
                 logger.error(f"Whisper API error: {error_msg}")
-                raise HTTPException(status_code=500, detail=f"Transcription failed: {error_msg}")
+                raise HTTPException(status_code=500, detail="Transcription failed")
 
             result = response.json()
             transcription = result.get("text", "")
@@ -1338,7 +1338,7 @@ async def send_voicemail_ringless(
             if not lines or lines[0].upper() != "OK":
                 error_msg = body[:300]
                 logger.error(f"Slybroadcast error for drop {voicemail_drop_id}: {error_msg}")
-                raise HTTPException(status_code=502, detail=f"Slybroadcast: {error_msg}")
+                raise HTTPException(status_code=502, detail="Voicemail delivery service error")
 
             # Second line is session_id (may be "session_id=12345" or just "12345")
             raw_session = lines[1] if len(lines) > 1 else ""

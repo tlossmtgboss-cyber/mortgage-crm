@@ -531,8 +531,10 @@ async def salesforce_callback(
                     return RedirectResponse(url=f"{return_url}?salesforce=connected")
                 except ValueError as e:
                     logger.error(f"OAuth callback error: {e}")
+                    from urllib.parse import urlencode
+                    safe_msg = str(e)[:100].replace("\r", "").replace("\n", "")
                     return RedirectResponse(
-                        url=f"{frontend_url}/settings/integrations?error=salesforce_auth_failed&message={str(e)}"
+                        url=f"{frontend_url}/settings/integrations?error=salesforce_auth_failed&{urlencode({'message': safe_msg})}"
                     )
             else:
                 # State not found in oauth_states - check if it's a long hex token that should have been there

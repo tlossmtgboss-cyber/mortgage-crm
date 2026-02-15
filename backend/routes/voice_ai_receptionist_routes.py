@@ -397,7 +397,7 @@ async def drop_voicemail(
                     voicemail_drop.status = 'failed'
                     voicemail_drop.error_message = f"Zapier error: {error_msg}"
                     db.commit()
-                    raise HTTPException(status_code=500, detail=f"Zapier webhook error: {error_msg}")
+                    raise HTTPException(status_code=500, detail="Voicemail delivery failed via webhook")
 
                 # Zapier webhook triggered successfully
                 session_id = f"zapier_{voicemail_drop.id}"
@@ -526,7 +526,7 @@ async def drop_voicemail(
                     voicemail_drop.error_message = error_msg
                     db.commit()
                     logger.error(f"Slybroadcast error: {error_msg}")
-                    raise HTTPException(status_code=500, detail=f"Slybroadcast error: {error_msg}")
+                    raise HTTPException(status_code=500, detail="Voicemail delivery failed")
                 else:
                     # Unexpected response
                     error_msg = str(sly_data)
@@ -534,7 +534,7 @@ async def drop_voicemail(
                     voicemail_drop.error_message = error_msg
                     db.commit()
                     logger.error(f"Unexpected Slybroadcast response: {error_msg}")
-                    raise HTTPException(status_code=500, detail=f"Unexpected Slybroadcast response: {error_msg}")
+                    raise HTTPException(status_code=500, detail="Voicemail delivery returned unexpected response")
 
         else:
             # VAPI FALLBACK (will ring the phone)
@@ -570,7 +570,7 @@ async def drop_voicemail(
                 if vapi_response.status_code not in [200, 201]:
                     error_msg = vapi_response.text
                     logger.error(f"Vapi error: {error_msg}")
-                    raise HTTPException(status_code=500, detail=f"Vapi error: {error_msg}")
+                    raise HTTPException(status_code=500, detail="Voice call initiation failed")
 
                 vapi_data = vapi_response.json()
                 session_id = vapi_data.get("id")

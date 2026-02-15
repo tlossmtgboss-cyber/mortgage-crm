@@ -1121,7 +1121,7 @@ async def track_conversion(
         )
     except Exception as e:
         logger.error(f"Conversion tracking failed: {e}")
-        raise HTTPException(500, f"Failed to track conversion: {e}")
+        raise HTTPException(500, "Failed to track conversion")
 
 
 @router.get("/conversions/{lead_id}")
@@ -1467,4 +1467,4 @@ async def run_migration(
 
     except SQLAlchemyError as e:
         logger.error(f"Migration failed: {e}")
-        raise HTTPException(500, f"Migration failed: {e}")
+        raise HTTPException(500, "Migration failed. Check server logs.")
