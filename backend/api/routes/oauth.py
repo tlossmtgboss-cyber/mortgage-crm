@@ -112,8 +112,9 @@ async def microsoft_callback(
     # Handle errors from Microsoft
     if error:
         logger.error(f"Microsoft OAuth error: {error} - {error_description}")
+        safe_msg = (error_description or "Authentication failed")[:100].replace("\r", "").replace("\n", "")
         return RedirectResponse(
-            url=f"{FRONTEND_URL}/settings?integration=microsoft&status=error&message={error_description}"
+            url=f"{FRONTEND_URL}/settings?integration=microsoft&status=error&{urlencode({'message': safe_msg})}"
         )
 
     # Parse state to get user_id and redirect info

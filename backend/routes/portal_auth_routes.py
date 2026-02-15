@@ -63,6 +63,20 @@ SESSION_COOKIE_DOMAIN = os.getenv('SESSION_COOKIE_DOMAIN', None)
 SESSION_COOKIE_SECURE = os.getenv('ENVIRONMENT', 'development') == 'production'
 
 
+def _safe_portal_redirect(redirect: Optional[str], workspace_slug: str) -> str:
+    """Validate redirect URL — only allow relative /portal/ paths."""
+    default = f"/portal/{workspace_slug}"
+    if not redirect:
+        return default
+    # Block absolute URLs, protocol-relative, and special chars
+    if redirect.startswith("//") or redirect.startswith("http") or "@" in redirect or "\\" in redirect:
+        return default
+    # Only allow paths under /portal/
+    if redirect.startswith("/portal/"):
+        return redirect
+    return default
+
+
 # =============================================================================
 # REQUEST/RESPONSE MODELS
 # =============================================================================
@@ -386,7 +400,7 @@ async def verify_magic_link(
                 "last_name": token_record[9],
                 "email": token_record[10],
             },
-            redirect_url=redirect or f"/portal/{workspace_slug}"
+            redirect_url=_safe_portal_redirect(redirect, workspace_slug)
         )
 
         # Set session cookie

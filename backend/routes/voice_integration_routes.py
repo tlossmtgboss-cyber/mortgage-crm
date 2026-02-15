@@ -74,16 +74,18 @@ async def voice_transcribe(
             temp_file.write(audio_bytes)
             temp_path = temp_file.name
 
-        # Transcribe with Whisper
-        with open(temp_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                response_format="text"
-            )
-
-        # Clean up temp file
-        os.unlink(temp_path)
+        try:
+            # Transcribe with Whisper
+            with open(temp_path, "rb") as audio_file:
+                transcript = client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file,
+                    response_format="text"
+                )
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
 
         return {
             "transcript": transcript,
@@ -132,13 +134,16 @@ async def voice_chat(
                 temp_file.write(audio_bytes)
                 temp_path = temp_file.name
 
-            with open(temp_path, "rb") as audio_file:
-                transcript = client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="text"
-                )
-            os.unlink(temp_path)
+            try:
+                with open(temp_path, "rb") as audio_file:
+                    transcript = client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio_file,
+                        response_format="text"
+                    )
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
             user_message = transcript
         elif text_input:
             user_message = text_input

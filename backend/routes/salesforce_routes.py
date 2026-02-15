@@ -2548,7 +2548,7 @@ async def test_import_one_closed_loan(
 
     except Exception as e:
         logger.error(f"Test import failed: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Import test failed. Check server logs for details."}
 
 
 # ============ Diagnostic: Check Salesforce Imported Loans ============
@@ -3601,7 +3601,7 @@ async def sync_all_loans_from_salesforce(
         if response.status_code != 200:
             error_text = response.text
             logger.error(f"Salesforce query failed: {error_text}")
-            raise HTTPException(status_code=500, detail=f"Salesforce query failed: {error_text[:200]}")
+            raise HTTPException(status_code=500, detail="Salesforce query failed. Check server logs for details.")
 
         sf_data = response.json()
         sf_records = sf_data.get("records", [])

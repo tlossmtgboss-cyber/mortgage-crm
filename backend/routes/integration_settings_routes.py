@@ -781,7 +781,7 @@ async def connect_integration(
                 if not hubspot_client.enabled:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=error_response("HubSpot integration not configured. Please set HUBSPOT_CLIENT_ID and HUBSPOT_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                        detail=error_response("HubSpot integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 # Get user_id for state parameter
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
@@ -801,7 +801,7 @@ async def connect_integration(
                 if not google_calendar_client.enabled:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=error_response("Google Calendar integration not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                        detail=error_response("Google Calendar integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
@@ -820,7 +820,7 @@ async def connect_integration(
                 if not zoom_client.enabled:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=error_response("Zoom integration not configured. Please set ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                        detail=error_response("Zoom integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
@@ -839,7 +839,7 @@ async def connect_integration(
                 if not slack_client.enabled:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=error_response("Slack integration not configured. Please set SLACK_CLIENT_ID and SLACK_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                        detail=error_response("Slack integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
@@ -858,7 +858,7 @@ async def connect_integration(
                 if not docusign_client.enabled:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=error_response("DocuSign integration not configured. Please set DOCUSIGN_CLIENT_ID and DOCUSIGN_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                        detail=error_response("DocuSign integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
@@ -877,7 +877,7 @@ async def connect_integration(
                 if not microsoft_outlook_client.enabled:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=error_response("Microsoft Outlook integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                        detail=error_response("Microsoft Outlook integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
@@ -896,7 +896,7 @@ async def connect_integration(
                 if not microsoft_outlook_client.enabled:
                     raise HTTPException(
                         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail=error_response("Microsoft Outlook integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET environment variables.", code="NOT_CONFIGURED")
+                        detail=error_response("Microsoft Outlook integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
                     )
                 user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
                 frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")

@@ -2031,7 +2031,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                         status_code=500,
                         detail=f"Cannot delete: still referenced by '{match.group(1)}'"
                     )
-            raise HTTPException(status_code=500, detail=f"Delete failed: {error_msg[:200]}")
+            raise HTTPException(status_code=500, detail="Delete failed due to existing references. Check server logs.")
 
 
     @app.post("/api/v1/admin/cleanup-sample-users")
