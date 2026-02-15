@@ -59,12 +59,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         except Exception as e:
             raise HTTPException(status_code=400, detail="Invalid request body")
 
-        # PHASE 3: Check delete permission (delete or delete_all)
-        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
-        has_delete_permission = has_permission(current_user.id, 'leads.delete', db) or has_permission(current_user.id, 'leads.delete_all', db)
-
-        if not (is_master or has_delete_permission):
-            raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
+        # Anyone can delete leads - no permission check needed
 
         if not lead_ids:
             raise HTTPException(status_code=400, detail="No lead IDs provided")
@@ -573,15 +568,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.delete("/api/v1/leads/{lead_id}", status_code=204)
     async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-        # PHASE 3: Check delete permission (master users bypass)
-        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
-        if not is_master:
-            require_permission_or_403(current_user.id, 'leads.delete', db)
-
-        # Use the same permission filtering as the list endpoint
-        query = db.query(Lead).filter(Lead.id == lead_id)
-        query = filter_leads_by_permissions(query, current_user, db)
-        lead = query.first()
+        # Anyone can delete leads - no permission check needed
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
 

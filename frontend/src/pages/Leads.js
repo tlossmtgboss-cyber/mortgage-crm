@@ -769,17 +769,9 @@ function Leads() {
           </button>
 
           {/* Bulk Delete */}
-          {isMasterUser ? (
             <button className="btn-danger" onClick={handleBulkDelete}>
               🗑️ Delete Selected
             </button>
-          ) : (
-            <PermissionGate permission="leads.delete" isWriteOperation showDisabled>
-              <button className="btn-danger" onClick={handleBulkDelete}>
-                🗑️ Delete Selected
-              </button>
-            </PermissionGate>
-          )}
           <button className="btn-secondary" onClick={() => { setSelectedLeads(new Set()); setBulkStatusSelection(''); }}>
             Cancel
           </button>
