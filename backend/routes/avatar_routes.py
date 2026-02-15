@@ -536,6 +536,8 @@ def _check_dev_only():
 async def test_create_avatar(
     name: str = Query(..., description="Avatar name"),
     description: str = Query("", description="Avatar description"),
+    user_id: int = Query(1, description="User ID for test avatar"),
+    organization_id: int = Query(1, description="Organization ID for test avatar"),
     db: Session = Depends(get_db)
 ):
     """Create a test avatar without authentication (for development/testing)."""
@@ -546,8 +548,8 @@ async def test_create_avatar(
         profile = avatar_service.create_profile(
             db=db,
             data=data,
-            user_id=1,  # Default test user
-            organization_id=1
+            user_id=user_id,
+            organization_id=organization_id
         )
         return {"success": True, "avatar": profile, "message": "Test avatar created"}
     except Exception as e:

@@ -66,6 +66,38 @@ def get_filter_leads_by_permissions():
 
 
 # ============================================================================
+# ORG-SCOPED QUERY HELPERS (Multi-tenant IDOR prevention)
+# ============================================================================
+
+def _org_scoped_lead(db, lead_id, current_user):
+    """Query Lead by ID scoped to the current user's organization."""
+    import main
+    Lead = main.Lead
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        query = query.filter(Lead.organization_id == org_id)
+    return query.first()
+
+
+def _org_scoped_loan(db, loan_id, current_user):
+    """Query Loan by ID scoped to the current user's organization."""
+    import main
+    Loan = main.Loan
+    query = db.query(Loan).filter(Loan.id == loan_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        query = query.filter(Loan.organization_id == org_id)
+    return query.first()
+
+
+def _org_scoped_document_filter(current_user):
+    """Return an org_id filter value for raw SQL document queries, or None if no scoping needed."""
+    org_id = getattr(current_user, 'organization_id', None)
+    return org_id if org_id else None
+
+
+# ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
 
@@ -158,10 +190,11 @@ class UpdateMatchRequest(BaseModel):
 # ============================================================================
 
 @router.get("/workflows/test")
-async def test_workflow_system(db: Session = Depends(get_db)):
+async def test_workflow_system(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Test the workflow automation system"""
-    import main
-    current_user = Depends(main.get_current_user)
 
     try:
         from workflows.workflow_engine import LeadWorkflowEngine, TimeBasedWorkflowEngine, WorkflowActionExecutor
@@ -193,19 +226,15 @@ async def test_workflow_system(db: Session = Depends(get_db)):
 async def test_status_change_workflow(
     lead_id: int,
     new_status: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """Test workflow by simulating a status change (dry run - does not update lead)"""
     import main
-    Lead = main.Lead
     LeadStatusChange = main.LeadStatusChange
 
-    # Get current user from dependency
-    current_user_dep = main.get_current_user
-    current_user = Depends(current_user_dep)
-
-    # Get the lead
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Get the lead (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -242,7 +271,10 @@ async def test_status_change_workflow(
 
 
 @router.post("/workflows/run-time-based")
-async def run_time_based_workflows_manual(db: Session = Depends(get_db)):
+async def run_time_based_workflows_manual(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Manually trigger time-based workflow checks"""
     from workflows.workflow_engine import TimeBasedWorkflowEngine, WorkflowActionExecutor
 
@@ -268,7 +300,10 @@ async def run_time_based_workflows_manual(db: Session = Depends(get_db)):
 
 
 @router.get("/workflows/status")
-async def get_workflow_status(db: Session = Depends(get_db)):
+async def get_workflow_status(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Get workflow automation status and recent executions"""
     import main
     LeadStage = main.LeadStage
@@ -303,18 +338,17 @@ async def get_workflow_status(db: Session = Depends(get_db)):
 # ============================================================================
 
 @router.get("/leads/{lead_id}/stage-history")
-async def get_lead_stage_history(lead_id: int, db: Session = Depends(get_db)):
+async def get_lead_stage_history(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Get the complete stage history for a lead"""
     import main
-    Lead = main.Lead
     StageHistory = main.StageHistory
-    filter_leads_by_permissions = main.filter_leads_by_permissions
-    current_user = Depends(main.get_current_user_flexible)
 
-    # Verify lead exists and user has access
-    query = db.query(Lead).filter(Lead.id == lead_id)
-    # Note: In actual use, filter_leads_by_permissions would need current_user
-    lead = query.first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -343,13 +377,16 @@ async def get_lead_stage_history(lead_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/leads/{lead_id}/chat-messages")
-async def get_lead_chat_messages(lead_id: int, limit: int = 50, db: Session = Depends(get_db)):
+async def get_lead_chat_messages(
+    lead_id: int,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Get Sarah AI chat messages associated with a lead"""
-    import main
-    Lead = main.Lead
 
-    # Verify lead exists and user has access
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -460,13 +497,15 @@ async def get_lead_chat_messages(lead_id: int, limit: int = 50, db: Session = De
 
 
 @router.get("/leads/{lead_id}/circle-contacts")
-async def get_lead_circle_contacts(lead_id: int, db: Session = Depends(get_db)):
+async def get_lead_circle_contacts(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Get the circle of cash flow contacts for a lead (trusted professionals from questionnaire)"""
-    import main
-    Lead = main.Lead
 
-    # Verify lead exists and user has access
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -506,13 +545,15 @@ async def get_lead_circle_contacts(lead_id: int, db: Session = Depends(get_db)):
 # ============================================================================
 
 @router.get("/leads/{lead_id}/conditions")
-async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db)):
+async def get_lead_conditions(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Get all conditions/needs list items for a lead"""
-    import main
-    Lead = main.Lead
 
-    # Verify lead exists and user has access
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -611,13 +652,16 @@ async def get_lead_conditions(lead_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/leads/{lead_id}/conditions")
-async def create_lead_condition(lead_id: int, condition: ConditionCreate, db: Session = Depends(get_db)):
+async def create_lead_condition(
+    lead_id: int,
+    condition: ConditionCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Create a new condition/needs list item for a lead"""
-    import main
-    Lead = main.Lead
 
-    # Verify lead exists and user has access
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -635,7 +679,7 @@ async def create_lead_condition(lead_id: int, condition: ConditionCreate, db: Se
             "priority": condition.priority,
             "due_date": condition.due_date if condition.due_date else None,
             "status": condition.status,
-            "created_by": 1  # Default user ID
+            "created_by": getattr(current_user, 'id', 1)
         })
         db.commit()
 
@@ -681,13 +725,17 @@ async def create_lead_condition(lead_id: int, condition: ConditionCreate, db: Se
 
 
 @router.patch("/leads/{lead_id}/conditions/{condition_id}")
-async def update_lead_condition(lead_id: int, condition_id: int, condition_update: ConditionUpdate, db: Session = Depends(get_db)):
+async def update_lead_condition(
+    lead_id: int,
+    condition_id: int,
+    condition_update: ConditionUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Update a condition status"""
-    import main
-    Lead = main.Lead
 
-    # Verify lead exists and user has access
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -741,13 +789,16 @@ async def update_lead_condition(lead_id: int, condition_id: int, condition_updat
 
 
 @router.delete("/leads/{lead_id}/conditions/{condition_id}")
-async def delete_lead_condition(lead_id: int, condition_id: int, db: Session = Depends(get_db)):
+async def delete_lead_condition(
+    lead_id: int,
+    condition_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Delete a condition"""
-    import main
-    Lead = main.Lead
 
-    # Verify lead exists and user has access
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -770,14 +821,17 @@ async def delete_lead_condition(lead_id: int, condition_id: int, db: Session = D
 
 
 @router.get("/leads/{lead_id}/team-assignments")
-async def get_lead_team_assignments(lead_id: int, db: Session = Depends(get_db)):
+async def get_lead_team_assignments(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Get team assignments for a lead including owner, processor, and other assigned team members"""
     import main
-    Lead = main.Lead
     User = main.User
 
-    # Verify lead exists and user has access
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -839,13 +893,17 @@ async def get_lead_team_assignments(lead_id: int, db: Session = Depends(get_db))
 
 
 @router.get("/loans/{loan_id}/stage-history")
-async def get_loan_stage_history(loan_id: int, db: Session = Depends(get_db)):
+async def get_loan_stage_history(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """Get the complete stage history for a loan"""
     import main
-    Loan = main.Loan
     StageHistory = main.StageHistory
 
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    # Verify loan exists and user has access (org-scoped)
+    loan = _org_scoped_loan(db, loan_id, current_user)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -883,7 +941,8 @@ async def get_rate_lock_analysis(
     loan_id: int,
     mbs_change_bps: Optional[float] = Query(None, description="MBS price change in basis points"),
     treasury_10y_change_bps: Optional[float] = Query(None, description="10Y Treasury change in basis points"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Get comprehensive rate lock analysis for a loan.
@@ -895,12 +954,10 @@ async def get_rate_lock_analysis(
     - Float-down opportunities
     - Extension strategy if lock is expiring
     """
-    import main
-    Loan = main.Loan
-
     from workflows.rate_lock_engine import RateLockIntelligenceEngine
 
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    # Verify loan exists and user has access (org-scoped)
+    loan = _org_scoped_loan(db, loan_id, current_user)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -938,7 +995,8 @@ async def execute_rate_lock_action(
     loan_id: int,
     action: str = Query(..., description="Action: lock, float, extend, relock"),
     lock_term_days: Optional[int] = Query(None, description="Lock term in days (for lock action)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Execute a rate lock action on a loan.
@@ -950,13 +1008,13 @@ async def execute_rate_lock_action(
     - relock: Relock after expiration
     """
     import main
-    Loan = main.Loan
     RateLockStatus = main.RateLockStatus
     RateLockRecommendation = main.RateLockRecommendation
 
     from workflows.rate_lock_engine import RateLockIntelligenceEngine
 
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    # Verify loan exists and user has access (org-scoped)
+    loan = _org_scoped_loan(db, loan_id, current_user)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -1127,10 +1185,11 @@ async def get_rate_lock_dashboard(
                 "priority": "critical"
             })
 
-    # Get loans with high volatility scores
-    high_volatility_loans = db.query(Loan).filter(
-        Loan.volatility_score >= 70
-    ).all()
+    # Get loans with high volatility scores (org-scoped)
+    high_vol_query = db.query(Loan).filter(Loan.volatility_score >= 70)
+    if hasattr(current_user, 'organization_id') and current_user.organization_id:
+        high_vol_query = high_vol_query.filter(Loan.organization_id == current_user.organization_id)
+    high_volatility_loans = high_vol_query.all()
 
     for loan in high_volatility_loans:
         if not any(a["loan_id"] == loan.id for a in attention_needed):
@@ -1157,7 +1216,8 @@ async def get_rate_lock_dashboard(
 async def bulk_rate_lock_analysis(
     mbs_change_bps: Optional[float] = Query(None, description="MBS price change in basis points"),
     treasury_10y_change_bps: Optional[float] = Query(None, description="10Y Treasury change in basis points"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Run rate lock analysis on all eligible loans.
@@ -1172,11 +1232,12 @@ async def bulk_rate_lock_analysis(
 
     from workflows.rate_lock_engine import RateLockIntelligenceEngine
 
-    # Get all loans in lockable stages
+    # Get all loans in lockable stages (org-scoped)
     lockable_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING, LoanStage.CONDITIONAL_APPROVAL, LoanStage.CTC]
-    loans = db.query(Loan).filter(
-        Loan.stage.in_(lockable_stages)
-    ).all()
+    query = db.query(Loan).filter(Loan.stage.in_(lockable_stages))
+    if hasattr(current_user, 'organization_id') and current_user.organization_id:
+        query = query.filter(Loan.organization_id == current_user.organization_id)
+    loans = query.all()
 
     results = {
         "lock_now": [],
@@ -1243,7 +1304,8 @@ async def bulk_rate_lock_analysis(
 async def trigger_lead_power_play(
     lead_id: int,
     request: PowerPlayTriggerRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Trigger the appropriate Power Play workflow for a lead.
@@ -1262,12 +1324,12 @@ async def trigger_lead_power_play(
     - manual: Manual trigger
     """
     import main
-    Lead = main.Lead
     Task = main.Task
 
     from workflows.power_play_engine import PowerPlayEngine
 
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Verify lead exists and user has access (org-scoped)
+    lead = _org_scoped_lead(db, lead_id, current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -1299,7 +1361,8 @@ async def trigger_lead_power_play(
 async def trigger_loan_power_play(
     loan_id: int,
     request: PowerPlayTriggerRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Trigger Under Contract Power Play for an active loan.
@@ -1314,12 +1377,12 @@ async def trigger_loan_power_play(
     - manual: Manual trigger
     """
     import main
-    Loan = main.Loan
     Task = main.Task
 
     from workflows.power_play_engine import PowerPlayEngine
 
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    # Verify loan exists and user has access (org-scoped)
+    loan = _org_scoped_loan(db, loan_id, current_user)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -1441,7 +1504,10 @@ async def get_power_play_dashboard(
 
 
 @router.post("/power-play/run-scheduled-touches")
-async def run_scheduled_touches(db: Session = Depends(get_db)):
+async def run_scheduled_touches(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """
     Run all scheduled touches that are due.
 
@@ -1521,7 +1587,8 @@ async def _execute_power_play_actions(actions: list, entity: Any, db: Session, T
 @router.post("/document-intake/process")
 async def process_inbound_email(
     email_data: EmailProcessRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Process an inbound email with attachments.
@@ -1554,7 +1621,10 @@ async def process_inbound_email(
 
 
 @router.get("/document-intake/pending")
-async def get_pending_intakes(db: Session = Depends(get_db)):
+async def get_pending_intakes(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """
     Get all email intakes with pending classifications.
 
@@ -1562,11 +1632,23 @@ async def get_pending_intakes(db: Session = Depends(get_db)):
     """
     import main
     EmailIntake = main.EmailIntake
+    Lead = main.Lead
+    Loan = main.Loan
     AttachmentClassificationStatus = main.AttachmentClassificationStatus
 
-    pending_intakes = db.query(EmailIntake).filter(
+    # Org-scope: EmailIntake doesn't have organization_id, so filter via matched borrower/loan
+    query = db.query(EmailIntake).filter(
         EmailIntake.processing_status == "processed"
-    ).options(
+    )
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        query = query.outerjoin(Lead, EmailIntake.matched_borrower_id == Lead.id).outerjoin(
+            Loan, EmailIntake.matched_loan_id == Loan.id
+        ).filter(
+            (Lead.organization_id == org_id) | (Loan.organization_id == org_id) |
+            ((EmailIntake.matched_borrower_id.is_(None)) & (EmailIntake.matched_loan_id.is_(None)))
+        )
+    pending_intakes = query.options(
         selectinload(EmailIntake.attachments),
         selectinload(EmailIntake.matched_borrower),
         selectinload(EmailIntake.matched_loan)
@@ -1603,12 +1685,18 @@ async def get_pending_intakes(db: Session = Depends(get_db)):
 
 
 @router.get("/document-intake/{intake_id}")
-async def get_email_intake(intake_id: int, db: Session = Depends(get_db)):
+async def get_email_intake(
+    intake_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """
     Get detailed information about an email intake and its attachments.
     """
     import main
     EmailIntake = main.EmailIntake
+    Lead = main.Lead
+    Loan = main.Loan
 
     intake = db.query(EmailIntake).filter(EmailIntake.id == intake_id).options(
         selectinload(EmailIntake.attachments),
@@ -1619,6 +1707,18 @@ async def get_email_intake(intake_id: int, db: Session = Depends(get_db)):
 
     if not intake:
         raise HTTPException(status_code=404, detail="Email intake not found")
+
+    # Org-scope: verify matched borrower/loan belongs to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        if intake.matched_borrower_id:
+            borrower = db.query(Lead).filter(Lead.id == intake.matched_borrower_id, Lead.organization_id == org_id).first()
+            if not borrower:
+                raise HTTPException(status_code=404, detail="Email intake not found")
+        if intake.matched_loan_id:
+            loan = db.query(Loan).filter(Loan.id == intake.matched_loan_id, Loan.organization_id == org_id).first()
+            if not loan:
+                raise HTTPException(status_code=404, detail="Email intake not found")
 
     return {
         "id": intake.id,
@@ -1673,7 +1773,8 @@ async def get_email_intake(intake_id: int, db: Session = Depends(get_db)):
 async def update_intake_match(
     intake_id: int,
     match_data: UpdateMatchRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Update the matched borrower/loan for an email intake.
@@ -1691,16 +1792,28 @@ async def update_intake_match(
     if not intake:
         raise HTTPException(status_code=404, detail="Email intake not found")
 
+    # Org-scope: verify existing matched entities belong to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        if intake.matched_borrower_id:
+            existing_borrower = db.query(Lead).filter(Lead.id == intake.matched_borrower_id, Lead.organization_id == org_id).first()
+            if not existing_borrower:
+                raise HTTPException(status_code=404, detail="Email intake not found")
+        if intake.matched_loan_id:
+            existing_loan = db.query(Loan).filter(Loan.id == intake.matched_loan_id, Loan.organization_id == org_id).first()
+            if not existing_loan:
+                raise HTTPException(status_code=404, detail="Email intake not found")
+
     if match_data.borrower_id is not None:
-        # Verify borrower exists
-        borrower = db.query(Lead).filter(Lead.id == match_data.borrower_id).first()
+        # Verify borrower exists (org-scoped)
+        borrower = _org_scoped_lead(db, match_data.borrower_id, current_user)
         if not borrower:
             raise HTTPException(status_code=400, detail="Borrower not found")
         intake.matched_borrower_id = match_data.borrower_id
 
     if match_data.loan_id is not None:
-        # Verify loan exists
-        loan = db.query(Loan).filter(Loan.id == match_data.loan_id).first()
+        # Verify loan exists (org-scoped)
+        loan = _org_scoped_loan(db, match_data.loan_id, current_user)
         if not loan:
             raise HTTPException(status_code=400, detail="Loan not found")
         intake.matched_loan_id = match_data.loan_id
@@ -1723,13 +1836,24 @@ async def update_intake_match(
 async def classify_attachment(
     attachment_id: int,
     classification: ClassifyAttachmentRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Classify an attachment and create a Document record.
 
     This is called when the user reviews an attachment and confirms its document type.
     """
+    # Org-scope: if borrower_id or loan_id provided, verify they belong to the user's org
+    if classification.borrower_id is not None:
+        borrower = _org_scoped_lead(db, classification.borrower_id, current_user)
+        if not borrower:
+            raise HTTPException(status_code=400, detail="Borrower not found")
+    if classification.loan_id is not None:
+        loan = _org_scoped_loan(db, classification.loan_id, current_user)
+        if not loan:
+            raise HTTPException(status_code=400, detail="Loan not found")
+
     from workflows.document_intake_engine import DocumentClassificationHandler
 
     handler = DocumentClassificationHandler(db)
@@ -1737,7 +1861,7 @@ async def classify_attachment(
     try:
         result = await handler.classify_attachment(
             attachment_id=attachment_id,
-            user_id=1,  # Default user
+            user_id=getattr(current_user, 'id', 1),
             doc_type=classification.doc_type,
             doc_category=classification.doc_category,
             borrower_id=classification.borrower_id,
@@ -1759,7 +1883,8 @@ async def classify_attachment(
 async def discard_attachment(
     attachment_id: int,
     discard_data: DiscardAttachmentRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Discard an attachment as irrelevant/junk.
@@ -1773,7 +1898,7 @@ async def discard_attachment(
     try:
         result = await handler.discard_attachment(
             attachment_id=attachment_id,
-            user_id=1,  # Default user
+            user_id=getattr(current_user, 'id', 1),
             reason=discard_data.reason
         )
         return result
@@ -1786,7 +1911,11 @@ async def discard_attachment(
 
 
 @router.post("/document-intake/tasks/{task_id}/complete")
-async def complete_classification_task(task_id: int, db: Session = Depends(get_db)):
+async def complete_classification_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """
     Complete a document classification task.
 
@@ -1799,7 +1928,7 @@ async def complete_classification_task(task_id: int, db: Session = Depends(get_d
     try:
         result = await handler.complete_classification_task(
             task_id=task_id,
-            user_id=1  # Default user
+            user_id=getattr(current_user, 'id', 1)
         )
         return result
     except ValueError as e:
@@ -1858,7 +1987,8 @@ async def get_documents(
     doc_category: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
 ):
     """
     Get documents with optional filtering.
@@ -1867,6 +1997,12 @@ async def get_documents(
     # Build query with raw SQL to bypass ORM enum validation
     conditions = ["status = 'active'"]
     params = {"limit_val": limit, "offset_val": offset}
+
+    # Org-scope: Document has organization_id
+    org_id = _org_scoped_document_filter(current_user)
+    if org_id:
+        conditions.append("organization_id = :org_id")
+        params["org_id"] = org_id
 
     if borrower_id:
         conditions.append("borrower_id = :borrower_id")
@@ -1924,21 +2060,35 @@ async def get_documents(
 
 
 @router.get("/documents/{document_id}")
-async def get_document(document_id: int, db: Session = Depends(get_db)):
+async def get_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """
     Get a single document by ID.
     Uses raw SQL to avoid enum validation issues with legacy data.
     """
-    query = text("""
+    # Org-scope: Document has organization_id
+    conditions = ["id = :doc_id"]
+    params = {"doc_id": document_id}
+
+    org_id = _org_scoped_document_filter(current_user)
+    if org_id:
+        conditions.append("organization_id = :org_id")
+        params["org_id"] = org_id
+
+    where_clause = " AND ".join(conditions)
+    query = text(f"""
         SELECT id, borrower_id, loan_id, doc_type, doc_category, filename,
                original_filename, file_size, mime_type, file_location,
                period_start_date, period_end_date, source, source_email_intake_id,
                status, notes, uploaded_at, updated_at
         FROM documents
-        WHERE id = :doc_id
+        WHERE {where_clause}
     """)
 
-    result = db.execute(query, {"doc_id": document_id}).first()
+    result = db.execute(query, params).first()
 
     if not result:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -1970,13 +2120,16 @@ async def get_document(document_id: int, db: Session = Depends(get_db)):
 # ============================================================================
 
 @router.post("/loans/{loan_id}/trigger-workflow")
-async def trigger_post_closing_workflow(loan_id: int, db: Session = Depends(get_db)):
+async def trigger_post_closing_workflow(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_flexible_dep()),
+):
     """
     Manually trigger the post-closing referral workflow for a loan.
     This analyzes the borrower's referral potential and creates appropriate tasks/tags.
     """
     import main
-    Loan = main.Loan
     Lead = main.Lead
 
     from workflows.post_closing_workflow import (
@@ -1986,16 +2139,23 @@ async def trigger_post_closing_workflow(loan_id: int, db: Session = Depends(get_
         calculate_referral_score
     )
 
-    # Get the loan
-    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    # Get the loan (org-scoped)
+    loan = _org_scoped_loan(db, loan_id, current_user)
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
-    # Find matching lead by borrower name
-    lead = db.query(Lead).filter(Lead.name == loan.borrower_name).first()
+    # Find matching lead by borrower name (org-scoped)
+    org_id = getattr(current_user, 'organization_id', None)
+    lead_query = db.query(Lead).filter(Lead.name == loan.borrower_name)
+    if org_id:
+        lead_query = lead_query.filter(Lead.organization_id == org_id)
+    lead = lead_query.first()
     if not lead:
-        # Try partial match
-        lead = db.query(Lead).filter(Lead.name.ilike(f"%{loan.borrower_name.split()[0]}%")).first()
+        # Try partial match (org-scoped)
+        lead_query = db.query(Lead).filter(Lead.name.ilike(f"%{loan.borrower_name.split()[0]}%"))
+        if org_id:
+            lead_query = lead_query.filter(Lead.organization_id == org_id)
+        lead = lead_query.first()
 
     if not lead:
         return {

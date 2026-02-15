@@ -1061,10 +1061,17 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             notes = args.get("notes")
 
             lead = None
+            org_id = getattr(current_user, 'organization_id', None)
             if lead_id:
-                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                query = db.query(Lead).filter(Lead.id == lead_id)
+                if org_id:
+                    query = query.filter(Lead.organization_id == org_id)
+                lead = query.first()
             elif lead_name:
-                lead = db.query(Lead).filter(Lead.name.ilike(f"%{lead_name}%")).first()
+                query = db.query(Lead).filter(Lead.name.ilike(f"%{lead_name}%"))
+                if org_id:
+                    query = query.filter(Lead.organization_id == org_id)
+                lead = query.first()
 
             if not lead:
                 return {"success": False, "error": "Lead not found"}
@@ -1083,12 +1090,22 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             borrower_name = args.get("borrower_name")
 
             loan = None
+            org_id = getattr(current_user, 'organization_id', None)
             if loan_id:
-                loan = db.query(Loan).filter(Loan.id == loan_id).first()
+                query = db.query(Loan).filter(Loan.id == loan_id)
+                if org_id:
+                    query = query.filter(Loan.organization_id == org_id)
+                loan = query.first()
             elif loan_number:
-                loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
+                query = db.query(Loan).filter(Loan.loan_number == loan_number)
+                if org_id:
+                    query = query.filter(Loan.organization_id == org_id)
+                loan = query.first()
             elif borrower_name:
-                loan = db.query(Loan).filter(Loan.borrower_name.ilike(f"%{borrower_name}%")).first()
+                query = db.query(Loan).filter(Loan.borrower_name.ilike(f"%{borrower_name}%"))
+                if org_id:
+                    query = query.filter(Loan.organization_id == org_id)
+                loan = query.first()
 
             if not loan:
                 return {"success": False, "error": "Loan not found"}
@@ -1113,10 +1130,17 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             lead_name = args.get("lead_name")
 
             lead = None
+            org_id = getattr(current_user, 'organization_id', None)
             if lead_id:
-                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                query = db.query(Lead).filter(Lead.id == lead_id)
+                if org_id:
+                    query = query.filter(Lead.organization_id == org_id)
+                lead = query.first()
             elif lead_name:
-                lead = db.query(Lead).filter(Lead.name.ilike(f"%{lead_name}%")).first()
+                query = db.query(Lead).filter(Lead.name.ilike(f"%{lead_name}%"))
+                if org_id:
+                    query = query.filter(Lead.organization_id == org_id)
+                lead = query.first()
 
             if not lead:
                 return {"success": False, "error": "Lead not found"}
@@ -2291,7 +2315,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if not lead_id:
                 return {"success": False, "error": "lead_id is required"}
 
-            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            org_id = getattr(current_user, 'organization_id', None)
+            query = db.query(Lead).filter(Lead.id == lead_id)
+            if org_id:
+                query = query.filter(Lead.organization_id == org_id)
+            lead = query.first()
             if not lead:
                 return {"success": False, "error": f"Lead not found: {lead_id}"}
 
@@ -3154,7 +3182,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         # Fetch profitability data for financial questions using ProfitabilityService
         try:
             from services.profitability_service import ProfitabilityService
-            profitability_service = ProfitabilityService(db, organization_id=1)  # Default org
+            profitability_service = ProfitabilityService(db, organization_id=getattr(current_user, 'organization_id', 1))
 
             # Get comprehensive dashboard metrics
             dashboard_metrics = profitability_service.get_dashboard_metrics(today)

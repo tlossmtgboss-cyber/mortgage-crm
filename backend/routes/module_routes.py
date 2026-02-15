@@ -439,6 +439,7 @@ async def run_module_migration(
 @router.get("/admin/check-users")
 async def check_users_debug(
     admin_key: str = Query(..., description="Admin API key"),
+    org_id: int = Query(1, description="Organization ID"),
 ):
     """Debug endpoint to check users and their organization associations."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -467,16 +468,16 @@ async def check_users_debug(
                 for row in result.fetchall()
             ]
 
-            # Get org modules for org 1
+            # Get org modules for specified org
             org_result = conn.execute(text("""
                 SELECT module_key, is_enabled FROM organization_modules
-                WHERE organization_id = 1
-            """))
+                WHERE organization_id = :org_id
+            """), {"org_id": org_id})
             org_modules = [{"key": r[0], "enabled": r[1]} for r in org_result.fetchall()]
 
             return {
                 "users": users,
-                "org_1_modules": org_modules
+                "org_modules": org_modules
             }
     except SQLAlchemyError as e:
         return {"error": "Internal server error"}

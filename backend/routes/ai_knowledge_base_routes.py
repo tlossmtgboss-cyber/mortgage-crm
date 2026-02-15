@@ -242,7 +242,7 @@ async def create_knowledge_entry(
         tags=entry.tags,
         priority=entry.priority or 5,
         created_by=current_user.id,
-        organization_id=1
+        organization_id=getattr(current_user, 'organization_id', 1)
     )
 
     db.add(new_entry)
@@ -378,7 +378,7 @@ async def upload_knowledge_document(
         tags=tag_list,
         priority=priority,
         created_by=current_user.id,
-        organization_id=1
+        organization_id=getattr(current_user, 'organization_id', 1)
     )
 
     db.add(new_entry)

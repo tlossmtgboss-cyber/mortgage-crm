@@ -766,7 +766,7 @@ async def complete_sla_task(
             task_id=task_id,
             milestone_date=milestone_date,
             user_id=current_user.id,
-            organization_id=1
+            organization_id=getattr(current_user, 'organization_id', 1)
         )
 
         if not result["success"]:

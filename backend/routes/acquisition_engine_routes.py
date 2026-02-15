@@ -990,6 +990,7 @@ async def trigger_speed_to_lead(
     request: SpeedToLeadTriggerRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Manually trigger speed-to-lead for a specific lead.
@@ -1013,7 +1014,7 @@ async def trigger_speed_to_lead(
     if request.event_type:
         event_service = EventService(db)
         event = event_service.ingest_event(
-            organization_id=1,
+            organization_id=getattr(current_user, 'organization_id', 1),
             event_type=request.event_type,
             lead_id=lead_id,
             campaign_instance_id=request.campaign_instance_id,

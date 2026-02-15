@@ -14,7 +14,7 @@ across all settings pages. It shows:
 Use this as a template for refactoring other routes.
 """
 
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, Request
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -280,24 +280,40 @@ def validate_configuration(settings: AgentSettingsUpdate) -> List[str]:
 
 
 # =============================================================================
-# MOCK USER DEPENDENCY (Replace with your actual auth)
+# AUTH DEPENDENCY
 # =============================================================================
 
-class MockUser:
-    """Mock user for development - replace with actual auth dependency"""
-    def __init__(self):
-        self.id = 1
-        self.email = "admin@perennia.ai"
-        self.organization_id = 1
-        self.permissions = ["view_agents", "manage_agents", "test_agents"]
+class _UserWithPermissions:
+    """Wraps user object to add has_permission for agent governance endpoints."""
+    _DEFAULT_PERMISSIONS = ["view_agents", "manage_agents", "test_agents", "approve_high_cost"]
+
+    def __init__(self, user):
+        self._user = user
+
+    def __getattr__(self, name):
+        return getattr(self._user, name)
 
     def has_permission(self, permission: str) -> bool:
-        return permission in self.permissions
+        if hasattr(self._user, 'has_permission'):
+            return self._user.has_permission(permission)
+        role = (getattr(self._user, 'role', '') or '').lower()
+        perm_role = (getattr(self._user, 'permission_role', '') or '').lower()
+        is_admin = getattr(self._user, 'is_admin', False)
+        if role in ('admin', 'owner', 'site_admin') or perm_role in ('admin', 'owner', 'site_admin') or is_admin:
+            return True
+        return permission in self._DEFAULT_PERMISSIONS
 
 
-def get_current_user():
-    """Mock auth dependency - replace with actual implementation"""
-    return MockUser()
+async def get_current_user(request: Request = None, db: Session = Depends(get_db)):
+    """Auth dependency using real auth from main, wrapped with permission support."""
+    from main import get_current_user as _main_auth
+    from fastapi.security import OAuth2PasswordBearer
+    _scheme = OAuth2PasswordBearer(tokenUrl="token")
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+    user = await _main_auth(token=token, request=request, db=db)
+    return _UserWithPermissions(user)
 
 
 # =============================================================================

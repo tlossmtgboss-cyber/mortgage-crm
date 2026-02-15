@@ -1041,7 +1041,8 @@ async def get_bottleneck_analysis_data(
 @router.get("/dashboard/run-rates")
 async def get_run_rate_report(
     lookback_days: int = Query(30, ge=7, le=90),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get run rate report with forecasting for all milestone types.
@@ -1057,8 +1058,10 @@ async def get_run_rate_report(
     """
     from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast, calculate_health_score
 
+    org_id = getattr(current_user, 'organization_id', 1)
+
     # Get all active SLA measures
-    measures = get_all_sla_measures(db, organization_id=1, active_only=True)
+    measures = get_all_sla_measures(db, organization_id=org_id, active_only=True)
     milestone_types = list(set(m.milestone_type for m in measures))
 
     report = {
@@ -1077,11 +1080,11 @@ async def get_run_rate_report(
     for mt in milestone_types:
         try:
             # Calculate run rate
-            run_rate = calculate_run_rate(db, mt, lookback_days=lookback_days, organization_id=1)
+            run_rate = calculate_run_rate(db, mt, lookback_days=lookback_days, organization_id=org_id)
             report["milestone_run_rates"].append(run_rate)
 
             # Calculate inventory forecast
-            forecast = calculate_inventory_forecast(db, mt, organization_id=1)
+            forecast = calculate_inventory_forecast(db, mt, organization_id=org_id)
             report["inventory_forecasts"].append(forecast)
 
             # Track bottlenecks
@@ -1125,7 +1128,8 @@ async def get_run_rate_report(
 async def get_milestone_run_rate(
     milestone_type: str,
     lookback_days: int = Query(30, ge=7, le=90),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get detailed run rate and forecast for a specific milestone type.
@@ -1140,8 +1144,9 @@ async def get_milestone_run_rate(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid milestone type: {milestone_type}")
 
-    run_rate = calculate_run_rate(db, mt, lookback_days=lookback_days, organization_id=1)
-    forecast = calculate_inventory_forecast(db, mt, organization_id=1)
+    org_id = getattr(current_user, 'organization_id', 1)
+    run_rate = calculate_run_rate(db, mt, lookback_days=lookback_days, organization_id=org_id)
+    forecast = calculate_inventory_forecast(db, mt, organization_id=org_id)
 
     return {
         "milestone_type": milestone_type,
@@ -1250,7 +1255,8 @@ class SLAReportEmailRequest(BaseModel):
 @router.post("/reports/send-email")
 async def send_sla_report_email(
     request: SLAReportEmailRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Send SLA run rate report via email.
@@ -1263,8 +1269,10 @@ async def send_sla_report_email(
     """
     from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast, calculate_health_score
 
+    org_id = getattr(current_user, 'organization_id', 1)
+
     # Get all active SLA measures
-    measures = get_all_sla_measures(db, organization_id=1, active_only=True)
+    measures = get_all_sla_measures(db, organization_id=org_id, active_only=True)
     milestone_types = list(set(m.milestone_type for m in measures))
 
     # Build report data
@@ -1277,10 +1285,10 @@ async def send_sla_report_email(
 
     for mt in milestone_types:
         try:
-            rr = calculate_run_rate(db, mt, lookback_days=30, organization_id=1)
+            rr = calculate_run_rate(db, mt, lookback_days=30, organization_id=org_id)
             run_rates.append(rr)
 
-            fc = calculate_inventory_forecast(db, mt, organization_id=1)
+            fc = calculate_inventory_forecast(db, mt, organization_id=org_id)
             forecasts.append(fc)
 
             if fc["is_potential_bottleneck"]:
