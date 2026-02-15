@@ -2226,7 +2226,11 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                         status, engagement_score, created_at, user_id
                     )
                     SELECT
-                        COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
+                        COALESCE(
+                            NULLIF(l.borrower_name, ''),
+                            NULLIF(TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')), ''),
+                            'Client - ' || l.loan_number
+                        ),
                         l.loan_number,
                         COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                         COALESCE(l.rate, 0),
@@ -2243,6 +2247,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                         CURRENT_TIMESTAMP,
                         :user_id
                     FROM loans l
+                    LEFT JOIN leads le ON le.email = l.borrower_email AND le.email IS NOT NULL
                     WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                            OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                            OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
@@ -2997,7 +3002,11 @@ async def import_funded_loans_to_mum(
                 status, engagement_score, created_at, user_id
             )
             SELECT
-                COALESCE(l.borrower_name, 'Client - ' || l.loan_number),
+                COALESCE(
+                    NULLIF(l.borrower_name, ''),
+                    NULLIF(TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')), ''),
+                    'Client - ' || l.loan_number
+                ),
                 l.loan_number,
                 COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
                 COALESCE(l.rate, 0),
@@ -3014,6 +3023,7 @@ async def import_funded_loans_to_mum(
                 CURRENT_TIMESTAMP,
                 :user_id
             FROM loans l
+            LEFT JOIN leads le ON le.email = l.borrower_email AND le.email IS NOT NULL
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
@@ -3083,6 +3093,90 @@ async def fix_mum_client_user_ids(
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Failed to fix MUM user IDs: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/fix-mum-client-names")
+async def fix_mum_client_names(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Fix MUM clients that show Salesforce IDs instead of real borrower names.
+    Updates names from: loans.borrower_name, then leads (first_name + last_name).
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        # Step 1: Fix from loans.borrower_name where it exists and is meaningful
+        from_loans = db.execute(text("""
+            UPDATE mum_clients m
+            SET client_name = l.borrower_name
+            FROM loans l
+            WHERE m.loan_number = l.loan_number
+            AND l.borrower_name IS NOT NULL
+            AND l.borrower_name != ''
+            AND l.borrower_name != 'Unknown Borrower'
+            AND (m.client_name LIKE 'Client - SF-%' OR m.client_name LIKE 'Client - %')
+            RETURNING m.id, m.client_name, m.loan_number
+        """))
+        fixed_from_loans = from_loans.fetchall()
+
+        # Step 2: Fix remaining from leads (first_name + last_name) via loan_number match
+        from_leads = db.execute(text("""
+            UPDATE mum_clients m
+            SET client_name = TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, ''))
+            FROM leads le
+            JOIN loans l ON l.loan_number = m.loan_number
+            WHERE le.salesforce_id IS NOT NULL
+            AND l.borrower_email IS NOT NULL
+            AND le.email = l.borrower_email
+            AND (le.first_name IS NOT NULL OR le.last_name IS NOT NULL)
+            AND TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')) != ''
+            AND (m.client_name LIKE 'Client - SF-%' OR m.client_name LIKE 'Client - %')
+            RETURNING m.id, m.client_name, m.loan_number
+        """))
+        fixed_from_leads = from_leads.fetchall()
+
+        # Step 3: Also fix the loans table borrower_name from leads for future imports
+        loans_fixed = db.execute(text("""
+            UPDATE loans l
+            SET borrower_name = TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, ''))
+            FROM leads le
+            WHERE le.email = l.borrower_email
+            AND le.email IS NOT NULL
+            AND (le.first_name IS NOT NULL OR le.last_name IS NOT NULL)
+            AND TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')) != ''
+            AND (l.borrower_name IS NULL OR l.borrower_name = '' OR l.borrower_name = 'Unknown Borrower')
+            RETURNING l.id, l.loan_number
+        """))
+        loans_updated = loans_fixed.fetchall()
+
+        db.commit()
+
+        # Count remaining unfixed
+        remaining = db.execute(text("""
+            SELECT COUNT(*) FROM mum_clients
+            WHERE client_name LIKE 'Client - SF-%' OR client_name LIKE 'Client - %'
+        """)).scalar()
+
+        return {
+            "status": "success",
+            "fixed_from_loans": len(fixed_from_loans),
+            "fixed_from_leads": len(fixed_from_leads),
+            "loans_table_updated": len(loans_updated),
+            "remaining_unfixed": remaining,
+            "message": f"Fixed {len(fixed_from_loans) + len(fixed_from_leads)} MUM client names, {remaining} still need manual review",
+            "samples": [
+                {"id": r[0], "new_name": r[1], "loan_number": r[2]}
+                for r in (list(fixed_from_loans) + list(fixed_from_leads))[:20]
+            ]
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.error(f"Failed to fix MUM client names: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
