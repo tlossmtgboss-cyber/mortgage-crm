@@ -21,6 +21,8 @@ from field_mapping_service import (
     FIELD_MAPPINGS,
 )
 
+from utils.pii_mask import mask_email
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auto-import", tags=["Auto Import"])
@@ -627,7 +629,7 @@ async def auto_import(
                             )
                             existing = result.fetchone()
                             if existing:
-                                logger.info(f"✅ Matched lead email '{email_normalized}' to existing lead ID {existing[0]}")
+                                logger.info(f"Matched lead email '{mask_email(email_normalized)}' to existing lead ID {existing[0]}")
                                 # Update existing - use safe SQL builder
                                 update_data = {k: v for k, v in row_data.items() if k not in ['created_at']}
                                 update_data['updated_at'] = datetime.utcnow()

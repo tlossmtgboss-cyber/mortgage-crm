@@ -21,6 +21,7 @@ import logging
 import os
 
 from database import get_db
+from utils.pii_mask import mask_email
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1693,7 +1694,7 @@ async def block_sender(
         db.add(blocked)
         db.commit()
 
-        logger.info(f"User {current_user.id} blocked sender: {sender_email}")
+        logger.info(f"User {current_user.id} blocked sender: {mask_email(sender_email)}")
 
         return {
             "status": "success",

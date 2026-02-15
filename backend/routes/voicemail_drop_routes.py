@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from db import get_db
+from utils.pii_mask import mask_phone
 
 logger = logging.getLogger(__name__)
 
@@ -2563,7 +2564,7 @@ async def revoke_consent(
                 if (token_phone and phone_number and _normalize_phone(token_phone) == _normalize_phone(phone_number)) or \
                    (token_email and email and token_email.lower() == email.lower()):
                     is_authenticated = True
-                    logger.info(f"Consent revocation via signed token for phone={phone_number}")
+                    logger.info(f"Consent revocation via signed token for phone={mask_phone(phone_number)}")
                 else:
                     raise HTTPException(status_code=403, detail="Token does not match the contact being revoked")
             else:

@@ -201,7 +201,7 @@ async def unblock_ip(
                 break
 
         if unblocked:
-            logger.info(f"Admin {current_user.email} unblocked IP: {ip_address}")
+            logger.info(f"Admin {current_user.id} unblocked IP: {ip_address}")
             return {"status": "success", "message": f"IP {ip_address} has been unblocked"}
         else:
             return {"status": "not_found", "message": f"IP {ip_address} was not in blocked list"}

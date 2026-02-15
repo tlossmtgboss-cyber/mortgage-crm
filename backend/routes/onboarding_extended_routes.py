@@ -25,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db import get_db
+from utils.pii_mask import mask_email, mask_phone
 
 logger = logging.getLogger(__name__)
 
@@ -523,9 +524,9 @@ If you didn't request this code, you can safely ignore this email.
             )
 
             if email_sent:
-                logger.info(f"Email verification code sent to {email} for user {current_user.id}")
+                logger.info(f"Email verification code sent to {mask_email(email)} for user {current_user.id}")
             else:
-                logger.warning(f"Failed to send email verification to {email}, but code was created")
+                logger.warning(f"Failed to send email verification to {mask_email(email)}, but code was created")
 
         except Exception as email_err:
             logger.error(f"Error sending verification email: {email_err}")
@@ -668,9 +669,9 @@ async def send_sms_verification(
             )
 
             if sms_result.get("success"):
-                logger.info(f"SMS verification code sent to {phone} for user {current_user.id}")
+                logger.info(f"SMS verification code sent to {mask_phone(phone)} for user {current_user.id}")
             else:
-                logger.warning(f"Failed to send SMS verification to {phone}: {sms_result.get('error')}")
+                logger.warning(f"Failed to send SMS verification to {mask_phone(phone)}: {sms_result.get('error')}")
 
         except Exception as sms_err:
             logger.error(f"Error sending verification SMS: {sms_err}")
@@ -1356,15 +1357,15 @@ If you didn't expect this invitation, please contact your administrator.
         )
 
         if email_sent:
-            logger.info(f"Employee invite email sent to {invite_data.email}")
+            logger.info(f"Employee invite email sent to {mask_email(invite_data.email)}")
         else:
-            logger.warning(f"Failed to send invite email to {invite_data.email}, invite still created")
+            logger.warning(f"Failed to send invite email to {mask_email(invite_data.email)}, invite still created")
 
     except Exception as email_err:
         logger.error(f"Error sending invite email: {email_err}")
         # Continue anyway - invite was created
 
-    logger.info(f"Employee invite created: {invite_data.email}, URL: {invite_url}")
+    logger.info(f"Employee invite created: {mask_email(invite_data.email)}, invite_id: {invite.id}")
 
     return {
         "success": True,

@@ -14,6 +14,7 @@ import logging
 import os
 import asyncio
 import requests
+from utils.pii_mask import mask_email
 
 logger = logging.getLogger(__name__)
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
@@ -2009,7 +2010,7 @@ def register_debug_data_routes(
                 message_body = re.sub(r'<[^>]+>', ' ', html_body)
                 message_body = re.sub(r'\s+', ' ', message_body)
 
-            logger.info(f"Raw message body from {sender_email}: {message_body[:500]}...")
+            logger.info(f"Raw message body from {mask_email(sender_email)}: {message_body[:100]}...")
 
             # Clean up the message (remove quoted replies)
             lines = message_body.split('\n')

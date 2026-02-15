@@ -717,7 +717,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             )
             totals = result.fetchone()
 
-            logger.info(f"User {current_user.email} claimed {leads_claimed} leads, {loans_claimed} loans")
+            logger.info(f"User {current_user.id} claimed {leads_claimed} leads, {loans_claimed} loans")
 
             return {
                 "success": True,

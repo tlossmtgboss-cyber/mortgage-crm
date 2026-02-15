@@ -74,6 +74,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFi
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
+from utils.pii_mask import mask_email, mask_phone
 
 logger = logging.getLogger(__name__)
 
@@ -1504,7 +1505,7 @@ async def schedule_review_call(
                     duration_minutes=30,
                     lo_email=lo_email,
                 )
-                logger.info(f"Review call confirmation email sent to {borrower_email}")
+                logger.info(f"Review call confirmation email sent to {mask_email(borrower_email)}")
 
             # Send confirmation SMS
             if borrower_phone:
@@ -1516,7 +1517,7 @@ async def schedule_review_call(
                     f"Reply STOP to opt out."
                 )
                 notification_service.send_sms(to_phone=borrower_phone, message=sms_message)
-                logger.info(f"Review call confirmation SMS sent to {borrower_phone}")
+                logger.info(f"Review call confirmation SMS sent to {mask_phone(borrower_phone)}")
 
         except Exception as notif_err:
             logger.error(f"Error sending review call confirmation: {notif_err}")
@@ -2319,7 +2320,7 @@ If you weren't expecting this invitation, please contact {borrower_name}.
             )
 
             if email_sent:
-                logger.info(f"Co-borrower invitation email sent to {data.email}")
+                logger.info(f"Co-borrower invitation email sent to {mask_email(data.email)}")
 
             # Send SMS if phone provided
             if data.phone:
@@ -2329,7 +2330,7 @@ If you weren't expecting this invitation, please contact {borrower_name}.
                     f"Complete your info here: {invite_url} (expires in 14 days). Reply STOP to opt out."
                 )
                 notification_service.send_sms(to_phone=data.phone, message=sms_message)
-                logger.info(f"Co-borrower invitation SMS sent to {data.phone}")
+                logger.info(f"Co-borrower invitation SMS sent to {mask_phone(data.phone)}")
 
             invitation.sent_at = datetime.now(timezone.utc)
             invitation.status = "sent"

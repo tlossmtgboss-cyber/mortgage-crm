@@ -16,6 +16,7 @@ import uuid
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from utils.pii_mask import mask_phone
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +301,7 @@ async def initiate_cold_transfer(
         else:
             raise HTTPException(status_code=400, detail="Must provide to_user_id or to_phone")
 
-        logger.info(f"Initiating cold transfer: {request.call_sid} -> {to_phone}")
+        logger.info(f"Initiating cold transfer: {request.call_sid} -> {mask_phone(to_phone)}")
 
         # Create transfer record
         transfer_uuid = str(uuid.uuid4())[:8].upper()
@@ -491,7 +492,7 @@ async def initiate_warm_transfer(
         else:
             raise HTTPException(status_code=400, detail="Must provide to_user_id or to_phone")
 
-        logger.info(f"Initiating warm transfer: {request.call_sid} -> {to_phone}")
+        logger.info(f"Initiating warm transfer: {request.call_sid} -> {mask_phone(to_phone)}")
 
         # Create a conference room for the warm transfer
         conference_name = f"warm-transfer-{uuid.uuid4().hex[:8]}"

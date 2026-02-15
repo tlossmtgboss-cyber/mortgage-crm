@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from utils.pii_mask import mask_email
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,7 @@ async def execute_email_response_action(
 
                     results["email_sent"] = email_sent
                     if email_sent:
-                        logger.info(f"Sent email reply to {queue_item.sender_email} for queue item {queue_item.id}")
+                        logger.info(f"Sent email reply to {mask_email(queue_item.sender_email)} for queue item {queue_item.id}")
                     else:
                         results["errors"].append("Email service returned failure")
 

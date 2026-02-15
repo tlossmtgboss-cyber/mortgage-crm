@@ -966,7 +966,7 @@ Be proactive, professional, and action-oriented. When asked to perform an action
         db.commit()
         db.refresh(db_conversation)
 
-        logger.info(f"AI chat completed for user {current_user.email}. Actions taken: {len(actions_taken)}")
+        logger.info(f"AI chat completed for user {current_user.id}. Actions taken: {len(actions_taken)}")
         return db_conversation
 
     except Exception as e:
