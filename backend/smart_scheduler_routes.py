@@ -2076,10 +2076,51 @@ async def create_appointment(
                 email_error = email_result.get("error", "Unknown email error")
                 logger.warning(f"Email send failed for {appt_data.attendee_email}: {email_error}")
 
+                # Fallback: try sending via Salesforce if SendGrid failed
+                try:
+                    from services.salesforce.email_sync_service import SalesforceEmailSyncService
+                    from salesforce_integration_models import IntegrationProfile
+                    sf_email_service = SalesforceEmailSyncService()
+                    # Find user's active SF integration
+                    sf_profile = db.query(IntegrationProfile).filter(
+                        IntegrationProfile.user_id == user.id,
+                        IntegrationProfile.provider == "salesforce",
+                        IntegrationProfile.is_active == True
+                    ).first()
+                    if sf_profile:
+                        sf_html = (
+                            f"<p>Hi {appt_data.attendee_name or 'there'},</p>"
+                            f"<p>Your appointment has been confirmed!</p>"
+                            f"<p><strong>Date:</strong> {appointment_date}<br>"
+                            f"<strong>Time:</strong> {appointment_time}<br>"
+                            f"<strong>Duration:</strong> {duration_str}<br>"
+                            f"<strong>Meeting Type:</strong> {meeting_mode_str}</p>"
+                            + (f"<p><strong>With:</strong> {team_member_name}</p>" if team_member_name else "")
+                            + (f"<p><a href='{video_link}'>Join Video Call</a></p>" if video_link else "")
+                            + "<p>We'll send you a reminder before your appointment.</p>"
+                        )
+                        sf_result = await sf_email_service.send_email_via_salesforce(
+                            db=db,
+                            integration_profile_id=sf_profile.id,
+                            to_email=appt_data.attendee_email,
+                            subject=f"Appointment Confirmed: {appointment.title}",
+                            html_body=sf_html
+                        )
+                        if sf_result.get("success"):
+                            email_sent = True
+                            email_error = None
+                            logger.info(f"Appointment email sent via Salesforce to {appt_data.attendee_email}")
+                        else:
+                            logger.warning(f"Salesforce email fallback also failed: {sf_result.get('message')}")
+                    else:
+                        logger.info("No active Salesforce integration for appointment email fallback")
+                except Exception as sf_err:
+                    logger.warning(f"Salesforce email fallback error: {sf_err}")
+
             # Send notification email to team member (loan officer) with calendar invite
             if team_member_email:
                 try:
-                    send_team_member_notification_email(
+                    team_result = send_team_member_notification_email(
                         team_member_email=team_member_email,
                         team_member_name=team_member_name or "Team Member",
                         attendee_name=appt_data.attendee_name or "Client",
@@ -2094,7 +2135,31 @@ async def create_appointment(
                         scheduled_start=appointment.scheduled_start,
                         duration_minutes=appointment.duration_minutes
                     )
-                    logger.info(f"Team member notification sent to {team_member_email}")
+                    if not team_result:
+                        logger.warning(f"Failed to send team member notification via SendGrid")
+                        # Fallback: try Salesforce for team member notification too
+                        try:
+                            from services.salesforce.email_sync_service import SalesforceEmailSyncService
+                            from salesforce_integration_models import IntegrationProfile
+                            sf_svc = SalesforceEmailSyncService()
+                            sf_prof = db.query(IntegrationProfile).filter(
+                                IntegrationProfile.user_id == user.id,
+                                IntegrationProfile.provider == "salesforce",
+                                IntegrationProfile.is_active == True
+                            ).first()
+                            if sf_prof:
+                                tm_subject = f"New Appointment: {appointment.title}"
+                                tm_body = f"<p>New appointment with {appt_data.attendee_name or 'Client'} on {appointment_date} at {appointment_time} ({duration_str}).</p>"
+                                sf_tm_result = await sf_svc.send_email_via_salesforce(
+                                    db=db, integration_profile_id=sf_prof.id,
+                                    to_email=team_member_email, subject=tm_subject, html_body=tm_body
+                                )
+                                if sf_tm_result.get("success"):
+                                    logger.info(f"Team member notification sent via Salesforce to {team_member_email}")
+                        except Exception as sf_tm_err:
+                            logger.warning(f"SF fallback for team member email failed: {sf_tm_err}")
+                    else:
+                        logger.info(f"Team member notification sent to {team_member_email}")
                 except Exception as team_email_error:
                     logger.error(f"Error sending team member notification: {team_email_error}")
         except Exception as e:
