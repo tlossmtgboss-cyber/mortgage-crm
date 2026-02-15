@@ -13,7 +13,12 @@ from datetime import datetime, timezone
 import logging
 from sqlalchemy.exc import SQLAlchemyError
 
-router = APIRouter()
+def _get_auth_dep():
+    """Get auth dependency at runtime to avoid circular imports."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
+
+router = APIRouter(dependencies=[Depends(_get_auth_dep())])
 logger = logging.getLogger(__name__)
 
 

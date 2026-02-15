@@ -136,7 +136,7 @@ def verify_caller_id(
 
 
 @router.delete("/admin/caller-ids/{caller_id_id}")
-def delete_caller_id(caller_id_id: int):
+def delete_caller_id(caller_id_id: int, current_user=Depends(get_current_user)):
     """Delete a caller ID"""
     try:
         from main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
@@ -175,7 +175,7 @@ def delete_caller_id(caller_id_id: int):
 
 
 @router.post("/admin/caller-ids/{caller_id_id}/set-default")
-def set_default_caller_id(caller_id_id: int):
+def set_default_caller_id(caller_id_id: int, current_user=Depends(get_current_user)):
     """Set a verified caller ID as the default"""
     try:
         from main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
@@ -213,7 +213,7 @@ def set_default_caller_id(caller_id_id: int):
 # =============================================================================
 
 @router.get("/admin/telephony/status")
-def get_telephony_status():
+def get_telephony_status(current_user=Depends(get_current_user)):
     """Get Twilio account status and configuration"""
     try:
         from telephony.provider import get_telephony_provider
