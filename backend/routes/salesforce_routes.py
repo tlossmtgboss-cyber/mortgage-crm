@@ -3124,15 +3124,15 @@ async def fix_mum_client_names(
         """))
         fixed_from_loans = from_loans.fetchall()
 
-        # Step 2: Fix remaining from leads (first_name + last_name) via loan_number match
+        # Step 2: Fix remaining from leads (first_name + last_name) via email match
         from_leads = db.execute(text("""
             UPDATE mum_clients m
             SET client_name = TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, ''))
-            FROM leads le
-            JOIN loans l ON l.loan_number = m.loan_number
-            WHERE le.salesforce_id IS NOT NULL
-            AND l.borrower_email IS NOT NULL
+            FROM leads le, loans l
+            WHERE l.loan_number = m.loan_number
             AND le.email = l.borrower_email
+            AND le.email IS NOT NULL
+            AND l.borrower_email IS NOT NULL
             AND (le.first_name IS NOT NULL OR le.last_name IS NOT NULL)
             AND TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')) != ''
             AND (m.client_name LIKE 'Client - SF-%' OR m.client_name LIKE 'Client - %')
@@ -3174,10 +3174,17 @@ async def fix_mum_client_names(
                 for r in (list(fixed_from_loans) + list(fixed_from_leads))[:20]
             ]
         }
-    except SQLAlchemyError as e:
+    except Exception as e:
         db.rollback()
         logger.error(f"Failed to fix MUM client names: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        return {
+            "status": "error",
+            "message": f"Fix failed: {str(e)[:200]}",
+            "fixed_from_loans": 0,
+            "fixed_from_leads": 0,
+            "loans_table_updated": 0,
+            "remaining_unfixed": -1
+        }
 
 
 @router.post("/sync-and-import-mum")
