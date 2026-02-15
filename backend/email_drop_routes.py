@@ -517,8 +517,9 @@ async def process_as_lead(
 
         # Update fields (only non-null values)
         conflicts = []
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'owner_id'}
         for field, value in fields.items():
-            if value is not None and hasattr(lead, field):
+            if value is not None and hasattr(lead, field) and field not in _protected:
                 current = getattr(lead, field)
                 if current and current != value:
                     conflicts.append({
@@ -570,10 +571,11 @@ async def process_as_lead(
         )
 
         # Set additional fields if provided
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'owner_id'}
         for field in ["employer_name", "annual_income", "loan_amount", "property_address",
                      "loan_type", "credit_score"]:
             if fields.get(field):
-                if hasattr(lead, field):
+                if hasattr(lead, field) and field not in _protected:
                     setattr(lead, field, fields[field])
 
         db.add(lead)
@@ -616,8 +618,9 @@ async def process_as_loan(
 
         # Update fields
         conflicts = []
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'loan_officer_id'}
         for field, value in fields.items():
-            if value is not None and hasattr(loan, field):
+            if value is not None and hasattr(loan, field) and field not in _protected:
                 current = getattr(loan, field)
                 if current and str(current) != str(value):
                     conflicts.append({

@@ -1280,7 +1280,10 @@ async def update_scheduler_config(
 
     # Update fields
     update_fields = config_data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for field, value in update_fields.items():
+        if field in _protected:
+            continue
         if field == "routing_strategy" and value:
             try:
                 value = RoutingStrategy(value)
@@ -1531,8 +1534,10 @@ async def update_appointment_type(
         raise HTTPException(status_code=404, detail="Appointment type not found")
 
     update_fields = type_data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for field, value in update_fields.items():
-        setattr(appt_type, field, value)
+        if field not in _protected:
+            setattr(appt_type, field, value)
 
     db.commit()
 
@@ -2323,8 +2328,9 @@ async def update_appointment(
         is_reschedule = True
 
     # Apply all updates
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_fields.items():
-        if hasattr(appointment, field):
+        if hasattr(appointment, field) and field not in _protected:
             setattr(appointment, field, value)
 
     db.commit()

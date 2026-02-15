@@ -331,7 +331,8 @@ async def auto_save_step(
 
         # Save to appropriate step data column
         step_column = f"step_{step_number}_data"
-        if hasattr(progress, step_column):
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
+        if hasattr(progress, step_column) and step_column not in _protected:
             setattr(progress, step_column, step_data)
             progress.last_updated = datetime.now(timezone.utc)
             db.commit()

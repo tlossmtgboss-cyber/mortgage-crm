@@ -415,7 +415,8 @@ async def execute_merge(
             chosen_value = val1 if chosen_record == 1 else val2
 
             # Update principal lead with chosen value
-            if chosen_value is not None:
+            _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
+            if chosen_value is not None and field_name not in _protected:
                 setattr(principal_lead, field_name, chosen_value)
 
             # Track if AI was correct

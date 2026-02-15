@@ -1105,8 +1105,9 @@ async def update_my_microsite_profile(
 
         # Update fields
         update_dict = update_data.model_dump(exclude_unset=True)
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
         for field, value in update_dict.items():
-            if hasattr(profile, field):
+            if hasattr(profile, field) and field not in _protected:
                 setattr(profile, field, value)
 
         db.commit()

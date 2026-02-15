@@ -767,9 +767,10 @@ async def update_application_by_token(
         'has_coborrower', 'coborrower_email',
         'notes', 'time_spent_seconds',
     }
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id', 'borrower_id'}
     update_data = data.dict(exclude_unset=True)
     for field, value in update_data.items():
-        if field in _ALLOWED_UPDATE_FIELDS and hasattr(application, field):
+        if field in _ALLOWED_UPDATE_FIELDS and hasattr(application, field) and field not in _protected:
             setattr(application, field, value)
 
     # Update status to in_progress if still draft

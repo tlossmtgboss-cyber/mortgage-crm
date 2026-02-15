@@ -1389,8 +1389,9 @@ async def update_user_settings(
         settings = BlogUserSettings(user_id=user_id)
         db.add(settings)
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for field, value in request.dict(exclude_unset=True).items():
-        if value is not None:
+        if value is not None and field not in _protected:
             setattr(settings, field, value)
 
     settings.updated_at = datetime.utcnow()

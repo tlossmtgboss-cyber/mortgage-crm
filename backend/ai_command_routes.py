@@ -4434,6 +4434,8 @@ async def execute_bulk_update(
     new_value = modifications.get("new_value", preview.get("new_value", ""))
 
     updated_count = 0
+    _protected_lead = {'id', 'organization_id', 'created_at', 'updated_at', 'owner_id'}
+    _protected_deal = {'id', 'organization_id', 'created_at', 'updated_at'}
 
     for record in records:
         record_id = record.get("id")
@@ -4445,7 +4447,7 @@ async def execute_bulk_update(
                 Lead.user_id == user_id
             ).first()
 
-            if lead and hasattr(lead, field):
+            if lead and hasattr(lead, field) and field not in _protected_lead:
                 setattr(lead, field, new_value)
                 updated_count += 1
 
@@ -4455,7 +4457,7 @@ async def execute_bulk_update(
                 Deal.user_id == user_id
             ).first()
 
-            if deal and hasattr(deal, field):
+            if deal and hasattr(deal, field) and field not in _protected_deal:
                 setattr(deal, field, new_value)
                 updated_count += 1
 

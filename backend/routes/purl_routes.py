@@ -1550,8 +1550,9 @@ async def update_workspace(
 
     # Update allowed fields
     allowed_fields = ["display_name", "settings", "status"]
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for field, value in (updates or {}).items():
-        if field in allowed_fields and hasattr(workspace, field):
+        if field in allowed_fields and hasattr(workspace, field) and field not in _protected:
             setattr(workspace, field, value)
 
     db.commit()

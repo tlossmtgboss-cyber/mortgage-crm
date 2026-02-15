@@ -168,13 +168,15 @@ async def update_pre_approval_letter_settings(
     settings = get_or_create_settings(db)
 
     update_data = updates.dict(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
 
     for field, value in update_data.items():
-        if field == "default_conditions":
-            # Serialize conditions list to JSON string
-            setattr(settings, field, serialize_conditions(value))
-        else:
-            setattr(settings, field, value)
+        if field not in _protected:
+            if field == "default_conditions":
+                # Serialize conditions list to JSON string
+                setattr(settings, field, serialize_conditions(value))
+            else:
+                setattr(settings, field, value)
 
     settings.updated_at = datetime.now(timezone.utc)
     db.commit()

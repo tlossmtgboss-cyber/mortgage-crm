@@ -485,8 +485,9 @@ async def update_dialer_settings(
 
     # Update fields that were provided
     update_data = settings_update.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_data.items():
-        if value is not None:
+        if value is not None and field not in _protected:
             setattr(settings, field, value)
 
     settings.updated_at = datetime.utcnow()

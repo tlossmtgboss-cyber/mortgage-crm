@@ -466,8 +466,10 @@ async def update_clip(
         raise HTTPException(status_code=404, detail="Clip not found")
 
     update_data = data.dict(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_data.items():
-        setattr(clip, field, value)
+        if field not in _protected:
+            setattr(clip, field, value)
 
     clip.updated_at = datetime.utcnow()
     db.commit()
