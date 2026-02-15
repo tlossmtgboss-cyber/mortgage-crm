@@ -1019,12 +1019,10 @@ export const voicemailAPI = {
   },
 
   // Transcribe voice recording
+  // NOTE: Do NOT set Content-Type manually — axios auto-sets it with the
+  // correct multipart boundary when the body is FormData.
   transcribe: async (formData) => {
-    const response = await api.post('/api/v1/voicemail/transcribe', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
+    const response = await api.post('/api/v1/voicemail/transcribe', formData);
     return response.data;
   },
 

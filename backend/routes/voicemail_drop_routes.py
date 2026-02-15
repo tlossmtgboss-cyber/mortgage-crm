@@ -1251,7 +1251,7 @@ async def send_voicemail_ringless(
     import httpx
 
     provider = os.getenv("RINGLESS_VM_PROVIDER", "").lower().strip()
-    caller_id = os.getenv("RINGLESS_VM_CALLER_ID", "")
+    caller_id = os.getenv("RINGLESS_VM_CALLER_ID", "") or os.getenv("SLYBROADCAST_CALLER_ID", "")
 
     if not provider:
         raise HTTPException(
@@ -1300,17 +1300,27 @@ async def send_voicemail_ringless(
             base_url = f"https://{base_url}"
         dispo_url = f"{base_url}/api/v1/voicemail/webhook/rvm" if base_url else ""
 
-        # URL-encode the audio_url as required by docs
-        from urllib.parse import quote
-        encoded_audio_url = quote(audio_url, safe="")
+        # NOTE: Do NOT pre-encode the audio_url — httpx form POST already
+        # application/x-www-form-urlencoded-encodes all values.  Pre-encoding
+        # causes double-encoding which makes the URL unreachable.
+
+        clean_caller = caller_id.replace("+", "")
+        # Slybroadcast expects 10-digit caller ID (no country code prefix)
+        if len(clean_caller) == 11 and clean_caller.startswith("1"):
+            clean_caller = clean_caller[1:]
+
+        logger.info(
+            f"Slybroadcast request: drop={voicemail_drop_id} phone={clean_number} "
+            f"callerID={clean_caller} audio_url={audio_url[:120]}"
+        )
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             payload = {
                 "c_uid": sb_email,
                 "c_password": sb_password,
-                "c_callerID": caller_id.replace("+", ""),
+                "c_callerID": clean_caller,
                 "c_phone": clean_number,
-                "c_url": encoded_audio_url,
+                "c_url": audio_url,
                 "c_date": "now",
                 "c_audio": "mp3",
                 "mobile_only": "1",
