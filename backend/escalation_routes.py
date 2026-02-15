@@ -144,12 +144,17 @@ async def create_escalation(
                     import re as _re
                     raw_ext = os.path.splitext(file.filename)[1]
                     file_ext = raw_ext if _re.match(r'^\.[a-zA-Z0-9]{1,10}$', raw_ext) else '.bin'
+                    BLOCKED_EXTENSIONS = {'.exe', '.com', '.bat', '.cmd', '.sh', '.py', '.js', '.msi', '.scr', '.pif', '.vbs', '.ps1'}
+                    if file_ext.lower() in BLOCKED_EXTENSIONS:
+                        file_ext = '.bin'
                     unique_filename = f"{uuid.uuid4()}{file_ext}"
                     file_path = os.path.join(upload_dir, unique_filename)
 
-                    # Save file
+                    # Save file with size limit
+                    content = await file.read(10 * 1024 * 1024 + 1)  # 10MB limit
+                    if len(content) > 10 * 1024 * 1024:
+                        continue  # Skip oversized attachments
                     with open(file_path, "wb") as buffer:
-                        content = await file.read()
                         buffer.write(content)
 
                     attachment_paths.append({

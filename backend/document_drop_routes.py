@@ -192,9 +192,12 @@ async def upload_document(
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(status_code=413, detail=f"File too large. Maximum size is 50 MB.")
 
-        # Generate unique filename
-        ext = file.filename.split('.')[-1] if '.' in file.filename else ''
-        unique_filename = f"{uuid.uuid4().hex[:12]}_{file.filename}"
+        # Generate unique filename with sanitization
+        import re as _re
+        raw_name = os.path.basename(file.filename or 'upload')
+        safe_name = _re.sub(r'[^\w\.\-]', '_', raw_name)[:100]
+        ext = safe_name.rsplit('.', 1)[-1].lower() if '.' in safe_name else ''
+        unique_filename = f"{uuid.uuid4().hex[:12]}_{safe_name}"
 
         # Determine storage path (in production, upload to S3/GCS)
         storage_path = f"documents/{datetime.now().strftime('%Y/%m/%d')}/{unique_filename}"

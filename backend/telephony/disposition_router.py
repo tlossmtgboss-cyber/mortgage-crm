@@ -318,10 +318,10 @@ async def _process_voice_note(audio_base64: str, context_notes: str) -> Optional
 
         # Save temporarily
         temp_file = f"/tmp/voice_note_{datetime.utcnow().timestamp()}.webm"
-        with open(temp_file, 'wb') as f:
-            f.write(audio_data)
-
         try:
+            with open(temp_file, 'wb') as f:
+                f.write(audio_data)
+
             # Transcribe with Whisper
             client = OpenAI(api_key=openai_key)
 
@@ -365,9 +365,10 @@ Keep it concise and professional. Format as bullet points."""
             return summary
 
         finally:
-            # Cleanup temp file
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
+            try:
+                os.unlink(temp_file)
+            except OSError:
+                pass
 
     except Exception as e:
         logger.error(f"Error in voice note processing: {e}")

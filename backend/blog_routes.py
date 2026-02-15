@@ -767,9 +767,14 @@ async def upload_source_document(
     file_path = os.path.join(UPLOAD_DIR, f"{file_id}.pdf")
 
     try:
-        content = await file.read()
+        MAX_PDF_SIZE = 50 * 1024 * 1024  # 50MB
+        content = await file.read(MAX_PDF_SIZE + 1)
+        if len(content) > MAX_PDF_SIZE:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size: 50MB")
         with open(file_path, "wb") as f:
             f.write(content)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to save file")
 
