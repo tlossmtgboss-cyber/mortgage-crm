@@ -15,9 +15,8 @@ function Leads() {
   const navigate = useNavigate();
   const { canPerformAction, isReadOnlyMode, hasAnyPermission, userRole, isAdmin } = usePermissions();
 
-  // Permission check - require leads access
-  // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
-  const canAccessLeads = isAdmin || hasAnyPermission(['leads.view', 'leads.view_all', 'leads.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
+  // All users can access leads
+  const canAccessLeads = true;
 
   // Use React Query for cached data fetching - instant on revisit!
   const { data: leadsData, isLoading: loading, refetch: refetchLeads } = useLeads();
@@ -707,11 +706,9 @@ function Leads() {
           <h1>Leads</h1>
           <p>{leads.length} total leads</p>
         </div>
-        <PermissionGate permission="leads.create" isWriteOperation showDisabled>
           <button className="btn-primary" onClick={handleNewLead}>
             + Add Lead
           </button>
-        </PermissionGate>
       </div>
 
       <div className="filter-tabs">

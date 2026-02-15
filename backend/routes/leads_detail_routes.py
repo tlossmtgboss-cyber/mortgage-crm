@@ -189,11 +189,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
         for lead_id in lead_ids:
             try:
-                # Apply permission filtering
-                query = db.query(Lead).filter(Lead.id == lead_id)
-                if not is_master:
-                    query = filter_leads_by_permissions(query, current_user, db)
-                lead = query.first()
+                lead = db.query(Lead).filter(Lead.id == lead_id).first()
 
                 if not lead:
                     errors.append(f"Lead {lead_id} not found or access denied")
@@ -249,10 +245,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.get("/api/v1/leads/{lead_id}")
     async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-        # Use the same permission filtering as the list endpoint
-        query = db.query(Lead).filter(Lead.id == lead_id)
-        query = filter_leads_by_permissions(query, current_user, db)
-        lead = query.first()
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -366,10 +359,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
     @app.get("/api/v1/leads/{lead_id}/documents")
     async def get_lead_documents(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
         """Get all documents associated with a lead"""
-        # Check lead exists and user has access
-        query = db.query(Lead).filter(Lead.id == lead_id)
-        query = filter_leads_by_permissions(query, current_user, db)
-        lead = query.first()
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -425,21 +415,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.patch("/api/v1/leads/{lead_id}")
     async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-        # Use the same permission filtering as the list endpoint
-        query = db.query(Lead).filter(Lead.id == lead_id)
-        query = filter_leads_by_permissions(query, current_user, db)
-        lead = query.first()
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
-
-        # PHASE 3: Check edit permission (edit_all or edit_own + ownership)
-        check_resource_access(
-            current_user.id,
-            lead.owner_id,
-            'leads.edit_all',
-            'leads.edit_own',
-            db
-        )
 
         # Capture old status for workflow trigger
         old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None

@@ -90,8 +90,7 @@ async def create_lead(
     update_capacity_on_assignment = get_capacity_updater()
     business_metrics = get_business_metrics()
 
-    # PHASE 3: Check create permission
-    require_permission_or_403(current_user.id, 'leads.create', db)
+    # Anyone can create leads - no permission check needed
 
     try:
         # Validate input with Pydantic schema
@@ -159,7 +158,7 @@ async def create_lead(
 @router.get("/")
 async def get_leads(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 5000,
     stage: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_dep())
@@ -169,9 +168,8 @@ async def get_leads(
     _, filter_leads_by_permissions = get_permission_functions()
 
     try:
-        # Phase 3: Apply permission-based filtering
+        # Show all leads - no permission-based filtering
         query = db.query(Lead)
-        query = filter_leads_by_permissions(query, current_user, db)
 
         if stage:
             query = query.filter(Lead.stage == stage)
@@ -255,9 +253,8 @@ async def search_leads(
 
     search_term = q.strip().lower()
 
-    # Build query with permission filtering
+    # Build query - show all leads
     query = db.query(Lead)
-    query = filter_leads_by_permissions(query, current_user, db)
 
     # Search by name (case-insensitive)
     query = query.filter(
