@@ -2,8 +2,8 @@
   "version": "1.0",
   "source_file": "SYSTEM_PROMPTS.md",
   "source_hash": "0f5e7d5ba3d4ed43777d1a13606f5054",
-  "total_sections": 20,
-  "total_characters": 23650,
+  "total_sections": 22,
+  "total_characters": 55050,
   "sections": [
     {
       "id": "perennia_ai_master_system_prompts",
@@ -297,6 +297,41 @@
       "char_count": 308,
       "line_count": 12,
       "file": "conditional/model_selection_guide.md"
+    },
+    {
+      "id": "sales_agent_skill",
+      "title": "Sales Agent Skill — Decision Engine & Conversational Productivity",
+      "priority": "conditional",
+      "capabilities": [
+        "identity",
+        "tools",
+        "memory",
+        "search",
+        "domain",
+        "agent",
+        "communication",
+        "workflow"
+      ],
+      "dependencies": ["core_identity", "core_guidelines", "tone_and_style"],
+      "char_count": 27400,
+      "line_count": 871,
+      "file": "conditional/sales_agent_skill.md"
+    },
+    {
+      "id": "sales_agent_implementation",
+      "title": "Sales Agent Skill — Implementation Reference",
+      "priority": "conditional",
+      "capabilities": [
+        "tools",
+        "domain",
+        "agent",
+        "communication",
+        "workflow"
+      ],
+      "dependencies": ["sales_agent_skill"],
+      "char_count": 4000,
+      "line_count": 345,
+      "file": "conditional/sales_agent_implementation.md"
     }
   ]
 }
