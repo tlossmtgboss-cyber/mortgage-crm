@@ -482,10 +482,37 @@ class SalesforceEmailSyncService:
 
     def _strip_html(self, html: str) -> str:
         """Convert HTML to clean plain text for Salesforce emailSimple.
-        emailSimple only supports plain text — HTML tags render as raw source."""
+        emailSimple only supports plain text — HTML tags render as raw source.
+        Preserves URLs from <a> tags and <img> src so links/videos remain accessible."""
         # Remove style and script blocks entirely
         text = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Convert <a href="url">label</a> to "label (url)" — preserves clickable links
+        def _replace_link(m):
+            url = m.group(1)
+            label = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+            if not label or label == url:
+                return url
+            return f"{label} ( {url} )"
+        text = re.sub(
+            r'<a\s[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>',
+            _replace_link, text, flags=re.DOTALL | re.IGNORECASE
+        )
+        # Convert <img src="url" alt="text"> to "[text] (url)" or just "(url)"
+        def _replace_img(m):
+            src = m.group(1)
+            alt = (m.group(2) or '').strip() if m.group(2) else ''
+            if alt:
+                return f"[{alt}] ( {src} )"
+            return f"( {src} )"
+        text = re.sub(
+            r'<img\s[^>]*src=["\']([^"\']+)["\'][^>]*?alt=["\']([^"\']*)["\'][^>]*/?>',
+            _replace_img, text, flags=re.IGNORECASE
+        )
+        text = re.sub(
+            r'<img\s[^>]*src=["\']([^"\']+)["\'][^>]*/?>',
+            lambda m: f"( {m.group(1)} )", text, flags=re.IGNORECASE
+        )
         # Convert block elements to newlines
         text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
         text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
