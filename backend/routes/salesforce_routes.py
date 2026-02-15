@@ -3005,7 +3005,7 @@ async def import_funded_loans_to_mum(
             )
             SELECT
                 COALESCE(
-                    NULLIF(l.borrower_name, ''),
+                    NULLIF(CASE WHEN l.borrower_name ~ '^[0-9a-zA-Z]{15,18}$' THEN NULL ELSE l.borrower_name END, ''),
                     NULLIF(TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')), ''),
                     'Client - ' || l.loan_number
                 ),
@@ -3112,7 +3112,8 @@ async def fix_mum_client_names(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     try:
-        # Step 1: Fix from loans.borrower_name where it exists and is meaningful
+        # Step 1: Fix from loans.borrower_name where it's a real name (not a SF ID)
+        # SF Contact IDs are 15-18 char alphanumeric strings like 0038c00002l706jAAA
         from_loans = db.execute(text("""
             UPDATE mum_clients m
             SET client_name = l.borrower_name
@@ -3121,7 +3122,9 @@ async def fix_mum_client_names(
             AND l.borrower_name IS NOT NULL
             AND l.borrower_name != ''
             AND l.borrower_name != 'Unknown Borrower'
-            AND (m.client_name LIKE 'Client - SF-%' OR m.client_name LIKE 'Client - %')
+            AND l.borrower_name !~ '^[0-9a-zA-Z]{15,18}$'
+            AND (m.client_name LIKE 'Client - %'
+                 OR m.client_name ~ '^[0-9a-zA-Z]{15,18}$')
             RETURNING m.id, m.client_name, m.loan_number
         """))
         fixed_from_loans = from_loans.fetchall()
@@ -3137,12 +3140,14 @@ async def fix_mum_client_names(
             AND l.borrower_email IS NOT NULL
             AND (le.first_name IS NOT NULL OR le.last_name IS NOT NULL)
             AND TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')) != ''
-            AND (m.client_name LIKE 'Client - SF-%' OR m.client_name LIKE 'Client - %')
+            AND (m.client_name LIKE 'Client - %'
+                 OR m.client_name ~ '^[0-9a-zA-Z]{15,18}$')
             RETURNING m.id, m.client_name, m.loan_number
         """))
         fixed_from_leads = from_leads.fetchall()
 
         # Step 3: Also fix the loans table borrower_name from leads for future imports
+        # Includes loans where borrower_name is a Salesforce Contact ID
         loans_fixed = db.execute(text("""
             UPDATE loans l
             SET borrower_name = TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, ''))
@@ -3151,7 +3156,8 @@ async def fix_mum_client_names(
             AND le.email IS NOT NULL
             AND (le.first_name IS NOT NULL OR le.last_name IS NOT NULL)
             AND TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')) != ''
-            AND (l.borrower_name IS NULL OR l.borrower_name = '' OR l.borrower_name = 'Unknown Borrower')
+            AND (l.borrower_name IS NULL OR l.borrower_name = '' OR l.borrower_name = 'Unknown Borrower'
+                 OR l.borrower_name ~ '^[0-9a-zA-Z]{15,18}$')
             RETURNING l.id, l.loan_number
         """))
         loans_updated = loans_fixed.fetchall()
@@ -3161,7 +3167,8 @@ async def fix_mum_client_names(
         # Count remaining unfixed
         remaining = db.execute(text("""
             SELECT COUNT(*) FROM mum_clients
-            WHERE client_name LIKE 'Client - SF-%' OR client_name LIKE 'Client - %'
+            WHERE client_name LIKE 'Client - %'
+               OR client_name ~ '^[0-9a-zA-Z]{15,18}$'
         """)).scalar()
 
         return {
