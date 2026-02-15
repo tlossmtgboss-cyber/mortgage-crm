@@ -46,6 +46,20 @@ const EMPTY_FORM = {
   intake_questions: [],
 };
 
+const extractErrorMessage = (err) => {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+  if (typeof err.message === 'string') return err.message;
+  return String(err);
+};
+
+const normalizeType = (t) => ({
+  ...t,
+  duration_minutes: t.duration_minutes || t.default_duration_minutes || 30,
+  requires_loan: t.requires_loan ?? t.requires_loan_id ?? false,
+  requires_lead: t.requires_lead ?? t.requires_lead_id ?? false,
+});
+
 const AppointmentTypesManager = () => {
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +69,19 @@ const AppointmentTypesManager = () => {
   const [editingType, setEditingType] = useState(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [isDefaults, setIsDefaults] = useState(false);
+
+  const seedDefaults = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/scheduler/seed-defaults`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const loadTypes = useCallback(async () => {
     setLoading(true);
@@ -65,13 +92,35 @@ const AppointmentTypesManager = () => {
       });
       if (!res.ok) throw new Error('Failed to load appointment types');
       const data = await res.json();
-      setTypes(data.appointment_types || data || []);
+
+      // If defaults returned (no DB records), seed them first
+      if (data.source === 'defaults') {
+        setIsDefaults(true);
+        const seeded = await seedDefaults();
+        if (seeded) {
+          // Re-fetch now that defaults are seeded in DB
+          const res2 = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types?include_inactive=true`, {
+            headers: getAuthHeaders(),
+          });
+          if (res2.ok) {
+            const data2 = await res2.json();
+            setTypes((data2.appointment_types || []).map(normalizeType));
+            setIsDefaults(false);
+            return;
+          }
+        }
+        // Fallback: show defaults as read-only
+        setTypes((data.appointment_types || []).map(normalizeType));
+      } else {
+        setIsDefaults(false);
+        setTypes((data.appointment_types || data || []).map(normalizeType));
+      }
     } catch (err) {
-      setError(err.message);
+      setError(extractErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [seedDefaults]);
 
   useEffect(() => {
     loadTypes();
@@ -132,16 +181,20 @@ const AppointmentTypesManager = () => {
   };
 
   const openEdit = (type) => {
+    if (!type.id) {
+      setError('Cannot edit default types. Please save your configuration first.');
+      return;
+    }
     setEditingType(type);
     setForm({
       type_name: type.type_name || '',
       type_key: type.type_key || '',
       description: type.description || '',
-      duration_minutes: type.duration_minutes || 30,
+      duration_minutes: type.duration_minutes || type.default_duration_minutes || 30,
       allowed_modes: type.allowed_modes || ['video'],
       color: type.color || '#218D8D',
-      requires_loan: type.requires_loan || false,
-      requires_lead: type.requires_lead || false,
+      requires_loan: type.requires_loan ?? type.requires_loan_id ?? false,
+      requires_lead: type.requires_lead ?? type.requires_lead_id ?? false,
       is_public: type.is_public ?? true,
       is_active: type.is_active ?? true,
       intake_questions: type.intake_questions || [],
@@ -153,10 +206,30 @@ const AppointmentTypesManager = () => {
     if (!form.type_name.trim()) return;
     setSaving(true);
     try {
-      const payload = { ...form };
-      if (!payload.type_key) {
-        payload.type_key = generateKey(payload.type_name);
-      }
+      const type_key = form.type_key || generateKey(form.type_name);
+
+      // Map frontend field names to backend field names
+      const payload = editingType ? {
+        type_name: form.type_name,
+        description: form.description,
+        default_duration_minutes: form.duration_minutes,
+        allowed_modes: form.allowed_modes,
+        color: form.color,
+        is_active: form.is_active,
+        is_public: form.is_public,
+        intake_questions: form.intake_questions,
+      } : {
+        type_key,
+        type_name: form.type_name,
+        description: form.description,
+        default_duration_minutes: form.duration_minutes,
+        allowed_modes: form.allowed_modes,
+        color: form.color,
+        requires_loan_id: form.requires_loan,
+        requires_lead_id: form.requires_lead,
+        is_public: form.is_public,
+        intake_questions: form.intake_questions,
+      };
 
       const url = editingType
         ? `${API_BASE}/api/v1/scheduler/appointment-types/${editingType.id}`
@@ -170,43 +243,55 @@ const AppointmentTypesManager = () => {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.error?.message || 'Failed to save');
+        const detail = errData.detail;
+        const errorMsg = typeof detail === 'string' ? detail
+          : Array.isArray(detail) ? detail.map(d => d.msg || String(d)).join(', ')
+          : errData.error?.message || 'Failed to save';
+        throw new Error(errorMsg);
       }
 
       setShowModal(false);
       await loadTypes();
     } catch (err) {
-      setError(err.message);
+      setError(extractErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
   const handleToggleActive = async (type) => {
+    if (!type.id) {
+      setError('Cannot modify default types. Please save your configuration first.');
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types/${type.id}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ is_active: !type.is_active }),
       });
-      if (!res.ok) throw new Error('Failed to update');
+      if (!res.ok) throw new Error('Failed to update appointment type');
       await loadTypes();
     } catch (err) {
-      setError(err.message);
+      setError(extractErrorMessage(err));
     }
   };
 
   const handleDelete = async (id) => {
+    if (!id) {
+      setError('Cannot delete default types.');
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
-      if (!res.ok) throw new Error('Failed to delete');
+      if (!res.ok) throw new Error('Failed to delete appointment type');
       setDeleteConfirm(null);
       await loadTypes();
     } catch (err) {
-      setError(err.message);
+      setError(extractErrorMessage(err));
     }
   };
 
