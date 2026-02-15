@@ -17,6 +17,10 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
     """Register AI chat and orchestrator routes."""
     from main import User
 
+    # Extract functions passed from main.py via kwargs
+    log_ai_action_to_mission_control = kwargs.get('log_ai_action_to_mission_control')
+    update_ai_action_outcome = kwargs.get('update_ai_action_outcome')
+
     @app.post("/api/v1/ai/orchestrator-chat-stream")
     async def orchestrator_chat_stream(
         request: Request,
@@ -3830,7 +3834,10 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         try:
             from openai import OpenAI
             import json
+            import time
+            from datetime import datetime
             from integrations.twilio_service import sms_client
+            from database.models import SMSMessage, Task
 
             client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -3847,19 +3854,24 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             # Activity log to track what AI does
             activity_log = []
 
-            # Log autonomous task to Mission Control
-            action_id = await log_ai_action_to_mission_control(
-                db=db,
-                agent_name="Autonomous AI Agent",
-                action_type="autonomous_task",
-                lead_id=lead_id,
-                user_id=current_user.id,
-                context={"task": task[:200], "lead_name": lead_name},
-                reasoning=f"Executing autonomous task: {task}",
-                autonomy_level="full",  # This is fully autonomous!
-                required_approval=False,
-                status="pending"
-            )
+            # Log autonomous task to Mission Control (optional)
+            action_id = None
+            if log_ai_action_to_mission_control:
+                try:
+                    action_id = await log_ai_action_to_mission_control(
+                        db=db,
+                        agent_name="Autonomous AI Agent",
+                        action_type="autonomous_task",
+                        lead_id=lead_id,
+                        user_id=current_user.id,
+                        context={"task": task[:200], "lead_name": lead_name},
+                        reasoning=f"Executing autonomous task: {task}",
+                        autonomy_level="full",
+                        required_approval=False,
+                        status="pending"
+                    )
+                except Exception as mc_err:
+                    logger.warning(f"Mission control logging failed: {mc_err}")
 
             # Define tools available to AI
             tools = [
@@ -3989,54 +4001,66 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                             # Send SMS using Twilio
                             try:
                                 if not sms_client.enabled:
-                                    tool_result = {"success": False, "error": "SMS service not configured"}
+                                    tool_result = {"success": False, "error": "SMS service not configured. Check Twilio credentials."}
+                                    logger.error("SMS client not enabled — missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_PHONE_NUMBER")
                                 else:
+                                    to_num = function_args["to_number"]
+                                    sms_body = function_args["message"]
                                     message_sid = await sms_client.send_sms(
-                                        to_number=function_args["to_number"],
-                                        message=function_args["message"]
+                                        to_number=to_num,
+                                        message=sms_body
                                     )
 
-                                    # Log SMS
-                                    sms_record = SMSMessage(
-                                        user_id=current_user.id,
-                                        lead_id=lead_id,
-                                        to_number=function_args["to_number"],
-                                        from_number=sms_client.from_number,
-                                        message=function_args["message"],
-                                        direction="outbound",
-                                        status="sent",
-                                        twilio_sid=message_sid
-                                    )
-                                    db.add(sms_record)
-                                    db.commit()
+                                    if not message_sid:
+                                        tool_result = {"success": False, "error": "SMS send failed — check Twilio logs"}
+                                        logger.error(f"SMS send returned None for to={to_num}")
+                                    else:
+                                        # Log SMS to database
+                                        try:
+                                            sms_record = SMSMessage(
+                                                user_id=current_user.id,
+                                                lead_id=lead_id,
+                                                to_number=to_num,
+                                                from_number=sms_client.from_number,
+                                                message=sms_body,
+                                                direction="outbound",
+                                                status="sent",
+                                                twilio_sid=message_sid,
+                                                ai_generated=True
+                                            )
+                                            db.add(sms_record)
+                                            db.commit()
+                                        except Exception as db_err:
+                                            logger.warning(f"Failed to log SMS to DB: {db_err}")
+                                            db.rollback()
 
-                                    tool_result = {
-                                        "success": True,
-                                        "message_sid": message_sid,
-                                        "message": "SMS sent successfully"
-                                    }
+                                        tool_result = {
+                                            "success": True,
+                                            "message_sid": message_sid,
+                                            "message": "SMS sent successfully"
+                                        }
 
-                                    activity_log.append({
-                                        "icon": "📤",
-                                        "message": f"Sent SMS to {function_args['to_number']}: {function_args['message'][:50]}...",
-                                        "timestamp": datetime.now().isoformat()
-                                    })
+                                        activity_log.append({
+                                            "icon": "📤",
+                                            "message": f"Sent SMS to {to_num}: {sms_body[:50]}...",
+                                            "timestamp": datetime.now().isoformat()
+                                        })
                             except Exception as e:
-                                tool_result = {"success": False, "error": "Internal server error"}
+                                logger.error(f"SMS tool error: {e}", exc_info=True)
+                                tool_result = {"success": False, "error": f"SMS failed: {str(e)}"}
 
                         elif function_name == "schedule_appointment":
                             # Create calendar appointment
                             try:
                                 task_record = Task(
-                                    user_id=current_user.id,
+                                    owner_id=current_user.id,
                                     title=function_args["title"],
                                     description=function_args.get("notes", ""),
                                     due_date=datetime.fromisoformat(function_args["date_time"]),
                                     priority="high",
                                     status="pending",
-                                    entity_type="lead",
-                                    entity_id=lead_id,
-                                    created_by=current_user.id
+                                    related_type="lead",
+                                    lead_id=lead_id,
                                 )
                                 db.add(task_record)
                                 db.commit()
@@ -4059,15 +4083,14 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                             # Create follow-up task
                             try:
                                 task_record = Task(
-                                    user_id=current_user.id,
+                                    owner_id=current_user.id,
                                     title=function_args["title"],
                                     description=function_args.get("description", ""),
                                     due_date=datetime.fromisoformat(function_args["due_date"]) if function_args.get("due_date") else None,
                                     priority=function_args.get("priority", "medium"),
                                     status="pending",
-                                    entity_type="lead",
-                                    entity_id=lead_id,
-                                    created_by=current_user.id
+                                    related_type="lead",
+                                    lead_id=lead_id,
                                 )
                                 db.add(task_record)
                                 db.commit()
@@ -4100,18 +4123,21 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             final_message = messages[-1].content if hasattr(messages[-1], 'content') else "Task completed"
 
             # Update Mission Control with success
-            if action_id:
-                await update_ai_action_outcome(
-                    db=db,
-                    action_id=action_id,
-                    outcome="success",
-                    impact_score=0.9,  # High impact for autonomous actions!
-                    metadata={
-                        "activity_log": activity_log,
-                        "tools_used": len(activity_log),
-                        "iterations": iteration + 1
-                    }
-                )
+            if action_id and update_ai_action_outcome:
+                try:
+                    await update_ai_action_outcome(
+                        db=db,
+                        action_id=action_id,
+                        outcome="success",
+                        impact_score=0.9,
+                        metadata={
+                            "activity_log": activity_log,
+                            "tools_used": len(activity_log),
+                            "iterations": iteration + 1
+                        }
+                    )
+                except Exception:
+                    pass
 
             return {
                 "success": True,
@@ -4121,17 +4147,16 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             }
 
         except Exception as e:
-            logger.error(f"Error in autonomous task: {e}")
+            logger.error(f"Error in autonomous task: {e}", exc_info=True)
 
             # Update Mission Control with failure
-            # Note: action_id might not be in scope here, but we'll try
             try:
-                if 'action_id' in locals() and action_id:
+                if 'action_id' in locals() and action_id and update_ai_action_outcome:
                     await update_ai_action_outcome(
                         db=db,
                         action_id=action_id,
                         outcome="failure",
-                        metadata={"error": "Internal server error"}
+                        metadata={"error": str(e)}
                     )
             except Exception:
                 pass  # Don't fail main response if logging fails
