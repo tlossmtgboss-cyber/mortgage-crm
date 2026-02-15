@@ -3,6 +3,7 @@ Salesforce OAuth Integration
 Handles CRM sync and API access
 """
 import os
+import re
 import logging
 import secrets
 import hashlib
@@ -13,6 +14,15 @@ import requests
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
+
+_SF_INSTANCE_URL_PATTERN = re.compile(r'^https://[a-zA-Z0-9\-]+\.salesforce\.com$')
+
+
+def _validate_salesforce_url(instance_url: str) -> str:
+    if not _SF_INSTANCE_URL_PATTERN.match(instance_url):
+        raise ValueError("Invalid Salesforce instance URL")
+    return instance_url
+
 
 # Salesforce API version - centralized for easy updates
 # See https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/api_versions.htm
@@ -335,6 +345,11 @@ class SalesforceClient:
             Query results or None on error
         """
         try:
+            _validate_salesforce_url(instance_url)
+        except ValueError:
+            logger.error(f"Invalid Salesforce instance URL in query")
+            return None
+        try:
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json"
@@ -372,6 +387,11 @@ class SalesforceClient:
         Args:
             raise_for_401: If True, re-raises HTTPError for 401 responses (for auto-refresh)
         """
+        try:
+            _validate_salesforce_url(instance_url)
+        except ValueError:
+            logger.error(f"Invalid Salesforce instance URL in create_record")
+            return None
         try:
             headers = {
                 "Authorization": f"Bearer {access_token}",
@@ -411,6 +431,11 @@ class SalesforceClient:
             raise_for_401: If True, re-raises HTTPError for 401 responses (for auto-refresh)
         """
         try:
+            _validate_salesforce_url(instance_url)
+        except ValueError:
+            logger.error(f"Invalid Salesforce instance URL in update_record")
+            return False
+        try:
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json"
@@ -441,6 +466,11 @@ class SalesforceClient:
         record_id: str
     ) -> Optional[Dict[str, Any]]:
         """Get a Salesforce record by ID"""
+        try:
+            _validate_salesforce_url(instance_url)
+        except ValueError:
+            logger.error(f"Invalid Salesforce instance URL in get_record")
+            return None
         try:
             headers = {
                 "Authorization": f"Bearer {access_token}",

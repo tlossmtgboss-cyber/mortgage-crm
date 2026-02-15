@@ -9,6 +9,7 @@ from sqlalchemy import text
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
+from urllib.parse import urlparse
 from database import get_db
 from services.recruit_social_service import recruit_social_service, SocialProfile
 import logging
@@ -18,6 +19,18 @@ from sqlalchemy.exc import SQLAlchemyError
 logger = logging.getLogger(__name__)
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
+_ALLOWED_REDIRECT_HOSTS = {"app.perenniaai.com", "localhost", "127.0.0.1"}
+
+
+def _validate_redirect_uri(uri: str) -> str:
+    parsed = urlparse(uri)
+    hostname = parsed.hostname or ""
+    if parsed.scheme not in ("https", "http"):
+        raise HTTPException(status_code=400, detail="Invalid redirect URI scheme")
+    if hostname not in _ALLOWED_REDIRECT_HOSTS and not hostname.endswith(".perenniaai.com"):
+        raise HTTPException(status_code=400, detail="Redirect URI not allowed")
+    return uri
 
 
 def _get_current_user():
@@ -68,6 +81,7 @@ async def get_facebook_oauth_url(
     redirect_uri: str = Query(..., description="OAuth callback URL")
 ):
     """Get Facebook OAuth authorization URL."""
+    _validate_redirect_uri(redirect_uri)
     url = recruit_social_service.get_facebook_oauth_url(redirect_uri)
     return {"oauth_url": url}
 
@@ -77,6 +91,7 @@ async def get_linkedin_oauth_url(
     redirect_uri: str = Query(..., description="OAuth callback URL")
 ):
     """Get LinkedIn OAuth authorization URL."""
+    _validate_redirect_uri(redirect_uri)
     url = recruit_social_service.get_linkedin_oauth_url(redirect_uri)
     return {"oauth_url": url}
 

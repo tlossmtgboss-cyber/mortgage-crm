@@ -12,6 +12,9 @@ import os
 import re
 import json
 import logging
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import httpx
@@ -19,6 +22,38 @@ from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session
 
 from models.content_marketing import ContentBrandVoice
+
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+
+def _validate_url_for_ssrf(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("URL scheme must be http or https")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL must have a valid hostname")
+    if hostname.lower() in ("localhost", "0.0.0.0"):
+        raise ValueError("Blocked hostname")
+    try:
+        addrinfos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        raise ValueError("Could not resolve hostname")
+    for family, _type, _proto, _canonname, sockaddr in addrinfos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        for network in _BLOCKED_NETWORKS:
+            if ip in network:
+                raise ValueError("Blocked IP address")
+    return url
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +98,11 @@ class BrandVoiceAnalyzerService:
         Returns:
             Dict with extracted content and metadata
         """
+        try:
+            _validate_url_for_ssrf(url)
+        except ValueError:
+            return {"success": False, "error": "Invalid or blocked URL"}
+
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(url, headers={

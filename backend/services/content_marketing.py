@@ -11,6 +11,9 @@ Services for content marketing automation:
 
 import logging
 import uuid
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
@@ -18,6 +21,39 @@ from sqlalchemy import text
 import json
 
 logger = logging.getLogger(__name__)
+
+
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+
+def _validate_url_for_ssrf(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("URL scheme must be http or https")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL must have a valid hostname")
+    if hostname.lower() in ("localhost", "0.0.0.0"):
+        raise ValueError("Blocked hostname")
+    try:
+        addrinfos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        raise ValueError("Could not resolve hostname")
+    for family, _type, _proto, _canonname, sockaddr in addrinfos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        for network in _BLOCKED_NETWORKS:
+            if ip in network:
+                raise ValueError("Blocked IP address")
+    return url
 
 
 class BrandVoiceAnalyzerService:
@@ -152,6 +188,10 @@ class BrandVoiceAnalyzerService:
 
     async def fetch_website_content(self, url: str) -> Dict[str, Any]:
         """Fetch content from a website for analysis."""
+        try:
+            _validate_url_for_ssrf(url)
+        except ValueError:
+            return {"success": False, "error": "Invalid or blocked URL"}
         try:
             import httpx
             async with httpx.AsyncClient() as client:
