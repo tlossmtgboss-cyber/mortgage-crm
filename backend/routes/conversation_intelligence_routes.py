@@ -9,6 +9,7 @@ Provides endpoints for:
 - Testing tone analysis
 """
 
+import html as html_mod
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
@@ -697,7 +698,7 @@ async def send_email_response(
             result = notification_service.send_email(
                 to_email=to_email,
                 subject=subject,
-                html_content=f"<div style='font-family: Arial, sans-serif;'>{__import__('html').escape(body).replace(chr(10), '<br>')}</div>"
+                html_content=f"<div style='font-family: Arial, sans-serif;'>{html_mod.escape(body).replace(chr(10), '<br>')}</div>"
             )
             logger.info(f"Email sent via SendGrid to {to_email} for conversation {conversation_id}")
             return result

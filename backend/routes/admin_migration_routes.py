@@ -2,6 +2,7 @@
 Admin Migration Routes
 Temporary migration endpoints for database updates and admin bootstrapping
 """
+import hmac
 import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -52,7 +53,7 @@ async def run_ai_migration_endpoint(request: dict):
     """
     if not ADMIN_MIGRATION_SECRET:
         raise HTTPException(status_code=503, detail="Migration endpoint not configured")
-    if not request.get("secret") or not __import__('hmac').compare_digest(request.get("secret", ""), ADMIN_MIGRATION_SECRET):
+    if not request.get("secret") or not hmac.compare_digest(request.get("secret", ""), ADMIN_MIGRATION_SECRET):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     try:
@@ -149,7 +150,7 @@ async def bootstrap_admin_user(
     try:
         if not ADMIN_MIGRATION_SECRET:
             raise HTTPException(status_code=503, detail="Bootstrap endpoint not configured")
-        if not bootstrap_key or not __import__('hmac').compare_digest(bootstrap_key, ADMIN_MIGRATION_SECRET):
+        if not bootstrap_key or not hmac.compare_digest(bootstrap_key, ADMIN_MIGRATION_SECRET):
             raise HTTPException(status_code=403, detail="Invalid bootstrap key")
 
         user = db.query(User).filter(User.id == user_id).first()

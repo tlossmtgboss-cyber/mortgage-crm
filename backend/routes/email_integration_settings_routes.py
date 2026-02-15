@@ -3,6 +3,7 @@ Email Integration Settings Routes
 Comprehensive error handling pattern for email configuration
 """
 
+import html as html_mod
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -597,14 +598,14 @@ async def send_test_email(
                     <strong>{_html.escape(settings.from_name or settings.assistant_name or "")}</strong><br>
                     {_html.escape(settings.company_name or "")}
                 </p>
-                {f'<img src="{__import__("html").escape(settings.logo_url)}" alt="Logo" style="max-width: 150px; margin-top: 10px;">' if settings.logo_url and settings.logo_url.startswith(('https://', 'http://')) else ''}
-                {f'<div style="margin-top: 20px; color: #666; font-size: 12px;">{__import__("html").escape(settings.email_signature)}</div>' if settings.email_signature else ''}
+                {f'<img src="{html_mod.escape(settings.logo_url)}" alt="Logo" style="max-width: 150px; margin-top: 10px;">' if settings.logo_url and settings.logo_url.startswith(('https://', 'http://')) else ''}
+                {f'<div style="margin-top: 20px; color: #666; font-size: 12px;">{html_mod.escape(settings.email_signature)}</div>' if settings.email_signature else ''}
             </div>
             """
         else:
             html_body = f"""
             <div style="font-family: Arial, sans-serif;">
-                <p>Test email from {__import__("html").escape(settings.assistant_name or "")}</p>
+                <p>Test email from {html_mod.escape(settings.assistant_name or "")}</p>
                 <p>Configuration is working correctly.</p>
             </div>
             """
@@ -746,8 +747,8 @@ async def preview_email_signature(db: Session = Depends(get_db)):
                 <span style="color: #666;">{_html.escape(settings.assistant_title or 'AI Assistant')}</span><br>
                 <span style="color: #666;">{_html.escape(settings.company_name or "")}</span>
             </div>
-            {f'<img src="{__import__("html").escape(settings.logo_url)}" alt="Logo" style="max-width: 120px; margin-top: 15px;">' if settings.logo_url and settings.logo_url.startswith(('https://', 'http://')) else ''}
-            {f'<div style="margin-top: 15px; color: #666; font-size: 12px; white-space: pre-wrap;">{__import__("html").escape(settings.email_signature)}</div>' if settings.email_signature else ''}
+            {f'<img src="{html_mod.escape(settings.logo_url)}" alt="Logo" style="max-width: 120px; margin-top: 15px;">' if settings.logo_url and settings.logo_url.startswith(('https://', 'http://')) else ''}
+            {f'<div style="margin-top: 15px; color: #666; font-size: 12px; white-space: pre-wrap;">{html_mod.escape(settings.email_signature)}</div>' if settings.email_signature else ''}
         </div>
         """
 
