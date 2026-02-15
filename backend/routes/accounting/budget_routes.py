@@ -389,8 +389,10 @@ async def update_budget(
     old_values = budget.to_dict()
 
     update_data = data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in update_data.items():
-        setattr(budget, key, value)
+        if key not in _protected:
+            setattr(budget, key, value)
 
     log_audit(
         db, org_id, user_id, 'update', 'budget_template', budget.id,
@@ -874,8 +876,10 @@ async def update_budget_item(
         raise HTTPException(status_code=404, detail="Budget item not found")
 
     update_data = data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in update_data.items():
-        setattr(item, key, value)
+        if key not in _protected:
+            setattr(item, key, value)
 
     # Recalculate budget totals
     calculate_budget_totals(db, budget)

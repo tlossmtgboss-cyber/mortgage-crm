@@ -66,8 +66,9 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
         scores = calculate_referral_scores(data)
 
         # Update lead with calculated scores
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
         for key, value in scores.items():
-            if hasattr(lead, key):
+            if hasattr(lead, key) and key not in _protected:
                 setattr(lead, key, value)
 
         db.commit()
@@ -84,8 +85,9 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
 
         scores = calculate_referral_scores(data)
 
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
         for key, value in scores.items():
-            if hasattr(loan, key):
+            if hasattr(loan, key) and key not in _protected:
                 setattr(loan, key, value)
 
         db.commit()
@@ -102,8 +104,9 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
 
         scores = calculate_referral_scores(data)
 
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
         for key, value in scores.items():
-            if hasattr(client, key):
+            if hasattr(client, key) and key not in _protected:
                 setattr(client, key, value)
 
         db.commit()

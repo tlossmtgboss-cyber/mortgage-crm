@@ -417,8 +417,10 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         # Capture old status for workflow trigger
         old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
 
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id', 'owner_id'}
         for key, value in lead_update.dict(exclude_unset=True).items():
-            setattr(lead, key, value)
+            if key not in _protected:
+                setattr(lead, key, value)
 
         # Recalculate AI score
         lead.ai_score = calculate_lead_score(lead)

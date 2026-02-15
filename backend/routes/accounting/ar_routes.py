@@ -324,8 +324,10 @@ async def update_customer(
     old_values = customer.to_dict()
 
     update_data = data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in update_data.items():
-        setattr(customer, key, value)
+        if key not in _protected:
+            setattr(customer, key, value)
 
     log_audit(
         db, org_id, 1, 'update', 'ar_customer', customer.id,

@@ -305,8 +305,10 @@ async def update_income_source(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid verification status")
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in update_data.items():
-        setattr(source, key, value)
+        if key not in _protected:
+            setattr(source, key, value)
 
     source.updated_at = datetime.utcnow()
     db.commit()

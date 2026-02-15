@@ -347,8 +347,10 @@ async def update_vendor(
     old_values = vendor.to_dict()
 
     update_data = data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at'}
     for key, value in update_data.items():
-        setattr(vendor, key, value)
+        if key not in _protected:
+            setattr(vendor, key, value)
 
     log_audit(
         db, org_id, 1, 'update', 'ap_vendor', vendor.id,

@@ -627,8 +627,10 @@ async def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in task_update.dict(exclude_unset=True).items():
-        setattr(task, key, value)
+        if key not in _protected:
+            setattr(task, key, value)
 
     if task_update.type == TaskType.COMPLETED:
         task.completed_at = datetime.now(timezone.utc)

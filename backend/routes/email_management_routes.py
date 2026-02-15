@@ -285,8 +285,10 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
             ).first()
 
             if existing:
+                _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
                 for key, value in signature_data.model_dump(exclude_unset=True).items():
-                    setattr(existing, key, value)
+                    if key not in _protected:
+                        setattr(existing, key, value)
                 existing.updated_at = datetime.now(timezone.utc)
                 db.commit()
                 db.refresh(existing)
