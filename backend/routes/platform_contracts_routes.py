@@ -312,8 +312,10 @@ async def update_contract(
             update_data[date_field] = _parse_date(update_data[date_field])
 
     try:
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
         for key, value in update_data.items():
-            setattr(contract, key, value)
+            if key not in _protected:
+                setattr(contract, key, value)
 
         contract.updated_at = datetime.now(timezone.utc)
         db.commit()

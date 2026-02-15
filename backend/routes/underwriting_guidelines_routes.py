@@ -286,8 +286,10 @@ async def update_guideline(
     if "category" in update_data and update_data["category"]:
         update_data["category"] = update_data["category"].value
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_data.items():
-        setattr(guideline, field, value)
+        if field not in _protected:
+            setattr(guideline, field, value)
 
     db.commit()
     db.refresh(guideline)

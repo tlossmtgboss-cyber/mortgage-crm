@@ -263,8 +263,9 @@ async def update_survey_template(
 
     # Update fields if provided
     update_fields = data.dict(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_fields.items():
-        if value is not None:
+        if value is not None and field not in _protected:
             setattr(template, field, value)
 
     db.commit()

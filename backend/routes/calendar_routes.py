@@ -252,8 +252,10 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in event_update.model_dump(exclude_unset=True).items():
-        setattr(event, key, value)
+        if key not in _protected:
+            setattr(event, key, value)
 
     event.updated_at = datetime.now(timezone.utc)
     db.commit()

@@ -1023,8 +1023,10 @@ async def update_org_microsite_settings(
 
     # Update fields
     update_dict = update_data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in update_dict.items():
-        setattr(settings, key, value)
+        if key not in _protected:
+            setattr(settings, key, value)
 
     db.commit()
     db.refresh(settings)

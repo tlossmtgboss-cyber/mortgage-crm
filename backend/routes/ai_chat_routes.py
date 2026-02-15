@@ -4047,7 +4047,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                                         })
                             except Exception as e:
                                 logger.error(f"SMS tool error: {e}", exc_info=True)
-                                tool_result = {"success": False, "error": f"SMS failed: {str(e)}"}
+                                tool_result = {"success": False, "error": "SMS failed"}
 
                         elif function_name == "schedule_appointment":
                             # Create calendar appointment

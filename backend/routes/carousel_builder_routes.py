@@ -870,8 +870,9 @@ async def update_project(
         project.width = width
         project.height = height
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in update_data.items():
-        if hasattr(project, key):
+        if hasattr(project, key) and key not in _protected:
             setattr(project, key, value)
 
     project.updated_at = datetime.now(timezone.utc)
@@ -1107,8 +1108,9 @@ async def update_slide(
 
     # Update fields
     update_data = slide_data.dict(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in update_data.items():
-        if hasattr(slide, key):
+        if hasattr(slide, key) and key not in _protected:
             setattr(slide, key, value)
 
     slide.updated_at = datetime.now(timezone.utc)

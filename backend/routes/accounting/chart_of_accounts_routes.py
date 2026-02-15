@@ -426,7 +426,10 @@ async def update_account(
 
     # Update fields
     update_fields = data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_fields.items():
+        if field in _protected:
+            continue
         if field == 'parent_account_id' and value:
             value = uuid.UUID(value)
         setattr(account, field, value)

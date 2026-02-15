@@ -383,8 +383,10 @@ async def update_service(
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
 
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(service, key, value)
+        if key not in _protected:
+            setattr(service, key, value)
 
     service.updated_at = datetime.utcnow()
     db.commit()

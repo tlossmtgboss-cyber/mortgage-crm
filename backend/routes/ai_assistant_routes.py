@@ -392,7 +392,7 @@ async def execute_ai_function(
                     "result": f"SMS sent successfully to {recipient_name or recipient_phone}"
                 }
             except Exception as sms_error:
-                return {"success": False, "error": f"SMS failed: {str(sms_error)}"}
+                return {"success": False, "error": "SMS failed"}
 
         elif function_name == "update_user_profile":
             # Update user profile

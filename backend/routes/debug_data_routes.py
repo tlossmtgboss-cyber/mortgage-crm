@@ -977,7 +977,7 @@ def register_debug_data_routes(
 
             except Exception as parse_error:
                 logger.error(f"Claude parsing error: {parse_error}")
-                raise HTTPException(status_code=500, detail=f"Parsing error: {str(parse_error)}")
+                raise HTTPException(status_code=500, detail="Parsing error")
 
         except HTTPException:
             raise

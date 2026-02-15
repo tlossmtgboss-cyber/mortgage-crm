@@ -160,8 +160,10 @@ async def update_process_template(
         raise HTTPException(status_code=404, detail="Process template not found")
 
     update_data = template_update.dict(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_data.items():
-        setattr(db_template, field, value)
+        if field not in _protected:
+            setattr(db_template, field, value)
 
     db_template.updated_at = datetime.now(timezone.utc)
     db.commit()

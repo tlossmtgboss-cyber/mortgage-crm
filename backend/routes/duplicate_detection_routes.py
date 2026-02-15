@@ -1856,8 +1856,9 @@ async def update_ai_action(
             raise HTTPException(status_code=404, detail="Action not found")
 
         # Update fields
+        _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
         for key, value in updates.items():
-            if hasattr(action, key):
+            if hasattr(action, key) and key not in _protected:
                 setattr(action, key, value)
 
         # Set completed_at if outcome is set and not already set

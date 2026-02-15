@@ -410,7 +410,7 @@ async def get_profile_settings(
         )
     except Exception as e:
         logger.error(f"Error fetching profile settings: {e}")
-        raise DatabaseException(f"Failed to retrieve profile settings: {str(e)}")
+        raise DatabaseException("Failed to retrieve profile settings", original_error=str(e))
 
 
 @router.put("")
@@ -494,7 +494,7 @@ async def update_profile_settings(
     except Exception as e:
         logger.error(f"Error updating profile: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to update profile: {str(e)}")
+        raise DatabaseException("Failed to update profile", original_error=str(e))
 
 
 @router.put("/password")
@@ -529,7 +529,7 @@ async def change_password(
     except SQLAlchemyError as e:
         logger.error(f"Error changing password: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to change password: {str(e)}")
+        raise DatabaseException("Failed to change password", original_error=str(e))
 
 
 @router.post("/photo")
@@ -596,7 +596,7 @@ async def upload_profile_photo(
         raise
     except SQLAlchemyError as e:
         logger.error(f"Error uploading photo: {e}")
-        raise DatabaseException(f"Failed to upload photo: {str(e)}")
+        raise DatabaseException("Failed to upload photo", original_error=str(e))
 
 
 @router.delete("/photo")
@@ -622,7 +622,7 @@ async def delete_profile_photo(
     except SQLAlchemyError as e:
         logger.error(f"Error deleting photo: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to delete photo: {str(e)}")
+        raise DatabaseException("Failed to delete photo", original_error=str(e))
 
 
 @router.get("/timezones")

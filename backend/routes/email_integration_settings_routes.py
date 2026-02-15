@@ -445,7 +445,7 @@ async def get_email_settings(db: Session = Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error fetching email settings: {e}")
-        raise DatabaseException(f"Failed to retrieve email settings: {str(e)}")
+        raise DatabaseException("Failed to retrieve email settings", original_error=str(e))
 
 
 @router.put("")
@@ -518,7 +518,7 @@ async def update_email_settings(
     except Exception as e:
         logger.error(f"Error updating email settings: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to update email settings: {str(e)}")
+        raise DatabaseException("Failed to update email settings", original_error=str(e))
 
 
 @router.get("/status")
@@ -558,7 +558,7 @@ async def get_email_status(db: Session = Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error checking email status: {e}")
-        raise DatabaseException(f"Failed to check email status: {str(e)}")
+        raise DatabaseException("Failed to check email status", original_error=str(e))
 
 
 @router.post("/test")
@@ -630,7 +630,7 @@ async def send_test_email(
         raise
     except Exception as e:
         logger.error(f"Failed to send test email: {e}")
-        raise DatabaseException(f"Failed to send test email: {str(e)}")
+        raise DatabaseException("Failed to send test email", original_error=str(e))
 
 
 @router.get("/dns-instructions")
@@ -686,7 +686,7 @@ async def get_dns_instructions(db: Session = Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error getting DNS instructions: {e}")
-        raise DatabaseException(f"Failed to get DNS instructions: {str(e)}")
+        raise DatabaseException("Failed to get DNS instructions", original_error=str(e))
 
 
 @router.post("/verify-dns")
@@ -726,7 +726,7 @@ async def verify_dns(db: Session = Depends(get_db)):
         raise
     except Exception as e:
         logger.error(f"Error verifying DNS: {e}")
-        raise DatabaseException(f"Failed to verify DNS: {str(e)}")
+        raise DatabaseException("Failed to verify DNS", original_error=str(e))
 
 
 @router.get("/preview-signature")
@@ -764,4 +764,4 @@ async def preview_email_signature(db: Session = Depends(get_db)):
         )
     except Exception as e:
         logger.error(f"Error generating preview: {e}")
-        raise DatabaseException(f"Failed to generate preview: {str(e)}")
+        raise DatabaseException("Failed to generate preview", original_error=str(e))

@@ -359,8 +359,10 @@ async def update_bank_account(
         ).update({'is_primary': False})
 
     update_data = data.model_dump(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in update_data.items():
-        setattr(account, key, value)
+        if key not in _protected:
+            setattr(account, key, value)
 
     log_audit(
         db, org_id, 1, 'update', 'bank_account', account.id,

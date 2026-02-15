@@ -444,7 +444,7 @@ async def _get_kpis_from_organizations(db: Session):
         )
     except Exception as e:
         logger.error(f"Error getting KPIs from organizations: {e}")
-        raise DatabaseException(f"Failed to get KPIs: {str(e)}")
+        raise DatabaseException("Failed to get KPIs")
 
 
 async def _list_accounts_from_organizations(db: Session, status: str, search: str, page: int, limit: int, sort: str, order: str):
@@ -566,7 +566,7 @@ async def _list_accounts_from_organizations(db: Session, status: str, search: st
         )
     except Exception as e:
         logger.error(f"Error listing accounts from organizations: {e}")
-        raise DatabaseException(f"Failed to list accounts: {str(e)}")
+        raise DatabaseException("Failed to list accounts")
 
 
 # =============================================================================
@@ -614,7 +614,7 @@ async def run_account_management_migration(
                         result = conn.execute(text(f"DELETE FROM {validated_table}"))
                         results['deleted'][table] = result.rowcount
                     except SQLAlchemyError as e:
-                        results['errors'].append(f"{table}: {str(e)[:50]}")
+                        results['errors'].append(f"{table}: cleanup failed")
 
                 # Delete team members/profiles (whitelist-validated)
                 for table in ['team_members', 'team_member_profiles', 'extracted_data', 'referral_partners']:
@@ -845,7 +845,8 @@ async def run_cleanup_migration(
                 results['deleted'][table] = rowcount
                 logger.info(f"Cleanup: Deleted {rowcount} rows from {table}")
             except SQLAlchemyError as e:
-                results['errors'].append(f"{table}: {str(e)[:100]}")
+                logger.error(f"Cleanup error for {table}: {e}")
+                results['errors'].append(f"{table}: cleanup failed")
 
         # 2. Delete team members and profiles (whitelist-validated)
         team_tables = ['team_members', 'team_member_profiles']
@@ -854,21 +855,24 @@ async def run_cleanup_migration(
                 rowcount = safe_delete_from_table(db, table)
                 results['deleted'][table] = rowcount
             except SQLAlchemyError as e:
-                results['errors'].append(f"{table}: {str(e)[:100]}")
+                logger.error(f"Cleanup error for {table}: {e}")
+                results['errors'].append(f"{table}: cleanup failed")
 
         # 3. Delete extracted_data (reconciliation)
         try:
             result = db.execute(text("DELETE FROM extracted_data"))
             results['deleted']['extracted_data'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"extracted_data: {str(e)[:100]}")
+            logger.error(f"Cleanup error for extracted_data: {e}")
+            results['errors'].append("extracted_data: cleanup failed")
 
         # 4. Delete referral partners
         try:
             result = db.execute(text("DELETE FROM referral_partners"))
             results['deleted']['referral_partners'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"referral_partners: {str(e)[:100]}")
+            logger.error(f"Cleanup error for referral_partners: {e}")
+            results['errors'].append("referral_partners: cleanup failed")
 
         # 5. Get admin user ID to preserve
         admin_result = db.execute(text("""
@@ -925,7 +929,8 @@ async def run_cleanup_migration(
             """))
             results['deleted']['suspended_cancelled_accounts'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"tenant_accounts: {str(e)[:100]}")
+            logger.error(f"Cleanup error for tenant_accounts: {e}")
+            results['errors'].append("tenant_accounts: cleanup failed")
 
         # 9. Clean up account management tables (whitelist-validated)
         account_tables = [
@@ -1127,7 +1132,7 @@ async def get_kpis(
         raise
     except Exception as e:
         logger.error(f"Error fetching KPIs: {e}")
-        raise DatabaseException(f"Failed to retrieve KPIs: {str(e)}")
+        raise DatabaseException("Failed to retrieve KPIs")
 
 
 # =============================================================================
@@ -1199,7 +1204,7 @@ async def invite_subscriber(
         except Exception as store_err:
             logger.error(f"Could not store invitation: {store_err}")
             db.rollback()
-            raise DatabaseException(f"Failed to create invitation: {str(store_err)}")
+            raise DatabaseException("Failed to create invitation")
 
         # Also log to audit log for historical tracking
         try:
@@ -1287,7 +1292,7 @@ async def invite_subscriber(
     except Exception as e:
         logger.error(f"Error sending invitation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to send invitation: {str(e)}")
+        raise DatabaseException("Failed to send invitation")
 
 
 @router.get("/pending-invites")
@@ -1384,7 +1389,7 @@ async def list_pending_invites(
         raise
     except Exception as e:
         logger.error(f"Error listing pending invites: {e}")
-        raise DatabaseException(f"Failed to list pending invites: {str(e)}")
+        raise DatabaseException("Failed to list pending invites")
 
 
 @router.post("/invites/{invite_id}/resend")
@@ -1462,7 +1467,7 @@ async def resend_invite(
     except Exception as e:
         logger.error(f"Error resending invitation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to resend invitation: {str(e)}")
+        raise DatabaseException("Failed to resend invitation")
 
 
 @router.delete("/invites/{invite_id}")
@@ -1511,7 +1516,7 @@ async def revoke_invite(
     except SQLAlchemyError as e:
         logger.error(f"Error revoking invitation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to revoke invitation: {str(e)}")
+        raise DatabaseException("Failed to revoke invitation")
 
 
 @router.post("/invites/{invite_id}/reinstate")
@@ -1576,7 +1581,7 @@ async def reinstate_invite(
     except Exception as e:
         logger.error(f"Error reinstating invitation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to reinstate invitation: {str(e)}")
+        raise DatabaseException("Failed to reinstate invitation")
 
 
 @router.post("/invites/reinstate-by-token/{token}")
@@ -1629,7 +1634,7 @@ async def reinstate_invite_by_token(
     except SQLAlchemyError as e:
         logger.error(f"Error reinstating invitation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to reinstate invitation: {str(e)}")
+        raise DatabaseException("Failed to reinstate invitation")
 
 
 @router.post("/invites/resend-by-token/{token}")
@@ -1706,7 +1711,7 @@ async def resend_invite_by_token(
     except Exception as e:
         logger.error(f"Error resending invitation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to resend invitation: {str(e)}")
+        raise DatabaseException("Failed to resend invitation")
 
 
 # =============================================================================
@@ -1814,7 +1819,7 @@ async def list_accounts(
         raise
     except Exception as e:
         logger.error(f"Error listing accounts: {e}")
-        raise DatabaseException(f"Failed to list accounts: {str(e)}")
+        raise DatabaseException("Failed to list accounts")
 
 
 @router.get("/accounts/{account_id}")
@@ -1868,7 +1873,7 @@ async def get_account(
         raise
     except Exception as e:
         logger.error(f"Error getting account: {e}")
-        raise DatabaseException(f"Failed to get account: {str(e)}")
+        raise DatabaseException("Failed to get account")
 
 
 # =============================================================================
@@ -1933,7 +1938,7 @@ async def suspend_account(
     except SQLAlchemyError as e:
         logger.error(f"Error suspending account: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to suspend account: {str(e)}")
+        raise DatabaseException("Failed to suspend account")
 
 
 @router.post("/accounts/{account_id}/reinstate")
@@ -1990,7 +1995,7 @@ async def reinstate_account(
     except SQLAlchemyError as e:
         logger.error(f"Error reinstating account: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to reinstate account: {str(e)}")
+        raise DatabaseException("Failed to reinstate account")
 
 
 @router.post("/accounts/{account_id}/cancel")
@@ -2047,7 +2052,7 @@ async def cancel_account(
     except SQLAlchemyError as e:
         logger.error(f"Error canceling account: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to cancel account: {str(e)}")
+        raise DatabaseException("Failed to cancel account")
 
 
 @router.put("/accounts/{account_id}/notes")
@@ -2086,7 +2091,7 @@ async def update_notes(
     except SQLAlchemyError as e:
         logger.error(f"Error updating notes: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to update notes: {str(e)}")
+        raise DatabaseException("Failed to update notes")
 
 
 @router.delete("/accounts/{account_id}")
@@ -2139,7 +2144,7 @@ async def delete_account(
     except SQLAlchemyError as e:
         logger.error(f"Error deleting account: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to delete account: {str(e)}")
+        raise DatabaseException("Failed to delete account")
 
 
 # =============================================================================
@@ -2226,7 +2231,7 @@ async def list_account_users(
         raise
     except Exception as e:
         logger.error(f"Error listing users: {e}")
-        raise DatabaseException(f"Failed to list users: {str(e)}")
+        raise DatabaseException("Failed to list users")
 
 
 # =============================================================================
@@ -2298,7 +2303,7 @@ async def get_user_detail(
         raise
     except Exception as e:
         logger.error(f"Error getting user: {e}")
-        raise DatabaseException(f"Failed to get user: {str(e)}")
+        raise DatabaseException("Failed to get user")
 
 
 @router.get("/users/{user_id}/login-history")
@@ -2362,7 +2367,7 @@ async def get_login_history(
         raise
     except Exception as e:
         logger.error(f"Error getting login history: {e}")
-        raise DatabaseException(f"Failed to get login history: {str(e)}")
+        raise DatabaseException("Failed to get login history")
 
 
 @router.post("/users/{user_id}/disable")
@@ -2407,7 +2412,7 @@ async def disable_user(
     except SQLAlchemyError as e:
         logger.error(f"Error disabling user: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to disable user: {str(e)}")
+        raise DatabaseException("Failed to disable user")
 
 
 @router.post("/users/{user_id}/enable")
@@ -2451,7 +2456,7 @@ async def enable_user(
     except SQLAlchemyError as e:
         logger.error(f"Error enabling user: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to enable user: {str(e)}")
+        raise DatabaseException("Failed to enable user")
 
 
 @router.put("/users/{user_id}/roles")
@@ -2499,7 +2504,7 @@ async def update_user_roles(
     except SQLAlchemyError as e:
         logger.error(f"Error updating roles: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to update roles: {str(e)}")
+        raise DatabaseException("Failed to update roles")
 
 
 # =============================================================================
@@ -2598,7 +2603,7 @@ async def get_user_permissions(
         raise
     except Exception as e:
         logger.error(f"Error getting user permissions: {e}")
-        raise DatabaseException(f"Failed to get user permissions: {str(e)}")
+        raise DatabaseException("Failed to get user permissions")
 
 
 @router.put("/users/{user_id}/permissions")
@@ -2692,7 +2697,7 @@ async def update_user_permissions(
     except Exception as e:
         logger.error(f"Error updating user permissions: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to update user permissions: {str(e)}")
+        raise DatabaseException("Failed to update user permissions")
 
 
 # =============================================================================
@@ -2753,7 +2758,7 @@ async def migrate_permissions_table(
     except SQLAlchemyError as e:
         logger.error(f"Error migrating permissions table: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to migrate permissions table: {str(e)}")
+        raise DatabaseException("Failed to migrate permissions table")
 
 
 # =============================================================================
@@ -2825,7 +2830,7 @@ async def start_impersonation(
     except Exception as e:
         logger.error(f"Error starting impersonation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to start impersonation: {str(e)}")
+        raise DatabaseException("Failed to start impersonation")
 
 
 @router.post("/impersonate/stop")
@@ -2869,7 +2874,7 @@ async def stop_impersonation(
     except SQLAlchemyError as e:
         logger.error(f"Error stopping impersonation: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to stop impersonation: {str(e)}")
+        raise DatabaseException("Failed to stop impersonation")
 
 
 # =============================================================================
@@ -2929,7 +2934,7 @@ async def get_account_invoices(
         raise
     except Exception as e:
         logger.error(f"Error getting invoices: {e}")
-        raise DatabaseException(f"Failed to get invoices: {str(e)}")
+        raise DatabaseException("Failed to get invoices")
 
 
 @router.get("/accounts/{account_id}/cost-breakdown")
@@ -2988,7 +2993,7 @@ async def get_cost_breakdown(
         raise
     except Exception as e:
         logger.error(f"Error getting cost breakdown: {e}")
-        raise DatabaseException(f"Failed to get cost breakdown: {str(e)}")
+        raise DatabaseException("Failed to get cost breakdown")
 
 
 @router.get("/accounts/{account_id}/cost-trend")
@@ -3033,7 +3038,7 @@ async def get_cost_trend(
         raise
     except Exception as e:
         logger.error(f"Error getting cost trend: {e}")
-        raise DatabaseException(f"Failed to get cost trend: {str(e)}")
+        raise DatabaseException("Failed to get cost trend")
 
 
 @router.get("/accounts/{account_id}/subscription-timeline")
@@ -3079,7 +3084,7 @@ async def get_subscription_timeline(
         raise
     except Exception as e:
         logger.error(f"Error getting timeline: {e}")
-        raise DatabaseException(f"Failed to get timeline: {str(e)}")
+        raise DatabaseException("Failed to get timeline")
 
 
 # =============================================================================
@@ -3133,7 +3138,7 @@ async def get_account_audit_log(
         raise
     except Exception as e:
         logger.error(f"Error getting audit log: {e}")
-        raise DatabaseException(f"Failed to get audit log: {str(e)}")
+        raise DatabaseException("Failed to get audit log")
 
 
 @router.get("/users/{user_id}/audit-log")
@@ -3181,7 +3186,7 @@ async def get_user_audit_log(
         raise
     except Exception as e:
         logger.error(f"Error getting audit log: {e}")
-        raise DatabaseException(f"Failed to get audit log: {str(e)}")
+        raise DatabaseException("Failed to get audit log")
 
 
 @router.get("/security-audit-log")
@@ -3309,7 +3314,7 @@ async def get_security_audit_log(
         raise
     except Exception as e:
         logger.error(f"Error getting security audit log: {e}")
-        raise DatabaseException(f"Failed to get security audit log: {str(e)}")
+        raise DatabaseException("Failed to get security audit log")
 
 
 def _format_time_ago(dt):
@@ -3421,7 +3426,7 @@ async def cleanup_sample_data(
     except SQLAlchemyError as e:
         logger.error(f"Error cleaning up sample data: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to cleanup sample data: {str(e)}")
+        raise DatabaseException("Failed to cleanup sample data")
 
 
 @router.delete("/cleanup/users")
@@ -3492,7 +3497,7 @@ async def cleanup_users(
                 deleted_counts[f"{table}.{column}"] = result.rowcount
             except SQLAlchemyError as e:
                 logger.warning(f"Could not clean {table}.{column}: {e}")
-                deleted_counts[f"{table}.{column}"] = f"skipped: {str(e)[:50]}"
+                deleted_counts[f"{table}.{column}"] = "skipped: cleanup failed"
 
         # Also delete team_members and team_member_profiles (whitelist-validated)
         for table in ['team_members', 'team_member_profiles']:
@@ -3535,7 +3540,7 @@ async def cleanup_users(
     except Exception as e:
         logger.error(f"Error cleaning up users: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to cleanup users: {str(e)}")
+        raise DatabaseException("Failed to cleanup users")
 
 
 @router.delete("/cleanup/all-sample-data")
@@ -3587,8 +3592,8 @@ async def cleanup_all_sample_data(
                 results['deleted'][table] = rowcount
                 logger.info(f"Deleted {rowcount} rows from {table}")
             except SQLAlchemyError as e:
-                results['errors'].append(f"{table}: {str(e)[:100]}")
                 logger.warning(f"Could not delete from {table}: {e}")
+                results['errors'].append(f"{table}: cleanup failed")
 
         # 2. Delete team members and profiles (whitelist-validated)
         team_tables = ['team_members', 'team_member_profiles']
@@ -3597,28 +3602,32 @@ async def cleanup_all_sample_data(
                 rowcount = safe_delete_from_table(db, table)
                 results['deleted'][table] = rowcount
             except SQLAlchemyError as e:
-                results['errors'].append(f"{table}: {str(e)[:100]}")
+                logger.error(f"Cleanup error for {table}: {e}")
+                results['errors'].append(f"{table}: cleanup failed")
 
         # 3. Delete extracted_data (reconciliation)
         try:
             result = db.execute(text("DELETE FROM extracted_data"))
             results['deleted']['extracted_data'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"extracted_data: {str(e)[:100]}")
+            logger.error(f"Cleanup error for extracted_data: {e}")
+            results['errors'].append("extracted_data: cleanup failed")
 
         # 4. Delete referral partners
         try:
             result = db.execute(text("DELETE FROM referral_partners"))
             results['deleted']['referral_partners'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"referral_partners: {str(e)[:100]}")
+            logger.error(f"Cleanup error for referral_partners: {e}")
+            results['errors'].append("referral_partners: cleanup failed")
 
         # 5. Delete workflow instances
         try:
             result = db.execute(text("DELETE FROM workflow_instances"))
             results['deleted']['workflow_instances'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"workflow_instances: {str(e)[:100]}")
+            logger.error(f"Cleanup error for workflow_instances: {e}")
+            results['errors'].append("workflow_instances: cleanup failed")
 
         # 6. Get admin user ID to preserve
         admin_result = db.execute(text("""
@@ -3673,7 +3682,8 @@ async def cleanup_all_sample_data(
             """), {'admin_id': admin_id})
             results['deleted']['users'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"users: {str(e)[:100]}")
+            logger.error(f"Cleanup error for users: {e}")
+            results['errors'].append("users: cleanup failed")
 
         # 9. Delete suspended and cancelled accounts
         try:
@@ -3682,7 +3692,8 @@ async def cleanup_all_sample_data(
             """))
             results['deleted']['suspended_cancelled_accounts'] = result.rowcount
         except SQLAlchemyError as e:
-            results['errors'].append(f"tenant_accounts: {str(e)[:100]}")
+            logger.error(f"Cleanup error for tenant_accounts: {e}")
+            results['errors'].append("tenant_accounts: cleanup failed")
 
         # 10. Clean up account management tables (whitelist-validated)
         account_tables = [
@@ -3723,7 +3734,7 @@ async def cleanup_all_sample_data(
     except SQLAlchemyError as e:
         logger.error(f"Error in comprehensive cleanup: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to cleanup: {str(e)}")
+        raise DatabaseException("Failed to cleanup")
 
 
 @router.post("/emergency-admin-reset")
@@ -3805,4 +3816,4 @@ async def emergency_admin_reset(
     except SQLAlchemyError as e:
         logger.error(f"Emergency admin reset failed: {e}")
         db.rollback()
-        raise DatabaseException(f"Failed to reset admin: {str(e)}")
+        raise DatabaseException("Failed to reset admin")

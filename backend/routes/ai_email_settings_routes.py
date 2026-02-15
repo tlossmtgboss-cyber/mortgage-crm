@@ -143,8 +143,10 @@ async def update_ai_email_settings(
     settings = get_or_create_settings(db)
 
     update_data = updates.dict(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for field, value in update_data.items():
-        setattr(settings, field, value)
+        if field not in _protected:
+            setattr(settings, field, value)
 
     # Auto-generate from_name if assistant_name or company_name changed
     if 'assistant_name' in update_data or 'company_name' in update_data:

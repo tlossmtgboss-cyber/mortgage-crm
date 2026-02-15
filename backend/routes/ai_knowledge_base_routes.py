@@ -268,8 +268,10 @@ async def update_knowledge_entry(
         raise HTTPException(status_code=404, detail="Knowledge entry not found")
 
     update_data = update.dict(exclude_unset=True)
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     for key, value in update_data.items():
-        setattr(entry, key, value)
+        if key not in _protected:
+            setattr(entry, key, value)
 
     db.commit()
     db.refresh(entry)
