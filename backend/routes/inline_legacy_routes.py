@@ -1305,7 +1305,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Debug endpoint to check video meeting loading status
     @app.get("/api/v1/debug/video-meetings-status", tags=["Debug"])
-    async def debug_video_meetings_status():
+    async def debug_video_meetings_status(current_user=Depends(get_current_user)):
         """Check if video meeting routes loaded successfully"""
         if _video_meeting_error:
             return {"status": "failed"}
@@ -1334,7 +1334,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Debug endpoint to check video clip loading status
     @app.get("/api/v1/debug/video-clips-status", tags=["Debug"])
-    async def debug_video_clips_status():
+    async def debug_video_clips_status(current_user=Depends(get_current_user)):
         """Check if video clip routes loaded successfully"""
         if _video_clip_error:
             return {"status": "failed"}
@@ -1654,7 +1654,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
 
     @app.get("/api/v1/debug/carousel-routes-status", tags=["Debug"])
-    async def debug_carousel_routes_status():
+    async def debug_carousel_routes_status(current_user=Depends(get_current_user)):
         """Check if carousel builder routes loaded successfully"""
         if _carousel_routes_error:
             return {"status": "failed"}
@@ -2480,7 +2480,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Perennia Docs AI routes not loaded: {e}")
 
     @app.get("/api/v1/debug/perennia-docs-status")
-    async def debug_perennia_docs_status():
+    async def debug_perennia_docs_status(current_user=Depends(get_current_user)):
         """Debug endpoint to check Perennia Docs AI routes loading status"""
         return {
             "perennia_docs_loaded": perennia_docs_error is None
@@ -2507,7 +2507,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ E-Signature routes not loaded: {e}")
 
     @app.get("/api/v1/debug/esign-status")
-    async def debug_esign_status():
+    async def debug_esign_status(current_user=Depends(get_current_user)):
         """Debug endpoint to check E-Signature routes loading status"""
         return {
             "esign_loaded": esign_error is None
@@ -2546,7 +2546,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ PURL-Perennia Integration routes not loaded: {e}")
 
     @app.get("/api/v1/debug/portal-integration-status")
-    async def debug_portal_integration_status():
+    async def debug_portal_integration_status(current_user=Depends(get_current_user)):
         """Debug endpoint to check Portal AI and PURL Integration routes loading status"""
         return {
             "portal_ai_assistant_loaded": portal_ai_assistant_error is None,
@@ -2734,7 +2734,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Support Tickets routes not loaded: {e}")
 
     @app.get("/api/v1/debug/portal-services-status")
-    async def debug_portal_services_status():
+    async def debug_portal_services_status(current_user=Depends(get_current_user)):
         """Debug endpoint to check all portal-related routes loading status"""
         return {
             "portal_ai_assistant": {"loaded": portal_ai_assistant_error is None},
@@ -2745,7 +2745,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         }
 
     @app.get("/api/v1/debug/intake-engine-status")
-    async def debug_intake_engine_status():
+    async def debug_intake_engine_status(current_user=Depends(get_current_user)):
         """Debug endpoint to check intake engine loading status"""
         status = {
             "loaded": intake_engine_error is None
@@ -2767,7 +2767,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Debug endpoint for tools registry loading
     @app.get("/api/v1/debug/tools-registry-status")
-    async def debug_tools_registry_status():
+    async def debug_tools_registry_status(current_user=Depends(get_current_user)):
         """Debug endpoint to check tools registry loading status"""
         return {
             "tools_router_loaded": tools_router_error is None

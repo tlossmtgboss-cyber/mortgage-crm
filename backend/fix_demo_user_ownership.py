@@ -5,9 +5,13 @@ This ensures the AI chat can properly query CRM data.
 """
 
 import os
+import sys
 from sqlalchemy import create_engine, text
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/mortgage_crm")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL environment variable is required")
+    sys.exit(1)
 
 def main():
     print("🔧 Fixing demo user data ownership...")

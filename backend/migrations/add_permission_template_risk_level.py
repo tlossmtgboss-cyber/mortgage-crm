@@ -8,7 +8,7 @@ import os
 
 def get_database_url():
     """Get database URL from environment"""
-    return os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/mortgage_crm')
+    return os.getenv('DATABASE_URL')
 
 def upgrade():
     """Add risk_level column to permission_templates table"""

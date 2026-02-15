@@ -8,8 +8,12 @@ import asyncio
 import os
 import sys
 
-# Use production database
-os.environ["DATABASE_URL"] = os.getenv("PROD_DATABASE_URL", "postgresql://postgres:RzXRIwJsZINuRwMQybbbZYqYFoHBaxRw@postgres.railway.internal:5432/railway")
+# Use production database — requires PROD_DATABASE_URL or DATABASE_URL to be set
+_db_url = os.getenv("PROD_DATABASE_URL") or os.getenv("DATABASE_URL")
+if not _db_url:
+    print("ERROR: Set PROD_DATABASE_URL or DATABASE_URL environment variable")
+    sys.exit(1)
+os.environ["DATABASE_URL"] = _db_url
 
 from datetime import datetime
 from database import SessionLocal

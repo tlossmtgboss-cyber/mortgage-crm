@@ -53,7 +53,7 @@ SERVICERS = [
 
 def get_database_url():
     """Get database URL from environment"""
-    return os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/mortgage_crm')
+    return os.getenv('DATABASE_URL')
 
 def generate_phone():
     """Generate realistic phone number"""

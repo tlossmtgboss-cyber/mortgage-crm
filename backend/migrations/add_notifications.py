@@ -8,7 +8,10 @@ import os
 import sys
 
 # Get DATABASE_URL from environment
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost/dbname')
+DATABASE_URL = os.getenv('DATABASE_URL')
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL environment variable is required")
+    sys.exit(1)
 
 # Fix Railway DATABASE_URL format (postgres:// -> postgresql://)
 if DATABASE_URL.startswith("postgres://"):

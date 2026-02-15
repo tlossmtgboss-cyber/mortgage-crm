@@ -43,11 +43,15 @@ if ENVIRONMENT == "production" and not SECRET_KEY:
         "Generate a secure key with: python -c \"import secrets; print(secrets.token_hex(32))\""
     )
 
-# Use a development key only in non-production
+# Require SECRET_KEY in all non-development environments
 if not SECRET_KEY:
-    SECRET_KEY = "dev-only-insecure-key-do-not-use-in-production"
-    if ENVIRONMENT != "development":
-        logging.warning("⚠️ Using insecure SECRET_KEY - this should never happen in production!")
+    if ENVIRONMENT not in ("development", "test"):
+        raise ValueError(
+            f"SECRET_KEY environment variable is required in {ENVIRONMENT}. "
+            "Generate a secure key with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    import secrets
+    SECRET_KEY = secrets.token_hex(32)
 
 
 # ============================================================================

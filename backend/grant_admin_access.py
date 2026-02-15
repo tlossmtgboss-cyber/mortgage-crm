@@ -8,8 +8,11 @@ import os
 import sys
 from sqlalchemy import create_engine, text
 
-# Use production database
-DATABASE_URL = os.getenv("PROD_DATABASE_URL", "postgresql://postgres:RzXRIwJsZINuRwMQybbbZYqYFoHBaxRw@postgres.railway.internal:5432/railway")
+# Use production database — requires PROD_DATABASE_URL or DATABASE_URL to be set
+DATABASE_URL = os.getenv("PROD_DATABASE_URL") or os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print("ERROR: Set PROD_DATABASE_URL or DATABASE_URL environment variable")
+    sys.exit(1)
 
 def get_engine():
     return create_engine(DATABASE_URL)
