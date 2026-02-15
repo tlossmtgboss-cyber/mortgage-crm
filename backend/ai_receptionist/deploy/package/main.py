@@ -113,12 +113,19 @@ app = FastAPI(
 )
 
 # CORS middleware
+_ALLOWED_ORIGINS = [
+    origin for origin in [
+        os.getenv("FRONTEND_URL", "https://app.perenniaai.com"),
+        os.getenv("API_URL", "https://api.perenniaai.com"),
+    ] if origin
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 

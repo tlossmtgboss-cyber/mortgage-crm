@@ -397,6 +397,12 @@ ENDPOINT_RATE_LIMITS = {
     # File uploads - moderate limits
     "/api/v1/documents/upload": {"multiplier": 0.5, "burst_allowed": 20},
     "/api/v1/smart-docs/upload": {"multiplier": 0.5, "burst_allowed": 20},
+    # SMS/email sending - strict limits to prevent financial abuse
+    "/api/v1/sms-intelligence/send/bulk": {"multiplier": 0.02, "burst_allowed": 1},
+    "/api/v1/sms-intelligence/send": {"multiplier": 0.05, "burst_allowed": 3},
+    "/api/v1/conversation-intelligence/send-sms": {"multiplier": 0.05, "burst_allowed": 3},
+    "/api/v1/email-drafts/send": {"multiplier": 0.1, "burst_allowed": 5},
+    "/api/v1/voicemail-drop/campaigns": {"multiplier": 0.05, "burst_allowed": 2},
     # Standard API calls - normal limits (must be LAST - catch-all prefix)
     "/api/v1/": {"multiplier": 1.0, "burst_allowed": 100},
 }
