@@ -111,8 +111,8 @@ def validate_twilio_signature(
         auth_token = TWILIO_AUTH_TOKEN
 
     if not auth_token:
-        logger.warning("TWILIO_AUTH_TOKEN not set - skipping signature validation")
-        return True  # Allow in development
+        logger.error("TWILIO_AUTH_TOKEN not set — rejecting webhook")
+        return False
 
     # Build signature data
     data = url

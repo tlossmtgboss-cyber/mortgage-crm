@@ -31,8 +31,8 @@ async def verify_vapi_request(request: Request):
     Checks the X-Vapi-Secret header against the configured VAPI_WEBHOOK_SECRET.
     """
     if not VAPI_WEBHOOK_SECRET:
-        logger.warning("VAPI_WEBHOOK_SECRET not configured - webhook verification disabled")
-        return True  # Allow in development if not configured
+        logger.error("VAPI_WEBHOOK_SECRET not configured — rejecting webhook")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
 
     # Check for Vapi signature header
     vapi_secret = request.headers.get("X-Vapi-Secret")
