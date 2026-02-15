@@ -34,6 +34,14 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
     )
     from services.dre_helpers import calculate_lead_score
 
+    def _org_scoped_lead(db, lead_id, current_user):
+        """Query a lead with organization scoping to prevent cross-tenant access."""
+        query = db.query(Lead).filter(Lead.id == lead_id)
+        org_id = getattr(current_user, 'organization_id', None)
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        return query.first()
+
     # IMPORTANT: This route MUST be defined BEFORE /leads/{lead_id} to avoid route conflicts
     @app.delete("/api/v1/leads/bulk-delete")
     @app.post("/api/v1/leads/bulk-delete")
@@ -98,7 +106,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             # Use savepoint for each lead so failures don't cascade
             savepoint = db.begin_nested()
             try:
-                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                lead = _org_scoped_lead(db, lead_id, current_user)
                 if not lead:
                     errors.append(f"Lead {lead_id} not found")
                     savepoint.rollback()
@@ -184,7 +192,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
         for lead_id in lead_ids:
             try:
-                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                lead = _org_scoped_lead(db, lead_id, current_user)
 
                 if not lead:
                     errors.append(f"Lead {lead_id} not found or access denied")
@@ -240,7 +248,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.get("/api/v1/leads/{lead_id}")
     async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -354,7 +362,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
     @app.get("/api/v1/leads/{lead_id}/documents")
     async def get_lead_documents(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
         """Get all documents associated with a lead"""
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -410,7 +418,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.patch("/api/v1/leads/{lead_id}")
     async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -570,8 +578,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.delete("/api/v1/leads/{lead_id}", status_code=204)
     async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-        # Anyone can delete leads - no permission check needed
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
 

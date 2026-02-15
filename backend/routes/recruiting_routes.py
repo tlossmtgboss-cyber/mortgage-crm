@@ -17,7 +17,11 @@ import os
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
-router = APIRouter(prefix="/api/v1/recruiting", tags=["recruiting"])
+router = APIRouter(
+    prefix="/api/v1/recruiting",
+    tags=["recruiting"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 # =============================================================================

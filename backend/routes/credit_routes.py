@@ -469,7 +469,8 @@ async def get_lead_credit_reports(
 async def update_credit_item(
     item_id: int,
     request: UpdateCreditItemRequest,
-    db: Session = Depends(get_db_session())
+    db: Session = Depends(get_db_session()),
+    current_user = Depends(get_current_user_dep()),
 ):
     """Update a credit item's status or notes."""
     from sqlalchemy import text
@@ -518,7 +519,8 @@ async def update_credit_item(
 @router.post("/ai/analyze-credit-report")
 async def analyze_credit_report(
     request: AnalyzeCreditReportRequest,
-    db: Session = Depends(get_db_session())
+    db: Session = Depends(get_db_session()),
+    current_user = Depends(get_current_user_dep()),
 ):
     """Trigger AI analysis of a credit report document."""
     from main import Document

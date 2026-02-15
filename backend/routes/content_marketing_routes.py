@@ -34,8 +34,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/content-marketing", tags=["content-marketing"])
-
 
 # ============================================================================
 # AUTH DEPENDENCY
@@ -84,6 +82,13 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
                 pass
 
     raise HTTPException(status_code=401, detail="Authentication required")
+
+
+router = APIRouter(
+    prefix="/api/v1/content-marketing",
+    tags=["content-marketing"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 # ============================================================================

@@ -35,7 +35,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     # PURL System Migration Endpoint
     @app.post("/api/v1/migrations/add-purl-system")
-    async def add_purl_system_migration(db: Session = Depends(get_db)):
+    async def add_purl_system_migration(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Run migration to add PURL (Persistent URL) borrower portal tables"""
         try:
             from sqlalchemy import text as sql_text
@@ -221,7 +221,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     # Email Monitor Migration Endpoint
     @app.post("/api/v1/migrations/add-email-monitor")
-    async def add_email_monitor_migration(db: Session = Depends(get_db)):
+    async def add_email_monitor_migration(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Run migration to add email monitor tables"""
         try:
             import os
@@ -276,7 +276,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     # Morning Check-in Migration Endpoint
     @app.post("/api/v1/migrations/add-morning-checkin")
-    async def add_morning_checkin_migration(db: Session = Depends(get_db)):
+    async def add_morning_checkin_migration(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Run migration to add morning check-in tables"""
         try:
             import os
@@ -301,7 +301,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     # Rate Sheet Migration Endpoint
     @app.post("/api/v1/migrations/add-rate-sheets")
-    async def add_rate_sheets_migration(db: Session = Depends(get_db)):
+    async def add_rate_sheets_migration(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Run migration to add rate sheet and refinance opportunity tables"""
         try:
             from sqlalchemy import text as sql_text
@@ -504,7 +504,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/add-permanent-memory")
     async def add_permanent_memory_migration(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Add permanent AI conversation memory tables
@@ -604,7 +605,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/add-lead-milestone-columns")
     async def add_lead_milestone_columns(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Add milestone date columns to leads table for task triggering
@@ -653,7 +655,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/backfill-lead-received-date")
     async def backfill_lead_received_date(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Backfill lead_received_date from created_at for existing leads.
@@ -703,7 +706,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/add-stage-changed-at")
     async def add_stage_changed_at_column(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Add stage_changed_at column to leads table for workflow day calculations.
@@ -752,7 +756,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/add-loan-milestone-columns")
     async def add_loan_milestone_columns(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Add milestone date columns to loans table for task triggering
@@ -800,7 +805,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/migrations/fix-lead-stage-values")
     async def fix_lead_stage_values_migration(
         key: str = "",
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Fix invalid lead stage values in the database.
@@ -868,7 +874,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
     @app.post("/api/v1/migrations/convert-lead-stage-to-enum-names")
     async def convert_lead_stage_to_enum_names_migration(
         key: str = "",
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Convert lead stage display values to PostgreSQL enum names.
@@ -940,7 +947,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/add-subscription-system")
     async def add_subscription_system_migration(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Add subscription and permission system tables
@@ -1138,7 +1146,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
 
     @app.post("/api/v1/migrations/add-rate-monitor-system")
-    async def add_rate_monitor_system_migration(db: Session = Depends(get_db)):
+    async def add_rate_monitor_system_migration(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Migration: Add Rate Monitor tables for MUM refinance opportunity tracking"""
         try:
             from sqlalchemy import text as sql_text
@@ -1313,7 +1321,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
 
     @app.post("/api/v1/migrations/add-rate-monitor-columns")
-    async def add_rate_monitor_columns_migration(db: Session = Depends(get_db)):
+    async def add_rate_monitor_columns_migration(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Migration: Add standalone borrower columns to rate_monitor_targets table"""
         try:
             from sqlalchemy import text as sql_text
@@ -1349,7 +1357,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/add-workflow-system")
     async def add_workflow_system_migration(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Add complete Active Loan Workflow System tables
@@ -1756,7 +1765,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/seed-workflow-rules")
     async def seed_workflow_rules_migration(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Seed default workflow rules for Active Loan Workflow System
@@ -1844,7 +1854,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/migrations/add-workflow-sla-system")
     async def add_workflow_sla_system_migration(
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
     ):
         """
         Migration: Add SLA Workflow Task Generation System
