@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db import get_db
@@ -156,10 +157,40 @@ async def get_mum_clients_portfolio(
             if is_refinance_opportunity:
                 refinance_count += 1
 
+            # Resolve client name — detect Salesforce IDs stored as names
+            display_name = client.client_name or getattr(client, 'name', None) or ""
+            _is_sf_id = (
+                display_name
+                and len(display_name) >= 15
+                and len(display_name) <= 18
+                and " " not in display_name
+                and display_name[:3].isalnum()
+            )
+            if not display_name or _is_sf_id:
+                # Try to resolve from associated lead by email
+                try:
+                    _lead = db.execute(text(
+                        "SELECT first_name, last_name FROM leads "
+                        "WHERE LOWER(email) = LOWER(:email) LIMIT 1"
+                    ), {"email": client.email}).fetchone()
+                    if _lead and (_lead[0] or _lead[1]):
+                        resolved = f"{_lead[0] or ''} {_lead[1] or ''}".strip()
+                        display_name = resolved
+                        # Also fix the record in-place for future loads
+                        try:
+                            client.client_name = resolved
+                            db.commit()
+                        except Exception:
+                            db.rollback()
+                except Exception:
+                    pass
+            if not display_name or _is_sf_id:
+                display_name = f"Client - {client.loan_number}"
+
             client_data = {
                 "id": client.id,
                 "source": "mum_client",  # Mark source for debugging
-                "client_name": client.client_name or client.name,
+                "client_name": display_name,
                 "email": client.email,
                 "phone": client.phone,
                 "loan_number": client.loan_number,

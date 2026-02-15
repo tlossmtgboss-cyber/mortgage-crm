@@ -91,8 +91,35 @@ def maybe_promote_loan_to_mum(
         # Estimate property value (80% LTV assumption)
         estimated_property_value = loan.appraisal_value or (loan_amount * 1.25 if loan_amount else 0.0)
 
-        # Build client name
-        client_name = loan.borrower_name or f"Client - {loan.loan_number}"
+        # Build client name — resolve Salesforce IDs to real names
+        client_name = loan.borrower_name or ""
+        # Detect Salesforce IDs (e.g., 003TN000004OGfhYAG, 0038c00002mT5G3AAK)
+        _looks_like_sf_id = (
+            client_name
+            and len(client_name) >= 15
+            and len(client_name) <= 18
+            and client_name[:3].isalnum()
+            and not " " in client_name
+        )
+        if not client_name or _looks_like_sf_id:
+            # Try to resolve from the associated lead
+            try:
+                lead_row = db.execute(
+                    text("""
+                        SELECT l.first_name, l.last_name
+                        FROM leads l
+                        JOIN loans lo ON lo.borrower_email = l.email
+                        WHERE lo.id = :loan_id
+                        LIMIT 1
+                    """),
+                    {"loan_id": loan_id}
+                ).fetchone()
+                if lead_row and (lead_row[0] or lead_row[1]):
+                    client_name = f"{lead_row[0] or ''} {lead_row[1] or ''}".strip()
+            except Exception:
+                pass
+        if not client_name or _looks_like_sf_id:
+            client_name = f"Client - {loan.loan_number}"
 
         # First payment date
         first_payment = loan.first_payment_date or (funded_date + timedelta(days=45))
