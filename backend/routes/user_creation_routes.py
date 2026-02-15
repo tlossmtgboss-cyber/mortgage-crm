@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 logger = logging.getLogger(__name__)
 
@@ -377,6 +377,13 @@ def get_user_creation_routes(
                 "activation_expires_at": user_profile.activation_token_expires_at.isoformat()
             }
 
+        except IntegrityError:
+            db.rollback()
+            logger.warning(f"Duplicate email conflict during user creation: {email}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already exists in the system"
+            )
         except HTTPException:
             raise
         except Exception as e:
@@ -483,6 +490,13 @@ def get_user_creation_routes(
                 }
             }
 
+        except IntegrityError:
+            db.rollback()
+            logger.warning(f"Duplicate email conflict during single user creation: {data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email already exists in the system"
+            )
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error creating user: {e}")

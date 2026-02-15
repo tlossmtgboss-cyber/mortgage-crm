@@ -13,6 +13,7 @@ API endpoints for:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Path, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, date, time
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, validator
@@ -628,15 +629,6 @@ async def create_meeting_room(
         if org_settings.max_participants and data.max_participants > org_settings.max_participants:
             data.max_participants = org_settings.max_participants
 
-    # Generate unique room code (with collision guard)
-    room_code = generate_room_code()
-    for _ in range(10):
-        if not db.query(VideoMeetingRoom).filter(VideoMeetingRoom.room_code == room_code).first():
-            break
-        room_code = generate_room_code()
-    else:
-        raise HTTPException(status_code=500, detail="Failed to generate unique room code")
-
     # Calculate end time if not provided
     scheduled_end = data.scheduled_end
     if data.scheduled_start and not scheduled_end:
@@ -655,34 +647,44 @@ async def create_meeting_room(
                 'duration_minutes': template.default_duration_minutes
             }
 
-    room = VideoMeetingRoom(
-        room_code=room_code,
-        room_name=data.room_name,
-        room_description=data.room_description,
-        provider=data.provider,
-        host_user_id=current_user.id,
-        organization_id=getattr(current_user, 'organization_id', None),
-        scheduled_start=data.scheduled_start,
-        scheduled_end=scheduled_end,
-        duration_minutes=template_settings.get('duration_minutes', data.duration_minutes),
-        status="scheduled" if data.scheduled_start else "active",
-        waiting_room_enabled=template_settings.get('waiting_room_enabled', data.waiting_room_enabled),
-        recording_enabled=template_settings.get('recording_enabled', data.recording_enabled),
-        transcription_enabled=template_settings.get('transcription_enabled', data.transcription_enabled),
-        ai_assistant_enabled=template_settings.get('ai_assistant_enabled', data.ai_assistant_enabled),
-        password_protected=data.password_protected,
-        room_password=_pwd_context.hash(data.room_password) if data.password_protected and data.room_password and _pwd_context else data.room_password,
-        max_participants=data.max_participants,
-        loan_id=data.loan_id,
-        lead_id=data.lead_id,
-        appointment_id=data.appointment_id,
-        meeting_type=data.meeting_type,
-        created_by=current_user.id
-    )
-
-    db.add(room)
-    db.commit()
-    db.refresh(room)
+    # Generate unique room code with retry on DB-level collision (IntegrityError)
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        room_code = generate_room_code()
+        room = VideoMeetingRoom(
+            room_code=room_code,
+            room_name=data.room_name,
+            room_description=data.room_description,
+            provider=data.provider,
+            host_user_id=current_user.id,
+            organization_id=getattr(current_user, 'organization_id', None),
+            scheduled_start=data.scheduled_start,
+            scheduled_end=scheduled_end,
+            duration_minutes=template_settings.get('duration_minutes', data.duration_minutes),
+            status="scheduled" if data.scheduled_start else "active",
+            waiting_room_enabled=template_settings.get('waiting_room_enabled', data.waiting_room_enabled),
+            recording_enabled=template_settings.get('recording_enabled', data.recording_enabled),
+            transcription_enabled=template_settings.get('transcription_enabled', data.transcription_enabled),
+            ai_assistant_enabled=template_settings.get('ai_assistant_enabled', data.ai_assistant_enabled),
+            password_protected=data.password_protected,
+            room_password=_pwd_context.hash(data.room_password) if data.password_protected and data.room_password and _pwd_context else data.room_password,
+            max_participants=data.max_participants,
+            loan_id=data.loan_id,
+            lead_id=data.lead_id,
+            appointment_id=data.appointment_id,
+            meeting_type=data.meeting_type,
+            created_by=current_user.id
+        )
+        db.add(room)
+        try:
+            db.commit()
+            db.refresh(room)
+            break
+        except IntegrityError:
+            db.rollback()
+            logger.warning(f"Room code collision on attempt {attempt + 1}: {room_code}")
+            if attempt == max_attempts - 1:
+                raise HTTPException(status_code=500, detail="Failed to generate unique room code")
 
     # Add host as participant
     if MeetingParticipant:
@@ -2015,32 +2017,38 @@ async def create_instant_meeting(
 
     VideoMeetingRoom = _models.get('VideoMeetingRoom')
 
-    room_code = generate_room_code()
-    while db.query(VideoMeetingRoom).filter(VideoMeetingRoom.room_code == room_code).first():
+    # Generate unique room code with retry on DB-level collision (IntegrityError)
+    max_attempts = 3
+    for attempt in range(max_attempts):
         room_code = generate_room_code()
-
-    room = VideoMeetingRoom(
-        room_code=room_code,
-        room_name=data.room_name,
-        provider="internal",
-        host_user_id=current_user.id,
-        organization_id=getattr(current_user, 'organization_id', None),
-        scheduled_start=datetime.utcnow(),
-        scheduled_end=datetime.utcnow() + timedelta(minutes=60),
-        actual_start=datetime.utcnow(),
-        duration_minutes=60,
-        status="active",
-        waiting_room_enabled=False,
-        recording_enabled=True,
-        transcription_enabled=True,
-        ai_assistant_enabled=True,
-        meeting_type="instant",
-        created_by=current_user.id
-    )
-
-    db.add(room)
-    db.commit()
-    db.refresh(room)
+        room = VideoMeetingRoom(
+            room_code=room_code,
+            room_name=data.room_name,
+            provider="internal",
+            host_user_id=current_user.id,
+            organization_id=getattr(current_user, 'organization_id', None),
+            scheduled_start=datetime.utcnow(),
+            scheduled_end=datetime.utcnow() + timedelta(minutes=60),
+            actual_start=datetime.utcnow(),
+            duration_minutes=60,
+            status="active",
+            waiting_room_enabled=False,
+            recording_enabled=True,
+            transcription_enabled=True,
+            ai_assistant_enabled=True,
+            meeting_type="instant",
+            created_by=current_user.id
+        )
+        db.add(room)
+        try:
+            db.commit()
+            db.refresh(room)
+            break
+        except IntegrityError:
+            db.rollback()
+            logger.warning(f"Room code collision on instant meeting attempt {attempt + 1}: {room_code}")
+            if attempt == max_attempts - 1:
+                raise HTTPException(status_code=500, detail="Failed to generate unique room code")
 
     return {
         "success": True,

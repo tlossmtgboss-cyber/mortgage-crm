@@ -649,24 +649,36 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         Claim all orphan leads (leads with no owner) and assign them to the current user.
         This fixes the AI chat issue where leads aren't visible because they have no owner.
         Also claims loans that don't belong to any valid user.
+
+        Uses SELECT ... FOR UPDATE SKIP LOCKED to prevent concurrent requests from
+        double-claiming the same leads/loans.
         """
         try:
-            # Update leads with NULL owner_id to current user
+            # Lock and claim orphan leads atomically using FOR UPDATE SKIP LOCKED
+            # This prevents concurrent requests from claiming the same leads
             result = db.execute(
-                text("UPDATE leads SET owner_id = :user_id WHERE owner_id IS NULL"),
+                text("""
+                    UPDATE leads SET owner_id = :user_id
+                    WHERE id IN (
+                        SELECT id FROM leads
+                        WHERE owner_id IS NULL
+                        FOR UPDATE SKIP LOCKED
+                    )
+                """),
                 {"user_id": current_user.id}
             )
             leads_claimed = result.rowcount
 
-            # Update loans with NULL loan_officer_id OR loan_officer_id not matching any user
-            # This catches loans with invalid/orphaned loan_officer_ids
+            # Lock and claim orphan loans atomically using FOR UPDATE SKIP LOCKED
             result = db.execute(
                 text("""
-                    UPDATE loans
-                    SET loan_officer_id = :user_id
-                    WHERE loan_officer_id IS NULL
-                       OR loan_officer_id NOT IN (SELECT id FROM users)
-                       OR loan_officer_id != :user_id
+                    UPDATE loans SET loan_officer_id = :user_id
+                    WHERE id IN (
+                        SELECT id FROM loans
+                        WHERE loan_officer_id IS NULL
+                           OR loan_officer_id NOT IN (SELECT id FROM users)
+                        FOR UPDATE SKIP LOCKED
+                    )
                 """),
                 {"user_id": current_user.id}
             )

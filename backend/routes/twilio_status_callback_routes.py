@@ -61,6 +61,19 @@ TERMINAL_STATUSES = {"completed", "busy", "failed", "no-answer", "canceled"}
 # Dispositions that prevent further retries
 TERMINAL_DISPOSITIONS = {"scheduled", "not_interested", "wrong_number", "dnc"}
 
+# Status ordering: higher ordinal = later in call lifecycle.
+# Callbacks may arrive out of order (e.g., 'completed' before 'ringing').
+# Only update status if the new status has a higher ordinal than the current one.
+STATUS_ORDER = {
+    "queued": 1,
+    "dialing": 2,
+    "ringing": 3,
+    "in_progress": 4,
+    "completed": 5,
+    "failed": 5,
+    "canceled": 5,
+}
+
 
 # =============================================================================
 # PYDANTIC MODELS
@@ -226,7 +239,27 @@ async def update_attempt_status(
     disposition: str = None,
     sip_code: str = None
 ):
-    """Update call attempt status and optionally disposition."""
+    """Update call attempt status and optionally disposition.
+
+    Guards against out-of-order Twilio callbacks by only updating the status
+    if the new status has a higher ordinal than the current one (STATUS_ORDER).
+    For example, a late 'ringing' callback will not overwrite 'completed'.
+    """
+    # Check current status to prevent out-of-order updates
+    result = db.execute(text("""
+        SELECT status FROM call_attempts WHERE id = :id
+    """), {"id": attempt_id})
+    row = result.fetchone()
+    if row and row[0]:
+        current_order = STATUS_ORDER.get(row[0], 0)
+        new_order = STATUS_ORDER.get(new_status, 0)
+        if new_order < current_order:
+            logger.info(
+                f"Ignoring out-of-order status update for attempt {attempt_id}: "
+                f"current={row[0]} (order={current_order}), received={new_status} (order={new_order})"
+            )
+            return
+
     update_fields = ["status = :status", "updated_at = NOW()"]
     params = {"id": attempt_id, "status": new_status}
 
