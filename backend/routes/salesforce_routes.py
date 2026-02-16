@@ -3247,8 +3247,10 @@ async def fix_mum_client_names(
 
                         db.commit()
         except Exception as sf_err:
-            sf_errors.append(f"SF resolution: {str(sf_err)[:200]}")
-            logger.warning(f"Salesforce Contact resolution failed: {sf_err}")
+            import traceback
+            sf_errors.append(f"SF resolution ({type(sf_err).__name__}): {str(sf_err)[:200]}")
+            sf_errors.append(f"TB: {traceback.format_exc()[-400:]}")
+            logger.warning(f"Salesforce Contact resolution failed: {type(sf_err).__name__}: {sf_err}")
 
         # Count remaining unfixed
         remaining = db.execute(text("""
