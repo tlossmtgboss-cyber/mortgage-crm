@@ -23,32 +23,60 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _column_exists(conn, table, column, is_sqlite):
+    """Check if a column exists in a table."""
+    from sqlalchemy import text
+    if is_sqlite:
+        result = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+        return any(row[1] == column for row in result)
+    else:
+        result = conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = :table AND column_name = :col
+        """), {"table": table, "col": column}).fetchone()
+        return result is not None
+
+
 def run_migration():
     """Execute the SSN encryption migration."""
     from sqlalchemy import text
     from db import engine
+
+    is_sqlite = "sqlite" in str(engine.url)
 
     with engine.connect() as conn:
         # Step 1: Add encrypted SSN columns if they don't exist
         logger.info("Step 1: Adding ssn_encrypted and co_ssn_encrypted columns...")
 
         for col_name in ["ssn_encrypted", "co_ssn_encrypted"]:
-            conn.execute(text(f"""
-                ALTER TABLE borrower_applications
-                ADD COLUMN IF NOT EXISTS {col_name} VARCHAR
-            """))
+            if not _column_exists(conn, "borrower_applications", col_name, is_sqlite):
+                conn.execute(text(f"""
+                    ALTER TABLE borrower_applications ADD COLUMN {col_name} VARCHAR
+                """))
+                logger.info(f"  Added column {col_name}.")
+            else:
+                logger.info(f"  Column {col_name} already exists.")
         conn.commit()
-        logger.info("  Columns added (or already exist).")
 
         # Step 2: Find rows with plaintext SSN in step_data
         logger.info("Step 2: Migrating plaintext SSNs from step_data...")
 
-        rows = conn.execute(text("""
-            SELECT id, step_data
-            FROM borrower_applications
-            WHERE step_data IS NOT NULL
-              AND step_data::text LIKE '%"ssn"%'
-        """)).fetchall()
+        if is_sqlite:
+            query = text("""
+                SELECT id, step_data
+                FROM borrower_applications
+                WHERE step_data IS NOT NULL
+                  AND step_data LIKE '%"ssn"%'
+            """)
+        else:
+            query = text("""
+                SELECT id, step_data
+                FROM borrower_applications
+                WHERE step_data IS NOT NULL
+                  AND step_data::text LIKE '%"ssn"%'
+            """)
+
+        rows = conn.execute(query).fetchall()
 
         logger.info(f"  Found {len(rows)} applications with SSN in step_data.")
 
@@ -69,6 +97,9 @@ def run_migration():
 
                 # Encrypt primary SSN
                 if ssn_raw and isinstance(ssn_raw, str):
+                    # Skip already-encrypted values
+                    if ssn_raw == "***ENCRYPTED***":
+                        continue
                     digits = "".join(c for c in ssn_raw if c.isdigit())
                     if len(digits) == 9:
                         ssn_encrypted = encrypt_value(digits)
@@ -78,6 +109,8 @@ def run_migration():
 
                 # Encrypt co-borrower SSN
                 if co_ssn_raw and isinstance(co_ssn_raw, str):
+                    if co_ssn_raw == "***ENCRYPTED***":
+                        continue
                     digits = "".join(c for c in co_ssn_raw if c.isdigit())
                     if len(digits) == 9:
                         co_ssn_encrypted = encrypt_value(digits)

@@ -5,7 +5,7 @@ P0-4 Enterprise Remediation: Audit logs must be append-only with tamper detectio
 
 This migration:
 1. Adds hash chain columns (sequence_number, record_hash, previous_hash, hash_algorithm)
-2. Creates DB triggers to prevent UPDATE and DELETE on audit_logs
+2. Creates DB triggers to prevent UPDATE and DELETE on audit_logs (PostgreSQL only)
 3. Backfills sequence_number and computes initial record_hash for existing rows
 
 Run: python backend/migrations/add_audit_log_immutability.py
@@ -24,10 +24,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _column_exists(conn, table, column, is_sqlite):
+    """Check if a column exists in a table."""
+    from sqlalchemy import text
+    if is_sqlite:
+        result = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+        return any(row[1] == column for row in result)
+    else:
+        result = conn.execute(text("""
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = :table AND column_name = :col
+        """), {"table": table, "col": column}).fetchone()
+        return result is not None
+
+
 def run_migration():
     """Execute the audit log immutability migration."""
     from sqlalchemy import text
     from db import engine
+
+    is_sqlite = "sqlite" in str(engine.url)
 
     with engine.connect() as conn:
         # Step 1: Add hash chain columns
@@ -41,12 +57,14 @@ def run_migration():
         }
 
         for col_name, col_type in columns.items():
-            conn.execute(text(f"""
-                ALTER TABLE audit_logs
-                ADD COLUMN IF NOT EXISTS {col_name} {col_type}
-            """))
+            if not _column_exists(conn, "audit_logs", col_name, is_sqlite):
+                conn.execute(text(f"""
+                    ALTER TABLE audit_logs ADD COLUMN {col_name} {col_type}
+                """))
+                logger.info(f"  Added column {col_name}.")
+            else:
+                logger.info(f"  Column {col_name} already exists.")
         conn.commit()
-        logger.info("  Hash chain columns added.")
 
         # Step 2: Create index on sequence_number
         logger.info("Step 2: Creating index on sequence_number...")
@@ -127,40 +145,44 @@ def run_migration():
             conn.commit()
             logger.info(f"  Backfill complete: {len(rows)} rows hash-chained.")
 
-        # Step 4: Create immutability triggers
-        logger.info("Step 4: Creating immutability triggers...")
+        # Step 4: Create immutability triggers (PostgreSQL only)
+        if is_sqlite:
+            logger.info("Step 4: Skipping immutability triggers (SQLite — triggers are PostgreSQL-only).")
+        else:
+            logger.info("Step 4: Creating immutability triggers...")
 
-        conn.execute(text("""
-            CREATE OR REPLACE FUNCTION prevent_audit_log_modification()
-            RETURNS TRIGGER AS $$
-            BEGIN
-                RAISE EXCEPTION 'audit_logs table is append-only: % not allowed', TG_OP;
-            END;
-            $$ LANGUAGE plpgsql
-        """))
+            conn.execute(text("""
+                CREATE OR REPLACE FUNCTION prevent_audit_log_modification()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    RAISE EXCEPTION 'audit_logs table is append-only: % not allowed', TG_OP;
+                END;
+                $$ LANGUAGE plpgsql
+            """))
 
-        # Drop existing triggers first (idempotent)
-        conn.execute(text("""
-            DROP TRIGGER IF EXISTS audit_log_no_update ON audit_logs
-        """))
-        conn.execute(text("""
-            DROP TRIGGER IF EXISTS audit_log_no_delete ON audit_logs
-        """))
+            # Drop existing triggers first (idempotent)
+            conn.execute(text("""
+                DROP TRIGGER IF EXISTS audit_log_no_update ON audit_logs
+            """))
+            conn.execute(text("""
+                DROP TRIGGER IF EXISTS audit_log_no_delete ON audit_logs
+            """))
 
-        conn.execute(text("""
-            CREATE TRIGGER audit_log_no_update
-                BEFORE UPDATE ON audit_logs
-                FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification()
-        """))
+            conn.execute(text("""
+                CREATE TRIGGER audit_log_no_update
+                    BEFORE UPDATE ON audit_logs
+                    FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification()
+            """))
 
-        conn.execute(text("""
-            CREATE TRIGGER audit_log_no_delete
-                BEFORE DELETE ON audit_logs
-                FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification()
-        """))
+            conn.execute(text("""
+                CREATE TRIGGER audit_log_no_delete
+                    BEFORE DELETE ON audit_logs
+                    FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification()
+            """))
 
-        conn.commit()
-        logger.info("  Immutability triggers created.")
+            conn.commit()
+            logger.info("  Immutability triggers created.")
+
         logger.info("Audit log immutability migration complete.")
 
 
