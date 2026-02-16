@@ -55,24 +55,16 @@ class SMSClient:
             logger.warning("Twilio SMS credentials not configured")
 
     def _init_telnyx(self):
-        """Initialize Telnyx SMS client"""
-        try:
-            from telnyx import Telnyx
+        """Initialize Telnyx SMS client (uses HTTP API directly, no SDK needed)"""
+        self._telnyx_api_key = os.getenv("TELNYX_API_KEY", "")
+        self.from_number = os.getenv("TELNYX_PHONE_NUMBER", "")
+        self.messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
 
-            api_key = os.getenv("TELNYX_API_KEY", "")
-            self.from_number = os.getenv("TELNYX_PHONE_NUMBER", "")
-            self.messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
-
-            if api_key and self.from_number:
-                self._client = Telnyx(api_key=api_key)
-                self.enabled = True
-                logger.info("Telnyx SMS initialized successfully")
-            else:
-                logger.warning("Telnyx SMS credentials not configured")
-        except ImportError:
-            logger.warning("Telnyx SDK not installed - run: pip install telnyx")
-        except Exception as e:
-            logger.error(f"Failed to initialize Telnyx SMS: {e}")
+        if self._telnyx_api_key and self.from_number:
+            self.enabled = True
+            logger.info("Telnyx SMS initialized successfully (HTTP mode)")
+        else:
+            logger.warning("Telnyx SMS credentials not configured")
 
     async def send_sms(
         self,
@@ -130,24 +122,40 @@ class SMSClient:
     async def _send_telnyx(
         self, to_number: str, message: str, media_url: Optional[str], from_number: str
     ) -> Optional[str]:
-        """Send SMS via Telnyx"""
+        """Send SMS via Telnyx HTTP API"""
         try:
-            kwargs = {
-                "from_": from_number,
+            import requests
+
+            payload = {
+                "from": from_number,
                 "to": to_number,
                 "text": message,
             }
 
             if self.messaging_profile_id:
-                kwargs["messaging_profile_id"] = self.messaging_profile_id
+                payload["messaging_profile_id"] = self.messaging_profile_id
 
             if media_url:
-                kwargs["media_urls"] = [media_url]
+                payload["media_urls"] = [media_url]
 
-            response = self._client.messages.create(**kwargs)
-            message_id = response.data.id
-            logger.info(f"Telnyx SMS sent. ID: {message_id}")
-            return message_id
+            response = requests.post(
+                "https://api.telnyx.com/v2/messages",
+                headers={
+                    "Authorization": f"Bearer {self._telnyx_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=10,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                message_id = data.get("data", {}).get("id", "")
+                logger.info(f"Telnyx SMS sent. ID: {message_id}")
+                return message_id
+            else:
+                logger.error(f"Telnyx SMS failed: {response.status_code} {response.text[:200]}")
+                return None
 
         except Exception as e:
             logger.error(f"Telnyx error sending SMS: {e}")
@@ -218,21 +226,33 @@ class SMSClient:
             return None
 
     async def _get_telnyx_status(self, message_id: str) -> Optional[Dict[str, Any]]:
-        """Get Telnyx message status"""
+        """Get Telnyx message status via HTTP API"""
         try:
-            response = self._client.messages.retrieve(message_id)
-            msg = response.data
+            import requests
 
-            return {
-                "id": msg.id,
-                "status": msg.to[0].status if msg.to else "unknown",
-                "to": msg.to[0].phone_number if msg.to else None,
-                "from": msg.from_.phone_number if msg.from_ else None,
-                "body": msg.text,
-                "date_sent": msg.sent_at,
-                "error_code": None,
-                "error_message": None
-            }
+            response = requests.get(
+                f"https://api.telnyx.com/v2/messages/{message_id}",
+                headers={"Authorization": f"Bearer {self._telnyx_api_key}"},
+                timeout=10,
+            )
+
+            if response.status_code == 200:
+                msg = response.json().get("data", {})
+                to_list = msg.get("to", [])
+                from_obj = msg.get("from", {})
+                return {
+                    "id": msg.get("id"),
+                    "status": to_list[0].get("status") if to_list else "unknown",
+                    "to": to_list[0].get("phone_number") if to_list else None,
+                    "from": from_obj.get("phone_number") if from_obj else None,
+                    "body": msg.get("text"),
+                    "date_sent": msg.get("sent_at"),
+                    "error_code": None,
+                    "error_message": None,
+                }
+            else:
+                logger.error(f"Telnyx status check failed: {response.status_code}")
+                return None
 
         except Exception as e:
             logger.error(f"Error fetching Telnyx message status: {e}")
