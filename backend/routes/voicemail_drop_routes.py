@@ -754,93 +754,110 @@ async def create_voicemail_drop(
         db.commit()
 
         # Send voicemail via configured delivery method
+        # Ringless (Slybroadcast) is preferred; falls back to Vapi if it fails.
+        async def _deliver_via_vapi():
+            """Deliver voicemail via Vapi AI outbound call."""
+            vapi_result = await send_voicemail_via_vapi(
+                phone_number=phone_number,
+                message=message,
+                recipient_name=recipient_name,
+                user_name=current_user.full_name or "your loan officer",
+                voicemail_drop_id=voicemail_drop.id,
+                db=db,
+                voice_provider=voice_provider,
+                voice_id=voice_id,
+                voice_speed=voice_speed,
+                audio_url=audio_url,
+            )
+            voicemail_drop.vapi_call_id = vapi_result.get("call_id")
+            voicemail_drop.status = 'calling'
+            voicemail_drop.delivery_attempts = (voicemail_drop.delivery_attempts or 0) + 1
+            voicemail_drop.last_attempt_at = datetime.now(timezone.utc)
+            db.commit()
+
+            calling_event = VoicemailEvent(
+                voicemail_drop_id=voicemail_drop.id,
+                event_type='calling',
+                event_data={"vapi_call_id": vapi_result.get("call_id")}
+            )
+            db.add(calling_event)
+            db.commit()
+            logger.info(f"Voicemail drop {voicemail_drop.id} initiated via Vapi")
+            return {
+                "success": True,
+                "voicemail_drop_id": voicemail_drop.id,
+                "vapi_call_id": vapi_result.get("call_id"),
+                "status": "calling",
+                "message": "Voicemail is being delivered"
+            }
+
         try:
             if delivery_method == "ringless":
-                rvm_result = await send_voicemail_ringless(
-                    phone_number=phone_number,
-                    message=message,
-                    audio_url=audio_url,
-                    voicemail_drop_id=voicemail_drop.id,
-                    voice=voice_id or "nova",
-                    voice_speed=float(voice_speed or 1.0),
-                )
+                try:
+                    rvm_result = await send_voicemail_ringless(
+                        phone_number=phone_number,
+                        message=message,
+                        audio_url=audio_url,
+                        voicemail_drop_id=voicemail_drop.id,
+                        voice=voice_id or "nova",
+                        voice_speed=float(voice_speed or 1.0),
+                    )
 
-                # Update with RVM-specific fields
-                voicemail_drop.rvm_session_id = rvm_result.get("session_id")
-                voicemail_drop.rvm_provider = rvm_result.get("provider")
-                voicemail_drop.status = 'sending'
-                voicemail_drop.delivery_attempts = 1
-                voicemail_drop.last_attempt_at = datetime.now(timezone.utc)
-                db.commit()
+                    voicemail_drop.rvm_session_id = rvm_result.get("session_id")
+                    voicemail_drop.rvm_provider = rvm_result.get("provider")
+                    voicemail_drop.status = 'sending'
+                    voicemail_drop.delivery_attempts = 1
+                    voicemail_drop.last_attempt_at = datetime.now(timezone.utc)
+                    db.commit()
 
-                sending_event = VoicemailEvent(
-                    voicemail_drop_id=voicemail_drop.id,
-                    event_type='sending',
-                    event_data={
+                    sending_event = VoicemailEvent(
+                        voicemail_drop_id=voicemail_drop.id,
+                        event_type='sending',
+                        event_data={
+                            "rvm_session_id": rvm_result.get("session_id"),
+                            "provider": rvm_result.get("provider"),
+                        }
+                    )
+                    db.add(sending_event)
+                    db.commit()
+                    logger.info(f"RVM drop {voicemail_drop.id} submitted to {rvm_result.get('provider')}")
+
+                    return {
+                        "success": True,
+                        "voicemail_drop_id": voicemail_drop.id,
                         "rvm_session_id": rvm_result.get("session_id"),
                         "provider": rvm_result.get("provider"),
+                        "status": "sending",
+                        "message": "Ringless voicemail submitted for delivery"
                     }
-                )
-                db.add(sending_event)
-                db.commit()
-
-                logger.info(f"RVM drop {voicemail_drop.id} submitted to {rvm_result.get('provider')}")
-
-                return {
-                    "success": True,
-                    "voicemail_drop_id": voicemail_drop.id,
-                    "rvm_session_id": rvm_result.get("session_id"),
-                    "provider": rvm_result.get("provider"),
-                    "status": "sending",
-                    "message": "Ringless voicemail submitted for delivery"
-                }
+                except Exception as rvm_err:
+                    # Ringless failed — fall back to Vapi AI call
+                    logger.warning(
+                        f"Ringless delivery failed for drop {voicemail_drop.id}, "
+                        f"falling back to Vapi: {rvm_err}"
+                    )
+                    fallback_event = VoicemailEvent(
+                        voicemail_drop_id=voicemail_drop.id,
+                        event_type='fallback',
+                        event_data={
+                            "original_method": "ringless",
+                            "fallback_method": "vapi_ai",
+                            "reason": str(rvm_err)[:300],
+                        }
+                    )
+                    db.add(fallback_event)
+                    db.commit()
+                    voicemail_drop.delivery_method = "vapi_ai"
+                    db.commit()
+                    return await _deliver_via_vapi()
             else:
-                vapi_result = await send_voicemail_via_vapi(
-                    phone_number=phone_number,
-                    message=message,
-                    recipient_name=recipient_name,
-                    user_name=current_user.full_name or "your loan officer",
-                    voicemail_drop_id=voicemail_drop.id,
-                    db=db,
-                    voice_provider=voice_provider,
-                    voice_id=voice_id,
-                    voice_speed=voice_speed,
-                    audio_url=audio_url,
-                )
-
-                # Update voicemail drop with Vapi call ID
-                voicemail_drop.vapi_call_id = vapi_result.get("call_id")
-                voicemail_drop.status = 'calling'
-                voicemail_drop.delivery_attempts = 1
-                voicemail_drop.last_attempt_at = datetime.now(timezone.utc)
-                db.commit()
-
-                # Create calling event
-                calling_event = VoicemailEvent(
-                    voicemail_drop_id=voicemail_drop.id,
-                    event_type='calling',
-                    event_data={"vapi_call_id": vapi_result.get("call_id")}
-                )
-                db.add(calling_event)
-                db.commit()
-
-                logger.info(f"Voicemail drop {voicemail_drop.id} initiated via Vapi")
-
-                return {
-                    "success": True,
-                    "voicemail_drop_id": voicemail_drop.id,
-                    "vapi_call_id": vapi_result.get("call_id"),
-                    "status": "calling",
-                    "message": "Voicemail is being delivered"
-                }
+                return await _deliver_via_vapi()
 
         except Exception as e:
-            # Update voicemail drop with error (truncate to prevent DB bloat)
             voicemail_drop.status = 'failed'
             voicemail_drop.error_message = str(e)[:500]
             db.commit()
 
-            # Create failed event
             failed_event = VoicemailEvent(
                 voicemail_drop_id=voicemail_drop.id,
                 event_type='failed',
