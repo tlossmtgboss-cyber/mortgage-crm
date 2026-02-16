@@ -131,7 +131,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
             except Exception as e:
                 savepoint.rollback()  # Rollback only this lead's savepoint
-                errors.append(f"Failed to delete lead {lead_id}: {str(e)}")
+                logger.error(f"Failed to delete lead {lead_id}: {e}")
+                errors.append(f"Failed to delete lead {lead_id}")
 
         # Final commit
         try:
@@ -220,7 +221,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     logger.error(f"Cascade error for lead {lead_id}: {cascade_err}")
 
             except Exception as e:
-                errors.append(f"Failed to update lead {lead_id}: {str(e)}")
+                logger.error(f"Failed to update lead {lead_id}: {e}")
+                errors.append(f"Failed to update lead {lead_id}")
 
         try:
             db.commit()

@@ -15,6 +15,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 import csv
 import io
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy.orm import Session
@@ -43,6 +44,8 @@ from schemas.business_operations import (
     RunwayAnalysis, BreakEvenAnalysis,
     CACAnalysis, LTVAnalysis, MarketingROI
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/business-ops", tags=["business-operations"], dependencies=[Depends(require_auth)])
 
@@ -541,7 +544,8 @@ async def import_usage_csv(
             db.add(record)
             records_created += 1
         except SQLAlchemyError as e:
-            errors.append(f"Row {row_num}: {str(e)}")
+            logger.error(f"Row {row_num} import failed: {e}")
+            errors.append(f"Row {row_num}: import failed")
 
     if records_created > 0:
         db.commit()

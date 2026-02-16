@@ -1207,14 +1207,17 @@ async def oauth_callback(
                 logger.warning(f"Initial schema discovery failed (non-fatal): {schema_error}")
 
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        # Validate return_url to prevent open redirect
+        # Validate return_url to prevent open redirect (including protocol-relative URLs)
         raw_return_url = result.get('return_url')
         if raw_return_url:
             from urllib.parse import urlparse
             parsed = urlparse(raw_return_url)
             frontend_parsed = urlparse(frontend_url)
-            if parsed.scheme and parsed.netloc and parsed.netloc != frontend_parsed.netloc:
-                raw_return_url = None  # Reject external redirect
+            # Reject if: has external netloc, missing scheme, or protocol-relative (//...)
+            if raw_return_url.startswith("//"):
+                raw_return_url = None
+            elif parsed.netloc and (not parsed.scheme or parsed.scheme not in ("http", "https") or parsed.netloc != frontend_parsed.netloc):
+                raw_return_url = None
         final_redirect = raw_return_url or f"{frontend_url}/settings/integrations"
 
         # Properly append query parameter - avoid double ?

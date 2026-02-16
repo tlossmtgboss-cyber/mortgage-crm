@@ -157,7 +157,7 @@ async def execute_email_response_action(
 
                 except Exception as e:
                     logger.error(f"Failed to send email reply: {e}")
-                    results["errors"].append(f"Email send failed: {str(e)}")
+                    results["errors"].append("Email send failed")
 
         # Actions that require updating entity status
         if final_action in ["acknowledge_and_update", "update_status"]:
@@ -208,7 +208,7 @@ async def execute_email_response_action(
 
                 except Exception as e:
                     logger.error(f"Failed to update entity status: {e}")
-                    results["errors"].append(f"Status update failed: {str(e)}")
+                    results["errors"].append("Status update failed")
 
         # Actions that create a task
         if final_action == "create_task":
@@ -231,7 +231,7 @@ async def execute_email_response_action(
 
             except Exception as e:
                 logger.error(f"Failed to create task: {e}")
-                results["errors"].append(f"Task creation failed: {str(e)}")
+                results["errors"].append("Task creation failed")
 
         # Log the execution timestamp
         db.execute(text("""
@@ -242,7 +242,7 @@ async def execute_email_response_action(
 
     except Exception as e:
         logger.error(f"Error executing email response action: {e}")
-        results["errors"].append(str(e))
+        results["errors"].append("Action execution failed")
 
     return results
 

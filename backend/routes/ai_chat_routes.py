@@ -3864,7 +3864,8 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             import json
             import time
             from datetime import datetime
-            from integrations.twilio_service import sms_client
+            from integrations.sms_service import get_sms_client
+            sms_client = get_sms_client()
             from database.models import SMSMessage, Task
 
             client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -4026,11 +4027,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                         tool_result = None
 
                         if function_name == "send_sms":
-                            # Send SMS using Twilio
+                            # Send SMS using configured provider (Telnyx/Twilio)
                             try:
                                 if not sms_client.enabled:
-                                    tool_result = {"success": False, "error": "SMS service not configured. Check Twilio credentials."}
-                                    logger.error("SMS client not enabled — missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_PHONE_NUMBER")
+                                    tool_result = {"success": False, "error": f"SMS service not configured. Check {sms_client.provider} credentials."}
+                                    logger.error(f"SMS client not enabled — provider={sms_client.provider}")
                                 else:
                                     to_num = function_args["to_number"]
                                     sms_body = function_args["message"]
@@ -4040,7 +4041,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                                     )
 
                                     if not message_sid:
-                                        tool_result = {"success": False, "error": "SMS send failed — check Twilio logs"}
+                                        tool_result = {"success": False, "error": f"SMS send failed — check {sms_client.provider} logs"}
                                         logger.error(f"SMS send returned None for to={to_num}")
                                     else:
                                         # Log SMS to database
@@ -4184,7 +4185,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                         db=db,
                         action_id=action_id,
                         outcome="failure",
-                        metadata={"error": str(e)}
+                        metadata={"error": "Task execution failed"}
                     )
             except Exception:
                 pass  # Don't fail main response if logging fails

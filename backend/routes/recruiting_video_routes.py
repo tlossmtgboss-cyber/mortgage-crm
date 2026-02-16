@@ -565,7 +565,8 @@ async def fix_video_urls(
                 else:
                     errors.append(f"Video {row.id}: {public_result.get('error')}")
             except SQLAlchemyError as e:
-                errors.append(f"Video {row.id}: {str(e)}")
+                logger.error(f"Video {row.id} processing failed: {e}")
+                errors.append(f"Video {row.id}: processing failed")
 
         db.commit()
 

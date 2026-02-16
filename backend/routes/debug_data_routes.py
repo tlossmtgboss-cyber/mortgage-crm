@@ -1730,7 +1730,8 @@ def register_debug_data_routes(
                         db.execute(text(f"ALTER TABLE loans ADD COLUMN {col_name} {col_type}"))
                         results["loans_added"].append(col_name)
                     except Exception as e:
-                        results["errors"].append(f"loans.{col_name}: {str(e)}")
+                        logger.error(f"loans.{col_name} migration failed: {e}")
+                        results["errors"].append(f"loans.{col_name}: migration failed")
 
             # Get existing columns for LEADS
             lead_cols_result = db.execute(text("""
@@ -1751,7 +1752,8 @@ def register_debug_data_routes(
                         db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
                         results["leads_added"].append(col_name)
                     except Exception as e:
-                        results["errors"].append(f"leads.{col_name}: {str(e)}")
+                        logger.error(f"leads.{col_name} migration failed: {e}")
+                        results["errors"].append(f"leads.{col_name}: migration failed")
 
             db.commit()
 
@@ -2692,19 +2694,22 @@ def register_debug_data_routes(
             import pytz
             results["success"].append("pytz")
         except Exception as e:
-            results["errors"].append(f"pytz: {str(e)}")
+            logger.error(f"pytz import failed: {e}")
+            results["errors"].append(f"pytz: import failed")
 
         try:
             from services.notification_service import notification_service
             results["success"].append("notification_service")
         except Exception as e:
-            results["errors"].append(f"notification_service: {str(e)}")
+            logger.error(f"notification_service import failed: {e}")
+            results["errors"].append(f"notification_service: import failed")
 
         try:
             from smart_scheduler_models import create_smart_scheduler_models
             results["success"].append("smart_scheduler_models")
         except Exception as e:
-            results["errors"].append(f"smart_scheduler_models: {str(e)}")
+            logger.error(f"smart_scheduler_models import failed: {e}")
+            results["errors"].append(f"smart_scheduler_models: import failed")
 
         try:
             from smart_scheduler_routes import router as smart_scheduler_router

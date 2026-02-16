@@ -779,7 +779,7 @@ async def merge_documents(
                 errors.append(f"{doc.file_name}: Not a PDF, skipping")
         except Exception as e:
             logger.error(f"Error processing document {doc.id}: {e}")
-            errors.append(f"{doc.file_name}: {str(e)}")
+            errors.append(f"{doc.file_name}: processing failed")
 
     if not merged_any:
         raise HTTPException(

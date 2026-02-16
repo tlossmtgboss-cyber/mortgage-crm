@@ -13,7 +13,10 @@ from database import get_db
 from services.recruiting_service import RecruitingService
 from main import get_current_user, User
 from sqlalchemy.exc import SQLAlchemyError
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
@@ -1753,7 +1756,8 @@ async def seed_test_data(
                 }).fetchone()
                 results["candidates"].append({"id": result.id, "name": f"{c[0]} {c[1]}"})
             except Exception as e:
-                results["errors"].append(f"Candidate {c[0]} {c[1]}: {str(e)}")
+                logger.error(f"Candidate {c[0]} {c[1]} creation failed: {e}")
+                results["errors"].append(f"Candidate {c[0]} {c[1]}: creation failed")
 
         # Create test job postings
         job_postings = [
@@ -1779,7 +1783,8 @@ async def seed_test_data(
                 }).fetchone()
                 results["job_postings"].append({"id": result.id, "slug": result.slug})
             except SQLAlchemyError as e:
-                results["errors"].append(f"Job {jp[0]}: {str(e)}")
+                logger.error(f"Job {jp[0]} creation failed: {e}")
+                results["errors"].append(f"Job {jp[0]}: creation failed")
 
         db.commit()
         return results

@@ -993,7 +993,8 @@ async def run_page_permissions_migration(
             results["tables_created"].append("page_categories")
         except SQLAlchemyError as e:
             if "already exists" not in str(e).lower():
-                results["errors"].append(f"page_categories: {str(e)}")
+                logger.error(f"page_categories creation failed: {e}")
+                results["errors"].append("page_categories: creation failed")
 
         # Create pages table
         try:
@@ -1016,7 +1017,8 @@ async def run_page_permissions_migration(
             results["tables_created"].append("pages")
         except Exception as e:
             if "already exists" not in str(e).lower():
-                results["errors"].append(f"pages: {str(e)}")
+                logger.error(f"pages table creation failed: {e}")
+                results["errors"].append("pages: creation failed")
 
         # Create page_permissions table
         try:
@@ -1037,7 +1039,8 @@ async def run_page_permissions_migration(
             results["tables_created"].append("page_permissions")
         except SQLAlchemyError as e:
             if "already exists" not in str(e).lower():
-                results["errors"].append(f"page_permissions: {str(e)}")
+                logger.error(f"page_permissions table creation failed: {e}")
+                results["errors"].append("page_permissions: creation failed")
 
         # Create user_page_overrides table
         try:
@@ -1062,7 +1065,8 @@ async def run_page_permissions_migration(
             results["tables_created"].append("user_page_overrides")
         except Exception as e:
             if "already exists" not in str(e).lower():
-                results["errors"].append(f"user_page_overrides: {str(e)}")
+                logger.error(f"user_page_overrides table creation failed: {e}")
+                results["errors"].append("user_page_overrides: creation failed")
 
         # Create page_access_log table
         try:
@@ -1084,7 +1088,8 @@ async def run_page_permissions_migration(
             results["tables_created"].append("page_access_log")
         except Exception as e:
             if "already exists" not in str(e).lower():
-                results["errors"].append(f"page_access_log: {str(e)}")
+                logger.error(f"page_access_log table creation failed: {e}")
+                results["errors"].append("page_access_log: creation failed")
 
         db.commit()
 
