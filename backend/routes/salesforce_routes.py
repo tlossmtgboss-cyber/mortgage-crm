@@ -3245,6 +3245,17 @@ async def fix_mum_client_names(
 
         total_fixed = len(fixed_from_loans) + len(fixed_from_leads) + sf_fixed_count
 
+        # Diagnostic: show sample borrower_name values for remaining unfixed
+        diag_samples = db.execute(text("""
+            SELECT l.borrower_name, l.loan_number, l.borrower_email,
+                   m.client_name, LENGTH(l.borrower_name) as name_len
+            FROM loans l
+            JOIN mum_clients m ON m.loan_number = l.loan_number
+            WHERE m.client_name LIKE 'Client - %'
+               OR m.client_name ~ '^[0-9a-zA-Z]{15,18}$'
+            LIMIT 10
+        """)).fetchall()
+
         return {
             "status": "success",
             "fixed_from_loans": len(fixed_from_loans),
@@ -3257,7 +3268,17 @@ async def fix_mum_client_names(
             "samples": [
                 {"id": r[0], "new_name": r[1], "loan_number": r[2]}
                 for r in (list(fixed_from_loans) + list(fixed_from_leads))[:20]
-            ]
+            ],
+            "diagnostic_unfixed_loans": [
+                {
+                    "borrower_name": r[0],
+                    "loan_number": r[1],
+                    "borrower_email": r[2],
+                    "mum_client_name": r[3],
+                    "name_length": r[4]
+                }
+                for r in diag_samples
+            ] if remaining > 0 else []
         }
     except Exception as e:
         db.rollback()
