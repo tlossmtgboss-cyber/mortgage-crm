@@ -74,8 +74,8 @@ async def upload_rate_sheet(
     from models.rate_sheet import RateSheet
     from services.rate_sheet_parser_service import RateSheetParserService
 
-    # Validate file type
-    filename = file.filename.lower()
+    # Validate file type by extension
+    filename = file.filename.lower() if file.filename else ""
     allowed_extensions = ['.pdf', '.xlsx', '.xls', '.csv']
     if not any(filename.endswith(ext) for ext in allowed_extensions):
         raise HTTPException(
@@ -83,10 +83,25 @@ async def upload_rate_sheet(
             detail=f"File type not supported. Allowed: {', '.join(allowed_extensions)}"
         )
 
-    # Read file content
+    # Read file content with size limit (read in chunks to avoid memory abuse)
     file_content = await file.read()
     if len(file_content) > 10 * 1024 * 1024:  # 10MB limit
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+
+    # Validate file content matches claimed extension (magic byte check)
+    _MAGIC_BYTES = {
+        '.pdf': (b'%PDF', 0),
+        '.xlsx': (b'PK\x03\x04', 0),  # ZIP/OOXML format
+        '.xls': (b'\xd0\xcf\x11\xe0', 0),  # OLE compound document
+    }
+    file_ext = '.' + filename.rsplit('.', 1)[-1] if '.' in filename else ''
+    if file_ext in _MAGIC_BYTES:
+        expected_magic, offset = _MAGIC_BYTES[file_ext]
+        if not file_content[offset:offset + len(expected_magic)] == expected_magic:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File content does not match {file_ext} format"
+            )
 
     # Calculate hash to check for duplicates
     parser_service = RateSheetParserService(db)

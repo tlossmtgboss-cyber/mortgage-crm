@@ -86,6 +86,18 @@ ALLOWED_MIME_TYPES = [
 
 ALLOWED_EXTENSIONS = {'pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'doc', 'docx'}
 
+# Map MIME types to their valid extensions for consistency check
+_MIME_TO_EXTENSIONS = {
+    'application/pdf': {'pdf'},
+    'image/jpeg': {'jpg', 'jpeg'},
+    'image/png': {'png'},
+    'image/gif': {'gif'},
+    'image/webp': {'webp'},
+    'image/heic': {'heic'},
+    'application/msword': {'doc'},
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {'docx'},
+}
+
 
 # =============================================================================
 # REQUEST/RESPONSE MODELS
@@ -200,6 +212,14 @@ async def initiate_document_upload(
     file_ext = request.file_name.rsplit('.', 1)[-1].lower() if '.' in request.file_name else ''
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"File extension '.{file_ext}' not allowed")
+
+    # Validate MIME type matches file extension (prevent type mismatch)
+    valid_exts = _MIME_TO_EXTENSIONS.get(request.mime_type)
+    if valid_exts and file_ext not in valid_exts:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File extension '.{file_ext}' does not match MIME type '{request.mime_type}'"
+        )
     unique_id = str(uuid.uuid4())
     storage_key = f"workspaces/{request.workspace_id}/documents/{unique_id}.{file_ext}"
 
