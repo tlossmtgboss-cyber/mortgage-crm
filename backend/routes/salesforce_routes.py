@@ -3166,21 +3166,33 @@ async def fix_mum_client_names(
         # Find loans with SF Contact IDs as borrower_name that still have bad MUM names
         sf_fixed_count = 0
         sf_errors = []
+        sf_status = "not_attempted"
         try:
             from integrations.salesforce_service import salesforce_client
 
+            # Try current user first, then ANY user with SF integration
             integration = db.execute(text("""
-                SELECT access_token, refresh_token, scopes FROM user_integrations
-                WHERE user_id = :user_id AND provider = 'salesforce'
+                SELECT access_token, refresh_token, scopes, user_id FROM user_integrations
+                WHERE provider = 'salesforce' AND access_token IS NOT NULL
+                ORDER BY CASE WHEN user_id = :user_id THEN 0 ELSE 1 END, updated_at DESC
+                LIMIT 1
             """), {"user_id": user_id}).fetchone()
 
-            if integration and integration[0]:
-                access_token = decrypt_token(integration[0])
+            if not integration or not integration[0]:
+                sf_status = "no_sf_integration"
+                sf_errors.append("No Salesforce integration found for any user")
+            else:
+                sf_integration_user = integration[3]
+                access_token_sf = decrypt_token(integration[0])
                 instance_url = None
                 if integration[2] and "instance_url:" in integration[2]:
                     instance_url = parse_instance_url_from_scopes(integration[2])
 
-                if instance_url:
+                if not instance_url:
+                    sf_status = "no_instance_url"
+                    sf_errors.append(f"No instance_url in scopes for SF user {sf_integration_user}")
+                else:
+                    sf_status = "connected"
                     # Get SF Contact IDs from loans.borrower_name for unfixed MUM clients
                     sf_contact_rows = db.execute(text("""
                         SELECT DISTINCT l.borrower_name as contact_id, l.loan_number
@@ -3190,6 +3202,8 @@ async def fix_mum_client_names(
                         AND (m.client_name LIKE 'Client - %'
                              OR m.client_name ~ '^[0-9a-zA-Z]{15,18}$')
                     """)).fetchall()
+
+                    sf_errors.append(f"Found {len(sf_contact_rows)} SF Contact IDs to resolve (user {sf_integration_user})")
 
                     if sf_contact_rows:
                         # Batch Contact IDs (max 200 per SOQL query)
@@ -3202,7 +3216,7 @@ async def fix_mum_client_names(
                             soql = f"SELECT Id, FirstName, LastName FROM Contact WHERE Id IN ('{id_list}')"
 
                             try:
-                                result = salesforce_client.query(access_token, instance_url, soql)
+                                result = salesforce_client.query(access_token_sf, instance_url, soql)
                                 if result and result.get("records"):
                                     for rec in result["records"]:
                                         first = rec.get("FirstName") or ""
@@ -3263,6 +3277,7 @@ async def fix_mum_client_names(
             "fixed_from_salesforce": sf_fixed_count,
             "loans_table_updated": len(loans_updated),
             "remaining_unfixed": remaining,
+            "sf_status": sf_status,
             "sf_errors": sf_errors if sf_errors else None,
             "message": f"Fixed {total_fixed} MUM client names ({sf_fixed_count} from Salesforce API), {remaining} still need review",
             "samples": [
@@ -3285,7 +3300,7 @@ async def fix_mum_client_names(
         logger.error(f"Failed to fix MUM client names: {e}")
         return {
             "status": "error",
-            "message": f"Fix failed: {str(e)[:200]}",
+            "message": "Fix failed due to an internal error",
             "fixed_from_loans": 0,
             "fixed_from_leads": 0,
             "fixed_from_salesforce": 0,
