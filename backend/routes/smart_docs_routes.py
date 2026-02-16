@@ -31,9 +31,16 @@ from services.smart_docs.freshness_validator import FreshnessValidator
 from services.smart_docs.notification_service import SmartDocsNotificationService
 from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import text as sa_text
 
 logger = logging.getLogger(__name__)
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
+
+def _get_loan_org_id(db: Session, loan_id: int) -> Optional[int]:
+    """Look up organization_id for a loan (for S3 tenant isolation)."""
+    row = db.execute(sa_text("SELECT organization_id FROM loans WHERE id = :id"), {"id": loan_id}).first()
+    return row[0] if row else None
 
 router = APIRouter(
     prefix="/api/v1/smart-docs",
@@ -547,11 +554,13 @@ async def upload_document(
     # Get S3 service
     s3_service = get_smart_docs_s3_service()
 
-    # Generate storage key
+    # Generate storage key with org isolation
+    org_id = _get_loan_org_id(db, loan_id)
     storage_key = s3_service.generate_storage_key(
         loan_id=loan_id,
         borrower_id=borrower_id,
-        file_name=file.filename
+        file_name=file.filename,
+        organization_id=org_id,
     )
 
     # Create document record
@@ -2802,10 +2811,12 @@ async def test_upload(
     # Step 2: Get S3 service
     try:
         s3_service = get_smart_docs_s3_service()
+        org_id = _get_loan_org_id(db, loan_id)
         storage_key = s3_service.generate_storage_key(
             loan_id=loan_id,
             borrower_id=borrower_id,
-            file_name=file.filename
+            file_name=file.filename,
+            organization_id=org_id,
         )
         steps["s3_service"] = f"ok, key: {storage_key}"
     except Exception as e:

@@ -414,6 +414,16 @@ class DocumentIntakeEngine:
                     match_reason="Multiple potential matches found"
                 )
 
+    def _get_intake_org_id(self, email_intake_id: int) -> Optional[int]:
+        """Look up organization_id for an email intake via its matched loan."""
+        from sqlalchemy import text
+        row = self.db.execute(text("""
+            SELECT l.organization_id FROM email_intakes ei
+            JOIN loans l ON l.id = ei.matched_loan_id
+            WHERE ei.id = :id AND ei.matched_loan_id IS NOT NULL
+        """), {"id": email_intake_id}).first()
+        return row[0] if row else None
+
     async def _store_attachment(self, attachment: ParsedAttachment, email_intake_id: int) -> str:
         """
         Store attachment in S3 and return storage key.
@@ -422,8 +432,11 @@ class DocumentIntakeEngine:
         try:
             s3_service = get_s3_service()
 
+            # Look up org for tenant-isolated S3 key
+            org_id = self._get_intake_org_id(email_intake_id)
+
             # Generate storage key for intake (temporary storage)
-            storage_key = s3_service.generate_intake_key(email_intake_id, attachment.filename)
+            storage_key = s3_service.generate_intake_key(email_intake_id, attachment.filename, organization_id=org_id)
 
             # Upload file content to S3
             result = s3_service.upload_file(
@@ -730,12 +743,23 @@ class DocumentClassificationHandler:
             # Get the classified document type (default to 'other' if not set)
             doc_type = getattr(attachment, 'classified_document_type', None) or 'other'
 
+            # Look up org_id from the classified loan for tenant isolation
+            classified_loan_id = getattr(attachment, 'classified_loan_id', None)
+            org_id = None
+            if classified_loan_id:
+                from sqlalchemy import text
+                row = self.db.execute(text(
+                    "SELECT organization_id FROM loans WHERE id = :id"
+                ), {"id": classified_loan_id}).first()
+                org_id = row[0] if row else None
+
             # Generate permanent storage key based on classification
             permanent_key = s3_service.generate_document_key(
                 borrower_id=attachment.classified_borrower_id,
-                loan_id=getattr(attachment, 'classified_loan_id', None),
+                loan_id=classified_loan_id,
                 doc_type=doc_type,
-                filename=attachment.filename
+                filename=attachment.filename,
+                organization_id=org_id,
             )
 
             # Move file from intake location to permanent location

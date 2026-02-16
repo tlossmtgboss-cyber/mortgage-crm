@@ -99,6 +99,7 @@ async def create_lead(
         db_lead = Lead(
             **lead_data.model_dump(),
             owner_id=current_user.id,
+            organization_id=getattr(current_user, 'organization_id', None),
             lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
         )
 
@@ -168,8 +169,9 @@ async def get_leads(
     _, filter_leads_by_permissions = get_permission_functions()
 
     try:
-        # Show all leads - no permission-based filtering
+        # Apply org + role-based permission filtering (multi-tenant isolation)
         query = db.query(Lead)
+        query = filter_leads_by_permissions(query, current_user, db)
 
         if stage:
             query = query.filter(Lead.stage == stage)
@@ -253,8 +255,11 @@ async def search_leads(
 
     search_term = q.strip().lower()
 
-    # Build query - show all leads
+    # Build query with org scoping for multi-tenant isolation
     query = db.query(Lead)
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        query = query.filter(Lead.organization_id == org_id)
 
     # Search by name (case-insensitive)
     query = query.filter(

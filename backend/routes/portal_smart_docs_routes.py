@@ -257,11 +257,12 @@ async def upload_document_for_requirement(
             detail="Document storage is temporarily unavailable. Please try again later."
         )
 
-    # Generate storage key
+    # Generate storage key with org isolation
     storage_key = s3_service.generate_storage_key(
         loan_id=main_loan_id,
         borrower_id=borrower_id,
-        file_name=file.filename
+        file_name=file.filename,
+        organization_id=getattr(workspace, 'organization_id', None),
     )
 
     # Upload file to S3 first

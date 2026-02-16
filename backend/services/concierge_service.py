@@ -251,10 +251,13 @@ class ConciergeService:
                     cleaned[key] = value
 
             elif key in ["ssn", "co_ssn"]:
-                # Remove dashes/spaces
+                # Remove dashes/spaces, encrypt before storing
                 cleaned_ssn = "".join(c for c in str(value) if c.isdigit())
                 if len(cleaned_ssn) == 9:
-                    cleaned[key] = cleaned_ssn
+                    from encryption_utils import encrypt_value
+                    cleaned[key] = encrypt_value(cleaned_ssn)
+                    # Store last 4 unencrypted for display/matching
+                    cleaned[f"{key}_last4"] = cleaned_ssn[-4:]
 
             elif key in ["annual_income", "monthly_bonus", "monthly_commission",
                         "other_income", "purchase_price", "down_payment",

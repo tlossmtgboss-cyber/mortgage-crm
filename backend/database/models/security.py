@@ -27,7 +27,11 @@ from db import Base
 # ============================================================================
 
 class AuditLog(Base):
-    """Audit log for tracking all changes to user profiles and permissions"""
+    """Audit log for tracking all changes to user profiles and permissions.
+
+    Immutability enforced via DB triggers (prevent UPDATE/DELETE).
+    Tamper detection via SHA-256 hash chain (each record includes hash of previous).
+    """
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -42,6 +46,12 @@ class AuditLog(Base):
     session_id = Column(String, nullable=True)
     reason = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    # Hash chain for tamper detection (P0-4)
+    sequence_number = Column(Integer, nullable=True, index=True)
+    record_hash = Column(String(64), nullable=True)       # SHA-256 of this record
+    previous_hash = Column(String(64), nullable=True)      # Hash of previous record (NULL for first)
+    hash_algorithm = Column(String(10), default="sha256")
 
 
 # ============================================================================

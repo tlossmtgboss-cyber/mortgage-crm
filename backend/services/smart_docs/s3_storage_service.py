@@ -115,18 +115,21 @@ class SmartDocsS3Service:
         loan_id: int,
         borrower_id: Optional[int],
         file_name: str,
-        document_id: Optional[int] = None
+        document_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
     ) -> str:
         """
         Generate a unique storage key for a document.
 
-        Format: smart-docs/{loan_id}/{borrower_id}/{uuid}_{filename}
+        Format: org/{org_id}/smart-docs/{loan_id}/{borrower_id}/{uuid}_{filename}
+        Legacy (no org): smart-docs/{loan_id}/{borrower_id}/{uuid}_{filename}
 
         Args:
             loan_id: Loan ID
             borrower_id: Borrower ID (optional)
             file_name: Original file name
             document_id: Optional document ID to include
+            organization_id: Organization ID for tenant isolation
 
         Returns:
             Storage key string
@@ -141,11 +144,12 @@ class SmartDocsS3Service:
 
         # Build path
         borrower_part = str(borrower_id) if borrower_id else "unknown"
+        org_prefix = f"org/{organization_id}/" if organization_id else ""
 
         if document_id:
-            return f"{self.prefix}/{loan_id}/{borrower_part}/{document_id}_{unique_id}_{safe_name}"
+            return f"{org_prefix}{self.prefix}/{loan_id}/{borrower_part}/{document_id}_{unique_id}_{safe_name}"
         else:
-            return f"{self.prefix}/{loan_id}/{borrower_part}/{unique_id}_{safe_name}"
+            return f"{org_prefix}{self.prefix}/{loan_id}/{borrower_part}/{unique_id}_{safe_name}"
 
     def upload_file(
         self,

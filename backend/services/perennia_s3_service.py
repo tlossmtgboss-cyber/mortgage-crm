@@ -97,17 +97,20 @@ class PerenniaS3Service:
         self,
         loan_id: int,
         file_name: str,
-        folder: str = "originals"
+        folder: str = "originals",
+        organization_id: Optional[int] = None,
     ) -> str:
         """
         Generate a unique storage key for a document.
 
-        Format: documents/{loan_id}/{folder}/{uuid}.{extension}
+        Format: org/{org_id}/documents/{loan_id}/{folder}/{uuid}.{extension}
+        Legacy (no org): documents/{loan_id}/{folder}/{uuid}.{extension}
 
         Args:
             loan_id: Loan ID for organization
             file_name: Original file name (for extension)
             folder: Subfolder (originals, compressed, previews)
+            organization_id: Organization ID for tenant isolation
 
         Returns:
             Storage key string
@@ -123,7 +126,9 @@ class PerenniaS3Service:
         # Generate unique key
         unique_id = uuid.uuid4().hex
 
-        return f"documents/{loan_id}/{folder}/{unique_id}.{ext}"
+        # Org-prefixed key for tenant isolation
+        org_prefix = f"org/{organization_id}/" if organization_id else ""
+        return f"{org_prefix}documents/{loan_id}/{folder}/{unique_id}.{ext}"
 
     def get_presigned_upload_url(
         self,
@@ -621,16 +626,19 @@ class PerenniaS3Service:
     def generate_intake_key(
         self,
         email_intake_id: int,
-        filename: str
+        filename: str,
+        organization_id: Optional[int] = None,
     ) -> str:
         """
         Generate storage key for document intake (temp storage).
 
-        Format: intake/{email_intake_id}/{uuid}.{extension}
+        Format: org/{org_id}/intake/{email_intake_id}/{uuid}.{extension}
+        Legacy (no org): intake/{email_intake_id}/{uuid}.{extension}
 
         Args:
             email_intake_id: Email intake record ID
             filename: Original filename
+            organization_id: Organization ID for tenant isolation
 
         Returns:
             Storage key string
@@ -638,25 +646,29 @@ class PerenniaS3Service:
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
         unique_id = uuid.uuid4().hex
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-        return f"intake/{email_intake_id}/{timestamp}_{unique_id}.{ext}"
+        org_prefix = f"org/{organization_id}/" if organization_id else ""
+        return f"{org_prefix}intake/{email_intake_id}/{timestamp}_{unique_id}.{ext}"
 
     def generate_document_key(
         self,
         borrower_id: Optional[int],
         loan_id: Optional[int],
         doc_type: str,
-        filename: str
+        filename: str,
+        organization_id: Optional[int] = None,
     ) -> str:
         """
         Generate permanent storage key for classified document.
 
-        Format: documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
+        Format: org/{org_id}/documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
+        Legacy (no org): documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
 
         Args:
             borrower_id: Borrower ID (optional)
             loan_id: Loan ID (optional)
             doc_type: Document type (e.g., 'W2', 'BANK_STATEMENT')
             filename: Original filename
+            organization_id: Organization ID for tenant isolation
 
         Returns:
             Storage key string
@@ -667,7 +679,28 @@ class PerenniaS3Service:
         borrower_folder = str(borrower_id) if borrower_id else 'unassigned'
         loan_folder = str(loan_id) if loan_id else 'general'
 
-        return f"documents/{borrower_folder}/{loan_folder}/{doc_type.lower()}/{unique_id}.{ext}"
+        org_prefix = f"org/{organization_id}/" if organization_id else ""
+        return f"{org_prefix}documents/{borrower_folder}/{loan_folder}/{doc_type.lower()}/{unique_id}.{ext}"
+
+    def validate_org_access(self, storage_key: str, organization_id: int) -> bool:
+        """
+        Verify the storage key belongs to the requesting organization.
+
+        Args:
+            storage_key: S3 object key to validate
+            organization_id: Organization ID of the requesting user
+
+        Returns:
+            True if the key belongs to the org, False otherwise
+        """
+        if not organization_id:
+            return False
+        expected_prefix = f"org/{organization_id}/"
+        # Allow access to org-prefixed keys that match, and legacy keys without org prefix
+        if storage_key.startswith("org/"):
+            return storage_key.startswith(expected_prefix)
+        # Legacy keys (no org prefix) — allow access for backward compatibility
+        return True
 
     def list_loan_documents(
         self,

@@ -19,6 +19,7 @@ from sqlalchemy.orm import relationship
 
 from db import Base
 from database.enums import ApplicationStatus, ApplicationStep, DocumentCategory
+from encryption_utils import EncryptedString
 
 
 class BorrowerProfile(Base):
@@ -156,6 +157,10 @@ class BorrowerApplication(Base):
     credit_auth_ip_address = Column(String)
     credit_auth_user_agent = Column(String)
     credit_auth_ssn_last4 = Column(String(4))
+
+    # Encrypted SSN storage (P0-3: SSN must not be stored plaintext)
+    ssn_encrypted = Column(EncryptedString, nullable=True)
+    co_ssn_encrypted = Column(EncryptedString, nullable=True)
 
     # Submission tracking
     submitted_at = Column(DateTime)
