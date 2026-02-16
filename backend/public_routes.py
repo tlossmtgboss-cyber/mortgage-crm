@@ -13,6 +13,11 @@ from jose import jwt
 import logging
 import os
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 # Lazy import for get_db to avoid circular dependency with main.py
 # Other model imports (User, Subscription, etc.) are done inside each function that needs them
 def get_db():
@@ -1377,10 +1382,10 @@ async def send_phone_verification_code(
         else:
             # Send via email (method == "email")
             # Would need email address - for now just log
-            logger.info(f"Phone verification code for {request.phone}: {code}")
+            logger.info(f"Phone verification code sent to {mask_phone(request.phone)}")
             result = {"success": True, "dry_run": True}
 
-        logger.info(f"Phone verification sent to {request.phone}: {result}")
+        logger.info(f"Phone verification sent to {mask_phone(request.phone)}: {result}")
 
         return {
             "success": result.get("success", False),

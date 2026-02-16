@@ -20,6 +20,11 @@ from models.rate_monitor import (
 )
 from services.optimal_blue_service import OptimalBlueService, RateScenario
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/rate-monitor", tags=["rate-monitor"])
@@ -917,7 +922,7 @@ async def test_call_target(
         target.trigger_count = (target.trigger_count or 0) + 1
         db.commit()
 
-        logger.info(f"Initiated test call for target {target_id} to {phone}, call_id: {call_result.get('id')}")
+        logger.info(f"Initiated test call for target {target_id} to {mask_phone(phone)}, call_id: {call_result.get('id')}")
 
         return {
             'status': 'call_initiated',

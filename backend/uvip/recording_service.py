@@ -12,6 +12,11 @@ from twilio.rest import Client
 from twilio.twiml.voice_response import VoiceResponse, Dial, Conference
 from sqlalchemy.orm import Session
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,7 +88,7 @@ class TwilioRecordingService:
                 machine_detection_timeout=5
             )
 
-            logger.info(f"Started call to {participant_phone} for meeting {meeting_room_id}, SID: {call.sid}")
+            logger.info(f"Started call to {mask_phone(participant_phone)} for meeting {meeting_room_id}, SID: {call.sid}")
             return call.sid
 
         except Exception as e:

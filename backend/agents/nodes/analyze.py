@@ -38,6 +38,11 @@ from ..intent_router import (
     INTENT_TO_AGENTS
 )
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 logger = logging.getLogger(__name__)
 
 # Base tools always available (core CRM functions)
@@ -473,7 +478,7 @@ def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
                     phone = extract_phone_number(query)
                     if phone:
                         result["extracted_entities"] = {"phone_number": phone}
-                        logger.info(f"[ANALYZE] Extracted phone: {phone}")
+                        logger.info(f"[ANALYZE] Extracted phone: {mask_phone(phone)}")
 
                 # For borrower-specific queries, extract the borrower name
                 if config.get("extract_borrower_name"):

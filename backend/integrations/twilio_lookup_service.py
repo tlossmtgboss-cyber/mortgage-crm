@@ -15,6 +15,11 @@ import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 logger = logging.getLogger(__name__)
 
 # Try to import Twilio client
@@ -166,7 +171,7 @@ class TwilioLookupService:
             return result
 
         except Exception as e:
-            logger.error(f"Twilio Lookup failed for {phone_number}: {e}")
+            logger.error(f"Twilio Lookup failed for {mask_phone(phone_number)}: {e}")
             return LookupResult(
                 phone_number=phone_number,
                 valid=False,

@@ -33,6 +33,11 @@ except ImportError as e:
     traceback.print_exc()
     PROMPT_OPTIMIZATION_AVAILABLE = False
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 logger = logging.getLogger(__name__)
 
 
@@ -2035,7 +2040,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     else:
                         results["texts_failed"] += 1
                 except Exception as e:
-                    logger.error(f"Failed to send SMS to {phone}: {e}")
+                    logger.error(f"Failed to send SMS to {mask_phone(phone)}: {e}")
                     results["texts_failed"] += 1
 
             db.commit()

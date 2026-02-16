@@ -26,6 +26,11 @@ from ai_receptionist_dashboard_models import (
 )
 import uuid
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 # Voice Sentiment Analysis
 from services.voice_sentiment_service import analyze_voice_sentiment
 
@@ -105,7 +110,7 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
         called_number = form_data.get("To", "")
         call_sid = form_data.get("CallSid", "")
 
-        logger.info(f"Incoming call from {caller_number} (SID: {call_sid})")
+        logger.info(f"Incoming call from {mask_phone(caller_number)} (SID: {call_sid})")
 
         # ============================================================
         # CALL SCREENING - Spam filtering
@@ -114,7 +119,7 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
         screening_result = await screening_service.screen_call(caller_number, call_sid)
 
         logger.info(
-            f"Screening decision for {caller_number}: {screening_result.decision.value} "
+            f"Screening decision for {mask_phone(caller_number)}: {screening_result.decision.value} "
             f"(reason: {screening_result.reason})"
         )
 
@@ -124,7 +129,7 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
 
         if screening_result.decision == ScreeningDecision.BLOCK:
             # Blocked caller - immediate hangup, no message
-            logger.warning(f"BLOCKING call from {caller_number}: {screening_result.reason}")
+            logger.warning(f"BLOCKING call from {mask_phone(caller_number)}: {screening_result.reason}")
 
             # Log to dashboard as blocked
             dashboard_activity = AIReceptionistActivity(
@@ -2317,7 +2322,7 @@ async def handle_voicemail_transcription(request: Request, db: Session = Depends
         transcription_text = form_data.get("TranscriptionText", "")
         caller = form_data.get("From", "Unknown")
 
-        logger.info(f"Voicemail transcription from {caller}: {transcription_text[:100]}")
+        logger.info(f"Voicemail transcription from {mask_phone(caller)}: {transcription_text[:100]}")
 
         # Create task for team to follow up
         task = Task(

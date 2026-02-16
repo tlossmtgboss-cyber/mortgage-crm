@@ -20,6 +20,11 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 import httpx
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 logger = logging.getLogger(__name__)
 
 # Telnyx API Configuration
@@ -373,7 +378,7 @@ class TelnyxRetellBridge:
             setup_result["steps_completed"].append("termination_uri_configured")
 
             # Step 3: Import number to Retell
-            logger.info(f"Importing {phone_number} to Retell with agent {retell_agent_id}")
+            logger.info(f"Importing {mask_phone(phone_number)} to Retell with agent {retell_agent_id}")
             retell_import = await self.import_number_to_retell(
                 phone_number=phone_number,
                 agent_id=retell_agent_id,

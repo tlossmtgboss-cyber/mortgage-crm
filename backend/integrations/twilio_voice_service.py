@@ -11,6 +11,12 @@ from twilio.base.exceptions import TwilioRestException
 from twilio.twiml.voice_response import VoiceResponse, Gather, Dial
 import openai
 
+try:
+    from utils.pii_mask import mask_phone, mask_name
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+    mask_name = lambda x: x[0] + "***" if x else "***"
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,7 +77,7 @@ class TwilioVoiceClient:
         # Sam will greet the caller with his AI voice
         domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')
         logger.info(f"Connecting to WebSocket at: wss://{domain}/api/v1/voice/ws/voice-stream")
-        logger.info(f"Caller info - Name: {caller_name}, Phone: {caller_phone}, Category: {caller_category}")
+        logger.info(f"Caller info - Name: {mask_name(caller_name)}, Phone: {mask_phone(caller_phone)}, Category: {caller_category}")
 
         connect = response.connect()
 

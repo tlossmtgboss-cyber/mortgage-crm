@@ -17,6 +17,11 @@ import os
 import hmac
 import hashlib
 
+try:
+    from utils.pii_mask import mask_phone
+except ImportError:
+    mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vapi", tags=["vapi"])
@@ -866,7 +871,7 @@ async def schedule_calendly_appointment_function(
                     context=context
                 )
                 sms_sent = sms_result.get("success", False)
-                logger.info(f"Calendly SMS sent to {phone}: {sms_sent}")
+                logger.info(f"Calendly SMS sent to {mask_phone(phone)}: {sms_sent}")
             except Exception as sms_error:
                 logger.error(f"Error sending Calendly SMS: {sms_error}")
 
