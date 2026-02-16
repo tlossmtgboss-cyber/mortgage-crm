@@ -3163,34 +3163,43 @@ async def fix_mum_client_names(
         db.commit()
 
         # Step 4: Resolve remaining via Salesforce Contact API
-        # Find loans with SF Contact IDs as borrower_name that still have bad MUM names
+        # Uses integration_profiles (new OAuth) instead of user_integrations
         sf_fixed_count = 0
         sf_errors = []
         sf_status = "not_attempted"
         try:
-            from integrations.salesforce_service import salesforce_client
-
-            # Try current user first, then ANY user with SF integration
-            integration = db.execute(text("""
-                SELECT access_token, refresh_token, scopes, user_id FROM user_integrations
-                WHERE provider = 'salesforce' AND access_token IS NOT NULL
-                ORDER BY CASE WHEN user_id = :user_id THEN 0 ELSE 1 END, updated_at DESC
+            profile = db.execute(text("""
+                SELECT id, access_token_encrypted, refresh_token_encrypted, instance_url, user_id
+                FROM integration_profiles
+                WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
+                ORDER BY updated_at DESC
                 LIMIT 1
-            """), {"user_id": user_id}).fetchone()
+            """)).fetchone()
 
-            if not integration or not integration[0]:
+            if not profile:
                 sf_status = "no_sf_integration"
-                sf_errors.append("No Salesforce integration found for any user")
+                sf_errors.append("No Salesforce integration_profile found")
             else:
-                sf_integration_user = integration[3]
-                access_token_sf = decrypt_token(integration[0])
-                instance_url = None
-                if integration[2] and "instance_url:" in integration[2]:
-                    instance_url = parse_instance_url_from_scopes(integration[2])
+                profile_id = profile[0]
+                instance_url = profile[3]
+                sf_integration_user = profile[4]
 
-                if not instance_url:
-                    sf_status = "no_instance_url"
-                    sf_errors.append(f"No instance_url in scopes for SF user {sf_integration_user}")
+                from services.salesforce.oauth_service import SalesforceOAuthService
+                oauth = SalesforceOAuthService()
+                access_token_sf = None
+
+                try:
+                    access_token_sf = await oauth.refresh_access_token(db, profile_id)
+                except Exception as refresh_err:
+                    sf_errors.append(f"Token refresh failed: {str(refresh_err)[:100]}")
+                    try:
+                        access_token_sf, _ = await oauth.get_access_token(db, profile_id)
+                    except Exception as oauth_err:
+                        sf_errors.append(f"Token get failed: {str(oauth_err)[:100]}")
+
+                if not access_token_sf or not instance_url:
+                    sf_status = "no_credentials"
+                    sf_errors.append(f"Missing token or instance_url for profile {profile_id}")
                 else:
                     sf_status = "connected"
                     # Get SF Contact IDs from loans.borrower_name for unfixed MUM clients
@@ -3203,29 +3212,39 @@ async def fix_mum_client_names(
                              OR m.client_name ~ '^[0-9a-zA-Z]{15,18}$')
                     """)).fetchall()
 
-                    sf_errors.append(f"Found {len(sf_contact_rows)} SF Contact IDs to resolve (user {sf_integration_user})")
+                    sf_errors.append(f"Found {len(sf_contact_rows)} SF Contact IDs to resolve (profile {profile_id})")
 
                     if sf_contact_rows:
-                        # Batch Contact IDs (max 200 per SOQL query)
                         contact_ids = list(set(r[0] for r in sf_contact_rows))
                         contact_name_map = {}
 
+                        import urllib.parse
                         for i in range(0, len(contact_ids), 200):
                             batch = contact_ids[i:i + 200]
                             id_list = "','".join(batch)
                             soql = f"SELECT Id, FirstName, LastName FROM Contact WHERE Id IN ('{id_list}')"
+                            encoded_soql = urllib.parse.quote(soql)
+                            url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/?q={encoded_soql}"
 
                             try:
-                                result = salesforce_client.query(access_token_sf, instance_url, soql)
-                                if result and result.get("records"):
-                                    for rec in result["records"]:
-                                        first = rec.get("FirstName") or ""
-                                        last = rec.get("LastName") or ""
-                                        full_name = f"{first} {last}".strip()
-                                        if full_name:
-                                            contact_name_map[rec["Id"]] = full_name
+                                import httpx
+                                async with httpx.AsyncClient(timeout=30) as client:
+                                    resp = await client.get(url, headers={"Authorization": f"Bearer {access_token_sf}"})
+                                    if resp.status_code == 200:
+                                        result = resp.json()
+                                        for rec in result.get("records", []):
+                                            first = rec.get("FirstName") or ""
+                                            last = rec.get("LastName") or ""
+                                            full_name = f"{first} {last}".strip()
+                                            if full_name:
+                                                contact_name_map[rec["Id"]] = full_name
+                                        sf_errors.append(f"Batch {i}: {len(result.get('records', []))} contacts resolved")
+                                    else:
+                                        sf_errors.append(f"Batch {i}: HTTP {resp.status_code} - {resp.text[:100]}")
                             except Exception as qe:
-                                sf_errors.append(f"SOQL batch {i}: {str(qe)[:100]}")
+                                sf_errors.append(f"SOQL batch {i}: {type(qe).__name__}: {str(qe)[:100]}")
+
+                        sf_errors.append(f"Resolved {len(contact_name_map)} unique Contact names")
 
                         # Update loans and MUM clients with resolved names
                         for contact_id, real_name in contact_name_map.items():
