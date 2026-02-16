@@ -3163,10 +3163,7 @@ async def fix_mum_client_names(
         db.commit()
 
         # Step 4: Resolve remaining via Salesforce Contact API
-        # Uses integration_profiles (new OAuth) instead of user_integrations
         sf_fixed_count = 0
-        sf_errors = []
-        sf_status = "not_attempted"
         try:
             profile = db.execute(text("""
                 SELECT id, access_token_encrypted, refresh_token_encrypted, instance_url, user_id
@@ -3176,13 +3173,9 @@ async def fix_mum_client_names(
                 LIMIT 1
             """)).fetchone()
 
-            if not profile:
-                sf_status = "no_sf_integration"
-                sf_errors.append("No Salesforce integration_profile found")
-            else:
+            if profile:
                 profile_id = profile[0]
                 instance_url = profile[3]
-                sf_integration_user = profile[4]
 
                 from services.salesforce.oauth_service import SalesforceOAuthService
                 oauth = SalesforceOAuthService()
@@ -3190,18 +3183,13 @@ async def fix_mum_client_names(
 
                 try:
                     access_token_sf = await oauth.refresh_access_token(db, profile_id)
-                except Exception as refresh_err:
-                    sf_errors.append(f"Token refresh failed: {str(refresh_err)[:100]}")
+                except Exception:
                     try:
                         access_token_sf, _ = await oauth.get_access_token(db, profile_id)
-                    except Exception as oauth_err:
-                        sf_errors.append(f"Token get failed: {str(oauth_err)[:100]}")
+                    except Exception:
+                        pass
 
-                if not access_token_sf or not instance_url:
-                    sf_status = "no_credentials"
-                    sf_errors.append(f"Missing token or instance_url for profile {profile_id}")
-                else:
-                    sf_status = "connected"
+                if access_token_sf and instance_url:
                     # Get SF Contact IDs from loans.borrower_name for unfixed MUM clients
                     sf_contact_rows = db.execute(text("""
                         SELECT DISTINCT l.borrower_name as contact_id, l.loan_number
@@ -3212,13 +3200,11 @@ async def fix_mum_client_names(
                              OR m.client_name ~ '^[0-9a-zA-Z]{15,18}$')
                     """)).fetchall()
 
-                    sf_errors.append(f"Found {len(sf_contact_rows)} SF Contact IDs to resolve (profile {profile_id})")
-
                     if sf_contact_rows:
                         contact_ids = list(set(r[0] for r in sf_contact_rows))
                         contact_name_map = {}
 
-                        import urllib.parse
+                        import urllib.parse, httpx
                         for i in range(0, len(contact_ids), 200):
                             batch = contact_ids[i:i + 200]
                             id_list = "','".join(batch)
@@ -3227,24 +3213,17 @@ async def fix_mum_client_names(
                             url = f"{instance_url}/services/data/{SALESFORCE_API_VERSION}/query/?q={encoded_soql}"
 
                             try:
-                                import httpx
                                 async with httpx.AsyncClient(timeout=30) as client:
                                     resp = await client.get(url, headers={"Authorization": f"Bearer {access_token_sf}"})
                                     if resp.status_code == 200:
-                                        result = resp.json()
-                                        for rec in result.get("records", []):
+                                        for rec in resp.json().get("records", []):
                                             first = rec.get("FirstName") or ""
                                             last = rec.get("LastName") or ""
                                             full_name = f"{first} {last}".strip()
                                             if full_name:
                                                 contact_name_map[rec["Id"]] = full_name
-                                        sf_errors.append(f"Batch {i}: {len(result.get('records', []))} contacts resolved")
-                                    else:
-                                        sf_errors.append(f"Batch {i}: HTTP {resp.status_code} - {resp.text[:100]}")
                             except Exception as qe:
-                                sf_errors.append(f"SOQL batch {i}: {type(qe).__name__}: {str(qe)[:100]}")
-
-                        sf_errors.append(f"Resolved {len(contact_name_map)} unique Contact names")
+                                logger.warning(f"SF Contact batch {i} failed: {qe}")
 
                         # Update loans and MUM clients with resolved names
                         for contact_id, real_name in contact_name_map.items():
@@ -3266,9 +3245,6 @@ async def fix_mum_client_names(
 
                         db.commit()
         except Exception as sf_err:
-            import traceback
-            sf_errors.append(f"SF resolution ({type(sf_err).__name__}): {str(sf_err)[:200]}")
-            sf_errors.append(f"TB: {traceback.format_exc()[-400:]}")
             logger.warning(f"Salesforce Contact resolution failed: {type(sf_err).__name__}: {sf_err}")
 
         # Count remaining unfixed
@@ -3280,17 +3256,6 @@ async def fix_mum_client_names(
 
         total_fixed = len(fixed_from_loans) + len(fixed_from_leads) + sf_fixed_count
 
-        # Diagnostic: show sample borrower_name values for remaining unfixed
-        diag_samples = db.execute(text("""
-            SELECT l.borrower_name, l.loan_number, l.borrower_email,
-                   m.client_name, LENGTH(l.borrower_name) as name_len
-            FROM loans l
-            JOIN mum_clients m ON m.loan_number = l.loan_number
-            WHERE m.client_name LIKE 'Client - %'
-               OR m.client_name ~ '^[0-9a-zA-Z]{15,18}$'
-            LIMIT 10
-        """)).fetchall()
-
         return {
             "status": "success",
             "fixed_from_loans": len(fixed_from_loans),
@@ -3298,23 +3263,11 @@ async def fix_mum_client_names(
             "fixed_from_salesforce": sf_fixed_count,
             "loans_table_updated": len(loans_updated),
             "remaining_unfixed": remaining,
-            "sf_status": sf_status,
-            "sf_errors": sf_errors if sf_errors else None,
             "message": f"Fixed {total_fixed} MUM client names ({sf_fixed_count} from Salesforce API), {remaining} still need review",
             "samples": [
                 {"id": r[0], "new_name": r[1], "loan_number": r[2]}
                 for r in (list(fixed_from_loans) + list(fixed_from_leads))[:20]
-            ],
-            "diagnostic_unfixed_loans": [
-                {
-                    "borrower_name": r[0],
-                    "loan_number": r[1],
-                    "borrower_email": r[2],
-                    "mum_client_name": r[3],
-                    "name_length": r[4]
-                }
-                for r in diag_samples
-            ] if remaining > 0 else []
+            ]
         }
     except Exception as e:
         db.rollback()
