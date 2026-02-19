@@ -292,6 +292,8 @@ from database.models import (
     ApplicationNotification, ApplicationSession, VoiceApplicationSession,
     # Loan Estimates
     EstimateParseCache, EstimateParseFailure, EstimateComparison,
+    # SSO
+    SSOConfig,
 )
 
 # Configure mappers after all model imports
@@ -633,6 +635,14 @@ async def get_current_user(
         if api_key is None:
             raise credentials_exception
 
+        # Check API key expiration (Enterprise Check 4.11)
+        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="API key has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         # Update last used timestamp
         api_key.last_used_at = datetime.now(timezone.utc)
         db.commit()
@@ -641,6 +651,25 @@ async def get_current_user(
         actual_user = db.query(User).filter(User.id == api_key.user_id).first()
         if actual_user is None:
             raise credentials_exception
+
+        # API key scope enforcement (Enterprise Check 4.11)
+        # Store API key on request state for scope checking in require_scope()
+        if request:
+            request.state._api_key_obj = api_key
+
+        # Automatic scope enforcement based on endpoint pattern
+        if request and api_key.scopes:
+            try:
+                from auth.scope_enforcement import check_endpoint_scopes
+                if not check_endpoint_scopes(request, api_key.scopes):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="API key lacks required scope for this endpoint",
+                    )
+            except ImportError:
+                pass  # Scope enforcement module not available
+            except HTTPException:
+                raise
 
     else:
         # Otherwise, treat it as a JWT token

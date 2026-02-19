@@ -31,6 +31,7 @@ class AIDelegatedTask(Base):
     __tablename__ = "ai_delegated_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     email_intent = Column(String, nullable=False)  # "Clear to Close", "Rate Lock", etc.
     action_type = Column(String, nullable=False)  # "status_update", "field_update", etc.
@@ -51,9 +52,11 @@ class AIFeedbackLog(Base):
         Index('ix_ai_feedback_created_at', 'created_at'),
         Index('ix_ai_feedback_status', 'status'),
         Index('ix_ai_feedback_category', 'category'),
+        Index('ix_ai_feedback_organization_id', 'organization_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     # The original question/prompt from the user
@@ -95,6 +98,7 @@ class AIAction(Base):
     __tablename__ = "ai_actions"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     email_id = Column(Integer, ForeignKey("emails.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
@@ -128,6 +132,7 @@ class AILearningMetric(Base):
     __tablename__ = "ai_learning_metrics"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     action_type = Column(String, index=True)  # "create_lead", "update_field", etc.
     field_name = Column(String)  # Specific field if applicable
@@ -176,7 +181,7 @@ class AIKnowledgeBase(Base):
     priority = Column(Integer, default=5)  # 1-10, higher = more important to reference
     last_reviewed = Column(DateTime)  # When content was last verified
     created_by = Column(Integer, ForeignKey("users.id"))
-    organization_id = Column(Integer, default=1)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -193,6 +198,7 @@ class AIAuditLog(Base):
     __tablename__ = "ai_audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     agent_name = Column(String, nullable=False, index=True)
     action_type = Column(String, nullable=False, index=True)  # email_sent, task_created, lead_updated, etc.
@@ -228,6 +234,7 @@ class AIColleagueAction(Base):
     __tablename__ = "ai_colleague_actions"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     action_id = Column(String(100), unique=True, nullable=False, index=True)
     agent_name = Column(String(100), nullable=False, index=True)
     action_type = Column(String(100), nullable=False, index=True)

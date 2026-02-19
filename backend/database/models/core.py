@@ -41,6 +41,12 @@ class Organization(Base):
     # Subscription info (links to organization_subscriptions table)
     subscription_tier = Column(String, default="lead_management")
 
+    # SSO enforcement (Enterprise Check 5.12) - when True, password login is blocked
+    sso_enforced = Column(Boolean, default=False)
+
+    # MFA enforcement (Enterprise Check 4.6) - when True, all users must enable MFA
+    mfa_required = Column(Boolean, default=False)
+
     # Status
     is_active = Column(Boolean, default=True)
 
@@ -137,6 +143,10 @@ class User(Base):
     mfa_enabled = Column(Boolean, default=False)
     mfa_backup_codes = Column(JSON, nullable=True)  # Hashed backup codes
     mfa_enabled_at = Column(DateTime, nullable=True)
+
+    # SSO provisioning (Enterprise Check 5.11)
+    sso_provider = Column(String, nullable=True)  # 'saml' or 'oidc' if JIT-provisioned
+    sso_subject_id = Column(String, nullable=True)  # IdP unique identifier (NameID or sub claim)
 
     # Relationships
     branch = relationship("Branch", back_populates="users")

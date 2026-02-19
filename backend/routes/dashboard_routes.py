@@ -11,6 +11,10 @@ Provides the main dashboard endpoint with comprehensive metrics including:
 - Efficiency metrics (time to close, pull-through rate, bottlenecks)
 
 These metrics are server-computed from CRM database and cached for performance.
+
+Enterprise Readiness (Check 9.6):
+Role-based access scoping is applied via middleware/report_access.py.
+Scope information is included in the response for client awareness.
 """
 
 import logging
@@ -940,7 +944,16 @@ async def get_dashboard(
         "bottlenecks": bottlenecks
     }
 
+    # Add role-based scope info (Enterprise Readiness Check 9.6)
+    try:
+        from middleware.report_access import get_report_scope, get_scope_description
+        scope = get_report_scope(current_user)
+        scope_info = get_scope_description(scope)
+    except Exception:
+        scope_info = "Personal data"
+
     result = {
+        "scope": scope_info,
         "prioritized_tasks": prioritized_tasks,
         "pipeline_stats": pipeline_stats,
         "production": production,

@@ -200,6 +200,7 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     type = Column(String(50), nullable=False)  # 'permission_approved', 'permission_denied', 'milestone_due', 'assessment_reminder', 'goal_reminder', 'feedback_added'
     title = Column(String(255), nullable=False)

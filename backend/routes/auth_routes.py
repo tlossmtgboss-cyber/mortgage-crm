@@ -243,6 +243,7 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
     try:
         models = get_models()
         User = models['User']
+        Organization = models['Organization']
         auth_funcs = get_auth_functions()
         config = get_auth_config()
 
@@ -255,6 +256,24 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        # SSO-only enforcement (Enterprise Check 5.12)
+        # If the user's organization has sso_enforced=True, reject password login
+        org = None  # Will be loaded if user has org_id, reused by MFA check
+        try:
+            if user.organization_id:
+                org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+                if org and getattr(org, 'sso_enforced', False):
+                    logger.warning(f"Password login rejected for SSO-enforced org: user={user.email}, org={org.name}")
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Password login is disabled for your organization. Please use Single Sign-On (SSO).",
+                        headers={"X-SSO-Required": "true"},
+                    )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.debug(f"SSO enforcement check skipped: {e}")
 
         # Account lockout check (Enterprise Security Check 4.4)
         try:
@@ -323,7 +342,25 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
         )
 
         # Check if MFA is enabled (Enterprise Security Check 4.6)
-        mfa_required = getattr(user, 'mfa_enabled', False) or False
+        user_mfa_enabled = getattr(user, 'mfa_enabled', False) or False
+
+        # Check org-level MFA enforcement (Enterprise Check 4.6)
+        org_mfa_required = False
+        mfa_setup_required = False
+        try:
+            if user.organization_id:
+                if not org:  # org may already be loaded from SSO check above
+                    org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+                if org and getattr(org, 'mfa_required', False):
+                    org_mfa_required = True
+                    if not user_mfa_enabled:
+                        # User must set up MFA before they can proceed
+                        mfa_setup_required = True
+        except Exception as e:
+            logger.debug(f"Org MFA check skipped: {e}")
+
+        # MFA is required if user has it enabled OR org mandates it
+        mfa_required = user_mfa_enabled or org_mfa_required
 
         return {
             "access_token": access_token,
@@ -331,6 +368,7 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             "token_type": "bearer",
             "expires_in": config['ACCESS_TOKEN_EXPIRE_MINUTES'] * 60,  # seconds
             "mfa_required": mfa_required,
+            "mfa_setup_required": mfa_setup_required,  # True if org requires MFA but user hasn't set it up
             "user": {
                 "id": user.id,
                 "email": user.email,

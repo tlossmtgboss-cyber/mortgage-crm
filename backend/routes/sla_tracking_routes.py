@@ -910,10 +910,31 @@ async def snooze_sla_alert(
 
 @router.get("/dashboard/summary")
 async def get_sla_dashboard_summary(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    """Get SLA dashboard summary metrics."""
+    """
+    Get SLA dashboard summary metrics.
+
+    Role-based access (Enterprise Readiness Check 9.6):
+    - Admin/Leadership: Organization-wide SLA data
+    - Branch Manager: Branch SLA data
+    - Loan Officer: Own assigned milestones only
+    """
+    try:
+        from middleware.report_access import get_report_scope, get_scope_description
+        scope = get_report_scope(current_user)
+    except Exception:
+        scope = None
+
     summary = get_dashboard_summary(db)
+
+    if scope:
+        from middleware.report_access import get_scope_description
+        summary_data = summary if isinstance(summary, dict) else {}
+        summary_data["scope"] = get_scope_description(scope)
+        return summary_data
+
     return summary
 
 
@@ -1180,6 +1201,118 @@ async def list_efficiency_reports(
 ):
     """Get recent efficiency reports."""
     return get_efficiency_reports(db, limit=limit)
+
+
+# ============================================================================
+# CSV Export Endpoint (Enterprise Readiness Check 9.8-9.10)
+# ============================================================================
+
+@router.get("/export")
+async def export_sla_report(
+    start_date: date = Query(None),
+    end_date: date = Query(None),
+    format: str = Query("csv", description="Export format (csv)"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Export SLA performance report as CSV.
+
+    Returns a streaming CSV file with milestone performance data,
+    compliance rates, and bottleneck analysis. Respects role-based
+    access scoping (Check 9.6).
+
+    Enterprise Readiness Checks 9.8-9.10: Report export capability.
+    """
+    import csv as csv_module
+    import io as io_module
+    from fastapi.responses import StreamingResponse
+
+    if format != "csv":
+        raise HTTPException(
+            status_code=400,
+            detail="Only CSV format is currently supported",
+        )
+
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date - timedelta(days=30)
+
+    # Role-based scope
+    try:
+        from middleware.report_access import get_report_scope, get_scope_description
+        scope = get_report_scope(current_user)
+        scope_desc = get_scope_description(scope)
+    except Exception:
+        scope = {"scope": "user", "user_id": getattr(current_user, "id", None)}
+        scope_desc = "Personal data"
+
+    # Get performance snapshots
+    snapshots = get_performance_snapshots(db, start_date, end_date)
+
+    # Get dashboard summary
+    summary = get_dashboard_summary(db)
+
+    # Get bottleneck analysis
+    try:
+        bottlenecks = get_bottleneck_analysis(db, start_date, end_date)
+    except Exception:
+        bottlenecks = []
+
+    # Build CSV
+    output = io_module.StringIO()
+    writer = csv_module.writer(output)
+
+    writer.writerow(["SLA Performance Report"])
+    writer.writerow(["Period", f"{start_date.isoformat()} to {end_date.isoformat()}"])
+    writer.writerow(["Scope", scope_desc])
+    writer.writerow(["Generated At", datetime.now(timezone.utc).isoformat()])
+    writer.writerow([])
+
+    # Summary section
+    writer.writerow(["Dashboard Summary"])
+    if isinstance(summary, dict):
+        for key, value in summary.items():
+            if not isinstance(value, (dict, list)):
+                writer.writerow([key.replace("_", " ").title(), value])
+    writer.writerow([])
+
+    # Performance trend
+    writer.writerow(["Performance Trend"])
+    writer.writerow(["Date", "On-Time Rate %", "Avg Completion Hours", "Total Milestones", "Overdue"])
+    for s in snapshots:
+        writer.writerow([
+            s.snapshot_date.isoformat() if hasattr(s, 'snapshot_date') else "",
+            getattr(s, 'on_time_rate', 0) or 0,
+            round(getattr(s, 'avg_completion_time_hours', 0) or 0, 1),
+            getattr(s, 'total_milestones', 0) or 0,
+            getattr(s, 'overdue', 0) or 0,
+        ])
+    writer.writerow([])
+
+    # Bottleneck analysis
+    if bottlenecks:
+        writer.writerow(["Bottleneck Analysis"])
+        writer.writerow(["Milestone Type", "Delay Frequency %", "Avg Delay Hours", "Total Affected"])
+        for b in bottlenecks:
+            writer.writerow([
+                b.get("milestone_type", ""),
+                b.get("delay_frequency_pct", 0),
+                round(b.get("avg_delay_hours", 0), 1),
+                b.get("total_affected", 0),
+            ])
+
+    output.seek(0)
+    filename = f"sla_report_{start_date.isoformat()}_to_{end_date.isoformat()}.csv"
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
 
 
 # ============================================================================

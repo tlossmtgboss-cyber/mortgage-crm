@@ -661,11 +661,13 @@ async def get_document(
 async def download_document(
     document_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Get a presigned URL to download a document.
 
     Returns a temporary URL that can be used to download the file directly from S3.
+    Requires authentication and verifies the requesting user's org matches the document's loan org.
     """
     document = db.query(SmartDocument).filter(
         SmartDocument.id == document_id
@@ -673,6 +675,14 @@ async def download_document(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if document.loan_id and org_id and not is_platform_admin:
+        doc_org_id = _get_loan_org_id(db, document.loan_id)
+        if doc_org_id is not None and doc_org_id != org_id:
+            raise HTTPException(status_code=404, detail="Document not found")
 
     if not document.storage_key:
         raise HTTPException(status_code=404, detail="Document file not available")

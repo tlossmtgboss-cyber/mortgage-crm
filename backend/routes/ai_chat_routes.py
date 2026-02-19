@@ -3250,10 +3250,16 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         # Fetch relevant knowledge base entries for the user's question
         knowledge_context = ""
         try:
-            # Get active knowledge base entries
-            knowledge_entries = db.query(AIKnowledgeBase).filter(
+            # Get active knowledge base entries (tenant-scoped)
+            kb_query = db.query(AIKnowledgeBase).filter(
                 AIKnowledgeBase.is_active == True
-            ).order_by(AIKnowledgeBase.priority.desc()).limit(20).all()
+            )
+            # Tenant isolation: scope to user's organization
+            _kb_org_id = getattr(current_user, 'organization_id', None)
+            _kb_is_admin = getattr(current_user, 'permission_role', '') == 'admin'
+            if _kb_org_id and not _kb_is_admin:
+                kb_query = kb_query.filter(AIKnowledgeBase.organization_id == _kb_org_id)
+            knowledge_entries = kb_query.order_by(AIKnowledgeBase.priority.desc()).limit(20).all()
 
             if knowledge_entries:
                 # Search for entries relevant to the user's question

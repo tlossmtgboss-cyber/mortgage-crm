@@ -250,6 +250,9 @@ from .compliance import (
     AdverseActionReason,
 )
 
+# SSO configuration models (SAML, OIDC)
+from .sso import SSOConfig
+
 
 __all__ = [
     # =====================
@@ -479,4 +482,9 @@ __all__ = [
     "ToleranceCategory",
     "DisclosureType",
     "AdverseActionReason",
+
+    # =====================
+    # SSO (SAML, OIDC)
+    # =====================
+    "SSOConfig",
 ]

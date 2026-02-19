@@ -5,23 +5,56 @@ Extracted from inline_legacy_routes.py.
 Provides comprehensive loan scorecard metrics including conversion metrics,
 funding totals, and referral source breakdown.
 
-Enterprise Readiness (Check 9.5-9.7):
-All report queries include organization_id filtering to enforce multi-tenant
-data isolation. The current user's organization_id is extracted from the
-authenticated user object and applied to every database query.
+Enterprise Readiness (Checks 9.5-9.7, 9.6, 9.8):
+- All report queries include organization_id filtering for multi-tenant isolation.
+- Role-based access scoping (Check 9.6): Admins see org data, branch managers
+  see branch data, loan officers see only their own data.
+- CSV export endpoint (Check 9.8): GET /api/v1/scorecard/export?format=csv
 """
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import date, datetime as dt
 from typing import Optional
+import csv
+import io
 import logging
 
 logger = logging.getLogger(__name__)
 
 
+def _apply_lead_scope(query, scope, Lead):
+    """Apply role-based scope to a Lead query."""
+    org_id = scope.get("org_id")
+    if org_id is not None and hasattr(Lead, "organization_id"):
+        query = query.filter(Lead.organization_id == org_id)
+    if scope["scope"] == "user":
+        query = query.filter(Lead.owner_id == scope["user_id"])
+    elif scope["scope"] == "branch" and hasattr(Lead, "branch_id"):
+        query = query.filter(Lead.branch_id == scope.get("branch_id"))
+    return query
+
+
+def _apply_loan_scope(query, scope, Loan):
+    """Apply role-based scope to a Loan query."""
+    org_id = scope.get("org_id")
+    if org_id is not None and hasattr(Loan, "organization_id"):
+        query = query.filter(Loan.organization_id == org_id)
+    if scope["scope"] == "user":
+        query = query.filter(Loan.loan_officer_id == scope["user_id"])
+    elif scope["scope"] == "branch" and hasattr(Loan, "branch_id"):
+        query = query.filter(Loan.branch_id == scope.get("branch_id"))
+    return query
+
+
 def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanStage, **kwargs):
     """Register scorecard report routes."""
+
+    def _get_scope(current_user):
+        """Get role-based report scope for the current user."""
+        from middleware.report_access import get_report_scope
+        return get_report_scope(current_user)
 
     @app.get("/api/v1/scorecard")
     async def get_scorecard(
@@ -33,6 +66,11 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
         """
         Get comprehensive loan scorecard metrics matching the Loan Scorecard Report format.
         Includes conversion metrics, funding totals, and referral source breakdown.
+
+        Role-based access (Enterprise Readiness Check 9.6):
+        - Admin/Leadership: Organization-wide data
+        - Branch Manager: Branch data
+        - Loan Officer: Own data only
 
         All queries are scoped to the current user's organization_id for
         multi-tenant data isolation (Enterprise Readiness Check 9.5-9.7).
@@ -54,18 +92,16 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             raise HTTPException(status_code=500, detail="Error processing scorecard data")
 
         try:
-            # Extract organization_id for tenant isolation (Check 9.5-9.7)
-            org_id = getattr(current_user, 'organization_id', None)
+            # Role-based scope (Check 9.6) + org isolation (Check 9.5-9.7)
+            scope = _get_scope(current_user)
 
             # LOAN STARTS VS. ACTIVITY TOTALS
             try:
                 lead_query = db.query(Lead).filter(
-                    Lead.owner_id == current_user.id,
                     Lead.created_at >= start,
                     Lead.created_at <= end
                 )
-                if org_id is not None:
-                    lead_query = lead_query.filter(Lead.organization_id == org_id)
+                lead_query = _apply_lead_scope(lead_query, scope, Lead)
                 all_leads = lead_query.all()
             except Exception:
                 all_leads = []
@@ -74,51 +110,43 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
 
             try:
                 apps_query = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
                     Loan.created_at >= start,
                     Loan.created_at <= end
                 )
-                if org_id is not None:
-                    apps_query = apps_query.filter(Loan.organization_id == org_id)
+                apps_query = _apply_loan_scope(apps_query, scope, Loan)
                 apps_count = apps_query.scalar() or 0
             except Exception:
                 apps_count = 0
 
             try:
                 funded_query = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.FUNDED,
                     Loan.funded_date >= start,
                     Loan.funded_date <= end
                 )
-                if org_id is not None:
-                    funded_query = funded_query.filter(Loan.organization_id == org_id)
+                funded_query = _apply_loan_scope(funded_query, scope, Loan)
                 funded_count = funded_query.scalar() or 0
             except Exception:
                 funded_count = 0
 
             try:
                 credit_query = db.query(func.count(Lead.id)).filter(
-                    Lead.owner_id == current_user.id,
                     Lead.created_at >= start,
                     Lead.created_at <= end,
                     Lead.credit_score.isnot(None)
                 )
-                if org_id is not None:
-                    credit_query = credit_query.filter(Lead.organization_id == org_id)
+                credit_query = _apply_lead_scope(credit_query, scope, Lead)
                 credit_pulls = credit_query.scalar() or 0
             except Exception:
                 credit_pulls = 0
 
             try:
                 cancelled_query = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.SUSPENDED,
                     Loan.created_at >= start,
                     Loan.created_at <= end
                 )
-                if org_id is not None:
-                    cancelled_query = cancelled_query.filter(Loan.organization_id == org_id)
+                cancelled_query = _apply_loan_scope(cancelled_query, scope, Loan)
                 cancelled_count = cancelled_query.scalar() or 0
             except Exception:
                 cancelled_count = 0
@@ -127,26 +155,22 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
 
             try:
                 uw_query = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.UW_RECEIVED,
                     Loan.created_at >= start,
                     Loan.created_at <= end
                 )
-                if org_id is not None:
-                    uw_query = uw_query.filter(Loan.organization_id == org_id)
+                uw_query = _apply_loan_scope(uw_query, scope, Loan)
                 uw_count = uw_query.scalar() or 0
             except Exception:
                 uw_count = 0
 
             try:
                 ctc_query = db.query(func.count(Loan.id)).filter(
-                    Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.CTC,
                     Loan.created_at >= start,
                     Loan.created_at <= end
                 )
-                if org_id is not None:
-                    ctc_query = ctc_query.filter(Loan.organization_id == org_id)
+                ctc_query = _apply_loan_scope(ctc_query, scope, Loan)
                 ctc_count = ctc_query.scalar() or 0
             except Exception:
                 ctc_count = 0
@@ -180,13 +204,11 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
 
             try:
                 funded_loans_query = db.query(Loan).filter(
-                    Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.FUNDED,
                     Loan.funded_date >= start,
                     Loan.funded_date <= end
                 )
-                if org_id is not None:
-                    funded_loans_query = funded_loans_query.filter(Loan.organization_id == org_id)
+                funded_loans_query = _apply_loan_scope(funded_loans_query, scope, Loan)
                 funded_loans = funded_loans_query.all()
             except Exception:
                 funded_loans = []
@@ -218,13 +240,11 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             # FUNDING TOTALS
             try:
                 funded_all_query = db.query(Loan).filter(
-                    Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.FUNDED,
                     Loan.funded_date >= start,
                     Loan.funded_date <= end
                 )
-                if org_id is not None:
-                    funded_all_query = funded_all_query.filter(Loan.organization_id == org_id)
+                funded_all_query = _apply_loan_scope(funded_all_query, scope, Loan)
                 funded_loans_all = funded_all_query.all()
             except Exception:
                 funded_loans_all = []
@@ -266,8 +286,10 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 "avg_loan_amount": total_funded_volume / total_funded_units if total_funded_units > 0 else 0,
             }
 
+            from middleware.report_access import get_scope_description
             return {
                 "period": {"start_date": start_date_str, "end_date": end_date_str},
+                "scope": get_scope_description(scope),
                 "conversion_metrics": conversion_metrics,
                 "conversion_upswing": conversion_upswing,
                 "funding_totals": funding_totals,
@@ -277,4 +299,163 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             logger.error(f"Error in scorecard endpoint: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail="Error generating scorecard")
 
-    logger.info("Scorecard routes loaded")
+    # ==================================================================
+    # GET /api/v1/scorecard/export - CSV Export (Check 9.8)
+    # ==================================================================
+
+    @app.get("/api/v1/scorecard/export")
+    async def export_scorecard(
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        format: str = Query("csv", description="Export format (csv)"),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Export scorecard report as CSV.
+
+        Returns a streaming CSV file with conversion metrics, funding
+        totals, and referral source breakdown. Respects role-based
+        access scoping (Check 9.6).
+
+        Enterprise Readiness Check 9.8: Report export capability.
+        """
+        if format != "csv":
+            raise HTTPException(
+                status_code=400,
+                detail="Only CSV format is currently supported",
+            )
+
+        try:
+            if start_date and end_date:
+                start = dt.strptime(start_date, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+                end = dt.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            else:
+                today = date.today()
+                start = dt(today.year, today.month, 1, 0, 0, 0)
+                end = dt(today.year, today.month, today.day, 23, 59, 59)
+
+            start_date_str = start.strftime("%Y-%m-%d")
+            end_date_str = end.strftime("%Y-%m-%d")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+
+        scope = _get_scope(current_user)
+
+        # Gather metrics (same logic as JSON endpoint)
+        try:
+            lead_query = db.query(Lead).filter(
+                Lead.created_at >= start, Lead.created_at <= end
+            )
+            lead_query = _apply_lead_scope(lead_query, scope, Lead)
+            starts_count = lead_query.count()
+        except Exception:
+            starts_count = 0
+
+        try:
+            apps_query = db.query(func.count(Loan.id)).filter(
+                Loan.created_at >= start, Loan.created_at <= end
+            )
+            apps_query = _apply_loan_scope(apps_query, scope, Loan)
+            apps_count = apps_query.scalar() or 0
+        except Exception:
+            apps_count = 0
+
+        try:
+            funded_query = db.query(func.count(Loan.id)).filter(
+                Loan.stage == LoanStage.FUNDED,
+                Loan.funded_date >= start, Loan.funded_date <= end
+            )
+            funded_query = _apply_loan_scope(funded_query, scope, Loan)
+            funded_count = funded_query.scalar() or 0
+        except Exception:
+            funded_count = 0
+
+        try:
+            funded_loans_query = db.query(Loan).filter(
+                Loan.stage == LoanStage.FUNDED,
+                Loan.funded_date >= start, Loan.funded_date <= end
+            )
+            funded_loans_query = _apply_loan_scope(funded_loans_query, scope, Loan)
+            funded_loans_all = funded_loans_query.all()
+        except Exception:
+            funded_loans_all = []
+
+        total_funded_volume = sum(
+            loan.amount for loan in funded_loans_all if loan.amount
+        ) if funded_loans_all else 0
+
+        # Build CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Header section
+        from middleware.report_access import get_scope_description
+        writer.writerow(["Loan Scorecard Report"])
+        writer.writerow(["Period", f"{start_date_str} to {end_date_str}"])
+        writer.writerow(["Scope", get_scope_description(scope)])
+        writer.writerow(["Generated At", dt.utcnow().isoformat()])
+        writer.writerow([])
+
+        # Conversion metrics
+        writer.writerow(["Conversion Metrics"])
+        writer.writerow(["Metric", "Current", "Total", "Percentage", "Goal %"])
+        starts_to_apps = int((apps_count / starts_count * 100)) if starts_count > 0 else 0
+        apps_to_funded = int((funded_count / apps_count * 100)) if apps_count > 0 else 0
+        starts_to_funded = int((funded_count / starts_count * 100)) if starts_count > 0 else 0
+
+        writer.writerow(["Starts to Applications", apps_count, starts_count, f"{starts_to_apps}%", "75%"])
+        writer.writerow(["Applications to Funded", funded_count, apps_count, f"{apps_to_funded}%", "80%"])
+        writer.writerow(["Starts to Funded", funded_count, starts_count, f"{starts_to_funded}%", "50%"])
+        writer.writerow([])
+
+        # Funding totals
+        writer.writerow(["Funding Totals"])
+        writer.writerow(["Total Funded Units", len(funded_loans_all)])
+        writer.writerow(["Total Funded Volume", f"${total_funded_volume:,.2f}"])
+        avg_amount = total_funded_volume / len(funded_loans_all) if funded_loans_all else 0
+        writer.writerow(["Average Loan Amount", f"${avg_amount:,.2f}"])
+        writer.writerow([])
+
+        # Loan type breakdown
+        writer.writerow(["Funded Loans by Type"])
+        writer.writerow(["Loan Type", "Units", "Volume", "% of Total"])
+        loan_type_breakdown = {}
+        for loan in funded_loans_all:
+            lt = loan.loan_type or "Unknown"
+            if lt not in loan_type_breakdown:
+                loan_type_breakdown[lt] = {"units": 0, "volume": 0}
+            loan_type_breakdown[lt]["units"] += 1
+            loan_type_breakdown[lt]["volume"] += loan.amount if loan.amount else 0
+
+        for lt, d in loan_type_breakdown.items():
+            pct = (d["volume"] / total_funded_volume * 100) if total_funded_volume > 0 else 0
+            writer.writerow([lt, d["units"], f"${d['volume']:,.2f}", f"{pct:.1f}%"])
+        writer.writerow([])
+
+        # Referral sources
+        writer.writerow(["Referral Sources"])
+        writer.writerow(["Source", "Referrals", "Closed Volume"])
+        referral_breakdown = {}
+        for loan in funded_loans_all:
+            source = loan.source or "Unknown"
+            if source not in referral_breakdown:
+                referral_breakdown[source] = {"referrals": 0, "volume": 0}
+            referral_breakdown[source]["referrals"] += 1
+            referral_breakdown[source]["volume"] += loan.amount if loan.amount else 0
+
+        for s, d in referral_breakdown.items():
+            writer.writerow([s, d["referrals"], f"${d['volume']:,.2f}"])
+
+        output.seek(0)
+        filename = f"scorecard_{start_date_str}_to_{end_date_str}.csv"
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            },
+        )
+
+    logger.info("Scorecard routes loaded (with role-based scoping + CSV export)")

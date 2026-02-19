@@ -86,6 +86,7 @@ from database.models import (
     CalendarMapping, OnboardingStep, ProcessTemplate, ProcessRole,
     ProcessMilestone, ProcessTask, EmailVerificationToken,
     AIColleagueLearningMetric,
+    SSOConfig,
 )
 
 # Import enums from their source
@@ -264,6 +265,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.error(f"❌ Scorecard routes failed: {e}")
 
     try:
+        from routes.backup_routes import register_backup_routes
+        register_backup_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("✅ Backup & DR routes loaded (enterprise readiness)")
+    except Exception as e:
+        logger.error(f"❌ Backup & DR routes failed: {e}")
+
+    try:
         from routes.gdpr_routes import register_gdpr_routes
         register_gdpr_routes(app, get_db, get_current_user, **kwargs)
         logger.info("✅ GDPR/CCPA data deletion routes loaded (extracted)")
@@ -369,6 +377,20 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.info("✅ MFA routes loaded (/api/v1/auth/mfa)")
     except Exception as e:
         logger.warning(f"⚠️ MFA routes not loaded: {e}")
+
+    # Include SSO routes (SAML 2.0 + OIDC + admin config)
+    try:
+        from routes.sso_routes import router as sso_router
+        app.include_router(sso_router, tags=["SSO - Single Sign-On"])
+        # Create SSO tables if they don't exist
+        try:
+            from database.models.sso import SSOConfig
+            SSOConfig.__table__.create(engine, checkfirst=True)
+        except Exception as _tbl_err:
+            logger.debug(f"SSO table creation skipped (may already exist): {_tbl_err}")
+        logger.info("✅ SSO routes loaded (SAML + OIDC)")
+    except Exception as e:
+        logger.warning(f"⚠️ SSO routes not loaded: {e}")
 
     # Include borrower portal routes (applications, documents, scheduling)
     try:
@@ -2885,6 +2907,33 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.info("✅ Leads detail/CRUD routes loaded (extracted)")
     except Exception as e:
         logger.error(f"❌ Leads detail routes failed: {e}")
+
+    # ============================================================================
+    # LOS INTEGRATION ROUTES (Domain 7 - Integration Health)
+    # ============================================================================
+    try:
+        from routes.los_routes import register_los_routes
+        register_los_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("LOS integration routes registered")
+    except Exception as e:
+        logger.warning(f"LOS routes not available: {e}")
+
+    try:
+        from routes.los_webhook_routes import register_los_webhook_routes
+        register_los_webhook_routes(app, get_db, **kwargs)
+        logger.info("LOS webhook routes registered")
+    except Exception as e:
+        logger.warning(f"LOS webhook routes not available: {e}")
+
+    # ============================================================================
+    # COMPLIANCE ROUTES (Domain 2 - Fair Lending, License, TCPA)
+    # ============================================================================
+    try:
+        from routes.compliance_routes import register_compliance_routes
+        register_compliance_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("Compliance routes registered (fair lending, license enforcement, TCPA)")
+    except Exception as e:
+        logger.warning(f"Compliance routes not available: {e}")
 
     # ============================================================================
     # DATABASE INITIALIZATION (extracted to database/init_db.py)

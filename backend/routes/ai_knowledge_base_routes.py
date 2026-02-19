@@ -107,6 +107,12 @@ async def list_knowledge_base(
 
     query = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.is_active == is_active)
 
+    # Tenant isolation: scope to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if org_id and not is_platform_admin:
+        query = query.filter(AIKnowledgeBase.organization_id == org_id)
+
     if category:
         query = query.filter(AIKnowledgeBase.category == category)
 
@@ -158,13 +164,19 @@ async def get_knowledge_categories(
         {"id": "other", "name": "Other", "description": "Miscellaneous knowledge and resources"}
     ]
 
+    # Tenant isolation: scope category counts to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
     # Get counts for each category
     for cat in categories:
-        count = db.query(AIKnowledgeBase).filter(
+        cat_query = db.query(AIKnowledgeBase).filter(
             AIKnowledgeBase.category == cat["id"],
             AIKnowledgeBase.is_active == True
-        ).count()
-        cat["count"] = count
+        )
+        if org_id and not is_platform_admin:
+            cat_query = cat_query.filter(AIKnowledgeBase.organization_id == org_id)
+        cat["count"] = cat_query.count()
 
     return categories
 
@@ -179,7 +191,15 @@ async def get_knowledge_entry(
     models = get_models()
     AIKnowledgeBase = models["AIKnowledgeBase"]
 
-    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
+    query = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id)
+
+    # Tenant isolation: verify entry belongs to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if org_id and not is_platform_admin:
+        query = query.filter(AIKnowledgeBase.organization_id == org_id)
+
+    entry = query.first()
     if not entry:
         raise HTTPException(status_code=404, detail="Knowledge entry not found")
 
@@ -263,7 +283,15 @@ async def update_knowledge_entry(
     models = get_models()
     AIKnowledgeBase = models["AIKnowledgeBase"]
 
-    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
+    query = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id)
+
+    # Tenant isolation: verify entry belongs to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if org_id and not is_platform_admin:
+        query = query.filter(AIKnowledgeBase.organization_id == org_id)
+
+    entry = query.first()
     if not entry:
         raise HTTPException(status_code=404, detail="Knowledge entry not found")
 
@@ -289,7 +317,15 @@ async def delete_knowledge_entry(
     models = get_models()
     AIKnowledgeBase = models["AIKnowledgeBase"]
 
-    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
+    query = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id)
+
+    # Tenant isolation: verify entry belongs to user's organization
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if org_id and not is_platform_admin:
+        query = query.filter(AIKnowledgeBase.organization_id == org_id)
+
+    entry = query.first()
     if not entry:
         raise HTTPException(status_code=404, detail="Knowledge entry not found")
 

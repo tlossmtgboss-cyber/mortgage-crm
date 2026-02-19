@@ -57,6 +57,7 @@ class DialerSession(Base):
         Index('ix_dialer_sessions_agent_status', 'agent_id', 'status'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(SQLEnum(DialerSessionStatus), default=DialerSessionStatus.ACTIVE)
     current_task_id = Column(Integer, nullable=True)
@@ -110,6 +111,7 @@ class CallLog(Base):
         Index('ix_call_logs_call_sid', 'call_sid'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     contact_phone = Column(String, nullable=False)
     contact_name = Column(String)

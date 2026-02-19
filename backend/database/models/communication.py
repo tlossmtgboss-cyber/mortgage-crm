@@ -229,6 +229,7 @@ class Email(Base):
     __tablename__ = "emails"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     message_id = Column(String, unique=True, index=True)  # Microsoft Graph message ID
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))  # Linked lead if identified
@@ -258,6 +259,7 @@ class EmailDraft(Base):
     __tablename__ = "email_drafts"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
     loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
@@ -310,6 +312,7 @@ class TeamsMessage(Base):
     __tablename__ = "teams_messages"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
@@ -395,6 +398,7 @@ class VoicemailTemplate(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
 
     name = Column(String(255), nullable=False)
@@ -430,6 +434,7 @@ class VoicemailCampaign(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
 
     name = Column(String(255), nullable=False)
@@ -487,6 +492,7 @@ class CalendarEvent(Base):
     __tablename__ = "calendar_events"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     title = Column(String, nullable=False)
     description = Column(Text)
     start_time = Column(DateTime, nullable=False)
@@ -514,6 +520,7 @@ class IntegrationLog(Base):
     __tablename__ = "integration_logs"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     integration_type = Column(String, nullable=False)  # sms, email, teams, calendar
     action = Column(String, nullable=False)  # send, receive, sync, webhook
     status = Column(String, nullable=False)  # success, failed, pending
@@ -531,6 +538,7 @@ class IntegrationCredential(Base):
     __tablename__ = "integration_credentials"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     integration_type = Column(String, nullable=False)  # calendly, zoom, docusign, etc.
     api_key = Column(String, nullable=False)  # Encrypted API key

@@ -31,6 +31,7 @@ class ScheduledWorkflow(Base):
     __tablename__ = "scheduled_workflows"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(Text)
@@ -59,6 +60,7 @@ class WorkflowExecution(Base):
     __tablename__ = "workflow_executions"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     workflow_id = Column(Integer, ForeignKey("scheduled_workflows.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(String, default="running")  # running, completed, failed, partial
@@ -80,6 +82,7 @@ class Workflow(Base):
     __tablename__ = "workflows"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"))  # Account owner
     name = Column(String, nullable=False)
     description = Column(Text)

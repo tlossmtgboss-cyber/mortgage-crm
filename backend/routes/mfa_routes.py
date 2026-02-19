@@ -203,3 +203,107 @@ async def get_mfa_status(
         enabled_at=current_user.mfa_enabled_at.isoformat() if current_user.mfa_enabled_at else None,
         has_backup_codes=bool(current_user.mfa_backup_codes),
     )
+
+
+# =============================================================================
+# MFA LOGIN VERIFICATION (Enterprise Check 4.6)
+# =============================================================================
+
+class MFALoginVerifyRequest(BaseModel):
+    """Request to verify MFA token during login."""
+    email: str
+    mfa_token: str  # 6-digit TOTP token or backup code
+    access_token: str  # The provisional token from /token endpoint
+
+
+@router.post("/login-verify")
+async def verify_mfa_login(
+    request: MFALoginVerifyRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Verify MFA token during the login flow.
+
+    After /token returns mfa_required=true, the frontend sends the user's
+    TOTP code here. On success, returns a new fully-authenticated token pair.
+
+    This endpoint accepts either a 6-digit TOTP code or a backup code.
+    """
+    from auth.mfa import verify_mfa_token, verify_backup_code
+
+    # Lazy imports for auth functions
+    import main
+    User = main.User
+
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+        )
+
+    if not user.mfa_enabled or not user.mfa_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA is not enabled for this account.",
+        )
+
+    # Try TOTP verification first
+    token_str = request.mfa_token.strip()
+    verified = False
+
+    if len(token_str) == 6 and token_str.isdigit():
+        # Looks like a TOTP code
+        verified = verify_mfa_token(user.mfa_secret, token_str)
+
+    if not verified:
+        # Try backup code
+        if user.mfa_backup_codes:
+            code_index = verify_backup_code(token_str, user.mfa_backup_codes)
+            if code_index is not None:
+                # Remove used backup code
+                codes = list(user.mfa_backup_codes)
+                codes.pop(code_index)
+                user.mfa_backup_codes = codes
+                db.flush()
+                verified = True
+                logger.info(f"MFA backup code used for user {user.email} (codes remaining: {len(codes)})")
+
+    if not verified:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid MFA token. Please try again.",
+        )
+
+    # MFA verified - issue fully authenticated tokens
+    tenant_id = str(user.organization_id) if user.organization_id else None
+    access_token = main.create_access_token(
+        data={"sub": user.email, "mfa_verified": True},
+        user_id=user.id,
+        tenant_id=tenant_id,
+    )
+    refresh_token = main.create_refresh_token(
+        data={"sub": user.email},
+        user_id=user.id,
+    )
+
+    # Update last activity
+    user.last_activity_at = datetime.now(timezone.utc)
+    db.commit()
+
+    logger.info(f"MFA login verified for user {user.email}")
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "mfa_verified": True,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role,
+            "permission_role": user.permission_role,
+            "onboarding_completed": user.onboarding_completed,
+        },
+    }
