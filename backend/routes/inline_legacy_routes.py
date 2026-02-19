@@ -264,6 +264,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.error(f"❌ Scorecard routes failed: {e}")
 
     try:
+        from routes.gdpr_routes import register_gdpr_routes
+        register_gdpr_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("✅ GDPR/CCPA data deletion routes loaded (extracted)")
+    except Exception as e:
+        logger.error(f"❌ GDPR routes failed: {e}")
+
+    try:
         from routes.search_routes import register_search_routes
         register_search_routes(app, get_db, get_current_user_flexible=get_current_user_flexible, Lead=Lead, Loan=Loan, LoanTeamMember=LoanTeamMember, ReferralPartner=ReferralPartner, MUMClient=MUMClient, filter_leads_by_permissions=filter_leads_by_permissions, **kwargs)
         logger.info("✅ Global search routes loaded (extracted)")
@@ -354,6 +361,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.info("✅ Authentication routes loaded (/token, password reset, registration)")
     except Exception as e:
         logger.warning(f"⚠️ Authentication routes not loaded: {e}")
+
+    # Include MFA routes (TOTP setup, verify, disable, status)
+    try:
+        from routes.mfa_routes import router as mfa_router
+        app.include_router(mfa_router, tags=["MFA - Multi-Factor Authentication"])
+        logger.info("✅ MFA routes loaded (/api/v1/auth/mfa)")
+    except Exception as e:
+        logger.warning(f"⚠️ MFA routes not loaded: {e}")
 
     # Include borrower portal routes (applications, documents, scheduling)
     try:

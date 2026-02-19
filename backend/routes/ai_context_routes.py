@@ -43,6 +43,11 @@ def get_models():
     }
 
 
+def _get_org_id(current_user) -> Optional[int]:
+    """Extract organization_id from the current user for tenant scoping."""
+    return getattr(current_user, 'organization_id', None)
+
+
 # ============================================================================
 # AI CONTEXT ENDPOINTS - Comprehensive data for AI queries
 # ============================================================================
@@ -57,23 +62,32 @@ async def get_lead_context_for_ai(
     models = get_models()
     Lead = models["Lead"]
 
-    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
+    org_id = _get_org_id(current_user)
+    lead_query = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id)
+    if org_id:
+        lead_query = lead_query.filter(Lead.organization_id == org_id)
+    lead = lead_query.first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    # Get activities/contact history
+    # Get activities/contact history (tenant-scoped)
+    activity_params = {"lead_id": lead_id}
+    activity_org_filter = ""
+    if org_id:
+        activity_org_filter = "AND organization_id = :org_id"
+        activity_params["org_id"] = org_id
     activities = db.execute(
-        text("""
+        text(f"""
             SELECT type, content, created_at
             FROM activities
-            WHERE lead_id = :lead_id
+            WHERE lead_id = :lead_id {activity_org_filter}
             ORDER BY created_at DESC
             LIMIT 20
         """),
-        {"lead_id": lead_id}
+        activity_params
     ).fetchall()
 
-    # Get tasks for this lead
+    # Get tasks for this lead (tenant-scoped via owner_id)
     tasks = db.execute(
         text("""
             SELECT title, status, due_date, priority, created_at
@@ -132,23 +146,32 @@ async def get_loan_context_for_ai(
     models = get_models()
     Loan = models["Loan"]
 
-    loan = db.query(Loan).filter(
+    org_id = _get_org_id(current_user)
+    loan_query = db.query(Loan).filter(
         Loan.id == loan_id,
         Loan.loan_officer_id == current_user.id
-    ).first()
+    )
+    if org_id:
+        loan_query = loan_query.filter(Loan.organization_id == org_id)
+    loan = loan_query.first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
-    # Get loan activities
+    # Get loan activities (tenant-scoped)
+    activity_params = {"loan_id": loan_id}
+    activity_org_filter = ""
+    if org_id:
+        activity_org_filter = "AND organization_id = :org_id"
+        activity_params["org_id"] = org_id
     activities = db.execute(
-        text("""
+        text(f"""
             SELECT type, content, created_at
             FROM activities
-            WHERE loan_id = :loan_id
+            WHERE loan_id = :loan_id {activity_org_filter}
             ORDER BY created_at DESC
             LIMIT 20
         """),
-        {"loan_id": loan_id}
+        activity_params
     ).fetchall()
 
     # Get loan tasks
@@ -233,23 +256,32 @@ async def get_client_context_for_ai(
     models = get_models()
     MUMClient = models["MUMClient"]
 
-    client = db.query(MUMClient).filter(
+    org_id = _get_org_id(current_user)
+    client_query = db.query(MUMClient).filter(
         MUMClient.id == client_id,
         MUMClient.user_id == current_user.id
-    ).first()
+    )
+    if org_id:
+        client_query = client_query.filter(MUMClient.organization_id == org_id)
+    client = client_query.first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    # Get client activities
+    # Get client activities (tenant-scoped)
+    activity_params = {"client_id": client_id}
+    activity_org_filter = ""
+    if org_id:
+        activity_org_filter = "AND organization_id = :org_id"
+        activity_params["org_id"] = org_id
     activities = db.execute(
-        text("""
+        text(f"""
             SELECT type, content, created_at
             FROM activities
-            WHERE mum_client_id = :client_id
+            WHERE mum_client_id = :client_id {activity_org_filter}
             ORDER BY created_at DESC
             LIMIT 20
         """),
-        {"client_id": client_id}
+        activity_params
     ).fetchall()
 
     # Get tasks for this client
@@ -321,37 +353,43 @@ async def get_ai_context_summary(
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return overall CRM summary for AI context"""
+    org_id = _get_org_id(current_user)
+    base_params = {"user_id": current_user.id}
+    org_filter = ""
+    if org_id:
+        org_filter = "AND organization_id = :org_id"
+        base_params["org_id"] = org_id
 
     # Count leads by stage
     lead_counts = db.execute(
-        text("""
+        text(f"""
             SELECT stage, COUNT(*) as count
             FROM leads
-            WHERE owner_id = :user_id
+            WHERE owner_id = :user_id {org_filter}
             GROUP BY stage
         """),
-        {"user_id": current_user.id}
+        base_params
     ).fetchall()
 
     # Count active loans by stage
     loan_counts = db.execute(
-        text("""
+        text(f"""
             SELECT stage, COUNT(*) as count
             FROM loans
-            WHERE loan_officer_id = :user_id
+            WHERE loan_officer_id = :user_id {org_filter}
             GROUP BY stage
         """),
-        {"user_id": current_user.id}
+        base_params
     ).fetchall()
 
     # Get pending tasks count (ai_tasks table may not exist)
     try:
         pending_tasks = db.execute(
-            text("""
+            text(f"""
                 SELECT COUNT(*) FROM ai_tasks
-                WHERE user_id = :user_id AND status != 'completed'
+                WHERE user_id = :user_id {org_filter} AND status != 'completed'
             """),
-            {"user_id": current_user.id}
+            base_params
         ).scalar()
     except Exception:
         pending_tasks = 0
@@ -359,14 +397,14 @@ async def get_ai_context_summary(
     # Get MUM client count and total equity
     try:
         mum_stats = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     COUNT(*) as total_clients,
                     SUM(COALESCE(loan_balance, 0)) as total_balance
                 FROM mum_clients
-                WHERE user_id = :user_id
+                WHERE user_id = :user_id {org_filter}
             """),
-            {"user_id": current_user.id}
+            base_params
         ).fetchone()
     except Exception:
         mum_stats = (0, 0)
@@ -395,17 +433,24 @@ async def get_task_context_for_ai(
     Lead = models["Lead"]
     Loan = models["Loan"]
 
-    task = db.query(Task).filter(
+    org_id = _get_org_id(current_user)
+    task_query = db.query(Task).filter(
         Task.id == task_id,
         Task.owner_id == current_user.id
-    ).first()
+    )
+    if org_id:
+        task_query = task_query.filter(Task.organization_id == org_id)
+    task = task_query.first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
     # Get related lead info if exists
     lead_info = None
     if task.lead_id:
-        lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+        lead_query = db.query(Lead).filter(Lead.id == task.lead_id)
+        if org_id:
+            lead_query = lead_query.filter(Lead.organization_id == org_id)
+        lead = lead_query.first()
         if lead:
             lead_info = {
                 "id": lead.id,
@@ -418,7 +463,10 @@ async def get_task_context_for_ai(
     # Get related loan info if exists
     loan_info = None
     if task.loan_id:
-        loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+        loan_query = db.query(Loan).filter(Loan.id == task.loan_id)
+        if org_id:
+            loan_query = loan_query.filter(Loan.organization_id == org_id)
+        loan = loan_query.first()
         if loan:
             loan_info = {
                 "id": loan.id,
@@ -450,20 +498,26 @@ async def get_user_profile_context_for_ai(
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return current user's profile and performance context for AI"""
+    org_id = _get_org_id(current_user)
+    base_params = {"user_id": current_user.id}
+    org_filter = ""
+    if org_id:
+        org_filter = "AND organization_id = :org_id"
+        base_params["org_id"] = org_id
 
     # Get task stats
     try:
         task_stats = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     COUNT(*) FILTER (WHERE status = 'pending') as pending,
                     COUNT(*) FILTER (WHERE status = 'completed') as completed,
                     COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
                     COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
                 FROM tasks
-                WHERE owner_id = :user_id
+                WHERE owner_id = :user_id {org_filter}
             """),
-            {"user_id": current_user.id}
+            base_params
         ).fetchone()
     except Exception:
         db.rollback()
@@ -472,14 +526,14 @@ async def get_user_profile_context_for_ai(
     # Get lead stats
     try:
         lead_stats = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     COUNT(*) as total,
                     COUNT(*) FILTER (WHERE created_at > CURRENT_DATE - INTERVAL '30 days') as new_this_month
                 FROM leads
-                WHERE owner_id = :user_id
+                WHERE owner_id = :user_id {org_filter}
             """),
-            {"user_id": current_user.id}
+            base_params
         ).fetchone()
     except Exception:
         db.rollback()
@@ -488,15 +542,15 @@ async def get_user_profile_context_for_ai(
     # Get loan stats
     try:
         loan_stats = db.execute(
-            text("""
+            text(f"""
                 SELECT
                     COUNT(*) as total,
                     COALESCE(SUM(amount), 0) as total_volume,
                     COUNT(*) FILTER (WHERE stage::text LIKE '%FUNDED%' OR stage::text LIKE '%Funded%') as funded_count
                 FROM loans
-                WHERE loan_officer_id = :user_id
+                WHERE loan_officer_id = :user_id {org_filter}
             """),
-            {"user_id": current_user.id}
+            base_params
         ).fetchone()
     except Exception:
         db.rollback()
@@ -505,11 +559,11 @@ async def get_user_profile_context_for_ai(
     # Get recent activities count
     try:
         recent_activities = db.execute(
-            text("""
+            text(f"""
                 SELECT COUNT(*) FROM activities
-                WHERE user_id = :user_id AND created_at > CURRENT_DATE - INTERVAL '7 days'
+                WHERE user_id = :user_id {org_filter} AND created_at > CURRENT_DATE - INTERVAL '7 days'
             """),
-            {"user_id": current_user.id}
+            base_params
         ).scalar()
     except Exception:
         db.rollback()
@@ -550,32 +604,41 @@ async def get_referral_partner_context_for_ai(
     models = get_models()
     ReferralPartner = models["ReferralPartner"]
 
-    partner = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id).first()
+    org_id = _get_org_id(current_user)
+    partner_query = db.query(ReferralPartner).filter(ReferralPartner.id == partner_id)
+    if org_id:
+        partner_query = partner_query.filter(ReferralPartner.organization_id == org_id)
+    partner = partner_query.first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
 
-    # Get leads from this partner
+    # Get leads from this partner (tenant-scoped)
+    lead_params = {"partner_id": partner_id, "user_id": current_user.id}
+    lead_org_filter = ""
+    if org_id:
+        lead_org_filter = "AND organization_id = :org_id"
+        lead_params["org_id"] = org_id
     lead_stats = db.execute(
-        text("""
+        text(f"""
             SELECT
                 COUNT(*) as total_leads,
                 COUNT(*) FILTER (WHERE stage IN ('Application', 'PRE_APPROVED', 'CLOSED')) as converted
             FROM leads
-            WHERE referral_partner_id = :partner_id AND owner_id = :user_id
+            WHERE referral_partner_id = :partner_id AND owner_id = :user_id {lead_org_filter}
         """),
-        {"partner_id": partner_id, "user_id": current_user.id}
+        lead_params
     ).fetchone()
 
     # Get recent leads from this partner
     recent_leads = db.execute(
-        text("""
+        text(f"""
             SELECT id, name, stage, created_at
             FROM leads
-            WHERE referral_partner_id = :partner_id AND owner_id = :user_id
+            WHERE referral_partner_id = :partner_id AND owner_id = :user_id {lead_org_filter}
             ORDER BY created_at DESC
             LIMIT 5
         """),
-        {"partner_id": partner_id, "user_id": current_user.id}
+        lead_params
     ).fetchall()
 
     return {
@@ -613,6 +676,7 @@ async def get_email_context_for_ai(
     Email = models["Email"]
     Lead = models["Lead"]
 
+    org_id = _get_org_id(current_user)
     email = db.query(Email).filter(
         Email.id == email_id,
         Email.user_id == current_user.id
@@ -620,10 +684,13 @@ async def get_email_context_for_ai(
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
 
-    # Get related lead info if exists
+    # Get related lead info if exists (tenant-scoped)
     lead_info = None
     if email.lead_id:
-        lead = db.query(Lead).filter(Lead.id == email.lead_id).first()
+        lead_query = db.query(Lead).filter(Lead.id == email.lead_id)
+        if org_id:
+            lead_query = lead_query.filter(Lead.organization_id == org_id)
+        lead = lead_query.first()
         if lead:
             lead_info = {
                 "id": lead.id,
@@ -682,6 +749,7 @@ async def get_calendar_context_for_ai(
     models = get_models()
     Lead = models["Lead"]
     Loan = models["Loan"]
+    org_id = _get_org_id(current_user)
 
     events = db.execute(
         text("""
@@ -698,15 +766,21 @@ async def get_calendar_context_for_ai(
 
     formatted_events = []
     for e in events:
-        # Get related lead/loan names
+        # Get related lead/loan names (tenant-scoped)
         lead_name = None
         loan_info = None
         if e[7]:  # lead_id
-            lead = db.query(Lead).filter(Lead.id == e[7]).first()
+            lead_query = db.query(Lead).filter(Lead.id == e[7])
+            if org_id:
+                lead_query = lead_query.filter(Lead.organization_id == org_id)
+            lead = lead_query.first()
             if lead:
                 lead_name = lead.name
         if e[8]:  # loan_id
-            loan = db.query(Loan).filter(Loan.id == e[8]).first()
+            loan_query = db.query(Loan).filter(Loan.id == e[8])
+            if org_id:
+                loan_query = loan_query.filter(Loan.organization_id == org_id)
+            loan = loan_query.first()
             if loan:
                 loan_info = f"{loan.loan_number} - {loan.borrower_name}"
 
@@ -741,10 +815,14 @@ async def get_account_profile_context_for_ai(
     models = get_models()
     ClientProfile = models["ClientProfile"]
 
-    profile = db.query(ClientProfile).filter(
+    org_id = _get_org_id(current_user)
+    profile_query = db.query(ClientProfile).filter(
         ClientProfile.id == profile_id,
         ClientProfile.primary_user_id == current_user.id
-    ).first()
+    )
+    if org_id:
+        profile_query = profile_query.filter(ClientProfile.organization_id == org_id)
+    profile = profile_query.first()
     if not profile:
         raise HTTPException(status_code=404, detail="Account profile not found")
 
@@ -774,73 +852,79 @@ async def get_pipeline_context_for_ai(
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return detailed pipeline health context for AI"""
+    org_id = _get_org_id(current_user)
+    base_params = {"user_id": current_user.id}
+    org_filter = ""
+    if org_id:
+        org_filter = "AND organization_id = :org_id"
+        base_params["org_id"] = org_id
 
     # Lead pipeline by stage with values
     lead_pipeline = db.execute(
-        text("""
+        text(f"""
             SELECT
                 stage,
                 COUNT(*) as count,
                 COALESCE(SUM(preapproval_amount), 0) as total_value,
                 AVG(ai_score) as avg_score
             FROM leads
-            WHERE owner_id = :user_id
+            WHERE owner_id = :user_id {org_filter}
             GROUP BY stage
             ORDER BY count DESC
         """),
-        {"user_id": current_user.id}
+        base_params
     ).fetchall()
 
     # Loan pipeline by stage
     loan_pipeline = db.execute(
-        text("""
+        text(f"""
             SELECT
                 stage,
                 COUNT(*) as count,
                 COALESCE(SUM(amount), 0) as total_value,
                 AVG(days_in_stage) as avg_days
             FROM loans
-            WHERE loan_officer_id = :user_id
+            WHERE loan_officer_id = :user_id {org_filter}
             GROUP BY stage
             ORDER BY count DESC
         """),
-        {"user_id": current_user.id}
+        base_params
     ).fetchall()
 
     # At-risk loans (high days in stage)
     at_risk_loans = db.execute(
-        text("""
+        text(f"""
             SELECT id, loan_number, borrower_name, stage, days_in_stage, amount
             FROM loans
-            WHERE loan_officer_id = :user_id AND days_in_stage > 7
+            WHERE loan_officer_id = :user_id {org_filter} AND days_in_stage > 7
             ORDER BY days_in_stage DESC
             LIMIT 5
         """),
-        {"user_id": current_user.id}
+        base_params
     ).fetchall()
 
     # Hot leads (high AI score)
     hot_leads = db.execute(
-        text("""
+        text(f"""
             SELECT id, name, stage, ai_score, preapproval_amount, last_contact
             FROM leads
-            WHERE owner_id = :user_id AND ai_score >= 70
+            WHERE owner_id = :user_id {org_filter} AND ai_score >= 70
             ORDER BY ai_score DESC
             LIMIT 5
         """),
-        {"user_id": current_user.id}
+        base_params
     ).fetchall()
 
     # Closing this week
     closing_soon = db.execute(
-        text("""
+        text(f"""
             SELECT id, loan_number, borrower_name, amount, closing_date, stage
             FROM loans
-            WHERE loan_officer_id = :user_id
+            WHERE loan_officer_id = :user_id {org_filter}
             AND closing_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
             ORDER BY closing_date ASC
         """),
-        {"user_id": current_user.id}
+        base_params
     ).fetchall()
 
     return {
@@ -906,19 +990,25 @@ async def get_activity_feed_context_for_ai(
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return recent activity feed for AI context"""
+    org_id = _get_org_id(current_user)
+    activity_params = {"user_id": current_user.id, "limit": limit}
+    org_filter = ""
+    if org_id:
+        org_filter = "AND a.organization_id = :org_id"
+        activity_params["org_id"] = org_id
 
     activities = db.execute(
-        text("""
+        text(f"""
             SELECT a.id, a.type, a.content, a.created_at, a.lead_id, a.loan_id,
                    l.name as lead_name, lo.loan_number, lo.borrower_name
             FROM activities a
             LEFT JOIN leads l ON a.lead_id = l.id
             LEFT JOIN loans lo ON a.loan_id = lo.id
-            WHERE a.user_id = :user_id
+            WHERE a.user_id = :user_id {org_filter}
             ORDER BY a.created_at DESC
             LIMIT :limit
         """),
-        {"user_id": current_user.id, "limit": limit}
+        activity_params
     ).fetchall()
 
     return {
@@ -948,23 +1038,32 @@ async def get_mum_client_context_for_ai(
     models = get_models()
     MUMClient = models["MUMClient"]
 
-    client = db.query(MUMClient).filter(
+    org_id = _get_org_id(current_user)
+    client_query = db.query(MUMClient).filter(
         MUMClient.id == client_id,
         MUMClient.user_id == current_user.id
-    ).first()
+    )
+    if org_id:
+        client_query = client_query.filter(MUMClient.organization_id == org_id)
+    client = client_query.first()
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
 
-    # Get related activities
+    # Get related activities (tenant-scoped)
+    activity_params = {"client_id": client_id}
+    activity_org_filter = ""
+    if org_id:
+        activity_org_filter = "AND organization_id = :org_id"
+        activity_params["org_id"] = org_id
     activities = db.execute(
-        text("""
+        text(f"""
             SELECT type, content, created_at
             FROM activities
-            WHERE mum_client_id = :client_id
+            WHERE mum_client_id = :client_id {activity_org_filter}
             ORDER BY created_at DESC
             LIMIT 10
         """),
-        {"client_id": client_id}
+        activity_params
     ).fetchall()
 
     return {
@@ -1012,6 +1111,7 @@ async def get_all_tasks_context_for_ai(
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Return all tasks context for AI queries"""
+    org_id = _get_org_id(current_user)
 
     query = """
         SELECT t.id, t.title, t.description, t.status, t.priority, t.due_date,
@@ -1024,6 +1124,10 @@ async def get_all_tasks_context_for_ai(
     """
     params = {"user_id": current_user.id}
 
+    if org_id:
+        query += " AND t.organization_id = :org_id"
+        params["org_id"] = org_id
+
     if status:
         query += " AND t.status = :status"
         params["status"] = status
@@ -1033,17 +1137,22 @@ async def get_all_tasks_context_for_ai(
     tasks = db.execute(text(query), params).fetchall()
 
     # Get task stats
+    stats_params = {"user_id": current_user.id}
+    stats_org_filter = ""
+    if org_id:
+        stats_org_filter = "AND organization_id = :org_id"
+        stats_params["org_id"] = org_id
     task_stats = db.execute(
-        text("""
+        text(f"""
             SELECT
                 COUNT(*) FILTER (WHERE status = 'pending') as pending,
                 COUNT(*) FILTER (WHERE status = 'completed') as completed,
                 COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
                 COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
             FROM tasks
-            WHERE owner_id = :user_id
+            WHERE owner_id = :user_id {stats_org_filter}
         """),
-        {"user_id": current_user.id}
+        stats_params
     ).fetchone()
 
     return {

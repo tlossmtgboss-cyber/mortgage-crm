@@ -27,6 +27,8 @@ from .stack import (
     configure_datadog_monitoring,
 )
 
+from .pii_log_filter import PIIRedactionFilter, install_pii_filter
+
 __all__ = [
     # AI Usage
     "AIUsageTracker",
@@ -40,4 +42,7 @@ __all__ = [
     "configure_middleware",
     "configure_production_hardening",
     "configure_datadog_monitoring",
+    # PII Log Filter
+    "PIIRedactionFilter",
+    "install_pii_filter",
 ]

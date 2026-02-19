@@ -113,8 +113,12 @@ class Conversation(Base):
 class ConversationMemory(Base):
     """Stores conversation summaries with vector embeddings for AI context retrieval"""
     __tablename__ = "conversation_memory"
+    __table_args__ = (
+        Index('ix_conversation_memory_organization_id', 'organization_id'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
     loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
@@ -139,6 +143,7 @@ class SMSMessage(Base):
     __tablename__ = "sms_messages"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
@@ -166,9 +171,11 @@ class SMSConversation(Base):
         Index('ix_sms_conv_phone', 'phone_number'),
         Index('ix_sms_conv_user', 'user_id'),
         Index('ix_sms_conv_active', 'is_active'),
+        Index('ix_sms_conversations_organization_id', 'organization_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     phone_number = Column(String, nullable=False, index=True)  # The external party's phone
     user_id = Column(Integer, ForeignKey("users.id"))  # The LO managing this conversation
     lead_id = Column(Integer, ForeignKey("leads.id"))
@@ -197,6 +204,7 @@ class EmailMessage(Base):
     __tablename__ = "email_messages"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))

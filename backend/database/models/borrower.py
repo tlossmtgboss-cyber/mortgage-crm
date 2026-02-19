@@ -31,9 +31,11 @@ class BorrowerProfile(Base):
     __table_args__ = (
         Index('ix_borrower_profile_email', 'email'),
         Index('ix_borrower_profile_provider', 'provider', 'provider_user_id'),
+        Index('ix_borrower_profile_org_id', 'organization_id'),
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
 
     # Identity from social provider
     email = Column(String, nullable=False, index=True)

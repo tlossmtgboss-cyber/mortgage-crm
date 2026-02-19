@@ -256,6 +256,18 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        # Account lockout check (Enterprise Security Check 4.4)
+        try:
+            from auth.account_lockout import check_account_locked, record_failed_login, reset_failed_login
+            if check_account_locked(user):
+                logger.warning(f"Login attempt on locked account: {user.email}")
+                raise HTTPException(
+                    status_code=status.HTTP_423_LOCKED,
+                    detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
+                )
+        except ImportError:
+            pass  # Account lockout module not available, skip check
+
         if not user.hashed_password:
             logger.warning("Login attempt for user with no password set")
             raise HTTPException(
@@ -265,11 +277,34 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             )
 
         if not auth_funcs['verify_password'](form_data.password, user.hashed_password):
+            # Record failed login attempt (Enterprise Security Check 4.4)
+            try:
+                from auth.account_lockout import record_failed_login
+                lockout_result = record_failed_login(db, user)
+                if lockout_result.get("locked"):
+                    logger.warning(f"Account locked after failed attempts: {user.email}")
+                    raise HTTPException(
+                        status_code=status.HTTP_423_LOCKED,
+                        detail="Account has been locked due to too many failed login attempts. Please try again in 30 minutes.",
+                    )
+            except ImportError:
+                pass  # Account lockout module not available, skip recording
+            except HTTPException:
+                raise  # Re-raise the 423 HTTPException
+
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        # Successful login - reset failed login counter (Enterprise Security Check 4.4)
+        try:
+            from auth.account_lockout import reset_failed_login
+            if hasattr(user, 'failed_login_attempts') and user.failed_login_attempts:
+                reset_failed_login(db, user)
+        except (ImportError, Exception):
+            pass  # Account lockout module not available or column missing, skip
 
         # Update last_activity_at on successful login
         user.last_activity_at = datetime.now(timezone.utc)
@@ -287,11 +322,15 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             user_id=user.id
         )
 
+        # Check if MFA is enabled (Enterprise Security Check 4.6)
+        mfa_required = getattr(user, 'mfa_enabled', False) or False
+
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "expires_in": config['ACCESS_TOKEN_EXPIRE_MINUTES'] * 60,  # seconds
+            "mfa_required": mfa_required,
             "user": {
                 "id": user.id,
                 "email": user.email,

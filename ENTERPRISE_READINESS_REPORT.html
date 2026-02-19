@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perennia AI — Enterprise Readiness Report</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242833;
+    --border: #2e3345;
+    --text: #e1e4ed;
+    --text-muted: #8b90a0;
+    --accent: #6366f1;
+    --accent-light: #818cf8;
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,.12);
+    --orange: #f59e0b;
+    --orange-bg: rgba(245,158,11,.12);
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,.12);
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,.12);
+    --cyan: #06b6d4;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+
+  /* Header */
+  .hero {
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #1e1b4b 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 48px 0 40px;
+  }
+  .hero-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+  .hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+  .logo {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent-light);
+  }
+  .meta-pills {
+    display: flex;
+    gap: 12px;
+  }
+  .meta-pill {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+  .hero p.subtitle {
+    font-size: 16px;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+  }
+
+  /* Score Ring */
+  .score-row {
+    display: flex;
+    align-items: center;
+    gap: 48px;
+  }
+  .score-ring-wrap {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    flex-shrink: 0;
+  }
+  .score-ring-wrap svg {
+    transform: rotate(-90deg);
+  }
+  .score-ring-bg {
+    fill: none;
+    stroke: rgba(255,255,255,.08);
+    stroke-width: 10;
+  }
+  .score-ring-fg {
+    fill: none;
+    stroke: var(--red);
+    stroke-width: 10;
+    stroke-linecap: round;
+    stroke-dasharray: 408;
+    stroke-dashoffset: 249;
+    transition: stroke-dashoffset .8s ease;
+  }
+  .score-ring-label {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    text-align: center;
+  }
+  .score-ring-label .number {
+    font-size: 40px;
+    font-weight: 800;
+    color: var(--red);
+    line-height: 1;
+  }
+  .score-ring-label .of {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .score-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    flex: 1;
+  }
+  .stat-card {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .stat-card .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .stat-card .value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .stat-card .value.red { color: var(--red); }
+  .stat-card .value.orange { color: var(--orange); }
+  .stat-card .value.green { color: var(--green); }
+  .stat-card .value.blue { color: var(--blue); }
+  .stat-card .detail {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  /* Main Content */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 32px;
+  }
+
+  /* Executive Summary */
+  .exec-summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 40px;
+  }
+  .exec-summary h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+  .exec-summary p {
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .strengths-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .strength-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--green-bg);
+    border: 1px solid rgba(34,197,94,.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .strength-item .icon { color: var(--green); flex-shrink: 0; font-size: 15px; }
+
+  /* Domain Scores Table */
+  .section-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: #fff;
+  }
+  .domain-table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 40px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  thead th {
+    background: var(--surface2);
+    text-align: left;
+    padding: 14px 20px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,.02); }
+
+  /* Score bar in table */
+  .score-bar-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .score-bar-track {
+    width: 120px;
+    height: 8px;
+    background: rgba(255,255,255,.06);
+    border-radius: 4px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width .5s ease;
+  }
+  .score-bar-fill.red { background: var(--red); }
+  .score-bar-fill.orange { background: var(--orange); }
+  .score-bar-fill.green { background: var(--green); }
+  .score-num {
+    font-weight: 700;
+    min-width: 28px;
+  }
+
+  .grade-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    font-weight: 800;
+    font-size: 14px;
+  }
+  .grade-F { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,.25); }
+  .grade-D { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(245,158,11,.25); }
+  .grade-C { background: rgba(234,179,8,.12); color: #eab308; border: 1px solid rgba(234,179,8,.25); }
+  .grade-B { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(59,130,246,.25); }
+  .grade-A { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,.25); }
+
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .status-BLOCKED { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
+  .status-AT_RISK { background: var(--orange-bg); color: var(--orange); border: 1px solid rgba(245,158,11,.2); }
+  .status-OK { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,.2); }
+
+  .crit-count { font-weight: 700; }
+  .crit-count.has-crit { color: var(--red); }
+
+  /* Domain Detail Cards */
+  .domain-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .domain-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 28px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .domain-card-header:hover { background: rgba(255,255,255,.02); }
+  .domain-card-header .left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .domain-card-header .domain-num {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  .domain-card-header .domain-name {
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .domain-card-header .right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .domain-card-header .chevron {
+    color: var(--text-muted);
+    transition: transform .2s;
+    font-size: 18px;
+  }
+  .domain-card.open .chevron { transform: rotate(180deg); }
+  .domain-card-body {
+    display: none;
+    padding: 28px;
+  }
+  .domain-card.open .domain-card-body { display: block; }
+
+  .checks-section {
+    margin-bottom: 24px;
+  }
+  .checks-section:last-child { margin-bottom: 0; }
+  .checks-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .checks-section-title.passed { color: var(--green); }
+  .checks-section-title.failed { color: var(--red); }
+
+  .check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .check-row.pass {
+    background: rgba(34,197,94,.06);
+    border: 1px solid rgba(34,197,94,.12);
+  }
+  .check-row.fail {
+    background: rgba(239,68,68,.06);
+    border: 1px solid rgba(239,68,68,.12);
+  }
+  .check-id {
+    flex-shrink: 0;
+    font-weight: 700;
+    font-size: 12px;
+    width: 50px;
+    color: var(--text-muted);
+  }
+  .check-content { flex: 1; }
+  .check-name { font-weight: 600; color: var(--text); }
+  .check-evidence { color: var(--text-muted); margin-top: 2px; font-size: 12px; }
+  .check-severity {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .sev-CRITICAL { background: var(--red-bg); color: var(--red); }
+  .sev-HIGH { background: var(--orange-bg); color: var(--orange); }
+  .sev-MEDIUM { background: var(--blue-bg); color: var(--blue); }
+
+  .remediation-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-top: 20px;
+  }
+  .remediation-box h4 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-light);
+    margin-bottom: 10px;
+  }
+  .remediation-box ol {
+    padding-left: 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .remediation-box li { margin-bottom: 6px; }
+
+  /* Critical Failures Summary */
+  .crit-table-wrap {
+    background: var(--surface);
+    border: 1px solid rgba(239,68,68,.2);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 40px;
+  }
+  .crit-table-wrap table thead th {
+    background: rgba(239,68,68,.08);
+  }
+
+  /* Roadmap */
+  .phase-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .phase-header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .phase-num {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 16px;
+  }
+  .phase-1 .phase-num { background: var(--red-bg); color: var(--red); }
+  .phase-2 .phase-num { background: var(--orange-bg); color: var(--orange); }
+  .phase-3 .phase-num { background: var(--blue-bg); color: var(--blue); }
+  .phase-4 .phase-num { background: rgba(139,92,246,.12); color: #a78bfa; }
+  .phase-title { font-weight: 700; font-size: 16px; color: #fff; }
+  .phase-weeks { font-size: 13px; color: var(--text-muted); margin-left: auto; }
+  .phase-body { padding: 0; }
+  .phase-body table td { font-size: 13px; }
+
+  /* Comparison */
+  .comparison-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 40px;
+  }
+  .change-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .change-up { background: var(--green-bg); color: var(--green); }
+  .change-down { background: var(--red-bg); color: var(--red); }
+  .change-same { background: rgba(255,255,255,.06); color: var(--text-muted); }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 40px 32px;
+    color: var(--text-muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff; color: #111; }
+    .hero { background: #f1f5f9; border: 1px solid #e2e8f0; }
+    .domain-card-body { display: block !important; }
+    .stat-card, .domain-card, .exec-summary, .phase-card, .domain-table-wrap, .crit-table-wrap, .comparison-wrap {
+      background: #fff; border-color: #e2e8f0;
+    }
+    table { font-size: 12px; }
+  }
+
+  @media (max-width: 768px) {
+    .score-row { flex-direction: column; }
+    .score-summary-stats { grid-template-columns: repeat(2, 1fr); }
+    .strengths-grid { grid-template-columns: 1fr; }
+    .hero-top { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ====================== HERO ====================== -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-top">
+      <div class="logo">Perennia AI</div>
+      <div class="meta-pills">
+        <span class="meta-pill">Full Audit &bull; All 12 Domains</span>
+        <span class="meta-pill">2026-02-19</span>
+        <span class="meta-pill">Static Code Analysis &bull; 5 Agents</span>
+      </div>
+    </div>
+    <h1>Enterprise Readiness Report</h1>
+    <p class="subtitle">Comprehensive assessment across 196 checks required for enterprise mortgage lender deployment</p>
+
+    <div class="score-row">
+      <div class="score-ring-wrap">
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <circle class="score-ring-bg" cx="70" cy="70" r="65"/>
+          <circle class="score-ring-fg" cx="70" cy="70" r="65"/>
+        </svg>
+        <div class="score-ring-label">
+          <div class="number">39</div>
+          <div class="of">/ 100</div>
+        </div>
+      </div>
+      <div class="score-summary-stats">
+        <div class="stat-card">
+          <div class="label">Overall Grade</div>
+          <div class="value red">F</div>
+          <div class="detail">Not Enterprise Ready</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Checks Passed</div>
+          <div class="value green">72</div>
+          <div class="detail">of 196 total</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Critical Failures</div>
+          <div class="value red">31</div>
+          <div class="detail">Immediate action required</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Remediation</div>
+          <div class="value orange">20</div>
+          <div class="detail">weeks estimated</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- ====================== EXEC SUMMARY ====================== -->
+<div class="exec-summary">
+  <h2>Executive Summary</h2>
+  <p><strong>72 of 196 checks passed</strong> across 12 domains. <strong>31 critical failures</strong> require immediate remediation. <strong>10 of 12 domains scored F</strong> (below 60). Only Domain 12 (White-Label) achieved a D grade.</p>
+  <p>The platform has <strong>strong foundational infrastructure</strong> &mdash; FastAPI, PostgreSQL with RLS, hash-chained audit logging, Fernet field encryption, comprehensive security middleware, and a well-designed multi-tenant architecture. However, critical implementation gaps exist between the architecture and enforcement.</p>
+  <p style="color:var(--red); font-weight:600;">Top 5 blocking gaps: (1) 7 unscoped tenant tables including borrower PII and AI memory, (2) No mortgage compliance automation (TRID, HMDA, ECOA), (3) No account lockout, MFA, or enterprise SSO, (4) No disaster recovery infrastructure, (5) No LOS integration (Encompass/BytePro).</p>
+
+  <div class="strengths-grid">
+    <div class="strength-item"><span class="icon">&#10003;</span> Hash-chained immutable audit trail with tamper detection</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> TCPA compliance: consent, DNC lists, calling hours</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> Field-level Fernet encryption for SSN/PII at rest</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> SQL injection prevention (parameterized queries)</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> CSRF protection with constant-time comparison</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> Comprehensive security headers (CSP, HSTS, X-Frame)</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> Tiered rate limiting with auth-specific limits</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> PostgreSQL RLS with fail-closed semantics on 9 tables</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> Custom domain routing with DNS verification</div>
+    <div class="strength-item"><span class="icon">&#10003;</span> Full white-label brand configuration schema</div>
+  </div>
+</div>
+
+<!-- ====================== DOMAIN SCORES TABLE ====================== -->
+<h2 class="section-title">Domain Scores</h2>
+<div class="domain-table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Domain</th>
+        <th>Score</th>
+        <th>Grade</th>
+        <th>Critical Failures</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Multi-Tenant Isolation</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:35%"></div></div>
+            <span class="score-num" style="color:var(--red)">35</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">8</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Compliance &amp; Regulatory</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:30%"></div></div>
+            <span class="score-num" style="color:var(--red)">30</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">10</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Data Quality &amp; Integrity</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:52%"></div></div>
+            <span class="score-num" style="color:var(--red)">52</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">2</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Security Audit</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:49%"></div></div>
+            <span class="score-num" style="color:var(--red)">49</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">4</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Onboarding &amp; Provisioning</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:30%"></div></div>
+            <span class="score-num" style="color:var(--red)">30</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">4</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>Performance &amp; Load Testing</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:55%"></div></div>
+            <span class="score-num" style="color:var(--red)">55</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count">0</td>
+        <td><span class="status-badge status-AT_RISK">At Risk</span></td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>Integration Health</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:30%"></div></div>
+            <span class="score-num" style="color:var(--red)">30</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">3</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>Disaster Recovery</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:15%"></div></div>
+            <span class="score-num" style="color:var(--red)">15</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">4</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>Analytics &amp; Reporting</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:35%"></div></div>
+            <span class="score-num" style="color:var(--red)">35</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count has-crit">2</td>
+        <td><span class="status-badge status-BLOCKED">Blocked</span></td>
+      </tr>
+      <tr>
+        <td>10</td>
+        <td>Migration &amp; Data Import</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:35%"></div></div>
+            <span class="score-num" style="color:var(--red)">35</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count">0</td>
+        <td><span class="status-badge status-AT_RISK">At Risk</span></td>
+      </tr>
+      <tr>
+        <td>11</td>
+        <td>API Gateway &amp; Dev Experience</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill red" style="width:45%"></div></div>
+            <span class="score-num" style="color:var(--red)">45</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-F">F</span></td>
+        <td class="crit-count">0</td>
+        <td><span class="status-badge status-AT_RISK">At Risk</span></td>
+      </tr>
+      <tr>
+        <td>12</td>
+        <td>White-Label &amp; Theming</td>
+        <td>
+          <div class="score-bar-cell">
+            <div class="score-bar-track"><div class="score-bar-fill orange" style="width:62%"></div></div>
+            <span class="score-num" style="color:var(--orange)">62</span>
+          </div>
+        </td>
+        <td><span class="grade-badge grade-D">D</span></td>
+        <td class="crit-count">0</td>
+        <td><span class="status-badge status-AT_RISK">At Risk</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ====================== DOMAIN DETAIL CARDS ====================== -->
+<h2 class="section-title">Detailed Results by Domain</h2>
+
+<!-- Domain 1 -->
+<div class="domain-card open" id="domain-1">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 1</div>
+        <div class="domain-name">Multi-Tenant Isolation</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">35 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed Checks (4)</div>
+      <div class="check-row pass">
+        <span class="check-id">1.1</span>
+        <div class="check-content">
+          <div class="check-name">RLS policies exist on tenant tables</div>
+          <div class="check-evidence">9 tables covered via 006_enable_row_level_security.py migration</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">1.2</span>
+        <div class="check-content">
+          <div class="check-name">RLS policies are ENABLED with fail-closed</div>
+          <div class="check-evidence">NULLIF(current_setting('app.current_tenant', true), '')::integer returns NULL &rarr; zero rows</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">1.7</span>
+        <div class="check-content">
+          <div class="check-name">Middleware sets tenant context</div>
+          <div class="check-evidence">TenantContextMiddleware extracts org_id from authenticated user &rarr; request.state</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">1.10</span>
+        <div class="check-content">
+          <div class="check-name">TenantContext filtering service</div>
+          <div class="check-evidence">tenant_isolation.py provides filter_query() and validate_access() helpers</div>
+        </div>
+      </div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed Checks (7)</div>
+      <div class="check-row fail">
+        <span class="check-id">1.1</span>
+        <div class="check-content">
+          <div class="check-name">RLS on ALL tenant tables</div>
+          <div class="check-evidence"><strong>7 tables missing organization_id entirely:</strong> email_intakes, attachment_intakes, sms_messages, email_messages, sms_conversations, conversation_memory, borrower_profiles</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">1.3-1.6</span>
+        <div class="check-content">
+          <div class="check-name">Cross-tenant CRUD blocked</div>
+          <div class="check-evidence">Cannot verify &mdash; missing org_id on 7 tables means no RLS possible</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">1.7</span>
+        <div class="check-content">
+          <div class="check-name">API endpoints enforce tenant scope</div>
+          <div class="check-evidence">Routes use owner_id == user.id instead of organization_id filter. Raw SQL queries in ai_context_routes.py lack org filter</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">1.11</span>
+        <div class="check-content">
+          <div class="check-name">S3 paths include tenant prefix</div>
+          <div class="check-evidence">No /{organization_id}/ prefix in S3 key structure. Keys use documents/{loan_id}/{folder}/{uuid}.{ext}</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">1.12-1.13</span>
+        <div class="check-content">
+          <div class="check-name">Presigned URLs / downloads scoped to tenant</div>
+          <div class="check-evidence">Cannot confirm presigned URL tenant scoping &mdash; no S3 prefix code found</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">1.14-1.16</span>
+        <div class="check-content">
+          <div class="check-name">AI context / RAG / conversation memory scoped</div>
+          <div class="check-evidence">ConversationMemory has no organization_id. AI context queries lack org filter. AIKnowledgeBase.organization_id defaults to 1</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">1.17-1.18</span>
+        <div class="check-content">
+          <div class="check-name">Background workers process within tenant scope</div>
+          <div class="check-evidence">Salesforce sync tasks create SessionLocal() without calling set_tenant_context()</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+    </div>
+    <div class="remediation-box">
+      <h4>Remediation &mdash; Est. 5-7 days</h4>
+      <ol>
+        <li>Add organization_id FK + index to all 7 missing models</li>
+        <li>Create Alembic migration to backfill from related entities</li>
+        <li>Extend RLS migration to cover all 16 tenant-scoped tables</li>
+        <li>Implement S3 key prefix: s3://bucket/org-{org_id}/entity-type/id/file</li>
+        <li>Add AND organization_id = :org_id to all AI context and raw SQL queries</li>
+        <li>Add org_id parameter to background task functions with set_tenant_context() call</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 2 -->
+<div class="domain-card" id="domain-2">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 2</div>
+        <div class="domain-name">Compliance &amp; Regulatory</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">30 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed Checks (5)</div>
+      <div class="check-row pass">
+        <span class="check-id">2.11</span>
+        <div class="check-content">
+          <div class="check-name">Consent captured before outbound</div>
+          <div class="check-evidence">BorrowerProfile has FCC Jan 2025 one-to-one consent fields</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">2.12</span>
+        <div class="check-content">
+          <div class="check-name">DNC list checking</div>
+          <div class="check-evidence">telephony/compliance.py provides check_dnc(), add_to_dnc(), remove_from_dnc()</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">2.13</span>
+        <div class="check-content">
+          <div class="check-name">Time-of-day calling restrictions</div>
+          <div class="check-evidence">TCPA safe harbor 8AM-9PM enforced with area code &rarr; timezone mapping</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">2.21</span>
+        <div class="check-content">
+          <div class="check-name">Immutable audit logging</div>
+          <div class="check-evidence">SHA-256 hash-chained append-only audit trail with sequence_number, record_hash, previous_hash</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">2.22</span>
+        <div class="check-content">
+          <div class="check-name">Audit log tamper detection</div>
+          <div class="check-evidence">verify_audit_chain() validates all hashes and detects broken links</div>
+        </div>
+      </div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed Checks (8)</div>
+      <div class="check-row fail">
+        <span class="check-id">2.1-2.2</span>
+        <div class="check-content">
+          <div class="check-name">LE/CD delivery deadline tracking</div>
+          <div class="check-evidence">Fields exist but NO validation logic enforces 3-day LE or 3-day CD-before-closing rules</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">2.3-2.5</span>
+        <div class="check-content">
+          <div class="check-name">Changed circumstance / tolerance / waiting period</div>
+          <div class="check-evidence">Zero code for changed circumstance triggers, tolerance cure tracking, or waiting period enforcement. No loan_fees table</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">2.6</span>
+        <div class="check-content">
+          <div class="check-name">TRID audit trail</div>
+          <div class="check-evidence">No disclosure-specific audit events</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">2.7-2.8</span>
+        <div class="check-content">
+          <div class="check-name">Adverse action notices</div>
+          <div class="check-evidence">No adverse action model, no auto-trigger on denial, no reason codes</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">2.9-2.10</span>
+        <div class="check-content">
+          <div class="check-name">Fair lending / AI bias monitoring</div>
+          <div class="check-evidence">No demographic data separation from decisioning, no AI bias monitoring</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">2.14</span>
+        <div class="check-content">
+          <div class="check-name">Opt-out processing (immediate)</div>
+          <div class="check-evidence">Consent revocation logged but no enforcement workflow &mdash; outreach continues</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">2.15-2.17</span>
+        <div class="check-content">
+          <div class="check-name">HMDA data capture/export</div>
+          <div class="check-evidence">Many HMDA fields scattered across models but no validation, no LAR export endpoint</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">2.19-2.20</span>
+        <div class="check-content">
+          <div class="check-name">State-specific disclosures / multi-state enforcement</div>
+          <div class="check-evidence">State requirements documented in CLAUDE.md only, not enforced in code</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+    </div>
+    <div class="remediation-box">
+      <h4>Remediation &mdash; Est. 3-4 weeks</h4>
+      <ol>
+        <li>Build TRID SLA engine: auto-calculate LE/CD deadlines with business day calendar</li>
+        <li>Add loan_fees table with tolerance category tracking (zero/10%/unlimited)</li>
+        <li>Create AdverseActionNotice model with auto-trigger on denial</li>
+        <li>Implement HMDA LAR export endpoint per CFPB spec</li>
+        <li>Add state-specific disclosure validation per property state</li>
+        <li>Wire opt-out processing to immediately suppress all outbound</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 3 -->
+<div class="domain-card" id="domain-3">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 3</div>
+        <div class="domain-name">Data Quality &amp; Integrity</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">52 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed Checks (4)</div>
+      <div class="check-row pass">
+        <span class="check-id">3.6-3.10</span>
+        <div class="check-content">
+          <div class="check-name">Referential integrity</div>
+          <div class="check-evidence">Explicit ForeignKey with proper constraints. Cascading deletes on applications, documents</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">3.11-3.13</span>
+        <div class="check-content">
+          <div class="check-name">Duplicate detection</div>
+          <div class="check-evidence">DuplicatePair model, DuplicateDetectionService, scan/merge endpoints at /api/v1/duplicates/</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">3.18</span>
+        <div class="check-content">
+          <div class="check-name">SSN encrypted at rest</div>
+          <div class="check-evidence">Fernet field-level encryption via EncryptedString type decorator. ssn_encrypted, co_ssn_encrypted on BorrowerApplication</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">3.4</span>
+        <div class="check-content">
+          <div class="check-name">SLA milestone dates</div>
+          <div class="check-evidence">Loan tracks 10+ milestones (prospect through funding). Lead tracks 5 SLA milestones</div>
+        </div>
+      </div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed Checks (5)</div>
+      <div class="check-row fail">
+        <span class="check-id">3.19</span>
+        <div class="check-content">
+          <div class="check-name">SSN masked in API responses</div>
+          <div class="check-evidence">Schemas don&rsquo;t explicitly mask ssn_encrypted in responses &mdash; could expose via JSON serialization</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">3.20</span>
+        <div class="check-content">
+          <div class="check-name">PII not present in logs</div>
+          <div class="check-evidence">No PII masking in log messages. Generic exception handler logs full traceback</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">3.5</span>
+        <div class="check-content">
+          <div class="check-name">Contact method validity</div>
+          <div class="check-evidence">No email regex validation, no phone E.164 normalization</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">3.1-3.3</span>
+        <div class="check-content">
+          <div class="check-name">Required fields populated</div>
+          <div class="check-evidence">Lead.email and Lead.phone both nullable with no validation ensuring at least one present</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">3.14-3.15</span>
+        <div class="check-content">
+          <div class="check-name">Stale data detection</div>
+          <div class="check-evidence">No automated staleness check for leads (30+ days) or loans stuck beyond SLA targets</div>
+        </div>
+        <span class="check-severity sev-MEDIUM">Medium</span>
+      </div>
+    </div>
+    <div class="remediation-box">
+      <h4>Remediation &mdash; Est. 1-2 weeks</h4>
+      <ol>
+        <li>Add response schema masking for encrypted SSN fields (return ***-**-1234)</li>
+        <li>Implement logging.Filter to redact SSN patterns from all log output</li>
+        <li>Add email/phone format validation and minimum-one-contact rule</li>
+        <li>Build stale data detection background job</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 4 -->
+<div class="domain-card" id="domain-4">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 4</div>
+        <div class="domain-name">Security Audit</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">49 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed Checks (14 of 24)</div>
+      <div class="check-row pass">
+        <span class="check-id">4.1</span>
+        <div class="check-content">
+          <div class="check-name">JWT expiration</div>
+          <div class="check-evidence">15-min access tokens, 7-day refresh tokens, verify_exp=True</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.2</span>
+        <div class="check-content">
+          <div class="check-name">Refresh token rotation</div>
+          <div class="check-evidence">Old token blacklisted, new tokens issued, HttpOnly cookies</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.12</span>
+        <div class="check-content">
+          <div class="check-name">SQL injection prevention</div>
+          <div class="check-evidence">All queries use parameterized text() with bound parameters</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.13</span>
+        <div class="check-content">
+          <div class="check-name">XSS prevention</div>
+          <div class="check-evidence">Bleach sanitization, tag whitelist, javascript: URL blocking, null byte removal</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.14</span>
+        <div class="check-content">
+          <div class="check-name">CSRF protection</div>
+          <div class="check-evidence">Double-submit cookie, secrets.compare_digest() constant-time comparison</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.15</span>
+        <div class="check-content">
+          <div class="check-name">File upload validation</div>
+          <div class="check-evidence">MIME whitelist, extension validation, size limits, filename sanitization</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.16</span>
+        <div class="check-content">
+          <div class="check-name">Request size limits</div>
+          <div class="check-evidence">10MB max request size configured</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.17-4.18</span>
+        <div class="check-content">
+          <div class="check-name">TLS + HSTS</div>
+          <div class="check-evidence">Strict-Transport-Security: max-age=31536000; includeSubDomains</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.20</span>
+        <div class="check-content">
+          <div class="check-name">No hardcoded secrets</div>
+          <div class="check-evidence">All secrets via os.getenv(), .env in .gitignore</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.21</span>
+        <div class="check-content">
+          <div class="check-name">Security headers complete</div>
+          <div class="check-evidence">CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy</div>
+        </div>
+      </div>
+      <div class="check-row pass">
+        <span class="check-id">4.22</span>
+        <div class="check-content">
+          <div class="check-name">Auth rate limiting</div>
+          <div class="check-evidence">Login: 5/min, 20/hour. Refresh: 10/min. Tiered per-role limits</div>
+        </div>
+      </div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed Checks (10)</div>
+      <div class="check-row fail">
+        <span class="check-id">4.4</span>
+        <div class="check-content">
+          <div class="check-name">Account lockout after failed attempts</div>
+          <div class="check-evidence">No per-user failed login tracking. Only IP-level rate limiting exists</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.5</span>
+        <div class="check-content">
+          <div class="check-name">SSO/SAML integration</div>
+          <div class="check-evidence">No SAML 2.0, no OpenID Connect, no JIT provisioning</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.6</span>
+        <div class="check-content">
+          <div class="check-name">MFA enforcement</div>
+          <div class="check-evidence">mfa_enabled column exists but NOT enforced. No TOTP, no SMS 2FA, no WebAuthn</div>
+        </div>
+        <span class="check-severity sev-CRITICAL">Critical</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.11</span>
+        <div class="check-content">
+          <div class="check-name">API key scope enforcement</div>
+          <div class="check-evidence">ApiKey model has no scopes column. All keys inherit full user permissions</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.3</span>
+        <div class="check-content">
+          <div class="check-name">Password complexity requirements</div>
+          <div class="check-evidence">12-char minimum configured but not enforced on all endpoints. User invitation routes use 8-char minimum</div>
+        </div>
+        <span class="check-severity sev-MEDIUM">Medium</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.7</span>
+        <div class="check-content">
+          <div class="check-name">RBAC enforced on all endpoints</div>
+          <div class="check-evidence">RBAC framework exists but not uniformly applied. Many legacy routes bypass permission checks</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.8</span>
+        <div class="check-content">
+          <div class="check-name">Role escalation prevention</div>
+          <div class="check-evidence">No role change audit trail, no approval workflow, no self-upgrade prevention</div>
+        </div>
+        <span class="check-severity sev-HIGH">High</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.19</span>
+        <div class="check-content">
+          <div class="check-name">Encryption key separation</div>
+          <div class="check-evidence">DATA_ENCRYPTION_KEY falls back to SECRET_KEY if not set</div>
+        </div>
+        <span class="check-severity sev-MEDIUM">Medium</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.23</span>
+        <div class="check-content">
+          <div class="check-name">Admin IP restriction</div>
+          <div class="check-evidence">IP whitelist env vars likely empty in production</div>
+        </div>
+        <span class="check-severity sev-MEDIUM">Medium</span>
+      </div>
+      <div class="check-row fail">
+        <span class="check-id">4.24</span>
+        <div class="check-content">
+          <div class="check-name">Dependency vulnerability scan</div>
+          <div class="check-evidence">No automated pip audit in CI/CD</div>
+        </div>
+        <span class="check-severity sev-MEDIUM">Medium</span>
+      </div>
+    </div>
+    <div class="remediation-box">
+      <h4>Remediation &mdash; Est. 4-6 weeks</h4>
+      <ol>
+        <li><strong>Week 1:</strong> Account lockout (add failed_login_attempts, locked_until to User model)</li>
+        <li><strong>Week 1-2:</strong> TOTP MFA via pyotp library (enforce for admin roles)</li>
+        <li><strong>Week 2-3:</strong> Centralized @require_permission decorator applied to all routes</li>
+        <li><strong>Week 3-4:</strong> API key scopes (add scopes JSON column, scope validation middleware)</li>
+        <li><strong>Week 4-6:</strong> SAML 2.0 via python-saml or authlib</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 5 -->
+<div class="domain-card" id="domain-5">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 5</div>
+        <div class="domain-name">Onboarding &amp; Provisioning</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">30 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (3)</div>
+      <div class="check-row pass"><span class="check-id">5.3</span><div class="check-content"><div class="check-name">Role template assignment</div><div class="check-evidence">15+ pre-defined roles with permission seeds</div></div></div>
+      <div class="check-row pass"><span class="check-id">5.4</span><div class="check-content"><div class="check-name">Welcome email delivery</div><div class="check-evidence">Activation email sent post-user finalization</div></div></div>
+      <div class="check-row pass"><span class="check-id">5.6</span><div class="check-content"><div class="check-name">Subscription tier activation</div><div class="check-evidence">3 tiers (Starter/Pro/Enterprise), Stripe integration, seat-based pricing</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (5)</div>
+      <div class="check-row fail"><span class="check-id">5.9-5.12</span><div class="check-content"><div class="check-name">SAML/OIDC/JIT/SSO-enforced login</div><div class="check-evidence">No SAML, no OIDC, no JIT provisioning, no SSO-only mode</div></div><span class="check-severity sev-CRITICAL">Critical</span></div>
+      <div class="check-row fail"><span class="check-id">5.2</span><div class="check-content"><div class="check-name">SCIM provisioning</div><div class="check-evidence">No SCIM 2.0 endpoints; manual user creation only</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">5.8</span><div class="check-content"><div class="check-name">Agent config per org</div><div class="check-evidence">No Vapi assistant config templates; manual assistant creation</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">5.14</span><div class="check-content"><div class="check-name">Sample data cleanup</div><div class="check-evidence">Demo data in seed files; no production-mode cleanup script</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">5.16</span><div class="check-content"><div class="check-name">Training materials</div><div class="check-evidence">No onboarding docs, videos, or help center integration</div></div><span class="check-severity sev-HIGH">High</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 6 -->
+<div class="domain-card" id="domain-6">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 6</div>
+        <div class="domain-name">Performance &amp; Load Testing</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">55 / 100</span>
+      <span class="status-badge status-AT_RISK">At Risk</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (4)</div>
+      <div class="check-row pass"><span class="check-id">6.1</span><div class="check-content"><div class="check-name">Async endpoints</div><div class="check-evidence">Majority of routes use async def and BackgroundTasks</div></div></div>
+      <div class="check-row pass"><span class="check-id">6.6</span><div class="check-content"><div class="check-name">Connection pool</div><div class="check-evidence">QueuePool with 3+5 (max 8) connections, PgBouncer production support</div></div></div>
+      <div class="check-row pass"><span class="check-id">6.5</span><div class="check-content"><div class="check-name">Slow query logging</div><div class="check-evidence">500ms threshold with configurable SLOW_QUERY_THRESHOLD_MS</div></div></div>
+      <div class="check-row pass"><span class="check-id">6.9</span><div class="check-content"><div class="check-name">Webhook processing</div><div class="check-evidence">Vapi webhook returns 200 immediately; processes in background</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (4)</div>
+      <div class="check-row fail"><span class="check-id">6.7</span><div class="check-content"><div class="check-name">Index coverage</div><div class="check-evidence">No explicit indexes on frequently-queried FK columns</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">6.12-6.14</span><div class="check-content"><div class="check-name">AI agent performance</div><div class="check-evidence">No max concurrent sessions, no token budget tracking, no retry strategy</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">6.4</span><div class="check-content"><div class="check-name">Rate limiting per API client</div><div class="check-evidence">No global rate limiter for Salesforce sync; no per-client API rate limits</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">6.1-6.2</span><div class="check-content"><div class="check-name">p95/p99 under load</div><div class="check-evidence">Cannot verify without live load testing</div></div><span class="check-severity sev-MEDIUM">Medium</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 7 -->
+<div class="domain-card" id="domain-7">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 7</div>
+        <div class="domain-name">Integration Health</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">30 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (3)</div>
+      <div class="check-row pass"><span class="check-id">7.8</span><div class="check-content"><div class="check-name">SOQL query performance</div><div class="check-evidence">Field discovery via SfUserSchema.fields; query builder exists</div></div></div>
+      <div class="check-row pass"><span class="check-id">7.14</span><div class="check-content"><div class="check-name">Webhook pipeline</div><div class="check-evidence">Vapi webhook HMAC-authenticated; asynchronous processing</div></div></div>
+      <div class="check-row pass"><span class="check-id">7.16</span><div class="check-content"><div class="check-name">Email send functional</div><div class="check-evidence">Email send via Graph API; receive via Gmail API polling</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (5)</div>
+      <div class="check-row fail"><span class="check-id">7.1-7.6</span><div class="check-content"><div class="check-name">LOS integration (BytePro/Encompass)</div><div class="check-evidence"><strong>No LOS integration exists.</strong> No Encompass REST API, no MISMO XML, no bidirectional sync</div></div><span class="check-severity sev-CRITICAL">Critical</span></div>
+      <div class="check-row fail"><span class="check-id">7.7</span><div class="check-content"><div class="check-name">Salesforce OAuth refresh</div><div class="check-evidence">refresh_token_encrypted stored but no auto-refresh scheduler</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">7.9</span><div class="check-content"><div class="check-name">Salesforce Bulk API</div><div class="check-evidence">No Bulk API 2.0; single-record sync only</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">7.11</span><div class="check-content"><div class="check-name">Telephony credentials</div><div class="check-evidence">Telnyx API key invalid (Feb 2026). No credential rotation schedule</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">7.18</span><div class="check-content"><div class="check-name">Email unsubscribe</div><div class="check-evidence">No List-Unsubscribe header, no CAN-SPAM compliance headers</div></div><span class="check-severity sev-HIGH">High</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 8 -->
+<div class="domain-card" id="domain-8">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 8</div>
+        <div class="domain-name">Disaster Recovery</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">15 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (1)</div>
+      <div class="check-row pass"><span class="check-id">8.6</span><div class="check-content"><div class="check-name">Queue persistence across restart</div><div class="check-evidence">Sync queue stored in DB; survives process restart</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (6)</div>
+      <div class="check-row fail"><span class="check-id">8.1-8.4</span><div class="check-content"><div class="check-name">Backup schedule / restore / PITR / encryption</div><div class="check-evidence"><strong>No pg_dump, no WAL archiving, no restore runbook, no backup encryption.</strong> Railway auto-backup only (unverified)</div></div><span class="check-severity sev-CRITICAL">Critical</span></div>
+      <div class="check-row fail"><span class="check-id">8.5</span><div class="check-content"><div class="check-name">Database failover</div><div class="check-evidence">No hot standby; Railway ~15 min failover SLA; no read replica promotion</div></div><span class="check-severity sev-CRITICAL">Critical</span></div>
+      <div class="check-row fail"><span class="check-id">8.11</span><div class="check-content"><div class="check-name">GDPR/CCPA data deletion</div><div class="check-evidence">No hard delete capability; soft delete only (is_active=False). No PII purge endpoint</div></div><span class="check-severity sev-CRITICAL">Critical</span></div>
+      <div class="check-row fail"><span class="check-id">8.12</span><div class="check-content"><div class="check-name">RPO/RTO documented</div><div class="check-evidence">No DR runbook. RPO estimated 24 hours. RTO unclear</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">8.7-8.8</span><div class="check-content"><div class="check-name">Graceful degradation</div><div class="check-evidence">No circuit breakers for external services (Vapi, Salesforce)</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">8.9-8.10</span><div class="check-content"><div class="check-name">Data retention / archival</div><div class="check-evidence">No retention rules; logs and emails kept indefinitely</div></div><span class="check-severity sev-MEDIUM">Medium</span></div>
+    </div>
+    <div class="remediation-box">
+      <h4>Remediation &mdash; Est. 2 weeks (HIGHEST PRIORITY)</h4>
+      <ol>
+        <li>Implement hourly WAL archiving to S3</li>
+        <li>Monthly restore drill with documented runbook</li>
+        <li>Add /api/users/{id}/delete-all-data with cascading PII purge</li>
+        <li>Implement data retention policies (logs: 90 days, emails: 1 year)</li>
+        <li>Add circuit breakers for all external service calls</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 9 -->
+<div class="domain-card" id="domain-9">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 9</div>
+        <div class="domain-name">Analytics &amp; Reporting</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">35 / 100</span>
+      <span class="status-badge status-BLOCKED">Blocked</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (3)</div>
+      <div class="check-row pass"><span class="check-id">9.1-9.2</span><div class="check-content"><div class="check-name">Pipeline report / LO scorecard</div><div class="check-evidence">Scorecard routes with units, volume, conversion rates</div></div></div>
+      <div class="check-row pass"><span class="check-id">9.3</span><div class="check-content"><div class="check-name">SLA compliance report</div><div class="check-evidence">SLA milestone tracking on Loan model with target days</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (4)</div>
+      <div class="check-row fail"><span class="check-id">9.5-9.7</span><div class="check-content"><div class="check-name">Access controls on reports</div><div class="check-evidence">organization_id filtering not verified on report endpoints</div></div><span class="check-severity sev-CRITICAL">Critical</span></div>
+      <div class="check-row fail"><span class="check-id">9.8-9.10</span><div class="check-content"><div class="check-name">PDF/Excel/CSV export</div><div class="check-evidence">No export functionality; reports return JSON only</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">9.11</span><div class="check-content"><div class="check-name">Scheduled report delivery</div><div class="check-evidence">No scheduled email delivery of reports</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">9.12-9.14</span><div class="check-content"><div class="check-name">Dashboard performance</div><div class="check-evidence">Cannot verify without live testing</div></div><span class="check-severity sev-MEDIUM">Medium</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 10 -->
+<div class="domain-card" id="domain-10">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 10</div>
+        <div class="domain-name">Migration &amp; Data Import</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">35 / 100</span>
+      <span class="status-badge status-AT_RISK">At Risk</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (3)</div>
+      <div class="check-row pass"><span class="check-id">10.1</span><div class="check-content"><div class="check-name">CSV/Excel import</div><div class="check-evidence">data_import_routes.py and auto_import_routes.py support CSV/Excel via pandas</div></div></div>
+      <div class="check-row pass"><span class="check-id">10.2</span><div class="check-content"><div class="check-name">Field mapping (partial)</div><div class="check-evidence">suggest_column_mappings() with 40+ column patterns for leads</div></div></div>
+      <div class="check-row pass"><span class="check-id">10.5</span><div class="check-content"><div class="check-name">Dry-run preview (partial)</div><div class="check-evidence">Preview endpoint returns parsed rows, headers, data types</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (5)</div>
+      <div class="check-row fail"><span class="check-id">10.9</span><div class="check-content"><div class="check-name">Encompass migration</div><div class="check-evidence">No Encompass integration, no MISMO XML parser</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">10.7</span><div class="check-content"><div class="check-name">Import rollback</div><div class="check-evidence">No transaction wrapping, no audit trail, no undo capability</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">10.4</span><div class="check-content"><div class="check-name">Duplicate detection during import</div><div class="check-evidence">DuplicatePair model exists but not integrated into import flow</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">10.8</span><div class="check-content"><div class="check-name">Large file handling</div><div class="check-evidence">File loaded entirely into memory (pandas DataFrame); would crash on 100MB+</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">10.12</span><div class="check-content"><div class="check-name">Import audit trail</div><div class="check-evidence">No DataImportLog table; no record of who imported what</div></div><span class="check-severity sev-HIGH">High</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 11 -->
+<div class="domain-card" id="domain-11">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-F">F</span>
+      <div>
+        <div class="domain-num">DOMAIN 11</div>
+        <div class="domain-name">API Gateway &amp; Dev Experience</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--red)">45 / 100</span>
+      <span class="status-badge status-AT_RISK">At Risk</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (4)</div>
+      <div class="check-row pass"><span class="check-id">11.1</span><div class="check-content"><div class="check-name">OpenAPI/Swagger auto-generated</div><div class="check-evidence">/docs (Swagger UI), /redoc (ReDoc), version 4.0.0</div></div></div>
+      <div class="check-row pass"><span class="check-id">11.4</span><div class="check-content"><div class="check-name">API key provisioning</div><div class="check-evidence">ApiKey model with user_id, organization_id, created_at, last_used_at</div></div></div>
+      <div class="check-row pass"><span class="check-id">11.5</span><div class="check-content"><div class="check-name">API versioning</div><div class="check-evidence">API-Version header, RFC 8594 deprecation support</div></div></div>
+      <div class="check-row pass"><span class="check-id">11.6</span><div class="check-content"><div class="check-name">Webhook support (basic)</div><div class="check-evidence">Multiple webhook handlers (Vapi, Stripe, Telnyx, CRM)</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (5)</div>
+      <div class="check-row fail"><span class="check-id">11.11</span><div class="check-content"><div class="check-name">SDK availability</div><div class="check-evidence">No published SDKs (Python, JavaScript, etc.)</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">11.9</span><div class="check-content"><div class="check-name">Developer sandbox</div><div class="check-evidence">No staging/sandbox environment</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">11.10</span><div class="check-content"><div class="check-name">API changelog</div><div class="check-evidence">No version history or breaking change documentation</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">11.12</span><div class="check-content"><div class="check-name">Postman collection</div><div class="check-evidence">No importable API collection</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">11.3</span><div class="check-content"><div class="check-name">Code examples</div><div class="check-evidence">Auto-generated docs only; no hand-written examples</div></div><span class="check-severity sev-MEDIUM">Medium</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Domain 12 -->
+<div class="domain-card" id="domain-12">
+  <div class="domain-card-header" onclick="this.parentElement.classList.toggle('open')">
+    <div class="left">
+      <span class="grade-badge grade-D">D</span>
+      <div>
+        <div class="domain-num">DOMAIN 12</div>
+        <div class="domain-name">White-Label &amp; Theming</div>
+      </div>
+    </div>
+    <div class="right">
+      <span class="score-num" style="color:var(--orange)">62 / 100</span>
+      <span class="status-badge status-AT_RISK">At Risk</span>
+      <span class="chevron">&#9660;</span>
+    </div>
+  </div>
+  <div class="domain-card-body">
+    <div class="checks-section">
+      <div class="checks-section-title passed">&#10003; Passed (5)</div>
+      <div class="check-row pass"><span class="check-id">12.1</span><div class="check-content"><div class="check-name">Logo upload/display</div><div class="check-evidence">BrandAssets model: logo_url, logo_dark_url, icon_url, favicon_url with SSRF validation</div></div></div>
+      <div class="check-row pass"><span class="check-id">12.2</span><div class="check-content"><div class="check-name">Color customization</div><div class="check-evidence">BrandColors: primary, secondary, accent, success, warning, error, text, background, header, sidebar</div></div></div>
+      <div class="check-row pass"><span class="check-id">12.3</span><div class="check-content"><div class="check-name">Font customization</div><div class="check-evidence">BrandTypography: heading_font, body_font, weights, base_font_size, line_height</div></div></div>
+      <div class="check-row pass"><span class="check-id">12.4</span><div class="check-content"><div class="check-name">Favicon customization</div><div class="check-evidence">favicon_url field in BrandAssets</div></div></div>
+      <div class="check-row pass"><span class="check-id">12.9</span><div class="check-content"><div class="check-name">Custom domain support</div><div class="check-evidence">Full CRUD endpoints, DNS verification via dnspython, dynamic CORS</div></div></div>
+    </div>
+    <div class="checks-section">
+      <div class="checks-section-title failed">&#10007; Failed (4)</div>
+      <div class="check-row fail"><span class="check-id">12.8</span><div class="check-content"><div class="check-name">Report/PDF branding</div><div class="check-evidence">DocumentBranding model defined but NO report generation code uses it</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">12.12</span><div class="check-content"><div class="check-name">Branding leak scan</div><div class="check-evidence">No automated test to verify zero &ldquo;Perennia&rdquo; references in white-labeled output</div></div><span class="check-severity sev-HIGH">High</span></div>
+      <div class="check-row fail"><span class="check-id">12.6</span><div class="check-content"><div class="check-name">SMS sender customization</div><div class="check-evidence">All SMS from shared number; no per-org sender ID</div></div><span class="check-severity sev-MEDIUM">Medium</span></div>
+      <div class="check-row fail"><span class="check-id">12.7</span><div class="check-content"><div class="check-name">Portal branding</div><div class="check-evidence">4 microsite themes exist; no admin UI to configure per-org</div></div><span class="check-severity sev-MEDIUM">Medium</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== CRITICAL FAILURES SUMMARY ====================== -->
+<h2 class="section-title" style="color:var(--red)">Critical Failures Summary (31 total)</h2>
+<div class="crit-table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Priority</th>
+        <th>Check IDs</th>
+        <th>Domain</th>
+        <th>Description</th>
+        <th>Est. Effort</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><span class="status-badge status-BLOCKED">P0</span></td><td>8.1-8.5</td><td>DR</td><td>No backup/restore/failover infrastructure</td><td>2 weeks</td></tr>
+      <tr><td><span class="status-badge status-BLOCKED">P0</span></td><td>1.1, 1.3-1.6</td><td>Tenant</td><td>7 tables missing organization_id + RLS</td><td>3 days</td></tr>
+      <tr><td><span class="status-badge status-BLOCKED">P0</span></td><td>1.11-1.13</td><td>Tenant</td><td>S3 storage not tenant-scoped</td><td>3 days</td></tr>
+      <tr><td><span class="status-badge status-BLOCKED">P0</span></td><td>4.4</td><td>Security</td><td>No account lockout after failed login attempts</td><td>1 day</td></tr>
+      <tr><td><span class="status-badge status-BLOCKED">P0</span></td><td>4.6</td><td>Security</td><td>MFA not implemented (only flag exists)</td><td>3 days</td></tr>
+      <tr><td><span class="status-badge status-BLOCKED">P0</span></td><td>3.19-3.20</td><td>Data</td><td>SSN not masked in API responses; PII in logs</td><td>2 days</td></tr>
+      <tr><td><span class="status-badge status-AT_RISK">P1</span></td><td>2.1-2.6</td><td>Compliance</td><td>No TRID automation (LE/CD deadlines, tolerances)</td><td>2 weeks</td></tr>
+      <tr><td><span class="status-badge status-AT_RISK">P1</span></td><td>2.7-2.8</td><td>Compliance</td><td>No adverse action notice system</td><td>1 week</td></tr>
+      <tr><td><span class="status-badge status-AT_RISK">P1</span></td><td>4.5</td><td>Security</td><td>No SAML/OIDC enterprise SSO</td><td>3 weeks</td></tr>
+      <tr><td><span class="status-badge status-AT_RISK">P1</span></td><td>7.1-7.6</td><td>Integration</td><td>No LOS integration (Encompass/BytePro)</td><td>6 weeks</td></tr>
+      <tr><td><span class="status-badge status-AT_RISK">P1</span></td><td>8.11</td><td>DR</td><td>No GDPR/CCPA data deletion capability</td><td>1 week</td></tr>
+      <tr><td><span class="status-badge status-AT_RISK">P1</span></td><td>2.15-2.17</td><td>Compliance</td><td>No HMDA reporting/export</td><td>2 weeks</td></tr>
+      <tr><td style="color:var(--text-muted)">P2</td><td>1.14-1.16</td><td>Tenant</td><td>AI context and conversation memory not tenant-scoped</td><td>3 days</td></tr>
+      <tr><td style="color:var(--text-muted)">P2</td><td>9.5-9.7</td><td>Analytics</td><td>Report access controls not verified for tenant scoping</td><td>3 days</td></tr>
+      <tr><td style="color:var(--text-muted)">P2</td><td>4.7, 4.11</td><td>Security</td><td>RBAC not enforced on all endpoints; API keys have no scopes</td><td>2 weeks</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ====================== REMEDIATION ROADMAP ====================== -->
+<h2 class="section-title">Remediation Roadmap</h2>
+
+<div class="phase-card phase-1">
+  <div class="phase-header">
+    <div class="phase-num">1</div>
+    <div class="phase-title">Survival &mdash; Block Enterprise Data Loss</div>
+    <div class="phase-weeks">Weeks 1-2</div>
+  </div>
+  <div class="phase-body">
+    <table>
+      <thead><tr><th>Task</th><th>Domain</th><th>Effort</th><th>Impact</th></tr></thead>
+      <tbody>
+        <tr><td>Implement hourly WAL archiving + S3 backup</td><td>D8</td><td>3 days</td><td>Prevents total data loss</td></tr>
+        <tr><td>Add organization_id to 7 missing models + extend RLS</td><td>D1</td><td>3 days</td><td>Closes cross-tenant data leak</td></tr>
+        <tr><td>Implement S3 tenant-prefix scoping</td><td>D1</td><td>2 days</td><td>Isolates document storage</td></tr>
+        <tr><td>Add SSN masking in API responses</td><td>D3</td><td>1 day</td><td>Prevents PII exposure</td></tr>
+        <tr><td>Add PII redaction to logging</td><td>D3</td><td>1 day</td><td>Prevents PII in logs</td></tr>
+        <tr><td>Implement account lockout (5 attempts &rarr; lock)</td><td>D4</td><td>1 day</td><td>Prevents brute-force attacks</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="phase-card phase-2">
+  <div class="phase-header">
+    <div class="phase-num">2</div>
+    <div class="phase-title">Security Hardening</div>
+    <div class="phase-weeks">Weeks 3-6</div>
+  </div>
+  <div class="phase-body">
+    <table>
+      <thead><tr><th>Task</th><th>Domain</th><th>Effort</th><th>Impact</th></tr></thead>
+      <tbody>
+        <tr><td>Implement TOTP MFA for admin roles</td><td>D4</td><td>3 days</td><td>Enterprise auth requirement</td></tr>
+        <tr><td>Centralized @require_permission decorator</td><td>D4</td><td>1 week</td><td>Consistent RBAC enforcement</td></tr>
+        <tr><td>GDPR/CCPA data deletion endpoint</td><td>D8</td><td>1 week</td><td>Regulatory requirement</td></tr>
+        <tr><td>Add AI context tenant scoping</td><td>D1</td><td>3 days</td><td>Prevents AI memory leakage</td></tr>
+        <tr><td>Background worker tenant context</td><td>D1</td><td>2 days</td><td>Prevents worker data leaks</td></tr>
+        <tr><td>Set DATA_ENCRYPTION_KEY (separate from SECRET_KEY)</td><td>D4</td><td>1 day</td><td>Key separation best practice</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="phase-card phase-3">
+  <div class="phase-header">
+    <div class="phase-num">3</div>
+    <div class="phase-title">Compliance</div>
+    <div class="phase-weeks">Weeks 7-12</div>
+  </div>
+  <div class="phase-body">
+    <table>
+      <thead><tr><th>Task</th><th>Domain</th><th>Effort</th><th>Impact</th></tr></thead>
+      <tbody>
+        <tr><td>Build TRID SLA engine (LE/CD deadlines)</td><td>D2</td><td>2 weeks</td><td>Mortgage regulatory requirement</td></tr>
+        <tr><td>Adverse action notice auto-trigger</td><td>D2</td><td>1 week</td><td>ECOA compliance</td></tr>
+        <tr><td>HMDA LAR export endpoint</td><td>D2</td><td>2 weeks</td><td>CFPB reporting requirement</td></tr>
+        <tr><td>State-specific disclosure automation</td><td>D2</td><td>1 week</td><td>Multi-state compliance</td></tr>
+        <tr><td>SAML 2.0 via python-saml/authlib</td><td>D4/D5</td><td>3 weeks</td><td>Enterprise SSO requirement</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="phase-card phase-4">
+  <div class="phase-header">
+    <div class="phase-num">4</div>
+    <div class="phase-title">Integration &amp; Platform</div>
+    <div class="phase-weeks">Weeks 13-20</div>
+  </div>
+  <div class="phase-body">
+    <table>
+      <thead><tr><th>Task</th><th>Domain</th><th>Effort</th><th>Impact</th></tr></thead>
+      <tbody>
+        <tr><td>Encompass REST API integration</td><td>D7</td><td>6 weeks</td><td>Largest single gap</td></tr>
+        <tr><td>PDF/Excel report export with branding</td><td>D9/D12</td><td>2 weeks</td><td>Enterprise reporting</td></tr>
+        <tr><td>Import rollback + audit trail</td><td>D10</td><td>1 week</td><td>Data migration safety</td></tr>
+        <tr><td>Python SDK from OpenAPI spec</td><td>D11</td><td>2 weeks</td><td>Developer experience</td></tr>
+        <tr><td>Developer sandbox environment</td><td>D11</td><td>1 week</td><td>Partner integrations</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ====================== COMPARISON ====================== -->
+<h2 class="section-title">Comparison to Previous Audit (2026-02-16)</h2>
+<div class="comparison-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Domain</th>
+        <th>Previous</th>
+        <th>Current</th>
+        <th>Change</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>1. Multi-Tenant</td><td>16</td><td>35</td><td><span class="change-badge change-up">+19</span></td><td>P0 RLS + TenantContext work recognized</td></tr>
+      <tr><td>2. Compliance</td><td>27</td><td>30</td><td><span class="change-badge change-up">+3</span></td><td>TCPA compliance + audit trail credited</td></tr>
+      <tr><td>3. Data Quality</td><td>49</td><td>52</td><td><span class="change-badge change-up">+3</span></td><td>Encryption improvements credited</td></tr>
+      <tr><td>4. Security</td><td>49</td><td>49</td><td><span class="change-badge change-same">0</span></td><td>Same blockers (lockout, MFA, SSO)</td></tr>
+      <tr><td>5. Onboarding</td><td>49</td><td>30</td><td><span class="change-badge change-down">-19</span></td><td>Deeper audit found more SSO gaps</td></tr>
+      <tr><td>6. Performance</td><td>55</td><td>55</td><td><span class="change-badge change-same">0</span></td><td>Unchanged</td></tr>
+      <tr><td>7. Integration</td><td>35</td><td>30</td><td><span class="change-badge change-down">-5</span></td><td>Credential issues identified</td></tr>
+      <tr><td>8. DR</td><td>25</td><td>15</td><td><span class="change-badge change-down">-10</span></td><td>GDPR gap newly identified</td></tr>
+      <tr><td>9. Analytics</td><td>49</td><td>35</td><td><span class="change-badge change-down">-14</span></td><td>Tenant scoping gap on reports</td></tr>
+      <tr><td>10. Migration</td><td>40</td><td>35</td><td><span class="change-badge change-down">-5</span></td><td>Rollback/audit gaps identified</td></tr>
+      <tr><td>11. API Gateway</td><td>55</td><td>45</td><td><span class="change-badge change-down">-10</span></td><td>SDK/sandbox gaps weighted more</td></tr>
+      <tr><td>12. White-Label</td><td>65</td><td>62</td><td><span class="change-badge change-down">-3</span></td><td>Report branding not wired</td></tr>
+      <tr style="font-weight:700; border-top: 2px solid var(--border)"><td>Overall</td><td>42</td><td>39</td><td><span class="change-badge change-down">-3</span></td><td>Deeper audit revealed more gaps</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</div><!-- /container -->
+
+<footer class="footer">
+  Report generated by 5 parallel audit agents analyzing 180+ source files across backend, frontend, database models, middleware, services, and route handlers.<br>
+  &copy; 2026 Perennia AI &bull; Enterprise Readiness Audit &bull; Generated 2026-02-19
+</footer>
+
+<script>
+// Open Domain 1 by default, rest closed
+// Toggle handled by inline onclick
+</script>
+
+</body>
+</html>

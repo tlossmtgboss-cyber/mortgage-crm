@@ -43,9 +43,11 @@ class EmailIntake(Base):
     __table_args__ = (
         Index('ix_email_intakes_match_status', 'match_status'),
         Index('ix_email_intakes_received_at', 'received_at'),
+        Index('ix_email_intakes_organization_id', 'organization_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     from_email = Column(String, nullable=False, index=True)
     to_email = Column(String)
     cc_emails = Column(String)  # Comma-separated
@@ -85,9 +87,11 @@ class AttachmentIntake(Base):
     __table_args__ = (
         Index('ix_attachment_intakes_classification_status', 'classification_status'),
         Index('ix_attachment_intakes_email_intake_id', 'email_intake_id'),
+        Index('ix_attachment_intakes_organization_id', 'organization_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     email_intake_id = Column(Integer, ForeignKey("email_intakes.id"), nullable=False)
 
     # File info

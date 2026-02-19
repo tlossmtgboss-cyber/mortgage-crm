@@ -103,18 +103,21 @@ class PerenniaS3Service:
         """
         Generate a unique storage key for a document.
 
-        Format: org/{org_id}/documents/{loan_id}/{folder}/{uuid}.{extension}
+        Format: org-{org_id}/documents/{loan_id}/{folder}/{uuid}.{extension}
         Legacy (no org): documents/{loan_id}/{folder}/{uuid}.{extension}
 
         Args:
             loan_id: Loan ID for organization
             file_name: Original file name (for extension)
             folder: Subfolder (originals, compressed, previews)
-            organization_id: Organization ID for tenant isolation
+            organization_id: Organization ID for tenant isolation (required for new uploads)
 
         Returns:
             Storage key string
         """
+        if not organization_id:
+            logger.warning("generate_storage_key called without organization_id - using legacy path")
+
         # Extract extension
         ext = file_name.rsplit('.', 1)[-1].lower() if '.' in file_name else 'bin'
 
@@ -127,7 +130,7 @@ class PerenniaS3Service:
         unique_id = uuid.uuid4().hex
 
         # Org-prefixed key for tenant isolation
-        org_prefix = f"org/{organization_id}/" if organization_id else ""
+        org_prefix = f"org-{organization_id}/" if organization_id else ""
         return f"{org_prefix}documents/{loan_id}/{folder}/{unique_id}.{ext}"
 
     def get_presigned_upload_url(
@@ -632,21 +635,24 @@ class PerenniaS3Service:
         """
         Generate storage key for document intake (temp storage).
 
-        Format: org/{org_id}/intake/{email_intake_id}/{uuid}.{extension}
+        Format: org-{org_id}/intake/{email_intake_id}/{uuid}.{extension}
         Legacy (no org): intake/{email_intake_id}/{uuid}.{extension}
 
         Args:
             email_intake_id: Email intake record ID
             filename: Original filename
-            organization_id: Organization ID for tenant isolation
+            organization_id: Organization ID for tenant isolation (required for new uploads)
 
         Returns:
             Storage key string
         """
+        if not organization_id:
+            logger.warning("generate_intake_key called without organization_id - using legacy path")
+
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
         unique_id = uuid.uuid4().hex
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-        org_prefix = f"org/{organization_id}/" if organization_id else ""
+        org_prefix = f"org-{organization_id}/" if organization_id else ""
         return f"{org_prefix}intake/{email_intake_id}/{timestamp}_{unique_id}.{ext}"
 
     def generate_document_key(
@@ -660,7 +666,7 @@ class PerenniaS3Service:
         """
         Generate permanent storage key for classified document.
 
-        Format: org/{org_id}/documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
+        Format: org-{org_id}/documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
         Legacy (no org): documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
 
         Args:
@@ -668,23 +674,28 @@ class PerenniaS3Service:
             loan_id: Loan ID (optional)
             doc_type: Document type (e.g., 'W2', 'BANK_STATEMENT')
             filename: Original filename
-            organization_id: Organization ID for tenant isolation
+            organization_id: Organization ID for tenant isolation (required for new uploads)
 
         Returns:
             Storage key string
         """
+        if not organization_id:
+            logger.warning("generate_document_key called without organization_id - using legacy path")
+
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
         unique_id = uuid.uuid4().hex
 
         borrower_folder = str(borrower_id) if borrower_id else 'unassigned'
         loan_folder = str(loan_id) if loan_id else 'general'
 
-        org_prefix = f"org/{organization_id}/" if organization_id else ""
+        org_prefix = f"org-{organization_id}/" if organization_id else ""
         return f"{org_prefix}documents/{borrower_folder}/{loan_folder}/{doc_type.lower()}/{unique_id}.{ext}"
 
     def validate_org_access(self, storage_key: str, organization_id: int) -> bool:
         """
         Verify the storage key belongs to the requesting organization.
+
+        Checks both new (org-{id}/) and old (org/{id}/) prefix formats.
 
         Args:
             storage_key: S3 object key to validate
@@ -695,31 +706,38 @@ class PerenniaS3Service:
         """
         if not organization_id:
             return False
-        expected_prefix = f"org/{organization_id}/"
-        # Allow access to org-prefixed keys that match, and legacy keys without org prefix
-        if storage_key.startswith("org/"):
-            return storage_key.startswith(expected_prefix)
-        # Legacy keys (no org prefix) — allow access for backward compatibility
+        # Check new format (org-{id}/) and legacy format (org/{id}/)
+        new_prefix = f"org-{organization_id}/"
+        legacy_prefix = f"org/{organization_id}/"
+        if storage_key.startswith("org-") or storage_key.startswith("org/"):
+            return storage_key.startswith(new_prefix) or storage_key.startswith(legacy_prefix)
+        # Legacy keys (no org prefix) -- allow access for backward compatibility
         return True
 
     def list_loan_documents(
         self,
         loan_id: int,
         folder: Optional[str] = None,
-        max_keys: int = 100
+        max_keys: int = 100,
+        organization_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        List all documents for a loan.
+        List all documents for a loan, scoped by organization.
 
         Args:
             loan_id: Loan ID
             folder: Optional subfolder (originals, compressed, previews)
             max_keys: Maximum number of keys to return
+            organization_id: Organization ID for tenant-scoped listing
 
         Returns:
             Dict with list of document keys
         """
-        prefix = f"documents/{loan_id}/"
+        if organization_id:
+            prefix = f"org-{organization_id}/documents/{loan_id}/"
+        else:
+            logger.warning("list_loan_documents called without organization_id - listing legacy path only")
+            prefix = f"documents/{loan_id}/"
         if folder:
             prefix += f"{folder}/"
 

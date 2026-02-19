@@ -239,6 +239,17 @@ from .estimate import (
 # Platform contract models
 from .platform_contract import PlatformContract
 
+# Compliance models (TRID, ECOA, HMDA)
+from .compliance import (
+    LoanFee,
+    DisclosureEvent,
+    AdverseActionNotice,
+    ComplianceAlert,
+    ToleranceCategory,
+    DisclosureType,
+    AdverseActionReason,
+)
+
 
 __all__ = [
     # =====================
@@ -457,4 +468,15 @@ __all__ = [
     # Platform Contracts
     # =====================
     "PlatformContract",
+
+    # =====================
+    # Compliance (TRID, ECOA, HMDA)
+    # =====================
+    "LoanFee",
+    "DisclosureEvent",
+    "AdverseActionNotice",
+    "ComplianceAlert",
+    "ToleranceCategory",
+    "DisclosureType",
+    "AdverseActionReason",
 ]

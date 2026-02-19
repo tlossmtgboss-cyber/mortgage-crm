@@ -71,10 +71,11 @@ from typing import Any, Dict, List, Optional
 import enum
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from utils.pii_mask import mask_email, mask_phone
+from schemas.pii_masking import sanitize_step_data
 
 logger = logging.getLogger(__name__)
 
@@ -281,7 +282,11 @@ class CoborrowerInvitationResponse(BaseModel):
 
 
 class BorrowerApplicationResponse(BaseModel):
-    """Full application response schema"""
+    """Full application response schema.
+
+    Enterprise Readiness 3.19: ssn_encrypted and co_ssn_encrypted are
+    intentionally excluded.  Only masked last-4 is exposed via ssn_display.
+    """
     id: int
     public_token: str
     status: str
@@ -299,6 +304,8 @@ class BorrowerApplicationResponse(BaseModel):
     prequalification_rate: Optional[float] = None
     prequalification_monthly_payment: Optional[float] = None
     credit_auth_captured: bool
+    # Masked SSN display: ***-**-1234 (derived from credit_auth_ssn_last4)
+    ssn_display: Optional[str] = None
     expires_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
@@ -330,6 +337,12 @@ class ApplicationPublicResponse(BaseModel):
     lo_email: Optional[str] = None
     lo_phone: Optional[str] = None
     company_name: Optional[str] = None
+
+    @field_validator('step_data', mode='before')
+    @classmethod
+    def sanitize_pii_from_step_data(cls, v):
+        """Enterprise Readiness 3.19: Strip SSN/PII from step_data before serialization"""
+        return sanitize_step_data(v)
 
     class Config:
         from_attributes = True
@@ -714,12 +727,15 @@ async def get_application_by_token(
     owner = db.query(User).filter(User.id == application.owner_id).first()
     org = db.query(Organization).filter(Organization.id == application.organization_id).first() if application.organization_id else None
 
+    # Enterprise Readiness Check 3.19: Sanitize step_data to strip raw SSN values
+    safe_step_data = sanitize_step_data(application.step_data)
+
     return ApplicationPublicResponse(
         status=application.status.value if hasattr(application.status, 'value') else str(application.status),
         current_step=application.current_step.value if hasattr(application.current_step, 'value') else str(application.current_step),
         progress_percentage=application.progress_percentage or 0,
         completed_steps=application.completed_steps or [],
-        step_data=application.step_data or {},
+        step_data=safe_step_data,
         borrower_first_name=application.borrower_first_name,
         borrower_last_name=application.borrower_last_name,
         borrower_email=application.borrower_email,
@@ -1384,7 +1400,7 @@ async def get_concierge_status(
         return {
             "status": "success",
             "completion": status,
-            "extracted_data": step_data,
+            "extracted_data": sanitize_step_data(step_data),
         }
 
     except Exception as e:

@@ -127,6 +127,17 @@ class User(Base):
     # Activity tracking
     last_activity_at = Column(DateTime, nullable=True)
 
+    # Account lockout (enterprise security - Check 4.4)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime, nullable=True)
+    last_failed_login_at = Column(DateTime, nullable=True)
+
+    # MFA (enterprise security - Check 4.6)
+    mfa_secret = Column(String, nullable=True)  # TOTP secret (encrypted in production)
+    mfa_enabled = Column(Boolean, default=False)
+    mfa_backup_codes = Column(JSON, nullable=True)  # Hashed backup codes
+    mfa_enabled_at = Column(DateTime, nullable=True)
+
     # Relationships
     branch = relationship("Branch", back_populates="users")
     organization = relationship("Organization", back_populates="users")
@@ -146,6 +157,11 @@ class ApiKey(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_used_at = Column(DateTime, nullable=True)
+
+    # API key scopes (enterprise security - Check 4.11)
+    scopes = Column(JSON, default=list)  # e.g. ["read:leads", "write:leads", "read:loans"]
+    description = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
 
 
 class UserSettings(Base):

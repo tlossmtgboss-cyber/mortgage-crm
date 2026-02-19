@@ -83,6 +83,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Install PII redaction filter on root logger to prevent SSN/PII leakage in logs
+# Enterprise Readiness Check 3.20 - must be installed before any PII processing
+try:
+    from middleware.pii_log_filter import install_pii_filter
+    install_pii_filter()
+except Exception as _pii_err:
+    logger.warning(f"PII log filter not installed: {_pii_err}")
+
 # Suppress noisy loggers in production
 if _log_level == logging.WARNING:
     logging.getLogger("apscheduler").setLevel(logging.WARNING)

@@ -4,6 +4,11 @@ Loan Scorecard Report Routes
 Extracted from inline_legacy_routes.py.
 Provides comprehensive loan scorecard metrics including conversion metrics,
 funding totals, and referral source breakdown.
+
+Enterprise Readiness (Check 9.5-9.7):
+All report queries include organization_id filtering to enforce multi-tenant
+data isolation. The current user's organization_id is extracted from the
+authenticated user object and applied to every database query.
 """
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -28,6 +33,9 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
         """
         Get comprehensive loan scorecard metrics matching the Loan Scorecard Report format.
         Includes conversion metrics, funding totals, and referral source breakdown.
+
+        All queries are scoped to the current user's organization_id for
+        multi-tenant data isolation (Enterprise Readiness Check 9.5-9.7).
         """
         try:
             if start_date and end_date:
@@ -46,76 +54,100 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             raise HTTPException(status_code=500, detail="Error processing scorecard data")
 
         try:
+            # Extract organization_id for tenant isolation (Check 9.5-9.7)
+            org_id = getattr(current_user, 'organization_id', None)
+
             # LOAN STARTS VS. ACTIVITY TOTALS
             try:
-                all_leads = db.query(Lead).filter(
+                lead_query = db.query(Lead).filter(
                     Lead.owner_id == current_user.id,
                     Lead.created_at >= start,
                     Lead.created_at <= end
-                ).all()
+                )
+                if org_id is not None:
+                    lead_query = lead_query.filter(Lead.organization_id == org_id)
+                all_leads = lead_query.all()
             except Exception:
                 all_leads = []
 
             starts_count = len(all_leads)
 
             try:
-                apps_count = db.query(func.count(Loan.id)).filter(
+                apps_query = db.query(func.count(Loan.id)).filter(
                     Loan.loan_officer_id == current_user.id,
                     Loan.created_at >= start,
                     Loan.created_at <= end
-                ).scalar() or 0
+                )
+                if org_id is not None:
+                    apps_query = apps_query.filter(Loan.organization_id == org_id)
+                apps_count = apps_query.scalar() or 0
             except Exception:
                 apps_count = 0
 
             try:
-                funded_count = db.query(func.count(Loan.id)).filter(
+                funded_query = db.query(func.count(Loan.id)).filter(
                     Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.FUNDED,
                     Loan.funded_date >= start,
                     Loan.funded_date <= end
-                ).scalar() or 0
+                )
+                if org_id is not None:
+                    funded_query = funded_query.filter(Loan.organization_id == org_id)
+                funded_count = funded_query.scalar() or 0
             except Exception:
                 funded_count = 0
 
             try:
-                credit_pulls = db.query(func.count(Lead.id)).filter(
+                credit_query = db.query(func.count(Lead.id)).filter(
                     Lead.owner_id == current_user.id,
                     Lead.created_at >= start,
                     Lead.created_at <= end,
                     Lead.credit_score.isnot(None)
-                ).scalar() or 0
+                )
+                if org_id is not None:
+                    credit_query = credit_query.filter(Lead.organization_id == org_id)
+                credit_pulls = credit_query.scalar() or 0
             except Exception:
                 credit_pulls = 0
 
             try:
-                cancelled_count = db.query(func.count(Loan.id)).filter(
+                cancelled_query = db.query(func.count(Loan.id)).filter(
                     Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.SUSPENDED,
                     Loan.created_at >= start,
                     Loan.created_at <= end
-                ).scalar() or 0
+                )
+                if org_id is not None:
+                    cancelled_query = cancelled_query.filter(Loan.organization_id == org_id)
+                cancelled_count = cancelled_query.scalar() or 0
             except Exception:
                 cancelled_count = 0
 
             denied_count = 0
 
             try:
-                uw_count = db.query(func.count(Loan.id)).filter(
+                uw_query = db.query(func.count(Loan.id)).filter(
                     Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.UW_RECEIVED,
                     Loan.created_at >= start,
                     Loan.created_at <= end
-                ).scalar() or 0
+                )
+                if org_id is not None:
+                    uw_query = uw_query.filter(Loan.organization_id == org_id)
+                uw_count = uw_query.scalar() or 0
             except Exception:
                 uw_count = 0
 
             try:
-                ctc_count = db.query(func.count(Loan.id)).filter(
+                ctc_query = db.query(func.count(Loan.id)).filter(
                     Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.CTC,
                     Loan.created_at >= start,
                     Loan.created_at <= end
-                ).scalar() or 0
+                )
+                if org_id is not None:
+                    ctc_query = ctc_query.filter(Loan.organization_id == org_id)
+                ctc_count = ctc_query.scalar() or 0
             except Exception:
                 ctc_count = 0
 
@@ -147,12 +179,15 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             target_pull_thru_pct = current_pull_thru_pct + 10
 
             try:
-                funded_loans = db.query(Loan).filter(
+                funded_loans_query = db.query(Loan).filter(
                     Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.FUNDED,
                     Loan.funded_date >= start,
                     Loan.funded_date <= end
-                ).all()
+                )
+                if org_id is not None:
+                    funded_loans_query = funded_loans_query.filter(Loan.organization_id == org_id)
+                funded_loans = funded_loans_query.all()
             except Exception:
                 funded_loans = []
 
@@ -182,12 +217,15 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
 
             # FUNDING TOTALS
             try:
-                funded_loans_all = db.query(Loan).filter(
+                funded_all_query = db.query(Loan).filter(
                     Loan.loan_officer_id == current_user.id,
                     Loan.stage == LoanStage.FUNDED,
                     Loan.funded_date >= start,
                     Loan.funded_date <= end
-                ).all()
+                )
+                if org_id is not None:
+                    funded_all_query = funded_all_query.filter(Loan.organization_id == org_id)
+                funded_loans_all = funded_all_query.all()
             except Exception:
                 funded_loans_all = []
 
@@ -239,4 +277,4 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             logger.error(f"Error in scorecard endpoint: {str(e)}", exc_info=True)
             raise HTTPException(status_code=500, detail="Error generating scorecard")
 
-    logger.info("✅ Scorecard routes loaded")
+    logger.info("Scorecard routes loaded")

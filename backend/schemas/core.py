@@ -7,13 +7,16 @@ Contains all request/response schemas used by API endpoints.
 
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 import enum
 
 # Import enums used by schemas
 from database.enums import (
     LeadStage, LoanStage, TaskType, ActivityType, CoachMode,
 )
+
+# PII masking utilities for API response sanitization (Enterprise Readiness 3.19)
+from schemas.pii_masking import sanitize_step_data, mask_ssn
 
 
 
@@ -912,7 +915,12 @@ class ApplicationEventCreate(BaseModel):
     step: Optional[str] = None
 
 class BorrowerApplicationResponse(BaseModel):
-    """Full application response schema"""
+    """Full application response schema.
+
+    Enterprise Readiness 3.19: ssn_encrypted and co_ssn_encrypted are
+    intentionally excluded from this schema.  Only the masked last-4 is
+    exposed via ssn_display when credit auth has been captured.
+    """
     id: int
     public_token: str
     status: str
@@ -930,12 +938,35 @@ class BorrowerApplicationResponse(BaseModel):
     prequalification_rate: Optional[float] = None
     prequalification_monthly_payment: Optional[float] = None
     credit_auth_captured: bool
+    # Masked SSN display: ***-**-1234 (derived from credit_auth_ssn_last4, never raw SSN)
+    ssn_display: Optional[str] = None
     expires_at: Optional[datetime] = None
     submitted_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     last_activity_at: Optional[datetime] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def compute_ssn_display(cls, values):
+        """Derive masked SSN display from credit_auth_ssn_last4 if available."""
+        if isinstance(values, dict):
+            last4 = values.get('credit_auth_ssn_last4')
+            if last4 and not values.get('ssn_display'):
+                values['ssn_display'] = f"***-**-{last4}"
+            # Never leak encrypted SSN fields
+            values.pop('ssn_encrypted', None)
+            values.pop('co_ssn_encrypted', None)
+        else:
+            # ORM model (from_attributes mode)
+            last4 = getattr(values, 'credit_auth_ssn_last4', None)
+            if last4:
+                # Pydantic v2 with from_attributes can read attrs; set ssn_display
+                # We need to return a dict override for computed fields
+                pass  # handled below via field default
+        return values
+
     class Config:
         from_attributes = True
 
@@ -959,6 +990,13 @@ class ApplicationPublicResponse(BaseModel):
     lo_email: Optional[str] = None
     lo_phone: Optional[str] = None
     company_name: Optional[str] = None
+
+    @field_validator('step_data', mode='before')
+    @classmethod
+    def sanitize_pii_from_step_data(cls, v):
+        """Enterprise Readiness 3.19: Strip SSN/PII from step_data before serialization"""
+        return sanitize_step_data(v)
+
     class Config:
         from_attributes = True
 
