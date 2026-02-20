@@ -46,7 +46,7 @@ TOLERANCE_CATEGORIES = {
 @mortgage_tool(
     name="check_trid_compliance",
     description="Check TRID (TILA-RESPA Integrated Disclosure) compliance status for a loan",
-    agent_roles=["compliance_checker", "processor", "closer"],
+    agent_roles=["compliance_checker", "processor", "closer", "pipeline_analyst"],
     risk_level="medium",
     examples=[
         "Is this loan TRID compliant?",
@@ -805,7 +805,7 @@ def get_state_requirements(
 @mortgage_tool(
     name="audit_loan_file",
     description="Perform comprehensive compliance audit of a loan file",
-    agent_roles=["compliance_checker", "manager"],
+    agent_roles=["compliance_checker", "manager", "document_tracker"],
     risk_level="medium",
     examples=[
         "Audit this loan file",

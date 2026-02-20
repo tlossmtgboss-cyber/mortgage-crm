@@ -13,6 +13,7 @@ from .base import (
     ToolResult,
     execute_query,
     execute_single,
+    db_session,
     format_date,
 )
 
@@ -244,6 +245,22 @@ def trigger_credit_pull(
             "name": loan.get("coborrower_name"),
         })
 
+    # Log the credit pull attempt to credit_pulls table
+    try:
+        from sqlalchemy import text as sa_text
+        with db_session() as session:
+            session.execute(sa_text("""
+                INSERT INTO credit_pulls (loan_id, bureau, pull_type, status, requested_at)
+                VALUES (:loan_id, :bureau, :pull_type, 'pending', CURRENT_TIMESTAMP)
+            """), {
+                "loan_id": loan_id,
+                "bureau": bureau,
+                "pull_type": pull_type,
+            })
+        logged = True
+    except Exception:
+        logged = False
+
     data = {
         "request_id": request_id,
         "loan_id": loan_id,
@@ -255,6 +272,7 @@ def trigger_credit_pull(
         "requested_at": datetime.now().isoformat(),
         "requires_authorization": pull_type == "hard",
         "estimated_response": "30-60 seconds",
+        "audit_logged": logged,
     }
 
     return ToolResult.success(

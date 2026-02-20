@@ -13,6 +13,7 @@ from .base import (
     ToolResult,
     execute_query,
     execute_single,
+    db_session,
     format_date,
 )
 
@@ -131,7 +132,56 @@ def get_checklist(
     user_role: str = "loan_officer",
     include_completed: bool = True,
 ) -> ToolResult:
-    """Get onboarding checklist."""
+    """Get onboarding checklist from OnboardingStep table, with hardcoded fallback."""
+    # Try to load steps from the database first
+    db_steps = execute_query("""
+        SELECT id, step_id, name, category, priority, help_url,
+               time_estimate_minutes, required, role, sort_order
+        FROM onboarding_steps
+        WHERE (role = :role OR role IS NULL OR role = 'all')
+          AND is_active = true
+        ORDER BY sort_order ASC
+    """, {"role": user_role})
+
+    if db_steps:
+        # Group by category
+        categories = {}
+        for step in db_steps:
+            cat = step.get("category", "General")
+            if cat not in categories:
+                categories[cat] = {
+                    "category": cat,
+                    "priority": step.get("priority", "recommended"),
+                    "items": [],
+                }
+            categories[cat]["items"].append({
+                "task": step.get("name"),
+                "help_url": step.get("help_url", ""),
+                "time_estimate": f"{step.get('time_estimate_minutes', 5)} min",
+                "step_id": step.get("step_id"),
+            })
+
+        checklist = list(categories.values())
+        total_items = sum(len(cat["items"]) for cat in checklist)
+        total_time = sum(
+            int(item["time_estimate"].split()[0])
+            for cat in checklist
+            for item in cat["items"]
+        )
+
+        return ToolResult.success(
+            data={
+                "user_role": user_role,
+                "checklist": checklist,
+                "total_items": total_items,
+                "estimated_total_time": f"{total_time} min",
+                "categories": len(checklist),
+                "source": "database",
+            },
+            message=f"Checklist for {user_role}: {total_items} items (~{total_time} min)",
+        )
+
+    # Fallback to hardcoded checklists if no DB entries
     checklists = {
         "loan_officer": [
             {
@@ -269,7 +319,7 @@ def complete_step(
     data: Optional[Dict] = None,
     feedback: Optional[str] = None,
 ) -> ToolResult:
-    """Mark onboarding step complete."""
+    """Mark onboarding step complete and persist to OnboardingProgress."""
     import uuid
     completion_id = str(uuid.uuid4())[:8].upper()
 
@@ -280,6 +330,35 @@ def complete_step(
     if step_id not in valid_steps:
         return ToolResult.error(f"Invalid step_id. Must be one of: {valid_steps}")
 
+    # Check if already completed
+    existing = execute_single("""
+        SELECT id FROM onboarding_progress
+        WHERE user_id = :user_id AND step_id = :step_id
+    """, {"user_id": user_id, "step_id": step_id})
+
+    if existing:
+        return ToolResult.success(
+            data={"user_id": user_id, "step_id": step_id, "already_completed": True},
+            message=f"Step '{step_id}' was already completed",
+        )
+
+    # Write to onboarding_progress table
+    persisted = False
+    try:
+        from sqlalchemy import text as sa_text
+        with db_session() as session:
+            session.execute(sa_text("""
+                INSERT INTO onboarding_progress (user_id, step_id, completed_at, feedback)
+                VALUES (:user_id, :step_id, CURRENT_TIMESTAMP, :feedback)
+            """), {
+                "user_id": user_id,
+                "step_id": step_id,
+                "feedback": feedback,
+            })
+        persisted = True
+    except Exception:
+        persisted = False
+
     completion = {
         "completion_id": f"OB-{completion_id}",
         "user_id": user_id,
@@ -288,6 +367,7 @@ def complete_step(
         "data": data,
         "feedback": feedback,
         "status": "completed",
+        "persisted": persisted,
     }
 
     # Get next step

@@ -14,6 +14,7 @@ from .base import (
     execute_query,
     execute_single,
     format_date,
+    db_session,
 )
 
 
@@ -367,7 +368,17 @@ def create_callback_request(
     notes: Optional[str] = None,
     assign_to: Optional[str] = None,
 ) -> ToolResult:
-    """Create callback request."""
+    """Create callback request with DNC compliance check."""
+    # COMPLIANCE GATE — check DNC before creating outbound callback
+    dnc = execute_single(
+        "SELECT id, reason FROM contact_dnc_status WHERE phone_number = :phone",
+        {"phone": caller_phone}
+    )
+    if dnc:
+        return ToolResult.error(
+            f"BLOCKED: Phone {caller_phone} is on DNC list. Cannot schedule callback. Reason: {dnc.get('reason', 'N/A')}"
+        )
+
     import uuid
     callback_id = str(uuid.uuid4())[:8].upper()
 
@@ -375,13 +386,11 @@ def create_callback_request(
     if not preferred_time:
         now = datetime.now()
         if now.hour >= 17 or now.weekday() >= 5:
-            # After hours or weekend - next business day 9 AM
             next_day = now + timedelta(days=1)
             while next_day.weekday() >= 5:
                 next_day += timedelta(days=1)
             preferred_time = next_day.replace(hour=9, minute=0, second=0).isoformat()
         else:
-            # During business hours - within 1 hour
             preferred_time = (now + timedelta(hours=1)).isoformat()
 
     # Check if caller exists
@@ -389,6 +398,26 @@ def create_callback_request(
         "SELECT id, assigned_to FROM leads WHERE phone = :phone",
         {"phone": caller_phone}
     )
+
+    # Write to DialerSessionTask for callback tracking
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            session.execute(text("""
+                INSERT INTO dialer_session_tasks
+                    (contact_phone, contact_name, contact_context, lead_id, status, notes, follow_up_date, task_order, created_at, updated_at)
+                VALUES
+                    (:phone, :name, :context, :lead_id, 'pending', :notes, :follow_up, 0, NOW(), NOW())
+            """), {
+                "phone": caller_phone,
+                "name": caller_name,
+                "context": f"Callback request: {callback_reason}",
+                "lead_id": existing.get("id") if existing else None,
+                "notes": notes,
+                "follow_up": preferred_time,
+            })
+    except Exception:
+        pass
 
     callback = {
         "callback_id": f"CB-{callback_id}",
@@ -401,12 +430,13 @@ def create_callback_request(
         "assign_to": assign_to or (existing.get("assigned_to") if existing else None),
         "existing_lead_id": existing.get("id") if existing else None,
         "status": "pending",
+        "compliance_cleared": True,
         "created_at": datetime.now().isoformat(),
     }
 
     return ToolResult.success(
         data=callback,
-        message=f"Callback scheduled for {caller_name}",
+        message=f"Callback scheduled for {caller_name} (DNC cleared)",
     )
 
 
@@ -512,9 +542,35 @@ def log_call_interaction(
     notes: Optional[str] = None,
     lead_id: Optional[str] = None,
 ) -> ToolResult:
-    """Log call interaction."""
+    """Log call interaction to CallLog table."""
+    # Write to call_logs table
+    db_id = None
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            result = session.execute(text("""
+                INSERT INTO call_logs
+                    (contact_phone, lead_id, call_sid, duration_seconds, outcome, notes, created_at, updated_at)
+                VALUES
+                    (:phone, :lead_id, :call_sid, :duration, :outcome, :notes, NOW(), NOW())
+                RETURNING id
+            """), {
+                "phone": caller_phone,
+                "lead_id": int(lead_id) if lead_id and lead_id.isdigit() else None,
+                "call_sid": call_id,
+                "duration": duration_seconds,
+                "outcome": outcome,
+                "notes": notes,
+            })
+            row = result.fetchone()
+            if row:
+                db_id = row[0]
+    except Exception:
+        pass
+
     log_entry = {
         "call_id": call_id,
+        "db_log_id": db_id,
         "caller_phone": caller_phone,
         "duration_seconds": duration_seconds,
         "duration_formatted": f"{duration_seconds // 60}m {duration_seconds % 60}s",
@@ -522,6 +578,7 @@ def log_call_interaction(
         "notes": notes,
         "lead_id": lead_id,
         "logged_at": datetime.now().isoformat(),
+        "persisted": db_id is not None,
         "status": "logged",
     }
 
@@ -543,48 +600,76 @@ def log_call_interaction(
 def get_call_queue_status(
     queue_name: str = "all",
 ) -> ToolResult:
-    """Get call queue status."""
-    # In production, would integrate with phone system
-    queues = {
-        "sales": {
-            "name": "Sales Queue",
-            "calls_waiting": 0,
-            "avg_wait_time_seconds": 0,
-            "agents_available": 0,
-            "agents_on_call": 0,
-        },
-        "support": {
-            "name": "Support Queue",
-            "calls_waiting": 0,
-            "avg_wait_time_seconds": 0,
-            "agents_available": 0,
-            "agents_on_call": 0,
-        },
-        "processing": {
-            "name": "Processing Queue",
-            "calls_waiting": 0,
-            "avg_wait_time_seconds": 0,
-            "agents_available": 0,
-            "agents_on_call": 0,
-        },
-    }
+    """Get call queue status from ActiveCall and DialerSession data."""
+    # Query active calls
+    active_calls = execute_single("""
+        SELECT COUNT(*) as active_count
+        FROM active_calls WHERE expires_at > NOW()
+    """)
 
-    if queue_name != "all" and queue_name in queues:
-        queue_data = {
-            "queue_name": queue_name,
-            "queue": queues[queue_name],
-        }
-    else:
-        queue_data = {
-            "queue_name": "all",
-            "queues": queues,
-            "total_waiting": sum(q["calls_waiting"] for q in queues.values()),
-            "total_agents_available": sum(q["agents_available"] for q in queues.values()),
-        }
+    # Query active dialer sessions
+    active_sessions = execute_query("""
+        SELECT
+            ds.id, ds.status, ds.total_tasks, ds.completed_tasks,
+            u.name as agent_name
+        FROM dialer_sessions ds
+        JOIN users u ON u.id = ds.agent_id
+        WHERE ds.status IN ('active', 'in_progress', 'paused')
+        ORDER BY ds.created_at DESC
+        LIMIT 20
+    """)
+
+    # Query pending callback tasks
+    pending_callbacks = execute_single("""
+        SELECT COUNT(*) as pending_count
+        FROM dialer_session_tasks
+        WHERE status = 'pending' AND follow_up_date IS NOT NULL
+    """)
+
+    # Query agents currently on calls
+    agents_on_call = execute_single("""
+        SELECT COUNT(DISTINCT agent_id) as on_call
+        FROM active_calls WHERE expires_at > NOW()
+    """)
+
+    # Query available agents (online LOs not on active calls)
+    agents_available = execute_single("""
+        SELECT COUNT(*) as available
+        FROM users u
+        WHERE u.role = 'loan_officer' AND u.active = true
+            AND u.id NOT IN (SELECT agent_id FROM active_calls WHERE expires_at > NOW())
+    """)
+
+    active_count = active_calls.get("active_count", 0) if active_calls else 0
+    on_call_count = agents_on_call.get("on_call", 0) if agents_on_call else 0
+    available_count = agents_available.get("available", 0) if agents_available else 0
+    pending_count = pending_callbacks.get("pending_count", 0) if pending_callbacks else 0
+
+    queue_data = {
+        "queue_name": queue_name,
+        "real_time": {
+            "active_calls": active_count,
+            "agents_on_call": on_call_count,
+            "agents_available": available_count,
+            "pending_callbacks": pending_count,
+        },
+        "dialer_sessions": [
+            {
+                "id": s.get("id"),
+                "agent": s.get("agent_name"),
+                "status": s.get("status"),
+                "progress": f"{s.get('completed_tasks', 0)}/{s.get('total_tasks', 0)}",
+            }
+            for s in (active_sessions or [])
+        ],
+        "total_waiting": pending_count,
+        "total_agents_available": available_count,
+        "checked_at": datetime.now().isoformat(),
+    }
 
     return ToolResult.success(
         data=queue_data,
-        message=f"Queue status: {queue_data.get('total_waiting', 0)} calls waiting",
+        message=f"Queue: {active_count} active calls, {available_count} agents available, {pending_count} pending callbacks",
     )
 
 

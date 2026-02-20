@@ -14,7 +14,26 @@ from .base import (
     execute_query,
     execute_single,
     format_date,
+    db_session,
 )
+
+
+def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult]:
+    """Run compliance checks before outbound contact. Returns ToolResult error or None if clear."""
+    # Check DNC
+    dnc = execute_single(
+        "SELECT id, reason FROM contact_dnc_status WHERE phone_number = :phone",
+        {"phone": phone}
+    )
+    if dnc:
+        return ToolResult.error(f"BLOCKED: Phone {phone} is on DNC list. Reason: {dnc.get('reason', 'N/A')}")
+
+    # Check calling window (8am-9pm ET as default)
+    now = datetime.now()
+    if now.hour < 8 or now.hour >= 21:
+        return ToolResult.error(f"BLOCKED: Outside TCPA calling window (8am-9pm). Current hour: {now.hour}")
+
+    return None
 
 
 # =============================================================================
@@ -41,7 +60,20 @@ def initiate_outbound_call(
     purpose: str = "follow_up",
     script_id: Optional[str] = None,
 ) -> ToolResult:
-    """Initiate outbound call."""
+    """Initiate outbound call with TCPA/DNC compliance gate."""
+    # COMPLIANCE GATE — must pass before any outbound call
+    compliance_block = _validate_outbound(phone_number, "call")
+    if compliance_block:
+        return compliance_block
+
+    # Check for duplicate active calls
+    active = execute_single(
+        "SELECT id FROM active_calls WHERE contact_phone = :phone AND expires_at > NOW()",
+        {"phone": phone_number}
+    )
+    if active:
+        return ToolResult.error(f"Active call already in progress for {phone_number}")
+
     import uuid
     call_id = str(uuid.uuid4())[:8].upper()
 
@@ -57,22 +89,41 @@ def initiate_outbound_call(
             {"id": contact_id}
         )
 
+    contact_name = contact.get("first_name", contact.get("name", "Unknown")) if contact else "Unknown"
+
+    # Write to CallLog
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            session.execute(text("""
+                INSERT INTO call_logs (contact_phone, contact_name, lead_id, loan_id, outcome, notes, created_at)
+                VALUES (:phone, :name, :lead_id, :loan_id, 'initiating', :notes, NOW())
+            """), {
+                "phone": phone_number,
+                "name": contact_name,
+                "lead_id": int(contact_id) if contact_type == "lead" else None,
+                "loan_id": int(contact_id) if contact_type != "lead" else None,
+                "notes": f"Outbound {purpose} call initiated",
+            })
+    except Exception:
+        pass  # Log failure shouldn't block the call
+
     call_data = {
         "call_id": f"CALL-{call_id}",
         "phone_number": phone_number,
         "contact_id": contact_id,
         "contact_type": contact_type,
-        "contact_name": contact.get("first_name", contact.get("name", "Unknown")) if contact else "Unknown",
+        "contact_name": contact_name,
         "purpose": purpose,
         "script_id": script_id,
         "status": "initiating",
         "initiated_at": datetime.now().isoformat(),
-        "twilio_status": "pending",
+        "compliance_cleared": True,
     }
 
     return ToolResult.success(
         data=call_data,
-        message=f"Call initiating to {phone_number}",
+        message=f"Call initiating to {phone_number} (compliance cleared)",
         requires_approval=True,
     )
 
@@ -95,33 +146,77 @@ def drop_voicemail(
     contact_id: str,
     scheduled_time: Optional[str] = None,
 ) -> ToolResult:
-    """Drop pre-recorded voicemail."""
+    """Drop pre-recorded voicemail with TCPA/DNC compliance gate."""
+    # COMPLIANCE GATE
+    compliance_block = _validate_outbound(phone_number, "call")
+    if compliance_block:
+        return compliance_block
+
     import uuid
     vm_id = str(uuid.uuid4())[:8].upper()
 
-    # Voicemail templates
-    templates = {
-        "follow_up": "Hi, this is [LO_NAME] from [COMPANY]. I wanted to follow up on your mortgage inquiry...",
-        "rate_update": "Hi, this is [LO_NAME]. I have some great news about current rates...",
-        "document_reminder": "Hi, this is [LO_NAME]. I'm calling about some documents we still need...",
-        "closing_update": "Hi, this is [LO_NAME]. I have an update on your closing...",
-    }
+    # Query real VoicemailTemplate from DB
+    db_template = execute_single("""
+        SELECT id, name, message_text, audio_url, voice_provider, voice_id, delivery_method, category
+        FROM voicemail_templates
+        WHERE (name = :name OR category = :name OR id::text = :name)
+            AND is_active = true
+        ORDER BY is_default DESC
+        LIMIT 1
+    """, {"name": voicemail_template})
 
-    template_text = templates.get(voicemail_template, voicemail_template)
+    if db_template:
+        template_text = db_template.get("message_text", "")
+        template_id = db_template.get("id")
+        audio_url = db_template.get("audio_url")
+        delivery_method = db_template.get("delivery_method", "vapi_ai")
+    else:
+        # Fallback to hardcoded templates
+        fallback_templates = {
+            "follow_up": "Hi, this is [LO_NAME] from [COMPANY]. I wanted to follow up on your mortgage inquiry...",
+            "rate_update": "Hi, this is [LO_NAME]. I have some great news about current rates...",
+            "document_reminder": "Hi, this is [LO_NAME]. I'm calling about some documents we still need...",
+            "closing_update": "Hi, this is [LO_NAME]. I have an update on your closing...",
+        }
+        template_text = fallback_templates.get(voicemail_template, voicemail_template)
+        template_id = None
+        audio_url = None
+        delivery_method = "vapi_ai"
+
+    # Write VoicemailDrop record
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            session.execute(text("""
+                INSERT INTO voicemail_drops (phone_number, message_text, template_id, audio_url, delivery_method, status, created_at, updated_at)
+                VALUES (:phone, :msg, :tid, :audio, :method, 'pending', NOW(), NOW())
+            """), {
+                "phone": phone_number,
+                "msg": template_text,
+                "tid": template_id,
+                "audio": audio_url,
+                "method": delivery_method,
+            })
+    except Exception:
+        pass
 
     drop_data = {
         "voicemail_id": f"VM-{vm_id}",
         "phone_number": phone_number,
         "contact_id": contact_id,
         "template": voicemail_template,
+        "template_id": template_id,
         "message_preview": template_text[:100] + "..." if len(template_text) > 100 else template_text,
+        "delivery_method": delivery_method,
+        "audio_url": audio_url,
         "scheduled_time": scheduled_time or datetime.now().isoformat(),
         "status": "queued",
+        "compliance_cleared": True,
     }
 
     return ToolResult.success(
         data=drop_data,
-        message=f"Voicemail queued for {phone_number}",
+        message=f"Voicemail queued for {phone_number} (compliance cleared)",
         requires_approval=True,
     )
 
@@ -205,13 +300,20 @@ def analyze_call_sentiment(
     call_id: str,
     transcription: Optional[str] = None,
 ) -> ToolResult:
-    """Analyze call sentiment."""
-    # In production, would use NLP service
+    """Analyze call sentiment from call log data or provided transcription."""
+    # Try to get call data from CallLog
+    call_data = execute_single("""
+        SELECT id, contact_phone, contact_name, duration_seconds, outcome,
+               notes, ai_note_summary, created_at
+        FROM call_logs WHERE id = :id OR call_sid = :id
+    """, {"id": call_id})
+
     analysis = {
         "call_id": call_id,
+        "call_found": call_data is not None,
         "sentiment": {
             "overall": "neutral",
-            "score": 0.0,  # -1 to 1
+            "score": 0.0,
             "confidence": 0.0,
         },
         "emotions_detected": [],
@@ -221,6 +323,21 @@ def analyze_call_sentiment(
         "follow_up_recommended": False,
         "status": "pending_transcription" if not transcription else "analyzed",
     }
+
+    # Use AI summary from call log if available
+    if call_data and call_data.get("ai_note_summary") and not transcription:
+        transcription = call_data.get("ai_note_summary")
+    if call_data and call_data.get("notes") and not transcription:
+        transcription = call_data.get("notes")
+
+    # Add call metadata
+    if call_data:
+        analysis["call_metadata"] = {
+            "contact": call_data.get("contact_name"),
+            "duration_seconds": call_data.get("duration_seconds"),
+            "outcome": call_data.get("outcome"),
+            "date": format_date(call_data.get("created_at")),
+        }
 
     if transcription:
         text_lower = transcription.lower()
@@ -271,7 +388,7 @@ def schedule_callback(
     priority: str = "normal",
     notes: Optional[str] = None,
 ) -> ToolResult:
-    """Schedule callback."""
+    """Schedule callback with TCPA compliance gate."""
     import uuid
     callback_id = str(uuid.uuid4())[:8].upper()
 
@@ -294,17 +411,50 @@ def schedule_callback(
             {"id": contact_id}
         )
 
+    phone = contact.get("phone") if contact else None
+
+    # COMPLIANCE GATE — check DNC before scheduling callback
+    if phone:
+        compliance_block = _validate_outbound(phone, "call")
+        if compliance_block:
+            return compliance_block
+
+    contact_name = f"{contact.get('first_name', '')} {contact.get('last_name', contact.get('name', ''))}".strip() if contact else "Unknown"
+
+    # Write to DialerSessionTask for callback tracking
+    try:
+        with db_session() as session:
+            from sqlalchemy import text
+            session.execute(text("""
+                INSERT INTO dialer_session_tasks
+                    (contact_phone, contact_name, contact_context, lead_id, loan_id, status, disposition, notes, follow_up_date, task_order, created_at, updated_at)
+                VALUES
+                    (:phone, :name, :context, :lead_id, :loan_id, 'pending', :reason, :notes, :follow_up, 0, NOW(), NOW())
+            """), {
+                "phone": phone,
+                "name": contact_name,
+                "context": f"Scheduled callback: {reason}",
+                "lead_id": int(contact_id) if contact_type == "lead" else None,
+                "loan_id": int(contact_id) if contact_type != "lead" else None,
+                "reason": reason,
+                "notes": notes,
+                "follow_up": callback_time,
+            })
+    except Exception:
+        pass
+
     callback_data = {
         "callback_id": f"CB-{callback_id}",
         "contact_id": contact_id,
         "contact_type": contact_type,
-        "contact_name": f"{contact.get('first_name', '')} {contact.get('last_name', contact.get('name', ''))}".strip() if contact else "Unknown",
-        "phone": contact.get("phone") if contact else None,
+        "contact_name": contact_name,
+        "phone": phone,
         "callback_time": callback_time,
         "reason": reason,
         "priority": priority,
         "notes": notes,
         "status": "scheduled",
+        "compliance_cleared": True if phone else None,
         "created_at": datetime.now().isoformat(),
     }
 

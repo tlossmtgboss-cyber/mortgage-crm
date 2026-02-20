@@ -14,6 +14,7 @@ from .base import (
     ToolResult,
     execute_query,
     execute_single,
+    db_session,
     format_date,
 )
 
@@ -82,6 +83,31 @@ def schedule_video_meeting(
         "status": "scheduled",
         "created_at": datetime.now().isoformat(),
     }
+
+    # Persist to calendar_events table
+    try:
+        from sqlalchemy import text as sa_text
+        with db_session() as session:
+            session.execute(sa_text("""
+                INSERT INTO calendar_events (
+                    title, event_type, start_time, end_time,
+                    contact_id, description, meeting_link, status, created_at
+                ) VALUES (
+                    :title, 'video_meeting', :start_time,
+                    :start_time::timestamp + :duration * interval '1 minute',
+                    :contact_id, :description, :meeting_link, 'scheduled', CURRENT_TIMESTAMP
+                )
+            """), {
+                "title": f"Video {meeting_type} with {meeting_data['contact_name']}",
+                "start_time": scheduled_time,
+                "duration": duration_minutes,
+                "contact_id": contact_id,
+                "description": f"{meeting_type} meeting",
+                "meeting_link": meeting_data["meeting_link"],
+            })
+        meeting_data["persisted"] = True
+    except Exception:
+        meeting_data["persisted"] = False
 
     return ToolResult.success(
         data=meeting_data,
@@ -163,26 +189,63 @@ def analyze_meeting(
     meeting_id: str,
     analysis_type: str = "all",
 ) -> ToolResult:
-    """Analyze meeting recording."""
+    """Analyze meeting by querying associated call logs and calendar event data."""
+    # Query calendar event for meeting context
+    meeting = execute_single("""
+        SELECT id, title, event_type, start_time, end_time,
+               contact_id, description, status
+        FROM calendar_events
+        WHERE id::text = :meeting_id OR title LIKE '%' || :meeting_id || '%'
+        ORDER BY created_at DESC LIMIT 1
+    """, {"meeting_id": meeting_id})
+
+    # Query associated call logs for sentiment/engagement data
+    call_data = execute_query("""
+        SELECT id, duration, disposition, ai_note_summary, sentiment,
+               talk_time_seconds, hold_time_seconds
+        FROM call_logs
+        WHERE notes LIKE '%' || :meeting_id || '%'
+           OR id::text = :meeting_id
+        ORDER BY created_at DESC LIMIT 5
+    """, {"meeting_id": meeting_id})
+
     analysis = {
         "meeting_id": meeting_id,
         "analysis_type": analysis_type,
-        "status": "pending",
+        "status": "analyzed" if (meeting or call_data) else "pending",
+        "meeting_found": meeting is not None,
+        "call_records_found": len(call_data) if call_data else 0,
     }
 
+    if meeting:
+        analysis["meeting_context"] = {
+            "title": meeting.get("title"),
+            "type": meeting.get("event_type"),
+            "status": meeting.get("status"),
+            "scheduled": meeting.get("start_time").isoformat() if meeting.get("start_time") else None,
+        }
+
     if analysis_type in ["sentiment", "all"]:
+        # Use call log sentiment if available
+        sentiments = [c.get("sentiment") for c in (call_data or []) if c.get("sentiment")]
+        ai_summaries = [c.get("ai_note_summary") for c in (call_data or []) if c.get("ai_note_summary")]
         analysis["sentiment"] = {
-            "overall": "neutral",
-            "borrower_sentiment": "neutral",
-            "sentiment_progression": [],
+            "overall": sentiments[0] if sentiments else "neutral",
+            "borrower_sentiment": sentiments[0] if sentiments else "neutral",
+            "ai_summaries": ai_summaries[:3],
+            "sentiment_progression": sentiments,
             "key_moments": [],
         }
 
     if analysis_type in ["engagement", "all"]:
+        total_talk = sum(float(c.get("talk_time_seconds", 0) or 0) for c in (call_data or []))
+        total_duration = sum(float(c.get("duration", 0) or 0) for c in (call_data or []))
         analysis["engagement"] = {
-            "score": 0,
+            "score": round((total_talk / total_duration) * 100, 1) if total_duration > 0 else 0,
+            "total_talk_time_seconds": total_talk,
+            "total_duration_seconds": total_duration,
             "questions_asked": 0,
-            "active_participation": 0,
+            "active_participation": round((total_talk / total_duration) * 100, 1) if total_duration > 0 else 0,
             "attention_drops": [],
         }
 
@@ -197,7 +260,7 @@ def analyze_meeting(
 
     return ToolResult.success(
         data=analysis,
-        message=f"Meeting analysis: {analysis_type}",
+        message=f"Meeting analysis: {analysis_type}" + (" — data from call logs" if call_data else " — pending transcript"),
     )
 
 
@@ -284,7 +347,7 @@ def get_video_analytics(
     period: str = "month",
     video_type: Optional[str] = None,
 ) -> ToolResult:
-    """Get video analytics."""
+    """Get video analytics aggregated from CalendarEvent meeting data."""
     # Calculate date range
     today = datetime.now().date()
     if period == "week":
@@ -295,6 +358,32 @@ def get_video_analytics(
         start_date = today - timedelta(days=90)
     else:
         start_date = today - timedelta(days=30)
+
+    # Query real meeting data from calendar_events
+    params = {"start_date": start_date.isoformat(), "end_date": today.isoformat()}
+    lo_filter = ""
+    if lo_id:
+        lo_filter = "AND ce.user_id = :lo_id"
+        params["lo_id"] = lo_id
+
+    meeting_stats = execute_single(f"""
+        SELECT
+            COUNT(*) as total_meetings,
+            COUNT(CASE WHEN ce.status = 'completed' THEN 1 END) as completed_meetings,
+            COUNT(CASE WHEN ce.status = 'no_show' THEN 1 END) as no_shows,
+            COUNT(CASE WHEN ce.status = 'cancelled' THEN 1 END) as cancelled,
+            COALESCE(AVG(EXTRACT(EPOCH FROM (ce.end_time - ce.start_time)) / 60), 0) as avg_duration_min
+        FROM calendar_events ce
+        WHERE ce.event_type IN ('video_meeting', 'meeting', 'consultation')
+          AND ce.start_time >= :start_date::date
+          AND ce.start_time <= :end_date::date + interval '1 day'
+          {lo_filter}
+    """, params)
+
+    total = meeting_stats.get("total_meetings", 0) if meeting_stats else 0
+    completed = meeting_stats.get("completed_meetings", 0) if meeting_stats else 0
+    no_shows = meeting_stats.get("no_shows", 0) if meeting_stats else 0
+    avg_duration = float(meeting_stats.get("avg_duration_min", 0) or 0) if meeting_stats else 0
 
     analytics = {
         "period": period,
@@ -307,8 +396,8 @@ def get_video_analytics(
             "total_views": 0,
             "view_rate": 0,
             "avg_watch_time_seconds": 0,
-            "total_meetings": 0,
-            "meeting_duration_minutes": 0,
+            "total_meetings": total,
+            "meeting_duration_minutes": round(avg_duration, 1),
         },
         "by_type": {
             "async_videos": {
@@ -317,18 +406,19 @@ def get_video_analytics(
                 "avg_completion": 0,
             },
             "live_meetings": {
-                "scheduled": 0,
-                "completed": 0,
-                "no_show_rate": 0,
+                "scheduled": total,
+                "completed": completed,
+                "no_show_rate": round((no_shows / total) * 100, 1) if total > 0 else 0,
             },
         },
         "top_performing": [],
         "lo_id": lo_id,
+        "source": "database",
     }
 
     return ToolResult.success(
         data=analytics,
-        message=f"Video analytics for {period}",
+        message=f"Video analytics for {period}: {total} meetings, {completed} completed",
     )
 
 

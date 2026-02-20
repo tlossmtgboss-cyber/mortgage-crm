@@ -13,6 +13,7 @@ from .base import (
     ToolResult,
     execute_query,
     execute_single,
+    db_session,
     format_currency,
     format_date,
 )
@@ -137,110 +138,78 @@ def get_plans(
     include_enterprise: bool = False,
     billing_cycle: Optional[str] = None,
 ) -> ToolResult:
-    """Get available plans."""
-    plans = [
-        {
-            "id": "starter",
-            "name": "Starter",
-            "description": "For individual loan officers getting started",
-            "price_monthly": 99,
-            "price_monthly_formatted": format_currency(99),
-            "price_annually": 999,
-            "price_annually_formatted": format_currency(999),
-            "annual_savings": format_currency(189),
-            "features": {
-                "users": 3,
-                "loans_per_month": 25,
-                "ai_credits": 250,
-                "integrations": 1,
-                "support": "email",
-                "storage_gb": 10,
+    """Get available plans from SubscriptionPlan table."""
+    # Query real plans from database
+    db_plans = execute_query("""
+        SELECT id, name, description, price_monthly, price_yearly,
+               features, user_limit, is_active
+        FROM subscription_plans
+        WHERE is_active = true
+        ORDER BY price_monthly ASC
+    """)
+
+    if db_plans:
+        plans = []
+        for p in db_plans:
+            monthly = float(p.get("price_monthly", 0) or 0)
+            yearly = float(p.get("price_yearly", 0) or 0)
+            plan = {
+                "id": p.get("id"),
+                "name": p.get("name"),
+                "description": p.get("description"),
+                "price_monthly": monthly,
+                "price_monthly_formatted": format_currency(monthly),
+                "price_annually": yearly,
+                "price_annually_formatted": format_currency(yearly) if yearly else "N/A",
+                "features": p.get("features") or {"users": p.get("user_limit", 5)},
+                "user_limit": p.get("user_limit"),
+            }
+            if billing_cycle == "annually":
+                plan["display_price"] = plan["price_annually_formatted"]
+            else:
+                plan["display_price"] = plan["price_monthly_formatted"]
+            plans.append(plan)
+    else:
+        # Fallback to hardcoded plans if no DB entries
+        plans = [
+            {
+                "id": "starter", "name": "Starter",
+                "description": "For individual loan officers getting started",
+                "price_monthly": 99, "price_monthly_formatted": format_currency(99),
+                "price_annually": 999, "price_annually_formatted": format_currency(999),
+                "features": {"users": 3, "loans_per_month": 25, "ai_credits": 250},
+                "display_price": format_currency(999) if billing_cycle == "annually" else format_currency(99),
             },
-            "recommended_for": "Individual LOs",
-        },
-        {
-            "id": "professional",
-            "name": "Professional",
-            "description": "For growing loan officers and small teams",
-            "price_monthly": 299,
-            "price_monthly_formatted": format_currency(299),
-            "price_annually": 2999,
-            "price_annually_formatted": format_currency(2999),
-            "annual_savings": format_currency(589),
-            "features": {
-                "users": 10,
-                "loans_per_month": 100,
-                "ai_credits": 1000,
-                "integrations": 5,
-                "support": "priority",
-                "storage_gb": 50,
+            {
+                "id": "professional", "name": "Professional", "popular": True,
+                "description": "For growing loan officers and small teams",
+                "price_monthly": 299, "price_monthly_formatted": format_currency(299),
+                "price_annually": 2999, "price_annually_formatted": format_currency(2999),
+                "features": {"users": 10, "loans_per_month": 100, "ai_credits": 1000},
+                "display_price": format_currency(2999) if billing_cycle == "annually" else format_currency(299),
             },
-            "popular": True,
-            "recommended_for": "Small teams",
-        },
-        {
-            "id": "business",
-            "name": "Business",
-            "description": "For established teams with high volume",
-            "price_monthly": 599,
-            "price_monthly_formatted": format_currency(599),
-            "price_annually": 5999,
-            "price_annually_formatted": format_currency(5999),
-            "annual_savings": format_currency(1189),
-            "features": {
-                "users": 25,
-                "loans_per_month": 500,
-                "ai_credits": 5000,
-                "integrations": "unlimited",
-                "support": "dedicated",
-                "storage_gb": 200,
+            {
+                "id": "business", "name": "Business",
+                "description": "For established teams with high volume",
+                "price_monthly": 599, "price_monthly_formatted": format_currency(599),
+                "price_annually": 5999, "price_annually_formatted": format_currency(5999),
+                "features": {"users": 25, "loans_per_month": 500, "ai_credits": 5000},
+                "display_price": format_currency(5999) if billing_cycle == "annually" else format_currency(599),
             },
-            "recommended_for": "Branch teams",
-        },
-    ]
+        ]
 
     if include_enterprise:
         plans.append({
-            "id": "enterprise",
-            "name": "Enterprise",
+            "id": "enterprise", "name": "Enterprise",
             "description": "Custom solutions for large organizations",
-            "price_monthly": None,
-            "price_monthly_formatted": "Contact Sales",
-            "price_annually": None,
-            "price_annually_formatted": "Contact Sales",
-            "features": {
-                "users": "unlimited",
-                "loans_per_month": "unlimited",
-                "ai_credits": "unlimited",
-                "integrations": "unlimited",
-                "support": "24/7 dedicated",
-                "storage_gb": "unlimited",
-                "custom_development": True,
-                "sla_guarantee": True,
-                "sso": True,
-                "audit_logs": True,
-            },
-            "contact_sales": True,
-            "recommended_for": "Enterprise",
+            "price_monthly": None, "price_monthly_formatted": "Contact Sales",
+            "features": {"users": "unlimited", "sso": True, "audit_logs": True},
+            "contact_sales": True, "display_price": "Contact Sales",
         })
 
-    # Filter by billing cycle display
-    result_plans = []
-    for plan in plans:
-        display_plan = plan.copy()
-        if billing_cycle == "annually":
-            display_plan["display_price"] = display_plan.get("price_annually_formatted")
-        else:
-            display_plan["display_price"] = display_plan.get("price_monthly_formatted")
-        result_plans.append(display_plan)
-
     return ToolResult.success(
-        data={
-            "plans": result_plans,
-            "count": len(result_plans),
-            "currency": "USD",
-        },
-        message=f"Found {len(result_plans)} available plans",
+        data={"plans": plans, "count": len(plans), "currency": "USD"},
+        message=f"Found {len(plans)} available plans",
     )
 
 
@@ -320,6 +289,36 @@ def change_plan(
         days_remaining = 15  # Simplified
         daily_rate = float(price or 0) / 30
         change["proration_credit"] = format_currency(daily_rate * days_remaining)
+
+    # Persist plan change to subscriptions table
+    try:
+        from sqlalchemy import text as sa_text
+        with db_session() as session:
+            if current:
+                session.execute(sa_text("""
+                    UPDATE subscriptions
+                    SET plan_id = :new_plan_id,
+                        billing_cycle = :billing_cycle,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE account_id = :account_id
+                """), {
+                    "new_plan_id": new_plan_id,
+                    "billing_cycle": billing_cycle,
+                    "account_id": account_id,
+                })
+            else:
+                session.execute(sa_text("""
+                    INSERT INTO subscriptions (account_id, plan_id, billing_cycle, status, created_at, updated_at)
+                    VALUES (:account_id, :new_plan_id, :billing_cycle, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """), {
+                    "account_id": account_id,
+                    "new_plan_id": new_plan_id,
+                    "billing_cycle": billing_cycle,
+                })
+        change["persisted"] = True
+    except Exception as e:
+        change["persisted"] = False
+        change["persistence_error"] = str(e)
 
     return ToolResult.success(
         data=change,
