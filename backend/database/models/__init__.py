@@ -54,6 +54,8 @@ from .lead_loan import Lead, Loan
 from .task import (
     AITask,
     Task,
+    EscalationRecord,
+    HandoffLog,
 )
 
 # Document models
@@ -83,6 +85,10 @@ from .communication import (
     CalendarEvent,
     IntegrationLog,
     IntegrationCredential,
+    ConversationSession,
+    EntityExtraction,
+    ChannelPreference,
+    MessageTemplate,
 )
 
 # AI models
@@ -239,6 +245,32 @@ from .estimate import (
 # Platform contract models
 from .platform_contract import PlatformContract
 
+# Refinance intelligence models
+from .refinance_intelligence import (
+    RefiOpportunity,
+    RefiScenario,
+    PortfolioMonitoringRun,
+)
+
+# Rate lock & market data models
+from .rate_lock import (
+    RateLock,
+    RateMarketData,
+)
+
+# Marketing campaign models
+from .marketing import (
+    AudienceSegment,
+    CampaignDefinition,
+    DripSequence,
+)
+
+# LOS integration & sync models
+from .los_sync import (
+    LosFieldMapping,
+    LosSyncLog,
+)
+
 # Compliance models (TRID, ECOA, HMDA)
 from .compliance import (
     LoanFee,
@@ -252,6 +284,13 @@ from .compliance import (
 
 # SSO configuration models (SAML, OIDC)
 from .sso import SSOConfig
+
+# Webhook models (API Gateway & Developer Experience)
+from .webhook import (
+    WebhookSubscription,
+    WebhookDeliveryLog,
+    WebhookEventCatalog,
+)
 
 
 __all__ = [
@@ -286,6 +325,8 @@ __all__ = [
     # =====================
     "AITask",
     "Task",
+    "EscalationRecord",
+    "HandoffLog",
 
     # =====================
     # Documents
@@ -315,6 +356,10 @@ __all__ = [
     "CalendarEvent",
     "IntegrationLog",
     "IntegrationCredential",
+    "ConversationSession",
+    "EntityExtraction",
+    "ChannelPreference",
+    "MessageTemplate",
 
     # =====================
     # AI
@@ -473,6 +518,32 @@ __all__ = [
     "PlatformContract",
 
     # =====================
+    # Refinance Intelligence
+    # =====================
+    "RefiOpportunity",
+    "RefiScenario",
+    "PortfolioMonitoringRun",
+
+    # =====================
+    # Rate Lock & Market Data
+    # =====================
+    "RateLock",
+    "RateMarketData",
+
+    # =====================
+    # Marketing Campaigns
+    # =====================
+    "AudienceSegment",
+    "CampaignDefinition",
+    "DripSequence",
+
+    # =====================
+    # LOS Integration & Sync
+    # =====================
+    "LosFieldMapping",
+    "LosSyncLog",
+
+    # =====================
     # Compliance (TRID, ECOA, HMDA)
     # =====================
     "LoanFee",
@@ -487,4 +558,11 @@ __all__ = [
     # SSO (SAML, OIDC)
     # =====================
     "SSOConfig",
+
+    # =====================
+    # Webhooks (API Gateway)
+    # =====================
+    "WebhookSubscription",
+    "WebhookDeliveryLog",
+    "WebhookEventCatalog",
 ]

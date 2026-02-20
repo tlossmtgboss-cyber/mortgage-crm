@@ -123,10 +123,124 @@ class Task(Base):
 
 
 # ============================================================================
+# ESCALATION & HANDOFF (Module 3 Gap Fix)
+# ============================================================================
+
+class EscalationRecord(Base):
+    """Dedicated escalation event tracking.
+
+    Provides audit trail for all escalations with level tracking,
+    resolution management, and SLA enforcement per Module 3.1.
+    """
+    __tablename__ = "escalation_records"
+    __table_args__ = (
+        Index('ix_escalation_org_id', 'organization_id'),
+        Index('ix_escalation_status', 'status'),
+        Index('ix_escalation_level', 'escalation_level'),
+        Index('ix_escalation_loan_id', 'loan_id'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+
+    # Escalation details
+    escalation_level = Column(Integer, default=1)  # 1=agent-to-agent, 2=agent-to-human, 3=emergency
+    escalation_type = Column(String, nullable=False)  # compliance, sla_breach, borrower_distress, tool_failure, domain_mismatch
+
+    # Routing
+    original_owner_id = Column(Integer, ForeignKey("users.id"))
+    original_agent = Column(String)  # AI agent that escalated
+    escalated_to_id = Column(Integer, ForeignKey("users.id"))
+    escalated_to_agent = Column(String)  # Target AI agent (for level 1)
+    escalated_to_role = Column(String)  # compliance_officer, branch_manager, processor
+
+    # Context (Module 3.2 — warm handoff)
+    escalation_reason = Column(Text, nullable=False)
+    conversation_summary = Column(Text)
+    active_entities = Column(JSON)  # [{"type": "loan", "id": 123}]
+    data_retrieved = Column(JSON)  # Key data already pulled
+    tools_used = Column(JSON)  # ["check_trid_compliance", "get_pipeline_metrics"]
+    user_emotional_state = Column(String)  # neutral, frustrated, urgent, confused
+    pending_question = Column(Text)  # What the user is waiting for
+
+    # SLA
+    sla_deadline = Column(DateTime)  # When this escalation must be resolved
+    acknowledged_at = Column(DateTime)
+    acknowledged_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Resolution
+    status = Column(String, default="open")  # open, acknowledged, in_progress, resolved, expired
+    resolved_at = Column(DateTime)
+    resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolution_notes = Column(Text)
+    resolution_action = Column(String)  # handled, re_routed, false_alarm
+
+    # Re-escalation
+    re_escalated = Column(Boolean, default=False)
+    re_escalation_count = Column(Integer, default=0)
+    parent_escalation_id = Column(Integer, ForeignKey("escalation_records.id"), nullable=True)
+
+    escalated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class HandoffLog(Base):
+    """Tracks agent-to-agent and agent-to-human transfers.
+
+    Captures the context package sent during handoffs per Module 3.2.
+    Enables quality measurement of handoff completeness.
+    """
+    __tablename__ = "handoff_logs"
+    __table_args__ = (
+        Index('ix_handoff_org_id', 'organization_id'),
+        Index('ix_handoff_session_id', 'session_id'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
+    session_id = Column(String, index=True)  # Conversation session UUID
+
+    # Participants
+    from_agent = Column(String, nullable=False)  # AI agent name or "human:user_id"
+    to_agent = Column(String, nullable=False)
+    from_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    to_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Handoff reason
+    handoff_reason = Column(String, nullable=False)  # domain_mismatch, escalation, user_request, multi_domain
+    handoff_trigger = Column(String)  # tool_name or "user_request" or "sla_breach"
+
+    # Context package (Module 2.4)
+    conversation_summary = Column(Text)
+    active_entities = Column(JSON)
+    pending_question = Column(Text)
+    tools_already_used = Column(JSON)
+    data_already_retrieved = Column(JSON)
+    user_emotional_state = Column(String)
+
+    # Quality tracking
+    context_completeness_score = Column(Float)  # 0-1, how complete was the handoff
+    user_had_to_repeat = Column(Boolean)  # Did the user need to re-explain?
+
+    # Timing
+    handoff_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    pickup_at = Column(DateTime)  # When receiving party engaged
+    pickup_delay_seconds = Column(Integer)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ============================================================================
 # EXPORTS
 # ============================================================================
 
 __all__ = [
     "AITask",
     "Task",
+    "EscalationRecord",
+    "HandoffLog",
 ]

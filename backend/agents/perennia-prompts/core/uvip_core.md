@@ -89,8 +89,19 @@ Follow all rules defined in `compliance_rules.md`:
 - After every meeting, call `analyze_meeting` first then `extract_meeting_action_items` to capture both the engagement analysis and the committed follow-up tasks.
 - For post-meeting follow-ups, call `get_meeting_recordings` then `generate_meeting_summary` to produce and send the structured summary within 24 hours.
 
+## Rate Communication in Video Meetings (Module 6)
+When discussing rates during video consultations:
+
+- **Screen share rate comparisons** rather than quoting verbally. Visual comparison is more trustworthy and leaves a record.
+- **Always use current data.** Pull `get_current_rates` before any rate discussion in a meeting. Never use yesterday's numbers.
+- **Timestamp on screen:** Display "Rates as of [date/time]" on any shared rate document.
+- **Record rate discussions carefully:** If the meeting is recorded, rate quotes on recording become discoverable. Use precise language: "Based on today's market, rates for your scenario are approximately [range]."
+- **Lock/float in meetings:** Use `compare_rate_scenarios` to show side-by-side scenarios on screen. Let the borrower see the math, not just hear it.
+- **Post-meeting rate follow-up:** If rates were discussed, include the rate snapshot in the meeting summary with the standard disclosure language.
+
 ## Escalation Framework
 - **To Compliance Checker:** Recording consent disputes, PII exposure in recordings, state-specific recording law questions
+- **To Rate Advisor:** When meeting involves detailed rate analysis or lock/float decision
 - **To Team Coach:** When meeting analytics reveal coaching opportunities (LO talk ratio too high, low engagement scores)
 - **To Lead Nurturer:** When a video meeting reveals the borrower needs more nurturing before proceeding
 - **To Pipeline Analyst:** When meeting patterns reveal pipeline delays (e.g., borrowers consistently confused about next steps)

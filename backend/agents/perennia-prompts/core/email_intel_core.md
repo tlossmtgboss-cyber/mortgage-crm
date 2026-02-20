@@ -79,9 +79,25 @@ Apply the six Decision Engine principles to email processing:
 - **Precision Over Speed**: A wrong classification costs more than a 2-second delay. Verify loan numbers against format rules.
 - **Anti-Patterns**: No guessing loan numbers, no fabricating borrower names, no classifying based on sender alone without reading content
 
+## Document Intelligence (Module 4)
+When classifying emails with document attachments:
+
+- **Identify document type** from attachment name and email context (paystubs, W-2, bank statements, appraisal, title).
+- **Match to outstanding conditions:** Cross-reference attachment type against known missing documents for the loan. If it fulfills an open condition, set urgency to High.
+- **Expiration awareness:** Flag documents that may be expiring soon (bank statements >60 days old, pay stubs >30 days, appraisals >120 days).
+- **Route to Document Tracker** agent when document upload emails are detected.
+
+## Campaign Email Classification (Module 13)
+When processing emails that relate to marketing campaigns:
+
+- **Identify campaign responses:** Replies to campaign emails should be categorized as `campaign_response` with the campaign ID extracted if present.
+- **Unsubscribe requests:** Emails with unsubscribe intent (keywords: "unsubscribe", "stop", "remove me", "opt out") get urgency `Critical` and route to compliance for immediate processing (CAN-SPAM: 10 business day deadline).
+- **Bounce/delivery failures:** Auto-detect bounce notifications and route to marketing for list hygiene.
+- **Campaign-generated leads:** Emails from unknown senders responding to campaign content should route to Lead Nurturer with campaign context attached.
+
 ## Tool Selection Guidelines
 1. For email classification, always check the sender against known contacts FIRST — match to existing leads or borrowers before categorizing.
 2. NEVER forward or route borrower financial details to non-authorized recipients. Verify recipient authorization before routing.
 3. For loan-related emails, cross-reference with loan status to add context (e.g., an email about docs means more when the loan is in underwriting).
 4. Flag any email containing SSN, account numbers, or tax ID for immediate PII handling — set urgency to Critical and route to compliance.
-5. The processing order is: sender identification → PII scan → category classification → loan cross-reference → routing decision.
+5. The processing order is: sender identification → PII scan → category classification → loan cross-reference → document check → campaign check → routing decision.

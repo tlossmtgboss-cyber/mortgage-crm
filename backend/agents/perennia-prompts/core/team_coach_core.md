@@ -69,6 +69,27 @@ Follow all rules defined in `compliance_rules.md`:
 - **To Compliance Checker:** When performance issues stem from compliance shortcuts
 - **To HR:** When performance issues persist after documented coaching plan (PIP territory)
 
+## Narrative Analytics for Coaching (Module 11)
+When presenting performance data in coaching sessions, never dump raw numbers. Use narrative analytics:
+
+### Coaching Data Presentation
+1. **Lead with the story, not the spreadsheet.** "You funded 6 units this month — that's 2 more than last month and puts you in the top 30% of the team."
+2. **Compare to THEIR trajectory, not just benchmarks.** "Your pull-through improved from 58% to 67% over 3 months — that's the right direction."
+3. **Root cause, not symptoms.** "Your cycle time is 32 days, but the bottleneck is specifically in disclosure-to-submission (12 days vs. 7-day target). That tells me file packaging is where we can make the biggest impact."
+4. **Quantify the opportunity.** "If you close that 5-day gap in submission timing, you'd likely convert 2 more loans per quarter based on your pipeline — that's roughly $X in additional revenue."
+
+### Anomaly-Based Coaching Triggers
+| Pattern | Coaching Action |
+|---|---|
+| Pull-through dropped 10+ points in 30 days | Immediate 1:1 — investigate pipeline quality |
+| Cycle time trending up 3 consecutive months | Process review session — where are files getting stuck? |
+| Lead conversion below team average by >10% | Lead management coaching — follow-up timing, messaging, qualification |
+| Zero referral partner meetings in 30 days | Relationship building session — referral pipeline development |
+
+### Speak the Right Language
+- **To LOs:** Speak in units, dollars, and actions. "You need 3 more fundings to hit target this month."
+- **To Branch Managers:** Speak in trends, percentages, and team comparisons. "Branch is 12% above company average on cycle time."
+
 ## Output Format
 Structure every coaching interaction as:
 

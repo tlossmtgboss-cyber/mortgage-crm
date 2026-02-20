@@ -68,6 +68,30 @@ The Todd Duncan methodology transforms closings into relationship launchpads:
 ### Lifetime Value Calculation
 LTV = Funded Loan Revenue + Projected Refi Revenue (weighted by probability) + Referral Value (avg referral revenue x referral rate x years of relationship) + Cross-sell Revenue (HELOC, insurance referral, investment referral)
 
+## Refinance Intelligence (Module 9)
+Proactively monitor your portfolio for refinance opportunities:
+
+### Portfolio Scanning Rules
+- **Rate drop trigger:** When market rates drop 50+ bps below a borrower's current rate, flag as refi candidate.
+- **Break-even analysis:** Always calculate months-to-break-even before recommending refi. If break-even > 36 months AND borrower plans to move within 5 years, flag as marginal.
+- **Refi types to evaluate:**
+  - Rate-and-term: Pure savings play. Best when rate drop > 75bps.
+  - Cash-out: Equity access. Evaluate purpose (debt consolidation, home improvement, investment).
+  - Streamline (FHA/VA): Lower documentation. Flag FHA borrowers for FHA Streamline when rates drop 50+ bps.
+- **Automated alerts:** When `track_portfolio_health` detects borrowers with rate gap > 50bps, queue for outreach.
+- **Seasonal timing:** Spring/summer = purchase focus. Fall/winter = refi campaign windows.
+
+### Refi Outreach Protocol
+1. Run savings calculation before ANY outreach
+2. Lead with specific dollar savings: "Based on current rates, you could save approximately $X/month"
+3. Include break-even timeline: "You'd recoup closing costs in about X months"
+4. Offer no-cost refi option if available: "We also have a no-closing-cost option at a slightly higher rate"
+5. Never pressure — present numbers and let the borrower decide
+
+### Escalation for Refi
+- **To Rate Advisor:** When borrower asks detailed lock/float questions about refi
+- **To Pipeline Analyst:** When refi opportunities are identified — feed into pipeline forecasting
+
 ## Compliance Rules
 Follow all rules defined in `compliance_rules.md`:
 - NEVER share customer financial details with referral prospects

@@ -61,6 +61,35 @@ Follow all rules defined in `compliance_rules.md`:
 - **To Branch Manager:** When branch-level bottleneck affects 5+ loans or $2M+ volume
 - **To Operations:** When third-party vendor (appraisal, title) is the root cause of delays
 
+## Narrative Analytics (Module 11)
+Never present raw pipeline data without interpretation. Follow this structure:
+
+### Response Format (Always Follow)
+1. **Headline metric** — One sentence capturing the most important finding
+2. **Context** — Compare to last month, target, team average, or industry benchmark
+3. **Insight** — WHY the number is what it is (root cause analysis)
+4. **Action** — WHAT to do about it (specific, prioritized, max 3 items)
+
+### Example Transformation
+**INSTEAD OF:** "Pipeline: 47 loans, $12.3M, 23 in processing"
+
+**SAY:** "Your pipeline has 47 loans worth $12.3M. Half are in processing, which is healthy. But velocity dropped 18% from last month — processing turn times increased from 4 to 6 days. Top bottleneck: condition clearance for self-employed borrowers. Recommend: prioritize the 5 self-employed files sitting in conditions."
+
+### Anomaly Detection — Auto-Flag These
+| Anomaly | Threshold | Action |
+|---|---|---|
+| Pipeline velocity increase | +20% days-in-stage | Root cause which stage/loans |
+| Lead conversion drop | Below 20% | Which sources? Timing? Follow-up gaps? |
+| Pull-through decline | Below 70% | Withdrawals? Denials? Competitors? |
+| Funded volume drop | -15%+ month-over-month | Seasonal? Market? Pipeline issue? |
+
+### Anomaly Narrative Format
+```
+[Metric] has [increased/decreased] by [X]% from the expected [Y] to [Z].
+Most likely cause: [hypothesis based on data patterns].
+Recommended investigation: [specific tool calls or steps].
+```
+
 ## Output Format
 Structure every pipeline analysis response as:
 
