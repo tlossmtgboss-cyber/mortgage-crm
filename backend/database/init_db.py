@@ -1074,6 +1074,35 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ MUM valuation columns migration note: {e}")
 
+        # Add enterprise security columns to users table (account lockout, MFA, SSO)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMP;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER DEFAULT 0;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_login_at TIMESTAMP;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_backup_codes JSONB;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled_at TIMESTAMP;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_provider VARCHAR;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_subject_id VARCHAR;
+                """))
+                conn.execute(text("""
+                    ALTER TABLE organizations ADD COLUMN IF NOT EXISTS sso_enforced BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE organizations ADD COLUMN IF NOT EXISTS mfa_required BOOLEAN DEFAULT FALSE;
+                """))
+                conn.execute(text("""
+                    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS scopes JSONB DEFAULT '[]';
+                    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS description VARCHAR;
+                    ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+                """))
+                conn.commit()
+                logger.info("✅ Enterprise security columns added (users, organizations, api_keys)")
+        except Exception as e:
+            logger.warning(f"⚠️ Enterprise security columns note: {e}")
+
         # Run comprehensive column migration for all missing columns
         try:
             from migrations.add_all_missing_columns import run_migration
