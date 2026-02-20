@@ -284,8 +284,10 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                     status_code=status.HTTP_423_LOCKED,
                     detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
                 )
-        except ImportError:
-            pass  # Account lockout module not available, skip check
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Account lockout not available or columns missing, skip check
 
         if not user.hashed_password:
             logger.warning("Login attempt for user with no password set")
@@ -306,10 +308,10 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                         status_code=status.HTTP_423_LOCKED,
                         detail="Account has been locked due to too many failed login attempts. Please try again in 30 minutes.",
                     )
-            except ImportError:
-                pass  # Account lockout module not available, skip recording
             except HTTPException:
                 raise  # Re-raise the 423 HTTPException
+            except Exception:
+                pass  # Account lockout not available or columns missing, skip recording
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -326,8 +328,11 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             pass  # Account lockout module not available or column missing, skip
 
         # Update last_activity_at on successful login
-        user.last_activity_at = datetime.now(timezone.utc)
-        db.commit()
+        try:
+            user.last_activity_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception:
+            db.rollback()  # Column may not exist yet; don't block login
 
         # Create tokens with user context for proper security
         tenant_id = str(user.organization_id) if hasattr(user, 'organization_id') and user.organization_id else None

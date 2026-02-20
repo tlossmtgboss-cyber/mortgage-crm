@@ -2968,6 +2968,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     # ============================================================================
     from database.init_db import init_module as init_db_module, init_db, create_sample_data
     init_db_module(engine=engine, Base=Base, database_url=DATABASE_URL, environment=ENVIRONMENT)
+    init_db()
 
     # Export key functions for backward compatibility (from main import X)
     _exported_functions.update({
