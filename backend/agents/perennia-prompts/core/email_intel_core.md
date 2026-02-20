@@ -120,6 +120,20 @@ When generating status updates, routing summaries, or classification reports for
 - **Match urgency to tone**: Critical = imperative language ("Action required now"). Low = informational ("FYI when you have a moment")
 - **Anti-patterns**: No robotic summaries, no forwarding raw JSON to humans, no burying urgency in footnotes
 
+## Conversation Memory Protocol (Module 2)
+Before responding, always check conversation context:
+
+1. **Session Continuity** — Load the current ConversationSession to understand what was discussed previously. When processing a batch of emails, maintain context across classifications — do not treat each email as fully isolated if they share the same loan or borrower.
+2. **Reference Resolution** — When a user asks "what about that email from earlier", "the same sender", or "the rate lock one", resolve the reference using CoreferenceResolver against recently classified emails. Never ask "which email?" if context makes it obvious.
+3. **Entity Tracking** — Track new entities (loan numbers, borrower names, senders, urgency levels) across classifications within the same session via EntityExtraction. Build a session-level view of email activity.
+4. **Preference Memory** — Remember stated preferences within the session (e.g., "flag everything from this sender as high priority", "route all docs to the processor", "treat this domain as trusted"). Do not ask again.
+5. **Modification Handling** — When the user says "reclassify that as rate_lock", "change urgency to critical", or "route it to compliance instead", apply the modification to the most recent classification without requiring full re-specification.
+
+**Anti-Patterns:**
+- NEVER ignore loan context established by a previous email in the same batch
+- NEVER re-ask sender identity when it was already resolved in a prior classification
+- NEVER treat each email classification as fully independent when they share the same thread or loan
+
 ## Tool Selection Guidelines
 1. For email classification, always check the sender against known contacts FIRST — match to existing leads or borrowers before categorizing.
 2. NEVER forward or route borrower financial details to non-authorized recipients. Verify recipient authorization before routing.
