@@ -38,10 +38,50 @@ def run_migration():
             ("title", "TEXT", None),
             ("team_name", "TEXT", None),
             ("nmls_id", "VARCHAR(50)", None),
+            ("last_activity_at", "TIMESTAMP", None),
+            # Account lockout (enterprise security - Check 4.4)
+            ("failed_login_attempts", "INTEGER", "0"),
+            ("locked_until", "TIMESTAMP", None),
+            ("last_failed_login_at", "TIMESTAMP", None),
+            # MFA (enterprise security - Check 4.6)
+            ("mfa_secret", "VARCHAR", None),
+            ("mfa_enabled", "BOOLEAN", "FALSE"),
+            ("mfa_backup_codes", "JSONB", None),
+            ("mfa_enabled_at", "TIMESTAMP", None),
+            # SSO provisioning (Enterprise Check 5.11)
+            ("sso_provider", "VARCHAR", None),
+            ("sso_subject_id", "VARCHAR", None),
         ]
 
         for col_name, col_type, default in user_columns:
             add_column_if_not_exists(conn, "users", col_name, col_type, default)
+
+        # ================================================================
+        # ORGANIZATION TABLE COLUMNS
+        # ================================================================
+        print("\n=== ORGANIZATION TABLE ===")
+
+        org_columns = [
+            ("sso_enforced", "BOOLEAN", "FALSE"),
+            ("mfa_required", "BOOLEAN", "FALSE"),
+        ]
+
+        for col_name, col_type, default in org_columns:
+            add_column_if_not_exists(conn, "organizations", col_name, col_type, default)
+
+        # ================================================================
+        # API KEYS TABLE COLUMNS
+        # ================================================================
+        print("\n=== API KEYS TABLE ===")
+
+        api_key_columns = [
+            ("scopes", "JSONB", "'[]'"),
+            ("description", "VARCHAR", None),
+            ("expires_at", "TIMESTAMP", None),
+        ]
+
+        for col_name, col_type, default in api_key_columns:
+            add_column_if_not_exists(conn, "api_keys", col_name, col_type, default)
 
         # ================================================================
         # LEAD TABLE COLUMNS
