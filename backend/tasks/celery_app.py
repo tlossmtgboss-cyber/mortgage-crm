@@ -230,6 +230,19 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute="*/2"),  # Every 2 minutes
         "options": {"queue": "video_render"},
     },
+
+    # Data Retention & DR Tasks
+    "run-data-retention-cleanup": {
+        "task": "tasks.sla_tasks.run_retention_cleanup_task",
+        "schedule": crontab(hour="3", minute="30", day_of_week="sunday"),  # Sunday 3:30 AM
+        "options": {"queue": "low_priority"},
+        "kwargs": {"dry_run": False},
+    },
+    "verify-backup-integrity": {
+        "task": "tasks.sla_tasks.verify_backup_task",
+        "schedule": crontab(hour="5", minute="0"),  # Daily 5 AM
+        "options": {"queue": "low_priority"},
+    },
 }
 
 

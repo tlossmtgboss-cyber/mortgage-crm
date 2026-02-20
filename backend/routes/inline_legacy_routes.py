@@ -272,6 +272,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.error(f"❌ Backup & DR routes failed: {e}")
 
     try:
+        from routes.dr_routes import register_dr_routes
+        register_dr_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("✅ DR management routes loaded (failover, retention, degradation)")
+    except Exception as e:
+        logger.error(f"❌ DR management routes failed: {e}")
+
+    try:
         from routes.gdpr_routes import register_gdpr_routes
         register_gdpr_routes(app, get_db, get_current_user, **kwargs)
         logger.info("✅ GDPR/CCPA data deletion routes loaded (extracted)")

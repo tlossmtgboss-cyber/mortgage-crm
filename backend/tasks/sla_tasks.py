@@ -667,3 +667,61 @@ def setup_sla_scheduler(scheduler):
     )
 
     logger.info("SLA scheduler jobs configured: status updates (15min), alerts (hourly), snapshots (8am/12pm), weekly report (Mon 6am)")
+
+
+# ============================================================================
+# Data Retention & Backup Tasks (Domain 8: Disaster Recovery)
+# ============================================================================
+
+def run_retention_cleanup_task(dry_run: bool = False):
+    """
+    Celery task: Run automated data retention cleanup.
+
+    Processes all organizations, deleting/redacting records past their
+    retention period. Default schedule: Sunday 3:30 AM.
+    """
+    db = SessionLocal()
+    try:
+        from services.data_retention import DataRetentionService
+
+        service = DataRetentionService(db)
+        result = service.run_retention_cleanup(dry_run=dry_run)
+        logger.info(
+            f"Retention cleanup: {result.get('total_records_affected', 0)} "
+            f"records affected (dry_run={dry_run})"
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Retention cleanup task failed: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
+
+
+def verify_backup_task():
+    """
+    Celery task: Verify backup integrity and RPO compliance.
+
+    Runs daily backup verification and records results for audit.
+    Default schedule: daily 5 AM.
+    """
+    db = SessionLocal()
+    try:
+        from services.backup_service import BackupVerificationService
+
+        service = BackupVerificationService(db)
+        backup_status = service.verify_latest_backup()
+        integrity = service.verify_backup_integrity()
+        service.record_verification(backup_status, integrity)
+
+        is_compliant = backup_status.get("rpo_compliant", False)
+        logger.info(
+            f"Backup verification: status={backup_status.get('status')}, "
+            f"RPO compliant={is_compliant}"
+        )
+        return {"status": backup_status.get("status"), "rpo_compliant": is_compliant}
+    except Exception as e:
+        logger.error(f"Backup verification task failed: {e}")
+        return {"error": str(e)}
+    finally:
+        db.close()
