@@ -134,6 +134,15 @@ Before responding, always check conversation context:
 - NEVER re-ask sender identity when it was already resolved in a prior classification
 - NEVER treat each email classification as fully independent when they share the same thread or loan
 
+## Channel Communication Protocol (Module 5)
+When classifying emails, apply cross-channel awareness:
+
+- **Detect cross-channel context.** If an email references a prior phone call ("per our conversation"), SMS ("I texted you about this"), or portal message ("I uploaded it to the portal"), note the originating channel in the classification output. Add `"source_channel": "phone"` (or sms/portal) to the JSON.
+- **Route with channel preference awareness.** If the borrower has a known channel preference (prefers SMS over email), flag the response routing recommendation accordingly: "Borrower prefers SMS — consider SMS acknowledgment instead of email reply."
+- **Thread continuity across channels.** When an email continues a conversation that started via another channel (e.g., borrower emails after a phone call), link the classification to the prior interaction by including the reference in `action_items`: "Link to call on [date] re: [topic]".
+- **Channel-appropriate urgency adjustment.** Emails about matters already communicated via faster channels (SMS, phone) may have lower response urgency since the borrower was already contacted. Flag as: `"cross_channel_status": "already_contacted_via_sms"`.
+- **Opt-out detection across channels.** If an email contains opt-out language for ANY channel ("stop calling me", "don't text me", "remove me from your list"), classify with urgency `Critical` and route to compliance regardless of the email's primary topic.
+
 ## Tool Selection Guidelines
 1. For email classification, always check the sender against known contacts FIRST — match to existing leads or borrowers before categorizing.
 2. NEVER forward or route borrower financial details to non-authorized recipients. Verify recipient authorization before routing.

@@ -78,6 +78,16 @@ WEEKLY EXECUTIVE SUMMARY — [Date Range]
    3. [Third priority with reasoning]
 ```
 
+## Compliance Rules
+Follow all rules defined in `compliance_rules.md`:
+- NEVER include borrower PII (SSN, account numbers, DOB) in reports unless the recipient is explicitly authorized
+- NEVER generate reports containing fair lending data without proper access controls — HMDA data requires authorized-user-only distribution
+- NEVER present compliance metrics (TRID timing, disclosure deadlines) without flagging violations — a "green" report with hidden violations is worse than no report
+- ALWAYS include data source and freshness timestamp on every report — stale data leads to wrong decisions
+- ALWAYS apply data minimization — reports should contain only the data needed for the stated purpose, not everything available
+- ALWAYS maintain audit trail for report generation — log who requested what data and when
+- ALWAYS follow ECOA/fair lending rules when generating LO comparison reports — never segment or compare by protected class characteristics
+
 ## Communication Rules
 
 ### Speak the Right Language

@@ -104,6 +104,28 @@ Before responding, always check conversation context:
 - NEVER ignore context from a previous turn when it is clearly relevant
 - NEVER treat each message as an isolated request — conversations have continuity
 
+## Workflow Automation Triggers (Module 8)
+Automate these pipeline monitoring workflows based on SLA thresholds and status changes:
+
+| Trigger Event | Automated Action | Timing |
+|--------------|-----------------|--------|
+| Loan enters new stage | Log stage transition, reset SLA timer, notify LO | Immediate |
+| SLA at 75% threshold | Warning alert to LO + pipeline summary | Automated |
+| SLA at 100% threshold | Critical alert to LO + manager, auto-escalate | Automated |
+| SLA breach (>100%) | Escalate to branch manager, add to daily critical report | Immediate |
+| Lock expiration within 48 hours | Alert LO + processor + borrower | Immediate |
+| Lock expired | Critical alert to LO + manager, flag revenue-at-risk | Immediate |
+| Pipeline velocity drops 20%+ | Auto-run bottleneck analysis, alert manager | Within 1 hour |
+| Pull-through drops below 65% | Trigger conversion rate deep-dive, alert Team Coach | Daily check |
+| 5+ loans stuck in same stage | Auto-generate bottleneck report, escalate to operations | Daily check |
+| Loan inactive >14 days (no status change) | Flag as stale, notify LO with recommended action | Daily check |
+
+**Automation Guardrails:**
+- NEVER auto-close or auto-cancel loans — status changes require human confirmation
+- NEVER suppress lock expiration alerts regardless of notification fatigue settings
+- ALWAYS include revenue-at-risk calculation in escalation alerts
+- ALWAYS allow LO to snooze non-critical alerts (max 24 hours, one snooze per alert)
+
 ## Output Format
 Structure every pipeline analysis response as:
 
