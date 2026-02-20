@@ -1,9 +1,10 @@
 """
 Backup & Disaster Recovery Management Routes
-Enterprise Readiness - Domain 8: Disaster Recovery (Checks 8.3, 8.4)
+Enterprise Readiness - Domain 8: Disaster Recovery (Checks 8.2, 8.3, 8.4)
 
 Admin-only endpoints for:
 - Backup history and verification
+- Backup restoration testing and history
 - RPO/RTO compliance monitoring
 - Cross-region replication status
 - Overall DR readiness dashboard
@@ -235,5 +236,67 @@ def register_backup_routes(app, get_db, get_current_user, **kwargs):
             )
 
         return result
+
+    # ==================================================================
+    # POST /api/v1/admin/backups/test-restore - Test backup restoration
+    # ==================================================================
+
+    @app.post("/api/v1/admin/backups/test-restore")
+    async def test_backup_restore(
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Trigger a backup restoration test.
+
+        Verifies that backups are restorable by either performing a full
+        pg_dump/restore cycle to a temporary database (if tools are
+        available) or running comprehensive logical verification checks
+        including row counts, data freshness, WAL continuity, and
+        index/constraint integrity.
+
+        Results are recorded in backup_restore_tests for audit history.
+        This is an expensive operation; use sparingly (e.g., weekly).
+        """
+        _require_admin(current_user)
+
+        from services.backup_service import BackupVerificationService
+
+        service = BackupVerificationService(db)
+        result = service.test_backup_restoration()
+
+        return {
+            "test_result": result,
+            "triggered_by": getattr(current_user, "email", "unknown"),
+        }
+
+    # ==================================================================
+    # GET /api/v1/admin/backups/restore-history - Restoration test log
+    # ==================================================================
+
+    @app.get("/api/v1/admin/backups/restore-history")
+    async def get_restore_history(
+        limit: int = 10,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Get history of backup restoration tests.
+
+        Returns a list of past restoration test results including
+        success/failure status, RTO achieved, row counts, and
+        integrity check summaries.
+        """
+        _require_admin(current_user)
+
+        from services.backup_service import BackupVerificationService
+
+        service = BackupVerificationService(db)
+        history = service.get_restoration_history(limit=limit)
+
+        return {
+            "total_records": len(history),
+            "history": history,
+        }
 
     logger.info("Backup & DR routes registered")

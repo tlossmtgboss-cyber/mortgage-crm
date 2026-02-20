@@ -719,8 +719,17 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
 
         async def execute_get_pipeline(args):
             include_details = args.get("include_details", True)  # Default to include details
-            leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
-            loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+            org_id = getattr(current_user, 'organization_id', None)
+
+            leads_query = db.query(Lead).filter(Lead.owner_id == current_user.id)
+            if org_id:
+                leads_query = leads_query.filter(Lead.organization_id == org_id)
+            leads = leads_query.all()
+
+            loans_query = db.query(Loan).filter(Loan.loan_officer_id == current_user.id)
+            if org_id:
+                loans_query = loans_query.filter(Loan.organization_id == org_id)
+            loans = loans_query.all()
 
             lead_stages = {}
             for lead in leads:
@@ -762,8 +771,10 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             stage = args.get("stage")
             limit = args.get("limit", 20)
 
-            # For demo: show all leads (not filtered by owner) so AI can see real data
+            org_id = getattr(current_user, 'organization_id', None)
             query = db.query(Lead)
+            if org_id:
+                query = query.filter(Lead.organization_id == org_id)
 
             if query_str:
                 search = f"%{query_str}%"
@@ -889,7 +900,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if recipient_name and not phone_number:
                 # Search in leads and users (no Contact model in this scope)
                 search = f"%{recipient_name}%"
-                lead = db.query(Lead).filter(Lead.name.ilike(search)).first()
+                org_id = getattr(current_user, 'organization_id', None)
+                lead_q = db.query(Lead).filter(Lead.name.ilike(search))
+                if org_id:
+                    lead_q = lead_q.filter(Lead.organization_id == org_id)
+                lead = lead_q.first()
                 if lead and lead.phone:
                     phone_number = lead.phone
                 else:
@@ -1198,8 +1213,15 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             else:
                 start_date = today.replace(day=1)
 
-            loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
-            leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+            org_id = getattr(current_user, 'organization_id', None)
+            loans_q = db.query(Loan).filter(Loan.loan_officer_id == current_user.id)
+            if org_id:
+                loans_q = loans_q.filter(Loan.organization_id == org_id)
+            loans = loans_q.all()
+            leads_q = db.query(Lead).filter(Lead.owner_id == current_user.id)
+            if org_id:
+                leads_q = leads_q.filter(Lead.organization_id == org_id)
+            leads = leads_q.all()
 
             return {
                 "success": True,
@@ -1240,11 +1262,15 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         async def execute_get_mum_clients(args):
             """Get Move Up/Move Down clients"""
             limit = args.get("limit", 10)
+            org_id = getattr(current_user, 'organization_id', None)
             # Get closed loans that might be candidates for refinance
-            loans = db.query(Loan).filter(
+            mum_q = db.query(Loan).filter(
                 Loan.loan_officer_id == current_user.id,
                 Loan.stage.in_(["Closed", "closed", "CLOSED"])
-            ).limit(limit).all()
+            )
+            if org_id:
+                mum_q = mum_q.filter(Loan.organization_id == org_id)
+            loans = mum_q.limit(limit).all()
 
             return {
                 "success": True,
@@ -1257,8 +1283,12 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         async def execute_get_referral_partners(args):
             """Get referral partners"""
             limit = args.get("limit", 10)
+            org_id = getattr(current_user, 'organization_id', None)
             # Get leads grouped by source
-            leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+            ref_q = db.query(Lead).filter(Lead.owner_id == current_user.id)
+            if org_id:
+                ref_q = ref_q.filter(Lead.organization_id == org_id)
+            leads = ref_q.all()
             sources = {}
             for lead in leads:
                 source = lead.source or "Unknown"
@@ -1293,7 +1323,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                 if user and user.phone:
                     phone_number = user.phone
                 else:
-                    lead = db.query(Lead).filter(Lead.name.ilike(f"%{contact_name}%")).first()
+                    org_id = getattr(current_user, 'organization_id', None)
+                    lead_q = db.query(Lead).filter(Lead.name.ilike(f"%{contact_name}%"))
+                    if org_id:
+                        lead_q = lead_q.filter(Lead.organization_id == org_id)
+                    lead = lead_q.first()
                     if lead and lead.phone:
                         phone_number = lead.phone
 
@@ -1313,6 +1347,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if not name:
                 return {"success": False, "error": "Name is required"}
 
+            org_id = getattr(current_user, 'organization_id', None)
             new_lead = Lead(
                 name=name,
                 email=email,
@@ -1320,6 +1355,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                 source=source,
                 notes=notes,
                 owner_id=current_user.id,
+                organization_id=org_id,
                 lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
             )
             db.add(new_lead)
@@ -1337,7 +1373,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
 
             # Look up phone if not provided
             if not recipient_phone and recipient_name:
-                lead = db.query(Lead).filter(Lead.name.ilike(f"%{recipient_name}%")).first()
+                org_id = getattr(current_user, 'organization_id', None)
+                vm_lead_q = db.query(Lead).filter(Lead.name.ilike(f"%{recipient_name}%"))
+                if org_id:
+                    vm_lead_q = vm_lead_q.filter(Lead.organization_id == org_id)
+                lead = vm_lead_q.first()
                 if lead and lead.phone:
                     recipient_phone = lead.phone
 
@@ -1361,20 +1401,30 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             lead_id = args.get("lead_id")
             loan_id = args.get("loan_id")
 
+            org_id = getattr(current_user, 'organization_id', None)
             # Look up email if not provided
             if not recipient_email:
                 if lead_id:
-                    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                    email_lead_q = db.query(Lead).filter(Lead.id == lead_id)
+                    if org_id:
+                        email_lead_q = email_lead_q.filter(Lead.organization_id == org_id)
+                    lead = email_lead_q.first()
                     if lead:
                         recipient_email = lead.email
                         recipient_name = lead.name
                 elif loan_id:
-                    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+                    email_loan_q = db.query(Loan).filter(Loan.id == loan_id)
+                    if org_id:
+                        email_loan_q = email_loan_q.filter(Loan.organization_id == org_id)
+                    loan = email_loan_q.first()
                     if loan:
                         recipient_email = loan.borrower_email
                         recipient_name = loan.borrower_name
                 elif recipient_name:
-                    lead = db.query(Lead).filter(Lead.name.ilike(f"%{recipient_name}%")).first()
+                    email_name_q = db.query(Lead).filter(Lead.name.ilike(f"%{recipient_name}%"))
+                    if org_id:
+                        email_name_q = email_name_q.filter(Lead.organization_id == org_id)
+                    lead = email_name_q.first()
                     if lead:
                         recipient_email = lead.email
 
@@ -1435,8 +1485,12 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
 
         async def execute_get_employee_capacity(args):
             """Get team capacity analysis"""
+            org_id = getattr(current_user, 'organization_id', None)
             # Get all users in the organization
-            users = db.query(User).filter(User.is_active == True).limit(10).all()
+            cap_user_q = db.query(User).filter(User.is_active == True)
+            if org_id:
+                cap_user_q = cap_user_q.filter(User.organization_id == org_id)
+            users = cap_user_q.limit(10).all()
 
             capacity_data = []
             for user in users:
@@ -1444,9 +1498,12 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                     AITask.assigned_to_id == user.id,
                     AITask.type != TaskType.COMPLETED
                 ).count()
-                loan_count = db.query(Loan).filter(
+                loan_q = db.query(Loan).filter(
                     Loan.loan_officer_id == user.id
-                ).count()
+                )
+                if org_id:
+                    loan_q = loan_q.filter(Loan.organization_id == org_id)
+                loan_count = loan_q.count()
 
                 capacity_data.append({
                     "name": user.full_name,
@@ -1464,9 +1521,13 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         async def execute_get_at_risk_deals(args):
             """Get loans at risk"""
             today = datetime.now().date()
+            org_id = getattr(current_user, 'organization_id', None)
 
             # Get loans with risk factors
-            loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+            risk_q = db.query(Loan).filter(Loan.loan_officer_id == current_user.id)
+            if org_id:
+                risk_q = risk_q.filter(Loan.organization_id == org_id)
+            loans = risk_q.all()
 
             at_risk = []
             for loan in loans:
@@ -1514,9 +1575,13 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         async def execute_get_activity_metrics(args):
             """Get activity metrics by team member"""
             period = args.get("period", "week")
+            org_id = getattr(current_user, 'organization_id', None)
 
             # Get team members
-            users = db.query(User).filter(User.is_active == True).limit(20).all()
+            act_user_q = db.query(User).filter(User.is_active == True)
+            if org_id:
+                act_user_q = act_user_q.filter(User.organization_id == org_id)
+            users = act_user_q.limit(20).all()
 
             metrics = []
             for user in users:
@@ -1527,9 +1592,12 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                 ).count()
 
                 # Count active loans
-                active_loans = db.query(Loan).filter(
+                act_loan_q = db.query(Loan).filter(
                     Loan.loan_officer_id == user.id
-                ).count()
+                )
+                if org_id:
+                    act_loan_q = act_loan_q.filter(Loan.organization_id == org_id)
+                active_loans = act_loan_q.count()
 
                 metrics.append({
                     "name": user.full_name,
@@ -1548,9 +1616,13 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
 
         async def execute_get_document_status(args):
             """Get missing documents per loan"""
-            loans = db.query(Loan).filter(
+            org_id = getattr(current_user, 'organization_id', None)
+            doc_loan_q = db.query(Loan).filter(
                 Loan.loan_officer_id == current_user.id
-            ).limit(20).all()
+            )
+            if org_id:
+                doc_loan_q = doc_loan_q.filter(Loan.organization_id == org_id)
+            loans = doc_loan_q.limit(20).all()
 
             doc_status = []
             for loan in loans:
@@ -1584,13 +1656,20 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             """Predict which borrowers might ghost"""
             loan_id = args.get("loan_id")
             threshold = args.get("threshold", 0.5)
+            org_id = getattr(current_user, 'organization_id', None)
 
             if loan_id:
-                loans = db.query(Loan).filter(Loan.id == loan_id).all()
+                ghost_q = db.query(Loan).filter(Loan.id == loan_id)
+                if org_id:
+                    ghost_q = ghost_q.filter(Loan.organization_id == org_id)
+                loans = ghost_q.all()
             else:
-                loans = db.query(Loan).filter(
+                ghost_q = db.query(Loan).filter(
                     Loan.loan_officer_id == current_user.id
-                ).limit(20).all()
+                )
+                if org_id:
+                    ghost_q = ghost_q.filter(Loan.organization_id == org_id)
+                loans = ghost_q.limit(20).all()
 
             predictions = []
             for loan in loans:
@@ -1628,13 +1707,20 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         async def execute_predict_deal_success(args):
             """Predict deal success probability"""
             loan_id = args.get("loan_id")
+            org_id = getattr(current_user, 'organization_id', None)
 
             if loan_id:
-                loans = db.query(Loan).filter(Loan.id == loan_id).all()
+                deal_q = db.query(Loan).filter(Loan.id == loan_id)
+                if org_id:
+                    deal_q = deal_q.filter(Loan.organization_id == org_id)
+                loans = deal_q.all()
             else:
-                loans = db.query(Loan).filter(
+                deal_q = db.query(Loan).filter(
                     Loan.loan_officer_id == current_user.id
-                ).limit(20).all()
+                )
+                if org_id:
+                    deal_q = deal_q.filter(Loan.organization_id == org_id)
+                loans = deal_q.limit(20).all()
 
             predictions = []
             for loan in loans:
@@ -1673,10 +1759,14 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         async def execute_forecast_revenue(args):
             """Forecast revenue from current pipeline"""
             timeframe = args.get("timeframe", "90_days")
+            org_id = getattr(current_user, 'organization_id', None)
 
-            loans = db.query(Loan).filter(
+            rev_q = db.query(Loan).filter(
                 Loan.loan_officer_id == current_user.id
-            ).all()
+            )
+            if org_id:
+                rev_q = rev_q.filter(Loan.organization_id == org_id)
+            loans = rev_q.all()
 
             total_pipeline = sum(float(loan.amount or 0) for loan in loans)
             avg_close_rate = 0.65  # Historical assumption
@@ -1713,12 +1803,16 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             """Find refinance candidates from past clients"""
             min_rate_savings_bps = args.get("min_rate_savings_bps", 50)
             min_months_since_close = args.get("min_months_since_close", 12)
+            org_id = getattr(current_user, 'organization_id', None)
 
             # Get funded/closed loans
-            funded_loans = db.query(Loan).filter(
+            refi_q = db.query(Loan).filter(
                 Loan.loan_officer_id == current_user.id,
                 Loan.stage.in_(["FUNDED", "CLOSED", "LoanStage.FUNDED", "LoanStage.CLOSED"])
-            ).limit(50).all()
+            )
+            if org_id:
+                refi_q = refi_q.filter(Loan.organization_id == org_id)
+            funded_loans = refi_q.limit(50).all()
 
             candidates = []
             current_rate = 6.5  # Assume current market rate
@@ -1929,14 +2023,21 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             new_stage = args.get("new_stage", "")
             notes = args.get("notes", "")
 
+            org_id = getattr(current_user, 'organization_id', None)
             lead = None
             if lead_id:
-                lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
+                mls_q = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id)
+                if org_id:
+                    mls_q = mls_q.filter(Lead.organization_id == org_id)
+                lead = mls_q.first()
             elif lead_name:
-                lead = db.query(Lead).filter(
+                mls_q = db.query(Lead).filter(
                     Lead.name.ilike(f"%{lead_name}%"),
                     Lead.owner_id == current_user.id
-                ).first()
+                )
+                if org_id:
+                    mls_q = mls_q.filter(Lead.organization_id == org_id)
+                lead = mls_q.first()
 
             if not lead:
                 return {"success": False, "error": "Lead not found"}
@@ -1979,14 +2080,21 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             new_stage = args.get("new_stage", "")
             notes = args.get("notes", "")
 
+            org_id = getattr(current_user, 'organization_id', None)
             loan = None
             if loan_id:
-                loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
+                mlo_q = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id)
+                if org_id:
+                    mlo_q = mlo_q.filter(Loan.organization_id == org_id)
+                loan = mlo_q.first()
             elif borrower_name:
-                loan = db.query(Loan).filter(
+                mlo_q = db.query(Loan).filter(
                     Loan.borrower_name.ilike(f"%{borrower_name}%"),
                     Loan.loan_officer_id == current_user.id
-                ).first()
+                )
+                if org_id:
+                    mlo_q = mlo_q.filter(Loan.organization_id == org_id)
+                loan = mlo_q.first()
 
             if not loan:
                 return {"success": False, "error": "Loan not found"}
@@ -2108,7 +2216,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             # If we have a name but no phone, look it up
             if recipient_name and not phone_number:
                 search = f"%{recipient_name}%"
-                lead = db.query(Lead).filter(Lead.name.ilike(search)).first()
+                org_id = getattr(current_user, 'organization_id', None)
+                mms_lead_q = db.query(Lead).filter(Lead.name.ilike(search))
+                if org_id:
+                    mms_lead_q = mms_lead_q.filter(Lead.organization_id == org_id)
+                lead = mms_lead_q.first()
                 if lead and lead.phone:
                     phone_number = lead.phone
                 else:
@@ -2416,10 +2528,14 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             email = args.get("email", "")
             phone = args.get("phone", "")
             name = args.get("name", "")
+            org_id = getattr(current_user, 'organization_id', None)
 
             # If lead_id provided, get lead details
             if lead_id:
-                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+                dup_lead_q = db.query(Lead).filter(Lead.id == lead_id)
+                if org_id:
+                    dup_lead_q = dup_lead_q.filter(Lead.organization_id == org_id)
+                lead = dup_lead_q.first()
                 if lead:
                     email = email or lead.email
                     phone = phone or lead.phone
@@ -2432,10 +2548,13 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
 
             # Search by email (exact match)
             if email:
-                email_matches = db.query(Lead).filter(
+                email_q = db.query(Lead).filter(
                     Lead.email.ilike(email),
                     Lead.id != lead_id if lead_id else True
-                ).all()
+                )
+                if org_id:
+                    email_q = email_q.filter(Lead.organization_id == org_id)
+                email_matches = email_q.all()
                 for match in email_matches:
                     duplicates.append({
                         "lead_id": match.id,
@@ -2450,10 +2569,13 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if phone:
                 phone_digits = ''.join(filter(str.isdigit, phone))
                 if len(phone_digits) >= 10:
-                    phone_matches = db.query(Lead).filter(
+                    phone_q = db.query(Lead).filter(
                         Lead.phone.ilike(f"%{phone_digits[-10:]}%"),
                         Lead.id != lead_id if lead_id else True
-                    ).all()
+                    )
+                    if org_id:
+                        phone_q = phone_q.filter(Lead.organization_id == org_id)
+                    phone_matches = phone_q.all()
                     for match in phone_matches:
                         if match.id not in [d["lead_id"] for d in duplicates]:
                             duplicates.append({
@@ -2470,10 +2592,13 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                 name_parts = name.lower().split()
                 for part in name_parts:
                     if len(part) > 2:
-                        name_matches = db.query(Lead).filter(
+                        name_q = db.query(Lead).filter(
                             Lead.name.ilike(f"%{part}%"),
                             Lead.id != lead_id if lead_id else True
-                        ).limit(10).all()
+                        )
+                        if org_id:
+                            name_q = name_q.filter(Lead.organization_id == org_id)
+                        name_matches = name_q.limit(10).all()
                         for match in name_matches:
                             if match.id not in [d["lead_id"] for d in duplicates]:
                                 # Calculate name similarity
@@ -2509,7 +2634,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if not lead_id:
                 return {"success": False, "error": "lead_id is required"}
 
-            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            org_id = getattr(current_user, 'organization_id', None)
+            assign_q = db.query(Lead).filter(Lead.id == lead_id)
+            if org_id:
+                assign_q = assign_q.filter(Lead.organization_id == org_id)
+            lead = assign_q.first()
             if not lead:
                 return {"success": False, "error": f"Lead not found: {lead_id}"}
 
@@ -2607,11 +2736,15 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if not stage:
                 return {"success": False, "error": "stage is required"}
 
+            org_id = getattr(current_user, 'organization_id', None)
             entity = None
             old_stage = None
 
             if entity_type == "lead":
-                entity = db.query(Lead).filter(Lead.id == entity_id).first()
+                pipe_q = db.query(Lead).filter(Lead.id == entity_id)
+                if org_id:
+                    pipe_q = pipe_q.filter(Lead.organization_id == org_id)
+                entity = pipe_q.first()
                 if entity:
                     old_stage = str(entity.stage) if entity.stage else "Unknown"
                     # Map to LeadStage enum if available
@@ -2620,7 +2753,10 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                     except (ValueError, AttributeError):
                         entity.stage = stage  # Use raw value if enum conversion fails
             else:
-                entity = db.query(Loan).filter(Loan.id == entity_id).first()
+                pipe_loan_q = db.query(Loan).filter(Loan.id == entity_id)
+                if org_id:
+                    pipe_loan_q = pipe_loan_q.filter(Loan.organization_id == org_id)
+                entity = pipe_loan_q.first()
                 if entity:
                     old_stage = str(entity.stage).replace("LoanStage.", "") if entity.stage else "Unknown"
                     # Map to LoanStage enum
@@ -2678,6 +2814,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if not document_types:
                 return {"success": False, "error": "document_types is required"}
 
+            org_id = getattr(current_user, 'organization_id', None)
             # Find the entity (loan or lead)
             entity = None
             entity_type = None
@@ -2685,13 +2822,19 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             contact_name = None
 
             if loan_id:
-                entity = db.query(Loan).filter(Loan.id == loan_id).first()
+                req_loan_q = db.query(Loan).filter(Loan.id == loan_id)
+                if org_id:
+                    req_loan_q = req_loan_q.filter(Loan.organization_id == org_id)
+                entity = req_loan_q.first()
                 entity_type = "loan"
                 if entity:
                     contact_name = entity.borrower_name
                     contact_email = entity.borrower_email
             elif lead_id:
-                entity = db.query(Lead).filter(Lead.id == lead_id).first()
+                req_lead_q = db.query(Lead).filter(Lead.id == lead_id)
+                if org_id:
+                    req_lead_q = req_lead_q.filter(Lead.organization_id == org_id)
+                entity = req_lead_q.first()
                 entity_type = "lead"
                 if entity:
                     contact_name = entity.name
@@ -2833,7 +2976,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if not all([loan_id, rate, lock_period_days]):
                 return {"success": False, "error": "loan_id, rate, and lock_period_days are required"}
 
-            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            org_id = getattr(current_user, 'organization_id', None)
+            lock_q = db.query(Loan).filter(Loan.id == loan_id)
+            if org_id:
+                lock_q = lock_q.filter(Loan.organization_id == org_id)
+            loan = lock_q.first()
             if not loan:
                 return {"success": False, "error": f"Loan not found: {loan_id}"}
 
@@ -2883,7 +3030,11 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             if not all([loan_id, extension_days]):
                 return {"success": False, "error": "loan_id and extension_days are required"}
 
-            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            org_id = getattr(current_user, 'organization_id', None)
+            ext_q = db.query(Loan).filter(Loan.id == loan_id)
+            if org_id:
+                ext_q = ext_q.filter(Loan.organization_id == org_id)
+            loan = ext_q.first()
             if not loan:
                 return {"success": False, "error": f"Loan not found: {loan_id}"}
 
@@ -3176,8 +3327,15 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
         start_of_year = today.replace(month=1, day=1)
 
         all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
-        all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
-        all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+        _org_id = getattr(current_user, 'organization_id', None)
+        _leads_q = db.query(Lead).filter(Lead.owner_id == current_user.id)
+        if _org_id:
+            _leads_q = _leads_q.filter(Lead.organization_id == _org_id)
+        all_leads = _leads_q.all()
+        _loans_q = db.query(Loan).filter(Loan.loan_officer_id == current_user.id)
+        if _org_id:
+            _loans_q = _loans_q.filter(Loan.organization_id == _org_id)
+        all_loans = _loans_q.all()
 
         # Fetch profitability data for financial questions using ProfitabilityService
         try:

@@ -475,10 +475,18 @@ async def get_loan(
 async def update_loan(
     loan_id: int,
     update_data: dict,
+    force_closing: bool = Query(False, description="Override CD waiting period (admin/site_admin only)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    """Update a loan by ID."""
+    """Update a loan by ID.
+
+    Compliance enforcement:
+    - Changed circumstances (rate, amount, loan_type, program, property_address)
+      auto-trigger a Revised LE DisclosureEvent and ComplianceAlert.
+    - Setting closing_date enforces the 3 business day CD waiting period.
+      Use force_closing=true (admin/site_admin only) to override.
+    """
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
 
@@ -487,6 +495,47 @@ async def update_loan(
     ).filter(Loan.id == loan_id).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
+
+    # ========================================================================
+    # Critical Failure 2.5: CD Waiting Period Enforcement
+    # Block closing if CD not sent >= 3 business days before closing date
+    # ========================================================================
+    if "closing_date" in update_data and update_data["closing_date"]:
+        try:
+            from services.disclosure_trigger import validate_cd_waiting_period
+
+            new_closing = update_data["closing_date"]
+            # Parse string dates if needed
+            if isinstance(new_closing, str):
+                new_closing = datetime.fromisoformat(new_closing.replace("Z", "+00:00"))
+
+            user_role = getattr(current_user, "permission_role", None) or getattr(current_user, "role", None)
+            user_id = getattr(current_user, "id", None)
+
+            cd_error = validate_cd_waiting_period(
+                db=db,
+                loan=loan,
+                new_closing_date=new_closing,
+                force_closing=force_closing,
+                user_role=user_role,
+                user_id=user_id,
+            )
+            if cd_error:
+                raise HTTPException(status_code=422, detail=cd_error)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"CD waiting period check failed: {e}", exc_info=True)
+            # Don't block the update if the check itself errors
+
+    # ========================================================================
+    # Critical Failure 2.3: Capture old values for changed circumstance detection
+    # ========================================================================
+    tracked_fields = ["rate", "amount", "loan_type", "program", "property_address"]
+    old_values = {}
+    for field in tracked_fields:
+        if field in update_data:
+            old_values[field] = getattr(loan, field, None)
 
     # Fields that can be updated
     updatable_fields = [
@@ -511,11 +560,46 @@ async def update_loan(
         if not loan.funded_date:
             loan.funded_date = datetime.now(timezone.utc)
 
+    # ========================================================================
+    # Critical Failure 2.3: Check for changed circumstances and auto-trigger
+    # re-disclosure events after applying the update
+    # ========================================================================
+    changes_detected = []
+    if old_values:
+        try:
+            from services.disclosure_trigger import check_changed_circumstances
+
+            new_values = {field: update_data[field] for field in tracked_fields if field in update_data}
+            changes_detected = check_changed_circumstances(
+                db=db,
+                loan_id=loan_id,
+                old_values=old_values,
+                new_values=new_values,
+                organization_id=getattr(loan, "organization_id", None),
+                triggered_by_user_id=getattr(current_user, "id", None),
+            )
+        except Exception as e:
+            logger.error(f"Changed circumstance check failed: {e}", exc_info=True)
+            # Don't block the update if the compliance check itself errors
+
     try:
         db.commit()
         db.refresh(loan)
         logger.info(f"Loan updated: {loan.loan_number} (ID: {loan.id})")
-        return _loan_to_dict(loan)
+
+        result = _loan_to_dict(loan)
+
+        # Include compliance actions in the response so the frontend can alert users
+        if changes_detected:
+            result["_compliance_actions"] = {
+                "changed_circumstances": changes_detected,
+                "message": (
+                    f"{len(changes_detected)} changed circumstance(s) detected. "
+                    f"Revised Loan Estimate(s) must be sent within 3 business days."
+                ),
+            }
+
+        return result
     except Exception as e:
         logger.error(f"Error updating loan: {e}", exc_info=True)
         db.rollback()

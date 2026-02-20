@@ -135,7 +135,7 @@ class DisclosureEvent(Base):
 
     # Delivery tracking
     prepared_at = Column(DateTime)
-    sent_at = Column(DateTime, nullable=False)
+    sent_at = Column(DateTime, nullable=True)  # Nullable: pending disclosures have sent_at=None until delivered
     delivery_method = Column(String)  # email, mail, in_person, esign
     received_at = Column(DateTime)  # Borrower acknowledged/signed
 

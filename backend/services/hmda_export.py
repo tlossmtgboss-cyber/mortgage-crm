@@ -229,10 +229,68 @@ def _format_date_hmda(dt: Any) -> str:
     return "NA"
 
 
+def _get_gmi_data(db: Session, loan: Any) -> Dict[str, str]:
+    """Look up GMI (Government Monitoring Information) demographic data for a loan.
+
+    GMI data is stored on BorrowerApplication, linked to the loan via loan_id.
+    If no application is found or fields are empty, returns "NA" per HMDA spec.
+
+    Args:
+        db: SQLAlchemy database session
+        loan: Loan ORM object
+
+    Returns:
+        Dict with HMDA demographic field values
+    """
+    defaults = {
+        "applicant_ethnicity": "NA",
+        "applicant_ethnicity_2": "NA",
+        "co_applicant_ethnicity": "NA",
+        "co_applicant_ethnicity_2": "NA",
+        "applicant_race": "NA",
+        "applicant_race_2": "NA",
+        "co_applicant_race": "NA",
+        "co_applicant_race_2": "NA",
+        "applicant_sex": "NA",
+        "co_applicant_sex": "NA",
+        "applicant_age": "NA",
+        "co_applicant_age": "NA",
+    }
+
+    try:
+        from database.models.borrower import BorrowerApplication
+
+        app = db.query(BorrowerApplication).filter(
+            BorrowerApplication.loan_id == loan.id
+        ).first()
+
+        if not app:
+            return defaults
+
+        return {
+            "applicant_ethnicity": _safe_str(getattr(app, "applicant_ethnicity", None)),
+            "applicant_ethnicity_2": "NA",  # Secondary ethnicity not tracked separately
+            "co_applicant_ethnicity": _safe_str(getattr(app, "co_applicant_ethnicity", None)),
+            "co_applicant_ethnicity_2": "NA",
+            "applicant_race": _safe_str(getattr(app, "applicant_race", None)),
+            "applicant_race_2": "NA",  # Secondary race not tracked separately
+            "co_applicant_race": _safe_str(getattr(app, "co_applicant_race", None)),
+            "co_applicant_race_2": "NA",
+            "applicant_sex": _safe_str(getattr(app, "applicant_sex", None)),
+            "co_applicant_sex": _safe_str(getattr(app, "co_applicant_sex", None)),
+            "applicant_age": _safe_str(getattr(app, "applicant_age", None)),
+            "co_applicant_age": _safe_str(getattr(app, "co_applicant_age", None)),
+        }
+    except Exception as e:
+        logger.warning(f"Could not retrieve GMI data for loan {loan.id}: {e}")
+        return defaults
+
+
 def _build_lar_record(
     loan: Any,
     lei: str,
     year: int,
+    db: Optional[Session] = None,
 ) -> str:
     """Build a single HMDA LAR record as a pipe-delimited line.
 
@@ -244,6 +302,7 @@ def _build_lar_record(
         loan: Loan ORM object
         lei: Legal Entity Identifier for the reporting institution
         year: Reporting year
+        db: Optional SQLAlchemy session for looking up GMI demographics
 
     Returns:
         Pipe-delimited string representing one LAR record
@@ -278,6 +337,20 @@ def _build_lar_record(
     # Census tract - would need geocoding service; use NA for now
     census_tract = "NA"
 
+    # GMI demographics (Critical Failure 2.9 fix)
+    # Look up from BorrowerApplication if db session is available
+    if db is not None:
+        gmi = _get_gmi_data(db, loan)
+    else:
+        gmi = {k: "NA" for k in [
+            "applicant_ethnicity", "applicant_ethnicity_2",
+            "co_applicant_ethnicity", "co_applicant_ethnicity_2",
+            "applicant_race", "applicant_race_2",
+            "co_applicant_race", "co_applicant_race_2",
+            "applicant_sex", "co_applicant_sex",
+            "applicant_age", "co_applicant_age",
+        ]}
+
     # Build the pipe-delimited record
     # Follows HMDA LAR field order (simplified subset of the full 110 fields)
     fields = [
@@ -297,19 +370,19 @@ def _build_lar_record(
         state_code,                             # 13: State
         county_code,                            # 14: County
         census_tract,                           # 15: Census Tract
-        # Applicant demographics (not stored in CRM - use NA)
-        "NA",                                   # 16: Ethnicity of Applicant 1
-        "NA",                                   # 17: Ethnicity of Applicant 2
-        "NA",                                   # 18: Co-Applicant Ethnicity 1
-        "NA",                                   # 19: Co-Applicant Ethnicity 2
-        "NA",                                   # 20: Race of Applicant 1
-        "NA",                                   # 21: Race of Applicant 2
-        "NA",                                   # 22: Co-Applicant Race 1
-        "NA",                                   # 23: Co-Applicant Race 2
-        "NA",                                   # 24: Sex of Applicant
-        "NA",                                   # 25: Sex of Co-Applicant
-        "NA",                                   # 26: Age of Applicant
-        "NA",                                   # 27: Age of Co-Applicant
+        # Applicant demographics (from GMI data on BorrowerApplication)
+        gmi["applicant_ethnicity"],             # 16: Ethnicity of Applicant 1
+        gmi["applicant_ethnicity_2"],           # 17: Ethnicity of Applicant 2
+        gmi["co_applicant_ethnicity"],          # 18: Co-Applicant Ethnicity 1
+        gmi["co_applicant_ethnicity_2"],        # 19: Co-Applicant Ethnicity 2
+        gmi["applicant_race"],                  # 20: Race of Applicant 1
+        gmi["applicant_race_2"],                # 21: Race of Applicant 2
+        gmi["co_applicant_race"],               # 22: Co-Applicant Race 1
+        gmi["co_applicant_race_2"],             # 23: Co-Applicant Race 2
+        gmi["applicant_sex"],                   # 24: Sex of Applicant
+        gmi["co_applicant_sex"],                # 25: Sex of Co-Applicant
+        gmi["applicant_age"],                   # 26: Age of Applicant
+        gmi["co_applicant_age"],                # 27: Age of Co-Applicant
         _safe_str(loan.borrower_name, "NA"),    # 28: Income (using borrower name as placeholder - actual income from lead)
         # Loan terms
         _format_rate(loan.rate),                # 29: Interest Rate
@@ -423,7 +496,7 @@ def generate_hmda_lar(
     lar_lines = []
     for loan in valid_loans:
         try:
-            record = _build_lar_record(loan, lei, year)
+            record = _build_lar_record(loan, lei, year, db=db)
             lar_lines.append(record)
         except Exception as e:
             logger.error(f"Failed to build HMDA record for loan {loan.id}: {e}")

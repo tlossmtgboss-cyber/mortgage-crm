@@ -42,6 +42,37 @@ def _get_loan_org_id(db: Session, loan_id: int) -> Optional[int]:
     row = db.execute(sa_text("SELECT organization_id FROM loans WHERE id = :id"), {"id": loan_id}).first()
     return row[0] if row else None
 
+
+def _verify_loan_tenant(db: Session, loan_id: int, current_user) -> None:
+    """Verify the requesting user's org owns the loan. Raises 404 if not."""
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if org_id and not is_platform_admin:
+        loan_org = _get_loan_org_id(db, loan_id)
+        if loan_org is not None and loan_org != org_id:
+            raise HTTPException(status_code=404, detail="Not found")
+
+
+def _verify_document_tenant(db: Session, document_id: int, current_user) -> None:
+    """Verify the requesting user's org owns the document's loan. Raises 404 if not."""
+    from models.smart_docs_models import SmartDocument as _SD
+    doc = db.query(_SD).filter(_SD.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    if doc.loan_id:
+        _verify_loan_tenant(db, doc.loan_id, current_user)
+    return doc
+
+
+def _verify_request_tenant(db: Session, request_id: int, current_user) -> None:
+    """Verify the requesting user's org owns the document request's loan. Raises 404 if not."""
+    from models.smart_docs_models import DocumentRequest as _DR
+    req = db.query(_DR).filter(_DR.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Not found")
+    if req.loan_id:
+        _verify_loan_tenant(db, req.loan_id, current_user)
+
 router = APIRouter(
     prefix="/api/v1/smart-docs",
     tags=["Smart Documents"],
@@ -222,6 +253,7 @@ FRESHNESS_DAYS = {
 async def generate_needs_list(
     request: GenerateNeedsListRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Generate a document needs list for a loan application.
@@ -230,6 +262,7 @@ async def generate_needs_list(
     appropriate document requirements using templates.
     """
     try:
+        _verify_loan_tenant(db, request.loan_id, current_user)
         generator = NeedsListGenerator(db)
         result = generator.generate_needs_list(
             loan_id=request.loan_id,
@@ -253,10 +286,12 @@ async def generate_needs_list(
 async def get_needs_list(
     loan_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get the current needs list for a loan with borrower info and document URLs."""
     from sqlalchemy import text
 
+    _verify_loan_tenant(db, loan_id, current_user)
     generator = NeedsListGenerator(db)
     result = generator.get_needs_list(loan_id)
 
@@ -340,6 +375,7 @@ async def get_needs_list(
 async def sync_documents_from_application(
     request: SyncApplicationDocumentsRequest,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Sync document requirements from a mortgage application to Smart Docs.
@@ -350,6 +386,7 @@ async def sync_documents_from_application(
     requirements in the client portal.
     """
     try:
+        _verify_loan_tenant(db, request.loan_id, current_user)
         created_requests = []
         skipped_count = 0
 
@@ -444,6 +481,7 @@ async def add_custom_request(
     borrower_id: int = Query(...),
     body: AddCustomRequestBody = None,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Add a custom document request to the needs list.
@@ -451,6 +489,7 @@ async def add_custom_request(
     Optionally sends an email notification to the borrower if send_notification
     is set to True and borrower_email is provided.
     """
+    _verify_loan_tenant(db, loan_id, current_user)
     generator = NeedsListGenerator(db)
     result = generator.add_custom_request(
         loan_id=loan_id,
@@ -493,8 +532,10 @@ async def waive_request(
     request_id: int,
     body: WaiveRequestBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Waive a document request."""
+    _verify_request_tenant(db, request_id, current_user)
     generator = NeedsListGenerator(db)
     try:
         return generator.waive_request(
@@ -518,6 +559,7 @@ async def upload_document(
     request_id: Optional[int] = Form(None),
     doc_type: Optional[str] = Form(None),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Upload and process a document.
@@ -528,6 +570,7 @@ async def upload_document(
     - Freshness validation
     - Accept/reject decision
     """
+    _verify_loan_tenant(db, loan_id, current_user)
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -614,6 +657,7 @@ async def upload_document(
 async def get_document(
     document_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get document details and processing results."""
     document = db.query(SmartDocument).filter(
@@ -622,6 +666,10 @@ async def get_document(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     return {
         "id": document.id,
@@ -953,8 +1001,10 @@ async def manual_review_document(
     document_id: int,
     body: ManualReviewBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Submit a manual review decision for a document."""
+    _verify_document_tenant(db, document_id, current_user)
     pipeline = DocumentReviewPipeline(db)
     try:
         return pipeline.manual_review(
@@ -971,6 +1021,7 @@ async def manual_review_document(
 async def reprocess_document(
     document_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Reprocess a document through the validation pipeline.
@@ -984,6 +1035,7 @@ async def reprocess_document(
     Returns:
         Updated processing result with new decision
     """
+    _verify_document_tenant(db, document_id, current_user)
     pipeline = DocumentReviewPipeline(db)
     try:
         result = pipeline.reprocess_document(document_id)
@@ -1002,6 +1054,7 @@ async def reprocess_document(
 async def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
     reviewer: str = Query(..., description="User performing the delete"),
     reason: Optional[str] = Query(None, description="Reason for deletion"),
 ):
@@ -1017,6 +1070,10 @@ async def delete_document(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     # Store deletion info
     old_status = document.status
@@ -1053,6 +1110,7 @@ async def update_document_type(
     document_id: int,
     body: UpdateDocumentTypeBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Update a document's type.
@@ -1066,6 +1124,10 @@ async def update_document_type(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     # Validate and parse the new doc_type
     try:
@@ -1098,6 +1160,7 @@ async def reject_document(
     document_id: int,
     body: RejectDocumentBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Reject a document with a reason.
@@ -1113,6 +1176,10 @@ async def reject_document(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     # Update document status
     document.status = "REJECTED"
@@ -1157,6 +1224,7 @@ async def approve_document(
     reviewer: str = Query(..., description="User performing the approval"),
     notes: Optional[str] = Query(None, description="Approval notes"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Approve a document.
@@ -1169,6 +1237,10 @@ async def approve_document(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     # Update document status
     document.status = "APPROVED"
@@ -1203,6 +1275,7 @@ async def re_request_document(
     request_id: int,
     body: ReRequestDocumentBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Re-request a document (reset request to OPEN).
@@ -1212,6 +1285,7 @@ async def re_request_document(
     """
     from datetime import timedelta
 
+    _verify_request_tenant(db, request_id, current_user)
     request = db.query(DocumentRequest).filter(
         DocumentRequest.id == request_id
     ).first()
@@ -1280,8 +1354,10 @@ async def get_loan_documents(
     loan_id: int,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get all documents for a loan."""
+    _verify_loan_tenant(db, loan_id, current_user)
     query = db.query(SmartDocument).filter(
         SmartDocument.loan_id == loan_id
     )
@@ -1314,9 +1390,10 @@ async def get_loan_documents_alias(
     loan_id: int,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Alias for /documents/{loan_id} - backward compatibility."""
-    return await get_loan_documents(loan_id, status, db)
+    return await get_loan_documents(loan_id, status, db, current_user)
 
 
 # =============================================================================
@@ -1328,8 +1405,11 @@ async def get_expiring_documents(
     loan_id: Optional[int] = None,
     days_ahead: int = Query(default=14, ge=1, le=90),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get documents expiring within the specified window."""
+    if loan_id:
+        _verify_loan_tenant(db, loan_id, current_user)
     scheduler = AutoRenewalScheduler(db)
     return {
         "days_ahead": days_ahead,
@@ -1383,8 +1463,10 @@ async def update_payroll_frequency(
     loan_id: int,
     body: UpdatePayrollFrequencyBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Update payroll frequency for a loan's paystub requests."""
+    _verify_loan_tenant(db, loan_id, current_user)
     try:
         frequency = PayrollFrequency(body.frequency)
     except ValueError:
@@ -1483,8 +1565,10 @@ async def get_loan_events(
     loan_id: int,
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get document policy events for a loan."""
+    _verify_loan_tenant(db, loan_id, current_user)
     events = db.query(DocPolicyEvent).filter(
         DocPolicyEvent.loan_id == loan_id
     ).order_by(
@@ -1946,8 +2030,10 @@ async def get_queue_summary(
 async def get_client_queue_detail(
     loan_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get detailed queue information for a specific client."""
+    _verify_loan_tenant(db, loan_id, current_user)
     from services.smart_docs.queue_service import QueueService
 
     queue_service = QueueService(db)
@@ -2016,8 +2102,10 @@ class ReminderSettingsBody(BaseModel):
 async def get_reminder_settings(
     loan_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get reminder settings for a loan."""
+    _verify_loan_tenant(db, loan_id, current_user)
     from models.smart_docs_models import ClientReminderSettings
 
     settings = db.query(ClientReminderSettings).filter(
@@ -2048,8 +2136,10 @@ async def update_reminder_settings(
     loan_id: int,
     body: ReminderSettingsBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Update reminder settings for a loan."""
+    _verify_loan_tenant(db, loan_id, current_user)
     from models.smart_docs_models import ClientReminderSettings
 
     settings = db.query(ClientReminderSettings).filter(
@@ -2083,12 +2173,14 @@ async def update_reminder_settings(
 async def send_reminder(
     loan_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Manually trigger a reminder for a loan.
 
     Updates last_reminder_sent_at and increments reminder_count.
     """
+    _verify_loan_tenant(db, loan_id, current_user)
     from models.smart_docs_models import ClientReminderSettings
     from services.smart_docs.notification_service import SmartDocsNotificationService
 
@@ -2181,6 +2273,7 @@ class ApproveDocumentBody(BaseModel):
 async def extract_document_data(
     document_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Trigger AI extraction for a document.
@@ -2200,6 +2293,10 @@ async def extract_document_data(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     # Check if extraction already exists
     existing = db.query(SmartDocumentExtraction).filter(
@@ -2324,8 +2421,10 @@ async def extract_document_data(
 async def get_document_extraction(
     document_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get existing extraction results for a document."""
+    _verify_document_tenant(db, document_id, current_user)
     from models.document_extraction import SmartDocumentExtraction
 
     extraction = db.query(SmartDocumentExtraction).filter(
@@ -2363,12 +2462,14 @@ async def get_field_comparison(
     profile_type: str = Query(default="lead", description="Profile type: 'lead' or 'loan'"),
     profile_id: Optional[int] = Query(default=None, description="Profile ID to compare against"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Compare extracted data against existing profile data.
 
     Returns side-by-side comparison with differences highlighted.
     """
+    _verify_document_tenant(db, document_id, current_user)
     from models.document_extraction import SmartDocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING
 
     # Get extraction
@@ -2471,12 +2572,14 @@ async def apply_extracted_fields(
     document_id: int,
     body: ApplyFieldsBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Apply selected extracted fields to Lead/Loan profile.
 
     Creates audit trail via DataConflict records.
     """
+    _verify_document_tenant(db, document_id, current_user)
     from models.document_extraction import SmartDocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING, ReviewStatus
     from sqlalchemy import text
 
@@ -2551,6 +2654,7 @@ async def update_document_name(
     document_id: int,
     body: UpdateDocumentNameBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Update document display name."""
     document = db.query(SmartDocument).filter(
@@ -2559,6 +2663,10 @@ async def update_document_name(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     document.display_name = body.display_name
     document.updated_at = datetime.utcnow()
@@ -2576,6 +2684,7 @@ async def approve_document_with_review(
     document_id: int,
     body: ApproveDocumentBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Approve a document after review.
@@ -2591,6 +2700,10 @@ async def approve_document_with_review(
 
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+
+    # Tenant isolation: verify document belongs to user's organization via loan
+    if document.loan_id:
+        _verify_loan_tenant(db, document.loan_id, current_user)
 
     # Update document status
     document.status = "APPROVED"
@@ -3247,6 +3360,7 @@ async def send_to_portal_for_signature(
     loan_id: int,
     body: SendToPortalForSignatureBody,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Send a document request to the client portal for DocuSign or Letter of Explanation.
@@ -3263,6 +3377,7 @@ async def send_to_portal_for_signature(
     from sqlalchemy import text
     from models.purl import PURLLoan, PURLWorkspace
 
+    _verify_loan_tenant(db, loan_id, current_user)
     logger.info(f"Sending document request to portal for loan {loan_id}: {body.title}, type={body.type}")
 
     # Find the PURL loan record that links to this loan
