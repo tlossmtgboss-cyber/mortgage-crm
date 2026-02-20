@@ -31,6 +31,7 @@ from db import (
     SessionLocal,
     engine,
     get_db,
+    get_db_with_tenant,
     get_db_url,
     get_pool_status,
 )
@@ -77,6 +78,7 @@ __all__ = [
     "SessionLocal",
     "engine",
     "get_db",
+    "get_db_with_tenant",
     "get_db_url",
     "get_pool_status",
     # Tenant isolation

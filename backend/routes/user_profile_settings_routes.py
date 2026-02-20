@@ -161,21 +161,17 @@ class WorkHoursUpdate(BaseModel):
 
 
 class PasswordChange(BaseModel):
-    """Password change with validation"""
+    """Password change with enterprise-grade validation (Domain 4)"""
     current_password: str = Field(..., min_length=1, description="Current password")
-    new_password: str = Field(..., min_length=8, max_length=128, description="New password")
+    new_password: str = Field(..., min_length=12, max_length=128, description="New password (min 12 chars, requires uppercase, lowercase, digit, special char)")
     confirm_password: str = Field(..., description="Confirm new password")
 
     @validator('new_password')
     def validate_password_strength(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        if not re.search(r'[A-Z]', v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not re.search(r'[a-z]', v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not re.search(r'[0-9]', v):
-            raise ValueError('Password must contain at least one number')
+        from utils.auth import validate_password_strength as _validate
+        violations = _validate(v)
+        if violations:
+            raise ValueError('; '.join(violations))
         return v
 
     @root_validator(skip_on_failure=True)

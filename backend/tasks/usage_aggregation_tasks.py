@@ -11,7 +11,9 @@ Run these tasks daily (preferably at midnight UTC) via APScheduler or cron:
 
 Usage:
     from tasks.usage_aggregation_tasks import run_daily_aggregation
-    run_daily_aggregation(db_session, organization_id=1)
+    run_daily_aggregation(db_session, organization_id=org_id)
+
+When run as a CLI script, iterates over all organizations automatically.
 """
 
 import os
@@ -872,8 +874,16 @@ if __name__ == "__main__":
     db = next(get_db())
 
     try:
-        # Run for yesterday by default
-        result = run_daily_aggregation(db, organization_id=1)
-        print(f"\nAggregation complete: {result}")
+        # Run for all organizations
+        from sqlalchemy import text
+        org_ids = [row[0] for row in db.execute(text("SELECT id FROM organizations")).fetchall()]
+        if not org_ids:
+            print("No organizations found in database.")
+        else:
+            print(f"Running daily aggregation for {len(org_ids)} organization(s)...")
+            for org_id in org_ids:
+                print(f"\n--- Organization {org_id} ---")
+                result = run_daily_aggregation(db, organization_id=org_id)
+                print(f"Aggregation complete: {result}")
     finally:
         db.close()

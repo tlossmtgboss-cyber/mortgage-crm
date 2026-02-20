@@ -5,12 +5,15 @@ Handles mapping, conflict resolution, and sync orchestration
 between the CRM Loan model and the LOS.
 
 Enterprise Readiness: Check 7.2 (Bidirectional LOS Sync)
+Enterprise Readiness: Check 7.5 (LOS Conflict Resolution)
 
 Features:
     - Push CRM loan changes to LOS
     - Pull LOS loan changes to CRM
     - Configurable field mapping
-    - Conflict resolution (CRM-wins, LOS-wins, manual)
+    - Timestamp-based conflict detection (compares last_modified on both sides)
+    - Conflict resolution strategies: crm_wins, los_wins, newest_wins, manual
+    - Structured conflict logging via LosSyncLog
     - Sync history and audit logging
 
 Usage:
@@ -39,6 +42,176 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Conflict Detection & Resolution (Check 7.5)
+# =============================================================================
+
+class ConflictDetector:
+    """Detects and resolves field-level conflicts between CRM and LOS data.
+
+    During a pull operation, each bidirectional field is checked:
+      1. If the CRM value has changed since the last sync AND
+         the LOS value has also changed since the last sync,
+         the field is a true conflict.
+      2. If only one side changed, it is NOT a conflict; the changed
+         side's value is applied.
+
+    Resolution strategies:
+      - crm_wins:     CRM value is kept, LOS value is discarded.
+      - los_wins:     LOS value is applied, CRM value is overwritten.
+      - newest_wins:  Whichever side was modified more recently wins.
+      - manual:       Neither side is applied; field is flagged for human review.
+    """
+
+    def __init__(self, strategy: str = "crm_wins"):
+        self.strategy = strategy
+
+    def detect_and_resolve(
+        self,
+        field_name: str,
+        crm_value: Any,
+        los_value: Any,
+        crm_last_modified: Optional[datetime],
+        los_last_modified: Optional[datetime],
+        last_sync_at: Optional[datetime],
+    ) -> Dict[str, Any]:
+        """Detect whether a field has a true conflict and resolve it.
+
+        Args:
+            field_name: The CRM field name being compared.
+            crm_value: Current value in the CRM.
+            los_value: Current value from the LOS.
+            crm_last_modified: When the CRM record was last modified.
+            los_last_modified: When the LOS record was last modified.
+            last_sync_at: Timestamp of the last successful sync.
+
+        Returns:
+            Dict with keys:
+                is_conflict (bool): True if both sides changed since last sync.
+                resolution (str): How the conflict was resolved.
+                winning_value: The value to apply (or None if manual).
+                winning_side (str): "crm", "los", or "manual".
+                details (dict): Full context for audit logging.
+        """
+        str_crm = str(crm_value) if crm_value is not None else ""
+        str_los = str(los_value) if los_value is not None else ""
+
+        # No difference means no conflict
+        if str_crm == str_los:
+            return {
+                "is_conflict": False,
+                "resolution": "no_change",
+                "winning_value": crm_value,
+                "winning_side": "both",
+                "details": {},
+            }
+
+        # Determine which sides changed since the last sync
+        crm_changed_since_sync = True
+        los_changed_since_sync = True
+
+        if last_sync_at is not None:
+            # Normalize timezone awareness
+            sync_ts = last_sync_at if last_sync_at.tzinfo else last_sync_at.replace(tzinfo=timezone.utc)
+
+            if crm_last_modified is not None:
+                crm_ts = crm_last_modified if crm_last_modified.tzinfo else crm_last_modified.replace(tzinfo=timezone.utc)
+                crm_changed_since_sync = crm_ts > sync_ts
+            else:
+                crm_changed_since_sync = False
+
+            if los_last_modified is not None:
+                los_ts = los_last_modified if los_last_modified.tzinfo else los_last_modified.replace(tzinfo=timezone.utc)
+                los_changed_since_sync = los_ts > sync_ts
+            else:
+                los_changed_since_sync = False
+
+        is_true_conflict = crm_changed_since_sync and los_changed_since_sync
+
+        # If only one side changed, that side wins (not a conflict)
+        if not is_true_conflict:
+            if los_changed_since_sync:
+                return {
+                    "is_conflict": False,
+                    "resolution": "los_only_changed",
+                    "winning_value": los_value,
+                    "winning_side": "los",
+                    "details": {},
+                }
+            else:
+                return {
+                    "is_conflict": False,
+                    "resolution": "crm_only_changed",
+                    "winning_value": crm_value,
+                    "winning_side": "crm",
+                    "details": {},
+                }
+
+        # True conflict: both sides changed since last sync
+        details = {
+            "field": field_name,
+            "crm_value": str_crm,
+            "los_value": str_los,
+            "crm_last_modified": crm_last_modified.isoformat() if crm_last_modified else None,
+            "los_last_modified": los_last_modified.isoformat() if los_last_modified else None,
+            "last_sync_at": last_sync_at.isoformat() if last_sync_at else None,
+            "strategy": self.strategy,
+        }
+
+        if self.strategy == "los_wins":
+            return {
+                "is_conflict": True,
+                "resolution": "los_wins",
+                "winning_value": los_value,
+                "winning_side": "los",
+                "details": details,
+            }
+        elif self.strategy == "crm_wins":
+            return {
+                "is_conflict": True,
+                "resolution": "crm_wins",
+                "winning_value": crm_value,
+                "winning_side": "crm",
+                "details": details,
+            }
+        elif self.strategy == "newest_wins":
+            # Compare modification timestamps to determine the winner
+            crm_ts = crm_last_modified or datetime.min.replace(tzinfo=timezone.utc)
+            los_ts = los_last_modified or datetime.min.replace(tzinfo=timezone.utc)
+            if crm_ts.tzinfo is None:
+                crm_ts = crm_ts.replace(tzinfo=timezone.utc)
+            if los_ts.tzinfo is None:
+                los_ts = los_ts.replace(tzinfo=timezone.utc)
+
+            if crm_ts >= los_ts:
+                details["winner_reason"] = "crm_modified_more_recently"
+                return {
+                    "is_conflict": True,
+                    "resolution": "newest_wins_crm",
+                    "winning_value": crm_value,
+                    "winning_side": "crm",
+                    "details": details,
+                }
+            else:
+                details["winner_reason"] = "los_modified_more_recently"
+                return {
+                    "is_conflict": True,
+                    "resolution": "newest_wins_los",
+                    "winning_value": los_value,
+                    "winning_side": "los",
+                    "details": details,
+                }
+        else:
+            # Manual: flag for human review, do not apply either value
+            return {
+                "is_conflict": True,
+                "resolution": "manual_review_required",
+                "winning_value": None,
+                "winning_side": "manual",
+                "details": details,
+            }
 
 
 # =============================================================================
@@ -178,6 +351,7 @@ class LOSSyncService:
 
         # Push via client
         result = await self.client.push_loan(push_data)
+        result.completed_at = datetime.now(timezone.utc)
 
         # If this was a create (no existing LOS ID), store the returned ID
         if result.status == LOSSyncStatus.SUCCESS and result.los_loan_id and not los_loan_id:
@@ -187,8 +361,13 @@ class LOSSyncService:
             except Exception as e:
                 logger.error(f"Failed to save LOS loan ID: {e}")
 
-        # Log the sync event
+        # Log the sync event with latency
         _log_sync_event(db, loan_id, result)
+
+        logger.info(
+            f"LOS push for loan {loan_id}: {result.status.value} "
+            f"in {result.latency_ms}ms (SLA: {'PASS' if result.within_sla else 'FAIL'})"
+        )
 
         return result
 
@@ -205,7 +384,14 @@ class LOSSyncService:
         """Pull loan data from LOS to CRM.
 
         Fetches the loan from LOS, maps fields back to CRM schema,
-        detects conflicts, and applies changes per resolution strategy.
+        uses timestamp-based conflict detection (Check 7.5), and applies
+        changes per resolution strategy.
+
+        Conflict detection logic:
+            For each bidirectional field, compare the CRM's updated_at
+            and the LOS's lastModified against the last sync timestamp.
+            If BOTH changed since last sync, it is a true conflict and
+            the configured resolution strategy is applied.
 
         Args:
             db: Database session
@@ -247,8 +433,39 @@ class LOSSyncService:
             # Pull from LOS
             los_data = await self.client.pull_loan(effective_los_id)
 
+            # Get last sync timestamp for conflict detection (Check 7.5)
+            last_sync_info = _get_last_sync(db, loan_id)
+            last_sync_at = None
+            if last_sync_info and last_sync_info.get("timestamp"):
+                try:
+                    ts = last_sync_info["timestamp"]
+                    if isinstance(ts, str):
+                        last_sync_at = datetime.fromisoformat(ts)
+                    elif isinstance(ts, datetime):
+                        last_sync_at = ts
+                except (ValueError, TypeError):
+                    pass
+
+            # Determine CRM and LOS modification timestamps
+            crm_last_modified = getattr(loan, "updated_at", None) or getattr(loan, "stage_changed_at", None)
+            los_last_modified = None
+            raw_last_mod = los_data.raw_data.get("lastModified") or los_data.raw_data.get("Fields/LOANINFO.X1")
+            if raw_last_mod and isinstance(raw_last_mod, str):
+                try:
+                    from dateutil.parser import parse as parse_date
+                    los_last_modified = parse_date(raw_last_mod)
+                except Exception:
+                    pass
+
+            # Initialize conflict detector (Check 7.5)
+            conflict_detector = ConflictDetector(strategy=self.conflict_resolution)
+
             # Apply fields to CRM loan
             conflicts = []
+            auto_resolved = 0
+            manual_pending = 0
+            changes = []
+
             for mapping in self.field_mappings:
                 # Skip push-only fields
                 if mapping.direction == "push":
@@ -265,39 +482,91 @@ class LOSSyncService:
 
                 crm_value = getattr(loan, mapping.crm_field, None)
 
-                # Detect conflict
-                if crm_value is not None and str(crm_value) != str(los_value):
-                    conflict = {
-                        "field": mapping.crm_field,
-                        "crm_value": str(crm_value),
-                        "los_value": str(los_value),
-                    }
+                # Use timestamp-based conflict detection for bidirectional fields
+                if mapping.direction == "bidirectional" and crm_value is not None and str(crm_value) != str(los_value):
+                    resolution = conflict_detector.detect_and_resolve(
+                        field_name=mapping.crm_field,
+                        crm_value=crm_value,
+                        los_value=los_value,
+                        crm_last_modified=crm_last_modified,
+                        los_last_modified=los_last_modified,
+                        last_sync_at=last_sync_at,
+                    )
 
-                    if self.conflict_resolution == "los_wins":
-                        setattr(loan, mapping.crm_field, _coerce_value(loan, mapping.crm_field, los_value))
-                        conflict["resolution"] = "los_wins"
-                        result.fields_synced += 1
-                    elif self.conflict_resolution == "crm_wins":
-                        conflict["resolution"] = "crm_wins"
-                        result.fields_skipped += 1
-                    elif self.conflict_resolution == "newest_wins":
-                        # Default to LOS as more recently updated for pull
-                        setattr(loan, mapping.crm_field, _coerce_value(loan, mapping.crm_field, los_value))
-                        conflict["resolution"] = "newest_wins_los"
-                        result.fields_synced += 1
+                    if resolution["is_conflict"]:
+                        conflict = {
+                            "field": mapping.crm_field,
+                            "crm_value": str(crm_value),
+                            "los_value": str(los_value),
+                            "resolution": resolution["resolution"],
+                            "winning_side": resolution["winning_side"],
+                        }
+
+                        if resolution["winning_side"] == "los":
+                            setattr(loan, mapping.crm_field, _coerce_value(loan, mapping.crm_field, los_value))
+                            changes.append({
+                                "field": mapping.crm_field,
+                                "old": str(crm_value),
+                                "new": str(los_value),
+                                "source": "los",
+                                "conflict_resolved": True,
+                            })
+                            result.fields_synced += 1
+                            auto_resolved += 1
+                        elif resolution["winning_side"] == "crm":
+                            result.fields_skipped += 1
+                            auto_resolved += 1
+                        else:
+                            # Manual review required
+                            result.fields_skipped += 1
+                            manual_pending += 1
+
+                        conflicts.append(conflict)
                     else:
-                        # Manual: flag conflict, don't update
-                        conflict["resolution"] = "manual_review_required"
-                        result.fields_skipped += 1
+                        # Not a true conflict: only one side changed
+                        if resolution["winning_side"] == "los":
+                            setattr(loan, mapping.crm_field, _coerce_value(loan, mapping.crm_field, los_value))
+                            changes.append({
+                                "field": mapping.crm_field,
+                                "old": str(crm_value),
+                                "new": str(los_value),
+                                "source": "los",
+                                "conflict_resolved": False,
+                            })
+                            result.fields_synced += 1
+                        else:
+                            result.fields_skipped += 1
 
-                    conflicts.append(conflict)
+                elif crm_value is not None and str(crm_value) != str(los_value):
+                    # Pull-only field: LOS always wins, no conflict possible
+                    setattr(loan, mapping.crm_field, _coerce_value(loan, mapping.crm_field, los_value))
+                    changes.append({
+                        "field": mapping.crm_field,
+                        "old": str(crm_value),
+                        "new": str(los_value),
+                        "source": "los",
+                        "conflict_resolved": False,
+                    })
+                    result.fields_synced += 1
                 else:
-                    # No conflict - apply value
+                    # No difference or CRM value is None: apply LOS value
                     if los_value is not None:
+                        old_val = str(crm_value) if crm_value is not None else None
                         setattr(loan, mapping.crm_field, _coerce_value(loan, mapping.crm_field, los_value))
+                        if old_val != str(los_value):
+                            changes.append({
+                                "field": mapping.crm_field,
+                                "old": old_val,
+                                "new": str(los_value),
+                                "source": "los",
+                                "conflict_resolved": False,
+                            })
                         result.fields_synced += 1
 
             result.conflicts = conflicts
+            result.details["changes"] = changes
+            result.details["conflicts_auto_resolved"] = auto_resolved
+            result.details["conflicts_manual_pending"] = manual_pending
 
             # Update stage if LOS has a stage mapping
             if los_data.stage:
@@ -316,7 +585,12 @@ class LOSSyncService:
                 logger.error(f"Failed to flush loan updates: {e}")
                 result.errors.append(f"Database flush failed: {str(e)}")
 
-            result.status = LOSSyncStatus.SUCCESS if not conflicts else LOSSyncStatus.PARTIAL
+            if manual_pending > 0:
+                result.status = LOSSyncStatus.CONFLICT
+            elif conflicts:
+                result.status = LOSSyncStatus.PARTIAL
+            else:
+                result.status = LOSSyncStatus.SUCCESS
             result.completed_at = datetime.now(timezone.utc)
 
         except Exception as e:
@@ -325,8 +599,15 @@ class LOSSyncService:
             result.completed_at = datetime.now(timezone.utc)
             logger.error(f"Pull from LOS failed for loan {loan_id}: {e}")
 
-        # Log the sync event
+        # Log the sync event with latency (audit trail + LosSyncLog)
         _log_sync_event(db, loan_id, result)
+        _log_to_los_sync_log(db, loan_id, result)
+
+        logger.info(
+            f"LOS pull for loan {loan_id}: {result.status.value} "
+            f"in {result.latency_ms}ms (SLA: {'PASS' if result.within_sla else 'FAIL'})"
+            f" | conflicts: {len(conflicts)} (auto: {auto_resolved}, manual: {manual_pending})"
+        )
 
         return result
 
@@ -483,6 +764,8 @@ def _log_sync_event(db: Session, loan_id: int, result: LOSSyncResult) -> None:
                 "fields_skipped": result.fields_skipped,
                 "conflicts": len(result.conflicts),
                 "errors": result.errors,
+                "latency_ms": result.latency_ms,
+                "within_sla": result.within_sla,
             },
         )
         db.add(log)
@@ -493,7 +776,28 @@ def _log_sync_event(db: Session, loan_id: int, result: LOSSyncResult) -> None:
 
 
 def _get_last_sync(db: Session, loan_id: int) -> Optional[Dict[str, Any]]:
-    """Get the last sync event for a loan."""
+    """Get the last sync event for a loan.
+
+    Checks LosSyncLog first (preferred), then falls back to AuditLog.
+    """
+    # Try LosSyncLog first (richer data)
+    try:
+        from database.models.los_sync import LosSyncLog
+        last_sync_log = db.query(LosSyncLog).filter(
+            LosSyncLog.loan_id == loan_id,
+            LosSyncLog.sync_status.in_(["success", "partial"]),
+        ).order_by(LosSyncLog.sync_timestamp.desc()).first()
+
+        if last_sync_log:
+            return {
+                "timestamp": last_sync_log.sync_timestamp.isoformat() if last_sync_log.sync_timestamp else None,
+                "direction": last_sync_log.sync_direction,
+                "status": last_sync_log.sync_status,
+            }
+    except Exception:
+        pass  # LosSyncLog table may not exist yet
+
+    # Fall back to AuditLog
     try:
         from database.models.security import AuditLog
         from sqlalchemy import and_
@@ -516,3 +820,61 @@ def _get_last_sync(db: Session, loan_id: int) -> Optional[Dict[str, Any]]:
         logger.warning(f"Failed to get last sync: {e}")
 
     return None
+
+
+def _log_to_los_sync_log(db: Session, loan_id: int, result: LOSSyncResult) -> None:
+    """Write a detailed sync record to the LosSyncLog table (Check 7.5).
+
+    This provides field-level conflict tracking, change history, and
+    resolution audit trails that the enterprise readiness audit requires.
+    """
+    try:
+        from database.models.los_sync import LosSyncLog
+
+        # Map LOSSyncStatus to LosSyncLog status strings
+        status_map = {
+            LOSSyncStatus.SUCCESS: "success",
+            LOSSyncStatus.PARTIAL: "partial",
+            LOSSyncStatus.FAILED: "failed",
+            LOSSyncStatus.CONFLICT: "conflict",
+            LOSSyncStatus.SKIPPED: "success",
+            LOSSyncStatus.IN_PROGRESS: "partial",
+            LOSSyncStatus.PENDING: "partial",
+        }
+
+        fields_synced_list = []
+        fields_conflicted_list = []
+        changes_list = result.details.get("changes", [])
+
+        for change in changes_list:
+            fields_synced_list.append(change["field"])
+
+        for conflict in result.conflicts:
+            fields_conflicted_list.append({
+                "field": conflict.get("field"),
+                "crm_value": conflict.get("crm_value"),
+                "los_value": conflict.get("los_value"),
+                "resolution": conflict.get("resolution"),
+                "winning_side": conflict.get("winning_side"),
+            })
+
+        sync_log = LosSyncLog(
+            loan_id=loan_id,
+            los_system="encompass",
+            sync_direction=result.direction.value,
+            sync_trigger="manual",
+            sync_status=status_map.get(result.status, "failed"),
+            fields_synced=fields_synced_list or None,
+            fields_conflicted=fields_conflicted_list or None,
+            changes=changes_list or None,
+            conflicts_auto_resolved=result.details.get("conflicts_auto_resolved", 0),
+            conflicts_manual_pending=result.details.get("conflicts_manual_pending", 0),
+            error_message="; ".join(result.errors) if result.errors else None,
+            duration_ms=int(result.latency_ms) if result.latency_ms else None,
+            sync_timestamp=datetime.now(timezone.utc),
+        )
+        db.add(sync_log)
+        db.flush()
+    except Exception as e:
+        # Don't fail the sync because structured logging failed
+        logger.warning(f"Failed to write LosSyncLog: {e}")

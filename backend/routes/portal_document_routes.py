@@ -551,12 +551,28 @@ async def get_document_download_url(
         logger.warning(f"Document download denied: doc {document_id} belongs to workspace {doc_workspace_id}, requested {workspace_id}")
         raise HTTPException(status_code=403, detail="Access denied: document does not belong to this workspace")
 
-    # Also verify the workspace exists
+    # Verify the workspace exists and get organization_id for tenant validation
     workspace = db.execute(text("""
-        SELECT id FROM purl_workspaces WHERE id = :workspace_id
+        SELECT id, organization_id FROM purl_workspaces WHERE id = :workspace_id
     """), {"workspace_id": workspace_id}).fetchone()
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
+
+    workspace_org_id = workspace[1]
+
+    # SEC DOC-013: Validate S3 key belongs to workspace's organization
+    storage_key = document[2]
+    if workspace_org_id and storage_key:
+        # Check that the storage key belongs to the correct tenant
+        expected_prefix = f"org-{workspace_org_id}/"
+        if storage_key.startswith("org-") and not storage_key.startswith(expected_prefix):
+            logger.warning(
+                f"Document download denied: storage key {storage_key} does not belong to org {workspace_org_id}"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: document belongs to another organization"
+            )
 
     s3_client = get_s3_client()
     if s3_client:
@@ -564,13 +580,13 @@ async def get_document_download_url(
             'get_object',
             Params={
                 'Bucket': S3_BUCKET,
-                'Key': document[2],
+                'Key': storage_key,
                 'ResponseContentDisposition': f'attachment; filename="{document[1]}"'
             },
             ExpiresIn=3600
         )
     else:
-        download_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{document[2]}"
+        download_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{storage_key}"
 
     return {
         "document_id": document_id,

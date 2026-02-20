@@ -15,6 +15,7 @@ class AIConversationMemory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    organization_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
     session_id = Column(UUID(as_uuid=True), nullable=False)
     message_index = Column(Integer, nullable=False)
     role = Column(String(20), nullable=False)  # 'user' or 'assistant'
@@ -26,6 +27,7 @@ class AIConversationMemory(Base):
     __table_args__ = (
         Index('idx_conv_user_date', 'user_id', 'created_at'),
         Index('idx_conv_session', 'session_id', 'message_index'),
+        Index('ix_ai_conversation_memory_organization_id', 'organization_id'),
     )
 
 
@@ -35,6 +37,7 @@ class AIActionHistory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    organization_id = Column(Integer, ForeignKey('organizations.id'), nullable=True)
     action_id = Column(UUID(as_uuid=True), nullable=False, unique=True)
     action_type = Column(String(50), nullable=False)
     preview_data = Column(JSONB, nullable=False)
@@ -45,4 +48,5 @@ class AIActionHistory(Base):
 
     __table_args__ = (
         Index('idx_action_user_date', 'user_id', 'created_at'),
+        Index('ix_ai_action_history_organization_id', 'organization_id'),
     )

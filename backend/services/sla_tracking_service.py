@@ -96,9 +96,9 @@ class SLATrackingService:
     Provides methods to track milestones based on loan/lead events.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, organization_id: int = None):
         self.db = db
-        self.organization_id = 1  # Default org, can be made configurable
+        self.organization_id = organization_id
 
     def on_lead_created(self, lead_id: int, loan_number: Optional[str] = None):
         """
@@ -480,18 +480,18 @@ class SLATrackingService:
 # Helper function to get service instance
 # ============================================================================
 
-def get_sla_service(db: Session) -> SLATrackingService:
+def get_sla_service(db: Session, organization_id: int = None) -> SLATrackingService:
     """Get an SLA tracking service instance."""
-    return SLATrackingService(db)
+    return SLATrackingService(db, organization_id=organization_id)
 
 
 # ============================================================================
 # Event hook functions for integration with main app
 # ============================================================================
 
-def track_lead_created(db: Session, lead_id: int, loan_number: Optional[str] = None):
+def track_lead_created(db: Session, lead_id: int, loan_number: Optional[str] = None, organization_id: int = None):
     """Hook for lead creation - call from lead creation endpoint."""
-    service = get_sla_service(db)
+    service = get_sla_service(db, organization_id=organization_id)
     return service.on_lead_created(lead_id, loan_number)
 
 
@@ -501,10 +501,11 @@ def track_lead_stage_change(
     old_stage: Optional[str],
     new_stage: str,
     user_id: Optional[int] = None,
-    loan_number: Optional[str] = None
+    loan_number: Optional[str] = None,
+    organization_id: int = None
 ):
     """Hook for lead stage change - call from lead update endpoint."""
-    service = get_sla_service(db)
+    service = get_sla_service(db, organization_id=organization_id)
     return service.on_lead_stage_change(lead_id, old_stage, new_stage, user_id, loan_number)
 
 
@@ -512,10 +513,11 @@ def track_loan_created(
     db: Session,
     loan_id: int,
     loan_number: str,
-    lead_id: Optional[int] = None
+    lead_id: Optional[int] = None,
+    organization_id: int = None
 ):
     """Hook for loan creation - call from loan creation endpoint."""
-    service = get_sla_service(db)
+    service = get_sla_service(db, organization_id=organization_id)
     return service.on_loan_created(loan_id, loan_number, lead_id)
 
 
@@ -525,8 +527,9 @@ def track_loan_stage_change(
     old_stage: Optional[str],
     new_stage: str,
     user_id: Optional[int] = None,
-    loan_number: Optional[str] = None
+    loan_number: Optional[str] = None,
+    organization_id: int = None
 ):
     """Hook for loan stage change - call from loan update endpoint."""
-    service = get_sla_service(db)
+    service = get_sla_service(db, organization_id=organization_id)
     return service.on_loan_stage_change(loan_id, old_stage, new_stage, user_id, loan_number)

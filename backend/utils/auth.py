@@ -1,6 +1,7 @@
 """
 Authentication and Authorization Utilities
-Provides role checking and permission verification for FastAPI endpoints.
+Provides role checking, permission verification, and password validation
+for FastAPI endpoints.
 
 Role Hierarchy:
 - admin: Platform Administrator (developer/engineer) - full access across all organizations
@@ -11,9 +12,141 @@ Role Hierarchy:
 - processing: Loan processors
 - operations: General operations staff
 """
+import re
+import logging
 from typing import Optional, List
 from fastapi import HTTPException, Depends
 from functools import wraps
+
+logger = logging.getLogger(__name__)
+
+# =============================================================================
+# PASSWORD COMPLEXITY CONSTANTS
+# =============================================================================
+
+PASSWORD_MIN_LENGTH = 12
+PASSWORD_SPECIAL_CHARS = r'!@#$%^&*()\-_+=\[\]{}|;:,.<>?/~`'
+
+# =============================================================================
+# PASSWORD STRENGTH VALIDATION (Enterprise Security - Domain 4)
+# =============================================================================
+
+def validate_password_strength(password: str) -> List[str]:
+    """
+    Validate password meets enterprise complexity requirements.
+
+    Requirements:
+    - Minimum 12 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one digit
+    - At least one special character (!@#$%^&*()-_+=)
+
+    Args:
+        password: The password string to validate
+
+    Returns:
+        List of violation messages. Empty list means the password is valid.
+    """
+    violations = []
+
+    if len(password) < PASSWORD_MIN_LENGTH:
+        violations.append(
+            f"Password must be at least {PASSWORD_MIN_LENGTH} characters long "
+            f"(currently {len(password)})"
+        )
+
+    if not re.search(r'[A-Z]', password):
+        violations.append("Password must contain at least one uppercase letter")
+
+    if not re.search(r'[a-z]', password):
+        violations.append("Password must contain at least one lowercase letter")
+
+    if not re.search(r'[0-9]', password):
+        violations.append("Password must contain at least one digit")
+
+    if not re.search(r'[!@#$%^&*()\-_+=\[\]{}|;:,.<>?/~`]', password):
+        violations.append(
+            "Password must contain at least one special character "
+            "(!@#$%^&*()-_+=)"
+        )
+
+    return violations
+
+
+def require_strong_password(password: str) -> None:
+    """
+    Validate password strength and raise HTTPException if requirements are not met.
+
+    Convenience wrapper around validate_password_strength() for use in route handlers.
+
+    Args:
+        password: The password string to validate
+
+    Raises:
+        HTTPException: 400 Bad Request with list of violations if password is weak
+    """
+    violations = validate_password_strength(password)
+    if violations:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password does not meet security requirements: {'; '.join(violations)}"
+        )
+
+
+# =============================================================================
+# MFA ENFORCEMENT FOR ADMIN ACCOUNTS (Enterprise Security - Domain 4)
+# =============================================================================
+
+# Admin-level roles that MUST have MFA enabled to access sensitive endpoints
+ADMIN_ROLES_REQUIRING_MFA = ['admin', 'site_admin']
+
+
+def require_admin_mfa(current_user) -> None:
+    """
+    Enforce MFA for admin-level users accessing sensitive endpoints.
+
+    If the user has an admin or site_admin role/permission_role, they MUST
+    have MFA enabled. Non-admin users are allowed through without MFA.
+
+    Args:
+        current_user: The authenticated user object
+
+    Raises:
+        HTTPException: 403 Forbidden if admin user has not enabled MFA
+    """
+    permission_role = getattr(current_user, 'permission_role', None) or ''
+    legacy_role = getattr(current_user, 'role', None) or ''
+
+    is_admin_user = (
+        permission_role.lower() in [r.lower() for r in ADMIN_ROLES_REQUIRING_MFA]
+        or legacy_role.lower() in [r.lower() for r in ADMIN_ROLES_REQUIRING_MFA]
+    )
+
+    if not is_admin_user:
+        return  # Non-admin users are not required to have MFA
+
+    mfa_enabled = getattr(current_user, 'mfa_enabled', False) or False
+
+    if not mfa_enabled:
+        logger.warning(
+            f"Admin MFA enforcement: user {getattr(current_user, 'email', '?')} "
+            f"(role={legacy_role}, permission_role={permission_role}) "
+            f"blocked from sensitive endpoint - MFA not enabled"
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Multi-factor authentication (MFA) is required for admin accounts. "
+                "Please enable MFA at /api/v1/auth/mfa/setup before accessing "
+                "this resource."
+            ),
+        )
+
+
+# =============================================================================
+# ROLE DEFINITIONS
+# =============================================================================
 
 # Platform admin - developer/engineer with god-mode access across all organizations
 PLATFORM_ADMIN_ROLES = ['admin']

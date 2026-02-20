@@ -98,25 +98,27 @@ class PerenniaS3Service:
         loan_id: int,
         file_name: str,
         folder: str = "originals",
-        organization_id: Optional[int] = None,
+        organization_id: int = None,  # REQUIRED for tenant isolation
     ) -> str:
         """
         Generate a unique storage key for a document.
 
         Format: org-{org_id}/documents/{loan_id}/{folder}/{uuid}.{extension}
-        Legacy (no org): documents/{loan_id}/{folder}/{uuid}.{extension}
 
         Args:
             loan_id: Loan ID for organization
             file_name: Original file name (for extension)
             folder: Subfolder (originals, compressed, previews)
-            organization_id: Organization ID for tenant isolation (required for new uploads)
+            organization_id: Organization ID for tenant isolation (REQUIRED)
 
         Returns:
             Storage key string
+
+        Raises:
+            ValueError: If organization_id is not provided
         """
         if not organization_id:
-            logger.warning("generate_storage_key called without organization_id - using legacy path")
+            raise ValueError("organization_id is required for tenant isolation - cannot create storage key without it")
 
         # Extract extension
         ext = file_name.rsplit('.', 1)[-1].lower() if '.' in file_name else 'bin'
@@ -129,9 +131,8 @@ class PerenniaS3Service:
         # Generate unique key
         unique_id = uuid.uuid4().hex
 
-        # Org-prefixed key for tenant isolation
-        org_prefix = f"org-{organization_id}/" if organization_id else ""
-        return f"{org_prefix}documents/{loan_id}/{folder}/{unique_id}.{ext}"
+        # Org-prefixed key for tenant isolation (ALWAYS required)
+        return f"org-{organization_id}/documents/{loan_id}/{folder}/{unique_id}.{ext}"
 
     def get_presigned_upload_url(
         self,
@@ -260,7 +261,8 @@ class PerenniaS3Service:
         self,
         storage_key: str,
         file_name: Optional[str] = None,
-        expires_in: Optional[int] = None
+        expires_in: Optional[int] = None,
+        organization_id: int = None,  # REQUIRED for tenant validation
     ) -> Dict[str, Any]:
         """
         Generate a presigned URL for downloading a document.
@@ -269,10 +271,28 @@ class PerenniaS3Service:
             storage_key: S3 object key
             file_name: Original file name for Content-Disposition
             expires_in: Custom expiry time in seconds
+            organization_id: Organization ID (REQUIRED) - validates the key belongs to this org
 
         Returns:
             Dict with presigned_url and expiry info
+
+        Raises:
+            ValueError: If organization_id is not provided
         """
+        # ALWAYS validate tenant access (CRITICAL for security)
+        if not organization_id:
+            raise ValueError("organization_id is required for tenant validation - cannot generate download URL without it")
+
+        if not self.validate_org_access(storage_key, organization_id):
+            logger.warning(
+                f"Presigned URL denied: org {organization_id} "
+                f"cannot access key {storage_key}"
+            )
+            return {
+                "success": False,
+                "error": "Access denied: document belongs to another organization",
+            }
+
         try:
             params = {
                 'Bucket': self.bucket_name,
@@ -630,30 +650,31 @@ class PerenniaS3Service:
         self,
         email_intake_id: int,
         filename: str,
-        organization_id: Optional[int] = None,
+        organization_id: int = None,  # REQUIRED for tenant isolation
     ) -> str:
         """
         Generate storage key for document intake (temp storage).
 
         Format: org-{org_id}/intake/{email_intake_id}/{uuid}.{extension}
-        Legacy (no org): intake/{email_intake_id}/{uuid}.{extension}
 
         Args:
             email_intake_id: Email intake record ID
             filename: Original filename
-            organization_id: Organization ID for tenant isolation (required for new uploads)
+            organization_id: Organization ID for tenant isolation (REQUIRED)
 
         Returns:
             Storage key string
+
+        Raises:
+            ValueError: If organization_id is not provided
         """
         if not organization_id:
-            logger.warning("generate_intake_key called without organization_id - using legacy path")
+            raise ValueError("organization_id is required for tenant isolation - cannot create intake key without it")
 
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
         unique_id = uuid.uuid4().hex
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-        org_prefix = f"org-{organization_id}/" if organization_id else ""
-        return f"{org_prefix}intake/{email_intake_id}/{timestamp}_{unique_id}.{ext}"
+        return f"org-{organization_id}/intake/{email_intake_id}/{timestamp}_{unique_id}.{ext}"
 
     def generate_document_key(
         self,
@@ -661,26 +682,28 @@ class PerenniaS3Service:
         loan_id: Optional[int],
         doc_type: str,
         filename: str,
-        organization_id: Optional[int] = None,
+        organization_id: int = None,  # REQUIRED for tenant isolation
     ) -> str:
         """
         Generate permanent storage key for classified document.
 
         Format: org-{org_id}/documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
-        Legacy (no org): documents/{borrower_id or 'unassigned'}/{loan_id or 'general'}/{doc_type}/{uuid}.{extension}
 
         Args:
             borrower_id: Borrower ID (optional)
             loan_id: Loan ID (optional)
             doc_type: Document type (e.g., 'W2', 'BANK_STATEMENT')
             filename: Original filename
-            organization_id: Organization ID for tenant isolation (required for new uploads)
+            organization_id: Organization ID for tenant isolation (REQUIRED)
 
         Returns:
             Storage key string
+
+        Raises:
+            ValueError: If organization_id is not provided
         """
         if not organization_id:
-            logger.warning("generate_document_key called without organization_id - using legacy path")
+            raise ValueError("organization_id is required for tenant isolation - cannot create document key without it")
 
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'bin'
         unique_id = uuid.uuid4().hex
@@ -688,8 +711,7 @@ class PerenniaS3Service:
         borrower_folder = str(borrower_id) if borrower_id else 'unassigned'
         loan_folder = str(loan_id) if loan_id else 'general'
 
-        org_prefix = f"org-{organization_id}/" if organization_id else ""
-        return f"{org_prefix}documents/{borrower_folder}/{loan_folder}/{doc_type.lower()}/{unique_id}.{ext}"
+        return f"org-{organization_id}/documents/{borrower_folder}/{loan_folder}/{doc_type.lower()}/{unique_id}.{ext}"
 
     def validate_org_access(self, storage_key: str, organization_id: int) -> bool:
         """
@@ -719,7 +741,7 @@ class PerenniaS3Service:
         loan_id: int,
         folder: Optional[str] = None,
         max_keys: int = 100,
-        organization_id: Optional[int] = None,
+        organization_id: int = None,  # REQUIRED for tenant-scoped listing
     ) -> Dict[str, Any]:
         """
         List all documents for a loan, scoped by organization.
@@ -728,16 +750,18 @@ class PerenniaS3Service:
             loan_id: Loan ID
             folder: Optional subfolder (originals, compressed, previews)
             max_keys: Maximum number of keys to return
-            organization_id: Organization ID for tenant-scoped listing
+            organization_id: Organization ID for tenant-scoped listing (REQUIRED)
 
         Returns:
             Dict with list of document keys
+
+        Raises:
+            ValueError: If organization_id is not provided
         """
-        if organization_id:
-            prefix = f"org-{organization_id}/documents/{loan_id}/"
-        else:
-            logger.warning("list_loan_documents called without organization_id - listing legacy path only")
-            prefix = f"documents/{loan_id}/"
+        if not organization_id:
+            raise ValueError("organization_id is required for tenant-scoped listing - cannot list documents without it")
+
+        prefix = f"org-{organization_id}/documents/{loan_id}/"
         if folder:
             prefix += f"{folder}/"
 

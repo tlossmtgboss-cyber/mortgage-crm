@@ -766,6 +766,12 @@ async def get_current_user_flexible(
             api_key.last_used_at = datetime.now(timezone.utc)
             db.commit()
 
+            # Set tenant context for API key organization (CRITICAL for tenant isolation)
+            if api_key.organization_id:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, api_key.organization_id)
+                logger.info(f"API key tenant context set to org {api_key.organization_id}")
+
             # Get the user associated with this API key
             actual_user = db.query(User).filter(User.id == api_key.user_id).first()
             if actual_user:
@@ -991,6 +997,22 @@ async def update_ai_action_outcome(
         logger.error(f"❌ Failed to update AI action outcome: {e}")
         db.rollback()
         return False
+
+# ============================================================================
+# API GATEWAY ROUTES - Enterprise Domain 11
+# ============================================================================
+try:
+    from routes.api_gateway_routes import register_api_gateway_routes
+    register_api_gateway_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ API Gateway routes loaded (Domain 11: API Key CRUD, Webhooks, Rate Limiting)")
+except Exception as e:
+    logger.error(f"❌ API Gateway routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
 
 # ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py

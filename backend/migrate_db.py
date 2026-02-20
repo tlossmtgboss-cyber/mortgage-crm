@@ -88,5 +88,5 @@ def add_user_roles_tables():
 if __name__ == "__main__":
     print("Running database migration...")
     add_onboarding_completed_column()
-        add_user_roles_tables()
+    add_user_roles_tables()
     print("Migration complete!")

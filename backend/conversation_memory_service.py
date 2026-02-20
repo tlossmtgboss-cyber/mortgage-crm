@@ -24,9 +24,16 @@ class ConversationMemory:
         role: str,
         content: str,
         action_id: str = None,
-        action_data: dict = None
+        action_data: dict = None,
+        organization_id: int = None
     ):
-        """Save a message to permanent storage"""
+        """Save a message to permanent storage.
+
+        Args:
+            organization_id: Tenant org ID for RLS. Defense-in-depth: RLS policies
+                enforce isolation via app.current_tenant, but writing the correct
+                organization_id ensures new rows are visible under the policy.
+        """
         try:
             # Get next message index
             result = db.execute(text("""
@@ -40,73 +47,47 @@ class ConversationMemory:
             action_id_val = action_id if action_id else None
             action_data_val = json.dumps(action_data) if action_data else None
 
-            # Insert message
-            if action_id_val and action_data_val:
-                db.execute(text("""
-                    INSERT INTO ai_conversation_memory
-                    (id, user_id, session_id, message_index, role, content, action_id, action_data, created_at)
-                    VALUES (
-                        gen_random_uuid(),
-                        :user_id,
-                        CAST(:session_id AS uuid),
-                        :message_index,
-                        :role,
-                        :content,
-                        CAST(:action_id AS uuid),
-                        CAST(:action_data AS jsonb),
-                        NOW()
-                    )
-                """), {
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "message_index": message_index,
-                    "role": role,
-                    "content": content,
-                    "action_id": action_id_val,
-                    "action_data": action_data_val
-                })
-            elif action_id_val:
-                db.execute(text("""
-                    INSERT INTO ai_conversation_memory
-                    (id, user_id, session_id, message_index, role, content, action_id, created_at)
-                    VALUES (
-                        gen_random_uuid(),
-                        :user_id,
-                        CAST(:session_id AS uuid),
-                        :message_index,
-                        :role,
-                        :content,
-                        CAST(:action_id AS uuid),
-                        NOW()
-                    )
-                """), {
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "message_index": message_index,
-                    "role": role,
-                    "content": content,
-                    "action_id": action_id_val
-                })
-            else:
-                db.execute(text("""
-                    INSERT INTO ai_conversation_memory
-                    (id, user_id, session_id, message_index, role, content, created_at)
-                    VALUES (
-                        gen_random_uuid(),
-                        :user_id,
-                        CAST(:session_id AS uuid),
-                        :message_index,
-                        :role,
-                        :content,
-                        NOW()
-                    )
-                """), {
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "message_index": message_index,
-                    "role": role,
-                    "content": content
-                })
+            # Build column/value lists dynamically based on optional fields
+            columns = ["id", "user_id", "session_id", "message_index", "role", "content", "created_at"]
+            values = [
+                "gen_random_uuid()",
+                ":user_id",
+                "CAST(:session_id AS uuid)",
+                ":message_index",
+                ":role",
+                ":content",
+                "NOW()"
+            ]
+            params = {
+                "user_id": user_id,
+                "session_id": session_id,
+                "message_index": message_index,
+                "role": role,
+                "content": content,
+            }
+
+            if organization_id is not None:
+                columns.append("organization_id")
+                values.append(":organization_id")
+                params["organization_id"] = organization_id
+
+            if action_id_val:
+                columns.append("action_id")
+                values.append("CAST(:action_id AS uuid)")
+                params["action_id"] = action_id_val
+
+            if action_data_val:
+                columns.append("action_data")
+                values.append("CAST(:action_data AS jsonb)")
+                params["action_data"] = action_data_val
+
+            col_sql = ", ".join(columns)
+            val_sql = ", ".join(values)
+
+            db.execute(text(f"""
+                INSERT INTO ai_conversation_memory ({col_sql})
+                VALUES ({val_sql})
+            """), params)
             db.commit()
             logger.info(f"Saved message for user {user_id}, session {session_id}")
 
@@ -117,7 +98,12 @@ class ConversationMemory:
 
     @staticmethod
     def get_recent_messages(db: Session, user_id: int, limit: int = 50) -> List[Dict]:
-        """Get recent messages for context"""
+        """Get recent messages for context.
+
+        Tenant isolation: user_id scopes the query to the requesting user.
+        RLS policy on ai_conversation_memory (via app.current_tenant) provides
+        additional tenant-level isolation as defense-in-depth.
+        """
         try:
             result = db.execute(text("""
                 SELECT role, content, action_id, action_data, created_at
@@ -146,7 +132,11 @@ class ConversationMemory:
 
     @staticmethod
     def search_history(db: Session, user_id: int, query: str, limit: int = 10) -> List[Dict]:
-        """Search conversation history using full-text search"""
+        """Search conversation history using full-text search.
+
+        Tenant isolation: user_id scopes the query. RLS on ai_conversation_memory
+        provides additional tenant-level isolation via app.current_tenant.
+        """
         try:
             result = db.execute(text("""
                 SELECT role, content, created_at
@@ -173,28 +163,44 @@ class ConversationMemory:
         user_id: int,
         action_id: str,
         action_type: str,
-        preview_data: dict
+        preview_data: dict,
+        organization_id: int = None
     ):
-        """Save action to history"""
+        """Save action to history.
+
+        Args:
+            organization_id: Tenant org ID for RLS defense-in-depth.
+        """
         try:
-            db.execute(text("""
-                INSERT INTO ai_action_history
-                (id, user_id, action_id, action_type, preview_data, status, created_at)
-                VALUES (
-                    gen_random_uuid(),
-                    :user_id,
-                    CAST(:action_id AS uuid),
-                    :action_type,
-                    CAST(:preview_data AS jsonb),
-                    'previewed',
-                    NOW()
-                )
-            """), {
+            columns = ["id", "user_id", "action_id", "action_type", "preview_data", "status", "created_at"]
+            values = [
+                "gen_random_uuid()",
+                ":user_id",
+                "CAST(:action_id AS uuid)",
+                ":action_type",
+                "CAST(:preview_data AS jsonb)",
+                "'previewed'",
+                "NOW()"
+            ]
+            params = {
                 "user_id": user_id,
                 "action_id": action_id,
                 "action_type": action_type,
-                "preview_data": json.dumps(preview_data)
-            })
+                "preview_data": json.dumps(preview_data),
+            }
+
+            if organization_id is not None:
+                columns.append("organization_id")
+                values.append(":organization_id")
+                params["organization_id"] = organization_id
+
+            col_sql = ", ".join(columns)
+            val_sql = ", ".join(values)
+
+            db.execute(text(f"""
+                INSERT INTO ai_action_history ({col_sql})
+                VALUES ({val_sql})
+            """), params)
             db.commit()
             logger.info(f"Saved action {action_id} for user {user_id}")
 
@@ -308,15 +314,30 @@ class ConversationMemory:
             }
 
     @staticmethod
-    def get_session_messages(db: Session, session_id: str) -> List[Dict]:
-        """Get all messages for a specific session"""
+    def get_session_messages(db: Session, session_id: str, user_id: int = None) -> List[Dict]:
+        """Get all messages for a specific session.
+
+        Args:
+            user_id: If provided, also filter by user_id as defense-in-depth.
+                RLS via app.current_tenant provides tenant isolation, but adding
+                user_id prevents cross-user session access within the same tenant.
+        """
         try:
-            result = db.execute(text("""
-                SELECT role, content, action_id, action_data, created_at
-                FROM ai_conversation_memory
-                WHERE session_id = CAST(:session_id AS uuid)
-                ORDER BY message_index ASC
-            """), {"session_id": session_id})
+            if user_id is not None:
+                result = db.execute(text("""
+                    SELECT role, content, action_id, action_data, created_at
+                    FROM ai_conversation_memory
+                    WHERE session_id = CAST(:session_id AS uuid)
+                      AND user_id = :user_id
+                    ORDER BY message_index ASC
+                """), {"session_id": session_id, "user_id": user_id})
+            else:
+                result = db.execute(text("""
+                    SELECT role, content, action_id, action_data, created_at
+                    FROM ai_conversation_memory
+                    WHERE session_id = CAST(:session_id AS uuid)
+                    ORDER BY message_index ASC
+                """), {"session_id": session_id})
 
             return [{
                 'role': r[0],

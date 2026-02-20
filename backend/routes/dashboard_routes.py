@@ -21,7 +21,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, case, text
 
@@ -42,10 +42,14 @@ router = APIRouter(prefix="/api/v1", tags=["Dashboard"])
 # DASHBOARD HELPER FUNCTIONS
 # =============================================================================
 
-def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago) -> list:
+def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago, org_id: Optional[int] = None, branch_user_ids: Optional[list] = None) -> list:
     """
     Calculate real stage performance metrics based on actual loan data.
     Returns efficiency scores and status for each stage.
+
+    Args:
+        branch_user_ids: List of user IDs in the branch (for branch-level filtering).
+                         If None, uses user_id. If empty list, uses all org users.
     """
     # Define stage mapping with target days for each stage
     stage_configs = [
@@ -64,10 +68,15 @@ def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago) -> l
     for config in stage_configs:
         if config["type"] == "lead":
             # Query leads in these stages
-            leads_in_stage = db.query(Lead).filter(
-                Lead.owner_id == user_id,
-                Lead.stage.in_(config["stages"])
-            ).all()
+            query_filters = [Lead.stage.in_(config["stages"])]
+            if org_id:
+                query_filters.append(Lead.organization_id == org_id)
+            if branch_user_ids is not None:
+                query_filters.append(Lead.owner_id.in_(branch_user_ids))
+            else:
+                query_filters.append(Lead.owner_id == user_id)
+
+            leads_in_stage = db.query(Lead).filter(*query_filters).all()
 
             if leads_in_stage:
                 total_days = 0
@@ -90,10 +99,15 @@ def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago) -> l
                 avg_days = 0
         else:
             # Query loans in these stages
-            loans_in_stage = db.query(Loan).filter(
-                Loan.loan_officer_id == user_id,
-                Loan.stage.in_(config["stages"])
-            ).all()
+            query_filters = [Loan.stage.in_(config["stages"])]
+            if org_id:
+                query_filters.append(Loan.organization_id == org_id)
+            if branch_user_ids is not None:
+                query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+            else:
+                query_filters.append(Loan.loan_officer_id == user_id)
+
+            loans_in_stage = db.query(Loan).filter(*query_filters).all()
 
             if loans_in_stage:
                 total_days = 0
@@ -130,10 +144,13 @@ def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago) -> l
     return stage_results
 
 
-def calculate_team_performance(db: Session, user_id: int, thirty_days_ago) -> list:
+def calculate_team_performance(db: Session, user_id: int, thirty_days_ago, org_id: Optional[int] = None, branch_user_ids: Optional[list] = None) -> list:
     """
     Calculate real team performance metrics based on actual user roles and their metrics.
     Returns performance scores by role category.
+
+    Args:
+        branch_user_ids: List of user IDs in the branch (for branch-level filtering).
     """
     # Get the user's organization or team context
     current_user = db.query(User).filter(User.id == user_id).first()
@@ -143,13 +160,18 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago) -> li
     team_results = []
 
     # Loan Officers performance - based on conversion rate and volume
+    query_filters = [Lead.created_at >= thirty_days_ago]
+    if org_id:
+        query_filters.append(Lead.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Lead.owner_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Lead.owner_id == user_id)
+
     lo_metrics = db.query(
         func.count(Lead.id).label('total_leads'),
         func.count(func.nullif(Lead.stage == LeadStage.CONVERTED, False)).label('converted')
-    ).filter(
-        Lead.owner_id == user_id,
-        Lead.created_at >= thirty_days_ago
-    ).first()
+    ).filter(*query_filters).first()
 
     total_leads = lo_metrics.total_leads or 0
     converted = lo_metrics.converted or 0
@@ -160,10 +182,15 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago) -> li
     team_results.append({"role": "Loan Officers", "performance": lo_performance})
 
     # Processors performance - based on processing time
-    processing_loans = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
-        Loan.stage == LoanStage.PROCESSING
-    ).all()
+    query_filters = [Loan.stage == LoanStage.PROCESSING]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    processing_loans = db.query(Loan).filter(*query_filters).all()
 
     if processing_loans:
         avg_processing_days = sum(
@@ -177,10 +204,15 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago) -> li
     team_results.append({"role": "Processors", "performance": processor_performance})
 
     # Underwriters performance - based on underwriting time
-    uw_loans = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
-        Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING])
-    ).all()
+    query_filters = [Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING])]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    uw_loans = db.query(Loan).filter(*query_filters).all()
 
     if uw_loans:
         avg_uw_days = sum(
@@ -194,11 +226,18 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago) -> li
     team_results.append({"role": "Underwriters", "performance": uw_performance})
 
     # Closers performance - based on CTC to funding time
-    funded_loans = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= thirty_days_ago
-    ).all()
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    funded_loans = db.query(Loan).filter(*query_filters).all()
 
     if funded_loans:
         # Closers are performing well if loans get funded promptly
@@ -211,20 +250,30 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago) -> li
     return team_results
 
 
-def calculate_bottlenecks(db: Session, user_id: int) -> list:
+def calculate_bottlenecks(db: Session, user_id: int, org_id: Optional[int] = None, branch_user_ids: Optional[list] = None) -> list:
     """
     Calculate real bottlenecks based on actual loan issues and delays.
     Returns dynamic bottleneck data with real affected counts and delays.
+
+    Args:
+        branch_user_ids: List of user IDs in the branch (for branch-level filtering).
     """
     now = datetime.now(timezone.utc)
     bottlenecks = []
 
     # 1. Check for loans missing documents (stuck in processing)
-    processing_loans = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage == LoanStage.PROCESSING,
         Loan.days_in_stage > 10
-    ).all()
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    processing_loans = db.query(Loan).filter(*query_filters).all()
 
     if processing_loans:
         avg_delay = sum(loan.days_in_stage or 0 for loan in processing_loans) / len(processing_loans)
@@ -236,11 +285,18 @@ def calculate_bottlenecks(db: Session, user_id: int) -> list:
         })
 
     # 2. Check for leads stuck without contact
-    stuck_leads = db.query(func.count(Lead.id)).filter(
-        Lead.owner_id == user_id,
+    query_filters = [
         Lead.stage == LeadStage.NEW,
         Lead.created_at < now - timedelta(days=3)
-    ).scalar() or 0
+    ]
+    if org_id:
+        query_filters.append(Lead.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Lead.owner_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Lead.owner_id == user_id)
+
+    stuck_leads = db.query(func.count(Lead.id)).filter(*query_filters).scalar() or 0
 
     if stuck_leads > 0:
         bottlenecks.append({
@@ -251,11 +307,18 @@ def calculate_bottlenecks(db: Session, user_id: int) -> list:
         })
 
     # 3. Check for underwriting delays
-    uw_delays = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING]),
         Loan.days_in_stage > 7
-    ).all()
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    uw_delays = db.query(Loan).filter(*query_filters).all()
 
     if uw_delays:
         avg_uw_delay = sum(loan.days_in_stage or 0 for loan in uw_delays) / len(uw_delays)
@@ -267,12 +330,19 @@ def calculate_bottlenecks(db: Session, user_id: int) -> list:
         })
 
     # 4. Check for loans with rate lock expiring soon
-    rate_lock_expiring = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.rate_lock_expiration.isnot(None),
         Loan.rate_lock_expiration <= now + timedelta(days=7),
         Loan.stage.not_in([LoanStage.FUNDED, LoanStage.CANCELLED, LoanStage.DENIED])
-    ).scalar() or 0
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    rate_lock_expiring = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
 
     if rate_lock_expiring > 0:
         bottlenecks.append({
@@ -283,11 +353,18 @@ def calculate_bottlenecks(db: Session, user_id: int) -> list:
         })
 
     # 5. Check for application stage delays
-    app_delays = db.query(Lead).filter(
-        Lead.owner_id == user_id,
+    query_filters = [
         Lead.stage == LeadStage.APPLICATION,
         Lead.stage_changed_at < now - timedelta(days=14)
-    ).all()
+    ]
+    if org_id:
+        query_filters.append(Lead.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Lead.owner_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Lead.owner_id == user_id)
+
+    app_delays = db.query(Lead).filter(*query_filters).all()
 
     if app_delays:
         avg_app_delay = sum(
@@ -306,52 +383,88 @@ def calculate_bottlenecks(db: Session, user_id: int) -> list:
     return bottlenecks
 
 
-def calculate_efficiency_trends(db: Session, user_id: int) -> dict:
+def calculate_efficiency_trends(db: Session, user_id: int, org_id: Optional[int] = None, branch_user_ids: Optional[list] = None) -> dict:
     """
     Calculate trend values by comparing current period to previous period.
     Returns percentage changes for key metrics.
+
+    Args:
+        branch_user_ids: List of user IDs in the branch (for branch-level filtering).
     """
     now = datetime.now(timezone.utc)
     thirty_days_ago = now - timedelta(days=30)
     sixty_days_ago = now - timedelta(days=60)
 
     # Current period metrics (last 30 days)
-    current_funded = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= thirty_days_ago.date()
-    ).scalar() or 0
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
 
-    current_total_apps = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == user_id,
-        Loan.created_at >= thirty_days_ago
-    ).scalar() or 1
+    current_funded = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
+
+    query_filters = [Loan.created_at >= thirty_days_ago]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    current_total_apps = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 1
 
     current_pull_through = (current_funded / current_total_apps * 100) if current_total_apps > 0 else 0
 
     # Previous period metrics (30-60 days ago)
-    prev_funded = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= sixty_days_ago.date(),
         Loan.funded_date < thirty_days_ago.date()
-    ).scalar() or 0
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
 
-    prev_total_apps = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == user_id,
+    prev_funded = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
+
+    query_filters = [
         Loan.created_at >= sixty_days_ago,
         Loan.created_at < thirty_days_ago
-    ).scalar() or 1
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    prev_total_apps = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 1
 
     prev_pull_through = (prev_funded / prev_total_apps * 100) if prev_total_apps > 0 else 0
 
     # Calculate average time to close for both periods
-    current_funded_loans = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= thirty_days_ago.date(),
         Loan.created_at.isnot(None)
-    ).all()
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    current_funded_loans = db.query(Loan).filter(*query_filters).all()
 
     if current_funded_loans:
         current_avg_time = sum(
@@ -362,13 +475,20 @@ def calculate_efficiency_trends(db: Session, user_id: int) -> dict:
     else:
         current_avg_time = 0
 
-    prev_funded_loans = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= sixty_days_ago.date(),
         Loan.funded_date < thirty_days_ago.date(),
         Loan.created_at.isnot(None)
-    ).all()
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    prev_funded_loans = db.query(Loan).filter(*query_filters).all()
 
     if prev_funded_loans:
         prev_avg_time = sum(
@@ -393,11 +513,18 @@ def calculate_efficiency_trends(db: Session, user_id: int) -> dict:
     overall_trend = round((pull_through_change + time_to_close_change) / 2, 1)
 
     # Count loans falling behind for both periods
-    current_behind = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == user_id,
+    query_filters = [
         Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED]),
         Loan.days_in_stage > 14
-    ).scalar() or 0
+    ]
+    if org_id:
+        query_filters.append(Loan.organization_id == org_id)
+    if branch_user_ids is not None:
+        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+    else:
+        query_filters.append(Loan.loan_officer_id == user_id)
+
+    current_behind = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
 
     return {
         "overall_trend": overall_trend,
@@ -414,6 +541,8 @@ def calculate_efficiency_trends(db: Session, user_id: int) -> dict:
 
 @router.get("/dashboard")
 async def get_dashboard(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -421,6 +550,16 @@ async def get_dashboard(
     Get dashboard data with real metrics from database.
     All values are server-computed from CRM database.
     OPTIMIZED: Uses caching + fewer queries by batching and aggregating in memory.
+
+    Query Parameters:
+    - start_date: Optional date range start (YYYY-MM-DD). Defaults to 30 days ago.
+    - end_date: Optional date range end (YYYY-MM-DD). Defaults to today.
+
+    Enterprise Readiness (Check 9.6 - Branch-Level Access):
+    Branch managers can only see data from loan officers in their branch.
+
+    Enterprise Readiness (Check 9.14 - Dashboard Date Range):
+    Supports configurable date ranges instead of hardcoded 30 days.
     """
     # Default dashboard data for error cases
     default_dashboard = {
@@ -456,11 +595,45 @@ async def get_dashboard(
         }
     }
 
-    # Check cache first for blazing fast retrieval
-    cache_key = f"dashboard:{current_user.id}"
+    # Parse date range (Check 9.14)
+    if start_date and end_date:
+        try:
+            from datetime import datetime as dt
+            start_dt = dt.strptime(start_date, "%Y-%m-%d").date()
+            end_dt = dt.strptime(end_date, "%Y-%m-%d").date()
+            thirty_days_ago = start_dt
+            today = end_dt
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    else:
+        # Default: last 30 days
+        today = date.today()
+        thirty_days_ago = today - timedelta(days=30)
+
+    # Check cache first for blazing fast retrieval (include date range in key)
+    cache_key = f"dashboard:{current_user.id}:{thirty_days_ago}:{today}"
     cached_data = get_cached(cache_key)
     if cached_data:
         return cached_data
+
+    # Organization-scoped filtering (Enterprise Readiness Check 9.5-9.7)
+    org_id = getattr(current_user, 'organization_id', None)
+
+    # Branch-level access control (Enterprise Readiness Check 9.6)
+    # Since Lead/Loan models don't have branch_id, we filter via User.branch_id
+    from middleware.report_access import get_report_scope
+    scope = get_report_scope(current_user)
+    branch_user_ids = None
+
+    if scope["scope"] == "branch":
+        # Branch manager: get all users in their branch
+        branch_id = scope.get("branch_id")
+        if branch_id:
+            branch_users = db.query(User.id).filter(User.branch_id == branch_id).all()
+            branch_user_ids = [u.id for u in branch_users]
+    elif scope["scope"] == "user":
+        # Individual user: only their own data
+        branch_user_ids = [current_user.id]
 
     # Verify database tables exist before proceeding
     try:
@@ -486,15 +659,20 @@ async def get_dashboard(
 
     # OPTIMIZED: Single query to get all funded loan counts with CASE statements
     try:
+        query_filters = [Loan.stage == LoanStage.FUNDED]
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
         funded_counts = db.query(
             func.count(case((extract('year', Loan.funded_date) == today.year, 1))).label('annual'),
             func.count(case((Loan.funded_date >= start_of_month, 1))).label('monthly'),
             func.count(case((Loan.funded_date >= start_of_week, 1))).label('weekly'),
             func.count(case((Loan.funded_date == today, 1))).label('daily')
-        ).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED
-        ).first()
+        ).filter(*query_filters).first()
 
         annual_actual = funded_counts.annual or 0
         monthly_actual = funded_counts.monthly or 0
@@ -533,6 +711,14 @@ async def get_dashboard(
 
     # OPTIMIZED: Single query to get all lead counts
     try:
+        query_filters = []
+        if org_id:
+            query_filters.append(Lead.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Lead.owner_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Lead.owner_id == current_user.id)
+
         lead_counts = db.query(
             func.count(case((Lead.stage == LeadStage.NEW, 1))).label('new_leads'),
             func.count(case((
@@ -540,9 +726,7 @@ async def get_dashboard(
                 (Lead.created_at < datetime.now(timezone.utc) - timedelta(hours=24)), 1
             ))).label('uncontacted'),
             func.count(case((Lead.stage == LeadStage.PRE_APPROVED, 1))).label('preapproved')
-        ).filter(
-            Lead.owner_id == current_user.id
-        ).first()
+        ).filter(*query_filters).first()
 
         new_leads = lead_counts.new_leads or 0
         uncontacted_alerts = lead_counts.uncontacted or 0
@@ -571,10 +755,15 @@ async def get_dashboard(
 
     # OPTIMIZED: Fetch all active loans in one query and aggregate in memory
     try:
-        active_loans = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])
-        ).all()
+        query_filters = [Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])]
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
+        active_loans = db.query(Loan).filter(*query_filters).all()
 
         # Process data in memory instead of separate queries
         processing = [l for l in active_loans if l.stage == LoanStage.PROCESSING]
@@ -623,14 +812,21 @@ async def get_dashboard(
 
     # Funded this month - use aggregation
     try:
+        query_filters = [
+            Loan.stage == LoanStage.FUNDED,
+            Loan.funded_date >= start_of_month
+        ]
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
         funded_data = db.query(
             func.count(Loan.id).label('count'),
             func.sum(Loan.amount).label('volume')
-        ).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED,
-            Loan.funded_date >= start_of_month
-        ).first()
+        ).filter(*query_filters).first()
         funded_count = funded_data.count or 0
         funded_volume = int(funded_data.volume or 0)
     except Exception as funded_err:
@@ -651,11 +847,18 @@ async def get_dashboard(
     # ============================================================================
 
     try:
-        tasks_today = db.query(Task).filter(
-            Task.owner_id == current_user.id,
+        query_filters = [
             Task.status.in_(["pending", "in_progress"]),
             Task.due_date <= today + timedelta(days=1)
-        ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
+        ]
+        if org_id:
+            query_filters.append(Task.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Task.owner_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Task.owner_id == current_user.id)
+
+        tasks_today = db.query(Task).filter(*query_filters).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
 
         prioritized_tasks = [{
             "title": task.title,
@@ -675,6 +878,14 @@ async def get_dashboard(
     try:
         # OPTIMIZED: Single query for all lead metrics
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
+        query_filters = []
+        if org_id:
+            query_filters.append(Lead.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Lead.owner_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Lead.owner_id == current_user.id)
+
         lead_metrics_query = db.query(
             func.count(Lead.id).label('total_leads'),
             func.count(case((Lead.created_at >= today_start, 1))).label('new_today'),
@@ -686,9 +897,7 @@ async def get_dashboard(
                 (Lead.ai_score >= 75) &
                 (Lead.stage == LeadStage.ATTEMPTED_CONTACT), 1
             ))).label('high_intent')
-        ).filter(
-            Lead.owner_id == current_user.id
-        ).first()
+        ).filter(*query_filters).first()
 
         total_leads = lead_metrics_query.total_leads or 1
         new_today = lead_metrics_query.new_today or 0
@@ -696,23 +905,36 @@ async def get_dashboard(
         high_intent_leads = lead_metrics_query.high_intent or 0
 
         # Get applications count (already have it from earlier, but need to query separately)
-        applications = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id
-        ).scalar() or 0
+        query_filters = []
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
+        applications = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
 
         conversion_rate = int((applications / total_leads * 100)) if total_leads > 0 else 0
 
         # Calculate average contact time from lead data (time from creation to first contact attempt)
         # Uses EXTRACT to get hours between lead creation and first contact attempt
+        query_filters = [
+            Lead.first_contact_attempt_date.isnot(None),
+            Lead.created_at.isnot(None)
+        ]
+        if org_id:
+            query_filters.append(Lead.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Lead.owner_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Lead.owner_id == current_user.id)
+
         avg_contact_time_result = db.query(
             func.avg(
                 func.extract('epoch', Lead.first_contact_attempt_date - Lead.created_at) / 3600
             ).label('avg_hours')
-        ).filter(
-            Lead.owner_id == current_user.id,
-            Lead.first_contact_attempt_date.isnot(None),
-            Lead.created_at.isnot(None)
-        ).scalar()
+        ).filter(*query_filters).scalar()
 
         # Default to 1.2 hours if no data, otherwise round to 1 decimal
         avg_contact_time = round(float(avg_contact_time_result), 1) if avg_contact_time_result else 1.2
@@ -752,13 +974,18 @@ async def get_dashboard(
         # Get all lead counts by source in one query
         partner_names = [p.name for p in partners]
         if partner_names:
+            query_filters = [Lead.source.in_(partner_names)]
+            if org_id:
+                query_filters.append(Lead.organization_id == org_id)
+            if branch_user_ids is not None:
+                query_filters.append(Lead.owner_id.in_(branch_user_ids))
+            else:
+                query_filters.append(Lead.owner_id == current_user.id)
+
             lead_counts_by_source = db.query(
                 Lead.source,
                 func.count(Lead.id).label('count')
-            ).filter(
-                Lead.owner_id == current_user.id,
-                Lead.source.in_(partner_names)
-            ).group_by(Lead.source).all()
+            ).filter(*query_filters).group_by(Lead.source).all()
 
             # Create a lookup dict
             source_counts = {row.source: row.count for row in lead_counts_by_source}
@@ -802,18 +1029,33 @@ async def get_dashboard(
 
     # Get total loan count for this user (to determine if they have any data)
     try:
-        total_loan_count = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).count()
+        query_filters = []
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
+        total_loan_count = db.query(Loan).filter(*query_filters).count()
     except Exception:
         total_loan_count = 0
 
     # Calculate average time to close from funded loans
-    thirty_days_ago = today - timedelta(days=30)
+    # Note: thirty_days_ago now comes from date range params or defaults to 30 days
     try:
-        funded_loans_recent = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
+        query_filters = [
             Loan.stage == LoanStage.FUNDED,
             Loan.funded_date >= thirty_days_ago
-        ).all()
+        ]
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
+        funded_loans_recent = db.query(Loan).filter(*query_filters).all()
     except Exception:
         funded_loans_recent = []
 
@@ -832,10 +1074,15 @@ async def get_dashboard(
 
     # Calculate pull-through rate (funded / total applications)
     try:
-        total_applications = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.created_at >= thirty_days_ago
-        ).scalar() or 1
+        query_filters = [Loan.created_at >= thirty_days_ago]
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
+        total_applications = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 1
     except Exception:
         total_applications = 1
 
@@ -844,28 +1091,45 @@ async def get_dashboard(
 
     # Count loans falling behind (in stage > 14 days)
     try:
-        loans_behind = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
+        query_filters = [
             Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED]),
             Loan.days_in_stage > 14
-        ).scalar() or 0
+        ]
+        if org_id:
+            query_filters.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Loan.loan_officer_id == current_user.id)
+
+        loans_behind = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
     except Exception:
         loans_behind = 0
 
     # Calculate automation rate from AI agent actions
     try:
-        total_tasks = db.query(func.count(Task.id)).filter(
-            Task.owner_id == current_user.id,
-            Task.created_at >= thirty_days_ago
-        ).scalar() or 1
+        query_filters = [Task.created_at >= thirty_days_ago]
+        if org_id:
+            query_filters.append(Task.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(Task.owner_id.in_(branch_user_ids))
+        else:
+            query_filters.append(Task.owner_id == current_user.id)
+
+        total_tasks = db.query(func.count(Task.id)).filter(*query_filters).scalar() or 1
     except Exception:
         total_tasks = 1
 
     try:
-        ai_tasks_count = db.query(func.count(AIColleagueAction.id)).filter(
-            AIColleagueAction.user_id == current_user.id,
-            AIColleagueAction.created_at >= thirty_days_ago
-        ).scalar() or 0
+        query_filters = [AIColleagueAction.created_at >= thirty_days_ago]
+        if org_id:
+            query_filters.append(AIColleagueAction.organization_id == org_id)
+        if branch_user_ids is not None:
+            query_filters.append(AIColleagueAction.user_id.in_(branch_user_ids))
+        else:
+            query_filters.append(AIColleagueAction.user_id == current_user.id)
+
+        ai_tasks_count = db.query(func.count(AIColleagueAction.id)).filter(*query_filters).scalar() or 0
     except Exception:
         ai_tasks_count = 0
 
@@ -897,23 +1161,23 @@ async def get_dashboard(
 
     # Calculate trend values from historical data
     try:
-        trends = calculate_efficiency_trends(db, current_user.id)
+        trends = calculate_efficiency_trends(db, current_user.id, org_id=org_id, branch_user_ids=branch_user_ids)
     except Exception:
         trends = {"overall_trend": "stable", "time_to_close_change": 0, "pull_through_change": 0, "loans_behind_change": 0, "automation_change": 0}
 
     # Build efficiency dict with safe helper function calls
     try:
-        stage_perf = calculate_stage_performance(db, current_user.id, thirty_days_ago) if total_loan_count > 0 else []
+        stage_perf = calculate_stage_performance(db, current_user.id, thirty_days_ago, org_id=org_id, branch_user_ids=branch_user_ids) if total_loan_count > 0 else []
     except Exception:
         stage_perf = []
 
     try:
-        team_perf = calculate_team_performance(db, current_user.id, thirty_days_ago) if total_loan_count > 0 else []
+        team_perf = calculate_team_performance(db, current_user.id, thirty_days_ago, org_id=org_id, branch_user_ids=branch_user_ids) if total_loan_count > 0 else []
     except Exception:
         team_perf = []
 
     try:
-        bottlenecks = calculate_bottlenecks(db, current_user.id) if loans_behind > 0 else []
+        bottlenecks = calculate_bottlenecks(db, current_user.id, org_id=org_id, branch_user_ids=branch_user_ids) if loans_behind > 0 else []
     except Exception:
         bottlenecks = []
 

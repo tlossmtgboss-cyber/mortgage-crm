@@ -292,7 +292,8 @@ class SmartDocsS3Service:
         storage_key: str,
         file_name: Optional[str] = None,
         expires_in: Optional[int] = None,
-        inline: bool = False
+        inline: bool = False,
+        organization_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Generate a presigned URL for downloading/viewing a document.
@@ -302,6 +303,7 @@ class SmartDocsS3Service:
             file_name: Original file name for Content-Disposition
             expires_in: Custom expiry time in seconds
             inline: If True, use inline disposition for browser viewing
+            organization_id: Organization ID for tenant validation (recommended)
 
         Returns:
             Dict with presigned_url and expiry info
@@ -311,6 +313,17 @@ class SmartDocsS3Service:
                 "success": False,
                 "error": "S3 storage not configured"
             }
+
+        # Validate tenant access if organization_id provided
+        if organization_id:
+            if not self._validate_org_access(storage_key, organization_id):
+                logger.warning(
+                    f"Presigned URL denied: org {organization_id} cannot access key {storage_key}"
+                )
+                return {
+                    "success": False,
+                    "error": "Access denied: document belongs to another organization"
+                }
 
         try:
             params = {
@@ -342,6 +355,29 @@ class SmartDocsS3Service:
                 "success": False,
                 "error": "Internal server error"
             }
+
+    def _validate_org_access(self, storage_key: str, organization_id: int) -> bool:
+        """
+        Verify the storage key belongs to the requesting organization.
+
+        Checks both new (org-{id}/) and old (org/{id}/) prefix formats.
+
+        Args:
+            storage_key: S3 object key to validate
+            organization_id: Organization ID of the requesting user
+
+        Returns:
+            True if the key belongs to the org, False otherwise
+        """
+        if not organization_id:
+            return False
+        # Check new format (org-{id}/) and legacy format (org/{id}/)
+        new_prefix = f"org-{organization_id}/"
+        legacy_prefix = f"org/{organization_id}/"
+        if storage_key.startswith("org-") or storage_key.startswith("org/"):
+            return storage_key.startswith(new_prefix) or storage_key.startswith(legacy_prefix)
+        # Legacy keys (no org prefix) -- allow access for backward compatibility
+        return True
 
     def delete_file(self, storage_key: str) -> Dict[str, Any]:
         """

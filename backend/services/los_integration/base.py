@@ -92,6 +92,22 @@ class LOSSyncResult:
     completed_at: Optional[datetime] = None
     details: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def latency_ms(self) -> Optional[float]:
+        """Calculate sync latency in milliseconds."""
+        if self.started_at and self.completed_at:
+            delta = (self.completed_at - self.started_at).total_seconds() * 1000
+            return round(delta, 1)
+        return None
+
+    @property
+    def within_sla(self) -> bool:
+        """Check if sync completed within the 60-second SLA."""
+        latency = self.latency_ms
+        if latency is None:
+            return False
+        return latency < 60_000  # 60 seconds
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "status": self.status.value,
@@ -105,6 +121,8 @@ class LOSSyncResult:
             "errors": self.errors,
             "started_at": self.started_at.isoformat(),
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "latency_ms": self.latency_ms,
+            "within_sla": self.within_sla,
             "details": self.details,
         }
 

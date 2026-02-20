@@ -1880,6 +1880,178 @@ def decrypt_token(encrypted_token: str) -> str:
     return f.decrypt(encrypted_token.encode()).decode()
 
 
+async def validate_microsoft_token(oauth_record, db: Session) -> dict:
+    """Validate Microsoft OAuth token before use, auto-refreshing if needed.
+
+    Enterprise Readiness Check 7.15: Email OAuth Validation
+
+    This function should be called before any Microsoft Graph API operation
+    to ensure the access token is valid. It checks:
+      1. Token existence (access_token and refresh_token are present)
+      2. Token expiry (refreshes proactively if within 5 minutes of expiry)
+      3. Token usability (makes a lightweight /me call to verify)
+
+    Args:
+        oauth_record: MicrosoftOAuthToken record from the database.
+        db: Database session for persisting refreshed tokens.
+
+    Returns:
+        dict with keys:
+            valid (bool): Whether the token is ready for use.
+            access_token (str|None): Decrypted access token if valid.
+            error (str|None): Error description if not valid.
+            needs_reauth (bool): True if user must re-authenticate entirely.
+            refreshed (bool): True if the token was refreshed during validation.
+    """
+    _ensure_models()
+
+    # 1. Check token existence
+    if not oauth_record:
+        return {
+            "valid": False,
+            "access_token": None,
+            "error": "No OAuth record found",
+            "needs_reauth": True,
+            "refreshed": False,
+        }
+
+    if not oauth_record.access_token:
+        return {
+            "valid": False,
+            "access_token": None,
+            "error": "No access token stored",
+            "needs_reauth": True,
+            "refreshed": False,
+        }
+
+    if not oauth_record.refresh_token:
+        return {
+            "valid": False,
+            "access_token": None,
+            "error": "No refresh token stored - full re-authentication required",
+            "needs_reauth": True,
+            "refreshed": False,
+        }
+
+    # 2. Check token expiry and refresh proactively
+    refreshed = False
+    if oauth_record.token_expires_at:
+        token_expiry = oauth_record.token_expires_at
+        if token_expiry.tzinfo is None:
+            token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+
+        if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
+            logger.info(f"Microsoft token for user {oauth_record.user_id} expiring soon, refreshing proactively...")
+            refresh_result = await refresh_microsoft_token(oauth_record, db)
+            if not refresh_result.get("success"):
+                return {
+                    "valid": False,
+                    "access_token": None,
+                    "error": refresh_result.get("error", "Token refresh failed"),
+                    "needs_reauth": refresh_result.get("needs_reauth", False),
+                    "refreshed": False,
+                }
+            db.refresh(oauth_record)
+            refreshed = True
+
+    # 3. Decrypt and verify token usability with a lightweight Graph API call
+    try:
+        access_token = decrypt_token(oauth_record.access_token)
+    except Exception as e:
+        logger.error(f"Failed to decrypt Microsoft token for user {oauth_record.user_id}: {e}")
+        return {
+            "valid": False,
+            "access_token": None,
+            "error": "Token decryption failed - may need re-authentication",
+            "needs_reauth": True,
+            "refreshed": refreshed,
+        }
+
+    try:
+        # Lightweight validation: call /me endpoint (minimal data, fast response)
+        verify_response = requests.get(
+            "https://graph.microsoft.com/v1.0/me?$select=id",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+
+        if verify_response.status_code == 200:
+            logger.debug(f"Microsoft token validated for user {oauth_record.user_id}")
+            return {
+                "valid": True,
+                "access_token": access_token,
+                "error": None,
+                "needs_reauth": False,
+                "refreshed": refreshed,
+            }
+        elif verify_response.status_code == 401:
+            # Token is invalid despite not being expired: try one refresh
+            if not refreshed:
+                logger.info(f"Microsoft token invalid (401) for user {oauth_record.user_id}, attempting refresh...")
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if refresh_result.get("success"):
+                    db.refresh(oauth_record)
+                    access_token = decrypt_token(oauth_record.access_token)
+                    return {
+                        "valid": True,
+                        "access_token": access_token,
+                        "error": None,
+                        "needs_reauth": False,
+                        "refreshed": True,
+                    }
+                else:
+                    return {
+                        "valid": False,
+                        "access_token": None,
+                        "error": refresh_result.get("error", "Token refresh failed after 401"),
+                        "needs_reauth": refresh_result.get("needs_reauth", True),
+                        "refreshed": False,
+                    }
+            else:
+                return {
+                    "valid": False,
+                    "access_token": None,
+                    "error": "Token invalid after refresh - user must re-authenticate",
+                    "needs_reauth": True,
+                    "refreshed": True,
+                }
+        else:
+            # Non-401 error (e.g., 403, 5xx): treat token as potentially valid
+            # but the Graph API is having issues
+            logger.warning(
+                f"Microsoft token validation returned {verify_response.status_code} "
+                f"for user {oauth_record.user_id} - treating as valid (non-auth error)"
+            )
+            return {
+                "valid": True,
+                "access_token": access_token,
+                "error": None,
+                "needs_reauth": False,
+                "refreshed": refreshed,
+            }
+
+    except requests.Timeout:
+        # Network timeout: token might be fine, Graph API is slow
+        logger.warning(f"Microsoft token validation timed out for user {oauth_record.user_id}")
+        return {
+            "valid": True,
+            "access_token": access_token,
+            "error": None,
+            "needs_reauth": False,
+            "refreshed": refreshed,
+        }
+    except Exception as e:
+        logger.error(f"Microsoft token validation error for user {oauth_record.user_id}: {e}")
+        # Return the token anyway if we have it; caller can handle API errors
+        return {
+            "valid": True,
+            "access_token": access_token,
+            "error": f"Validation check failed: {str(e)[:100]}",
+            "needs_reauth": False,
+            "refreshed": refreshed,
+        }
+
+
 async def refresh_microsoft_token(oauth_record, db: Session) -> dict:
     """Refresh an expired Microsoft access token."""
     _ensure_models()
@@ -1937,26 +2109,21 @@ async def refresh_microsoft_token(oauth_record, db: Session) -> dict:
 
 
 async def fetch_microsoft_emails(oauth_record, db: Session, limit: int = 50):
-    """Fetch emails from Microsoft Graph API"""
+    """Fetch emails from Microsoft Graph API.
+
+    Uses validate_microsoft_token() (Check 7.15) to ensure the token is
+    valid before making Graph API calls.
+    """
     try:
-        needs_refresh = False
-        if oauth_record.token_expires_at:
-            token_expiry = oauth_record.token_expires_at
-            if token_expiry.tzinfo is None:
-                token_expiry = token_expiry.replace(tzinfo=timezone.utc)
-            needs_refresh = token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5)
+        # Validate token before use (Check 7.15)
+        validation = await validate_microsoft_token(oauth_record, db)
+        if not validation.get("valid"):
+            return {
+                "error": validation.get("error", "Token validation failed"),
+                "needs_reauth": validation.get("needs_reauth", False)
+            }
 
-        if needs_refresh:
-            logger.info("Token expiring soon, refreshing proactively...")
-            refresh_result = await refresh_microsoft_token(oauth_record, db)
-            if not refresh_result.get("success"):
-                return {
-                    "error": refresh_result.get("error", "Failed to refresh token"),
-                    "needs_reauth": refresh_result.get("needs_reauth", False)
-                }
-            db.refresh(oauth_record)
-
-        access_token = decrypt_token(oauth_record.access_token)
+        access_token = validation["access_token"]
 
         folder = oauth_record.sync_folder or "Inbox"
         graph_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages?$top={limit}&$orderby=receivedDateTime desc"
@@ -2006,27 +2173,22 @@ async def fetch_microsoft_emails(oauth_record, db: Session, limit: int = 50):
 
 
 async def delete_microsoft_email(oauth_record, message_id: str, db: Session):
-    """Move an email to trash in Microsoft 365/Outlook"""
+    """Move an email to trash in Microsoft 365/Outlook.
+
+    Uses validate_microsoft_token() (Check 7.15) to ensure the token is
+    valid before making Graph API calls.
+    """
     try:
-        needs_refresh = False
-        if oauth_record.token_expires_at:
-            token_expiry = oauth_record.token_expires_at
-            if token_expiry.tzinfo is None:
-                token_expiry = token_expiry.replace(tzinfo=timezone.utc)
-            needs_refresh = token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5)
+        # Validate token before use (Check 7.15)
+        validation = await validate_microsoft_token(oauth_record, db)
+        if not validation.get("valid"):
+            return {
+                "success": False,
+                "error": validation.get("error", "Token validation failed"),
+                "needs_reauth": validation.get("needs_reauth", False)
+            }
 
-        if needs_refresh:
-            logger.info("Token expiring soon, refreshing before delete...")
-            refresh_result = await refresh_microsoft_token(oauth_record, db)
-            if not refresh_result.get("success"):
-                return {
-                    "success": False,
-                    "error": refresh_result.get("error", "Failed to refresh token"),
-                    "needs_reauth": refresh_result.get("needs_reauth", False)
-                }
-            db.refresh(oauth_record)
-
-        access_token = decrypt_token(oauth_record.access_token)
+        access_token = validation["access_token"]
 
         graph_url = f"https://graph.microsoft.com/v1.0/me/messages/{message_id}/move"
 

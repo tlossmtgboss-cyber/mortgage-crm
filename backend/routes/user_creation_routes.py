@@ -106,22 +106,18 @@ class ActivatePasswordRequest(BaseModel):
     activation_token: str = Field(..., description="Activation token from email")
     password: str = Field(
         ...,
-        min_length=8,
-        description="New password (min 8 chars, requires uppercase, lowercase, number, special char)"
+        min_length=12,
+        description="New password (min 12 chars, requires uppercase, lowercase, digit, special char)"
     )
     password_confirmation: str = Field(..., description="Password confirmation")
 
     @field_validator('password')
     @classmethod
     def validate_password(cls, v: str) -> str:
-        if not any(c.isupper() for c in v):
-            raise ValueError('Password must contain at least one uppercase letter')
-        if not any(c.islower() for c in v):
-            raise ValueError('Password must contain at least one lowercase letter')
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Password must contain at least one number')
-        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
-            raise ValueError('Password must contain at least one special character')
+        from utils.auth import validate_password_strength
+        violations = validate_password_strength(v)
+        if violations:
+            raise ValueError('; '.join(violations))
         return v
 
     @field_validator('password_confirmation')
@@ -218,6 +214,42 @@ def get_user_creation_routes(
     import os
     FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
 
+    def _check_seat_limit(db: Session, org_id: int) -> None:
+        """Enforce seat count from subscription (LIC-003).
+
+        Raises HTTPException(403) if the org has reached its max_users limit.
+        """
+        from sqlalchemy import text, func
+
+        # Get max_users from subscription
+        row = db.execute(
+            text(
+                "SELECT max_users FROM organization_subscriptions "
+                "WHERE organization_id = :org_id AND status = 'active' LIMIT 1"
+            ),
+            {"org_id": org_id}
+        ).fetchone()
+
+        if not row or row[0] is None:
+            return  # No subscription or no seat limit — allow
+
+        max_users = row[0]
+        if max_users <= 0:
+            return  # Unlimited seats
+
+        # Count current active users in the org
+        current_count = db.query(func.count(User.id)).filter(
+            User.organization_id == org_id,
+            User.is_active == True
+        ).scalar() or 0
+
+        if current_count >= max_users:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Seat limit reached ({current_count}/{max_users}). "
+                       f"Upgrade your subscription to add more users."
+            )
+
     # ========================================================================
     # UNIFIED USER CREATION ENDPOINT (All-in-one)
     # ========================================================================
@@ -238,6 +270,15 @@ def get_user_creation_routes(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to create users"
             )
+
+        # Enforce MFA for admin users (Enterprise Security - Domain 4)
+        from utils.auth import require_admin_mfa
+        require_admin_mfa(current_user)
+
+        # Enforce seat limit (LIC-003)
+        org_id = getattr(current_user, 'organization_id', None)
+        if org_id:
+            _check_seat_limit(db, org_id)
 
         try:
             data = await request.json()
@@ -415,6 +456,11 @@ def get_user_creation_routes(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to create users"
             )
+
+        # Enforce seat limit (LIC-003)
+        org_id = getattr(current_user, 'organization_id', None)
+        if org_id:
+            _check_seat_limit(db, org_id)
 
         # Check email uniqueness
         existing_user = db.query(User).filter(User.email == data.email).first()

@@ -24,7 +24,10 @@ Connection exhaustion prevention:
 import os
 import time
 import logging
-from sqlalchemy import create_engine, event
+import contextlib
+from datetime import datetime, timezone
+from typing import Dict
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
@@ -167,29 +170,271 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+# Per-tenant connection tracking (PERF-008)
+# Prevents one org from exhausting all DB connections
+import threading
+
+_tenant_connection_counts: Dict[int, int] = {}
+_tenant_conn_lock = threading.Lock()
+
+# Max concurrent DB connections per tenant (configurable via env)
+MAX_CONNECTIONS_PER_TENANT = int(os.getenv("MAX_DB_CONNECTIONS_PER_TENANT", "3"))
+
+
 def get_db(request: Request = None):
     """Database session dependency for FastAPI.
 
     If request has tenant context (set by TenantContextMiddleware),
     sets PostgreSQL RLS session variable for defense-in-depth.
 
+    Also enforces per-tenant connection limits (PERF-008) to prevent
+    one organization from exhausting the connection pool.
+
     FastAPI automatically injects Request when this is used as Depends(get_db).
     Non-FastAPI callers (scripts, tests) pass request=None and skip RLS.
     """
+    org_id = None
+    if request and hasattr(request, 'state'):
+        org_id = getattr(request.state, 'organization_id', None)
+
+    # Per-tenant connection limit check (PERF-008)
+    if org_id and MAX_CONNECTIONS_PER_TENANT > 0:
+        with _tenant_conn_lock:
+            current = _tenant_connection_counts.get(org_id, 0)
+            if current >= MAX_CONNECTIONS_PER_TENANT:
+                from fastapi import HTTPException
+                raise HTTPException(
+                    status_code=503,
+                    detail="Service temporarily unavailable — too many concurrent requests for your organization. Please retry shortly.",
+                    headers={"Retry-After": "2"},
+                )
+            _tenant_connection_counts[org_id] = current + 1
+
     db = SessionLocal()
     try:
         # Set RLS tenant context if available from middleware
-        if request and hasattr(request, 'state'):
-            org_id = getattr(request.state, 'organization_id', None)
-            if org_id and DATABASE_URL.startswith("postgresql"):
-                try:
-                    from database.tenant_mixin import set_tenant_context
-                    set_tenant_context(db, org_id)
-                except Exception as e:
-                    logger.warning(f"Failed to set RLS tenant context: {e}")
+        if org_id and DATABASE_URL.startswith("postgresql"):
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, org_id)
+            except Exception as e:
+                logger.warning(f"Failed to set RLS tenant context: {e}")
         yield db
     finally:
         db.close()
+        # Release the per-tenant connection slot
+        if org_id and MAX_CONNECTIONS_PER_TENANT > 0:
+            with _tenant_conn_lock:
+                current = _tenant_connection_counts.get(org_id, 1)
+                if current <= 1:
+                    _tenant_connection_counts.pop(org_id, None)
+                else:
+                    _tenant_connection_counts[org_id] = current - 1
+
+
+@contextlib.contextmanager
+def get_db_with_tenant(org_id: int):
+    """Database session context manager with RLS tenant context for background workers.
+
+    Background tasks (APScheduler, Celery) run outside the FastAPI request lifecycle,
+    so they don't get tenant context from TenantContextMiddleware. This function
+    creates a session AND sets the PostgreSQL RLS session variable, ensuring that
+    Row-Level Security policies are enforced even in background workers.
+
+    Args:
+        org_id: Organization/tenant ID. Must be a positive integer.
+
+    Yields:
+        SQLAlchemy Session with RLS tenant context set.
+
+    Usage:
+        for org_id in org_ids:
+            with get_db_with_tenant(org_id) as db:
+                # All queries in this block are RLS-filtered to org_id
+                results = db.query(MyModel).all()
+
+    Raises:
+        ValueError: If org_id is not a positive integer.
+    """
+    if not isinstance(org_id, int) or org_id <= 0:
+        raise ValueError(f"org_id must be a positive integer, got: {org_id}")
+
+    db = SessionLocal()
+    try:
+        # Set RLS tenant context (PostgreSQL only; no-op on SQLite)
+        if DATABASE_URL.startswith("postgresql"):
+            try:
+                from database.tenant_mixin import set_tenant_context
+                set_tenant_context(db, org_id)
+                logger.debug(f"Background worker: RLS tenant context set to org_id={org_id}")
+            except Exception as e:
+                logger.warning(
+                    f"Background worker: Failed to set RLS tenant context for org_id={org_id}: {e}. "
+                    "Queries will run WITHOUT tenant isolation -- audit trail logged."
+                )
+        else:
+            logger.debug(
+                f"Background worker: Skipping RLS (non-PostgreSQL database) for org_id={org_id}"
+            )
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+# =============================================================================
+# CMP-002: Auto-instrumentation for mutation audit logging
+# =============================================================================
+# SQLAlchemy ORM event listeners that automatically log INSERT/UPDATE/DELETE
+# operations with tenant context to the audit_logs table.
+
+_AUDIT_SKIP_TABLES = frozenset({
+    'audit_logs',           # Don't audit the audit table itself
+    'alembic_version',      # Migration metadata
+    'user_sessions',        # High-frequency session touches
+    'ai_token_usage_log',   # High-frequency AI usage
+    'rate_limit_events',    # Rate limiter internal state
+})
+
+_audit_enabled = os.getenv("ENABLE_MUTATION_AUDIT", "true").lower() == "true"
+
+
+def _setup_mutation_audit():
+    """Register ORM-level after_flush listener for auto audit logging."""
+
+    if not _audit_enabled:
+        logger.info("Mutation audit logging disabled (ENABLE_MUTATION_AUDIT=false)")
+        return
+
+    from sqlalchemy.orm import Session as SASession
+    from sqlalchemy import event as sa_event, inspect
+
+    @sa_event.listens_for(SASession, "after_flush")
+    def after_flush(session, flush_context):
+        """Capture new/modified/deleted objects and write audit entries."""
+        if not DATABASE_URL.startswith("postgresql"):
+            return  # Only audit on PostgreSQL
+
+        # Collect changes from the flush
+        audit_entries = []
+
+        for obj in session.new:
+            table = getattr(obj, '__tablename__', None)
+            if not table or table in _AUDIT_SKIP_TABLES:
+                continue
+            org_id = getattr(obj, 'organization_id', None)
+            entity_id = getattr(obj, 'id', None)
+            audit_entries.append({
+                "change_type": "insert",
+                "entity_type": table,
+                "entity_id": entity_id,
+                "organization_id": org_id,
+                "after_state": _safe_state(obj),
+            })
+
+        for obj in session.dirty:
+            table = getattr(obj, '__tablename__', None)
+            if not table or table in _AUDIT_SKIP_TABLES:
+                continue
+            insp = inspect(obj)
+            changes = {}
+            for attr in insp.attrs:
+                hist = attr.history
+                if hist.has_changes():
+                    changes[attr.key] = {
+                        "old": _serialize(hist.deleted[0]) if hist.deleted else None,
+                        "new": _serialize(hist.added[0]) if hist.added else None,
+                    }
+            if not changes:
+                continue
+            org_id = getattr(obj, 'organization_id', None)
+            entity_id = getattr(obj, 'id', None)
+            audit_entries.append({
+                "change_type": "update",
+                "entity_type": table,
+                "entity_id": entity_id,
+                "organization_id": org_id,
+                "before_state": {k: v["old"] for k, v in changes.items()},
+                "after_state": {k: v["new"] for k, v in changes.items()},
+            })
+
+        for obj in session.deleted:
+            table = getattr(obj, '__tablename__', None)
+            if not table or table in _AUDIT_SKIP_TABLES:
+                continue
+            org_id = getattr(obj, 'organization_id', None)
+            entity_id = getattr(obj, 'id', None)
+            audit_entries.append({
+                "change_type": "delete",
+                "entity_type": table,
+                "entity_id": entity_id,
+                "organization_id": org_id,
+                "before_state": _safe_state(obj),
+            })
+
+        # Write audit entries (use a separate connection to avoid flush recursion)
+        if audit_entries:
+            _write_audit_batch(audit_entries)
+
+
+def _safe_state(obj) -> dict:
+    """Extract a JSON-safe dict of an ORM object's columns (no relationships)."""
+    try:
+        from sqlalchemy import inspect as sa_inspect
+        mapper = sa_inspect(type(obj))
+        state = {}
+        for col in mapper.columns:
+            val = getattr(obj, col.key, None)
+            state[col.key] = _serialize(val)
+        return state
+    except Exception:
+        return {}
+
+
+def _serialize(val):
+    """Make a value JSON-serializable."""
+    if val is None or isinstance(val, (str, int, float, bool)):
+        return val
+    return str(val)
+
+
+def _write_audit_batch(entries: list):
+    """Write audit log entries via a separate connection (avoids flush recursion)."""
+    import json as _json
+    try:
+        with engine.connect() as conn:
+            for entry in entries:
+                conn.execute(
+                    text("""
+                        INSERT INTO audit_logs
+                            (user_id, changed_by_id, change_type, entity_type, entity_id,
+                             before_state, after_state, timestamp, organization_id)
+                        VALUES
+                            (0, 0, :change_type, :entity_type, :entity_id,
+                             :before_state, :after_state, :ts, :org_id)
+                    """),
+                    {
+                        "change_type": entry["change_type"],
+                        "entity_type": entry["entity_type"],
+                        "entity_id": entry.get("entity_id"),
+                        "before_state": _json.dumps(entry.get("before_state")) if entry.get("before_state") else None,
+                        "after_state": _json.dumps(entry.get("after_state")) if entry.get("after_state") else None,
+                        "ts": datetime.now(timezone.utc),
+                        "org_id": entry.get("organization_id"),
+                    },
+                )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Mutation audit batch write failed: {e}")
+
+
+# Initialize on module load
+try:
+    _setup_mutation_audit()
+except Exception as e:
+    logger.warning(f"Failed to setup mutation audit: {e}")
 
 
 def get_db_url():

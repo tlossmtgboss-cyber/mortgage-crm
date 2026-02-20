@@ -427,8 +427,19 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         # Capture old status for workflow trigger
         old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
 
+        # Enterprise Readiness 3.1: Prevent clearing both contact methods
+        update_data = lead_update.dict(exclude_unset=True)
+        resulting_email = update_data.get('email', lead.email)
+        resulting_phone = update_data.get('phone', lead.phone)
+        # Treat empty string as None for contact method check
+        if not resulting_email and not resulting_phone:
+            raise HTTPException(
+                status_code=422,
+                detail="At least one contact method is required: cannot clear both email and phone"
+            )
+
         _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id', 'owner_id'}
-        for key, value in lead_update.dict(exclude_unset=True).items():
+        for key, value in update_data.items():
             if key not in _protected:
                 setattr(lead, key, value)
 

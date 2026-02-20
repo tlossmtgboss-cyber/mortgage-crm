@@ -292,6 +292,10 @@ async def get_needs_list(
     from sqlalchemy import text
 
     _verify_loan_tenant(db, loan_id, current_user)
+
+    # Get org_id for tenant validation in S3 operations
+    org_id = getattr(current_user, 'organization_id', None)
+
     generator = NeedsListGenerator(db)
     result = generator.get_needs_list(loan_id)
 
@@ -353,7 +357,8 @@ async def get_needs_list(
                                 storage_key=latest_doc.storage_key,
                                 file_name=latest_doc.file_name,
                                 expires_in=3600,  # 1 hour
-                                inline=True  # Use inline disposition for iframe viewing
+                                inline=True,  # Use inline disposition for iframe viewing
+                                organization_id=org_id  # Pass org_id for tenant validation
                             )
                             if url_result.get("success"):
                                 req["file_url"] = url_result["presigned_url"]
@@ -746,7 +751,8 @@ async def download_document(
     result = s3_service.get_presigned_download_url(
         storage_key=document.storage_key,
         file_name=document.file_name,
-        expires_in=300  # 5 minutes
+        expires_in=300,  # 5 minutes
+        organization_id=org_id  # Pass org_id for tenant validation
     )
 
     if not result.get("success"):
@@ -2067,7 +2073,8 @@ async def get_client_queue_detail(
                                 storage_key=latest_doc.storage_key,
                                 file_name=latest_doc.file_name,
                                 expires_in=3600,  # 1 hour
-                                inline=True  # Use inline disposition for iframe viewing
+                                inline=True,  # Use inline disposition for iframe viewing
+                                organization_id=org_id  # Pass org_id for tenant validation
                             )
                             if url_result.get("success"):
                                 req["file_url"] = url_result["presigned_url"]

@@ -359,8 +359,23 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
         except Exception as e:
             logger.debug(f"Org MFA check skipped: {e}")
 
-        # MFA is required if user has it enabled OR org mandates it
-        mfa_required = user_mfa_enabled or org_mfa_required
+        # Enterprise Security - Domain 4: Admin/site_admin roles MUST have MFA
+        admin_mfa_required = False
+        user_role = getattr(user, 'role', '') or ''
+        user_perm_role = getattr(user, 'permission_role', '') or ''
+        admin_roles_requiring_mfa = ['admin', 'site_admin']
+        if (user_role.lower() in admin_roles_requiring_mfa
+                or user_perm_role.lower() in admin_roles_requiring_mfa):
+            admin_mfa_required = True
+            if not user_mfa_enabled:
+                mfa_setup_required = True
+                logger.info(
+                    f"Admin MFA enforcement: user {user.email} must set up MFA "
+                    f"(role={user_role}, permission_role={user_perm_role})"
+                )
+
+        # MFA is required if user has it enabled OR org mandates it OR admin role
+        mfa_required = user_mfa_enabled or org_mfa_required or admin_mfa_required
 
         return {
             "access_token": access_token,
@@ -664,11 +679,13 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
                     detail="This reset token has already been used. Please request a new password reset."
                 )
 
-        # Validate password strength
-        if len(request.new_password) < 8:
+        # Validate password strength (Enterprise Security - Domain 4)
+        from utils.auth import validate_password_strength
+        password_violations = validate_password_strength(request.new_password)
+        if password_violations:
             raise HTTPException(
                 status_code=400,
-                detail="Password must be at least 8 characters long."
+                detail=f"Password does not meet security requirements: {'; '.join(password_violations)}"
             )
 
         # Update password and record timestamp to prevent token reuse
@@ -710,14 +727,22 @@ async def admin_force_password_reset(request: AdminPasswordResetRequest, db: Ses
         logger.warning("Invalid admin reset attempt (bad admin key)")
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
+    # Note: This endpoint uses admin_key auth (not user session), so MFA check
+    # is not applicable here. Password strength is enforced below.
+
     # Find user
     user = db.query(User).filter(func.lower(User.email) == request.email.lower()).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Validate password
-    if len(request.new_password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    # Validate password strength (Enterprise Security - Domain 4)
+    from utils.auth import validate_password_strength
+    password_violations = validate_password_strength(request.new_password)
+    if password_violations:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password does not meet security requirements: {'; '.join(password_violations)}"
+        )
 
     # Update password
     user.hashed_password = auth_funcs['get_password_hash'](request.new_password)
@@ -740,6 +765,10 @@ async def kill_idle_connections(current_user=Depends(get_current_user_dep())):
     """Emergency endpoint to kill idle database connections. Admin only."""
     if not getattr(current_user, 'permission_role', None) or current_user.permission_role not in ('admin', 'site_admin'):
         raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Enforce MFA for admin users (Enterprise Security - Domain 4)
+    from utils.auth import require_admin_mfa
+    require_admin_mfa(current_user)
     from sqlalchemy import create_engine as _ce
     from sqlalchemy.pool import NullPool
     try:
@@ -863,11 +892,13 @@ async def register_account(
                 detail="An account with this email already exists. Please log in or use a different email."
             )
 
-        # Validate password strength
-        if len(request.password) < 8:
+        # Validate password strength (Enterprise Security - Domain 4)
+        from utils.auth import validate_password_strength
+        password_violations = validate_password_strength(request.password)
+        if password_violations:
             raise HTTPException(
                 status_code=400,
-                detail="Password must be at least 8 characters long."
+                detail=f"Password does not meet security requirements: {'; '.join(password_violations)}"
             )
 
         # Validate promo code if provided
@@ -1084,8 +1115,9 @@ def create_admin_promo_routes(app, get_current_user):
         db: Session = Depends(get_db)
     ):
         """Update an existing promo code."""
-        from utils.auth import require_admin
+        from utils.auth import require_admin, require_admin_mfa
         require_admin(current_user)
+        require_admin_mfa(current_user)
 
         models = get_models()
         PromoCode = models['PromoCode']
@@ -1136,8 +1168,9 @@ def create_admin_promo_routes(app, get_current_user):
         Admin endpoint to create promo codes.
         Requires admin role.
         """
-        from utils.auth import require_admin
+        from utils.auth import require_admin, require_admin_mfa
         require_admin(current_user)
+        require_admin_mfa(current_user)
 
         models = get_models()
         PromoCode = models['PromoCode']
@@ -1347,6 +1380,10 @@ def create_security_dashboard_routes(app, get_current_user):
         if current_user.role not in ['admin', 'management']:
             raise HTTPException(status_code=403, detail="Admin access required")
 
+        # Enforce MFA for admin users (Enterprise Security - Domain 4)
+        from utils.auth import require_admin_mfa
+        require_admin_mfa(current_user)
+
         security_stats = get_security_stats()
         if security_stats:
             return security_stats.get_dashboard_data()
@@ -1360,6 +1397,10 @@ def create_security_dashboard_routes(app, get_current_user):
         """
         if current_user.role not in ['admin', 'management']:
             raise HTTPException(status_code=403, detail="Admin access required")
+
+        # Enforce MFA for admin users (Enterprise Security - Domain 4)
+        from utils.auth import require_admin_mfa
+        require_admin_mfa(current_user)
 
         security_stats = get_security_stats()
         if security_stats and security_stats.unblock_ip(ip):

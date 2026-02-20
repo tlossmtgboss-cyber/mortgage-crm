@@ -162,6 +162,7 @@ async def disable_mfa(
     Disable MFA for the user.
 
     Requires a valid current TOTP token to confirm identity before disabling.
+    Admin and site_admin users cannot disable MFA (it is mandatory for them).
     """
     from auth.mfa import verify_mfa_token
 
@@ -169,6 +170,17 @@ async def disable_mfa(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="MFA is not currently enabled.",
+        )
+
+    # Enterprise Security - Domain 4: Admins cannot disable MFA
+    permission_role = getattr(current_user, 'permission_role', '') or ''
+    legacy_role = getattr(current_user, 'role', '') or ''
+    admin_roles = ['admin', 'site_admin']
+    if permission_role.lower() in admin_roles or legacy_role.lower() in admin_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin accounts cannot disable MFA. Multi-factor authentication "
+                   "is mandatory for all administrator accounts.",
         )
 
     # Verify current token before disabling

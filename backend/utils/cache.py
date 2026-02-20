@@ -96,25 +96,32 @@ class PerenniaCache:
                 self.redis = None
                 self.enabled = False
 
-    def _get_cache_key(self, query: str, user_id: Optional[str] = None) -> str:
+    def _get_cache_key(
+        self,
+        query: str,
+        user_id: Optional[str] = None,
+        org_id: Optional[str] = None,
+    ) -> str:
         """
-        Generate cache key with user isolation
-        Format: perennia:query:{user_id}:{query_hash}
+        Generate cache key with tenant + user isolation (ISO-014).
+        Format: perennia:{org_id}:query:{user_id}:{query_hash}
+
+        Tenant prefix ensures one org's cache never collides with another's.
         """
         query_normalized = query.lower().strip()
         query_hash = hashlib.sha256(query_normalized.encode()).hexdigest()[:16]
 
-        if user_id:
-            return f"perennia:query:{user_id}:{query_hash}"
-        return f"perennia:query:global:{query_hash}"
+        tenant = f"org:{org_id}" if org_id else "global"
+        user = user_id or "anon"
+        return f"perennia:{tenant}:query:{user}:{query_hash}"
 
-    async def get(self, query: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Get cached response if available"""
+    async def get(self, query: str, user_id: Optional[str] = None, org_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get cached response if available. org_id ensures tenant isolation (ISO-014)."""
         if not self.enabled:
             return None
 
         try:
-            cache_key = self._get_cache_key(query, user_id)
+            cache_key = self._get_cache_key(query, user_id, org_id)
             cached = await self.redis.get(cache_key)
 
             if cached:
@@ -167,14 +174,15 @@ class PerenniaCache:
         query: str,
         response: Dict[str, Any],
         intent: str = "general",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        org_id: Optional[str] = None,
     ):
-        """Cache response with intent-based TTL"""
+        """Cache response with intent-based TTL. org_id ensures tenant isolation (ISO-014)."""
         if not self.enabled:
             return
 
         try:
-            cache_key = self._get_cache_key(query, user_id)
+            cache_key = self._get_cache_key(query, user_id, org_id)
             ttl = self.TTL_MAP.get(intent, 3600)
 
             # Add cache metadata
@@ -212,13 +220,13 @@ class PerenniaCache:
             else:
                 logger.warning(f"[CACHE ERROR] Set failed: {e}")
 
-    async def invalidate(self, query: str, user_id: Optional[str] = None):
+    async def invalidate(self, query: str, user_id: Optional[str] = None, org_id: Optional[str] = None):
         """Invalidate a specific cached query"""
         if not self.enabled:
             return
 
         try:
-            cache_key = self._get_cache_key(query, user_id)
+            cache_key = self._get_cache_key(query, user_id, org_id)
             deleted = await self.redis.delete(cache_key)
 
             if deleted:
@@ -232,6 +240,44 @@ class PerenniaCache:
                 cache_logger.log_error("response", "invalidate", str(e), query)
             else:
                 logger.warning(f"[CACHE ERROR] Invalidate failed: {e}")
+
+    async def invalidate_tenant(self, org_id: str) -> int:
+        """Invalidate ALL cache entries for a specific tenant (ISO-015).
+
+        This ensures one tenant's cache flush does not affect other tenants.
+        """
+        if not self.enabled:
+            return 0
+
+        try:
+            cursor = 0
+            deleted = 0
+
+            while True:
+                cursor, keys = await self.redis.scan(
+                    cursor,
+                    match=f"perennia:org:{org_id}:*",
+                    count=100
+                )
+
+                if keys:
+                    deleted += await self.redis.delete(*keys)
+
+                if cursor == 0:
+                    break
+
+            if cache_logger:
+                cache_logger.log_invalidation("response", f"tenant:{org_id}", deleted)
+            else:
+                logger.info(f"[CACHE] Invalidated {deleted} keys for tenant org_id={org_id}")
+            return deleted
+
+        except Exception as e:
+            if cache_logger:
+                cache_logger.log_error("response", "invalidate_tenant", str(e))
+            else:
+                logger.warning(f"[CACHE ERROR] Tenant invalidation failed: {e}")
+            return 0
 
     async def invalidate_pattern(self, pattern: str):
         """

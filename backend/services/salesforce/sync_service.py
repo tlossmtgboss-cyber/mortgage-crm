@@ -268,17 +268,41 @@ class SalesforceSyncService:
         self,
         access_token: str,
         instance_url: str,
-        soql: str
+        soql: str,
+        max_records: int = 10000,
     ) -> List[Dict[str, Any]]:
-        """Query records from Salesforce"""
+        """Query records from Salesforce with automatic pagination.
+
+        Enterprise Readiness Check 7.8: SOQL Pagination
+
+        Salesforce returns a maximum of 2,000 records per response. If
+        more records exist, the response includes a ``nextRecordsUrl``
+        that must be followed to retrieve subsequent pages.
+
+        This method transparently follows ``nextRecordsUrl`` links until
+        all records are retrieved or ``max_records`` is reached.
+
+        Args:
+            access_token: Salesforce OAuth access token.
+            instance_url: Salesforce instance base URL.
+            soql: The SOQL query string.
+            max_records: Safety limit to prevent unbounded fetches (default 10,000).
+
+        Returns:
+            List of all record dicts across all pages.
+        """
+        all_records: List[Dict[str, Any]] = []
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+
         async with get_sf_client() as client:
+            # Initial query
             response = await client.get(
                 f"{instance_url}/services/data/v60.0/query",
                 params={'q': soql},
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Content-Type': 'application/json'
-                }
+                headers=headers,
             )
 
             if response.status_code != 200:
@@ -286,7 +310,49 @@ class SalesforceSyncService:
                 raise ValueError(f"Salesforce query failed: {error}")
 
             data = response.json()
-            return data.get('records', [])
+            records = data.get('records', [])
+            all_records.extend(records)
+            total_size = data.get('totalSize', len(records))
+
+            # Follow nextRecordsUrl for pagination (Check 7.8)
+            next_url = data.get('nextRecordsUrl')
+            page_count = 1
+
+            while next_url and len(all_records) < max_records:
+                page_count += 1
+                # nextRecordsUrl is a relative path like /services/data/v60.0/query/01gXXX-2000
+                full_url = f"{instance_url}{next_url}"
+
+                response = await client.get(full_url, headers=headers)
+
+                if response.status_code != 200:
+                    logger.error(
+                        f"Salesforce pagination failed on page {page_count}: "
+                        f"{response.status_code} {response.text[:200]}"
+                    )
+                    break
+
+                data = response.json()
+                page_records = data.get('records', [])
+                all_records.extend(page_records)
+                next_url = data.get('nextRecordsUrl')
+
+                logger.debug(
+                    f"SF pagination page {page_count}: {len(page_records)} records "
+                    f"(total so far: {len(all_records)}/{total_size})"
+                )
+
+            if len(all_records) >= max_records:
+                logger.warning(
+                    f"Salesforce query hit max_records limit ({max_records}). "
+                    f"Total available: {total_size}. Consider narrowing the query."
+                )
+
+        logger.info(
+            f"Salesforce query complete: {len(all_records)} records "
+            f"across {page_count} page(s) (total available: {total_size})"
+        )
+        return all_records
 
     async def _process_record(
         self,

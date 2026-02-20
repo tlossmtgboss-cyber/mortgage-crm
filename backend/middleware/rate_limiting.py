@@ -2,6 +2,7 @@
 Adaptive Rate Limiting & DDoS Protection
 
 This middleware provides:
+- Per-tenant rate limiting with tier-based quotas (PERF-004)
 - Tiered rate limiting by route category
 - Suspicious activity detection
 - Automatic stricter limits for bad actors
@@ -19,11 +20,22 @@ import redis
 
 logger = logging.getLogger(__name__)
 
+# Per-tenant rate limit quotas by subscription tier (PERF-004)
+# These define the TOTAL requests/min allowed for an entire organization
+TENANT_TIER_LIMITS = {
+    'lead_management': {'requests_per_min': 200, 'ai_per_min': 20, 'burst_multiplier': 1.5},
+    'lead_and_active': {'requests_per_min': 500, 'ai_per_min': 50, 'burst_multiplier': 1.5},
+    'full_pipeline': {'requests_per_min': 2000, 'ai_per_min': 200, 'burst_multiplier': 2.0},
+    # Fallback for orgs without a recognized tier
+    'default': {'requests_per_min': 120, 'ai_per_min': 10, 'burst_multiplier': 1.0},
+}
+
 
 class AdaptiveRateLimiter(BaseHTTPMiddleware):
     """
     Adaptive rate limiting that distinguishes between:
-    - Normal users
+    - Per-tenant org-level limits (prevents noisy neighbor)
+    - Per-client individual limits
     - Suspicious activity
     - Bot traffic
     """
@@ -32,13 +44,15 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         super().__init__(app)
         self.redis = redis_client
 
-        # Rate limit tiers by route category
+        # Per-client rate limit tiers by route category
         self.LIMITS = {
             'chat_message': {'requests': 60, 'window': 60},      # 60 msg/min
             'session_create': {'requests': 10, 'window': 3600},  # 10 sessions/hour
             'call_initiate': {'requests': 3, 'window': 3600},    # 3 calls/hour
             'analytics': {'requests': 100, 'window': 60},        # 100 req/min
             'default': {'requests': 120, 'window': 60},          # 120 req/min default
+            # API key rate limits (Enterprise Check 11.5)
+            'api_key': {'requests': 1000, 'window': 60},         # 1000 req/min for API keys
         }
 
         # Suspicious activity thresholds
@@ -66,8 +80,27 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
                 content={"error": "Access denied", "reason": "Too many violations"}
             )
 
-        # Get route category
-        route_category = self._categorize_route(request.url.path, request.method)
+        # --- Per-tenant rate limit check (PERF-004) ---
+        org_id = getattr(getattr(request, 'state', None), 'organization_id', None)
+        if org_id:
+            tenant_allowed, tenant_retry = await self._check_tenant_rate_limit(
+                org_id, request.url.path
+            )
+            if not tenant_allowed:
+                logger.warning(f"Tenant rate limit exceeded for org_id={org_id}")
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "error": "Organization rate limit exceeded",
+                        "retry_after": tenant_retry,
+                        "scope": "tenant"
+                    },
+                    headers={"Retry-After": str(tenant_retry)}
+                )
+
+        # --- Per-client rate limit check ---
+        # Get route category (now includes client_id for API key detection)
+        route_category = self._categorize_route(request.url.path, request.method, client_id)
 
         if route_category:
             # Check rate limit
@@ -96,13 +129,31 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         return response
 
     def _get_client_identifier(self, request: Request) -> str:
-        """Get unique client identifier with multiple fallback strategies"""
-        # Priority 1: Visitor ID from header (set by frontend)
+        """
+        Get unique client identifier with multiple fallback strategies.
+
+        Enterprise Check 11.5: Per-Client Rate Limiting (HIGH - 10pts)
+
+        Priority order:
+        1. API Key (X-API-Key header) - for authenticated API access
+        2. Visitor ID (X-Visitor-ID header) - for frontend tracking
+        3. Session ID (from URL path) - for chat/session endpoints
+        4. IP address (with X-Forwarded-For support) - fallback
+        """
+        # Priority 1: API Key from header (for programmatic access)
+        api_key = request.headers.get("X-API-Key")
+        if api_key:
+            # Hash the key for privacy in Redis
+            import hashlib
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+            return f"apikey:{key_hash}"
+
+        # Priority 2: Visitor ID from header (set by frontend)
         visitor_id = request.headers.get("X-Visitor-ID")
         if visitor_id:
             return f"visitor:{visitor_id}"
 
-        # Priority 2: Session ID from path (for message endpoints)
+        # Priority 3: Session ID from path (for message endpoints)
         path_parts = request.url.path.split('/')
         if 'sessions' in path_parts:
             try:
@@ -113,7 +164,7 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             except (ValueError, IndexError):
                 pass
 
-        # Priority 3: IP address (with X-Forwarded-For support)
+        # Priority 4: IP address (with X-Forwarded-For support)
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
             ip = forwarded.split(",")[0].strip()
@@ -122,9 +173,18 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
 
         return f"ip:{ip}"
 
-    def _categorize_route(self, path: str, method: str) -> str:
-        """Categorize route for rate limiting"""
+    def _categorize_route(self, path: str, method: str, client_id: str) -> str:
+        """
+        Categorize route for rate limiting.
+
+        Enterprise Check 11.5: Per-Client Rate Limiting (HIGH - 10pts)
+        API keys get higher rate limits than regular clients.
+        """
         path_lower = path.lower()
+
+        # API key requests get special higher limits
+        if client_id.startswith('apikey:'):
+            return 'api_key'
 
         if '/messages' in path_lower and method == 'POST':
             return 'chat_message'
@@ -136,6 +196,79 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             return 'analytics'
 
         return 'default'
+
+    async def _check_tenant_rate_limit(
+        self,
+        org_id: int,
+        path: str,
+    ) -> Tuple[bool, int]:
+        """Check per-tenant (organization-level) rate limit (PERF-004).
+
+        This prevents noisy-neighbor problems where one org consumes all API capacity.
+        Limits are determined by the org's subscription tier.
+        """
+        try:
+            tier = await self._get_tenant_tier(org_id)
+            tier_config = TENANT_TIER_LIMITS.get(tier, TENANT_TIER_LIMITS['default'])
+
+            # Determine which bucket: AI endpoints get a separate, smaller quota
+            is_ai = '/ai/' in path or '/chat/' in path or '/agents/' in path or '/messages' in path
+            if is_ai:
+                limit = tier_config['ai_per_min']
+                key = f"tenant_rl:ai:{org_id}"
+            else:
+                limit = tier_config['requests_per_min']
+                key = f"tenant_rl:api:{org_id}"
+
+            window = 60  # 1 minute sliding window
+
+            current = self.redis.get(key)
+            if current is None:
+                self.redis.setex(key, window, 1)
+                return True, 0
+
+            current = int(current)
+            if current >= limit:
+                ttl = self.redis.ttl(key)
+                return False, max(ttl, 1)
+
+            self.redis.incr(key)
+            return True, 0
+
+        except redis.RedisError as e:
+            logger.error(f"Redis error in tenant rate limiter: {e}")
+            return True, 0  # Fail open
+
+    async def _get_tenant_tier(self, org_id: int) -> str:
+        """Look up an org's subscription tier from cache or DB.
+
+        Caches the result in Redis for 5 minutes to avoid DB lookups on every request.
+        """
+        cache_key = f"tenant_tier:{org_id}"
+        try:
+            cached = self.redis.get(cache_key)
+            if cached:
+                return cached
+
+            # Lazy import to avoid circular dependency
+            from db import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                row = db.execute(
+                    text("SELECT tier FROM organization_subscriptions WHERE organization_id = :org_id AND status = 'active' LIMIT 1"),
+                    {"org_id": org_id}
+                ).fetchone()
+                tier = row[0] if row else 'default'
+            finally:
+                db.close()
+
+            self.redis.setex(cache_key, 300, tier)  # Cache for 5 min
+            return tier
+
+        except Exception as e:
+            logger.warning(f"Failed to get tenant tier for org {org_id}: {e}")
+            return 'default'
 
     async def _check_rate_limit(
         self,

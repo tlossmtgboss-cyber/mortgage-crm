@@ -286,6 +286,27 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.error(f"❌ GDPR routes failed: {e}")
 
     try:
+        from routes.data_quality_routes import register_data_quality_routes
+        register_data_quality_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("✅ Data quality routes loaded (enterprise readiness 3.9 orphan detection)")
+    except Exception as e:
+        logger.error(f"❌ Data quality routes failed: {e}")
+
+    try:
+        from routes.scim_provisioning_routes import register_scim_provisioning_routes
+        register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("✅ SCIM 2.0 provisioning, CSV import, MFA onboarding routes loaded (enterprise 5.11/5.12/5.15)")
+    except Exception as e:
+        logger.error(f"❌ SCIM provisioning routes failed: {e}")
+
+    try:
+        from routes.data_import_routes import register_data_import_routes
+        register_data_import_routes(app, get_db, get_current_user, **kwargs)
+        logger.info("✅ Data import routes loaded (CSV/Excel import, field mapping, rollback)")
+    except Exception as e:
+        logger.error(f"❌ Data import routes failed: {e}")
+
+    try:
         from routes.search_routes import register_search_routes
         register_search_routes(app, get_db, get_current_user_flexible=get_current_user_flexible, Lead=Lead, Loan=Loan, LoanTeamMember=LoanTeamMember, ReferralPartner=ReferralPartner, MUMClient=MUMClient, filter_leads_by_permissions=filter_leads_by_permissions, **kwargs)
         logger.info("✅ Global search routes loaded (extracted)")

@@ -28,9 +28,10 @@ def seed_user_onboarding_data(db, Role, Category, Responsibility, PermissionTemp
     # ========================================================================
     roles_data = [
         {
-                                "name": "Site Administrator",
-                                "description": "Site-level administrator with full system access and multi-role capabilities"
-                            },
+            "name": "Site Administrator",
+            "description": "Site-level administrator with full system access and multi-role capabilities"
+        },
+        {
             "name": "Application Analysis",
             "description": "Analyzes and reviews loan applications for eligibility and risk"
         },

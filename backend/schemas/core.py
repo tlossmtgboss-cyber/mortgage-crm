@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 import enum
+import re
 
 # Import enums used by schemas
 from database.enums import (
@@ -17,6 +18,49 @@ from database.enums import (
 
 # PII masking utilities for API response sanitization (Enterprise Readiness 3.19)
 from schemas.pii_masking import sanitize_step_data, mask_ssn
+
+
+# =============================================================================
+# CONTACT VALIDATION HELPERS (Enterprise Readiness 3.1 + 3.5)
+# =============================================================================
+
+# E.164 phone format or common US formats: (xxx) xxx-xxxx, xxx-xxx-xxxx, +1xxxxxxxxxx
+_PHONE_PATTERN = re.compile(
+    r"^(\+?1?\s*[-.]?\s*)?"           # optional country code
+    r"(\(?\d{3}\)?[\s\-.]?)"          # area code
+    r"(\d{3}[\s\-.]?)"                # exchange
+    r"(\d{4})$"                        # subscriber
+)
+
+# Standard email regex (loose enough for real-world, strict enough to catch garbage)
+_EMAIL_PATTERN = re.compile(
+    r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
+)
+
+
+def _validate_email_format(email: Optional[str]) -> Optional[str]:
+    """Validate email format. Returns the email if valid, raises ValueError if invalid."""
+    if email is None or email.strip() == "":
+        return None
+    email = email.strip()
+    if not _EMAIL_PATTERN.match(email):
+        raise ValueError(f"Invalid email format: '{email}'")
+    return email
+
+
+def _validate_phone_format(phone: Optional[str]) -> Optional[str]:
+    """Validate phone format. Returns the phone if valid, raises ValueError if invalid."""
+    if phone is None or phone.strip() == "":
+        return None
+    phone = phone.strip()
+    # Strip common formatting to validate digits
+    digits_only = re.sub(r"[\s\-.()+]", "", phone)
+    if len(digits_only) < 10 or len(digits_only) > 15 or not digits_only.isdigit():
+        raise ValueError(
+            f"Invalid phone format: '{phone}'. Expected 10-15 digits "
+            f"(e.g., '(555) 123-4567' or '+15551234567')"
+        )
+    return phone
 
 
 
@@ -121,6 +165,27 @@ class LeadCreate(BaseModel):
     # Metadata (for assets, etc.)
     user_metadata: Optional[Dict[str, Any]] = None
 
+    # -- Enterprise Readiness 3.5: Email format validation --
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        return _validate_email_format(v)
+
+    # -- Enterprise Readiness 3.5: Phone format validation --
+    @field_validator('phone', mode='before')
+    @classmethod
+    def validate_phone(cls, v):
+        return _validate_phone_format(v)
+
+    # -- Enterprise Readiness 3.1: At least one contact method required --
+    @model_validator(mode='after')
+    def require_contact_method(self):
+        if not self.email and not self.phone:
+            raise ValueError(
+                "At least one contact method is required: provide 'email' or 'phone' (or both)"
+            )
+        return self
+
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
     first_name: Optional[str] = None
@@ -134,6 +199,30 @@ class LeadUpdate(BaseModel):
     stage: Optional[LeadStage] = None
     loan_number: Optional[str] = None
     notes: Optional[str] = None
+
+    # -- Enterprise Readiness 3.5: Email format validation on update --
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        return _validate_email_format(v)
+
+    # -- Enterprise Readiness 3.5: Phone format validation on update --
+    @field_validator('phone', mode='before')
+    @classmethod
+    def validate_phone(cls, v):
+        return _validate_phone_format(v)
+
+    # -- Enterprise Readiness 3.5: Co-applicant email format --
+    @field_validator('co_applicant_email', mode='before')
+    @classmethod
+    def validate_co_email(cls, v):
+        return _validate_email_format(v)
+
+    # -- Enterprise Readiness 3.5: Co-applicant phone format --
+    @field_validator('co_applicant_phone', mode='before')
+    @classmethod
+    def validate_co_phone(cls, v):
+        return _validate_phone_format(v)
     # Property Information
     address: Optional[str] = None
     city: Optional[str] = None
@@ -609,6 +698,28 @@ class TaskCreate(BaseModel):
     loan_id: Optional[int] = None
     lead_id: Optional[int] = None
     due_date: Optional[datetime] = None
+
+    # -- Enterprise Readiness 3.3: Task title must be non-empty --
+    @field_validator('title', mode='before')
+    @classmethod
+    def validate_title(cls, v):
+        if not v or not str(v).strip():
+            raise ValueError("Task title is required and cannot be empty")
+        v = str(v).strip()
+        if len(v) < 3:
+            raise ValueError("Task title must be at least 3 characters")
+        if len(v) > 500:
+            raise ValueError("Task title must be at most 500 characters")
+        return v
+
+    # -- Enterprise Readiness 3.3: Priority must be a valid value --
+    @field_validator('priority', mode='before')
+    @classmethod
+    def validate_priority(cls, v):
+        valid_priorities = {"low", "medium", "high", "urgent", "critical"}
+        if v and str(v).strip().lower() not in valid_priorities:
+            raise ValueError(f"Invalid priority '{v}'. Must be one of: {', '.join(sorted(valid_priorities))}")
+        return str(v).strip().lower() if v else "medium"
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None

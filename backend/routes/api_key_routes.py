@@ -5,7 +5,10 @@ Extracted from inline_legacy_routes.py.
 Includes:
 - Contact search (leads + users autocomplete)
 
-Note: API key CRUD endpoints removed - handled by api_keys_settings_routes.py.
+Note: API key CRUD endpoints are now handled by:
+- api_gateway_routes.py (database-backed, enterprise-grade)
+- api_keys_settings_routes.py (legacy in-memory implementation)
+
 Lines ~18775-18896 from inline_legacy_routes.py.
 """
 from fastapi import Depends, HTTPException, Query
