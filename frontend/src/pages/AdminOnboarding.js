@@ -938,6 +938,8 @@ function AdminOnboarding() {
               setBillingAddress={setBillingAddress}
               promoCode={promoCode}
               setPromoCode={setPromoCode}
+              promoValidated={promoValidated}
+              setPromoValidated={setPromoValidated}
               isFreeAccess={isFreeAccess}
               onBack={handleGoBack}
               onComplete={(data) => {
@@ -1023,6 +1025,8 @@ function PaymentStep({
   setBillingAddress,
   promoCode,
   setPromoCode,
+  promoValidated = false,
+  setPromoValidated,
   isFreeAccess = false,
   onBack,
   onComplete,

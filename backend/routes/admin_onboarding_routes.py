@@ -563,11 +563,10 @@ async def save_user_profile(
                 last_name = :last_name,
                 full_name = :full_name,
                 phone = :phone,
-                job_title = :job_title,
+                title = :job_title,
                 nmls_id = :nmls,
                 timezone = :timezone,
-                headshot_url = :headshot,
-                updated_at = NOW()
+                headshot_url = :headshot
             WHERE email = :email
         """), {
             'first_name': profile.first_name,
@@ -719,7 +718,7 @@ async def create_subscription(
         plan_info = PLAN_PRICES.get(plan_key, PLAN_PRICES['professional'])
 
         # Free access promo code - bypass payment entirely
-        FREE_ACCESS_PROMO_CODE = 'CHARLIE2016'
+        FREE_ACCESS_PROMO_CODE = os.getenv('FREE_ACCESS_PROMO_CODE', 'CHARLIE2016')
         if payment.payment_method_id == 'free_access_promo' and payment.promo_code and payment.promo_code.upper() == FREE_ACCESS_PROMO_CODE:
             logger.info(f"Free access promo code applied for user {email}")
 
@@ -746,7 +745,7 @@ async def create_subscription(
                 'user_id': user.id,
                 'user_name': user.full_name or email,
                 'tenant_id': str(user.tenant_account_id),
-                'details': str({'promo_code': FREE_ACCESS_PROMO_CODE, 'plan': 'business', 'price': 0})
+                'details': json.dumps({'promo_code': FREE_ACCESS_PROMO_CODE, 'plan': 'business', 'price': 0})
             })
 
             db.commit()
@@ -927,7 +926,7 @@ async def complete_onboarding(
 
         # Mark onboarding complete
         db.execute(text("""
-            UPDATE users SET onboarding_completed = true, updated_at = NOW()
+            UPDATE users SET onboarding_completed = true
             WHERE id = :user_id
         """), {'user_id': user.id})
 
