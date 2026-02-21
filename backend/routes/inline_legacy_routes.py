@@ -2056,11 +2056,42 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         try:
             from tasks.salesforce_sync_tasks import register_salesforce_sync_jobs
             register_salesforce_sync_jobs(scheduler)
-            if not scheduler.running:
-                scheduler.start()
-            logger.info("✅ Salesforce sync jobs registered and scheduler started")
+            logger.info("✅ Salesforce sync jobs registered")
         except Exception as e:
             logger.warning(f"⚠️ Salesforce sync jobs not registered: {e}")
+
+    # Register SLA tracking jobs (milestone status, risk alerts, snapshots)
+    if scheduler:
+        try:
+            from tasks.sla_tasks import setup_sla_scheduler
+            setup_sla_scheduler(scheduler)
+            logger.info("✅ SLA scheduler jobs registered")
+        except Exception as e:
+            logger.warning(f"⚠️ SLA scheduler jobs not registered: {e}")
+
+    # Register workflow engine job (task generation, escalation, completions — every 5 min)
+    if scheduler:
+        try:
+            from apscheduler.triggers.interval import IntervalTrigger
+            from routes.workflow_sla_routes import run_scheduled_workflow_tasks_background
+            scheduler.add_job(
+                run_scheduled_workflow_tasks_background,
+                trigger=IntervalTrigger(minutes=5),
+                id="workflow_engine",
+                name="Workflow Engine: generate tasks, escalate overdue, check completions",
+                replace_existing=True,
+            )
+            logger.info("✅ Workflow engine job registered (every 5 min)")
+        except Exception as e:
+            logger.warning(f"⚠️ Workflow engine job not registered: {e}")
+
+    # Ensure scheduler is started after all jobs registered
+    if scheduler and not scheduler.running:
+        try:
+            scheduler.start()
+            logger.info("✅ APScheduler started")
+        except Exception as e:
+            logger.warning(f"⚠️ APScheduler failed to start: {e}")
 
     # Calendar Sync routes (CRM ↔ Salesforce ↔ Outlook calendar synchronization)
     try:
