@@ -36,6 +36,14 @@ def maybe_promote_loan_to_mum(
     """
     from database.models import Loan, MUMClient, Task
 
+    # Defensive rollback: clear any poisoned transaction state from upstream
+    # (e.g. failed SLA/reconciliation operations on the same session).
+    # The loan upsert already committed, so nothing is lost here.
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
     savepoint = db.begin_nested()
     try:
         loan = db.query(Loan).filter(Loan.id == loan_id).first()
@@ -243,8 +251,14 @@ Original Loan:
         logger.error(f"Error creating MUM client from loan {loan_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        # Full session rollback to clear the failed transaction state,
+        # so the next call on this session can succeed (bulk sync loop).
         try:
             savepoint.rollback()
+        except Exception:
+            pass
+        try:
+            db.rollback()
         except Exception:
             pass
         return None
