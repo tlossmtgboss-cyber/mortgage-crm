@@ -1211,6 +1211,44 @@ async def list_invitations(
         message=f"Found {len(invites)} invitations"
     )
 
+@router.post("/reset-invitation")
+async def reset_invitation(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Reset a subscriber invitation to pending with fresh expiry. Requires ADMIN_API_KEY."""
+    admin_key = request.headers.get('X-Admin-Key', '')
+    expected_key = (os.getenv('ADMIN_API_KEY') or '').strip()
+    if not admin_key or not expected_key or admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    try:
+        body = await request.json()
+        invite_id = body.get('invitation_id', '')
+
+        result = db.execute(text("""
+            UPDATE subscriber_invitations
+            SET status = 'pending',
+                accepted_at = NULL,
+                accepted_by_user_id = NULL,
+                expires_at = NOW() + INTERVAL '7 days'
+            WHERE id = CAST(:id AS uuid)
+            RETURNING id, token, email, company_name, status
+        """), {'id': invite_id}).fetchone()
+
+        if not result:
+            return success_response(data={'reset': False}, message="Invitation not found")
+
+        db.commit()
+        return success_response(
+            data={'reset': True, 'token': result[1], 'email': result[2], 'company': result[3]},
+            message=f"Invitation reset for {result[3]}"
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/cleanup-test-account")
 async def cleanup_test_account(
     request: Request,
