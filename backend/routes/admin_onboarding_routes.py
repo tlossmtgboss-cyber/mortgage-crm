@@ -226,9 +226,14 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
 
 
 def check_invite_used(db: Session, email: str) -> bool:
-    """Check if email already has an account"""
+    """Check if email already has an active tenant subscription account"""
     result = db.execute(text("""
-        SELECT id FROM users WHERE email = :email LIMIT 1
+        SELECT u.id FROM users u
+        JOIN tenant_accounts t ON t.id = u.tenant_account_id
+        WHERE u.email = :email
+          AND t.is_deleted = false
+          AND t.status = 'active'
+        LIMIT 1
     """), {'email': email}).fetchone()
     return result is not None
 
