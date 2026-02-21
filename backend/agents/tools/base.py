@@ -86,6 +86,10 @@ def get_db():
         session.close()
 
 
+# Alias for modules that import db_session
+db_session = get_db
+
+
 def execute_query(query: str, params: Optional[Dict] = None) -> List[Dict]:
     """
     Execute a query and return results as list of dicts.
