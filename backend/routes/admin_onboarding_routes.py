@@ -935,6 +935,30 @@ async def complete_onboarding(
         settings = user.settings or {}
         pending_invites = settings.get('pending_invites', [])
 
+        # Ensure user_invitations table exists (may not have been migrated)
+        if pending_invites:
+            try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS user_invitations (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        email VARCHAR(255) NOT NULL,
+                        first_name VARCHAR(100),
+                        last_name VARCHAR(100),
+                        permission_role VARCHAR(50) DEFAULT 'loan_officer',
+                        invited_by UUID REFERENCES users(id),
+                        organization_id UUID REFERENCES tenant_accounts(id),
+                        token VARCHAR(255) UNIQUE NOT NULL,
+                        expires_at TIMESTAMP,
+                        status VARCHAR(20) DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
+                db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_email ON user_invitations(email)"))
+                db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_token ON user_invitations(token)"))
+                db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_invites_org ON user_invitations(organization_id)"))
+            except Exception as e:
+                logger.warning(f"user_invitations table check: {e}")
+
         for invite in pending_invites:
             try:
                 # Create invitation token
