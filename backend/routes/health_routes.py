@@ -712,64 +712,6 @@ def register_health_routes(app, get_db, **kwargs):
             )
 
 
-    @app.get("/diag/task-debug")
-    async def diag_task_debug(db: Session = Depends(get_db)):
-        """Temporary: debug why tasks page shows 0."""
-        results = {}
-        try:
-            uid = 118
-
-            # 1. Raw task count
-            counts = db.execute(text(
-                "SELECT status, COUNT(*) FROM tasks WHERE owner_id = :uid GROUP BY status"
-            ), {"uid": uid}).fetchall()
-            results["tasks_for_uid_118"] = {r[0]: r[1] for r in counts}
-
-            # 2. Simulate unified-tasks ORM query
-            try:
-                import main as main_module
-                MainTask = main_module.Task
-                workflow_tasks = db.query(MainTask).filter(
-                    MainTask.owner_id == uid,
-                    MainTask.status.in_(["pending", "in_progress"])
-                ).limit(200).all()
-                results["simulated_workflow_tasks"] = len(workflow_tasks)
-            except Exception as e:
-                results["simulation_error"] = str(e)
-
-            # 3. Check WorkflowConfiguration (needed by all-workflow-tasks)
-            try:
-                wf_count = db.execute(text(
-                    "SELECT COUNT(*) FROM workflow_configurations WHERE is_active = true"
-                )).scalar()
-                results["active_workflow_configs"] = wf_count
-
-                wf_with_days = db.execute(text(
-                    "SELECT wc.workflow_key, wc.workflow_name, COUNT(wd.id) as day_count "
-                    "FROM workflow_configurations wc "
-                    "LEFT JOIN workflow_days wd ON wd.workflow_id = wc.id AND wd.is_active = true "
-                    "WHERE wc.is_active = true "
-                    "GROUP BY wc.workflow_key, wc.workflow_name"
-                )).fetchall()
-                results["workflows_with_days"] = [
-                    {"key": r[0], "name": r[1], "active_days": r[2]} for r in wf_with_days
-                ]
-            except Exception as e:
-                results["workflow_config_error"] = str(e)
-
-            # 4. Check _models state in workflow_config_routes
-            try:
-                from workflow_config_routes import _models
-                results["workflow_models_loaded"] = _models is not None
-                if _models:
-                    results["workflow_models_keys"] = list(_models.keys())
-            except Exception as e:
-                results["workflow_models_error"] = str(e)
-
-            return results
-        except Exception as e:
-            return {"error": str(e), "partial": results}
-
     # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
     # ========================================================================

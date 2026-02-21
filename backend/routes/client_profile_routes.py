@@ -884,21 +884,20 @@ async def get_unified_tasks(
     Lead = main.Lead
     ExtractedData = main.ExtractedData
     IncomingDataEvent = main.IncomingDataEvent
-    detect_scheduling_intent = main.detect_scheduling_intent
-    get_calendly_time_slots_for_user = main.get_calendly_time_slots_for_user
-    generate_scheduling_email_draft = main.generate_scheduling_email_draft
+    from services.dre_helpers import (
+        detect_scheduling_intent,
+        get_calendly_time_slots_for_user,
+        generate_scheduling_email_draft,
+    )
 
     from performance_cache import get_cached, set_cached, cache_key, DEFAULT_TTL
 
     try:
-        # TEMP DEBUG: Log who is calling and what we find
-        logger.info(f"[UNIFIED-TASKS] Called by user_id={current_user.id}, email={getattr(current_user, 'email', '?')}")
 
         # Check cache first (30 second TTL for task lists)
         cache_k = cache_key("unified_tasks", current_user.id)
         cached_result = get_cached(cache_k)
         if cached_result:
-            logger.info(f"[UNIFIED-TASKS] Returning cached result: total={cached_result.get('total_count')}")
             return cached_result
 
         unified_tasks = []
@@ -988,9 +987,6 @@ async def get_unified_tasks(
             Task.owner_id == current_user.id,
             Task.status.in_(["pending", "in_progress"])
         ).order_by(Task.due_date.asc()).limit(200).all()
-
-        # TEMP DEBUG
-        logger.info(f"[UNIFIED-TASKS] ai_tasks={len(ai_tasks)}, workflow_tasks={len(workflow_tasks)} for user_id={current_user.id}")
 
         # Collect additional loan/lead IDs from workflow tasks
         for task in workflow_tasks:
@@ -1164,13 +1160,10 @@ async def get_unified_tasks(
         # Cache for 30 seconds
         set_cached(cache_k, result, 30)
 
-        # TEMP DEBUG
-        logger.info(f"[UNIFIED-TASKS] Returning {result['total_count']} tasks: {result['counts_by_source']}")
-
         return result
 
     except Exception as e:
-        logger.error(f"[UNIFIED-TASKS] ERROR for user_id={getattr(current_user, 'id', '?')}: {e}", exc_info=True)
+        logger.error(f"Error fetching unified tasks: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
