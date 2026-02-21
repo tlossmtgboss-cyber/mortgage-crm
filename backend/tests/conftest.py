@@ -272,10 +272,10 @@ def authenticated_client(db_session, mock_user):
         finally:
             pass
 
-    async def override_get_current_user(*args, **kwargs):
+    async def override_get_current_user():
         return mock_user
 
-    async def override_get_current_user_flexible(*args, **kwargs):
+    async def override_get_current_user_flexible():
         return mock_user
 
     # Override all auth-related dependencies
