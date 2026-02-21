@@ -2190,6 +2190,11 @@ async def delete_account(
             except Exception:
                 pass
 
+        # Clear owner FK before deleting users
+        db.execute(text("""
+            UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :account_id
+        """), {'account_id': account_id})
+
         # Delete associated users
         db.execute(text("""
             DELETE FROM users WHERE tenant_account_id = :account_id
@@ -4012,6 +4017,11 @@ async def cleanup_account_by_api_key(
                 db.execute(text("DELETE FROM user_invitations WHERE organization_id = :id"), {'id': account_id})
             except Exception:
                 pass
+
+        # Clear owner FK on tenant account before deleting users
+        db.execute(text("""
+            UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :id
+        """), {'id': account_id})
 
         # Delete users
         user_del = db.execute(text("DELETE FROM users WHERE tenant_account_id = :id"), {'id': account_id})
