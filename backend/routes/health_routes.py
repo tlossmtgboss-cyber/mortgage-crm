@@ -711,57 +711,6 @@ def register_health_routes(app, get_db, **kwargs):
                 content={"status": "unhealthy", "error": "Internal server error"}
             )
 
-    @app.get("/diag/reconciliation-status")
-    async def diag_reconciliation_status(db: Session = Depends(get_db)):
-        """Temporary diagnostic: verify loan state reconciliation infrastructure."""
-        results = {}
-        try:
-            # 1. audit table
-            row = db.execute(text(
-                "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='loan_state_audit_log')"
-            )).scalar()
-            results["audit_table_exists"] = row
-            if row:
-                results["audit_log_count"] = db.execute(text("SELECT COUNT(*) FROM loan_state_audit_log")).scalar()
-                recent = db.execute(text(
-                    "SELECT loan_id, from_stage, to_stage, salesforce_raw_stage, action, "
-                    "is_backward_movement, created_at FROM loan_state_audit_log "
-                    "ORDER BY created_at DESC LIMIT 5"
-                )).fetchall()
-                results["recent_audit_entries"] = [
-                    {"loan_id": r[0], "from": r[1], "to": r[2], "sf_raw": r[3],
-                     "action": r[4], "backward": r[5], "at": str(r[6])}
-                    for r in recent
-                ]
-            # 2. raw stage column
-            col_exists = db.execute(text(
-                "SELECT EXISTS(SELECT 1 FROM information_schema.columns "
-                "WHERE table_name='loans' AND column_name='salesforce_raw_stage')"
-            )).scalar()
-            results["raw_stage_column_exists"] = col_exists
-            if col_exists:
-                results["raw_stage_populated"] = db.execute(text(
-                    "SELECT COUNT(*) FROM loans WHERE salesforce_raw_stage IS NOT NULL"
-                )).scalar()
-                results["total_loans"] = db.execute(text("SELECT COUNT(*) FROM loans")).scalar()
-                samples = db.execute(text(
-                    "SELECT id, stage, salesforce_raw_stage FROM loans "
-                    "WHERE salesforce_raw_stage IS NOT NULL ORDER BY updated_at DESC LIMIT 5"
-                )).fetchall()
-                results["raw_stage_samples"] = [
-                    {"id": s[0], "stage": s[1], "sf_raw": s[2]} for s in samples
-                ]
-            # 3. stage distribution
-            stages = db.execute(text(
-                "SELECT stage, COUNT(*) FROM loans WHERE stage IS NOT NULL GROUP BY stage ORDER BY COUNT(*) DESC"
-            )).fetchall()
-            results["stage_distribution"] = {s[0]: s[1] for s in stages}
-            # 4. last sync
-            results["last_sync"] = str(db.execute(text("SELECT MAX(salesforce_last_synced_at) FROM loans")).scalar())
-            return results
-        except Exception as e:
-            return {"error": str(e), "partial_results": results}
-
     # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
     # ========================================================================
