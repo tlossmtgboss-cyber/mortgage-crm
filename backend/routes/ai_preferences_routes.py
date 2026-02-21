@@ -62,7 +62,8 @@ async def get_ai_user_context(
             current_user.id,
             include_performance=True,
             include_preferences=True,
-            include_behavior=True
+            include_behavior=True,
+            organization_id=getattr(current_user, 'organization_id', None),
         )
 
         return {
@@ -131,7 +132,8 @@ async def get_ai_preferences(
             current_user.id,
             include_performance=False,
             include_preferences=True,
-            include_behavior=False
+            include_behavior=False,
+            organization_id=getattr(current_user, 'organization_id', None),
         )
 
         return {

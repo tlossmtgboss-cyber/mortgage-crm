@@ -60,6 +60,7 @@ class AgentState(TypedDict, total=False):
     user_id: str                         # Authenticated user ID
     user_email: str                      # User's email address
     user_role: str                       # User's role (loan_officer, manager, etc.)
+    organization_id: Optional[int]       # Tenant isolation: org the user belongs to
     conversation_id: Optional[str]       # For multi-turn conversations
 
     # === Query Analysis (from analyze node) ===
@@ -117,6 +118,7 @@ def create_initial_state(
     user_id: str,
     user_email: str,
     user_role: str = "loan_officer",
+    organization_id: Optional[int] = None,
     conversation_id: Optional[str] = None,
     conversation_history: Optional[list] = None
 ) -> AgentState:
@@ -128,6 +130,7 @@ def create_initial_state(
         user_id: Authenticated user ID
         user_email: User's email address
         user_role: User's role in the system
+        organization_id: Tenant org ID for data isolation
         conversation_id: Optional ID for multi-turn conversations
         conversation_history: Previous messages in the conversation
 
@@ -140,6 +143,7 @@ def create_initial_state(
         user_id=user_id,
         user_email=user_email,
         user_role=user_role,
+        organization_id=organization_id,
         conversation_id=conversation_id,
 
         # Query Analysis (to be filled by analyze node)

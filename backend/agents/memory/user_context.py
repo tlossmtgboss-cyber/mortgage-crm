@@ -46,7 +46,8 @@ class UserContextManager:
         user_id: int,
         include_performance: bool = True,
         include_preferences: bool = True,
-        include_behavior: bool = True
+        include_behavior: bool = True,
+        organization_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Get comprehensive user context for AI personalization.
@@ -57,6 +58,7 @@ class UserContextManager:
             include_performance: Include performance metrics
             include_preferences: Include learned preferences
             include_behavior: Include behavioral patterns
+            organization_id: Tenant org ID for defense-in-depth isolation
 
         Returns:
             Dict with user context for AI system prompt injection
@@ -68,13 +70,13 @@ class UserContextManager:
             }
 
             if include_performance:
-                context['performance'] = await UserContextManager._get_performance_metrics(db, user_id)
+                context['performance'] = await UserContextManager._get_performance_metrics(db, user_id, organization_id)
 
             if include_preferences:
-                context['preferences'] = await UserContextManager._get_preferences(db, user_id)
+                context['preferences'] = await UserContextManager._get_preferences(db, user_id, organization_id)
 
             if include_behavior:
-                context['behavior'] = await UserContextManager._get_behavioral_patterns(db, user_id)
+                context['behavior'] = await UserContextManager._get_behavioral_patterns(db, user_id, organization_id)
 
             # Build human-readable summary for AI
             context['summary'] = UserContextManager._build_context_summary(context)
@@ -152,7 +154,7 @@ class UserContextManager:
             return {'role': 'loan_officer', 'name': 'User'}
 
     @staticmethod
-    async def _get_performance_metrics(db: Session, user_id: int) -> Dict[str, Any]:
+    async def _get_performance_metrics(db: Session, user_id: int, organization_id: Optional[int] = None) -> Dict[str, Any]:
         """Get user's performance metrics for context."""
         try:
             # Get loan pipeline stats
@@ -168,8 +170,9 @@ class UserContextManager:
                           AND closing_date < NOW() + INTERVAL '7 days' THEN 1 END) as closing_this_week
                 FROM loans
                 WHERE loan_officer_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 AND created_at > NOW() - INTERVAL '90 days'
-            """), {"user_id": user_id})
+            """), {"user_id": user_id, "org_id": organization_id})
 
             pipeline = pipeline_result.fetchone()
 
@@ -181,8 +184,9 @@ class UserContextManager:
                     AVG(EXTRACT(DAY FROM updated_at - created_at)) as avg_days_to_convert
                 FROM leads
                 WHERE owner_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 AND created_at > NOW() - INTERVAL '90 days'
-            """), {"user_id": user_id})
+            """), {"user_id": user_id, "org_id": organization_id})
 
             leads = lead_result.fetchone()
 
@@ -194,8 +198,9 @@ class UserContextManager:
                     COUNT(CASE WHEN due_date < NOW() AND type != 'Completed' THEN 1 END) as overdue_tasks
                 FROM ai_tasks
                 WHERE assigned_to_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 AND created_at > NOW() - INTERVAL '30 days'
-            """), {"user_id": user_id})
+            """), {"user_id": user_id, "org_id": organization_id})
 
             tasks = task_result.fetchone()
 
@@ -245,7 +250,7 @@ class UserContextManager:
             }
 
     @staticmethod
-    async def _get_preferences(db: Session, user_id: int) -> Dict[str, Any]:
+    async def _get_preferences(db: Session, user_id: int, organization_id: Optional[int] = None) -> Dict[str, Any]:
         """Get user's AI interaction preferences (stored and learned)."""
         try:
             # Check for explicit user preferences in settings
@@ -265,7 +270,7 @@ class UserContextManager:
                     explicit_prefs[key] = row[1]
 
             # Learn preferences from conversation history
-            learned_prefs = await UserContextManager._learn_preferences_from_history(db, user_id)
+            learned_prefs = await UserContextManager._learn_preferences_from_history(db, user_id, organization_id)
 
             # Merge: explicit preferences override learned ones
             preferences = {**UserContextManager.DEFAULT_PREFERENCES}
@@ -283,10 +288,10 @@ class UserContextManager:
             return UserContextManager.DEFAULT_PREFERENCES.copy()
 
     @staticmethod
-    async def _learn_preferences_from_history(db: Session, user_id: int) -> Dict[str, Any]:
+    async def _learn_preferences_from_history(db: Session, user_id: int, organization_id: Optional[int] = None) -> Dict[str, Any]:
         """Learn user preferences from their conversation history."""
         try:
-            # Analyze conversation patterns
+            # Analyze conversation patterns (tenant-scoped for defense-in-depth)
             history_result = db.execute(text("""
                 SELECT
                     role,
@@ -295,9 +300,10 @@ class UserContextManager:
                     created_at
                 FROM ai_conversation_memory
                 WHERE user_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 ORDER BY created_at DESC
                 LIMIT 100
-            """), {"user_id": user_id})
+            """), {"user_id": user_id, "org_id": organization_id})
 
             messages = list(history_result)
             if not messages:
@@ -355,21 +361,22 @@ class UserContextManager:
             return {}
 
     @staticmethod
-    async def _get_behavioral_patterns(db: Session, user_id: int) -> Dict[str, Any]:
+    async def _get_behavioral_patterns(db: Session, user_id: int, organization_id: Optional[int] = None) -> Dict[str, Any]:
         """Analyze user's behavioral patterns."""
         try:
-            # Get activity timing patterns
+            # Get activity timing patterns (tenant-scoped for defense-in-depth)
             timing_result = db.execute(text("""
                 SELECT
                     EXTRACT(HOUR FROM created_at) as hour,
                     COUNT(*) as count
                 FROM ai_conversation_memory
                 WHERE user_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 AND created_at > NOW() - INTERVAL '30 days'
                 GROUP BY EXTRACT(HOUR FROM created_at)
                 ORDER BY count DESC
                 LIMIT 3
-            """), {"user_id": user_id})
+            """), {"user_id": user_id, "org_id": organization_id})
 
             peak_hours = [int(row[0]) for row in timing_result]
 
@@ -390,10 +397,11 @@ class UserContextManager:
                 SELECT content
                 FROM ai_conversation_memory
                 WHERE user_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 AND role = 'user'
                 AND created_at > NOW() - INTERVAL '30 days'
                 LIMIT 50
-            """), {"user_id": user_id})
+            """), {"user_id": user_id, "org_id": organization_id})
 
             all_content = ' '.join(row[0].lower() for row in topics_result)
 
@@ -412,16 +420,19 @@ class UserContextManager:
 
             # Get total interaction count
             count_result = db.execute(text("""
-                SELECT COUNT(*) FROM ai_conversation_memory WHERE user_id = :user_id
-            """), {"user_id": user_id})
+                SELECT COUNT(*) FROM ai_conversation_memory
+                WHERE user_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
+            """), {"user_id": user_id, "org_id": organization_id})
             total_interactions = count_result.scalar() or 0
 
             # Get last interaction
             last_result = db.execute(text("""
                 SELECT created_at FROM ai_conversation_memory
                 WHERE user_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 ORDER BY created_at DESC LIMIT 1
-            """), {"user_id": user_id})
+            """), {"user_id": user_id, "org_id": organization_id})
             last_row = last_result.fetchone()
             last_interaction = last_row[0] if last_row else None
 

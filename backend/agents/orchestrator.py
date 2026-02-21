@@ -227,6 +227,7 @@ async def run_orchestrator(
     user_id: str,
     user_email: str,
     user_role: str = "loan_officer",
+    organization_id: Optional[int] = None,
     tool_functions: Dict[str, Callable] = None,
     anthropic_client: Anthropic = None,
     autonomous_mode: bool = True,
@@ -335,11 +336,20 @@ async def run_orchestrator(
         # STEP 3: Create initial state (with intent pre-populated)
         # ================================================================
         step_start = time.perf_counter()
+        # Resolve organization_id from current_user if not explicitly provided
+        resolved_org_id = organization_id
+        if resolved_org_id is None and current_user is not None:
+            resolved_org_id = getattr(current_user, 'organization_id', None)
+
+        if resolved_org_id is None:
+            logger.warning(f"[ORCHESTRATOR] No organization_id for user {user_id} — tenant isolation degraded")
+
         state = create_initial_state(
             user_message=message,
             user_id=user_id,
             user_email=user_email,
             user_role=user_role,
+            organization_id=resolved_org_id,
             conversation_id=conversation_id,
             conversation_history=conversation_history
         )
@@ -493,6 +503,7 @@ class OrchestratorSession:
         user_id: str,
         user_email: str,
         user_role: str = "loan_officer",
+        organization_id: Optional[int] = None,
         tool_functions: Dict[str, Callable] = None,
         anthropic_client: Anthropic = None,
         autonomous_mode: bool = True
@@ -500,6 +511,7 @@ class OrchestratorSession:
         self.user_id = user_id
         self.user_email = user_email
         self.user_role = user_role
+        self.organization_id = organization_id
         self.tool_functions = tool_functions or {}
         self.anthropic_client = anthropic_client
         self.autonomous_mode = autonomous_mode
@@ -533,6 +545,7 @@ class OrchestratorSession:
             user_id=self.user_id,
             user_email=self.user_email,
             user_role=self.user_role,
+            organization_id=self.organization_id,
             tool_functions=self.tool_functions,
             anthropic_client=self.anthropic_client,
             autonomous_mode=self.autonomous_mode,

@@ -146,6 +146,7 @@ class AIAgentService:
                 user_id=str(self.current_user.id),
                 user_email=self.current_user.email,
                 user_role=getattr(self.current_user, 'role', 'loan_officer'),
+                organization_id=getattr(self.current_user, 'organization_id', None),
                 tool_functions=self._tool_functions,
                 anthropic_client=self.anthropic_client,
                 autonomous_mode=self.autonomous_mode,
@@ -953,6 +954,14 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     tools = {}
 
+    # Defense-in-depth: Extract org_id for tenant isolation (AI-004/AI-007)
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id is None:
+        logger.warning(
+            f"[TOOLS] No organization_id on current_user (id={getattr(current_user, 'id', '?')}) "
+            "— tenant isolation degraded for AI tool queries"
+        )
+
     # ============ Pipeline Tools ============
 
     async def execute_get_pipeline(args):
@@ -963,16 +972,18 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             # Get leads using raw SQL to avoid import issues
             lead_rows = db.execute(
                 text("""SELECT id, name, email, phone, stage
-                       FROM leads WHERE owner_id = :user_id"""),
-                {"user_id": current_user.id}
+                       FROM leads WHERE owner_id = :user_id
+                       AND (:org_id IS NULL OR organization_id = :org_id)"""),
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Get loans using raw SQL
             loan_rows = db.execute(
                 text("""SELECT id, loan_number, borrower_name, stage, amount,
                        processor, underwriter, days_in_stage, closing_date
-                       FROM loans WHERE loan_officer_id = :user_id"""),
-                {"user_id": current_user.id}
+                       FROM loans WHERE loan_officer_id = :user_id
+                       AND (:org_id IS NULL OR organization_id = :org_id)"""),
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Organize leads by stage
@@ -1039,12 +1050,13 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             LEFT JOIN loans ln ON t.loan_id = ln.id
             LEFT JOIN leads ld ON t.lead_id = ld.id
             WHERE t.assigned_to_id = :user_id AND t.type::text != 'Completed'
+            AND (:org_id IS NULL OR t.organization_id = :org_id)
             ORDER BY
                 CASE WHEN t.priority = 'high' THEN 1 WHEN t.priority = 'medium' THEN 2 ELSE 3 END,
                 t.due_date ASC NULLS LAST
         """)
 
-        result = db.execute(task_query, {"user_id": current_user.id})
+        result = db.execute(task_query, {"user_id": current_user.id, "org_id": org_id})
         all_tasks = result.fetchall()
 
         filtered_tasks = []
@@ -1099,15 +1111,18 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     text("""SELECT id, name, email, phone, stage
                            FROM leads
                            WHERE owner_id = :user_id
+                           AND (:org_id IS NULL OR organization_id = :org_id)
                            AND (name ILIKE :search OR email ILIKE :search OR phone ILIKE :search)
                            LIMIT :limit"""),
-                    {"user_id": current_user.id, "search": search, "limit": limit}
+                    {"user_id": current_user.id, "org_id": org_id, "search": search, "limit": limit}
                 ).fetchall()
             else:
                 lead_rows = db.execute(
                     text("""SELECT id, name, email, phone, stage
-                           FROM leads WHERE owner_id = :user_id LIMIT :limit"""),
-                    {"user_id": current_user.id, "limit": limit}
+                           FROM leads WHERE owner_id = :user_id
+                           AND (:org_id IS NULL OR organization_id = :org_id)
+                           LIMIT :limit"""),
+                    {"user_id": current_user.id, "org_id": org_id, "limit": limit}
                 ).fetchall()
 
             return {
@@ -1142,17 +1157,20 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                            processor, underwriter, property_address, closing_date
                            FROM loans
                            WHERE loan_officer_id = :user_id
+                           AND (:org_id IS NULL OR organization_id = :org_id)
                            AND (borrower_name ILIKE :search OR loan_number ILIKE :search
                                 OR property_address ILIKE :search)
                            LIMIT :limit"""),
-                    {"user_id": current_user.id, "search": search, "limit": limit}
+                    {"user_id": current_user.id, "org_id": org_id, "search": search, "limit": limit}
                 ).fetchall()
             else:
                 loan_rows = db.execute(
                     text("""SELECT id, loan_number, borrower_name, stage, amount,
                            processor, underwriter, property_address, closing_date
-                           FROM loans WHERE loan_officer_id = :user_id LIMIT :limit"""),
-                    {"user_id": current_user.id, "limit": limit}
+                           FROM loans WHERE loan_officer_id = :user_id
+                           AND (:org_id IS NULL OR organization_id = :org_id)
+                           LIMIT :limit"""),
+                    {"user_id": current_user.id, "org_id": org_id, "limit": limit}
                 ).fetchall()
 
             return {
@@ -1199,9 +1217,9 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             # Insert into ai_tasks table (the active task table)
             result = db.execute(
                 text("""INSERT INTO ai_tasks (title, description, due_date, priority, type,
-                       assigned_to_id, loan_id, lead_id, created_at, updated_at)
+                       assigned_to_id, loan_id, lead_id, organization_id, created_at, updated_at)
                        VALUES (:title, :description, :due_date, :priority, 'In Progress',
-                       :assigned_to_id, :loan_id, :lead_id, NOW(), NOW())
+                       :assigned_to_id, :loan_id, :lead_id, :org_id, NOW(), NOW())
                        RETURNING id, title"""),
                 {
                     "title": title,
@@ -1210,7 +1228,8 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     "priority": priority,
                     "assigned_to_id": current_user.id,
                     "loan_id": loan_id,
-                    "lead_id": lead_id
+                    "lead_id": lead_id,
+                    "org_id": org_id,
                 }
             )
             db.commit()
@@ -1245,8 +1264,9 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             stage_counts = db.execute(
                 text("""SELECT stage, COUNT(*) as count, SUM(amount) as total_amount
                        FROM loans WHERE loan_officer_id = :user_id
+                       AND (:org_id IS NULL OR organization_id = :org_id)
                        GROUP BY stage"""),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Get closing metrics (only count future closing dates)
@@ -1255,8 +1275,9 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        COUNT(*) FILTER (WHERE closing_date >= CURRENT_DATE AND closing_date <= CURRENT_DATE + INTERVAL '7 days') as closing_7_days,
                        COUNT(*) FILTER (WHERE closing_date >= CURRENT_DATE AND closing_date <= CURRENT_DATE + INTERVAL '30 days') as closing_30_days,
                        SUM(amount) FILTER (WHERE closing_date >= CURRENT_DATE AND closing_date <= CURRENT_DATE + INTERVAL '30 days') as volume_30_days
-                       FROM loans WHERE loan_officer_id = :user_id AND stage::text != 'Funded'"""),
-                {"user_id": current_user.id}
+                       FROM loans WHERE loan_officer_id = :user_id AND stage::text != 'Funded'
+                       AND (:org_id IS NULL OR organization_id = :org_id)"""),
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchone()
 
             return {
@@ -1290,11 +1311,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        rate, lock_expiration_date
                        FROM loans
                        WHERE loan_officer_id = :user_id
+                       AND (:org_id IS NULL OR organization_id = :org_id)
                        AND closing_date >= CURRENT_DATE
                        AND closing_date <= CURRENT_DATE + INTERVAL ':days days'
                        AND stage::text NOT IN ('Funded')
                        ORDER BY closing_date ASC""".replace(':days', str(days_to_close))),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Provide advisory based on general market principles
@@ -1334,6 +1356,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
                        WHERE t.assigned_to_id = :user_id
+                       AND (:org_id IS NULL OR t.organization_id = :org_id)
                        AND t.type::text != 'Completed'
                        AND t.due_date < CURRENT_DATE
                        ORDER BY
@@ -1342,7 +1365,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                                 ELSE 3 END,
                            t.due_date ASC
                        LIMIT 5"""),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Get today's tasks
@@ -1353,6 +1376,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
                        WHERE t.assigned_to_id = :user_id
+                       AND (:org_id IS NULL OR t.organization_id = :org_id)
                        AND t.type::text != 'Completed'
                        AND t.due_date::date = CURRENT_DATE
                        ORDER BY
@@ -1360,7 +1384,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                                 WHEN t.priority = 'medium' THEN 2
                                 ELSE 3 END
                        LIMIT 10"""),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Also get tomorrow's tasks
@@ -1371,6 +1395,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
                        WHERE t.assigned_to_id = :user_id
+                       AND (:org_id IS NULL OR t.organization_id = :org_id)
                        AND t.type::text != 'Completed'
                        AND t.due_date::date = CURRENT_DATE + INTERVAL '1 day'
                        ORDER BY
@@ -1378,7 +1403,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                                 WHEN t.priority = 'medium' THEN 2
                                 ELSE 3 END
                        LIMIT 5"""),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Get loans closing soon (future only - past dates mean loan is delayed or already closed)
@@ -1386,12 +1411,13 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 text("""SELECT id, loan_number, borrower_name, closing_date, stage, amount
                        FROM loans
                        WHERE loan_officer_id = :user_id
+                       AND (:org_id IS NULL OR organization_id = :org_id)
                        AND closing_date >= CURRENT_DATE
                        AND closing_date <= CURRENT_DATE + INTERVAL '7 days'
                        AND stage::text NOT IN ('Funded')
                        ORDER BY closing_date ASC
                        LIMIT 5"""),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             # Also check for loans with PAST closing dates that aren't funded (these need attention)
@@ -1399,11 +1425,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 text("""SELECT id, loan_number, borrower_name, closing_date, stage, amount
                        FROM loans
                        WHERE loan_officer_id = :user_id
+                       AND (:org_id IS NULL OR organization_id = :org_id)
                        AND closing_date < CURRENT_DATE
                        AND stage::text NOT IN ('Funded', 'Cancelled', 'Denied')
                        ORDER BY closing_date DESC
                        LIMIT 5"""),
-                {"user_id": current_user.id}
+                {"user_id": current_user.id, "org_id": org_id}
             ).fetchall()
 
             return {
@@ -1527,7 +1554,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
             # Build the IN clause safely
             status_placeholders = ", ".join([f":status_{i}" for i in range(len(mapped_statuses))])
-            params = {"user_id": current_user.id, "limit": max_results}
+            params = {"user_id": current_user.id, "org_id": org_id, "limit": max_results}
             for i, status in enumerate(mapped_statuses):
                 params[f"status_{i}"] = status
 
@@ -1537,6 +1564,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                        last_contact, created_at, updated_at, notes
                 FROM leads
                 WHERE owner_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 AND stage::text IN ({status_placeholders})
                 ORDER BY
                     CASE stage::text
@@ -1645,6 +1673,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 FROM leads l
                 WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify')
                   AND l.owner_id = :user_id
+                  AND (:org_id IS NULL OR l.organization_id = :org_id)
             """
 
             if require_phone:
@@ -1667,7 +1696,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 LIMIT :limit
             """
 
-            rows = db.execute(text(query_sql), {"user_id": current_user.id, "limit": limit}).fetchall()
+            rows = db.execute(text(query_sql), {"user_id": current_user.id, "org_id": org_id, "limit": limit}).fetchall()
 
             top_leads = []
             for i, row in enumerate(rows, 1):
@@ -1752,6 +1781,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     FROM leads l
                     WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify')
                       AND l.owner_id = :user_id
+                      AND (:org_id IS NULL OR l.organization_id = :org_id)
                       AND (l.last_contact IS NULL OR l.last_contact < :threshold)
                     ORDER BY l.last_contact ASC NULLS FIRST
                     LIMIT :limit
@@ -1774,6 +1804,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     FROM leads l
                     WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify')
                       AND l.owner_id = :user_id
+                      AND (:org_id IS NULL OR l.organization_id = :org_id)
                       AND l.last_contact IS NOT NULL
                       AND l.last_contact < :threshold
                     ORDER BY l.last_contact ASC
@@ -1782,6 +1813,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
             rows = db.execute(text(query_sql), {
                 "user_id": current_user.id,
+                "org_id": org_id,
                 "threshold": threshold_date,
                 "limit": limit
             }).fetchall()
@@ -2000,16 +2032,22 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         }
 
         try:
-            # Get leads by status
+            # Get leads by status — scoped to current user + tenant
             query = text("""
                 SELECT id, first_name, last_name, phone, email, stage
                 FROM leads
                 WHERE stage = :status
+                AND owner_id = :user_id
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 AND phone IS NOT NULL
                 AND phone != ''
                 LIMIT 50
             """)
-            leads = db.execute(query, {"status": lead_status}).fetchall()
+            leads = db.execute(query, {
+                "status": lead_status,
+                "user_id": current_user.id,
+                "org_id": org_id,
+            }).fetchall()
             results["leads_found"] = len(leads)
 
             if not leads:

@@ -101,7 +101,8 @@ async def execute_tool(
     tool_name: str,
     arguments: dict,
     tool_functions: Dict[str, Callable],
-    user_id: str = None
+    user_id: str = None,
+    organization_id: Optional[int] = None,
 ) -> ToolCall:
     """
     Execute a single tool and capture its result.
@@ -114,6 +115,7 @@ async def execute_tool(
         arguments: Arguments to pass to the tool
         tool_functions: Dictionary of available tool functions
         user_id: User ID for cache key generation
+        organization_id: Tenant org ID for cache key isolation
 
     Returns:
         ToolCall object with result or error
@@ -142,7 +144,7 @@ async def execute_tool(
 
             cache_key = cache._generate_key(
                 f"tool:{tool_name}",
-                user_id or "default",
+                f"org:{organization_id or 0}:{user_id or 'default'}",
                 **arguments
             )
             cached_result = await cache.get(cache_key)
@@ -410,8 +412,9 @@ async def gather_data(
         tasks = []
         task_tool_names = []
 
-        # Get user_id for cache key generation
+        # Get user_id and organization_id for cache key generation
         user_id = state.get("user_id")
+        organization_id = state.get("organization_id")
 
         for tool_name in required_tools:
             if tool_name not in tool_functions:
@@ -421,7 +424,7 @@ async def gather_data(
 
             args = determine_tool_arguments(tool_name, state)
             logger.info(f"[GATHER] Queuing tool {tool_name} with args: {args}")
-            tasks.append(execute_tool(tool_name, args, tool_functions, user_id))
+            tasks.append(execute_tool(tool_name, args, tool_functions, user_id, organization_id))
             task_tool_names.append(tool_name)
 
         # Execute ALL tools in parallel for maximum speed

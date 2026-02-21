@@ -78,7 +78,10 @@ async def orchestrator_chat(
         # Load user context
         try:
             from agents.memory.user_context import UserContextManager
-            user_context = await UserContextManager.get_context(db, current_user.id)
+            user_context = await UserContextManager.get_context(
+                db, current_user.id,
+                organization_id=getattr(current_user, 'organization_id', None),
+            )
             user_context_summary = user_context.get('summary', '')
             user_preferences = user_context.get('preferences', {})
         except Exception as ctx_err:
@@ -163,7 +166,10 @@ async def orchestrator_chat_stream(
             # Load user context
             try:
                 from agents.memory.user_context import UserContextManager
-                user_context = await UserContextManager.get_context(db, current_user.id)
+                user_context = await UserContextManager.get_context(
+                    db, current_user.id,
+                    organization_id=getattr(current_user, 'organization_id', None),
+                )
                 user_context_summary = user_context.get('summary', '')
             except Exception:
                 user_context_summary = ''
