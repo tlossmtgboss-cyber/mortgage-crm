@@ -485,7 +485,8 @@ async def save_company_profile(
         # Decode token to get user
         try:
             import jwt
-            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
+            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
+            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -549,7 +550,8 @@ async def save_user_profile(
 
         try:
             import jwt
-            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
+            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
+            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -610,7 +612,8 @@ async def queue_team_invites(
 
         try:
             import jwt
-            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
+            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
+            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -695,7 +698,8 @@ async def create_subscription(
 
         try:
             import jwt
-            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
+            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
+            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -904,7 +908,8 @@ async def complete_onboarding(
 
         try:
             import jwt
-            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
+            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
+            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
