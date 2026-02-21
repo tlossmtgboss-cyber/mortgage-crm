@@ -133,7 +133,10 @@ def get_bridge(db: Session, user_id: int) -> TelnyxRetellBridge:
             detail="Retell AI API key not configured. Go to Settings > Integrations to add your Retell credentials."
         )
 
-    return get_bridge_for_user(telnyx_key, retell_key)
+    try:
+        return get_bridge_for_user(telnyx_key, retell_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ==================== Status Endpoint ====================

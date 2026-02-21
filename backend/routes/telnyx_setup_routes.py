@@ -121,6 +121,11 @@ class SetupStatus(BaseModel):
 
 def get_telnyx_client(api_key: str):
     """Create Telnyx client with provided API key"""
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Telnyx API key not configured. Go to Settings > Integrations to add your credentials."
+        )
     try:
         from telnyx import Telnyx
         return Telnyx(api_key=api_key)

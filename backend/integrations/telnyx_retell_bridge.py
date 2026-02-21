@@ -65,6 +65,11 @@ class TelnyxRetellBridge:
     """
 
     def __init__(self, telnyx_api_key: str, retell_api_key: str):
+        if not telnyx_api_key:
+            raise ValueError("Telnyx API key is required but was empty or None")
+        if not retell_api_key:
+            raise ValueError("Retell API key is required but was empty or None")
+
         self.telnyx_api_key = telnyx_api_key
         self.retell_api_key = retell_api_key
 
@@ -443,7 +448,10 @@ def get_bridge_for_user(
     telnyx_api_key: str,
     retell_api_key: str,
 ) -> TelnyxRetellBridge:
-    """Create a bridge instance with user credentials."""
+    """Create a bridge instance with user credentials.
+
+    Raises ValueError if either key is missing/empty.
+    """
     return TelnyxRetellBridge(
         telnyx_api_key=telnyx_api_key,
         retell_api_key=retell_api_key,
