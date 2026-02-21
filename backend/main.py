@@ -1111,6 +1111,38 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# API DEVELOPER EXPERIENCE ROUTES (Enterprise Readiness Domain 11)
+# ============================================================================
+try:
+    from routes.api_developer_routes import register_api_developer_routes
+    register_api_developer_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ API developer routes loaded (changelog, SDK, Postman, sandbox, webhooks)")
+except Exception as e:
+    logger.error(f"❌ API developer routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# ENTERPRISE READINESS ROUTES (Domains 3, 4, 5, 7, 9, 10, 12)
+# ============================================================================
+try:
+    from routes.enterprise_readiness_routes import register_enterprise_readiness_routes
+    register_enterprise_readiness_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Enterprise readiness routes loaded (data quality, security, onboarding, white-label, import templates)")
+except Exception as e:
+    logger.error(f"❌ Enterprise readiness routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # VOICE AI RECEPTIONIST ROUTES
 # ============================================================================
 try:

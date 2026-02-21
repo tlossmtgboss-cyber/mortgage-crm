@@ -43,7 +43,12 @@ logger = logging.getLogger(__name__)
 # PDF Generation
 # =============================================================================
 
-def generate_pdf(report_data: Dict[str, Any], report_type: str, title: Optional[str] = None) -> bytes:
+def generate_pdf(
+    report_data: Dict[str, Any],
+    report_type: str,
+    title: Optional[str] = None,
+    branding: Optional[Dict] = None,
+) -> bytes:
     """
     Generate a PDF report from structured data.
 
@@ -51,6 +56,8 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str, title: Optional[
         report_data: The report data dict
         report_type: Type of report (pipeline, scorecard, sla_compliance, financial)
         title: Optional custom title
+        branding: Optional tenant branding config (company_name, primary_color, logo_url)
+                  from white_label_service.get_report_branding()
 
     Returns:
         PDF file as bytes
@@ -61,6 +68,10 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str, title: Optional[
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 
+    # Use tenant branding colors or defaults
+    primary_color = (branding or {}).get("primary_color", "#1a365d")
+    company_name = (branding or {}).get("company_name", "Perennia AI")
+
     buffer = io.BytesIO()
     page_size = landscape(letter) if report_type in ("pipeline", "sla_compliance") else letter
     doc = SimpleDocTemplate(buffer, pagesize=page_size, topMargin=0.75 * inch, bottomMargin=0.75 * inch)
@@ -68,7 +79,7 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str, title: Optional[
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         "ReportTitle", parent=styles["Heading1"], fontSize=18, spaceAfter=12,
-        textColor=colors.HexColor("#1a365d"),
+        textColor=colors.HexColor(primary_color),
     )
     subtitle_style = ParagraphStyle(
         "ReportSubtitle", parent=styles["Heading2"], fontSize=12, spaceAfter=8,
@@ -78,7 +89,7 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str, title: Optional[
 
     elements = []
 
-    # Header
+    # Header with tenant branding
     report_title = title or _get_default_title(report_type)
     elements.append(Paragraph(report_title, title_style))
     elements.append(Paragraph(
@@ -103,7 +114,7 @@ def generate_pdf(report_data: Dict[str, Any], report_type: str, title: Optional[
     # Footer with timestamp
     elements.append(Spacer(1, 20))
     elements.append(Paragraph(
-        f"Perennia AI — Confidential | {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+        f"{company_name} — Confidential | {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
         ParagraphStyle("Footer", parent=body_style, fontSize=8, textColor=colors.gray),
     ))
 

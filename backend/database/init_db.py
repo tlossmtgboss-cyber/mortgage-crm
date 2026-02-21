@@ -1494,6 +1494,48 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ scheduled_reports table note: {e}")
 
+        # Add white-label branding columns (Enterprise Readiness Domain 12)
+        try:
+            with _engine.connect() as conn:
+                branding_columns = [
+                    ("organization_branding", "favicon_url", "VARCHAR(500)"),
+                    ("organization_branding", "font_family", "VARCHAR(200) DEFAULT 'Inter, system-ui, sans-serif'"),
+                    ("organization_branding", "sms_sender_id", "VARCHAR(50)"),
+                    ("organization_branding", "sms_sender_name", "VARCHAR(100)"),
+                    ("organization_branding", "portal_logo_url", "VARCHAR(500)"),
+                    ("organization_branding", "portal_title", "VARCHAR(200)"),
+                    ("organization_branding", "portal_footer_text", "TEXT"),
+                    ("organization_branding", "custom_domain", "VARCHAR(255)"),
+                    ("organization_branding", "custom_css", "TEXT"),
+                ]
+                for table, col, col_type in branding_columns:
+                    conn.execute(text(
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_type}"
+                    ))
+                conn.commit()
+                logger.info("✅ White-label branding columns added (ER-12)")
+        except Exception as e:
+            logger.warning(f"⚠️ Branding columns note: {e}")
+
+        # Create organization_settings table (Enterprise Readiness Domain 5)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS organization_settings (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        setting_key VARCHAR(100) NOT NULL,
+                        setting_value TEXT,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW(),
+                        UNIQUE(organization_id, setting_key)
+                    )
+                """))
+                conn.commit()
+                logger.info("✅ organization_settings table created/verified (ER-5)")
+        except Exception as e:
+            logger.warning(f"⚠️ organization_settings table note: {e}")
+
         # Run comprehensive column migration for all missing columns
         try:
             from migrations.add_all_missing_columns import run_migration
