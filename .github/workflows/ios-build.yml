@@ -26,7 +26,7 @@ env:
 jobs:
   build-ios:
     name: Build iOS App
-    runs-on: macos-15  # macOS Sequoia with Xcode 16
+    runs-on: macos-26  # macOS Tahoe with Xcode 26 (required by Capacitor 8)
     timeout-minutes: 60
 
     steps:
@@ -42,12 +42,12 @@ jobs:
 
       - name: Select Xcode version
         run: |
-          # List available Xcode versions, pick latest with iOS SDK
+          # List available Xcode versions
           ls /Applications/ | grep Xcode | sort -V
-          # Try Xcode 16.1 first (includes iOS SDK), then 16.0, then default
-          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer \
-            || sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer \
-            || sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer \
+          # Use Xcode 26 (required by Capacitor 8 SPM)
+          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer \
+            || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer \
+            || sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer \
             || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
       - name: Show Xcode version
@@ -100,7 +100,10 @@ jobs:
 
       - name: Sync Capacitor
         working-directory: frontend
-        run: npx cap sync ios
+        run: |
+          # Remove stale Package.resolved so Xcode resolves fresh SPM deps
+          rm -f ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          npx cap sync ios
 
       - name: Update version numbers
         working-directory: frontend/ios/App
