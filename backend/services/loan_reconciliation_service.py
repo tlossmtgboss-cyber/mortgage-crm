@@ -95,6 +95,9 @@ class LoanReconciliationService:
     """
     Reconciles loan stage transitions during Salesforce sync.
 
+    Uses its own fresh DB session for all write operations (audit log, admin tasks,
+    raw stage storage) to avoid poisoning the caller's session if any write fails.
+
     Usage:
         service = LoanReconciliationService(db)
         result = service.reconcile(loan_id, old_data, new_data)
@@ -106,6 +109,25 @@ class LoanReconciliationService:
 
     def __init__(self, db: Session):
         self.db = db
+        # Create a fresh session for write operations to avoid
+        # poisoning the caller's session on commit failures.
+        self._own_db = None
+
+    def _get_own_db(self):
+        """Lazily create a fresh session for write operations."""
+        if self._own_db is None:
+            from db import SessionLocal
+            self._own_db = SessionLocal()
+        return self._own_db
+
+    def _close_own_db(self):
+        """Close the fresh session if it was created."""
+        if self._own_db is not None:
+            try:
+                self._own_db.close()
+            except Exception:
+                pass
+            self._own_db = None
 
     def reconcile(
         self,
@@ -184,6 +206,9 @@ class LoanReconciliationService:
         if raw_sf_stage:
             self._store_raw_sf_stage(loan_id, raw_sf_stage)
 
+        # Clean up our own session
+        self._close_own_db()
+
         return result
 
     # -------------------------------------------------------------------------
@@ -256,7 +281,8 @@ class LoanReconciliationService:
     def _is_duplicate_transition(self, loan_id: int, from_stage: str, to_stage: str) -> bool:
         """Check if the same transition was logged within the dedup window."""
         try:
-            row = self.db.execute(text("""
+            own_db = self._get_own_db()
+            row = own_db.execute(text("""
                 SELECT id FROM loan_state_audit_log
                 WHERE loan_id = :loan_id
                   AND from_stage = :from_stage
@@ -273,7 +299,7 @@ class LoanReconciliationService:
         except Exception as e:
             logger.debug(f"Dedup check unavailable (table may not exist yet): {e}")
             try:
-                self.db.rollback()
+                self._get_own_db().rollback()
             except Exception:
                 pass
             return False
@@ -281,7 +307,8 @@ class LoanReconciliationService:
     def _log_unmapped_stage(self, loan_id: int, raw_stage: str) -> None:
         """Create an admin task for an unmapped Salesforce stage."""
         try:
-            self.db.execute(text("""
+            own_db = self._get_own_db()
+            own_db.execute(text("""
                 INSERT INTO tasks (
                     title, description, task_type, status, priority,
                     related_entity_type, related_entity_id, created_at
@@ -298,19 +325,20 @@ class LoanReconciliationService:
                 ),
                 "loan_id": loan_id,
             })
-            self.db.commit()
+            own_db.commit()
             logger.warning(f"Created admin task for unmapped SF stage '{raw_stage}' on loan {loan_id}")
         except Exception as e:
             logger.warning(f"Could not create admin task for unmapped stage: {e}")
             try:
-                self.db.rollback()
+                self._get_own_db().rollback()
             except Exception:
                 pass
 
     def _write_audit_log(self, loan_id: int, result: ReconciliationResult) -> None:
         """Insert an entry into loan_state_audit_log."""
         try:
-            self.db.execute(text("""
+            own_db = self._get_own_db()
+            own_db.execute(text("""
                 INSERT INTO loan_state_audit_log (
                     loan_id, from_stage, to_stage, salesforce_raw_stage,
                     action, is_backward_movement, warnings,
@@ -331,24 +359,25 @@ class LoanReconciliationService:
                 "review_reason": result.admin_review_reason,
                 "metadata": json.dumps(result.audit_metadata),
             })
-            self.db.commit()
+            own_db.commit()
         except Exception as e:
             logger.debug(f"Could not write audit log (table may not exist yet): {e}")
             try:
-                self.db.rollback()
+                self._get_own_db().rollback()
             except Exception:
                 pass
 
     def _store_raw_sf_stage(self, loan_id: int, raw_stage: str) -> None:
         """Persist the original Salesforce stage value on the loan record."""
         try:
-            self.db.execute(text("""
+            own_db = self._get_own_db()
+            own_db.execute(text("""
                 UPDATE loans SET salesforce_raw_stage = :raw_stage WHERE id = :loan_id
             """), {"raw_stage": raw_stage, "loan_id": loan_id})
-            self.db.commit()
+            own_db.commit()
         except Exception as e:
             logger.debug(f"Could not store raw SF stage (column may not exist yet): {e}")
             try:
-                self.db.rollback()
+                self._get_own_db().rollback()
             except Exception:
                 pass

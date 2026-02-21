@@ -15,6 +15,16 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
+def _get_fresh_session():
+    """Create a fresh, independent DB session for MUM promotion.
+
+    This isolates MUM promotion from any upstream transaction poisoning
+    (e.g. failed SLA/reconciliation commits on the caller's session).
+    """
+    from db import SessionLocal
+    return SessionLocal()
+
+
 def maybe_promote_loan_to_mum(
     db: Session,
     loan_id: int,
@@ -26,8 +36,12 @@ def maybe_promote_loan_to_mum(
     Eligibility: loan has funded_date or closing_date set, OR stage is 'FUNDED'.
     Idempotent: skips if a MUMClient with matching loan_number already exists.
 
+    Uses a fresh independent DB session to avoid transaction poisoning from
+    upstream operations (SLA triggers, reconciliation) that may have left the
+    caller's session in a failed state.
+
     Args:
-        db: Active database session (caller manages commit/rollback)
+        db: Caller's database session (NOT used — only kept for signature compat)
         loan_id: The loan ID to check
         user_id: Owner user ID for the new MUMClient
 
@@ -36,37 +50,28 @@ def maybe_promote_loan_to_mum(
     """
     from database.models import Loan, MUMClient, Task
 
-    # Defensive rollback: clear any poisoned transaction state from upstream
-    # (e.g. failed SLA/reconciliation operations on the same session).
-    # The loan upsert already committed, so nothing is lost here.
+    # Use a fresh session to avoid inheriting poisoned transaction state
+    # from upstream SLA/reconciliation operations on the caller's session.
+    fresh_db = _get_fresh_session()
     try:
-        db.rollback()
-    except Exception:
-        pass
-
-    savepoint = db.begin_nested()
-    try:
-        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        loan = fresh_db.query(Loan).filter(Loan.id == loan_id).first()
         if not loan:
             logger.warning(f"MUM promotion: Loan {loan_id} not found")
-            savepoint.rollback()
             return None
 
         # Check eligibility: funded_date, closing_date, or stage == FUNDED
         stage_str = str(loan.stage).upper() if loan.stage else ""
         is_funded = bool(loan.funded_date) or bool(loan.closing_date) or stage_str == "FUNDED"
         if not is_funded:
-            savepoint.rollback()
             return None
 
         # Idempotent check: skip if MUM client already exists for this loan_number
         if loan.loan_number:
-            existing = db.query(MUMClient).filter(
+            existing = fresh_db.query(MUMClient).filter(
                 MUMClient.loan_number == loan.loan_number
             ).first()
             if existing:
                 logger.info(f"MUM client already exists for loan {loan.loan_number} (mum_id={existing.id})")
-                savepoint.commit()
                 return existing.id
 
         # Determine the owner: use the loan officer, fall back to the triggering user
@@ -87,7 +92,7 @@ def maybe_promote_loan_to_mum(
         loan_rate = loan.rate or 0.0
         if not loan_rate:
             try:
-                row = db.execute(
+                row = fresh_db.execute(
                     text("SELECT interest_rate FROM loans WHERE id = :lid"),
                     {"lid": loan_id}
                 ).fetchone()
@@ -112,7 +117,7 @@ def maybe_promote_loan_to_mum(
         if not client_name or _looks_like_sf_id:
             # Try to resolve from the associated lead
             try:
-                lead_row = db.execute(
+                lead_row = fresh_db.execute(
                     text("""
                         SELECT l.first_name, l.last_name
                         FROM leads l
@@ -180,8 +185,8 @@ def maybe_promote_loan_to_mum(
             property_zip=prop_zip,
         )
 
-        db.add(mum_client)
-        db.flush()
+        fresh_db.add(mum_client)
+        fresh_db.flush()
 
         logger.info(
             f"Created MUM client {mum_client.id} from funded loan {loan.loan_number} "
@@ -214,7 +219,7 @@ Loan Details:
             due_date=datetime.now(timezone.utc) + timedelta(days=1),
             status="pending",
         )
-        db.add(welcome_task)
+        fresh_db.add(welcome_task)
 
         # Create AMR reminder task for 11 months from now
         amr_task = Task(
@@ -240,28 +245,27 @@ Original Loan:
             due_date=datetime.now(timezone.utc) + timedelta(days=335),
             status="pending",
         )
-        db.add(amr_task)
+        fresh_db.add(amr_task)
 
         logger.info(f"Created post-close tasks for MUM client {mum_client.id}")
 
-        savepoint.commit()
+        fresh_db.commit()
         return mum_client.id
 
     except Exception as e:
         logger.error(f"Error creating MUM client from loan {loan_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        # Full session rollback to clear the failed transaction state,
-        # so the next call on this session can succeed (bulk sync loop).
         try:
-            savepoint.rollback()
-        except Exception:
-            pass
-        try:
-            db.rollback()
+            fresh_db.rollback()
         except Exception:
             pass
         return None
+    finally:
+        try:
+            fresh_db.close()
+        except Exception:
+            pass
 
 
 def maybe_promote_loan_to_mum_by_raw_data(
