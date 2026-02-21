@@ -2116,12 +2116,86 @@ async def delete_account(
 
         account_name = account[0]
 
-        # Delete associated users first
+        # Get user IDs for this account
+        user_rows = db.execute(text("""
+            SELECT id FROM users WHERE tenant_account_id = :account_id
+        """), {'account_id': account_id}).fetchall()
+        user_ids = [row[0] for row in user_rows]
+
+        if user_ids:
+            # Delete all FK-dependent records for these users.
+            # Use a comprehensive list of tables that reference users.id.
+            # Tables with ondelete=CASCADE are handled automatically by the DB.
+            dependent_tables = [
+                # Permission / role tables
+                ("user_assigned_roles", "user_id"),
+                ("user_active_role", "user_id"),
+                ("user_permissions", "user_id"),
+                ("user_page_permissions", "user_id"),
+                ("permission_requests", "employee_id"),
+                ("permissions", "user_id"),
+                # Auth / security
+                ("api_keys", "user_id"),
+                ("refresh_tokens", "user_id"),
+                ("revoked_tokens", "user_id"),
+                ("revoked_tokens", "revoked_by_id"),
+                ("security_certifications", "employee_id"),
+                ("microsoft_oauth_tokens", "user_id"),
+                ("microsoft_credentials", "user_id"),
+                ("audit_logs", "user_id"),
+                ("audit_logs", "changed_by_id"),
+                # Subscription / billing
+                ("subscription_plans", "user_id"),
+                ("account_subscriptions", "user_id"),
+                # Communication
+                ("email_tracking", "user_id"),
+                ("sms_messages", "user_id"),
+                ("call_logs", "user_id"),
+                ("voicemail_drops", "user_id"),
+                ("user_email_connections", "user_id"),
+                # Tasks / workflow
+                ("tasks", "assigned_to_id"),
+                ("tasks", "owner_id"),
+                ("workflow_tasks", "user_id"),
+                # AI / chat
+                ("ai_chat_sessions", "user_id"),
+                ("ai_audit_logs", "user_id"),
+                # Dialer
+                ("dialer_sessions", "user_id"),
+                ("dialer_agents", "agent_id"),
+                # Core / settings
+                ("user_settings", "user_id"),
+                ("notification_preferences", "user_id"),
+                ("impersonation_sessions", "manager_id"),
+                ("impersonation_sessions", "impersonated_user_id"),
+                # Invitations
+                ("employee_invites", "invited_by_user_id"),
+                ("employee_invites", "user_id"),
+                ("subscriber_invitations", "accepted_by_user_id"),
+            ]
+
+            for table_name, column_name in dependent_tables:
+                try:
+                    db.execute(text(f"""
+                        DELETE FROM {table_name} WHERE {column_name} IN :user_ids
+                    """), {'user_ids': tuple(user_ids)})
+                except Exception:
+                    pass  # Table may not exist yet or column may differ
+
+            # Also clean up tenant-level records
+            try:
+                db.execute(text("""
+                    DELETE FROM user_invitations WHERE organization_id = :account_id
+                """), {'account_id': account_id})
+            except Exception:
+                pass
+
+        # Delete associated users
         db.execute(text("""
             DELETE FROM users WHERE tenant_account_id = :account_id
         """), {'account_id': account_id})
 
-        # Delete the account (or soft delete)
+        # Soft delete the account
         db.execute(text("""
             UPDATE tenant_accounts
             SET is_deleted = true,
@@ -2142,9 +2216,9 @@ async def delete_account(
     except (PermissionException, NotFoundException):
         raise
     except SQLAlchemyError as e:
-        logger.error(f"Error deleting account: {e}")
+        logger.error(f"Error deleting account {account_id}: {e}")
         db.rollback()
-        raise DatabaseException("Failed to delete account")
+        raise DatabaseException(f"Failed to delete account: {str(e)[:200]}")
 
 
 # =============================================================================
