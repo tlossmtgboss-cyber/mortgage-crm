@@ -1180,3 +1180,100 @@ async def get_available_roles(
             data={'roles': default_roles, 'fallback': True},
             message="Default roles returned"
         )
+
+
+# =============================================================================
+# TEMPORARY: Admin cleanup endpoint (for resetting test accounts)
+# =============================================================================
+
+@router.delete("/cleanup-test-account")
+async def cleanup_test_account(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Delete a test company account and reset its invitation.
+    Requires ADMIN_API_KEY header for auth."""
+    admin_key = request.headers.get('X-Admin-Key', '')
+    expected_key = (os.getenv('ADMIN_API_KEY') or '').strip()
+    if not admin_key or not expected_key or admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    try:
+        body = await request.json()
+        search_name = body.get('company_name', 'test')
+
+        # Find the account
+        account = db.execute(text("""
+            SELECT id, name, owner_user_id FROM tenant_accounts
+            WHERE name ILIKE :search AND is_deleted = false
+            ORDER BY created_at DESC LIMIT 1
+        """), {'search': f'%{search_name}%'}).fetchone()
+
+        if not account:
+            return success_response(data={'deleted': False}, message=f"No account found matching '{search_name}'")
+
+        account_id = str(account[0])
+        account_name = account[1]
+
+        # Get user IDs for this tenant
+        user_rows = db.execute(text(
+            "SELECT id FROM users WHERE tenant_account_id = :tid"
+        ), {'tid': account_id}).fetchall()
+        user_ids = [str(r[0]) for r in user_rows]
+
+        # Clear owner FK
+        db.execute(text("UPDATE tenant_accounts SET owner_user_id = NULL WHERE id = :id"), {'id': account_id})
+
+        # Delete dependent records with savepoints
+        if user_ids:
+            dependent_tables = [
+                ('audit_logs', 'user_id'), ('audit_logs', 'changed_by_id'),
+                ('user_invitations', 'invited_by'),
+                ('user_sessions', 'user_id'), ('user_preferences', 'user_id'),
+                ('notification_preferences', 'user_id'), ('api_keys', 'user_id'),
+            ]
+            for table_name, col in dependent_tables:
+                try:
+                    sp = db.begin_nested()
+                    db.execute(text(f"DELETE FROM {table_name} WHERE {col} = ANY(:ids)"), {'ids': user_ids})
+                    sp.commit()
+                except Exception:
+                    sp.rollback()
+
+            # Delete users
+            try:
+                sp = db.begin_nested()
+                db.execute(text("DELETE FROM users WHERE tenant_account_id = :tid"), {'tid': account_id})
+                sp.commit()
+            except Exception:
+                sp.rollback()
+
+        # Mark account as canceled
+        try:
+            sp = db.begin_nested()
+            db.execute(text(
+                "UPDATE tenant_accounts SET status = 'canceled', is_deleted = true WHERE id = :id"
+            ), {'id': account_id})
+            sp.commit()
+        except Exception:
+            sp.rollback()
+
+        # Reset subscriber invitation for reuse
+        db.execute(text("""
+            UPDATE subscriber_invitations SET status = 'pending', accepted_at = NULL, accepted_by_user_id = NULL
+            WHERE company_name ILIKE :search AND status = 'accepted'
+        """), {'search': f'%{search_name}%'})
+
+        db.commit()
+
+        return success_response(
+            data={'deleted': True, 'account_name': account_name, 'users_cleaned': len(user_ids)},
+            message=f"Account '{account_name}' cleaned up, invitation reset"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Cleanup error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
