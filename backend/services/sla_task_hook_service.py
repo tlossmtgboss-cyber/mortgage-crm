@@ -182,6 +182,22 @@ class SLATaskHookService:
                     })
                     continue
 
+                # Skip if active workflow tasks exist for this loan
+                active_wf = db.execute(text("""
+                    SELECT COUNT(*) FROM workflow_task_instances wti
+                    JOIN workflow_instances wi ON wi.id = wti.workflow_instance_id
+                    WHERE wti.loan_id = :loan_id
+                    AND wti.status IN ('scheduled', 'pending', 'in_progress')
+                    AND wi.status = 'active'
+                """), {"loan_id": loan_id}).scalar()
+
+                if active_wf and active_wf > 0:
+                    results["tasks_skipped"].append({
+                        "milestone_type": milestone_type,
+                        "reason": f"Active workflow has {active_wf} pending tasks",
+                    })
+                    continue
+
                 # Create the SLA task
                 try:
                     result = sla_service.create_sla_task(

@@ -9,7 +9,7 @@ Provides database operations for:
 """
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func, desc
+from sqlalchemy import and_, or_, func, desc, text
 from datetime import datetime, date, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -415,6 +415,33 @@ def create_sla_warning_task(
         if existing_task:
             logger.debug(f"SLA task already exists for milestone {milestone.id}")
             return None
+
+        # Skip SLA warning if an active workflow already has pending tasks for this entity
+        # The workflow IS the action plan for hitting milestones
+        if milestone.lead_id:
+            entity_filter = "wti.lead_id = :entity_id"
+            entity_id = milestone.lead_id
+        elif milestone.loan_id:
+            entity_filter = "wti.loan_id = :entity_id"
+            entity_id = milestone.loan_id
+        else:
+            entity_id = None
+
+        if entity_id:
+            active_workflow_tasks = db.execute(text(f"""
+                SELECT COUNT(*) FROM workflow_task_instances wti
+                JOIN workflow_instances wi ON wi.id = wti.workflow_instance_id
+                WHERE {entity_filter}
+                AND wti.status IN ('scheduled', 'pending', 'in_progress')
+                AND wi.status = 'active'
+            """), {"entity_id": entity_id}).scalar()
+
+            if active_workflow_tasks and active_workflow_tasks > 0:
+                logger.info(
+                    f"Skipping SLA warning task for milestone {milestone.id} — "
+                    f"{active_workflow_tasks} active workflow tasks already exist"
+                )
+                return None
 
         # Get the loan date field for this milestone type
         date_field = MILESTONE_TO_LOAN_DATE_FIELD.get(milestone.milestone_type)
@@ -1306,6 +1333,29 @@ def complete_sla_task_with_date(
                 if completed_milestone:
                     result["milestone_completed"] = True
                     logger.info(f"Completed SLA milestone {task.sla_milestone_id}")
+
+        # Cancel pending workflow tasks for same entity — milestone was completed via SLA path
+        entity_id = task.loan_id or task.lead_id
+        entity_col = "loan_id" if task.loan_id else "lead_id"
+        if entity_id:
+            wf_cancelled = db.execute(text(f"""
+                UPDATE tasks
+                SET status = 'cancelled', updated_at = NOW()
+                WHERE {entity_col} = :entity_id
+                AND workflow_task_instance_id IS NOT NULL
+                AND status IN ('pending')
+                AND sla_milestone_id IS NULL
+            """), {"entity_id": entity_id}).rowcount
+
+            # Also cancel the workflow task instances themselves
+            if wf_cancelled:
+                db.execute(text(f"""
+                    UPDATE workflow_task_instances
+                    SET status = 'cancelled', updated_at = NOW()
+                    WHERE {entity_col} = :entity_id
+                    AND status IN ('scheduled', 'pending')
+                """), {"entity_id": entity_id})
+                logger.info(f"Cancelled {wf_cancelled} workflow tasks for {entity_col}={entity_id} — milestone completed via SLA")
 
         db.commit()
         result["success"] = True

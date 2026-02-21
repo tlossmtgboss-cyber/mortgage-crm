@@ -14,35 +14,35 @@ from datetime import datetime
 from decimal import Decimal
 
 # Import orchestration components
-from backend.services.call_intelligence.orchestration.prequal_calculator import (
+from services.call_intelligence.orchestration.prequal_calculator import (
     PreQualificationCalculator,
     PreQualificationResult,
     QualificationStatus,
     LoanProgram,
 )
-from backend.services.call_intelligence.orchestration.lead_service import (
+from services.call_intelligence.orchestration.lead_service import (
     LeadManagementService,
     LeadResult,
     LeadStatus,
     LeadPriority,
 )
-from backend.services.call_intelligence.orchestration.document_checklist import (
+from services.call_intelligence.orchestration.document_checklist import (
     DocumentChecklistService,
     DocumentChecklist,
     DocumentCategory,
 )
-from backend.services.call_intelligence.orchestration.outreach_service import (
+from services.call_intelligence.orchestration.outreach_service import (
     OutreachService,
     OutreachResult,
     OutreachType,
 )
-from backend.services.call_intelligence.orchestration.scheduling_service import (
+from services.call_intelligence.orchestration.scheduling_service import (
     SchedulingService,
     ScheduledFollowup,
     AppointmentType,
     FollowupPriority,
 )
-from backend.services.call_intelligence.orchestration.orchestrator import (
+from services.call_intelligence.orchestration.orchestrator import (
     CallIntelligenceOrchestrator,
     OrchestrationResult,
     OrchestrationConfig,
