@@ -5,7 +5,7 @@ Provides endpoints for managing customers, invoices, payments,
 and AR aging reports.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, and_
 from typing import Optional, List
@@ -122,9 +122,12 @@ class PaymentApplicationCreate(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def generate_invoice_number(db: Session, org_id: int) -> str:
@@ -201,6 +204,7 @@ def get_ar_account(db: Session, org_id: int) -> ChartOfAccounts:
 
 @router.get("/customers")
 async def list_customers(
+    request: Request,
     search: Optional[str] = Query(None, description="Search by name or email"),
     is_active: Optional[bool] = Query(None),
     skip: int = Query(0, ge=0),
@@ -208,7 +212,7 @@ async def list_customers(
     db: Session = Depends(get_db),
 ):
     """List AR customers."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(ARCustomer).filter(
         ARCustomer.organization_id == org_id
@@ -235,11 +239,12 @@ async def list_customers(
 
 @router.get("/customers/{customer_id}")
 async def get_customer(
+    request: Request,
     customer_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single customer with balance info."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     customer = db.query(ARCustomer).filter(
         ARCustomer.id == customer_id,
@@ -266,11 +271,12 @@ async def get_customer(
 
 @router.post("/customers")
 async def create_customer(
+    request: Request,
     data: CustomerCreate,
     db: Session = Depends(get_db),
 ):
     """Create a new AR customer."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Check for duplicate email
     if data.email:
@@ -306,12 +312,13 @@ async def create_customer(
 
 @router.put("/customers/{customer_id}")
 async def update_customer(
+    request: Request,
     customer_id: str,
     data: CustomerUpdate,
     db: Session = Depends(get_db),
 ):
     """Update a customer."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     customer = db.query(ARCustomer).filter(
         ARCustomer.id == customer_id,
@@ -351,6 +358,7 @@ async def update_customer(
 
 @router.get("/invoices")
 async def list_invoices(
+    request: Request,
     customer_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     from_date: Optional[date] = Query(None),
@@ -360,7 +368,7 @@ async def list_invoices(
     db: Session = Depends(get_db),
 ):
     """List AR invoices."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(ARInvoice).filter(
         ARInvoice.organization_id == org_id
@@ -390,11 +398,12 @@ async def list_invoices(
 
 @router.get("/invoices/{invoice_id}")
 async def get_invoice(
+    request: Request,
     invoice_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single invoice with lines."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     invoice = db.query(ARInvoice).filter(
         ARInvoice.id == invoice_id,
@@ -428,11 +437,12 @@ async def get_invoice(
 
 @router.post("/invoices")
 async def create_invoice(
+    request: Request,
     data: InvoiceCreate,
     db: Session = Depends(get_db),
 ):
     """Create a new invoice."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Validate customer
     customer = db.query(ARCustomer).filter(
@@ -544,11 +554,12 @@ async def create_invoice(
 
 @router.post("/invoices/{invoice_id}/send")
 async def send_invoice(
+    request: Request,
     invoice_id: str,
     db: Session = Depends(get_db),
 ):
     """Mark invoice as sent."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     invoice = db.query(ARInvoice).filter(
         ARInvoice.id == invoice_id,
@@ -634,11 +645,12 @@ async def send_invoice(
 
 @router.post("/invoices/{invoice_id}/void")
 async def void_invoice(
+    request: Request,
     invoice_id: str,
     db: Session = Depends(get_db),
 ):
     """Void an invoice."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     invoice = db.query(ARInvoice).filter(
         ARInvoice.id == invoice_id,
@@ -696,6 +708,7 @@ async def void_invoice(
 
 @router.get("/payments")
 async def list_payments(
+    request: Request,
     customer_id: Optional[str] = Query(None),
     from_date: Optional[date] = Query(None),
     to_date: Optional[date] = Query(None),
@@ -704,7 +717,7 @@ async def list_payments(
     db: Session = Depends(get_db),
 ):
     """List AR payments."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(ARPayment).filter(
         ARPayment.organization_id == org_id
@@ -731,11 +744,12 @@ async def list_payments(
 
 @router.post("/payments")
 async def create_payment(
+    request: Request,
     data: PaymentCreate,
     db: Session = Depends(get_db),
 ):
     """Record a payment received."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Validate customer
     customer = db.query(ARCustomer).filter(
@@ -899,12 +913,13 @@ async def create_payment(
 
 @router.get("/aging-report")
 async def get_aging_report(
+    request: Request,
     as_of_date: Optional[date] = Query(None, description="Report as of date"),
     customer_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Get AR aging report."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     report_date = as_of_date or date.today()
 
     # Get open invoices
@@ -999,10 +1014,11 @@ async def get_aging_report(
 
 @router.get("/summary")
 async def get_ar_summary(
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Get AR summary for dashboard."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     today = date.today()
 
     # Open balance

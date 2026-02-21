@@ -140,9 +140,12 @@ class ReconciliationUpdate(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def log_audit(db: Session, org_id: int, user_id: int, action: str,
@@ -191,11 +194,12 @@ def apply_categorization_rules(
 
 @router.get("/accounts")
 async def list_bank_accounts(
+    request: Request,
     include_inactive: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """List bank accounts."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(BankAccount).filter(
         BankAccount.organization_id == org_id
@@ -231,11 +235,12 @@ async def list_bank_accounts(
 
 @router.get("/accounts/{account_id}")
 async def get_bank_account(
+    request: Request,
     account_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single bank account with details."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     account = db.query(BankAccount).filter(
         BankAccount.id == account_id,
@@ -275,11 +280,12 @@ async def get_bank_account(
 
 @router.post("/accounts")
 async def create_bank_account(
+    request: Request,
     data: BankAccountCreate,
     db: Session = Depends(get_db),
 ):
     """Create a new bank account (manual, not Plaid-connected)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Validate GL account
     gl_account = db.query(ChartOfAccounts).filter(
@@ -333,12 +339,13 @@ async def create_bank_account(
 
 @router.put("/accounts/{account_id}")
 async def update_bank_account(
+    request: Request,
     account_id: str,
     data: BankAccountUpdate,
     db: Session = Depends(get_db),
 ):
     """Update a bank account."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     account = db.query(BankAccount).filter(
         BankAccount.id == account_id,
@@ -399,10 +406,11 @@ async def get_plaid_status():
 
 @router.post("/plaid/create-link-token")
 async def create_plaid_link_token(
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Create a Plaid Link token for connecting a bank."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     client = get_plaid_client()
 
     if not client:
@@ -441,6 +449,7 @@ async def create_plaid_link_token(
 
 @router.post("/plaid/exchange-token")
 async def exchange_plaid_public_token(
+    request: Request,
     public_token: str,
     institution_id: str,
     institution_name: str,
@@ -448,7 +457,7 @@ async def exchange_plaid_public_token(
     db: Session = Depends(get_db),
 ):
     """Exchange Plaid public token for access token and create bank accounts."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     client = get_plaid_client()
 
     if not client:
@@ -535,12 +544,13 @@ async def exchange_plaid_public_token(
 
 @router.post("/plaid/sync/{account_id}")
 async def sync_plaid_transactions(
+    request: Request,
     account_id: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """Sync transactions from Plaid for a bank account."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     account = db.query(BankAccount).filter(
         BankAccount.id == account_id,
@@ -680,11 +690,12 @@ async def sync_plaid_transactions(
 
 @router.delete("/plaid/disconnect/{account_id}")
 async def disconnect_plaid_account(
+    request: Request,
     account_id: str,
     db: Session = Depends(get_db),
 ):
     """Disconnect a Plaid-connected bank account."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     account = db.query(BankAccount).filter(
         BankAccount.id == account_id,
@@ -816,6 +827,7 @@ async def handle_plaid_webhook(
 
 @router.get("/transactions")
 async def list_transactions(
+    request: Request,
     account_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None, description="unmatched, categorized, matched, excluded"),
     from_date: Optional[date] = Query(None),
@@ -826,7 +838,7 @@ async def list_transactions(
     db: Session = Depends(get_db),
 ):
     """List bank transactions."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(BankTransaction).join(BankAccount).filter(
         BankAccount.organization_id == org_id
@@ -867,11 +879,12 @@ async def list_transactions(
 
 @router.get("/transactions/{transaction_id}")
 async def get_transaction(
+    request: Request,
     transaction_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single transaction."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     transaction = db.query(BankTransaction).join(BankAccount).filter(
         BankTransaction.id == transaction_id,
@@ -918,12 +931,13 @@ async def get_transaction(
 
 @router.post("/transactions/{transaction_id}/categorize")
 async def categorize_transaction(
+    request: Request,
     transaction_id: str,
     data: TransactionCategorizeRequest,
     db: Session = Depends(get_db),
 ):
     """Categorize a bank transaction to a GL account."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     transaction = db.query(BankTransaction).join(BankAccount).filter(
         BankTransaction.id == transaction_id,
@@ -962,12 +976,13 @@ async def categorize_transaction(
 
 @router.post("/transactions/{transaction_id}/match")
 async def match_transaction_to_entry(
+    request: Request,
     transaction_id: str,
     journal_entry_id: str,
     db: Session = Depends(get_db),
 ):
     """Match a bank transaction to a journal entry."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     transaction = db.query(BankTransaction).join(BankAccount).filter(
         BankTransaction.id == transaction_id,
@@ -1002,13 +1017,14 @@ async def match_transaction_to_entry(
 
 @router.post("/transactions/{transaction_id}/create-entry")
 async def create_entry_from_transaction(
+    request: Request,
     transaction_id: str,
     account_id: str,  # The expense/revenue account
     description: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Create a journal entry from a bank transaction."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     transaction = db.query(BankTransaction).join(BankAccount).filter(
         BankTransaction.id == transaction_id,
@@ -1132,12 +1148,13 @@ async def create_entry_from_transaction(
 
 @router.post("/transactions/{transaction_id}/exclude")
 async def exclude_transaction(
+    request: Request,
     transaction_id: str,
     reason: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Exclude a transaction from reconciliation."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     transaction = db.query(BankTransaction).join(BankAccount).filter(
         BankTransaction.id == transaction_id,
@@ -1165,10 +1182,11 @@ async def exclude_transaction(
 
 @router.get("/rules")
 async def list_categorization_rules(
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """List categorization rules."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     rules = db.query(BankCategorizationRule).filter(
         BankCategorizationRule.organization_id == org_id
@@ -1182,11 +1200,12 @@ async def list_categorization_rules(
 
 @router.post("/rules")
 async def create_categorization_rule(
+    request: Request,
     data: CategorizationRuleCreate,
     db: Session = Depends(get_db),
 ):
     """Create a categorization rule."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Validate target account
     target_account = db.query(ChartOfAccounts).filter(
@@ -1214,11 +1233,12 @@ async def create_categorization_rule(
 
 @router.delete("/rules/{rule_id}")
 async def delete_categorization_rule(
+    request: Request,
     rule_id: str,
     db: Session = Depends(get_db),
 ):
     """Delete a categorization rule."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     rule = db.query(BankCategorizationRule).filter(
         BankCategorizationRule.id == rule_id,
@@ -1239,11 +1259,12 @@ async def delete_categorization_rule(
 
 @router.post("/rules/apply")
 async def apply_rules_to_unmatched(
+    request: Request,
     account_id: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """Apply categorization rules to all unmatched transactions."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(BankTransaction).join(BankAccount).filter(
         BankAccount.organization_id == org_id,
@@ -1280,11 +1301,12 @@ async def apply_rules_to_unmatched(
 
 @router.get("/reconciliations")
 async def list_reconciliations(
+    request: Request,
     account_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """List bank reconciliations."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(BankReconciliation).join(BankAccount).filter(
         BankAccount.organization_id == org_id
@@ -1303,11 +1325,12 @@ async def list_reconciliations(
 
 @router.post("/reconciliations")
 async def start_reconciliation(
+    request: Request,
     data: ReconciliationCreate,
     db: Session = Depends(get_db),
 ):
     """Start a new bank reconciliation."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Validate account
     account = db.query(BankAccount).filter(
@@ -1374,11 +1397,12 @@ async def start_reconciliation(
 
 @router.get("/reconciliations/{recon_id}")
 async def get_reconciliation(
+    request: Request,
     recon_id: str,
     db: Session = Depends(get_db),
 ):
     """Get reconciliation details with transactions."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     recon = db.query(BankReconciliation).join(BankAccount).filter(
         BankReconciliation.id == recon_id,
@@ -1420,12 +1444,13 @@ async def get_reconciliation(
 
 @router.put("/reconciliations/{recon_id}")
 async def update_reconciliation(
+    request: Request,
     recon_id: str,
     data: ReconciliationUpdate,
     db: Session = Depends(get_db),
 ):
     """Update reconciliation (mark transactions as cleared)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     recon = db.query(BankReconciliation).join(BankAccount).filter(
         BankReconciliation.id == recon_id,
@@ -1466,11 +1491,12 @@ async def update_reconciliation(
 
 @router.post("/reconciliations/{recon_id}/complete")
 async def complete_reconciliation(
+    request: Request,
     recon_id: str,
     db: Session = Depends(get_db),
 ):
     """Complete and finalize a reconciliation."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     recon = db.query(BankReconciliation).join(BankAccount).filter(
         BankReconciliation.id == recon_id,
@@ -1533,11 +1559,12 @@ async def complete_reconciliation(
 
 @router.delete("/reconciliations/{recon_id}")
 async def delete_reconciliation(
+    request: Request,
     recon_id: str,
     db: Session = Depends(get_db),
 ):
     """Delete an in-progress reconciliation."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     recon = db.query(BankReconciliation).join(BankAccount).filter(
         BankReconciliation.id == recon_id,
@@ -1565,10 +1592,11 @@ async def delete_reconciliation(
 
 @router.get("/summary")
 async def get_banking_summary(
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Get banking summary for dashboard."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Get account balances
     accounts = db.query(BankAccount).filter(

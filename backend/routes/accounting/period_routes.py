@@ -5,7 +5,7 @@ Provides CRUD operations for managing accounting periods,
 period closing, and lock functionality.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import date, datetime
@@ -60,9 +60,12 @@ class LockDateRequest(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def log_audit(db: Session, org_id: int, user_id: int, action: str,
@@ -89,6 +92,7 @@ def log_audit(db: Session, org_id: int, user_id: int, action: str,
 
 @router.get("")
 async def list_periods(
+    request: Request,
     fiscal_year: Optional[int] = Query(None, description="Filter by fiscal year"),
     status: Optional[str] = Query(None, description="Filter by status"),
     skip: int = Query(0, ge=0),
@@ -96,7 +100,7 @@ async def list_periods(
     db: Session = Depends(get_db),
 ):
     """List accounting periods."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(AccountingPeriod).filter(
         AccountingPeriod.organization_id == org_id
@@ -123,10 +127,11 @@ async def list_periods(
 
 @router.get("/current")
 async def get_current_period(
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Get the current open accounting period."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     today = date.today()
 
     period = db.query(AccountingPeriod).filter(
@@ -150,11 +155,12 @@ async def get_current_period(
 
 @router.get("/{period_id}")
 async def get_period(
+    request: Request,
     period_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single accounting period."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.id == period_id,
@@ -181,11 +187,12 @@ async def get_period(
 
 @router.post("")
 async def create_period(
+    request: Request,
     data: PeriodCreate,
     db: Session = Depends(get_db),
 ):
     """Create a new accounting period."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Validate dates
     if data.end_date <= data.start_date:
@@ -236,13 +243,14 @@ async def create_period(
 
 @router.post("/generate-year")
 async def generate_fiscal_year_periods(
+    request: Request,
     fiscal_year: int = Query(..., description="Fiscal year to generate"),
     period_type: str = Query("month", description="Period type: month or quarter"),
     start_month: int = Query(1, ge=1, le=12, description="First month of fiscal year"),
     db: Session = Depends(get_db),
 ):
     """Generate all periods for a fiscal year."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Check if periods already exist
     existing = db.query(AccountingPeriod).filter(
@@ -318,12 +326,13 @@ async def generate_fiscal_year_periods(
 
 @router.put("/{period_id}")
 async def update_period(
+    request: Request,
     period_id: str,
     data: PeriodUpdate,
     db: Session = Depends(get_db),
 ):
     """Update an accounting period."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.id == period_id,
@@ -362,12 +371,13 @@ async def update_period(
 
 @router.post("/{period_id}/close")
 async def close_period(
+    request: Request,
     period_id: str,
     data: ClosePeriodRequest,
     db: Session = Depends(get_db),
 ):
     """Close an accounting period."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.id == period_id,
@@ -416,11 +426,12 @@ async def close_period(
 
 @router.post("/{period_id}/lock")
 async def lock_period(
+    request: Request,
     period_id: str,
     db: Session = Depends(get_db),
 ):
     """Lock a closed accounting period (prevents all modifications)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.id == period_id,
@@ -456,11 +467,12 @@ async def lock_period(
 
 @router.post("/{period_id}/reopen")
 async def reopen_period(
+    request: Request,
     period_id: str,
     db: Session = Depends(get_db),
 ):
     """Reopen a closed (not locked) accounting period."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     period = db.query(AccountingPeriod).filter(
         AccountingPeriod.id == period_id,
@@ -497,10 +509,11 @@ async def reopen_period(
 
 @router.get("/settings/lock-date")
 async def get_lock_date(
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Get the current lock date."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     settings = db.query(AccountingSettings).filter(
         AccountingSettings.organization_id == org_id
@@ -514,11 +527,12 @@ async def get_lock_date(
 
 @router.post("/settings/lock-date")
 async def set_lock_date(
+    request: Request,
     data: LockDateRequest,
     db: Session = Depends(get_db),
 ):
     """Set the global lock date (no entries can be posted on or before this date)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     settings = db.query(AccountingSettings).filter(
         AccountingSettings.organization_id == org_id

@@ -2,25 +2,23 @@
 GDPR/CCPA Data Routes
 Enterprise Readiness Check 8.11 + CMP-004/CMP-005
 
-Admin-only endpoints for:
-- GDPR data export (right to portability) — CMP-004
-- GDPR data deletion (right to erasure) — CMP-005
-- Viewing deletion history
-
 Endpoints:
-    POST /api/v1/admin/gdpr/export           - Export all org data as JSON
-    POST /api/v1/admin/gdpr/deletion-request  - Submit a new deletion request
-    GET  /api/v1/admin/gdpr/deletion-requests  - List past deletion requests
+    POST /api/v1/admin/gdpr/export              - Export all org data as JSON
+    POST /api/v1/admin/gdpr/deletion-request     - Submit a new deletion request
+    GET  /api/v1/admin/gdpr/deletion-requests    - List past deletion requests
+    POST /api/v1/gdpr/data-subject-request       - Public: submit a DSAR (no auth)
+    GET  /api/v1/gdpr/data-subject-request/{id}  - Public: check DSAR status by email
+    GET  /api/v1/admin/gdpr/data-subject-requests - Admin: list/manage DSARs for org
 
 Registration pattern: function-based (same as scorecard_routes, admin_ops_routes)
 """
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import datetime, timezone
-from typing import Optional
-from pydantic import BaseModel
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List
+from pydantic import BaseModel, Field, EmailStr
 import json
 import io
 import zipfile
@@ -52,6 +50,14 @@ class DeletionRequestResponse(BaseModel):
     started_at: str
     completed_at: Optional[str] = None
     error: Optional[str] = None
+
+
+class DSARSubmitBody(BaseModel):
+    """Public DSAR submission body."""
+    request_type: str = Field("access", description="Type: access, rectification, erasure, restriction")
+    requestor_email: str = Field(..., description="Email of the data subject")
+    requestor_name: Optional[str] = Field(None, description="Name of the data subject")
+    notes: Optional[str] = Field(None, max_length=2000, description="Additional details")
 
 
 # ============================================================================
@@ -309,6 +315,215 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to retrieve deletion history",
+            )
+
+    # ==================================================================
+    # CMP-004: GDPR Data Subject Request — Public Submission
+    # ==================================================================
+
+    @app.post("/api/v1/gdpr/data-subject-request", tags=["GDPR"])
+    async def submit_data_subject_request(
+        body: DSARSubmitBody,
+        db: Session = Depends(get_db),
+    ):
+        """
+        Submit a GDPR Data Subject Access Request (public, no auth required).
+
+        GDPR Articles 15-18: Data subjects can request access, rectification,
+        erasure, or restriction of their personal data. The organization has
+        30 days to respond.
+        """
+        valid_types = ("access", "rectification", "erasure", "restriction")
+        if body.request_type not in valid_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid request_type. Must be one of: {', '.join(valid_types)}",
+            )
+
+        try:
+            now = datetime.now(timezone.utc)
+            due = now + timedelta(days=30)
+
+            # Try to determine org from email domain (best-effort)
+            org_id = None
+            try:
+                email_domain = body.requestor_email.split("@")[1] if "@" in body.requestor_email else None
+                if email_domain:
+                    org_row = db.execute(text("""
+                        SELECT DISTINCT o.id FROM organizations o
+                        JOIN users u ON u.organization_id = o.id
+                        WHERE u.email LIKE :domain_pattern
+                        LIMIT 1
+                    """), {"domain_pattern": f"%@{email_domain}"}).fetchone()
+                    if org_row:
+                        org_id = org_row[0]
+            except Exception:
+                pass  # Best effort — org_id can be NULL
+
+            result = db.execute(text("""
+                INSERT INTO data_subject_requests
+                    (organization_id, request_type, requestor_email, requestor_name,
+                     status, submitted_at, due_date, notes)
+                VALUES
+                    (:org_id, :req_type, :email, :name, 'pending', :now, :due, :notes)
+                RETURNING id
+            """), {
+                "org_id": org_id,
+                "req_type": body.request_type,
+                "email": body.requestor_email,
+                "name": body.requestor_name,
+                "now": now,
+                "due": due,
+                "notes": body.notes,
+            })
+            db.commit()
+            dsr_id = result.fetchone()[0]
+
+            logger.info(f"DSAR submitted: id={dsr_id}, type={body.request_type}, email={body.requestor_email}")
+
+            return {
+                "success": True,
+                "request_id": dsr_id,
+                "status": "pending",
+                "due_date": due.isoformat(),
+                "message": f"Your {body.request_type} request has been received. We will respond within 30 days.",
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"DSAR submission failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to submit data subject request",
+            )
+
+    # ==================================================================
+    # CMP-004: GDPR Data Subject Request — Public Status Check
+    # ==================================================================
+
+    @app.get("/api/v1/gdpr/data-subject-request/{request_id}", tags=["GDPR"])
+    async def check_dsar_status(
+        request_id: int,
+        email: str = Query(..., description="Requestor email for verification"),
+        db: Session = Depends(get_db),
+    ):
+        """
+        Check the status of a GDPR Data Subject Access Request (public).
+
+        The requestor must provide their email to verify identity.
+        """
+        try:
+            row = db.execute(text("""
+                SELECT id, request_type, requestor_email, requestor_name,
+                       status, submitted_at, due_date, result_summary,
+                       identity_verified
+                FROM data_subject_requests
+                WHERE id = :id AND requestor_email = :email
+            """), {"id": request_id, "email": email}).fetchone()
+
+            if not row:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Request not found or email does not match",
+                )
+
+            return {
+                "request_id": row[0],
+                "request_type": row[1],
+                "requestor_email": row[2],
+                "requestor_name": row[3],
+                "status": row[4],
+                "submitted_at": row[5].isoformat() if row[5] else None,
+                "due_date": row[6].isoformat() if row[6] else None,
+                "result_summary": row[7],
+                "identity_verified": row[8],
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"DSAR status check failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to check request status",
+            )
+
+    # ==================================================================
+    # CMP-004: Admin DSAR Management
+    # ==================================================================
+
+    @app.get("/api/v1/admin/gdpr/data-subject-requests", tags=["GDPR"])
+    async def list_data_subject_requests(
+        status_filter: Optional[str] = Query(None, alias="status", description="Filter by status"),
+        limit: int = Query(50, ge=1, le=200),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        List and manage GDPR Data Subject Requests for the organization (admin only).
+        """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
+        org_id = getattr(current_user, 'organization_id', None)
+
+        try:
+            params = {"limit": limit}
+            where_clauses = []
+
+            if org_id:
+                where_clauses.append("(organization_id = :org_id OR organization_id IS NULL)")
+                params["org_id"] = org_id
+
+            if status_filter:
+                where_clauses.append("status = :status")
+                params["status"] = status_filter
+
+            where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+
+            rows = db.execute(text(f"""
+                SELECT id, organization_id, request_type, requestor_email,
+                       requestor_name, status, submitted_at, due_date,
+                       handled_by_id, handled_at, notes, result_summary,
+                       identity_verified
+                FROM data_subject_requests
+                {where_sql}
+                ORDER BY submitted_at DESC
+                LIMIT :limit
+            """), params).fetchall()
+
+            requests = []
+            for row in rows:
+                requests.append({
+                    "id": row[0],
+                    "organization_id": row[1],
+                    "request_type": row[2],
+                    "requestor_email": row[3],
+                    "requestor_name": row[4],
+                    "status": row[5],
+                    "submitted_at": row[6].isoformat() if row[6] else None,
+                    "due_date": row[7].isoformat() if row[7] else None,
+                    "handled_by_id": row[8],
+                    "handled_at": row[9].isoformat() if row[9] else None,
+                    "notes": row[10],
+                    "result_summary": row[11],
+                    "identity_verified": row[12],
+                    "is_overdue": row[7] < datetime.now(timezone.utc) if row[7] and row[5] in ("pending", "in_progress") else False,
+                })
+
+            overdue_count = sum(1 for r in requests if r.get("is_overdue"))
+
+            return {
+                "total": len(requests),
+                "overdue_count": overdue_count,
+                "requests": requests,
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"DSAR list failed: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to list data subject requests",
             )
 
     logger.info("GDPR/CCPA data deletion routes loaded")

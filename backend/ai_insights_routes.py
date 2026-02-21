@@ -4,7 +4,7 @@ FastAPI routes for AI-powered profitability insights.
 
 from datetime import date, datetime
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from database import get_db
@@ -16,9 +16,13 @@ from services.ai_insights_service import AIInsightsService
 router = APIRouter(prefix="/api/v1/profitability/ai", tags=["profitability-ai"], dependencies=[Depends(require_auth)])
 
 
-# Helper to get organization (integrate with your auth)
-def get_organization_id(db: Session) -> int:
-    return 1
+# Helper to get organization from tenant context middleware
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 # ============ Request/Response Models ============
@@ -43,7 +47,8 @@ class ScenarioCompareRequest(BaseModel):
 
 @router.post("/query")
 async def query_profitability(
-    request: NaturalLanguageQuery,
+    request: Request,
+    body: NaturalLanguageQuery,
     db: Session = Depends(get_db)
 ):
     """
@@ -55,19 +60,19 @@ async def query_profitability(
     - "Should we hire another processor?"
     - "How does this month compare to last month?"
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = AIInsightsService(db, org_id)
 
     # Parse month
     month = None
-    if request.month:
+    if body.month:
         try:
-            month = datetime.strptime(request.month, "%Y-%m").date()
+            month = datetime.strptime(body.month, "%Y-%m").date()
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
 
     try:
-        result = service.query_natural_language(request.question, month)
+        result = service.query_natural_language(body.question, month)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail="AI query failed")
@@ -75,11 +80,12 @@ async def query_profitability(
 
 @router.get("/recommendations")
 async def get_recommendations(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
     """Get AI-powered strategic recommendations based on profitability data."""
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = AIInsightsService(db, org_id)
 
     month_date = None
@@ -102,7 +108,8 @@ async def get_recommendations(
 
 @router.post("/hiring-analysis")
 async def analyze_hiring(
-    request: HiringAnalysisRequest,
+    request: Request,
+    body: HiringAnalysisRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -111,20 +118,20 @@ async def analyze_hiring(
     Analyzes ROI, break-even timeline, and provides a recommendation
     based on current role performance data.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = AIInsightsService(db, org_id)
 
     month_date = None
-    if request.month:
+    if body.month:
         try:
-            month_date = datetime.strptime(request.month, "%Y-%m").date()
+            month_date = datetime.strptime(body.month, "%Y-%m").date()
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid month format")
 
     try:
         result = service.analyze_hiring_decision(
-            request.role_name,
-            request.salary,
+            body.role_name,
+            body.salary,
             month_date
         )
         return result
@@ -134,6 +141,7 @@ async def analyze_hiring(
 
 @router.get("/executive-digest")
 async def get_executive_digest(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -141,7 +149,7 @@ async def get_executive_digest(
     Generate an executive digest email content with key metrics,
     insights, and recommendations.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = AIInsightsService(db, org_id)
 
     month_date = None
@@ -160,6 +168,7 @@ async def get_executive_digest(
 
 @router.get("/anomalies")
 async def detect_anomalies(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -168,7 +177,7 @@ async def detect_anomalies(
 
     Returns list of detected anomalies with severity and suggested actions.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = AIInsightsService(db, org_id)
 
     month_date = None
@@ -192,7 +201,8 @@ async def detect_anomalies(
 
 @router.post("/compare-scenarios")
 async def compare_scenarios(
-    request: ScenarioCompareRequest,
+    request: Request,
+    body: ScenarioCompareRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -202,18 +212,18 @@ async def compare_scenarios(
     - {"name": "Hire 1 LO", "cost": 8500, "expected_loans": 10}
     - {"name": "Increase marketing 20%", "cost": 2000, "expected_leads": 50}
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = AIInsightsService(db, org_id)
 
     month_date = None
-    if request.month:
+    if body.month:
         try:
-            month_date = datetime.strptime(request.month, "%Y-%m").date()
+            month_date = datetime.strptime(body.month, "%Y-%m").date()
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid month format")
 
     try:
-        result = service.compare_scenarios(request.scenarios, month_date)
+        result = service.compare_scenarios(body.scenarios, month_date)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail="Scenario comparison failed")
@@ -223,6 +233,7 @@ async def compare_scenarios(
 
 @router.get("/quick-insights")
 async def get_quick_insights(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -230,7 +241,7 @@ async def get_quick_insights(
     Get quick AI-generated insights without detailed analysis.
     Faster response for dashboard widgets.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = AIInsightsService(db, org_id)
 
     month_date = None
