@@ -54,42 +54,77 @@ def maybe_promote_loan_to_mum(
     # from upstream SLA/reconciliation operations on the caller's session.
     fresh_db = _get_fresh_session()
     try:
-        loan = fresh_db.query(Loan).filter(Loan.id == loan_id).first()
-        if not loan:
+        # Verify connection is clean before doing anything
+        try:
+            fresh_db.execute(text("SELECT 1"))
+            logger.debug(f"MUM promotion loan {loan_id}: fresh session health check OK")
+        except Exception as e:
+            logger.warning(f"MUM promotion loan {loan_id}: fresh session poisoned on checkout, resetting: {e}")
+            fresh_db.rollback()
+
+        # Use raw SQL for loan lookup to avoid ORM column mismatches poisoning the session
+        loan_row = fresh_db.execute(text("""
+            SELECT id, stage, funded_date, closing_date, loan_number,
+                   loan_officer_id, organization_id, amount, rate,
+                   appraisal_value, borrower_name, borrower_email, borrower_phone,
+                   first_payment_date, term, property_state, property_zip,
+                   program, loan_officer_name, loan_officer_email,
+                   processor, processor_email, underwriter, underwriter_email,
+                   closer, closer_email
+            FROM loans WHERE id = :loan_id
+        """), {"loan_id": loan_id}).fetchone()
+
+        if not loan_row:
             logger.warning(f"MUM promotion: Loan {loan_id} not found")
             return None
 
+        # Map row to dict for easier access
+        cols = ['id', 'stage', 'funded_date', 'closing_date', 'loan_number',
+                'loan_officer_id', 'organization_id', 'amount', 'rate',
+                'appraisal_value', 'borrower_name', 'borrower_email', 'borrower_phone',
+                'first_payment_date', 'term', 'property_state', 'property_zip',
+                'program', 'loan_officer_name', 'loan_officer_email',
+                'processor', 'processor_email', 'underwriter', 'underwriter_email',
+                'closer', 'closer_email']
+        loan = dict(zip(cols, loan_row))
+
         # Check eligibility: funded_date, closing_date, or stage == FUNDED
-        stage_str = str(loan.stage).upper() if loan.stage else ""
-        is_funded = bool(loan.funded_date) or bool(loan.closing_date) or stage_str == "FUNDED"
+        stage_str = str(loan['stage']).upper() if loan['stage'] else ""
+        is_funded = bool(loan['funded_date']) or bool(loan['closing_date']) or stage_str == "FUNDED"
         if not is_funded:
             return None
 
-        # Idempotent check: skip if MUM client already exists for this loan_number
-        if loan.loan_number:
-            existing = fresh_db.query(MUMClient).filter(
-                MUMClient.loan_number == loan.loan_number
-            ).first()
-            if existing:
-                logger.info(f"MUM client already exists for loan {loan.loan_number} (mum_id={existing.id})")
-                return existing.id
+        # Idempotent check: use raw SQL to avoid ORM SELECT issues
+        if loan['loan_number']:
+            try:
+                existing_row = fresh_db.execute(text("""
+                    SELECT id FROM mum_clients WHERE loan_number = :ln LIMIT 1
+                """), {"ln": loan['loan_number']}).fetchone()
+                if existing_row:
+                    logger.info(f"MUM client already exists for loan {loan['loan_number']} (mum_id={existing_row[0]})")
+                    return existing_row[0]
+            except Exception as e:
+                logger.warning(f"MUM idempotent check failed for loan {loan_id}: {e}")
+                try:
+                    fresh_db.rollback()
+                except Exception:
+                    pass
 
         # Determine the owner: use the loan officer, fall back to the triggering user
-        owner_user_id = loan.loan_officer_id or user_id
-        org_id = getattr(loan, 'organization_id', None)
+        owner_user_id = loan['loan_officer_id'] or user_id
+        org_id = loan['organization_id']
 
         # Determine funded date
-        funded_date = loan.funded_date or loan.closing_date or datetime.now(timezone.utc)
-        if funded_date.tzinfo is None:
+        funded_date = loan['funded_date'] or loan['closing_date'] or datetime.now(timezone.utc)
+        if hasattr(funded_date, 'tzinfo') and funded_date.tzinfo is None:
             funded_date = funded_date.replace(tzinfo=timezone.utc)
         days_since = (datetime.now(timezone.utc) - funded_date).days
 
         # Get loan amount
-        loan_amount = loan.amount or 0.0
+        loan_amount = loan['amount'] or 0.0
 
-        # Get interest rate: try ORM field first, then raw SQL fallback
-        # Loan model has 'rate' but CBM sync writes 'interest_rate' column directly
-        loan_rate = loan.rate or 0.0
+        # Get interest rate
+        loan_rate = loan['rate'] or 0.0
         if not loan_rate:
             try:
                 row = fresh_db.execute(
@@ -99,23 +134,24 @@ def maybe_promote_loan_to_mum(
                 if row and row[0]:
                     loan_rate = float(row[0])
             except Exception:
-                pass
+                try:
+                    fresh_db.rollback()
+                except Exception:
+                    pass
 
         # Estimate property value (80% LTV assumption)
-        estimated_property_value = loan.appraisal_value or (loan_amount * 1.25 if loan_amount else 0.0)
+        estimated_property_value = loan['appraisal_value'] or (loan_amount * 1.25 if loan_amount else 0.0)
 
         # Build client name — resolve Salesforce IDs to real names
-        client_name = loan.borrower_name or ""
-        # Detect Salesforce IDs (e.g., 003TN000004OGfhYAG, 0038c00002mT5G3AAK)
+        client_name = loan['borrower_name'] or ""
         _looks_like_sf_id = (
             client_name
             and len(client_name) >= 15
             and len(client_name) <= 18
             and client_name[:3].isalnum()
-            and not " " in client_name
+            and " " not in client_name
         )
         if not client_name or _looks_like_sf_id:
-            # Try to resolve from the associated lead
             try:
                 lead_row = fresh_db.execute(
                     text("""
@@ -130,127 +166,142 @@ def maybe_promote_loan_to_mum(
                 if lead_row and (lead_row[0] or lead_row[1]):
                     client_name = f"{lead_row[0] or ''} {lead_row[1] or ''}".strip()
             except Exception:
-                pass
+                try:
+                    fresh_db.rollback()
+                except Exception:
+                    pass
         if not client_name or _looks_like_sf_id:
-            client_name = f"Client - {loan.loan_number}"
+            client_name = f"Client - {loan['loan_number']}"
 
         # First payment date
-        first_payment = loan.first_payment_date or (funded_date + timedelta(days=45))
-        if first_payment.tzinfo is None:
+        first_payment = loan['first_payment_date'] or (funded_date + timedelta(days=45))
+        if hasattr(first_payment, 'tzinfo') and first_payment.tzinfo is None:
             first_payment = first_payment.replace(tzinfo=timezone.utc)
 
         # Copy term and property location from loan
-        loan_term = getattr(loan, 'term', None) or 360
-        prop_state = getattr(loan, 'property_state', None)
-        prop_zip = getattr(loan, 'property_zip', None)
+        loan_term = loan['term'] or 360
+        prop_state = loan['property_state']
+        prop_zip = loan['property_zip']
 
         # Compute maturity date from first payment + term
         maturity = first_payment + timedelta(days=loan_term * 30)  # Approximate
 
-        # Create MUM client
-        mum_client = MUMClient(
-            client_name=client_name,
-            email=loan.borrower_email,
-            phone=loan.borrower_phone,
-            loan_number=loan.loan_number,
-            original_close_date=funded_date,
-            closing_date=funded_date,
-            first_payment_date=first_payment,
-            days_since_funding=days_since,
-            original_rate=loan_rate,
-            current_rate=loan_rate,
-            interest_rate=loan_rate,
-            original_loan_amount=loan_amount,
-            current_loan_amount=loan_amount,
-            appraisal_value_at_closing=estimated_property_value or 0.0,
-            current_property_value=estimated_property_value or 0.0,
-            loan_balance=loan_amount,
-            refinance_opportunity=False,
-            engagement_score=100,
-            status="Active",
-            notes=f"Auto-created from funded loan on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}. Program: {loan.program or 'N/A'}",
-            loan_officer=loan.loan_officer_name,
-            loan_officer_email=loan.loan_officer_email,
-            processor=loan.processor,
-            processor_email=loan.processor_email,
-            underwriter=loan.underwriter,
-            underwriter_email=loan.underwriter_email,
-            closer=loan.closer,
-            closer_email=loan.closer_email,
-            user_id=owner_user_id,
-            organization_id=org_id,
-            term=loan_term,
-            maturity_date=maturity,
-            property_state=prop_state,
-            property_zip=prop_zip,
-        )
+        # INSERT using raw SQL to avoid ORM column mismatch issues
+        logger.info(f"MUM promotion: inserting MUM client for loan {loan_id} ({client_name})")
+        result = fresh_db.execute(text("""
+            INSERT INTO mum_clients (
+                organization_id, client_name, email, phone, loan_number,
+                original_close_date, closing_date, first_payment_date,
+                days_since_funding, original_rate, current_rate, interest_rate,
+                original_loan_amount, current_loan_amount,
+                appraisal_value_at_closing, current_property_value,
+                loan_balance, refinance_opportunity, engagement_score,
+                status, notes,
+                loan_officer, loan_officer_email,
+                processor, processor_email,
+                underwriter, underwriter_email,
+                closer, closer_email,
+                user_id, term, maturity_date,
+                property_state, property_zip
+            ) VALUES (
+                :org_id, :client_name, :email, :phone, :loan_number,
+                :original_close_date, :closing_date, :first_payment_date,
+                :days_since_funding, :original_rate, :current_rate, :interest_rate,
+                :original_loan_amount, :current_loan_amount,
+                :appraisal_value_at_closing, :current_property_value,
+                :loan_balance, :refinance_opportunity, :engagement_score,
+                :status, :notes,
+                :loan_officer, :loan_officer_email,
+                :processor, :processor_email,
+                :underwriter, :underwriter_email,
+                :closer, :closer_email,
+                :user_id, :term, :maturity_date,
+                :property_state, :property_zip
+            ) RETURNING id
+        """), {
+            "org_id": org_id,
+            "client_name": client_name,
+            "email": loan['borrower_email'],
+            "phone": loan['borrower_phone'],
+            "loan_number": loan['loan_number'],
+            "original_close_date": funded_date,
+            "closing_date": funded_date,
+            "first_payment_date": first_payment,
+            "days_since_funding": days_since,
+            "original_rate": loan_rate,
+            "current_rate": loan_rate,
+            "interest_rate": loan_rate,
+            "original_loan_amount": loan_amount,
+            "current_loan_amount": loan_amount,
+            "appraisal_value_at_closing": estimated_property_value or 0.0,
+            "current_property_value": estimated_property_value or 0.0,
+            "loan_balance": loan_amount,
+            "refinance_opportunity": False,
+            "engagement_score": 100,
+            "status": "Active",
+            "notes": f"Auto-created from funded loan on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}. Program: {loan['program'] or 'N/A'}",
+            "loan_officer": loan['loan_officer_name'],
+            "loan_officer_email": loan['loan_officer_email'],
+            "processor": loan['processor'],
+            "processor_email": loan['processor_email'],
+            "underwriter": loan['underwriter'],
+            "underwriter_email": loan['underwriter_email'],
+            "closer": loan['closer'],
+            "closer_email": loan['closer_email'],
+            "user_id": owner_user_id,
+            "term": loan_term,
+            "maturity_date": maturity,
+            "property_state": prop_state,
+            "property_zip": prop_zip,
+        })
 
-        fresh_db.add(mum_client)
-        fresh_db.flush()
+        mum_id_row = result.fetchone()
+        mum_client_id = mum_id_row[0] if mum_id_row else None
+
+        if not mum_client_id:
+            logger.error(f"MUM INSERT returned no ID for loan {loan_id}")
+            fresh_db.rollback()
+            return None
 
         logger.info(
-            f"Created MUM client {mum_client.id} from funded loan {loan.loan_number} "
+            f"Created MUM client {mum_client_id} from funded loan {loan['loan_number']} "
             f"({client_name})"
         )
 
         # Create post-close welcome task
-        welcome_task = Task(
-            title=f"Post-Close Welcome Call - {client_name}",
-            description=f"""Congratulations! {client_name}'s loan has funded!
-
-Action items:
-1. Make welcome call to congratulate and thank them
-2. Set up annual mortgage review (AMR) reminder
-3. Request Google/Zillow review
-4. Ask for referrals
-5. Add to retention marketing campaigns
-
-Loan Details:
-- Loan #: {loan.loan_number}
-- Program: {loan.program or 'N/A'}
-- Amount: ${loan_amount:,.2f}
-- Rate: {loan_rate}%
-- Close Date: {funded_date.strftime('%Y-%m-%d')}""",
-            priority="high",
-            loan_id=loan.id,
-            owner_id=owner_user_id,
-            related_contact_name=client_name,
-            related_type="post_close",
-            due_date=datetime.now(timezone.utc) + timedelta(days=1),
-            status="pending",
-        )
-        fresh_db.add(welcome_task)
+        fresh_db.execute(text("""
+            INSERT INTO tasks (title, description, priority, loan_id, owner_id,
+                             related_contact_name, related_type, due_date, status)
+            VALUES (:title, :desc, 'high', :loan_id, :owner_id,
+                    :contact, 'post_close', :due_date, 'pending')
+        """), {
+            "title": f"Post-Close Welcome Call - {client_name}",
+            "desc": f"Congratulations! {client_name}'s loan has funded!\n\nAction items:\n1. Make welcome call\n2. Set up AMR reminder\n3. Request reviews\n4. Ask for referrals\n5. Add to retention campaigns\n\nLoan #: {loan['loan_number']}\nAmount: ${loan_amount:,.2f}\nRate: {loan_rate}%",
+            "loan_id": loan_id,
+            "owner_id": owner_user_id,
+            "contact": client_name,
+            "due_date": datetime.now(timezone.utc) + timedelta(days=1),
+        })
 
         # Create AMR reminder task for 11 months from now
-        amr_task = Task(
-            title=f"Annual Mortgage Review Due - {client_name}",
-            description=f"""Annual Mortgage Review (AMR) is coming up for {client_name}.
+        fresh_db.execute(text("""
+            INSERT INTO tasks (title, description, priority, loan_id, owner_id,
+                             related_contact_name, related_type, due_date, status)
+            VALUES (:title, :desc, 'medium', :loan_id, :owner_id,
+                    :contact, 'amr', :due_date, 'pending')
+        """), {
+            "title": f"Annual Mortgage Review Due - {client_name}",
+            "desc": f"AMR coming up for {client_name}.\n\nReview: rates vs {loan_rate}%, refi opps, home value, life changes.\n\nLoan #: {loan['loan_number']}\nOriginal: ${loan_amount:,.2f} at {loan_rate}%",
+            "loan_id": loan_id,
+            "owner_id": owner_user_id,
+            "contact": client_name,
+            "due_date": datetime.now(timezone.utc) + timedelta(days=335),
+        })
 
-Review items:
-1. Check current market rates vs their rate ({loan_rate}%)
-2. Evaluate refinance opportunities
-3. Review home value appreciation
-4. Discuss any life changes affecting mortgage needs
-5. Explore HELOC/cash-out options if applicable
-
-Original Loan:
-- Loan #: {loan.loan_number}
-- Original Amount: ${loan_amount:,.2f}
-- Rate: {loan_rate}%""",
-            priority="medium",
-            loan_id=loan.id,
-            owner_id=owner_user_id,
-            related_contact_name=client_name,
-            related_type="amr",
-            due_date=datetime.now(timezone.utc) + timedelta(days=335),
-            status="pending",
-        )
-        fresh_db.add(amr_task)
-
-        logger.info(f"Created post-close tasks for MUM client {mum_client.id}")
+        logger.info(f"Created post-close tasks for MUM client {mum_client_id}")
 
         fresh_db.commit()
-        return mum_client.id
+        return mum_client_id
 
     except Exception as e:
         logger.error(f"Error creating MUM client from loan {loan_id}: {e}")
