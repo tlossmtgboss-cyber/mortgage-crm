@@ -56,6 +56,7 @@ def create_audit_entry(
     ip_address: Optional[str] = None,
     session_id: Optional[str] = None,
     reason: Optional[str] = None,
+    organization_id: Optional[int] = None,
 ) -> int:
     """
     Create a hash-chained audit log entry.
@@ -70,14 +71,23 @@ def create_audit_entry(
     before_json = json.dumps(before_state, sort_keys=True, default=str) if before_state else None
     after_json = json.dumps(after_state, sort_keys=True, default=str) if after_state else None
 
-    # Get previous entry's hash and sequence number
-    prev = db.execute(text("""
-        SELECT sequence_number, record_hash
-        FROM audit_logs
-        WHERE sequence_number IS NOT NULL
-        ORDER BY sequence_number DESC
-        LIMIT 1
-    """)).fetchone()
+    # Get previous entry's hash and sequence number, scoped to org if provided
+    if organization_id:
+        prev = db.execute(text("""
+            SELECT sequence_number, record_hash
+            FROM audit_logs
+            WHERE sequence_number IS NOT NULL AND organization_id = :org_id
+            ORDER BY sequence_number DESC
+            LIMIT 1
+        """), {"org_id": organization_id}).fetchone()
+    else:
+        prev = db.execute(text("""
+            SELECT sequence_number, record_hash
+            FROM audit_logs
+            WHERE sequence_number IS NOT NULL
+            ORDER BY sequence_number DESC
+            LIMIT 1
+        """)).fetchone()
 
     if prev:
         prev_seq = prev[0]
@@ -99,6 +109,7 @@ def create_audit_entry(
     )
 
     entry = AuditLog(
+        organization_id=organization_id,
         user_id=user_id,
         changed_by_id=changed_by_id,
         change_type=change_type,
@@ -123,21 +134,37 @@ def create_audit_entry(
     return entry.id
 
 
-def verify_audit_chain(db: Session, limit: int = 1000) -> Dict[str, Any]:
+def verify_audit_chain(db: Session, limit: int = 1000, organization_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Verify the integrity of the audit log hash chain.
 
+    Args:
+        db: Database session
+        limit: Max entries to verify
+        organization_id: If provided, only verify chain for this organization
+
     Returns a dict with verification results.
     """
-    rows = db.execute(text("""
-        SELECT id, user_id, change_type, entity_type, timestamp,
-               before_state, after_state, sequence_number,
-               record_hash, previous_hash
-        FROM audit_logs
-        WHERE sequence_number IS NOT NULL
-        ORDER BY sequence_number ASC
-        LIMIT :limit
-    """), {"limit": limit}).fetchall()
+    if organization_id:
+        rows = db.execute(text("""
+            SELECT id, user_id, change_type, entity_type, timestamp,
+                   before_state, after_state, sequence_number,
+                   record_hash, previous_hash
+            FROM audit_logs
+            WHERE sequence_number IS NOT NULL AND organization_id = :org_id
+            ORDER BY sequence_number ASC
+            LIMIT :limit
+        """), {"limit": limit, "org_id": organization_id}).fetchall()
+    else:
+        rows = db.execute(text("""
+            SELECT id, user_id, change_type, entity_type, timestamp,
+                   before_state, after_state, sequence_number,
+                   record_hash, previous_hash
+            FROM audit_logs
+            WHERE sequence_number IS NOT NULL
+            ORDER BY sequence_number ASC
+            LIMIT :limit
+        """), {"limit": limit}).fetchall()
 
     if not rows:
         return {"verified": True, "count": 0, "message": "No hash-chained entries found"}

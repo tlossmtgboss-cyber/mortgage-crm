@@ -9,7 +9,7 @@ Provides endpoints for:
 - Budget copying and rollover
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import Optional, List
@@ -136,11 +136,12 @@ class ApprovalRequest(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
-    if current_user and hasattr(current_user, 'organization_id') and current_user.organization_id:
-        return current_user.organization_id
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def get_user_id(current_user=None) -> int:
@@ -226,6 +227,7 @@ def get_actual_for_account(
 
 @router.get("")
 async def list_budgets(
+    request: Request,
     fiscal_year: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
@@ -233,7 +235,7 @@ async def list_budgets(
     db: Session = Depends(get_db),
 ):
     """List budget templates."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(BudgetTemplate).filter(
         BudgetTemplate.organization_id == org_id
@@ -260,11 +262,12 @@ async def list_budgets(
 
 @router.get("/active")
 async def get_active_budget(
+    request: Request,
     fiscal_year: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Get the active budget for a fiscal year."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     year = fiscal_year or date.today().year
 
     budget = db.query(BudgetTemplate).filter(
@@ -288,12 +291,13 @@ async def get_active_budget(
 
 @router.get("/{budget_id}")
 async def get_budget(
+    request: Request,
     budget_id: str,
     include_items: bool = Query(True),
     db: Session = Depends(get_db),
 ):
     """Get a budget template with optional items."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -311,12 +315,13 @@ async def get_budget(
 
 @router.post("")
 async def create_budget(
+    request: Request,
     data: BudgetCreate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Create a new budget template."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     # Check for duplicate
@@ -363,13 +368,14 @@ async def create_budget(
 
 @router.put("/{budget_id}")
 async def update_budget(
+    request: Request,
     budget_id: str,
     data: BudgetUpdate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Update a budget template."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
@@ -412,12 +418,13 @@ async def update_budget(
 
 @router.post("/{budget_id}/submit")
 async def submit_budget_for_approval(
+    request: Request,
     budget_id: str,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Submit a budget for approval."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
@@ -460,13 +467,14 @@ async def submit_budget_for_approval(
 
 @router.post("/{budget_id}/approve")
 async def approve_budget(
+    request: Request,
     budget_id: str,
     data: ApprovalRequest,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Approve or reject a budget."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
@@ -519,12 +527,13 @@ async def approve_budget(
 
 @router.post("/{budget_id}/activate")
 async def activate_budget(
+    request: Request,
     budget_id: str,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Activate an approved budget (makes it the active budget for the year)."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
@@ -568,12 +577,13 @@ async def activate_budget(
 
 @router.post("/{budget_id}/close")
 async def close_budget(
+    request: Request,
     budget_id: str,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Close a budget (end of year or replaced by new budget)."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     budget = db.query(BudgetTemplate).filter(
@@ -606,11 +616,12 @@ async def close_budget(
 
 @router.delete("/{budget_id}")
 async def delete_budget(
+    request: Request,
     budget_id: str,
     db: Session = Depends(get_db),
 ):
     """Delete a draft budget."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -641,13 +652,14 @@ async def delete_budget(
 
 @router.get("/{budget_id}/items")
 async def list_budget_items(
+    request: Request,
     budget_id: str,
     account_type: Optional[str] = Query(None),
     department_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """List budget items for a budget."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -686,12 +698,13 @@ async def list_budget_items(
 
 @router.post("/{budget_id}/items")
 async def create_budget_item(
+    request: Request,
     budget_id: str,
     data: BudgetItemCreate,
     db: Session = Depends(get_db),
 ):
     """Create a budget line item."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -764,12 +777,13 @@ async def create_budget_item(
 
 @router.post("/{budget_id}/items/bulk")
 async def create_budget_items_bulk(
+    request: Request,
     budget_id: str,
     data: BudgetItemBulkCreate,
     db: Session = Depends(get_db),
 ):
     """Create multiple budget items at once."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -845,13 +859,14 @@ async def create_budget_items_bulk(
 
 @router.put("/{budget_id}/items/{item_id}")
 async def update_budget_item(
+    request: Request,
     budget_id: str,
     item_id: str,
     data: BudgetItemUpdate,
     db: Session = Depends(get_db),
 ):
     """Update a budget item."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -895,13 +910,14 @@ async def update_budget_item(
 
 @router.post("/{budget_id}/items/{item_id}/distribute")
 async def distribute_amount(
+    request: Request,
     budget_id: str,
     item_id: str,
     data: DistributeAmountRequest,
     db: Session = Depends(get_db),
 ):
     """Distribute an annual amount across periods."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -969,12 +985,13 @@ async def distribute_amount(
 
 @router.delete("/{budget_id}/items/{item_id}")
 async def delete_budget_item(
+    request: Request,
     budget_id: str,
     item_id: str,
     db: Session = Depends(get_db),
 ):
     """Delete a budget item."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -1014,12 +1031,13 @@ async def delete_budget_item(
 
 @router.post("/copy")
 async def copy_budget(
+    request: Request,
     data: CopyBudgetRequest,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Copy a budget to create a new one (useful for year-over-year planning)."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     source = db.query(BudgetTemplate).filter(
@@ -1111,13 +1129,14 @@ async def copy_budget(
 
 @router.get("/{budget_id}/variance")
 async def get_budget_variance(
+    request: Request,
     budget_id: str,
     through_period: Optional[int] = Query(None, ge=1, le=12),
     department_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Get detailed budget vs actual variance for a budget."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -1246,11 +1265,12 @@ async def get_budget_variance(
 
 @router.get("/{budget_id}/forecast")
 async def get_budget_forecast(
+    request: Request,
     budget_id: str,
     db: Session = Depends(get_db),
 ):
     """Forecast year-end results based on YTD actuals and trends."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -1350,11 +1370,12 @@ async def get_budget_forecast(
 
 @router.get("/summary")
 async def get_budgeting_summary(
+    request: Request,
     fiscal_year: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Get budgeting summary for dashboard."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     year = fiscal_year or date.today().year
 
     # Get active budget

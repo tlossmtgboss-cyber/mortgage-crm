@@ -5,7 +5,7 @@ Provides CRUD operations for managing journal entries,
 posting, voiding, and reversing entries.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
@@ -129,11 +129,12 @@ class ReverseEntryRequest(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
-    if current_user and hasattr(current_user, 'organization_id') and current_user.organization_id:
-        return current_user.organization_id
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def get_user_id(current_user=None) -> int:
@@ -216,6 +217,7 @@ def log_audit(db: Session, org_id: int, user_id: int, action: str,
 
 @router.get("")
 async def list_journal_entries(
+    request: Request,
     status: Optional[str] = Query(None, description="Filter by status"),
     entry_type: Optional[str] = Query(None, description="Filter by entry type"),
     start_date: Optional[date] = Query(None, description="Filter from date"),
@@ -226,7 +228,7 @@ async def list_journal_entries(
     db: Session = Depends(get_db),
 ):
     """List journal entries with filters."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(JournalEntry).filter(
         JournalEntry.organization_id == org_id
@@ -267,11 +269,12 @@ async def list_journal_entries(
 
 @router.get("/{entry_id}")
 async def get_journal_entry(
+    request: Request,
     entry_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single journal entry with lines."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     entry = db.query(JournalEntry).filter(
         JournalEntry.id == entry_id,
@@ -289,13 +292,14 @@ async def get_journal_entry(
 
 @router.post("")
 async def create_journal_entry(
+    request: Request,
     data: JournalEntryCreate,
     auto_post: bool = Query(False, description="Automatically post the entry"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Create a new journal entry."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     # Generate entry number
@@ -390,13 +394,14 @@ async def create_journal_entry(
 
 @router.put("/{entry_id}")
 async def update_journal_entry(
+    request: Request,
     entry_id: str,
     data: JournalEntryUpdate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Update a draft journal entry."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     entry = db.query(JournalEntry).filter(
@@ -473,13 +478,14 @@ async def update_journal_entry(
 
 @router.post("/{entry_id}/post")
 async def post_journal_entry(
+    request: Request,
     entry_id: str,
     data: PostEntryRequest,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Post a draft journal entry."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     entry = db.query(JournalEntry).filter(
@@ -522,13 +528,14 @@ async def post_journal_entry(
 
 @router.post("/{entry_id}/void")
 async def void_journal_entry(
+    request: Request,
     entry_id: str,
     data: VoidEntryRequest,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Void a posted journal entry."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     entry = db.query(JournalEntry).filter(
@@ -575,13 +582,14 @@ async def void_journal_entry(
 
 @router.post("/{entry_id}/reverse")
 async def reverse_journal_entry(
+    request: Request,
     entry_id: str,
     data: ReverseEntryRequest,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """Create a reversing entry for a posted journal entry."""
-    org_id = get_organization_id(current_user)
+    org_id = get_organization_id(request)
     user_id = get_user_id(current_user)
 
     original = db.query(JournalEntry).filter(
@@ -666,11 +674,12 @@ async def reverse_journal_entry(
 
 @router.get("/summary/trial-balance")
 async def get_trial_balance(
+    request: Request,
     as_of_date: Optional[date] = Query(None, description="Trial balance as of date"),
     db: Session = Depends(get_db),
 ):
     """Generate trial balance report."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     as_of = as_of_date or date.today()
 
     # Get all active accounts with their balances

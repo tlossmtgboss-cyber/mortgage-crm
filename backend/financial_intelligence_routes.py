@@ -11,7 +11,7 @@ from datetime import date, datetime, timezone
 from typing import Optional, List
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -38,9 +38,12 @@ router = APIRouter(
 # HELPER FUNCTIONS
 # ================================================================
 
-def get_organization_id(db: Session) -> int:
-    """Get organization ID for current context."""
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def parse_month(month_str: Optional[str]) -> Optional[date]:
@@ -160,6 +163,7 @@ class ErrorResponse(BaseModel):
 
 @router.get("/executive-dashboard")
 async def get_executive_dashboard(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -187,7 +191,7 @@ async def get_executive_dashboard(
     - Q20: Investment recommendations
     """
     try:
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
         service = FinancialIntelligenceService(db, org_id)
         month_date = parse_month(month)
         return service.get_executive_dashboard(month_date)
@@ -208,6 +212,7 @@ async def get_executive_dashboard(
 
 @router.get("/gain-on-sale")
 async def get_gain_on_sale(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -217,26 +222,27 @@ async def get_gain_on_sale(
     Current gain-on-sale margin vs last month and last year.
     Critical for understanding pricing power and market conditions.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     month_date = parse_month(month)
     return service.get_gain_on_sale_metrics(month_date)
 
 
 @router.get("/hedge-analysis")
-async def get_hedge_analysis(db: Session = Depends(get_db)):
+async def get_hedge_analysis(request: Request, db: Session = Depends(get_db)):
     """
     **Q2: Hedge Effectiveness**
 
     Analysis of hedge effectiveness and rate risk coverage.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_hedge_analysis()
 
 
 @router.get("/product-profitability")
 async def get_product_profitability(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -245,7 +251,7 @@ async def get_product_profitability(
 
     Profitability breakdown by loan product type (Conventional, FHA, VA, etc.)
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     month_date = parse_month(month)
     return service.get_product_profitability(month_date)
@@ -253,6 +259,7 @@ async def get_product_profitability(
 
 @router.get("/cost-per-loan")
 async def get_cost_per_loan(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -266,7 +273,7 @@ async def get_cost_per_loan(
     - Overhead allocation
     """
     try:
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
         service = FinancialIntelligenceService(db, org_id)
         month_date = parse_month(month)
         return service.get_true_cost_per_loan(month_date)
@@ -282,20 +289,21 @@ async def get_cost_per_loan(
 
 
 @router.get("/cash-runway")
-async def get_cash_runway(db: Session = Depends(get_db)):
+async def get_cash_runway(request: Request, db: Session = Depends(get_db)):
     """
     **Q5: Cash Runway**
 
     Months of operating cash runway at current burn rate.
     Critical for financial planning and survival analysis.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_cash_runway()
 
 
 @router.get("/break-even")
 async def get_break_even(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -304,39 +312,40 @@ async def get_break_even(
 
     Break-even production volume at current margins.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     month_date = parse_month(month)
     return service.get_break_even_analysis(month_date)
 
 
 @router.get("/warehouse-efficiency")
-async def get_warehouse_efficiency(db: Session = Depends(get_db)):
+async def get_warehouse_efficiency(request: Request, db: Session = Depends(get_db)):
     """
     **Q7: Warehouse Efficiency**
 
     Warehouse line optimization and turn-time analysis.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_warehouse_efficiency()
 
 
 @router.get("/rate-exposure")
-async def get_rate_exposure(db: Session = Depends(get_db)):
+async def get_rate_exposure(request: Request, db: Session = Depends(get_db)):
     """
     **Q8: Rate Exposure**
 
     Exposure to rate movements (Fed cuts/raises).
     Scenario analysis for rate changes.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_rate_exposure()
 
 
 @router.get("/branch-profitability")
 async def get_branch_profitability(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -345,86 +354,87 @@ async def get_branch_profitability(
 
     Profitability breakdown by branch, team, or region.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     month_date = parse_month(month)
     return service.get_branch_profitability(month_date)
 
 
 @router.get("/msr-status")
-async def get_msr_status(db: Session = Depends(get_db)):
+async def get_msr_status(request: Request, db: Session = Depends(get_db)):
     """
     **Q10: MSR Status**
 
     MSR portfolio value, performance, and status.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_msr_status()
 
 
 @router.get("/pricing-analysis")
-async def get_pricing_analysis(db: Session = Depends(get_db)):
+async def get_pricing_analysis(request: Request, db: Session = Depends(get_db)):
     """
     **Q11: Pricing Analysis**
 
     Pricing competitiveness and lost deal analysis.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_pricing_analysis()
 
 
 @router.get("/cash-forecast")
-async def get_cash_forecast(db: Session = Depends(get_db)):
+async def get_cash_forecast(request: Request, db: Session = Depends(get_db)):
     """
     **Q12: Cash Forecast**
 
     Cash flow forecast for 30, 60, 90 days.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_cash_forecast()
 
 
 @router.get("/liquidity")
-async def get_liquidity(db: Session = Depends(get_db)):
+async def get_liquidity(request: Request, db: Session = Depends(get_db)):
     """
     **Q13: Liquidity Analysis**
 
     Liquidity analysis for potential volume increases.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_liquidity_analysis()
 
 
 @router.get("/capital")
-async def get_capital(db: Session = Depends(get_db)):
+async def get_capital(request: Request, db: Session = Depends(get_db)):
     """
     **Q14: Capital Requirements**
 
     Capital requirements for production goals.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_capital_analysis()
 
 
 @router.get("/compliance-risks")
-async def get_compliance_risks(db: Session = Depends(get_db)):
+async def get_compliance_risks(request: Request, db: Session = Depends(get_db)):
     """
     **Q15: Compliance Risks**
 
     Compliance and regulatory risk exposure assessment.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_compliance_exposure()
 
 
 @router.get("/tech-roi")
 async def get_tech_roi(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -433,14 +443,14 @@ async def get_tech_roi(
 
     ROI analysis on technology investments.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     month_date = parse_month(month)
     return service.get_tech_roi(month_date)
 
 
 @router.get("/operational-losses")
-async def get_operational_losses(db: Session = Depends(get_db)):
+async def get_operational_losses(request: Request, db: Session = Depends(get_db)):
     """
     **Q17-19: Operational Losses**
 
@@ -449,13 +459,14 @@ async def get_operational_losses(db: Session = Depends(get_db)):
     - Lock extensions
     - Pricing concessions
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     return service.get_operational_losses()
 
 
 @router.get("/investment-recommendations")
 async def get_investment_recommendations(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
@@ -464,7 +475,7 @@ async def get_investment_recommendations(
 
     AI-powered investment and cost-cutting recommendations.
     """
-    org_id = get_organization_id(db)
+    org_id = get_organization_id(request)
     service = FinancialIntelligenceService(db, org_id)
     month_date = parse_month(month)
     return service.get_investment_recommendations(month_date)
@@ -476,6 +487,7 @@ async def get_investment_recommendations(
 
 @router.post("/loan-sales", response_model=SuccessResponse)
 async def create_loan_sale(
+    request: Request,
     loan_sale: LoanSaleCreate,
     db: Session = Depends(get_db)
 ):
@@ -487,7 +499,7 @@ async def create_loan_sale(
     try:
         from models.financial_intelligence import LoanSale
 
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
 
         sale = LoanSale(
             organization_id=org_id,
@@ -512,6 +524,7 @@ async def create_loan_sale(
 
 @router.post("/cash-position", response_model=SuccessResponse)
 async def update_cash_position(
+    request: Request,
     position: CashPositionCreate,
     db: Session = Depends(get_db)
 ):
@@ -523,7 +536,7 @@ async def update_cash_position(
     try:
         from models.financial_intelligence import CashPosition
 
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
 
         cash_position = CashPosition(
             organization_id=org_id,
@@ -546,6 +559,7 @@ async def update_cash_position(
 
 @router.post("/warehouse-lines", response_model=SuccessResponse)
 async def create_warehouse_line(
+    request: Request,
     line: WarehouseLineCreate,
     db: Session = Depends(get_db)
 ):
@@ -557,7 +571,7 @@ async def create_warehouse_line(
     try:
         from models.financial_intelligence import WarehouseLine
 
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
 
         warehouse_line = WarehouseLine(
             organization_id=org_id,
@@ -582,6 +596,7 @@ async def create_warehouse_line(
 
 @router.post("/msr-valuation", response_model=SuccessResponse)
 async def update_msr_valuation(
+    request: Request,
     valuation: MSRValuationCreate,
     db: Session = Depends(get_db)
 ):
@@ -593,7 +608,7 @@ async def update_msr_valuation(
     try:
         from models.financial_intelligence import MSRPortfolio
 
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
 
         msr_valuation = MSRPortfolio(
             organization_id=org_id,
@@ -616,6 +631,7 @@ async def update_msr_valuation(
 
 @router.post("/compliance-risk", response_model=SuccessResponse)
 async def add_compliance_risk(
+    request: Request,
     risk: ComplianceRiskCreate,
     db: Session = Depends(get_db)
 ):
@@ -627,7 +643,7 @@ async def add_compliance_risk(
     try:
         from models.financial_intelligence import ComplianceRisk
 
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
 
         compliance_risk = ComplianceRisk(
             organization_id=org_id,
@@ -652,6 +668,7 @@ async def add_compliance_risk(
 
 @router.post("/lost-deal", response_model=SuccessResponse)
 async def record_lost_deal(
+    request: Request,
     deal: LostDealCreate,
     db: Session = Depends(get_db)
 ):
@@ -663,7 +680,7 @@ async def record_lost_deal(
     try:
         from models.financial_intelligence import LostDeal
 
-        org_id = get_organization_id(db)
+        org_id = get_organization_id(request)
 
         lost_deal = LostDeal(
             organization_id=org_id,

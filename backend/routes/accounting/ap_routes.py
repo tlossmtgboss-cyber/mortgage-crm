@@ -5,7 +5,7 @@ Provides endpoints for managing vendors, bills, payments,
 approval workflows, and AP aging reports.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import Optional, List
@@ -132,9 +132,12 @@ class BatchPaymentCreate(BaseModel):
 # Helper Functions
 # =============================================================================
 
-def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def generate_bill_number(db: Session, org_id: int) -> str:
@@ -211,6 +214,7 @@ def get_ap_account(db: Session, org_id: int) -> ChartOfAccounts:
 
 @router.get("/vendors")
 async def list_vendors(
+    request: Request,
     search: Optional[str] = Query(None, description="Search by name or email"),
     is_active: Optional[bool] = Query(None),
     is_1099: Optional[bool] = Query(None),
@@ -219,7 +223,7 @@ async def list_vendors(
     db: Session = Depends(get_db),
 ):
     """List AP vendors."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(APVendor).filter(
         APVendor.organization_id == org_id
@@ -249,11 +253,12 @@ async def list_vendors(
 
 @router.get("/vendors/{vendor_id}")
 async def get_vendor(
+    request: Request,
     vendor_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single vendor with balance info."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     vendor = db.query(APVendor).filter(
         APVendor.id == vendor_id,
@@ -290,11 +295,12 @@ async def get_vendor(
 
 @router.post("/vendors")
 async def create_vendor(
+    request: Request,
     data: VendorCreate,
     db: Session = Depends(get_db),
 ):
     """Create a new AP vendor."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Check for duplicate
     existing = db.query(APVendor).filter(
@@ -329,12 +335,13 @@ async def create_vendor(
 
 @router.put("/vendors/{vendor_id}")
 async def update_vendor(
+    request: Request,
     vendor_id: str,
     data: VendorUpdate,
     db: Session = Depends(get_db),
 ):
     """Update a vendor."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     vendor = db.query(APVendor).filter(
         APVendor.id == vendor_id,
@@ -374,6 +381,7 @@ async def update_vendor(
 
 @router.get("/bills")
 async def list_bills(
+    request: Request,
     vendor_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     from_date: Optional[date] = Query(None),
@@ -384,7 +392,7 @@ async def list_bills(
     db: Session = Depends(get_db),
 ):
     """List AP bills."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(APBill).filter(
         APBill.organization_id == org_id
@@ -417,12 +425,13 @@ async def list_bills(
 
 @router.get("/bills/due")
 async def get_bills_due(
+    request: Request,
     days_ahead: int = Query(7, ge=0, le=90),
     vendor_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Get bills due within specified days."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     today = date.today()
     due_by = today + timedelta(days=days_ahead)
 
@@ -457,11 +466,12 @@ async def get_bills_due(
 
 @router.get("/bills/{bill_id}")
 async def get_bill(
+    request: Request,
     bill_id: str,
     db: Session = Depends(get_db),
 ):
     """Get a single bill with lines."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     bill = db.query(APBill).filter(
         APBill.id == bill_id,
@@ -495,11 +505,12 @@ async def get_bill(
 
 @router.post("/bills")
 async def create_bill(
+    request: Request,
     data: BillCreate,
     db: Session = Depends(get_db),
 ):
     """Create a new bill."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Validate vendor
     vendor = db.query(APVendor).filter(
@@ -614,11 +625,12 @@ async def create_bill(
 
 @router.post("/bills/{bill_id}/submit")
 async def submit_bill_for_approval(
+    request: Request,
     bill_id: str,
     db: Session = Depends(get_db),
 ):
     """Submit a bill for approval."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     bill = db.query(APBill).filter(
         APBill.id == bill_id,
@@ -652,12 +664,13 @@ async def submit_bill_for_approval(
 
 @router.post("/bills/{bill_id}/approve")
 async def approve_bill(
+    request: Request,
     bill_id: str,
     data: BillApprovalRequest,
     db: Session = Depends(get_db),
 ):
     """Approve or reject a bill."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     bill = db.query(APBill).filter(
         APBill.id == bill_id,
@@ -760,11 +773,12 @@ async def approve_bill(
 
 @router.post("/bills/{bill_id}/void")
 async def void_bill(
+    request: Request,
     bill_id: str,
     db: Session = Depends(get_db),
 ):
     """Void a bill."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     bill = db.query(APBill).filter(
         APBill.id == bill_id,
@@ -821,6 +835,7 @@ async def void_bill(
 
 @router.get("/payments")
 async def list_payments(
+    request: Request,
     vendor_id: Optional[str] = Query(None),
     from_date: Optional[date] = Query(None),
     to_date: Optional[date] = Query(None),
@@ -829,7 +844,7 @@ async def list_payments(
     db: Session = Depends(get_db),
 ):
     """List AP payments."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     query = db.query(APPayment).filter(
         APPayment.organization_id == org_id
@@ -856,11 +871,12 @@ async def list_payments(
 
 @router.post("/payments")
 async def create_payment(
+    request: Request,
     data: PaymentCreate,
     db: Session = Depends(get_db),
 ):
     """Create a payment to one or more bills."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     if not data.bills:
         raise HTTPException(status_code=400, detail="Must specify at least one bill to pay")
@@ -1036,11 +1052,12 @@ async def create_payment(
 
 @router.post("/payments/batch")
 async def create_batch_payment(
+    request: Request,
     data: BatchPaymentCreate,
     db: Session = Depends(get_db),
 ):
     """Create batch payment for all due bills."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     today = date.today()
 
     # Get bills to pay
@@ -1080,7 +1097,7 @@ async def create_batch_payment(
         bills=bill_data,
     )
 
-    return await create_payment(payment_request, db)
+    return await create_payment(request, payment_request, db)
 
 
 # =============================================================================
@@ -1089,12 +1106,13 @@ async def create_batch_payment(
 
 @router.get("/aging-report")
 async def get_aging_report(
+    request: Request,
     as_of_date: Optional[date] = Query(None, description="Report as of date"),
     vendor_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Get AP aging report."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     report_date = as_of_date or date.today()
 
     # Get open bills
@@ -1189,11 +1207,12 @@ async def get_aging_report(
 
 @router.get("/1099-report")
 async def get_1099_report(
+    request: Request,
     year: int = Query(..., description="Tax year"),
     db: Session = Depends(get_db),
 ):
     """Get 1099 vendor payment report for tax year."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     # Get 1099 vendors with payments in the year
     start_date = date(year, 1, 1)
@@ -1249,10 +1268,11 @@ async def get_1099_report(
 
 @router.get("/summary")
 async def get_ap_summary(
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Get AP summary for dashboard."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     today = date.today()
 
     # Open balance

@@ -4,7 +4,7 @@ Provides real-time updates to the frontend dashboard
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from datetime import datetime, timedelta
 import asyncio
 import logging
@@ -19,44 +19,50 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
-    """Manages WebSocket connections for real-time updates"""
+    """Manages WebSocket connections for real-time updates with tenant isolation"""
 
     def __init__(self):
-        # Agent-specific connections
-        self.agent_connections: Dict[int, List[WebSocket]] = {}
-        # System-wide connections
-        self.system_connections: List[WebSocket] = []
+        # Agent-specific connections keyed by (org_id, agent_id) for tenant isolation
+        self.agent_connections: Dict[tuple, List[WebSocket]] = {}
+        # System-wide connections keyed by org_id for tenant isolation
+        self.system_connections: Dict[int, List[WebSocket]] = {}
 
-    async def connect_agent(self, websocket: WebSocket, agent_id: int):
-        """Track agent-specific connection (call websocket.accept() first)"""
-        if agent_id not in self.agent_connections:
-            self.agent_connections[agent_id] = []
-        self.agent_connections[agent_id].append(websocket)
-        logger.info(f"WebSocket connected for agent {agent_id}")
+    async def connect_agent(self, websocket: WebSocket, agent_id: int, org_id: int = 0):
+        """Track agent-specific connection scoped by organization"""
+        key = (org_id, agent_id)
+        if key not in self.agent_connections:
+            self.agent_connections[key] = []
+        self.agent_connections[key].append(websocket)
+        logger.info(f"WebSocket connected for agent {agent_id} (org={org_id})")
 
-    async def connect_system(self, websocket: WebSocket):
-        """Track system-wide connection (call websocket.accept() first)"""
-        self.system_connections.append(websocket)
-        logger.info("WebSocket connected for system health")
+    async def connect_system(self, websocket: WebSocket, org_id: int = 0):
+        """Track system-wide connection scoped by organization"""
+        if org_id not in self.system_connections:
+            self.system_connections[org_id] = []
+        self.system_connections[org_id].append(websocket)
+        logger.info(f"WebSocket connected for system health (org={org_id})")
 
-    def disconnect_agent(self, websocket: WebSocket, agent_id: int):
+    def disconnect_agent(self, websocket: WebSocket, agent_id: int, org_id: int = 0):
         """Disconnect from agent-specific updates"""
-        if agent_id in self.agent_connections:
-            if websocket in self.agent_connections[agent_id]:
-                self.agent_connections[agent_id].remove(websocket)
-        logger.info(f"WebSocket disconnected for agent {agent_id}")
+        key = (org_id, agent_id)
+        if key in self.agent_connections:
+            if websocket in self.agent_connections[key]:
+                self.agent_connections[key].remove(websocket)
+        logger.info(f"WebSocket disconnected for agent {agent_id} (org={org_id})")
 
-    def disconnect_system(self, websocket: WebSocket):
+    def disconnect_system(self, websocket: WebSocket, org_id: int = 0):
         """Disconnect from system-wide updates"""
-        if websocket in self.system_connections:
-            self.system_connections.remove(websocket)
-        logger.info("WebSocket disconnected for system health")
+        if org_id in self.system_connections:
+            if websocket in self.system_connections[org_id]:
+                self.system_connections[org_id].remove(websocket)
+        logger.info(f"WebSocket disconnected for system health (org={org_id})")
 
-    async def send_to_agent(self, agent_id: int, message: dict):
-        """Send message to all connections for a specific agent"""
-        if agent_id in self.agent_connections:
+    async def send_to_agent(self, agent_id: int, message: dict, org_id: int = 0):
+        """Send message to all connections for a specific agent within an org"""
+        key = (org_id, agent_id)
+        if key in self.agent_connections:
             disconnected = []
-            for connection in self.agent_connections[agent_id]:
+            for connection in self.agent_connections[key]:
                 try:
                     await connection.send_json(message)
                 except Exception as e:
@@ -64,12 +70,14 @@ class ConnectionManager:
                     disconnected.append(connection)
             # Clean up disconnected
             for conn in disconnected:
-                self.agent_connections[agent_id].remove(conn)
+                self.agent_connections[key].remove(conn)
 
-    async def broadcast_system(self, message: dict):
-        """Broadcast message to all system connections"""
+    async def broadcast_system(self, message: dict, org_id: int = 0):
+        """Broadcast message to all system connections within an org"""
+        if org_id not in self.system_connections:
+            return
         disconnected = []
-        for connection in self.system_connections:
+        for connection in self.system_connections[org_id]:
             try:
                 await connection.send_json(message)
             except Exception as e:
@@ -77,7 +85,7 @@ class ConnectionManager:
                 disconnected.append(connection)
         # Clean up disconnected
         for conn in disconnected:
-            self.system_connections.remove(conn)
+            self.system_connections[org_id].remove(conn)
 
 
 manager = ConnectionManager()
@@ -177,6 +185,7 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
     """
     Real-time metrics updates for a specific agent.
     Updates every 5 seconds. Requires JWT authentication.
+    Tenant-isolated: connections only receive data for their organization.
     """
     await websocket.accept()
 
@@ -191,7 +200,8 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
     finally:
         auth_db.close()
 
-    await manager.connect_agent(websocket, agent_id)
+    org_id = user.organization_id or 0
+    await manager.connect_agent(websocket, agent_id, org_id)
 
     try:
         while True:
@@ -213,10 +223,10 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
             await asyncio.sleep(5)
 
     except WebSocketDisconnect:
-        manager.disconnect_agent(websocket, agent_id)
+        manager.disconnect_agent(websocket, agent_id, org_id)
     except SQLAlchemyError as e:
         logger.error(f"Agent WebSocket error: {e}")
-        manager.disconnect_agent(websocket, agent_id)
+        manager.disconnect_agent(websocket, agent_id, org_id)
 
 
 @router.websocket("/ws/system/health")
@@ -224,6 +234,7 @@ async def system_health_websocket(websocket: WebSocket):
     """
     Real-time system-wide health updates.
     Updates every 10 seconds. Requires JWT authentication.
+    Tenant-isolated: connections only receive data for their organization.
     """
     await websocket.accept()
 
@@ -238,7 +249,8 @@ async def system_health_websocket(websocket: WebSocket):
     finally:
         auth_db.close()
 
-    await manager.connect_system(websocket)
+    org_id = user.organization_id or 0
+    await manager.connect_system(websocket, org_id)
 
     try:
         while True:
@@ -259,10 +271,10 @@ async def system_health_websocket(websocket: WebSocket):
             await asyncio.sleep(10)
 
     except WebSocketDisconnect:
-        manager.disconnect_system(websocket)
+        manager.disconnect_system(websocket, org_id)
     except SQLAlchemyError as e:
         logger.error(f"System WebSocket error: {e}")
-        manager.disconnect_system(websocket)
+        manager.disconnect_system(websocket, org_id)
 
 
 @router.websocket("/ws/alerts")

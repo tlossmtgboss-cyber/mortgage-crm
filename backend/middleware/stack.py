@@ -88,6 +88,16 @@ def configure_middleware(
         logger.warning(f"Tenant context middleware not loaded: {e}")
 
     # =========================================================================
+    # Subscription Enforcement (block access after grace period expires)
+    # =========================================================================
+    try:
+        from middleware.subscription_enforcement import SubscriptionEnforcementMiddleware
+        app.add_middleware(SubscriptionEnforcementMiddleware)
+        logger.info("Subscription enforcement middleware enabled")
+    except Exception as e:
+        logger.warning(f"Subscription enforcement middleware not loaded: {e}")
+
+    # =========================================================================
     # Impersonation Enforcement (block writes during impersonation)
     # =========================================================================
     try:

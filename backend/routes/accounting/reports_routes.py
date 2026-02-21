@@ -10,7 +10,7 @@ Provides endpoints for generating financial reports including:
 - Budget vs Actual Variance
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, and_, or_, extract
 from typing import Optional, List, Literal
@@ -60,9 +60,12 @@ class ReportFormat(str, Enum):
 # Helper Functions
 # =============================================================================
 
-def get_organization_id(current_user=None) -> int:
-    """Get organization ID from current user or default."""
-    return 1
+def get_organization_id(request: Request) -> int:
+    """Get organization ID from tenant context middleware."""
+    org_id = getattr(request.state, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 def get_period_dates(
@@ -194,6 +197,7 @@ def get_opening_balance(
 
 @router.get("/profit-loss")
 async def get_profit_loss(
+    request: Request,
     period: ReportPeriod = Query(ReportPeriod.MONTH),
     year: int = Query(default_factory=lambda: date.today().year),
     month: Optional[int] = Query(None),
@@ -210,7 +214,7 @@ async def get_profit_loss(
 
     Shows revenue, expenses, and net income for the period.
     """
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     try:
         report_start, report_end = get_period_dates(
@@ -401,6 +405,7 @@ async def get_profit_loss(
 
 @router.get("/balance-sheet")
 async def get_balance_sheet(
+    request: Request,
     as_of_date: Optional[date] = Query(None, description="Balance sheet date"),
     compare_prior: bool = Query(False, description="Include prior period comparison"),
     format: ReportFormat = Query(ReportFormat.SUMMARY),
@@ -411,7 +416,7 @@ async def get_balance_sheet(
 
     Shows assets, liabilities, and equity as of a specific date.
     """
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     report_date = as_of_date or date.today()
 
     # Function to get account balances by type
@@ -565,6 +570,7 @@ async def get_balance_sheet(
 
 @router.get("/cash-flow")
 async def get_cash_flow(
+    request: Request,
     period: ReportPeriod = Query(ReportPeriod.MONTH),
     year: int = Query(default_factory=lambda: date.today().year),
     month: Optional[int] = Query(None),
@@ -579,7 +585,7 @@ async def get_cash_flow(
 
     Shows cash flows from operating, investing, and financing activities.
     """
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     try:
         report_start, report_end = get_period_dates(
@@ -790,6 +796,7 @@ async def get_cash_flow(
 
 @router.get("/general-ledger")
 async def get_general_ledger(
+    request: Request,
     account_id: Optional[str] = Query(None, description="Filter by account"),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
@@ -802,7 +809,7 @@ async def get_general_ledger(
 
     Shows all posted journal entry lines with running balances.
     """
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     report_start = start_date or date(date.today().year, 1, 1)
     report_end = end_date or date.today()
@@ -882,6 +889,7 @@ async def get_general_ledger(
 
 @router.get("/account-history/{account_id}")
 async def get_account_history(
+    request: Request,
     account_id: str,
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
@@ -892,7 +900,7 @@ async def get_account_history(
     """
     Get transaction history for a specific account.
     """
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     account = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.id == account_id,
@@ -982,6 +990,7 @@ async def get_account_history(
 
 @router.get("/budget-variance")
 async def get_budget_variance(
+    request: Request,
     budget_id: str = Query(..., description="Budget template ID"),
     through_period: int = Query(None, ge=1, le=12, description="Through period number"),
     db: Session = Depends(get_db),
@@ -989,7 +998,7 @@ async def get_budget_variance(
     """
     Get Budget vs Actual variance report.
     """
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
 
     budget = db.query(BudgetTemplate).filter(
         BudgetTemplate.id == budget_id,
@@ -1119,13 +1128,14 @@ async def get_budget_variance(
 
 @router.get("/financial-ratios")
 async def get_financial_ratios(
+    request: Request,
     as_of_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
 ):
     """
     Calculate key financial ratios.
     """
-    org_id = get_organization_id()
+    org_id = get_organization_id(request)
     report_date = as_of_date or date.today()
     year_start = date(report_date.year, 1, 1)
 
@@ -1250,6 +1260,7 @@ async def get_financial_ratios(
 
 @router.get("/export/{report_type}")
 async def export_report(
+    request: Request,
     report_type: Literal["profit-loss", "balance-sheet", "cash-flow", "trial-balance"],
     format: Literal["json", "csv"] = Query("json"),
     period: ReportPeriod = Query(ReportPeriod.MONTH),
@@ -1264,16 +1275,16 @@ async def export_report(
     # Generate the base report
     if report_type == "profit-loss":
         report = await get_profit_loss(
-            period=period, year=year, month=month,
+            request=request, period=period, year=year, month=month,
             format=ReportFormat.DETAILED, db=db
         )
     elif report_type == "balance-sheet":
         report = await get_balance_sheet(
-            as_of_date=as_of_date, format=ReportFormat.DETAILED, db=db
+            request=request, as_of_date=as_of_date, format=ReportFormat.DETAILED, db=db
         )
     elif report_type == "cash-flow":
         report = await get_cash_flow(
-            period=period, year=year, month=month, db=db
+            request=request, period=period, year=year, month=month, db=db
         )
     else:
         raise HTTPException(status_code=400, detail="Invalid report type")
