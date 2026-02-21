@@ -718,8 +718,38 @@ def register_health_routes(app, get_db, **kwargs):
 
     @app.get("/diag/funded-not-mum")
     async def diag_funded_not_mum(db: Session = Depends(get_db)):
-        """Temporary: show funded loans missing MUM client records."""
+        """Temporary: check loan 1514 state and MUM status."""
+        results = {}
         try:
+            # Check loan 1514 specifically
+            loan = db.execute(text("""
+                SELECT l.id, l.loan_number, l.borrower_name, l.stage::text as stage,
+                       l.funded_date, l.closing_date, l.status,
+                       l.loan_officer_id, l.organization_id, l.rate, l.amount
+                FROM loans l WHERE l.id = 1514
+            """)).fetchone()
+            if loan:
+                results["loan_1514"] = {
+                    "id": loan[0], "loan_number": loan[1], "borrower": loan[2],
+                    "stage": loan[3], "funded_date": str(loan[4]) if loan[4] else None,
+                    "closing_date": str(loan[5]) if loan[5] else None,
+                    "status": loan[6], "lo_id": loan[7], "org_id": loan[8],
+                    "rate": str(loan[9]) if loan[9] else None,
+                    "amount": str(loan[10]) if loan[10] else None,
+                }
+
+                # Check if MUM client exists for this loan number
+                mum = db.execute(text("""
+                    SELECT mc.id, mc.client_name, mc.loan_number, mc.status
+                    FROM mum_clients mc WHERE mc.loan_number = :ln
+                """), {"ln": loan[1]}).fetchone()
+                results["mum_for_loan_1514"] = {
+                    "id": mum[0], "name": mum[1], "loan_number": mum[2], "status": mum[3]
+                } if mum else None
+            else:
+                results["loan_1514"] = "NOT FOUND"
+
+            # Also show all funded loans without MUM
             rows = db.execute(text("""
                 SELECT l.id, l.loan_number, l.borrower_name, l.stage::text,
                        l.funded_date, l.closing_date
@@ -733,19 +763,16 @@ def register_health_routes(app, get_db, **kwargs):
                   )
                 ORDER BY COALESCE(l.funded_date, l.closing_date) DESC NULLS LAST
             """)).fetchall()
-            return {
-                "funded_without_mum": len(rows),
-                "loans": [
-                    {
-                        "id": r[0], "loan_number": r[1], "borrower": r[2],
-                        "stage": r[3], "funded_date": str(r[4]) if r[4] else None,
-                        "closing_date": str(r[5]) if r[5] else None,
-                    }
-                    for r in rows
-                ],
-            }
+            results["funded_without_mum"] = len(rows)
+            results["loans"] = [
+                {"id": r[0], "loan_number": r[1], "borrower": r[2],
+                 "stage": r[3], "funded_date": str(r[4]) if r[4] else None}
+                for r in rows
+            ]
+
+            return results
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": str(e), "partial": results}
 
     # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
