@@ -170,6 +170,10 @@ class Lead(Base):
     nurture_month = Column(Integer, default=0)
     stage_changed_at = Column(DateTime)
 
+    # Current milestone state (fast reads for workflow engine)
+    current_milestone_status = Column(String(50))
+    current_milestone_entered_at = Column(DateTime)
+
     # Salesforce Sync - Property Details
     occupancy_type = Column(String)
     property_county = Column(String)
@@ -345,6 +349,13 @@ class Loan(Base):
     current_workflow_id = Column(String)
     last_workflow_action = Column(DateTime)
     stage_changed_at = Column(DateTime)
+
+    # Current milestone state (fast reads for workflow engine)
+    current_milestone_status = Column(String(50))
+    current_milestone_entered_at = Column(DateTime)
+
+    # MUM (Mortgage Update Monitoring) date
+    mum_date = Column(DateTime)
 
     # SLA Date Fields - Jungo Custom Byte Mappings
     prospect_date = Column(DateTime)

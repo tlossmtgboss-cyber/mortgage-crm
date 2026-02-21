@@ -1015,6 +1015,86 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# TENANT LIFECYCLE ROUTES - Provisioning & Lifecycle (D3)
+# ============================================================================
+try:
+    from routes.tenant_lifecycle_routes import register_tenant_lifecycle_routes
+    register_tenant_lifecycle_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Tenant lifecycle routes loaded (signup, provision, export, suspend, hard-delete)")
+except Exception as e:
+    logger.error(f"❌ Tenant lifecycle routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# BILLING ADMIN ROUTES - Licensing & Subscription (D2)
+# ============================================================================
+try:
+    from routes.billing_admin_routes import register_billing_admin_routes
+    register_billing_admin_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Billing admin routes loaded (Stripe, subscriptions, invoices)")
+except Exception as e:
+    logger.error(f"❌ Billing admin routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# EMAIL TEMPLATE ROUTES - White-Label (WL-003)
+# ============================================================================
+try:
+    from routes.email_template_routes import register_email_template_routes
+    register_email_template_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Email template routes loaded (per-tenant template editor)")
+except Exception as e:
+    logger.error(f"❌ Email template routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# LEGAL DOCUMENT ROUTES - White-Label (WL-007)
+# ============================================================================
+try:
+    from routes.legal_document_routes import register_legal_document_routes
+    register_legal_document_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Legal document routes loaded (T&C, Privacy Policy management)")
+except Exception as e:
+    logger.error(f"❌ Legal document routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# REGULATORY REPORT ROUTES - Compliance (CMP-008)
+# ============================================================================
+try:
+    from routes.regulatory_report_routes import register_regulatory_report_routes
+    register_regulatory_report_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Regulatory report routes loaded (HMDA LAR, state filings)")
+except Exception as e:
+    logger.error(f"❌ Regulatory report routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================
 try:

@@ -591,6 +591,22 @@ async def upload_document(
     if file_size > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
 
+    # Check storage quota (MTR-004)
+    try:
+        from services.storage_quota_service import check_storage_quota
+        org_id_for_quota = _get_loan_org_id(db, loan_id)
+        if org_id_for_quota:
+            allowed, quota_details = check_storage_quota(db, org_id_for_quota, file_size)
+            if not allowed:
+                raise HTTPException(
+                    status_code=413,
+                    detail=quota_details.get("error", "Storage quota exceeded")
+                )
+    except HTTPException:
+        raise
+    except Exception as quota_err:
+        logger.warning(f"Storage quota check skipped: {quota_err}")
+
     # Parse doc_type
     parsed_doc_type = None
     if doc_type:
@@ -643,6 +659,13 @@ async def upload_document(
     if not upload_result.get("success"):
         logger.warning(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
         # Continue processing even if S3 fails (for development/testing without S3)
+    else:
+        # Record storage usage for quota tracking (MTR-004)
+        try:
+            from services.storage_quota_service import record_storage_usage
+            record_storage_usage(db, org_id, storage_key, file_size, file_type=parsed_doc_type.value if parsed_doc_type else "document")
+        except Exception as track_err:
+            logger.warning(f"Storage usage tracking skipped: {track_err}")
 
     # Process the document
     pipeline = DocumentReviewPipeline(db)

@@ -393,6 +393,29 @@ _DEFAULTS = {
         "youtube": "",
         "tiktok": ""
     },
+    "mobile": {
+        "mobile_logo_url": None,
+        "mobile_icon_url": None,
+        "mobile_primary_color": None,
+        "mobile_header_background": None,
+        "mobile_nav_style": "bottom_tabs",
+        "mobile_font_scale": 1.0,
+        "mobile_touch_target_size": 44,
+        "mobile_safe_area_padding": True,
+        "mobile_landscape_layout": "adaptive",
+        "mobile_splash_screen_url": None,
+        "mobile_app_name": None,
+        "mobile_status_bar_style": "dark",
+        "responsive_breakpoints": {
+            "mobile": 640,
+            "tablet": 1024,
+            "desktop": 1280
+        },
+        "mobile_specific_css": None,
+        "tablet_specific_css": None,
+        "hide_sidebar_on_mobile": True,
+        "compact_header_on_mobile": True
+    },
 }
 
 

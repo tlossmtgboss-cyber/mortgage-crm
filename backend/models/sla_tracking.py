@@ -233,6 +233,26 @@ class LoanMilestoneHistory(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+# ============ Company Holidays ============
+
+class CompanyHoliday(Base):
+    """
+    Holiday calendar for business day calculations.
+    Used by the SLA Tracker and Workflow Engine to exclude
+    non-business days when calculating days_elapsed and deadlines.
+    """
+    __tablename__ = "company_holidays"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, index=True, nullable=False, default=0)
+
+    holiday_date = Column(Date, nullable=False)
+    holiday_name = Column(String(100))
+    is_recurring = Column(Boolean, default=False)  # Same date every year?
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 # ============ SLA Performance Snapshots ============
 
 class SLAPerformanceSnapshot(Base):

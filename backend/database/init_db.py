@@ -1103,6 +1103,218 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Enterprise security columns note: {e}")
 
+        # Add AI content attribution columns to ai_conversation_memory (AI-005)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE ai_conversation_memory ADD COLUMN IF NOT EXISTS is_ai_generated BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE ai_conversation_memory ADD COLUMN IF NOT EXISTS ai_model VARCHAR(50);
+                    ALTER TABLE ai_conversation_memory ADD COLUMN IF NOT EXISTS ai_confidence INTEGER;
+                """))
+                conn.commit()
+                logger.info("✅ AI content attribution columns added (ai_conversation_memory)")
+        except Exception as e:
+            logger.warning(f"⚠️ AI attribution columns note: {e}")
+
+        # Create tenant_email_templates table (WL-003)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS tenant_email_templates (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        template_key VARCHAR(100) NOT NULL,
+                        template_name VARCHAR(255) NOT NULL,
+                        subject VARCHAR(500),
+                        html_body TEXT,
+                        text_body TEXT,
+                        merge_fields JSONB DEFAULT '[]',
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_by INTEGER,
+                        updated_by INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(organization_id, template_key)
+                    )
+                """))
+                conn.commit()
+                logger.info("✅ tenant_email_templates table created/verified (WL-003)")
+        except Exception as e:
+            logger.warning(f"⚠️ tenant_email_templates table note: {e}")
+
+        # Create tenant_legal_documents table (WL-007)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS tenant_legal_documents (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        document_type VARCHAR(100) NOT NULL,
+                        title VARCHAR(500) NOT NULL,
+                        content TEXT NOT NULL,
+                        version INTEGER DEFAULT 1,
+                        is_published BOOLEAN DEFAULT FALSE,
+                        published_at TIMESTAMP,
+                        published_by INTEGER,
+                        created_by INTEGER,
+                        updated_by INTEGER,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.commit()
+                logger.info("✅ tenant_legal_documents table created/verified (WL-007)")
+        except Exception as e:
+            logger.warning(f"⚠️ tenant_legal_documents table note: {e}")
+
+        # Create regulatory_reports table (CMP-008)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS regulatory_reports (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        report_type VARCHAR(50) NOT NULL,
+                        report_name VARCHAR(255) NOT NULL,
+                        parameters JSONB DEFAULT '{}',
+                        file_content TEXT,
+                        file_format VARCHAR(20) DEFAULT 'csv',
+                        record_count INTEGER DEFAULT 0,
+                        status VARCHAR(50) DEFAULT 'generated',
+                        generated_by INTEGER,
+                        generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.commit()
+                logger.info("✅ regulatory_reports table created/verified (CMP-008)")
+        except Exception as e:
+            logger.warning(f"⚠️ regulatory_reports table note: {e}")
+
+        # Create tenant_storage_usage table (MTR-004)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS tenant_storage_usage (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        storage_key VARCHAR(500) UNIQUE NOT NULL,
+                        file_size_bytes BIGINT NOT NULL DEFAULT 0,
+                        file_type VARCHAR(50) DEFAULT 'document',
+                        uploaded_by_id INTEGER,
+                        is_deleted BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_tenant_storage_org
+                        ON tenant_storage_usage (organization_id, is_deleted)
+                """))
+                conn.commit()
+                logger.info("✅ tenant_storage_usage table created/verified (MTR-004)")
+        except Exception as e:
+            logger.warning(f"⚠️ tenant_storage_usage table note: {e}")
+
+        # Workflow SLA Phase 1: company_holidays table + milestone columns (WF-001)
+        try:
+            with _engine.connect() as conn:
+                # company_holidays table for business day SLA calculations
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS company_holidays (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL DEFAULT 0,
+                        holiday_date DATE NOT NULL,
+                        holiday_name VARCHAR(100),
+                        is_recurring BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        CONSTRAINT uq_holiday UNIQUE (organization_id, holiday_date)
+                    )
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_holidays_lookup
+                        ON company_holidays (organization_id, holiday_date)
+                """))
+
+                # Seed 2026 US federal holidays (org_id=0 = system defaults)
+                conn.execute(text("""
+                    INSERT INTO company_holidays (organization_id, holiday_date, holiday_name, is_recurring)
+                    VALUES
+                        (0, '2026-01-01', 'New Year''s Day', false),
+                        (0, '2026-01-19', 'Martin Luther King Jr. Day', false),
+                        (0, '2026-02-16', 'Presidents'' Day', false),
+                        (0, '2026-05-25', 'Memorial Day', false),
+                        (0, '2026-06-19', 'Juneteenth', false),
+                        (0, '2026-07-03', 'Independence Day (Observed)', false),
+                        (0, '2026-09-07', 'Labor Day', false),
+                        (0, '2026-10-12', 'Columbus Day', false),
+                        (0, '2026-11-11', 'Veterans Day', false),
+                        (0, '2026-11-26', 'Thanksgiving Day', false),
+                        (0, '2026-12-25', 'Christmas Day', false)
+                    ON CONFLICT DO NOTHING
+                """))
+
+                # current_milestone_status + current_milestone_entered_at on loans
+                conn.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS current_milestone_status VARCHAR(50)"))
+                conn.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS current_milestone_entered_at TIMESTAMPTZ"))
+                conn.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS mum_date TIMESTAMPTZ"))
+
+                # current_milestone_status + current_milestone_entered_at on leads
+                conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS current_milestone_status VARCHAR(50)"))
+                conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS current_milestone_entered_at TIMESTAMPTZ"))
+
+                # Performance indexes for workflow engine queries
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_loans_milestone_status
+                        ON loans (current_milestone_status, current_milestone_entered_at)
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_leads_milestone_status
+                        ON leads (current_milestone_status, current_milestone_entered_at)
+                """))
+
+                conn.commit()
+                logger.info("✅ Workflow SLA Phase 1: company_holidays + milestone columns (WF-001)")
+        except Exception as e:
+            logger.warning(f"⚠️ Workflow SLA Phase 1 note: {e}")
+
+        # Loan State Reconciliation: audit log table + raw SF stage column
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS loan_state_audit_log (
+                        id SERIAL PRIMARY KEY,
+                        loan_id INTEGER NOT NULL,
+                        from_stage VARCHAR(100),
+                        to_stage VARCHAR(100),
+                        salesforce_raw_stage VARCHAR(200),
+                        action VARCHAR(50) NOT NULL,
+                        is_backward_movement BOOLEAN DEFAULT FALSE,
+                        warnings JSONB DEFAULT '[]'::jsonb,
+                        admin_review_reason TEXT,
+                        metadata JSONB DEFAULT '{}'::jsonb,
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_loan_state_audit_loan_id
+                        ON loan_state_audit_log (loan_id)
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_loan_state_audit_created
+                        ON loan_state_audit_log (created_at)
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_loan_state_audit_action
+                        ON loan_state_audit_log (action)
+                """))
+                conn.execute(text("""
+                    ALTER TABLE loans ADD COLUMN IF NOT EXISTS salesforce_raw_stage VARCHAR(200)
+                """))
+                conn.commit()
+                logger.info("✅ Loan state reconciliation: audit log table + salesforce_raw_stage column")
+        except Exception as e:
+            logger.warning(f"⚠️ Loan state reconciliation migration note: {e}")
+
         # Run comprehensive column migration for all missing columns
         try:
             from migrations.add_all_missing_columns import run_migration

@@ -306,6 +306,7 @@ ALLOWED_LOAN_FIELDS = frozenset(
     "salesforce_id",
     "salesforce_last_synced_at",
     "salesforce_sync_status",
+    "salesforce_raw_stage",
     "sla_status",
     "created_at",
     "updated_at",
@@ -332,41 +333,85 @@ def validate_loan_field_name(field_name: str) -> str:
 
 # Stage mapping from Salesforce values to CRM LoanStage enum
 STAGE_MAPPING = {
-    # Salesforce status -> CRM stage
+    # --- Application / Early ---
     "New": "APPLICATION",
     "Application": "APPLICATION",
+    "Application Received": "APPLICATION",
+    "Disclosed": "DISCLOSED",
+    # --- Processing ---
     "Submitted": "PROCESSING",
     "Processing": "PROCESSING",
     "In Processing": "PROCESSING",
+    "Contract Received": "PROCESSING",
+    "Submitted to Processing": "PROCESSING",
+    "Document Collection": "PROCESSING",
+    "Documents Requested": "PROCESSING",
+    "Documents Received": "PROCESSING",
+    "Appraisal Ordered": "PROCESSING",
+    "Appraisal Received": "PROCESSING",
+    "Insurance Ordered": "PROCESSING",
+    "Insurance Received": "PROCESSING",
+    "Title Ordered": "PROCESSING",
+    "Title Received": "PROCESSING",
+    # --- Underwriting ---
     "Underwriting": "UNDERWRITING",
     "In Underwriting": "UNDERWRITING",
-    "Conditionally Approved": "APPROVED",
+    "Submitted to Underwriting": "UNDERWRITING",
+    "Underwriting Decision": "UW_RECEIVED",
+    "UW Received": "UW_RECEIVED",
+    # --- Approval ---
+    "Conditionally Approved": "CONDITIONAL_APPROVAL",
+    "Conditional Approval": "CONDITIONAL_APPROVAL",
+    "Conditions Cleared": "APPROVED",
     "Approved": "APPROVED",
+    # --- Clear to Close / Closing ---
     "Clear to Close": "CLEAR_TO_CLOSE",
     "CTC": "CLEAR_TO_CLOSE",
-    "Docs Out": "CLEAR_TO_CLOSE",
-    "Docs Signed": "CLEAR_TO_CLOSE",
+    "Closing Docs Out": "DOCS_OUT",
+    "Docs Out": "DOCS_OUT",
+    "Docs Signed": "DOCS_OUT",
+    "Closing Scheduled": "CLOSING",
+    "Closing Date": "CLOSING",
+    # --- Funded ---
     "Funded": "FUNDED",
+    "Loan Funded": "FUNDED",
     "Closed": "FUNDED",
+    "Closed Won": "FUNDED",
+    "Post-Closing": "FUNDED",
+    # --- Terminal / Special ---
     "Cancelled": "CANCELLED",
-    "Withdrawn": "CANCELLED",
+    "Withdrawn": "WITHDRAWN",
     "Denied": "DENIED",
     "Rejected": "DENIED",
+    "Dead": "DEAD",
+    "Does Not Qualify": "DOES_NOT_QUALIFY",
+    "Suspended": "SUSPENDED",
+    "Nurture": "NURTURE",
 }
 
 # Reverse stage mapping (CRM stage -> Salesforce status)
 REVERSE_STAGE_MAPPING = {
     "APPLICATION": "Application",
+    "DISCLOSED": "Disclosed",
     "PROCESSING": "Processing",
     "SUBMITTED": "Submitted",
     "UNDERWRITING": "Underwriting",
+    "UW_RECEIVED": "UW Received",
+    "CONDITIONAL_APPROVAL": "Conditional Approval",
     "APPROVED": "Approved",
+    "CTC": "Clear to Close",
     "CLEAR_TO_CLOSE": "Clear to Close",
+    "CLOSING": "Closing Scheduled",
+    "DOCS": "Docs Out",
     "DOCS_OUT": "Docs Out",
-    "DOCS_SIGNED": "Docs Signed",
     "FUNDED": "Funded",
     "CANCELLED": "Cancelled",
     "DENIED": "Denied",
+    "DEAD": "Dead",
+    "WITHDRAWN": "Withdrawn",
+    "DOES_NOT_QUALIFY": "Does Not Qualify",
+    "SUSPENDED": "Suspended",
+    "NURTURE": "Nurture",
 }
 
 # Default outbound field mappings (CRM field -> Salesforce field)
@@ -515,8 +560,11 @@ class SalesforceSyncService:
             return value
 
         if transform_type == "stage_mapping":
-            # Map Salesforce status to CRM stage
-            return STAGE_MAPPING.get(str(value), "APPLICATION")
+            # Map Salesforce status to CRM stage (None if unmapped, so reconciliation can flag it)
+            mapped = STAGE_MAPPING.get(str(value))
+            if mapped is None:
+                logger.warning(f"Unmapped Salesforce stage value: '{value}'")
+            return mapped
 
         if transform_type == "boolean":
             if isinstance(value, bool):
@@ -538,6 +586,11 @@ class SalesforceSyncService:
                 transformed_value = self.transform_value(value, transform_type)
                 if transformed_value is not None:
                     loan_data[crm_field] = transformed_value
+
+        # Capture raw Salesforce stage before any mapping (for reconciliation audit)
+        raw_stage = sf_record.get("MtgPlanner_CRM__Status__c") or sf_record.get("MtgPlanner_CRM__Stage__c")
+        if raw_stage:
+            loan_data["salesforce_raw_stage"] = str(raw_stage)
 
         # Set sync metadata
         loan_data["salesforce_last_synced_at"] = datetime.utcnow()
@@ -567,7 +620,7 @@ class SalesforceSyncService:
             # Check if loan exists and get current data for comparison
             existing = self.db.execute(text("""
                 SELECT id, closing_date, lock_date, lock_expiration_date,
-                       application_date, contract_received_date, status
+                       application_date, contract_received_date, stage, funded_date
                 FROM loans WHERE salesforce_id = :sf_id
             """), {"sf_id": salesforce_id}).fetchone()
 
@@ -580,7 +633,8 @@ class SalesforceSyncService:
                     "lock_expiration_date": existing[3],
                     "application_date": existing[4],
                     "contract_received_date": existing[5],
-                    "status": existing[6]
+                    "stage": existing[6],
+                    "funded_date": existing[7],
                 }
 
                 # Update existing loan
@@ -779,21 +833,66 @@ class SalesforceSyncService:
             # Don't fail the sync if task creation fails
             logger.error(f"Error creating SLA tasks for loan {loan_id}: {e}")
 
-        # Auto-promote funded loans to MUM (Mortgages Under Management)
+        # Loan State Reconciliation: validate transition, audit, and route (MUM/archive/pause)
         try:
-            from services.mum_promotion_service import maybe_promote_loan_to_mum_by_raw_data
-            mum_id = maybe_promote_loan_to_mum_by_raw_data(
-                db=self.db,
-                loan_id=loan_id,
-                user_id=self.user_id or 1,
-                loan_data=new_data,
-                old_data=old_data,
+            from services.loan_reconciliation_service import LoanReconciliationService
+            recon_service = LoanReconciliationService(self.db)
+            recon_result = recon_service.reconcile(loan_id, old_data, new_data)
+
+            logger.info(
+                f"Loan {loan_id} reconciliation: action={recon_result.action.value}, "
+                f"{recon_result.old_stage}→{recon_result.new_stage}"
+                + (f", warnings={recon_result.warnings}" if recon_result.warnings else "")
             )
-            if mum_id:
-                logger.info(f"Salesforce webhook sync auto-promoted loan {loan_id} to MUM client {mum_id}")
+
+            # Promote to MUM only when reconciliation says so
+            if recon_result.should_promote_mum:
+                try:
+                    from services.mum_promotion_service import maybe_promote_loan_to_mum_by_raw_data
+                    mum_id = maybe_promote_loan_to_mum_by_raw_data(
+                        db=self.db,
+                        loan_id=loan_id,
+                        user_id=self.user_id or 1,
+                        loan_data=new_data,
+                        old_data=old_data,
+                    )
+                    if mum_id:
+                        logger.info(f"Reconciliation promoted loan {loan_id} to MUM client {mum_id}")
+                except Exception as e:
+                    logger.warning(f"MUM promotion failed for loan {loan_id}: {e}")
+
+        except ImportError:
+            # Reconciliation service not available — fall back to direct MUM promotion
+            logger.debug("Loan reconciliation service not available, falling back to direct MUM promotion")
+            try:
+                from services.mum_promotion_service import maybe_promote_loan_to_mum_by_raw_data
+                mum_id = maybe_promote_loan_to_mum_by_raw_data(
+                    db=self.db,
+                    loan_id=loan_id,
+                    user_id=self.user_id or 1,
+                    loan_data=new_data,
+                    old_data=old_data,
+                )
+                if mum_id:
+                    logger.info(f"Fallback: auto-promoted loan {loan_id} to MUM client {mum_id}")
+            except Exception as e:
+                logger.warning(f"MUM promotion failed for loan {loan_id}: {e}")
         except Exception as e:
-            # Never fail the sync for MUM promotion errors
-            logger.warning(f"MUM promotion failed for loan {loan_id}: {e}")
+            # Unexpected reconciliation error — fall back to direct MUM promotion
+            logger.warning(f"Reconciliation error for loan {loan_id}: {e}, falling back to direct MUM promotion")
+            try:
+                from services.mum_promotion_service import maybe_promote_loan_to_mum_by_raw_data
+                mum_id = maybe_promote_loan_to_mum_by_raw_data(
+                    db=self.db,
+                    loan_id=loan_id,
+                    user_id=self.user_id or 1,
+                    loan_data=new_data,
+                    old_data=old_data,
+                )
+                if mum_id:
+                    logger.info(f"Fallback: auto-promoted loan {loan_id} to MUM client {mum_id}")
+            except Exception as e2:
+                logger.warning(f"MUM promotion fallback also failed for loan {loan_id}: {e2}")
 
     def process_webhook(self, payload: Dict[str, Any]) -> SyncResult:
         """

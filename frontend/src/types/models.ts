@@ -253,6 +253,10 @@ export interface Lead {
   nurture_month: number;
   stage_changed_at: string | null;
 
+  // Milestone state (workflow engine)
+  current_milestone_status: string | null;
+  current_milestone_entered_at: string | null;
+
   // Salesforce Integration
   salesforce_id: string | null;
   meta_data: Record<string, unknown> | null;
@@ -351,6 +355,13 @@ export interface Loan {
   last_workflow_action: string | null;
   stage_changed_at: string | null;
 
+  // Milestone state (workflow engine)
+  current_milestone_status: string | null;
+  current_milestone_entered_at: string | null;
+
+  // MUM
+  mum_date: string | null;
+
   // Timestamps
   created_at: string;
   updated_at: string;
@@ -399,4 +410,135 @@ export interface Task {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ============================================================================
+// WORKFLOW & SLA TYPES
+// ============================================================================
+
+export type SLAStatusValue =
+  | 'ON_TRACK'
+  | 'APPROACHING'
+  | 'OVERDUE'
+  | 'COMPLETED'
+  | 'NO_DATE';
+
+export type WorkflowTaskType =
+  | 'phone'
+  | 'phone_am'
+  | 'phone_pm'
+  | 'text'
+  | 'text_am'
+  | 'text_pm'
+  | 'email'
+  | 'referral_partner'
+  | 'ai'
+  | 'internal';
+
+export type WorkflowRoute =
+  | 'task_list'
+  | 'dialer_queue'
+  | 'ai_autonomous'
+  | 'email_automation'
+  | 'sms_automation';
+
+export type WorkflowTaskStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'archived'
+  | 'cancelled'
+  | 'skipped';
+
+/** Important Dates on a loan/lead — source of truth for workflow triggers */
+export interface ImportantDates {
+  // Lead Stage
+  lead_received_date: string | null;
+  first_contact_attempt_date: string | null;
+  first_contact_successful_date: string | null;
+  lead_qualification_date: string | null;
+  application_started_date: string | null;
+  application_completed_date: string | null;
+
+  // Active Loan Stage
+  prospect_date: string | null;
+  application_date: string | null;
+  le_pending_date: string | null;
+  credit_only_date: string | null;
+  file_received_date: string | null;
+  preapproval_date: string | null;
+  appraisal_ordered_date: string | null;
+  appraisal_received_date: string | null;
+  title_ordered_date: string | null;
+  title_received_date: string | null;
+  uw_received_date: string | null;
+  conditional_approval_date: string | null;
+  conditions_for_review_date: string | null;
+  suspended_date: string | null;
+  loan_approved_date: string | null;
+  clear_to_close_date: string | null;
+  cd_requested_date: string | null;
+  cd_sent_to_borrower_date: string | null;
+  cd_acknowledged_date: string | null;
+  docs_ordered_date: string | null;
+  docs_out_date: string | null;
+  scheduled_closing_date: string | null;
+  scheduled_funding_date: string | null;
+  funded_date: string | null;
+  mum_date: string | null;
+
+  // Current state
+  current_milestone_status: string | null;
+  current_milestone_entered_at: string | null;
+}
+
+/** SLA status for a single milestone */
+export interface SLAMilestoneStatus {
+  milestone_type: string;
+  started_at: string | null;
+  target_deadline: string | null;
+  days_elapsed: number;
+  target_days: number;
+  days_remaining: number;
+  status: SLAStatusValue;
+  percentage_complete: number;
+  needs_proactive_task: boolean;
+  needs_overdue_task: boolean;
+}
+
+/** A workflow-generated task instance */
+export interface WorkflowTask extends Task {
+  workflow_instance_id: number | null;
+  day_config_id: number | null;
+  task_type: WorkflowTaskType;
+  assigned_role: string | null;
+  routed_to: WorkflowRoute;
+  day_number: number;
+  task_group_key: string | null;
+  archived_at: string | null;
+  archive_reason: string | null;
+  ai_confidence: number | null;
+  ai_auto_completed: boolean;
+  // Display context
+  workflow_name: string | null;
+  workflow_color: string | null;
+  client_name: string | null;
+}
+
+/** A milestone history entry (audit trail) */
+export interface MilestoneHistoryEntry {
+  id: number;
+  loan_id: number | null;
+  lead_id: number | null;
+  milestone_type: string;
+  started_at: string;
+  completed_at: string | null;
+  target_deadline: string | null;
+  sla_target_days: number | null;
+  actual_days: number | null;
+  sla_status: string;
+  triggered_by: string | null;
+  triggered_by_user_id: number | null;
+  trigger_notes: string | null;
+  previous_milestone_type: string | null;
 }

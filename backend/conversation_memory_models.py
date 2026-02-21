@@ -3,7 +3,7 @@ AI Conversation Memory Models
 Stores permanent conversation history for AI assistant
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import text
 from database import Base
@@ -22,6 +22,9 @@ class AIConversationMemory(Base):
     content = Column(Text, nullable=False)
     action_id = Column(UUID(as_uuid=True), nullable=True)
     action_data = Column(JSONB, nullable=True)
+    is_ai_generated = Column(Boolean, default=False, nullable=False, server_default=text('false'))  # AI-005: Content attribution
+    ai_model = Column(String(50), nullable=True)  # AI-005: Which model generated this (claude-opus-4-5, gpt-4o, etc.)
+    ai_confidence = Column(Integer, nullable=True)  # AI-005: Confidence score 0-100 if applicable
     created_at = Column(DateTime, nullable=False, server_default=text('NOW()'))
 
     __table_args__ = (

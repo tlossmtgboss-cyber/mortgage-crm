@@ -211,6 +211,7 @@ const StateRecordingRules = lazyRetry(() => import('./pages/settings/StateRecord
 const TwilioStatusCallbacks = lazyRetry(() => import('./pages/settings/TwilioStatusCallbacks'));
 const QuoteLanguagePresets = lazyRetry(() => import('./pages/settings/QuoteLanguagePresets'));
 const CalculatorSettings = lazyRetry(() => import('./pages/settings/CalculatorSettings'));
+const BillingSettings = lazyRetry(() => import('./pages/settings/BillingSettings'));
 const APIKeysSettings = lazyRetry(() => import('./pages/APIKeysSettings'));
 const CompanyBrandingSettings = lazyRetry(() => import('./pages/CompanyBrandingSettings'));
 const AccountManagement = lazyRetry(() => import('./pages/AccountManagement'));
@@ -2831,6 +2832,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AccountManagement /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/billing"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><BillingSettings /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
