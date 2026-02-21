@@ -433,6 +433,19 @@ class SalesforceOAuthService:
             access_token = await self.refresh_access_token(db, integration_profile_id)
             return access_token, profile.instance_url
 
+    async def force_refresh_and_get_token(self, db: Session, integration_profile_id: int) -> Tuple[str, str]:
+        """Force-refresh the access token using the refresh token and return the new token.
+
+        Called when a 401 INVALID_SESSION_ID is encountered during sync.
+        """
+        logger.info(f"Force-refreshing Salesforce token for profile {integration_profile_id}")
+        access_token = await self.refresh_access_token(db, integration_profile_id)
+        profile = db.query(IntegrationProfile).filter(
+            IntegrationProfile.id == integration_profile_id
+        ).first()
+        instance_url = profile.instance_url if profile else ""
+        return access_token, instance_url
+
     def disconnect(self, db: Session, integration_profile_id: int):
         """Disconnect Salesforce integration"""
         profile = db.query(IntegrationProfile).filter(
