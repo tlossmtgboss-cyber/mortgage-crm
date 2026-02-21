@@ -272,6 +272,10 @@ class LoanReconciliationService:
             return row is not None
         except Exception as e:
             logger.debug(f"Dedup check unavailable (table may not exist yet): {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
             return False
 
     def _log_unmapped_stage(self, loan_id: int, raw_stage: str) -> None:
@@ -298,6 +302,10 @@ class LoanReconciliationService:
             logger.warning(f"Created admin task for unmapped SF stage '{raw_stage}' on loan {loan_id}")
         except Exception as e:
             logger.warning(f"Could not create admin task for unmapped stage: {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
     def _write_audit_log(self, loan_id: int, result: ReconciliationResult) -> None:
         """Insert an entry into loan_state_audit_log."""
@@ -326,6 +334,10 @@ class LoanReconciliationService:
             self.db.commit()
         except Exception as e:
             logger.debug(f"Could not write audit log (table may not exist yet): {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
     def _store_raw_sf_stage(self, loan_id: int, raw_stage: str) -> None:
         """Persist the original Salesforce stage value on the loan record."""
@@ -336,3 +348,7 @@ class LoanReconciliationService:
             self.db.commit()
         except Exception as e:
             logger.debug(f"Could not store raw SF stage (column may not exist yet): {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
