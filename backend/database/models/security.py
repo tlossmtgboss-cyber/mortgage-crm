@@ -35,8 +35,9 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     change_type = Column(String, nullable=False, index=True)  # 'permission', 'role', 'profile', 'workflow', 'milestone', 'goal', 'skill'
     entity_type = Column(String, nullable=False)  # 'user_permissions', 'user_profile', 'workflow_settings', etc.
     entity_id = Column(Integer, nullable=True)
@@ -212,6 +213,36 @@ class Notification(Base):
 
 
 # ============================================================================
+# GDPR DATA SUBJECT REQUESTS
+# ============================================================================
+
+class DataSubjectRequest(Base):
+    """GDPR/CCPA Data Subject Access Requests (DSAR).
+
+    Tracks requests from data subjects for access, rectification,
+    erasure, or restriction of their personal data.
+    """
+    __tablename__ = "data_subject_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    request_type = Column(String(50), nullable=False, default="access")  # access, rectification, erasure, restriction
+    requestor_email = Column(String(255), nullable=False, index=True)
+    requestor_name = Column(String(255), nullable=True)
+    status = Column(String(50), nullable=False, default="pending", index=True)  # pending, in_progress, completed, rejected
+    submitted_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    due_date = Column(DateTime, nullable=True)
+    handled_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    handled_at = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    result_summary = Column(Text, nullable=True)
+    identity_verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                       onupdate=lambda: datetime.now(timezone.utc))
+
+
+# ============================================================================
 # EXPORTS
 # ============================================================================
 
@@ -231,4 +262,6 @@ __all__ = [
     "SystemJobsLog",
     # Notifications
     "Notification",
+    # GDPR
+    "DataSubjectRequest",
 ]

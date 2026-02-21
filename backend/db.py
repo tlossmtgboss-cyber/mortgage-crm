@@ -412,7 +412,7 @@ def _write_audit_batch(entries: list):
                             (user_id, changed_by_id, change_type, entity_type, entity_id,
                              before_state, after_state, timestamp, organization_id)
                         VALUES
-                            (0, 0, :change_type, :entity_type, :entity_id,
+                            (NULL, NULL, :change_type, :entity_type, :entity_id,
                              :before_state, :after_state, :ts, :org_id)
                     """),
                     {
