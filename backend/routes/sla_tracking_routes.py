@@ -1665,7 +1665,7 @@ async def backfill_milestones(
     This is a one-time catch-up for records created before SLA tracking was wired.
     Safe to run multiple times — only creates milestones for entities that have none.
     """
-    from services.sla_tracking_service import track_lead_created, track_loan_created
+    from services.sla_tracking_service import track_lead_created, track_loan_stage_change
 
     org_id = getattr(current_user, 'organization_id', None)
     results = {"leads_found": 0, "leads_backfilled": 0, "loans_found": 0, "loans_backfilled": 0, "errors": []}
@@ -1695,10 +1695,11 @@ async def backfill_milestones(
                 except Exception as e:
                     results["errors"].append(f"Lead {lead_row.id}: {str(e)[:100]}")
 
-    # Backfill loans
+    # Backfill loans — use track_loan_stage_change with current stage
+    # This maps each loan's actual stage to the correct milestone type
     if entity_type in ("loans", "both"):
         loans_without_milestones = db.execute(text("""
-            SELECT l.id, l.loan_number, l.organization_id
+            SELECT l.id, l.loan_number, l.organization_id, l.stage::text as stage
             FROM loans l
             LEFT JOIN loan_milestone_history m ON m.loan_id = l.id
             WHERE m.id IS NULL
@@ -1712,14 +1713,21 @@ async def backfill_milestones(
             for loan_row in loans_without_milestones:
                 try:
                     loan_org = loan_row.organization_id or org_id
-                    milestone_id = track_loan_created(
-                        db, loan_row.id, loan_row.loan_number,
-                        organization_id=loan_org
+                    track_loan_stage_change(
+                        db, loan_row.id,
+                        old_stage=None,
+                        new_stage=loan_row.stage,
+                        loan_number=loan_row.loan_number,
+                        organization_id=loan_org,
                     )
-                    if milestone_id:
+                    # Verify a milestone was actually created
+                    check = db.execute(text(
+                        "SELECT id FROM loan_milestone_history WHERE loan_id = :lid ORDER BY id DESC LIMIT 1"
+                    ), {"lid": loan_row.id}).fetchone()
+                    if check:
                         results["loans_backfilled"] += 1
                     else:
-                        results["errors"].append(f"Loan {loan_row.id}: no milestone created (org={loan_org}, no SLA measure?)")
+                        results["errors"].append(f"Loan {loan_row.id}: no milestone created (stage={loan_row.stage}, org={loan_org})")
                 except Exception as e:
                     results["errors"].append(f"Loan {loan_row.id}: {str(e)[:100]}")
 
