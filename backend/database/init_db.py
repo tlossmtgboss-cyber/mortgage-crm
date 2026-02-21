@@ -1286,6 +1286,20 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Workflow SLA Phase 1 note: {e}")
 
+        # Workflow engine columns: escalation_level + workflow_instance_id on task instances
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE workflow_task_instances ADD COLUMN IF NOT EXISTS escalation_level INTEGER DEFAULT 0
+                """))
+                conn.execute(text("""
+                    ALTER TABLE workflow_task_instances ADD COLUMN IF NOT EXISTS workflow_instance_id INTEGER
+                """))
+                conn.commit()
+                logger.info("✅ Workflow engine columns added (escalation_level, workflow_instance_id)")
+        except Exception as e:
+            logger.warning(f"⚠️ Workflow engine columns note: {e}")
+
         # Loan State Reconciliation: audit log table + raw SF stage column
         try:
             with _engine.connect() as conn:
@@ -1383,6 +1397,59 @@ def init_db():
                 logger.info("✅ Call monitoring tables created/verified (call_sessions, call_artifacts, call_risk_flags)")
         except Exception as e:
             logger.warning(f"⚠️ Call monitoring tables note: {e}")
+
+        # Add organization_id to audit_logs for multi-tenant isolation (ISO-014)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id);
+                    CREATE INDEX IF NOT EXISTS ix_audit_logs_organization_id ON audit_logs(organization_id);
+                """))
+                conn.commit()
+                logger.info("✅ audit_logs: organization_id column added")
+        except Exception as e:
+            logger.warning(f"⚠️ audit_logs organization_id migration note: {e}")
+
+        # Add grace_period_ends_at to subscriptions for payment failure grace period (LIC-006)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS grace_period_ends_at TIMESTAMP;
+                """))
+                conn.commit()
+                logger.info("✅ subscriptions: grace_period_ends_at column added")
+        except Exception as e:
+            logger.warning(f"⚠️ subscriptions grace_period migration note: {e}")
+
+        # Create data_subject_requests table for GDPR DSAR (CMP-004)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS data_subject_requests (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER REFERENCES organizations(id),
+                        request_type VARCHAR(50) NOT NULL DEFAULT 'access',
+                        requestor_email VARCHAR(255) NOT NULL,
+                        requestor_name VARCHAR(255),
+                        status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        due_date TIMESTAMP,
+                        handled_by_id INTEGER REFERENCES users(id),
+                        handled_at TIMESTAMP,
+                        notes TEXT,
+                        result_summary TEXT,
+                        identity_verified BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_dsr_org_id ON data_subject_requests(organization_id);
+                    CREATE INDEX IF NOT EXISTS ix_dsr_status ON data_subject_requests(status);
+                    CREATE INDEX IF NOT EXISTS ix_dsr_email ON data_subject_requests(requestor_email);
+                """))
+                conn.commit()
+                logger.info("✅ data_subject_requests table created/verified")
+        except Exception as e:
+            logger.warning(f"⚠️ data_subject_requests table note: {e}")
 
         # Run comprehensive column migration for all missing columns
         try:

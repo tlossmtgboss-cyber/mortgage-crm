@@ -203,6 +203,7 @@ def create_workflow_config_models(Base):
 
         id = Column(Integer, primary_key=True, index=True)
         workflow_id = Column(Integer, ForeignKey("workflow_configurations.id"), nullable=False)
+        workflow_instance_id = Column(Integer, ForeignKey("workflow_instances.id"), nullable=True)
         day_config_id = Column(Integer, ForeignKey("workflow_day_configs.id"), nullable=False)
         lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
         loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
@@ -223,6 +224,7 @@ def create_workflow_config_models(Base):
         status = Column(String(50), default="pending")  # pending, in_progress, completed, skipped, failed
         health_status = Column(SQLEnum(TaskHealthStatus), default=TaskHealthStatus.HEALTHY)
         error_message = Column(Text)
+        escalation_level = Column(Integer, default=0)
 
         created_at = Column(DateTime, default=datetime.utcnow)
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
