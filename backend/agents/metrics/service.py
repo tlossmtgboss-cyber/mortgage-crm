@@ -463,7 +463,7 @@ class AIMetricsService:
                     COUNT(CASE WHEN (metadata->>'contradicted_claims')::int = 0 THEN 1 END) as clean_responses
                 FROM ai_metrics
                 WHERE metric_type = 'faithfulness_score'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
             """), params)
             faith_row = faith_result.fetchone()
@@ -476,7 +476,7 @@ class AIMetricsService:
                     COUNT(CASE WHEN metric_type = 'claim_contradicted' THEN 1 END) as contradicted
                 FROM ai_metrics
                 WHERE metric_type IN ('claim_verified', 'claim_unsupported', 'claim_contradicted')
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
                 GROUP BY metadata->>'claim_type'
             """), params)
@@ -496,7 +496,7 @@ class AIMetricsService:
                 FROM ai_metrics
                 WHERE metric_type IN ('claim_verified', 'claim_unsupported', 'claim_contradicted')
                 AND metadata->>'source_tool' IS NOT NULL
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
                 GROUP BY metadata->>'source_tool'
             """), params)
@@ -584,7 +584,7 @@ class AIMetricsService:
                     PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY value) as p99
                 FROM ai_metrics
                 WHERE metric_type = 'response_time'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
             """), params)
             time_row = time_result.fetchone()
@@ -596,7 +596,7 @@ class AIMetricsService:
                     SUM(value) as successes
                 FROM ai_metrics
                 WHERE metric_type = 'tool_execution'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
             """), params)
             tool_row = tool_result.fetchone()
@@ -608,7 +608,7 @@ class AIMetricsService:
                     COUNT(*) as error_count
                 FROM ai_metrics
                 WHERE metric_type = 'node_error'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
                 GROUP BY metadata->>'node_name'
             """), params)
@@ -618,7 +618,7 @@ class AIMetricsService:
             total_queries_result = db.execute(text(f"""
                 SELECT COUNT(*) FROM ai_metrics
                 WHERE metric_type = 'query_type'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
             """), params)
             total_queries = total_queries_result.scalar() or 1
@@ -633,7 +633,7 @@ class AIMetricsService:
                     SUM(CASE WHEN value = 0 THEN 1 ELSE 0 END) as negative
                 FROM ai_metrics
                 WHERE metric_type = 'user_feedback'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {user_filter}
             """), params)
             feedback_row = feedback_result.fetchone()
@@ -696,7 +696,7 @@ class AIMetricsService:
                     COUNT(DISTINCT user_id) as unique_users
                 FROM ai_metrics
                 WHERE metric_type = 'query_type'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             query_row = query_result.fetchone()
             total_queries = query_row[0] or 0
@@ -709,7 +709,7 @@ class AIMetricsService:
                     COUNT(*) as count
                 FROM ai_metrics
                 WHERE metric_type = 'query_type'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 GROUP BY metadata->>'query_type'
                 ORDER BY count DESC
                 LIMIT 10
@@ -724,7 +724,7 @@ class AIMetricsService:
                     AVG(value) as success_rate
                 FROM ai_metrics
                 WHERE metric_type IN ('tool_usage', 'tool_execution')
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 GROUP BY metadata->>'tool_name'
                 ORDER BY usage_count DESC
                 LIMIT 20
@@ -741,7 +741,7 @@ class AIMetricsService:
                     metadata->>'action_type' as action_type
                 FROM ai_metrics
                 WHERE metric_type = 'action_executed'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 GROUP BY metadata->>'action_type'
             """))
             actions_by_type = {}
@@ -757,7 +757,7 @@ class AIMetricsService:
                     COUNT(*) as total_messages
                 FROM ai_metrics
                 WHERE metric_type = 'query_type'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             eng_row = engagement_result.fetchone()
             total_sessions = eng_row[0] or 1
@@ -818,7 +818,7 @@ class AIMetricsService:
                     COUNT(CASE WHEN metadata->>'user_confirmed' IS NOT NULL THEN 1 END) as total_confirmed
                 FROM ai_metrics
                 WHERE metric_type = 'intent_classification'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             intent_row = intent_result.fetchone()
 
@@ -831,7 +831,7 @@ class AIMetricsService:
             tool_result = db.execute(text(f"""
                 SELECT AVG(value) FROM ai_metrics
                 WHERE metric_type = 'tool_execution'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             tool_accuracy = tool_result.scalar() or 0
 
@@ -839,7 +839,7 @@ class AIMetricsService:
             quality_result = db.execute(text(f"""
                 SELECT AVG(value) FROM ai_metrics
                 WHERE metric_type = 'user_feedback'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             response_quality = quality_result.scalar() or 0
 
@@ -847,14 +847,14 @@ class AIMetricsService:
             followup_result = db.execute(text(f"""
                 SELECT COUNT(*) FROM ai_metrics
                 WHERE metric_type = 'followup_click'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             followup_clicks = followup_result.scalar() or 0
 
             total_queries_result = db.execute(text(f"""
                 SELECT COUNT(*) FROM ai_metrics
                 WHERE metric_type = 'query_type'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             total_queries = total_queries_result.scalar() or 1
 
@@ -916,7 +916,7 @@ class AIMetricsService:
                     COUNT(*) as count
                 FROM ai_metrics
                 WHERE metric_type = 'response_time'
-                AND created_at > NOW() - INTERVAL '{days} days'
+                AND created_at > NOW() - (INTERVAL '1 day' * :days)
                 {type_filter}
                 GROUP BY metadata->>'query_type'
                 ORDER BY count DESC

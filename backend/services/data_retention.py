@@ -42,6 +42,10 @@ DEFAULT_RETENTION_DAYS = {
     "voicemail_drops": 365,     # 1 year
 }
 
+# Allowlist of tables that retention policies may target.
+# Any table not in this set is rejected before reaching SQL execution.
+_RETENTION_ALLOWED_TABLES = frozenset(DEFAULT_RETENTION_DAYS.keys())
+
 # Tables that must NEVER be purged (regulatory and audit requirements)
 NEVER_PURGE_TABLES = frozenset({
     "audit_logs",
@@ -142,6 +146,10 @@ class DataRetentionService:
 
         violations = []
         for table, days in overrides.items():
+            if table not in _RETENTION_ALLOWED_TABLES:
+                violations.append(
+                    f"'{table}' is not a recognized retention table"
+                )
             if table in NEVER_PURGE_TABLES:
                 violations.append(
                     f"'{table}' cannot have a retention policy (regulatory hold)"
@@ -271,6 +279,12 @@ class DataRetentionService:
             "action": "skip",
             "count": 0,
         }
+
+        # Reject table names not in the allowlist to prevent SQL injection
+        if table_name not in _RETENTION_ALLOWED_TABLES:
+            result["action"] = "rejected_unknown_table"
+            logger.warning(f"Retention cleanup rejected unknown table: {table_name}")
+            return result
 
         try:
             # Check if table exists

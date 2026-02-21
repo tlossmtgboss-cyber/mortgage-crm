@@ -1703,8 +1703,39 @@ async def _generate_audio_from_text(
         with open(file_path, "wb") as f:
             f.write(response.content)
 
-        logger.info(f"TTS audio generated: {filename} ({len(response.content)} bytes)")
+        # Validate audio duration >= 5 seconds (Slybroadcast API requirement)
+        audio_duration = _estimate_audio_duration_seconds(response.content)
+        if audio_duration < 5.0:
+            logger.warning(
+                f"TTS audio too short ({audio_duration:.1f}s < 5s minimum): {filename}. "
+                f"Slybroadcast requires audio > 5 seconds."
+            )
+            os.remove(file_path)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Generated audio is too short ({audio_duration:.1f}s). "
+                       f"Slybroadcast requires audio > 5 seconds. Use a longer message."
+            )
+
+        logger.info(f"TTS audio generated: {filename} ({len(response.content)} bytes, ~{audio_duration:.1f}s)")
         return filename
+
+
+def _estimate_audio_duration_seconds(mp3_data: bytes) -> float:
+    """Estimate MP3 audio duration from file size.
+
+    Uses average bitrate estimation for OpenAI TTS (tts-1 outputs ~48kbps MP3).
+    For precise validation, use mutagen or ffprobe if available.
+    """
+    try:
+        import mutagen.mp3
+        import io
+        audio = mutagen.mp3.MP3(io.BytesIO(mp3_data))
+        return audio.info.length
+    except (ImportError, Exception):
+        # Fallback: estimate from file size assuming ~48kbps bitrate (OpenAI tts-1 default)
+        bitrate_bytes_per_sec = 48000 / 8  # 6000 bytes/sec
+        return len(mp3_data) / bitrate_bytes_per_sec
 
 
 @router.delete("/templates/{template_id}/audio")

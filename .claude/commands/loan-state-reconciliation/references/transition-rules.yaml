@@ -1,0 +1,271 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Loan State Transition Rules
+# Source of truth for Salesforce → Perennia AI pipeline routing
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: "1.0"
+last_updated: "2026-02-20"
+
+# ─── Pipeline Definitions ───────────────────────────────────────────────────
+
+pipelines:
+  leads:
+    table: leads
+    description: "Prospects and pre-application borrowers"
+    terminal_statuses:
+      - "Converted to Active Loan"
+      - "Withdrawn"
+      - "Dead Lead"
+
+  active_loans:
+    table: active_loans
+    description: "Loans actively being processed through funding"
+    terminal_statuses:
+      - "Funded - Moved to MUM"
+      - "Withdrawn"
+      - "Denied"
+
+  mum:
+    table: mum_clients
+    description: "Mortgages Under Management — funded loans in portfolio"
+    terminal_statuses: []  # MUM records persist indefinitely
+
+# ─── Salesforce Stage → Milestone Mapping ───────────────────────────────────
+
+stage_mapping:
+  # Lead-phase stages (record stays in or enters Leads)
+  lead_stages:
+    - sf_stage: "New Lead"
+      milestone: NEW_LEAD
+      pipeline: leads
+    - sf_stage: "Attempted Contact"
+      milestone: ATTEMPTED_CONTACT
+      pipeline: leads
+    - sf_stage: "Contacted"
+      milestone: CONTACTED
+      pipeline: leads
+    - sf_stage: "Initial Consultation"
+      milestone: INITIAL_CONSULTATION
+      pipeline: leads
+    - sf_stage: "Pre-Qualified"
+      milestone: PRE_QUALIFIED
+      pipeline: leads
+    - sf_stage: "Pre-Approved"
+      milestone: PRE_APPROVED
+      pipeline: leads
+    - sf_stage: "Application Complete"
+      milestone: APPLICATION_COMPLETE
+      pipeline: leads
+    - sf_stage: "Qualification"
+      milestone: PRE_QUALIFIED
+      pipeline: leads
+    - sf_stage: "Needs Analysis"
+      milestone: INITIAL_CONSULTATION
+      pipeline: leads
+    - sf_stage: "Prospecting"
+      milestone: NEW_LEAD
+      pipeline: leads
+
+  # Transition-trigger stages (record moves Leads → Active Loans)
+  transition_to_active:
+    - sf_stage: "Contract Received"
+      milestone: CONTRACT_RECEIVED
+    - sf_stage: "Submitted to Processing"
+      milestone: SUBMITTED_TO_PROCESSING
+    - sf_stage: "In Processing"
+      milestone: LOAN_IN_PROCESSING
+    - sf_stage: "Application Submitted"
+      milestone: APPLICATION_SUBMITTED
+    - sf_stage: "Document Collection"
+      milestone: DOCUMENT_COLLECTION
+
+  # Active loan stages (record stays in Active Loans)
+  active_stages:
+    - sf_stage: "Contract Received"
+      milestone: CONTRACT_RECEIVED
+    - sf_stage: "Submitted to Processing"
+      milestone: SUBMITTED_TO_PROCESSING
+    - sf_stage: "In Processing"
+      milestone: LOAN_IN_PROCESSING
+    - sf_stage: "Application Submitted"
+      milestone: APPLICATION_SUBMITTED
+    - sf_stage: "Document Collection"
+      milestone: DOCUMENT_COLLECTION
+    - sf_stage: "Documents Requested"
+      milestone: DOCUMENTS_REQUESTED
+    - sf_stage: "Documents Received"
+      milestone: DOCUMENTS_RECEIVED
+    - sf_stage: "Appraisal Ordered"
+      milestone: APPRAISAL_ORDERED
+    - sf_stage: "Appraisal Received"
+      milestone: APPRAISAL_RECEIVED
+    - sf_stage: "Insurance Ordered"
+      milestone: INSURANCE_ORDERED
+    - sf_stage: "Insurance Received"
+      milestone: INSURANCE_RECEIVED
+    - sf_stage: "Title Ordered"
+      milestone: TITLE_ORDERED
+    - sf_stage: "Title Received"
+      milestone: TITLE_RECEIVED
+    - sf_stage: "Submitted to Underwriting"
+      milestone: LOAN_SUBMITTED_TO_UW
+    - sf_stage: "In Underwriting"
+      milestone: LOAN_IN_UW
+    - sf_stage: "Underwriting Decision"
+      milestone: UW_DECISION
+    - sf_stage: "Approved"
+      milestone: LOAN_APPROVED
+    - sf_stage: "Conditional Approval"
+      milestone: LOAN_APPROVED
+      substatus: "conditional"
+    - sf_stage: "Conditions Cleared"
+      milestone: CONDITIONS_CLEARED
+    - sf_stage: "Clear to Close"
+      milestone: LOAN_CTC
+    - sf_stage: "Closing Docs Out"
+      milestone: CLOSING_DOCS_OUT
+    - sf_stage: "Closing Scheduled"
+      milestone: LOAN_CLOSING_SCHEDULED
+    - sf_stage: "Closing Date"
+      milestone: LOAN_CLOSING_SCHEDULED
+
+  # Transition-trigger stages (record moves Active Loans → MUM)
+  transition_to_mum:
+    - sf_stage: "Funded"
+      milestone: LOAN_FUNDED
+    - sf_stage: "Loan Funded"
+      milestone: LOAN_FUNDED
+    - sf_stage: "Closed"
+      milestone: LOAN_FUNDED
+    - sf_stage: "Closed Won"
+      milestone: LOAN_FUNDED
+    - sf_stage: "Post-Closing"
+      milestone: LOAN_FUNDED
+
+  # Special statuses (no pipeline movement)
+  special_statuses:
+    suspended:
+      sf_stages: ["Suspended", "On Hold", "Paused"]
+      action: set_substatus
+      substatus: "suspended"
+      pause_sla: true
+    withdrawn:
+      sf_stages: ["Withdrawn", "Cancelled", "Lost", "Closed Lost"]
+      action: archive
+      substatus: "withdrawn"
+      stop_workflows: true
+    denied:
+      sf_stages: ["Denied", "Declined", "Adverse Action"]
+      action: archive
+      substatus: "denied"
+      stop_workflows: true
+      trigger_compliance: true
+
+# ─── Date Field Triggers ────────────────────────────────────────────────────
+# If these Salesforce date fields become non-null, they can also trigger
+# transitions even if StageName hasn't changed yet.
+
+date_field_triggers:
+  leads_to_active:
+    - field: Contract_Received_Date__c
+      alt_fields: [Contract_Date__c]
+      milestone: CONTRACT_RECEIVED
+    - field: Submitted_To_Processing_Date__c
+      alt_fields: [Processing_Start_Date__c]
+      milestone: SUBMITTED_TO_PROCESSING
+    - field: Application_Submission_Date__c
+      alt_fields: [App_Submitted_Date__c]
+      milestone: APPLICATION_SUBMITTED
+
+  active_to_mum:
+    - field: Funding_Date__c
+      alt_fields: [Funded_Date__c, Fund_Date__c, Loan_Funded_Date__c]
+      milestone: LOAN_FUNDED
+
+# ─── Transition Validation Rules ────────────────────────────────────────────
+
+validation:
+  leads_to_active:
+    required_fields:
+      - borrower_name
+      - borrower_email
+      - loan_amount
+    checks:
+      - name: no_duplicate_active_loan
+        description: "Check no existing active loan for same borrower + property"
+        severity: block  # block | warn
+      - name: required_fields_populated
+        description: "All required fields must have values"
+        severity: block
+
+  active_to_mum:
+    required_fields:
+      - funding_date
+      - loan_number
+      - final_loan_amount
+      - interest_rate
+    checks:
+      - name: conditions_cleared
+        description: "All prior-to-funding conditions should be cleared"
+        severity: warn  # Don't block, but alert
+      - name: loan_number_assigned
+        description: "Loan must have a permanent loan number"
+        severity: block
+
+# ─── Reactivation Rules ────────────────────────────────────────────────────
+
+reactivation:
+  from_withdrawn:
+    allowed_targets: [leads, active_loans]
+    action: restore_record
+    clear_substatus: true
+    restart_sla: true
+    audit_event: "reactivation_from_withdrawn"
+
+  from_suspended:
+    allowed_targets: [leads, active_loans]  # stays in current pipeline
+    action: clear_substatus
+    restart_sla: true
+    audit_event: "reactivation_from_suspended"
+
+  from_denied:
+    allowed_targets: [leads]  # Goes back to leads, not directly to active
+    action: restore_to_leads
+    clear_substatus: true
+    new_stage: "Re-Engagement"
+    audit_event: "reactivation_from_denied"
+
+# ─── Alert Configuration ───────────────────────────────────────────────────
+
+alerts:
+  - name: stuck_record
+    condition: "no_stage_change_days > 14"
+    severity: warning
+    notify: loan_officer
+
+  - name: unmapped_stage
+    condition: "sf_stage NOT IN stage_mapping"
+    severity: info
+    notify: admin
+
+  - name: transition_validation_failed
+    condition: "validation.severity == 'block'"
+    severity: high
+    notify: [loan_officer, admin]
+
+  - name: backward_movement
+    condition: "new_milestone_order < current_milestone_order"
+    severity: info
+    notify: loan_officer
+
+  - name: skip_to_funded
+    condition: "current_pipeline == 'leads' AND sf_stage IN transition_to_mum"
+    severity: critical
+    notify: admin
+    action: block_transition
+
+  - name: bulk_transition
+    condition: "transitions_in_batch > 50"
+    severity: warning
+    notify: admin
+    action: pause_and_verify

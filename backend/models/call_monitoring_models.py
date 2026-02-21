@@ -182,6 +182,7 @@ class CallSession(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
 
     # Capture source
     capture_mode = Column(String(30), nullable=False)
@@ -246,6 +247,7 @@ class CallParticipant(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     session_id = Column(UUID(as_uuid=True), ForeignKey('call_sessions.id', ondelete='CASCADE'), nullable=False)
 
     # Participant identification
@@ -290,6 +292,7 @@ class AgentRun(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     session_id = Column(UUID(as_uuid=True), ForeignKey('call_sessions.id', ondelete='CASCADE'), nullable=False)
 
     # Agent identification
@@ -348,6 +351,7 @@ class AgentEvent(Base):
     )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     session_id = Column(UUID(as_uuid=True), ForeignKey('call_sessions.id', ondelete='CASCADE'), nullable=False)
     run_id = Column(UUID(as_uuid=True), ForeignKey('agent_runs.id', ondelete='SET NULL'))
 
@@ -382,6 +386,7 @@ class CallArtifact(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     session_id = Column(UUID(as_uuid=True), ForeignKey('call_sessions.id', ondelete='CASCADE'), nullable=False)
     run_id = Column(UUID(as_uuid=True), ForeignKey('agent_runs.id', ondelete='SET NULL'))
 
@@ -441,6 +446,7 @@ class IntakeFieldUpdate(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     session_id = Column(UUID(as_uuid=True), ForeignKey('call_sessions.id', ondelete='CASCADE'), nullable=False)
     artifact_id = Column(UUID(as_uuid=True), ForeignKey('call_artifacts.id', ondelete='SET NULL'))
 
@@ -489,6 +495,7 @@ class CallRiskFlag(Base):
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     session_id = Column(UUID(as_uuid=True), ForeignKey('call_sessions.id', ondelete='CASCADE'), nullable=False)
     artifact_id = Column(UUID(as_uuid=True), ForeignKey('call_artifacts.id', ondelete='SET NULL'))
 

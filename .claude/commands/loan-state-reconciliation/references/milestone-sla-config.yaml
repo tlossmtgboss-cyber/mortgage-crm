@@ -1,0 +1,279 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Milestone SLA Configuration
+# Defines expected timeframes and escalation rules per milestone
+# Used by the reconciliation engine to start/stop/restart SLA timers
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: "1.0"
+
+# ─── Lead Phase Milestones ──────────────────────────────────────────────────
+
+lead_milestones:
+  NEW_LEAD:
+    display_name: "New Lead"
+    sla_hours: 4
+    description: "Initial response to new lead"
+    owner: loan_officer
+    escalation:
+      after_hours: 8
+      notify: manager
+    next_expected: ATTEMPTED_CONTACT
+
+  ATTEMPTED_CONTACT:
+    display_name: "Attempted Contact"
+    sla_hours: 2
+    description: "Follow-up after first attempt"
+    owner: loan_officer
+    escalation:
+      after_hours: 24
+      notify: loan_officer
+    next_expected: CONTACTED
+
+  CONTACTED:
+    display_name: "Contacted"
+    sla_hours: 48
+    description: "Schedule initial consultation"
+    owner: loan_officer
+    next_expected: INITIAL_CONSULTATION
+
+  INITIAL_CONSULTATION:
+    display_name: "Initial Consultation"
+    sla_business_days: 3
+    description: "Complete needs analysis and pre-qualification"
+    owner: loan_officer
+    next_expected: PRE_QUALIFIED
+
+  PRE_QUALIFIED:
+    display_name: "Pre-Qualified"
+    sla_hours: 1
+    description: "Issue pre-qualification letter"
+    owner: loan_officer
+    next_expected: PRE_APPROVED
+
+  PRE_APPROVED:
+    display_name: "Pre-Approved"
+    sla_business_days: 3
+    description: "Complete pre-approval documentation"
+    owner: loan_officer
+    next_expected: APPLICATION_COMPLETE
+
+  APPLICATION_COMPLETE:
+    display_name: "Application Complete"
+    sla_business_days: 2
+    description: "Application ready for processing"
+    owner: loan_officer
+    next_expected: CONTRACT_RECEIVED
+    # This is the last lead-phase milestone before transition to Active Loans
+
+# ─── Active Loan Phase Milestones ───────────────────────────────────────────
+
+active_milestones:
+  CONTRACT_RECEIVED:
+    display_name: "Contract Received"
+    sla_business_days: 3
+    description: "Process contract and begin file setup"
+    owner: processor
+    next_expected: SUBMITTED_TO_PROCESSING
+
+  SUBMITTED_TO_PROCESSING:
+    display_name: "Submitted to Processing"
+    sla_business_days: 3
+    description: "Begin document collection and file preparation"
+    owner: processor
+    next_expected: LOAN_IN_PROCESSING
+
+  LOAN_IN_PROCESSING:
+    display_name: "In Processing"
+    sla_business_days: 7
+    description: "Complete file preparation for UW submission"
+    owner: processor
+    escalation:
+      after_business_days: 10
+      notify: [processor, manager]
+    next_expected: LOAN_SUBMITTED_TO_UW
+
+  APPLICATION_SUBMITTED:
+    display_name: "Application Submitted"
+    sla_business_days: 3
+    description: "Application submitted and acknowledged"
+    owner: processor
+    next_expected: DOCUMENT_COLLECTION
+
+  DOCUMENT_COLLECTION:
+    display_name: "Document Collection"
+    sla_business_days: 5
+    description: "Collect all required borrower documents"
+    owner: processor
+    escalation:
+      after_business_days: 7
+      notify: loan_officer
+      action: borrower_reminder
+    next_expected: DOCUMENTS_RECEIVED
+
+  DOCUMENTS_REQUESTED:
+    display_name: "Documents Requested"
+    sla_business_days: 1
+    description: "Send document request to borrower"
+    owner: processor
+    next_expected: DOCUMENTS_RECEIVED
+
+  DOCUMENTS_RECEIVED:
+    display_name: "Documents Received"
+    sla_business_days: 5
+    description: "All requested documents received from borrower"
+    owner: processor
+    next_expected: LOAN_SUBMITTED_TO_UW
+
+  # ── Parallel Track: Appraisal ──
+
+  APPRAISAL_ORDERED:
+    display_name: "Appraisal Ordered"
+    sla_business_days: 1
+    description: "Order appraisal from AMC"
+    owner: processor
+    parallel: true  # Can happen alongside other milestones
+    next_expected: APPRAISAL_RECEIVED
+
+  APPRAISAL_RECEIVED:
+    display_name: "Appraisal Received"
+    sla_business_days: 7
+    measured_from: APPRAISAL_ORDERED
+    description: "Appraisal report received and reviewed"
+    owner: processor
+    parallel: true
+
+  # ── Parallel Track: Insurance ──
+
+  INSURANCE_ORDERED:
+    display_name: "Insurance Ordered"
+    sla_business_days: 10
+    description: "Order homeowners insurance"
+    owner: processor
+    parallel: true
+    next_expected: INSURANCE_RECEIVED
+
+  INSURANCE_RECEIVED:
+    display_name: "Insurance Received"
+    sla_business_days: 10
+    measured_from: closing_date  # 10 business days BEFORE closing
+    measure_direction: before
+    description: "Insurance binder received"
+    owner: processor
+    parallel: true
+
+  # ── Parallel Track: Title ──
+
+  TITLE_ORDERED:
+    display_name: "Title Ordered"
+    sla_business_days: 1
+    description: "Order title search and commitment"
+    owner: processor
+    parallel: true
+    next_expected: TITLE_RECEIVED
+
+  TITLE_RECEIVED:
+    display_name: "Title Received"
+    sla_business_days: 10
+    measured_from: closing_date
+    measure_direction: before
+    description: "Title commitment received and reviewed"
+    owner: processor
+    parallel: true
+
+  # ── Underwriting Track ──
+
+  LOAN_SUBMITTED_TO_UW:
+    display_name: "Submitted to Underwriting"
+    sla_business_days: 3
+    description: "File submitted, awaiting UW pickup"
+    owner: processor
+    escalation:
+      after_business_days: 5
+      notify: [processor, manager]
+      action: ping_uw_manager
+    next_expected: LOAN_IN_UW
+
+  LOAN_IN_UW:
+    display_name: "In Underwriting"
+    sla_hours: 48
+    description: "Underwriter actively reviewing file"
+    owner: underwriter
+    escalation:
+      after_business_days: 5
+      notify: [loan_officer, manager]
+    next_expected: UW_DECISION
+
+  UW_DECISION:
+    display_name: "Underwriting Decision"
+    sla_business_days: 3
+    description: "UW decision issued — approve, suspend, or deny"
+    owner: underwriter
+    next_expected: LOAN_APPROVED
+
+  LOAN_APPROVED:
+    display_name: "Approved"
+    sla_business_days: 5
+    description: "Approved with conditions — clear conditions"
+    owner: processor
+    escalation:
+      after_business_days: 7
+      notify: [processor, loan_officer]
+    next_expected: CONDITIONS_CLEARED
+
+  CONDITIONS_CLEARED:
+    display_name: "Conditions Cleared"
+    sla_hours: 24
+    description: "All conditions cleared — prepare for CTC"
+    owner: processor
+    next_expected: LOAN_CTC
+
+  # ── Closing Track ──
+
+  LOAN_CTC:
+    display_name: "Clear to Close"
+    sla_business_days: 3
+    description: "CTC issued — prepare closing package"
+    owner: closer
+    next_expected: CLOSING_DOCS_OUT
+
+  CLOSING_DOCS_OUT:
+    display_name: "Closing Docs Out"
+    sla_business_days: 1
+    description: "Closing disclosure sent to borrower"
+    owner: closer
+    next_expected: LOAN_CLOSING_SCHEDULED
+    compliance_note: "3-day TRID waiting period begins"
+
+  LOAN_CLOSING_SCHEDULED:
+    display_name: "Closing Scheduled"
+    sla_business_days: 7
+    description: "Closing appointment scheduled — final preparations"
+    owner: closer
+    escalation:
+      after_business_days: -1  # 1 day BEFORE closing
+      notify: closer
+      action: pre_closing_verification
+    next_expected: LOAN_FUNDED
+
+  LOAN_FUNDED:
+    display_name: "Loan Funded"
+    sla_business_days: 1
+    description: "Loan funded — triggers MUM transition"
+    owner: closer
+    triggers_transition: active_to_mum
+    next_expected: null  # Terminal milestone for active loans
+
+# ─── Stuck Record Thresholds ───────────────────────────────────────────────
+
+stuck_thresholds:
+  default_days: 14
+  overrides:
+    LOAN_IN_PROCESSING: 10
+    LOAN_IN_UW: 5
+    LOAN_APPROVED: 7
+    DOCUMENT_COLLECTION: 7
+  alert_recipients:
+    - loan_officer
+    - processor
+  escalation_recipients:
+    - manager

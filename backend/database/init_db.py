@@ -1103,6 +1103,23 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Enterprise security columns note: {e}")
 
+        # Add milestone + mum_date columns to loans/leads (required by ORM model)
+        # These MUST run before any ORM query on Loan/Lead to avoid
+        # "column does not exist" errors that poison DB transactions.
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE loans ADD COLUMN IF NOT EXISTS current_milestone_status VARCHAR(50);
+                    ALTER TABLE loans ADD COLUMN IF NOT EXISTS current_milestone_entered_at TIMESTAMPTZ;
+                    ALTER TABLE loans ADD COLUMN IF NOT EXISTS mum_date TIMESTAMPTZ;
+                    ALTER TABLE leads ADD COLUMN IF NOT EXISTS current_milestone_status VARCHAR(50);
+                    ALTER TABLE leads ADD COLUMN IF NOT EXISTS current_milestone_entered_at TIMESTAMPTZ;
+                """))
+                conn.commit()
+                logger.info("✅ Milestone + mum_date columns added (loans, leads)")
+        except Exception as e:
+            logger.warning(f"⚠️ Milestone columns note: {e}")
+
         # Add AI content attribution columns to ai_conversation_memory (AI-005)
         try:
             with _engine.connect() as conn:
@@ -1253,16 +1270,8 @@ def init_db():
                     ON CONFLICT DO NOTHING
                 """))
 
-                # current_milestone_status + current_milestone_entered_at on loans
-                conn.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS current_milestone_status VARCHAR(50)"))
-                conn.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS current_milestone_entered_at TIMESTAMPTZ"))
-                conn.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS mum_date TIMESTAMPTZ"))
-
-                # current_milestone_status + current_milestone_entered_at on leads
-                conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS current_milestone_status VARCHAR(50)"))
-                conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS current_milestone_entered_at TIMESTAMPTZ"))
-
                 # Performance indexes for workflow engine queries
+                # (columns added earlier in init_db)
                 conn.execute(text("""
                     CREATE INDEX IF NOT EXISTS idx_loans_milestone_status
                         ON loans (current_milestone_status, current_milestone_entered_at)

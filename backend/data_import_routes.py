@@ -21,6 +21,13 @@ def _safe_column_name(col: str) -> str:
         return col
     return ''
 
+# Columns that must never be set via CSV import (security-sensitive or system-managed)
+_IMPORT_PROTECTED_COLUMNS = frozenset({
+    "id", "owner_id", "organization_id", "permission_role", "role",
+    "is_admin", "is_superuser", "password", "hashed_password",
+    "two_factor_secret", "created_at", "tenant_id",
+})
+
 router = APIRouter(prefix="/api/v1/data-import", tags=["Data Import"])
 
 # Import dependencies with lazy loading to avoid circular imports
@@ -644,8 +651,11 @@ def get_table_columns(conn, table_name: str) -> set:
 
 
 def filter_valid_columns(row_dict: dict, valid_columns: set) -> dict:
-    """Filter row_dict to only include columns that exist in the table and pass sanitization"""
-    return {k: v for k, v in row_dict.items() if k in valid_columns and _safe_column_name(k)}
+    """Filter row_dict to only include columns that exist in the table, pass sanitization, and are not protected"""
+    return {
+        k: v for k, v in row_dict.items()
+        if k in valid_columns and _safe_column_name(k) and k not in _IMPORT_PROTECTED_COLUMNS
+    }
 
 
 def ensure_import_columns_exist(conn, destination: str):
@@ -804,7 +814,7 @@ async def execute_import(
                                 update_vals = []
                                 for col, val in zip(columns, values):
                                     safe_col = _safe_column_name(col)
-                                    if safe_col and safe_col not in ['created_at'] and val is not None:
+                                    if safe_col and safe_col not in _IMPORT_PROTECTED_COLUMNS and val is not None:
                                         update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
                                 if update_cols:
@@ -893,7 +903,7 @@ async def execute_import(
                                 update_vals = []
                                 for col, val in zip(columns, values):
                                     safe_col = _safe_column_name(col)
-                                    if safe_col and safe_col not in ['loan_number', 'created_at'] and val is not None:
+                                    if safe_col and safe_col not in _IMPORT_PROTECTED_COLUMNS and safe_col != 'loan_number' and val is not None:
                                         update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
                                 if update_cols:
@@ -1018,7 +1028,7 @@ async def execute_import(
                                 update_vals = []
                                 for col, val in zip(columns, values):
                                     safe_col = _safe_column_name(col)
-                                    if safe_col and safe_col not in ['loan_number', 'created_at'] and val is not None:
+                                    if safe_col and safe_col not in _IMPORT_PROTECTED_COLUMNS and safe_col != 'loan_number' and val is not None:
                                         update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
                                 if update_cols:

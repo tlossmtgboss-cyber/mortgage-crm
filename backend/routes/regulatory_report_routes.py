@@ -74,11 +74,25 @@ LOAN_PURPOSE_MAP = {
 }
 
 
+from pydantic import validator
+
 class HMDAGenerateRequest(BaseModel):
     year: int
     quarter: Optional[int] = None  # None = full year
     include_denied: bool = True
     include_withdrawn: bool = True
+
+    @validator("year")
+    def year_in_range(cls, v):
+        if not (2000 <= v <= 2100):
+            raise ValueError("year must be between 2000 and 2100")
+        return v
+
+    @validator("quarter")
+    def quarter_in_range(cls, v):
+        if v is not None and not (1 <= v <= 4):
+            raise ValueError("quarter must be 1-4")
+        return v
 
 
 class StateFilingRequest(BaseModel):
@@ -119,10 +133,12 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
         if body.quarter:
             q_start_month = (body.quarter - 1) * 3 + 1
             q_end_month = body.quarter * 3
-            date_filter = f"AND EXTRACT(MONTH FROM l.status_changed_at) BETWEEN {q_start_month} AND {q_end_month}"
+            date_filter = "AND EXTRACT(MONTH FROM l.status_changed_at) BETWEEN :q_start_month AND :q_end_month"
             period_label = f"{body.year}-Q{body.quarter}"
         else:
             date_filter = ""
+            q_start_month = None
+            q_end_month = None
             period_label = str(body.year)
 
         # Status filter based on HMDA-reportable actions
@@ -152,7 +168,10 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
               AND l.status IN ({','.join(status_list)})
               {date_filter}
             ORDER BY l.status_changed_at
-        """), {"org_id": org_id, "year": body.year}).fetchall()
+        """), {
+            "org_id": org_id, "year": body.year,
+            **({"q_start_month": q_start_month, "q_end_month": q_end_month} if q_start_month else {}),
+        }).fetchall()
 
         # Generate LAR records
         lar_records = []

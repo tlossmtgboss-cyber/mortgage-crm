@@ -724,6 +724,25 @@ async def vapi_voicemail_status_webhook(
 
             logger.info(f"Updated voicemail drop {voicemail_id}: status={voicemail_drop.status}")
 
+            # Send post-call confirmation SMS if voicemail was delivered
+            if voicemail_drop.status == "delivered" and voicemail_drop.phone_number:
+                try:
+                    from integrations.sms_service import get_sms_client
+                    sms_client = get_sms_client()
+                    if sms_client.enabled:
+                        contact_name = voicemail_drop.contact_name or "there"
+                        sms_body = (
+                            f"Hi {contact_name}, I just left you a voicemail. "
+                            f"Feel free to call or text me back at your convenience!"
+                        )
+                        await sms_client.send_sms(
+                            to_number=voicemail_drop.phone_number,
+                            message=sms_body,
+                        )
+                        logger.info(f"Post-call SMS sent to {voicemail_drop.phone_number} for voicemail {voicemail_id}")
+                except Exception as sms_err:
+                    logger.warning(f"Post-call SMS failed for voicemail {voicemail_id}: {sms_err}")
+
         return {"status": "received"}
 
     except Exception as e:
