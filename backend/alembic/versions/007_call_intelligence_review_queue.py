@@ -1,7 +1,7 @@
 """Call Intelligence Review Queue and Model Versioning
 
 Revision ID: 007_call_intelligence_review
-Revises: 006_enable_row_level_security
+Revises: 006_rls
 Create Date: 2025-02-05
 
 This migration adds:
@@ -18,7 +18,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '007_call_intelligence_review'
-down_revision = '006_enable_row_level_security'
+down_revision = '006_rls'
 branch_labels = None
 depends_on = None
 
