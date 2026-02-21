@@ -26,6 +26,11 @@ from anthropic import Anthropic
 
 logger = logging.getLogger(__name__)
 
+# Whisper delivery SLA targets
+WHISPER_LATENCY_TARGET_MS = 2000  # Max acceptable latency: trigger to delivery
+WHISPER_LATENCY_WARNING_MS = 1500  # Warn if latency exceeds this threshold
+WHISPER_PROCESSING_BUDGET_MS = 500  # Max time for local processing before LLM call
+
 
 class WhisperType(str, Enum):
     """Types of whisper suggestions."""

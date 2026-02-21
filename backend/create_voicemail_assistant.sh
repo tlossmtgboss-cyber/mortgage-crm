@@ -34,8 +34,10 @@ RESPONSE=$(curl -s -X POST "https://api.vapi.ai/assistant" \
     "recordingEnabled": true,
     "silenceTimeoutSeconds": 5,
     "maxDurationSeconds": 120,
-    "voicemailDetectionEnabled": true,
-    "endCallOnVoicemailDetection": false
+    "voicemailDetection": {
+      "provider": "vapi",
+      "beepMaxAwaitSeconds": 25
+    }
   }')
 
 echo "Response:"

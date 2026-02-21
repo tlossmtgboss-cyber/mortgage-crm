@@ -1324,6 +1324,66 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Loan state reconciliation migration note: {e}")
 
+        # Create call monitoring tables (call_sessions, call_participants, etc.)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS call_sessions (
+                        id VARCHAR(36) PRIMARY KEY,
+                        organization_id INTEGER,
+                        call_sid VARCHAR(255),
+                        provider VARCHAR(50) DEFAULT 'twilio',
+                        capture_mode VARCHAR(50),
+                        status VARCHAR(50) DEFAULT 'active',
+                        direction VARCHAR(20),
+                        from_number VARCHAR(50),
+                        to_number VARCHAR(50),
+                        lead_id INTEGER,
+                        loan_id INTEGER,
+                        user_id INTEGER,
+                        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        ended_at TIMESTAMP,
+                        duration_seconds INTEGER,
+                        recording_url TEXT,
+                        transcript TEXT,
+                        summary TEXT,
+                        metadata JSONB,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS call_artifacts (
+                        id VARCHAR(36) PRIMARY KEY,
+                        organization_id INTEGER,
+                        call_session_id VARCHAR(36),
+                        artifact_type VARCHAR(100),
+                        agent_role VARCHAR(100),
+                        content JSONB,
+                        approval_status VARCHAR(50) DEFAULT 'pending',
+                        approved_by INTEGER,
+                        approved_at TIMESTAMP,
+                        model_version VARCHAR(100),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS call_risk_flags (
+                        id VARCHAR(36) PRIMARY KEY,
+                        organization_id INTEGER,
+                        call_session_id VARCHAR(36),
+                        category VARCHAR(100),
+                        severity VARCHAR(20),
+                        description TEXT,
+                        source_agent VARCHAR(100),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.commit()
+                logger.info("✅ Call monitoring tables created/verified (call_sessions, call_artifacts, call_risk_flags)")
+        except Exception as e:
+            logger.warning(f"⚠️ Call monitoring tables note: {e}")
+
         # Run comprehensive column migration for all missing columns
         try:
             from migrations.add_all_missing_columns import run_migration

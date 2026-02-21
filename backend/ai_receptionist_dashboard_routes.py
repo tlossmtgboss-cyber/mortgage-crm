@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/ai-receptionist/dashboard", tags=["AI Receptionist Dashboard"], dependencies=[Depends(require_auth)])
 
 
+def _get_org_id(current_user) -> Optional[int]:
+    """Extract organization_id from current user for tenant filtering."""
+    return getattr(current_user, 'organization_id', None)
+
+
 # ============================================================================
 # PYDANTIC RESPONSE MODELS
 # ============================================================================
@@ -227,6 +232,7 @@ async def get_activity_feed(
     client_id: Optional[str] = Query(None, description="Filter by client ID"),
     start_date: Optional[datetime] = Query(None, description="Filter from this date"),
     end_date: Optional[datetime] = Query(None, description="Filter to this date"),
+    current_user=Depends(require_auth),
     db: Session = Depends(get_db)
 ):
     """
@@ -235,6 +241,11 @@ async def get_activity_feed(
     """
     try:
         query = db.query(AIReceptionistActivity)
+
+        # Multi-tenant isolation
+        org_id = _get_org_id(current_user)
+        if org_id:
+            query = query.filter(AIReceptionistActivity.organization_id == org_id)
 
         # Apply filters
         if action_type:
@@ -294,6 +305,7 @@ async def get_activity_count(
 async def get_daily_metrics(
     start_date: date = Query(..., description="Start date for metrics"),
     end_date: date = Query(..., description="End date for metrics"),
+    current_user=Depends(require_auth),
     db: Session = Depends(get_db)
 ):
     """
@@ -301,12 +313,16 @@ async def get_daily_metrics(
     Used for trend graphs and performance tracking
     """
     try:
-        metrics = db.query(AIReceptionistMetricsDaily).filter(
+        query = db.query(AIReceptionistMetricsDaily).filter(
             and_(
                 AIReceptionistMetricsDaily.date >= start_date,
                 AIReceptionistMetricsDaily.date <= end_date
             )
-        ).order_by(AIReceptionistMetricsDaily.date).all()
+        )
+        org_id = _get_org_id(current_user)
+        if org_id:
+            query = query.filter(AIReceptionistMetricsDaily.organization_id == org_id)
+        metrics = query.order_by(AIReceptionistMetricsDaily.date).all()
 
         return metrics
 
@@ -316,7 +332,7 @@ async def get_daily_metrics(
 
 
 @router.get("/metrics/realtime", response_model=RealtimeMetrics)
-async def get_realtime_metrics(db: Session = Depends(get_db)):
+async def get_realtime_metrics(current_user=Depends(require_auth), db: Session = Depends(get_db)):
     """
     Get real-time metrics for current day
     Updates as new activities come in
@@ -324,8 +340,13 @@ async def get_realtime_metrics(db: Session = Depends(get_db)):
     try:
         today = date.today()
         today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
+        org_id = _get_org_id(current_user)
 
         # Count today's activities
+        base_activity_filter = []
+        if org_id:
+            base_activity_filter.append(AIReceptionistActivity.organization_id == org_id)
+
         conversations_today = db.query(func.count(AIReceptionistActivity.id)).filter(
             and_(
                 AIReceptionistActivity.timestamp >= today_start,
@@ -701,11 +722,17 @@ async def get_conversations(
     outcome: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
+    current_user=Depends(require_auth),
     db: Session = Depends(get_db)
 ):
     """Get list of conversations with filters"""
     try:
         query = db.query(AIReceptionistConversation)
+
+        # Multi-tenant isolation
+        org_id = _get_org_id(current_user)
+        if org_id:
+            query = query.filter(AIReceptionistConversation.organization_id == org_id)
 
         if client_id:
             query = query.filter(AIReceptionistConversation.client_id == client_id)

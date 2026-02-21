@@ -30,9 +30,22 @@ router = APIRouter(prefix="/api/v1/calls", tags=["calls"])
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
+SUPPORTED_AUDIO_FORMATS = {"wav", "mp3", "flac", "m4a", "ogg", "webm", "mp4", "mpeg"}
+
+
 class CallProcessRequest(BaseModel):
     audioBase64: str
     audioFormat: str = "m4a"
+
+    @property
+    def validated_audio_format(self) -> str:
+        fmt = self.audioFormat.lower().strip(".")
+        if fmt not in SUPPORTED_AUDIO_FORMATS:
+            raise ValueError(
+                f"Unsupported audio format '{self.audioFormat}'. "
+                f"Supported: {', '.join(sorted(SUPPORTED_AUDIO_FORMATS))}"
+            )
+        return fmt
     contactName: Optional[str] = None
     contactId: Optional[str] = None
     contactPhone: Optional[str] = None
@@ -72,12 +85,18 @@ async def process_call_recording(
     3. Create task with draft email
     """
     try:
+        # Validate audio format
+        try:
+            audio_fmt = request.validated_audio_format
+        except ValueError as e:
+            return CallProcessResponse(success=False, error=str(e))
+
         # Decode audio
         audio_data = base64.b64decode(request.audioBase64)
 
         # Save to temp file
         with tempfile.NamedTemporaryFile(
-            suffix=f".{request.audioFormat}",
+            suffix=f".{audio_fmt}",
             delete=False
         ) as temp_file:
             temp_file.write(audio_data)

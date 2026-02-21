@@ -16,6 +16,7 @@ class AIReceptionistActivity(Base):
     __tablename__ = "ai_receptionist_activity"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
 
     # Client information
@@ -66,6 +67,7 @@ class AIReceptionistMetricsDaily(Base):
     __tablename__ = "ai_receptionist_metrics_daily"
 
     date = Column(Date, primary_key=True)
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
 
     # Volume metrics
     total_conversations = Column(Integer, default=0)
@@ -157,6 +159,7 @@ class AIReceptionistError(Base):
     __tablename__ = "ai_receptionist_errors"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     timestamp = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
 
     # Error classification
@@ -244,6 +247,7 @@ class AIReceptionistConversation(Base):
     __tablename__ = "ai_receptionist_conversations"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    organization_id = Column(Integer, index=True)  # Multi-tenant isolation
     started_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     ended_at = Column(DateTime(timezone=True))
     duration_seconds = Column(Integer)
