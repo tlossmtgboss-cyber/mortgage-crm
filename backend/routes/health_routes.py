@@ -718,75 +718,55 @@ def register_health_routes(app, get_db, **kwargs):
 
     @app.get("/diag/loan-sf-check")
     async def diag_loan_sf_check(db: Session = Depends(get_db)):
-        """Temporary: check loan 1551 and find its Salesforce match."""
+        """Temporary: fix loan 1551 stage and normalize mixed-case stages."""
         results = {}
         try:
-            # 1. Get loan 1551 details
-            loan = db.execute(text("""
-                SELECT l.id, l.loan_number, l.borrower_name, l.stage::text,
-                       l.salesforce_id, l.borrower_email, l.amount, l.property_address
-                FROM loans l WHERE l.id = 1551
-            """)).fetchone()
-            if loan:
-                results["loan_1551"] = {
-                    "id": loan[0], "loan_number": loan[1], "borrower": loan[2],
-                    "stage": loan[3], "salesforce_id": loan[4],
-                    "email": loan[5], "amount": str(loan[6]) if loan[6] else None,
-                    "address": loan[7],
-                }
+            # 1. Fix loan 1551: set stage to WITHDRAWN (matches Salesforce)
+            db.execute(text("""
+                UPDATE loans SET stage = 'WITHDRAWN'
+                WHERE id = 1551 AND stage::text != 'WITHDRAWN'
+            """))
+            results["loan_1551_fixed"] = "Set to WITHDRAWN"
 
-            # 2. Find any loans for "Danielle Stoltz" or "Stoltz"
-            stoltz = db.execute(text("""
-                SELECT l.id, l.loan_number, l.borrower_name, l.stage::text,
-                       l.salesforce_id, l.amount, l.property_address
-                FROM loans l
-                WHERE l.borrower_name ILIKE '%stoltz%'
-                ORDER BY l.id
-            """)).fetchall()
-            results["all_stoltz_loans"] = [
-                {"id": r[0], "loan_number": r[1], "borrower": r[2],
-                 "stage": r[3], "sf_id": r[4], "amount": str(r[5]) if r[5] else None,
-                 "address": r[6]}
-                for r in stoltz
-            ]
+            # 2. Normalize mixed-case stages to uppercase enum values
+            # Fix 'Funded' -> 'FUNDED'
+            r1 = db.execute(text("""
+                UPDATE loans SET stage = 'FUNDED'
+                WHERE stage::text = 'Funded'
+            """))
+            results["funded_normalized"] = r1.rowcount
 
-            # 3. Find any leads for Stoltz
-            stoltz_leads = db.execute(text("""
-                SELECT l.id, l.first_name, l.last_name, l.email,
-                       l.stage::text, l.salesforce_id
-                FROM leads l
-                WHERE l.last_name ILIKE '%stoltz%'
-                ORDER BY l.id
-            """)).fetchall()
-            results["all_stoltz_leads"] = [
-                {"id": r[0], "name": f"{r[1]} {r[2]}", "email": r[3],
-                 "stage": r[4], "sf_id": r[5]}
-                for r in stoltz_leads
-            ]
+            # Fix 'Processing' -> 'PROCESSING'
+            r2 = db.execute(text("""
+                UPDATE loans SET stage = 'PROCESSING'
+                WHERE stage::text = 'Processing'
+            """))
+            results["processing_normalized"] = r2.rowcount
 
-            # 4. Count all loans by stage to get overall picture
+            db.commit()
+
+            # 3. Show updated stage counts
             stage_counts = db.execute(text("""
                 SELECT stage::text, COUNT(*) as cnt
                 FROM loans
                 GROUP BY stage::text
                 ORDER BY cnt DESC
             """)).fetchall()
-            results["all_loan_stages"] = {r[0]: r[1] for r in stage_counts}
+            results["stage_counts_after"] = {r[0]: r[1] for r in stage_counts}
 
-            # 5. Check how many loans have salesforce_id vs not
-            sf_counts = db.execute(text("""
-                SELECT
-                    COUNT(*) as total,
-                    COUNT(salesforce_id) as with_sf,
-                    COUNT(*) - COUNT(salesforce_id) as without_sf
-                FROM loans
+            # 4. Verify loan 1551
+            loan = db.execute(text("""
+                SELECT id, loan_number, borrower_name, stage::text, salesforce_id
+                FROM loans WHERE id = 1551
             """)).fetchone()
-            results["salesforce_linkage"] = {
-                "total": sf_counts[0], "linked": sf_counts[1], "unlinked": sf_counts[2]
-            }
+            results["loan_1551_now"] = {
+                "id": loan[0], "loan_number": loan[1], "borrower": loan[2],
+                "stage": loan[3], "sf_id": loan[4]
+            } if loan else None
 
             return results
         except Exception as e:
+            db.rollback()
             return {"error": str(e), "partial": results}
 
     # ========================================================================
