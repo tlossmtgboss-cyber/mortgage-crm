@@ -47,6 +47,7 @@ class MilestoneTypeEnum(str, Enum):
     DOCUMENTS_RECEIVED = "documents_received"
     DOCUMENT_COLLECTION = "document_collection"
     APPLICATION_COMPLETE = "application_complete"
+    DISCLOSED = "disclosed"
 
     # Processing Stage
     SUBMITTED_TO_PROCESSING = "submitted_to_processing"

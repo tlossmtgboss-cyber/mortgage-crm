@@ -52,6 +52,7 @@ class MilestoneType(str, enum.Enum):
     APPLICATION_SUBMITTED = "application_submitted"
     LE_PENDING = "le_pending"
     LE_DISCLOSED = "le_disclosed"
+    DISCLOSED = "disclosed"
     DOCUMENT_COLLECTION = "document_collection"
 
     # Processing Stage
@@ -106,6 +107,7 @@ class TriggerFromEvent(str, enum.Enum):
     APPLICATION_SUBMITTED = "application_submitted"
     LE_PENDING = "le_pending"
     LE_DISCLOSED = "le_disclosed"
+    DISCLOSED = "disclosed"
     DOCUMENT_COLLECTION = "document_collection"
     SUBMITTED_TO_PROCESSING = "submitted_to_processing"
     PROCESSING_START = "processing_start"
