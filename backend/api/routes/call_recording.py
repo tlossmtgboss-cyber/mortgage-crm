@@ -7,13 +7,16 @@ Call Recording Processing API
 - Creates task with draft email
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
 import base64
 import tempfile
 import os
+import hmac
+import hashlib
+import time
 import httpx
 from sqlalchemy.orm import Session
 
@@ -367,6 +370,85 @@ def create_followup_task(
         logger.error(f"Error creating task: {e}")
         db.rollback()
         return None
+
+
+# ============================================================================
+# SIGNED PLAYBACK URLS (CR-005)
+# ============================================================================
+
+_PLAYBACK_SECRET = os.getenv("SECRET_KEY", "fallback-dev-secret-key")
+_PLAYBACK_TOKEN_TTL = 3600  # 1 hour
+
+
+def generate_signed_playback_url(recording_id: str, base_url: str = "") -> dict:
+    """Generate a time-limited signed URL for recording playback."""
+    expires_at = int(time.time()) + _PLAYBACK_TOKEN_TTL
+    payload = f"{recording_id}:{expires_at}"
+    signature = hmac.new(
+        _PLAYBACK_SECRET.encode(), payload.encode(), hashlib.sha256
+    ).hexdigest()
+
+    playback_path = f"/api/v1/calls/playback/{recording_id}?expires={expires_at}&sig={signature}"
+    url = f"{base_url}{playback_path}" if base_url else playback_path
+
+    return {
+        "url": url,
+        "expires_at": datetime.utcfromtimestamp(expires_at).isoformat() + "Z",
+        "ttl_seconds": _PLAYBACK_TOKEN_TTL,
+    }
+
+
+def _verify_playback_signature(recording_id: str, expires: int, sig: str) -> bool:
+    """Verify HMAC signature and expiration for playback URL."""
+    if int(time.time()) > expires:
+        return False
+    payload = f"{recording_id}:{expires}"
+    expected = hmac.new(
+        _PLAYBACK_SECRET.encode(), payload.encode(), hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(sig, expected)
+
+
+@router.get("/playback/{recording_id}")
+async def playback_recording(
+    recording_id: str,
+    expires: int = Query(..., description="Token expiration timestamp"),
+    sig: str = Query(..., description="HMAC signature"),
+):
+    """
+    Serve a recording with a signed, expiring token.
+    Returns a redirect to the actual recording URL after verification.
+    """
+    if not _verify_playback_signature(recording_id, expires, sig):
+        raise HTTPException(status_code=403, detail="Invalid or expired playback token")
+
+    # In production, look up the actual recording storage URL
+    # (Twilio recording URL, S3 presigned URL, etc.)
+    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
+    recording_url = (
+        f"https://api.twilio.com/2010-04-01/Accounts/{twilio_account_sid}"
+        f"/Recordings/{recording_id}.mp3"
+    )
+
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=recording_url, status_code=302)
+
+
+@router.post("/playback-url")
+async def create_playback_url(
+    recording_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a signed, time-limited playback URL for a recording."""
+    base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
+    if base_url and not base_url.startswith("http"):
+        base_url = f"https://{base_url}"
+
+    signed = generate_signed_playback_url(recording_id, base_url=base_url)
+    return {
+        "success": True,
+        "playback": signed,
+    }
 
 
 @router.get("/history")

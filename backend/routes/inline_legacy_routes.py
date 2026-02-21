@@ -548,9 +548,9 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     from ab_testing_routes import router as ab_testing_router
     app.include_router(ab_testing_router, tags=["A/B Testing"])
 
-    # Include AI Receptionist Dashboard routes
-    from ai_receptionist_dashboard_routes import router as ai_receptionist_dashboard_router
-    app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dashboard"])
+    # AI Receptionist Dashboard routes — registered in main.py (REC-001)
+    # from ai_receptionist_dashboard_routes import router as ai_receptionist_dashboard_router
+    # app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dashboard"])
 
     # Include Voice AI Receptionist routes
     # ✅ FIXED: Circular import resolved by using lazy imports in voice_routes.py
@@ -645,12 +645,9 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load IVR routes: {e}")
 
-    try:
-        from routes.call_queue_routes import router as call_queue_router
-        app.include_router(call_queue_router, tags=["Call Queues"])
-        logger.info("✅ Call Queue routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not load Call Queue routes: {e}")
+    # Call Queue routes — registered in main.py (CQ-002)
+    # from routes.call_queue_routes import router as call_queue_router
+    # app.include_router(call_queue_router, tags=["Call Queues"])
 
     try:
         from routes.conference_routes import router as conference_router
@@ -785,18 +782,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load MUM Valuation routes: {e}")
 
-    # Include Voice AI Receptionist sub-routes (webhooks, SMS, debug)
+    # Voice AI Receptionist sub-routes — registered in main.py (REC-001)
     # NOTE: The main voice_router is NOT included here — voice_routes.py (line ~492)
     # is the canonical /api/v1/voice router. Including both caused duplicate route conflicts.
     # Unique endpoints (drop-voicemail, amd-callback, voicemail-twiml) were migrated to voice_routes.py.
-    try:
-        from routes.voice_ai_receptionist_routes import webhook_router, sms_router, debug_router
-        app.include_router(webhook_router, tags=["Voice Webhooks"])
-        app.include_router(sms_router, tags=["SMS Messaging"])
-        app.include_router(debug_router, tags=["Debug"])
-        logger.info("✅ Voice AI Receptionist sub-routes loaded (webhooks, SMS, debug)")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not load Voice AI Receptionist sub-routes: {e}")
+    # webhook_router, sms_router, debug_router are registered in main.py directly.
 
     # Power Dialer routes — DISABLED to resolve duplicate route conflict.
     # telephony/router.py (registered at line ~1568) is the canonical /api/v1/dialer router

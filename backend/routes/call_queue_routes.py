@@ -595,6 +595,83 @@ def estimate_wait_time(db: Session, queue_id: int) -> int:
         return 120  # Default 2 minutes
 
 
+@router.get("/stats")
+async def get_all_queue_stats(
+    db: Session = Depends(get_db)
+):
+    """Get aggregate statistics across all active queues (CQ-002)"""
+    try:
+        # Per-queue stats
+        queues = db.execute(text("""
+            SELECT q.id, q.name, q.friendly_name,
+                   COUNT(DISTINCT CASE WHEN qe.status = 'waiting' THEN qe.id END) as calls_waiting,
+                   COUNT(DISTINCT CASE WHEN qm.is_active = TRUE THEN qm.id END) as agents_available
+            FROM call_queues q
+            LEFT JOIN queue_entries qe ON qe.queue_id = q.id AND qe.status = 'waiting'
+            LEFT JOIN queue_members qm ON qm.queue_id = q.id AND qm.is_active = TRUE
+            WHERE q.is_active = TRUE
+            GROUP BY q.id, q.name, q.friendly_name
+            ORDER BY q.name
+        """)).fetchall()
+
+        # Aggregate stats
+        agg = db.execute(text("""
+            SELECT
+                COUNT(DISTINCT q.id) as total_queues,
+                COUNT(DISTINCT CASE WHEN qe.status = 'waiting' THEN qe.id END) as total_waiting,
+                COUNT(DISTINCT CASE WHEN qm.is_active = TRUE THEN qm.id END) as total_agents
+            FROM call_queues q
+            LEFT JOIN queue_entries qe ON qe.queue_id = q.id AND qe.status = 'waiting'
+            LEFT JOIN queue_members qm ON qm.queue_id = q.id AND qm.is_active = TRUE
+            WHERE q.is_active = TRUE
+        """)).fetchone()
+
+        # Today's aggregate
+        today = db.execute(text("""
+            SELECT
+                COUNT(*) as calls_today,
+                AVG(actual_wait_seconds) as avg_wait_today,
+                MAX(actual_wait_seconds) as max_wait_today,
+                COUNT(CASE WHEN status = 'abandoned' THEN 1 END) as abandoned_today,
+                COUNT(CASE WHEN status = 'connected' THEN 1 END) as connected_today
+            FROM queue_entries
+            WHERE entered_at >= CURRENT_DATE
+        """)).fetchone()
+
+        queue_list = []
+        for q in queues:
+            queue_list.append({
+                "queue_id": q.id,
+                "queue_name": q.name,
+                "friendly_name": q.friendly_name,
+                "calls_waiting": q.calls_waiting or 0,
+                "agents_available": q.agents_available or 0,
+            })
+
+        return {
+            "summary": {
+                "total_queues": agg.total_queues or 0,
+                "total_calls_waiting": agg.total_waiting or 0,
+                "total_agents_available": agg.total_agents or 0,
+            },
+            "today": {
+                "total_calls": today.calls_today or 0,
+                "connected": today.connected_today or 0,
+                "abandoned": today.abandoned_today or 0,
+                "avg_wait_seconds": int(today.avg_wait_today or 0),
+                "max_wait_seconds": int(today.max_wait_today or 0),
+                "abandonment_rate": round(
+                    (today.abandoned_today or 0) / max(today.calls_today or 1, 1) * 100, 1
+                ),
+            },
+            "queues": queue_list,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting aggregate queue stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/{queue_id}/stats")
 async def get_queue_stats(
     queue_id: int,

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBiometricLogin } from '../hooks/useBiometricLogin';
-import { authAPI } from '../services/api';
+import { authAPI, aiAPI } from '../services/api';
+import { useDashboard, useTasks, useLeads } from '../hooks/useQueries';
 import { setAuth } from '../utils/auth';
 import { haptics } from '../services/nativeServices';
 import './AriaVoiceApp.css';
@@ -16,6 +17,9 @@ const AriaVoiceApp = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState(null);
+  const [textInput, setTextInput] = useState('');
+  const [textLoading, setTextLoading] = useState(false);
+  const [showFallback, setShowFallback] = useState(false);
 
   const {
     isAvailable: biometricAvailable,
@@ -31,6 +35,8 @@ const AriaVoiceApp = () => {
   const processorRef = useRef(null);
   const audioQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
+  const conversationRef = useRef(null);
+  const wsFailCountRef = useRef(0);
 
   // Determine API URLs based on environment
   const isLocalDev = typeof window !== 'undefined' && (
@@ -57,6 +63,13 @@ const AriaVoiceApp = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, biometricAvailable, hasStoredCredentials]);
+
+  // Auto-scroll conversation
+  useEffect(() => {
+    if (conversationRef.current) {
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+    }
+  }, [conversationHistory]);
 
   // Initialize audio context
   const initAudioContext = useCallback(() => {
@@ -169,6 +182,8 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
         switch (data.type) {
           case 'ready':
             setStatus('listening');
+            wsFailCountRef.current = 0;
+            setShowFallback(false);
             break;
           case 'transcript':
             setTranscript(data.text);
@@ -198,8 +213,12 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
 
       ws.onerror = (err) => {
         console.error('[Aria] WebSocket error:', err);
-        setError('Connection error. Please try again.');
+        wsFailCountRef.current += 1;
+        setError('Voice connection unavailable');
         setStatus('error');
+        if (wsFailCountRef.current >= 1) {
+          setShowFallback(true);
+        }
       };
 
       ws.onclose = () => {
@@ -224,40 +243,76 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
       'Content-Type': 'application/json'
     };
 
+    // Add pending action card to conversation
+    const actionId = Date.now();
+    const actionEntry = { role: 'action', id: actionId, action, data: params || {}, status: 'pending' };
+    setConversationHistory(prev => [...prev, actionEntry]);
+
     try {
       switch (action) {
         case 'send_sms':
-          await fetch(`${API_BASE_URL}/api/v1/communications/sms`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(params)
-          });
+          await fetch(`${API_BASE_URL}/api/v1/communications/sms`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'send_email':
-          await fetch(`${API_BASE_URL}/api/v1/communications/email`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(params)
-          });
+          await fetch(`${API_BASE_URL}/api/v1/communications/email`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'send_preapproval':
-          await fetch(`${API_BASE_URL}/api/v1/leads/${params.lead_id}/pre-approval`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(params)
-          });
+          await fetch(`${API_BASE_URL}/api/v1/leads/${params.lead_id}/pre-approval`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'complete_task':
-          await fetch(`${API_BASE_URL}/api/v1/tasks/${params.task_id}/complete`, {
-            method: 'POST',
-            headers
-          });
+          await fetch(`${API_BASE_URL}/api/v1/tasks/${params.task_id}/complete`, { method: 'POST', headers });
+          break;
+        case 'create_task':
+          await fetch(`${API_BASE_URL}/api/v1/tasks`, { method: 'POST', headers, body: JSON.stringify(params) });
+          break;
+        case 'schedule_appointment':
+          await fetch(`${API_BASE_URL}/api/v1/appointments`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         default:
           console.log('[Aria] Unknown action:', action);
+          break;
       }
+      // Update card to success
+      setConversationHistory(prev => prev.map(m => m.id === actionId ? { ...m, status: 'success' } : m));
+      haptics.success();
     } catch (err) {
       console.error('[Aria] Action error:', err);
+      setConversationHistory(prev => prev.map(m => m.id === actionId ? { ...m, status: 'error' } : m));
+      haptics.error();
+    }
+  };
+
+  // Handle text input submission
+  const handleTextSubmit = async (e) => {
+    e.preventDefault();
+    const message = textInput.trim();
+    if (!message || textLoading) return;
+
+    setTextInput('');
+    setTextLoading(true);
+    setConversationHistory(prev => [...prev, { role: 'user', content: message }]);
+
+    try {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // WS connected — send as text message
+        wsRef.current.send(JSON.stringify({ type: 'text', text: message }));
+        // Response arrives via WS 'response' handler
+      } else {
+        // WS down — use REST smart-chat API
+        const result = await aiAPI.smartChat(message, { include_context: true });
+        setConversationHistory(prev => [...prev, {
+          role: 'assistant',
+          content: result.response || 'No response received.'
+        }]);
+      }
+    } catch (err) {
+      console.error('[Aria] Text error:', err);
+      setConversationHistory(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I couldn\'t process that. Please try again.'
+      }]);
+    } finally {
+      setTextLoading(false);
     }
   };
 
@@ -475,13 +530,26 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
           </div>
         )}
 
+        {/* Fallback Dashboard */}
+        {showFallback && isAuthenticated && (
+          <FallbackDashboard onRetry={() => {
+            setShowFallback(false);
+            wsFailCountRef.current = 0;
+            connect();
+          }} />
+        )}
+
         {/* Conversation History */}
-        <div className="aria-conversation">
-          {conversationHistory.slice(-4).map((msg, idx) => (
-            <div key={idx} className={`aria-message aria-message-${msg.role}`}>
-              <span className="aria-message-role">{msg.role === 'user' ? 'You' : 'Aria'}</span>
-              <p className="aria-message-content">{msg.content}</p>
-            </div>
+        <div className="aria-conversation" ref={conversationRef}>
+          {conversationHistory.slice(-6).map((msg, idx) => (
+            msg.role === 'action' ? (
+              <ActionCard key={msg.id || idx} msg={msg} />
+            ) : (
+              <div key={idx} className={`aria-message aria-message-${msg.role}`}>
+                <span className="aria-message-role">{msg.role === 'user' ? 'You' : 'Aria'}</span>
+                <p className="aria-message-content">{msg.content}</p>
+              </div>
+            )
           ))}
         </div>
 
@@ -494,10 +562,127 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
           )}
         </div>
 
+        {/* Text Input */}
+        {isAuthenticated && (
+          <form className="aria-text-form" onSubmit={handleTextSubmit}>
+            <input
+              className="aria-text-input"
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder={textLoading ? 'Sending...' : 'Type to Aria...'}
+              disabled={textLoading}
+              autoComplete="off"
+            />
+            <button
+              className="aria-text-send"
+              type="submit"
+              disabled={!textInput.trim() || textLoading}
+            >
+              {textLoading ? '...' : '↑'}
+            </button>
+          </form>
+        )}
+
         {/* Footer */}
         <div className="aria-footer">
           <p>Powered by Perennia AI</p>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// Action Card Component
+const ACTION_CONFIG = {
+  send_sms:              { icon: '\u{1F4AC}', label: 'Text Message Sent', color: '#10b981' },
+  send_email:            { icon: '\u{1F4E7}', label: 'Email Sent',        color: '#3b82f6' },
+  create_task:           { icon: '\u{1F4CB}', label: 'Task Created',      color: '#f59e0b' },
+  complete_task:         { icon: '\u2713',     label: 'Task Completed',    color: '#10b981' },
+  schedule_appointment:  { icon: '\u{1F4C5}', label: 'Appointment Set',   color: '#8b5cf6' },
+  send_preapproval:      { icon: '\u{1F4C4}', label: 'Pre-Approval Sent', color: '#06b6d4' },
+};
+
+const ActionCard = ({ msg }) => {
+  const config = ACTION_CONFIG[msg.action] || { icon: '\u26A1', label: msg.action, color: '#94a3b8' };
+  const detail = msg.data?.to || msg.data?.phone || msg.data?.email
+    || msg.data?.title || msg.data?.borrower_name || '';
+
+  return (
+    <div className={`aria-action-card aria-action-${msg.status}`}>
+      <span className="aria-action-icon" style={{ borderColor: config.color }}>{config.icon}</span>
+      <div className="aria-action-body">
+        <div className="aria-action-label">{config.label}</div>
+        {detail && <div className="aria-action-detail">{detail}</div>}
+      </div>
+      <span className="aria-action-status">
+        {msg.status === 'pending' && <span className="aria-action-spinner" />}
+        {msg.status === 'success' && <span style={{ color: '#10b981' }}>Done</span>}
+        {msg.status === 'error' && <span style={{ color: '#ef4444' }}>Failed</span>}
+      </span>
+    </div>
+  );
+};
+
+// Fallback Dashboard Component
+const FallbackDashboard = ({ onRetry }) => {
+  const { data: dashboard, isLoading: dLoading } = useDashboard();
+  const { data: tasksData, isLoading: tLoading } = useTasks();
+  const { data: leadsData, isLoading: lLoading } = useLeads();
+
+  const pipeline = dashboard?.pipeline_stats || [];
+  const tasks = (tasksData?.tasks || (Array.isArray(tasksData) ? tasksData : []))
+    .filter(t => t.status !== 'completed').slice(0, 5);
+  const leads = (Array.isArray(leadsData) ? leadsData : leadsData?.leads || []).slice(0, 5);
+  const isLoading = dLoading && tLoading && lLoading;
+
+  return (
+    <div className="aria-fallback">
+      <button className="aria-fallback-retry" onClick={onRetry}>
+        Try Aria Again
+      </button>
+
+      {/* Pipeline */}
+      <div className="aria-fallback-section">
+        <div className="aria-fallback-title">Pipeline</div>
+        {isLoading ? (
+          <div className="aria-fallback-shimmer" />
+        ) : (
+          <div className="aria-fallback-pipeline">
+            {pipeline.map(s => (
+              <div key={s.id} className="aria-fallback-pill">
+                <span className="aria-fallback-pill-count">{s.count}</span>
+                <span className="aria-fallback-pill-label">{s.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Tasks */}
+      <div className="aria-fallback-section">
+        <div className="aria-fallback-title">Tasks ({tasks.length})</div>
+        {tasks.length === 0 ? (
+          <div className="aria-fallback-empty">No pending tasks</div>
+        ) : tasks.map((t, i) => (
+          <div key={i} className="aria-fallback-row">
+            <span className={`aria-fallback-priority ${t.priority || 'medium'}`} />
+            <span className="aria-fallback-row-text">{t.title}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent Leads */}
+      <div className="aria-fallback-section">
+        <div className="aria-fallback-title">Recent Leads</div>
+        {leads.length === 0 ? (
+          <div className="aria-fallback-empty">No leads</div>
+        ) : leads.map((l, i) => (
+          <div key={i} className="aria-fallback-row">
+            <span className="aria-fallback-row-text">{l.name || `${l.first_name || ''} ${l.last_name || ''}`.trim()}</span>
+            <span className="aria-fallback-badge">{l.stage || l.status}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
