@@ -43,19 +43,29 @@ class ToolStatus(str, Enum):
     PENDING_APPROVAL = "pending_approval"
 
 
-class LoanStatus(str, Enum):
-    LEAD = "lead"
-    APPLICATION = "application"
-    PROCESSING = "processing"
-    SUBMITTED = "submitted"
-    UNDERWRITING = "underwriting"
-    APPROVED = "approved"
-    CLEAR_TO_CLOSE = "clear_to_close"
-    DOCS_OUT = "docs_out"
-    DOCS_BACK = "docs_back"
-    FUNDED = "funded"
-    CANCELLED = "cancelled"
-    DENIED = "denied"
+class LoanStage(str, Enum):
+    """Real loan stages (stored UPPERCASE in DB as plain String column)."""
+    APPLICATION = "APPLICATION"
+    DISCLOSED = "DISCLOSED"
+    PROCESSING = "PROCESSING"
+    SUBMITTED = "SUBMITTED"
+    UNDERWRITING = "UNDERWRITING"
+    UW_RECEIVED = "UW_RECEIVED"
+    CONDITIONAL_APPROVAL = "CONDITIONAL_APPROVAL"
+    APPROVED = "APPROVED"
+    SUSPENDED = "SUSPENDED"
+    CTC = "CTC"
+    CLEAR_TO_CLOSE = "CLEAR_TO_CLOSE"
+    CLOSING = "CLOSING"
+    DOCS = "DOCS"
+    DOCS_OUT = "DOCS_OUT"
+    FUNDED = "FUNDED"
+    CANCELLED = "CANCELLED"
+    DENIED = "DENIED"
+    DEAD = "DEAD"
+    NURTURE = "NURTURE"
+    WITHDRAWN = "WITHDRAWN"
+    DOES_NOT_QUALIFY = "DOES_NOT_QUALIFY"
 
 
 class LoanType(str, Enum):
@@ -85,13 +95,19 @@ class OccupancyType(str, Enum):
 # CONSTANTS
 # =============================================================================
 
+# SLA targets in days for stage-to-stage transitions (based on real SLA date fields on Loan model)
 SLA_TARGETS = {
-    "application_to_disclosure": 3,
-    "disclosure_to_submission": 7,
-    "submission_to_approval": 5,
-    "approval_to_ctc": 3,
-    "ctc_to_funding": 5,
+    "APPLICATION_to_DISCLOSED": 3,
+    "DISCLOSED_to_SUBMITTED": 7,
+    "SUBMITTED_to_UW_RECEIVED": 2,
+    "UW_RECEIVED_to_APPROVED": 5,
+    "APPROVED_to_CLEAR_TO_CLOSE": 3,
+    "CLEAR_TO_CLOSE_to_DOCS_OUT": 3,
+    "DOCS_OUT_to_FUNDED": 5,
 }
+
+# Closed/terminal stages that are excluded from active pipeline queries
+TERMINAL_STAGES = ("FUNDED", "CANCELLED", "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY")
 
 DOCUMENT_CATEGORIES = {
     "income": ["paystubs", "w2", "tax_returns", "1099", "profit_loss"],
@@ -115,19 +131,19 @@ class ToolResult:
     error: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     requires_approval: bool = False
-    
+
     @classmethod
     def success(cls, data: Dict[str, Any], message: str = "", requires_approval: bool = False) -> "ToolResult":
         return cls(status=ToolStatus.SUCCESS, data=data, message=message, requires_approval=requires_approval)
-    
+
     @classmethod
     def error(cls, error: str, message: str = "") -> "ToolResult":
         return cls(status=ToolStatus.ERROR, error=error, message=message or error)
-    
+
     @classmethod
     def no_data(cls, message: str = "No data found") -> "ToolResult":
         return cls(status=ToolStatus.NO_DATA, message=message, data={})
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "status": self.status.value,
@@ -214,27 +230,27 @@ def execute_single(query: str, params: Dict = None) -> Optional[Dict]:
 class ToolRegistry:
     """Registry for all mortgage tools."""
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._tools = {}
             cls._instance._metadata = {}
         return cls._instance
-    
+
     def register(self, name: str, func: Callable, metadata: Dict):
         """Register a tool."""
         self._tools[name] = func
         self._metadata[name] = metadata
-    
+
     def get(self, name: str) -> Optional[Callable]:
         """Get a tool by name."""
         return self._tools.get(name)
-    
+
     def get_metadata(self, name: str) -> Optional[Dict]:
         """Get tool metadata."""
         return self._metadata.get(name)
-    
+
     def get_tools(self, agent_role: str = None) -> Dict[str, Callable]:
         """Get tools, optionally filtered by agent role."""
         if agent_role is None:
@@ -243,7 +259,7 @@ class ToolRegistry:
             name: func for name, func in self._tools.items()
             if agent_role in self._metadata.get(name, {}).get("agent_roles", [])
         }
-    
+
     def get_langchain_tools(self, agent_role: str = None) -> List:
         """Get tools formatted for LangChain."""
         from langchain.tools import StructuredTool
@@ -256,10 +272,10 @@ class ToolRegistry:
                 description=meta.get("description", ""),
             ))
         return tools
-    
+
     def __len__(self):
         return len(self._tools)
-    
+
     def __iter__(self):
         return iter(self._tools.items())
 
@@ -284,7 +300,7 @@ def mortgage_tool(
     """Decorator to register a function as a mortgage tool."""
     if requires_approval is None:
         requires_approval = risk_level == "HIGH"
-    
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> ToolResult:
@@ -300,7 +316,7 @@ def mortgage_tool(
             except Exception as e:
                 logger.exception(f"Tool {name} failed")
                 return ToolResult.error(error=str(e), message=f"Tool execution failed: {str(e)}")
-        
+
         tool_registry.register(name, wrapper, {
             "name": name,
             "description": description,
@@ -309,7 +325,7 @@ def mortgage_tool(
             "requires_approval": requires_approval,
             "function": func.__name__,
         })
-        
+
         return wrapper
     return decorator
 
@@ -356,60 +372,60 @@ def days_between(start: Union[datetime, date, None], end: Union[datetime, date, 
 
 @mortgage_tool(
     name="get_pipeline_metrics",
-    description="Get pipeline metrics including count, volume, and velocity for a loan officer or branch",
+    description="Get pipeline metrics including count, volume, and velocity for a loan officer or organization",
     agent_roles=["pipeline_analyst", "team_coach"],
     risk_level="LOW",
 )
 def get_pipeline_metrics(
     lo_id: Optional[str] = None,
-    branch_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
     days: int = 30,
 ) -> ToolResult:
     """Get pipeline metrics."""
     params = {"days": days}
-    filters = ["l.status NOT IN ('funded', 'cancelled', 'denied')"]
-    
+    filters = ["l.stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')"]
+
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")
         params["lo_id"] = lo_id
-    if branch_id:
-        filters.append("l.branch_id = :branch_id")
-        params["branch_id"] = branch_id
-    
+    if organization_id:
+        filters.append("l.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
     where_sql = " AND ".join(filters)
-    
+
     result = execute_single(f"""
-        SELECT 
+        SELECT
             COUNT(*) as total_count,
-            COALESCE(SUM(l.loan_amount), 0) as total_volume,
-            COUNT(CASE WHEN l.status IN ('clear_to_close', 'docs_out', 'docs_back') THEN 1 END) as closing_soon,
-            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.status_changed_at)) / 86400) as avg_days_in_status
+            COALESCE(SUM(l.amount), 0) as total_volume,
+            COUNT(CASE WHEN l.stage IN ('CTC', 'CLEAR_TO_CLOSE', 'DOCS', 'DOCS_OUT', 'CLOSING') THEN 1 END) as closing_soon,
+            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) as avg_days_in_stage
         FROM loans l
         WHERE {where_sql}
     """, params)
-    
+
     # Get velocity (funded in period)
     velocity = execute_single(f"""
-        SELECT COUNT(*) as funded_count, COALESCE(SUM(loan_amount), 0) as funded_volume
+        SELECT COUNT(*) as funded_count, COALESCE(SUM(amount), 0) as funded_volume
         FROM loans l
-        WHERE l.funded_at >= CURRENT_DATE - :days
+        WHERE l.funded_date >= CURRENT_DATE - :days
         {"AND l.loan_officer_id = :lo_id" if lo_id else ""}
-        {"AND l.branch_id = :branch_id" if branch_id else ""}
+        {"AND l.organization_id = :organization_id" if organization_id else ""}
     """, params)
-    
+
     data = {
         "total_count": result["total_count"] or 0,
         "total_volume": float(result["total_volume"] or 0),
         "total_volume_formatted": format_currency(result["total_volume"]),
         "closing_soon": result["closing_soon"] or 0,
-        "avg_days_in_status": round(float(result["avg_days_in_status"] or 0), 1),
+        "avg_days_in_stage": round(float(result["avg_days_in_stage"] or 0), 1),
         "velocity": {
             "period_days": days,
             "funded_count": velocity["funded_count"] or 0,
             "funded_volume": float(velocity["funded_volume"] or 0),
         },
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Pipeline: {data['total_count']} loans, {data['total_volume_formatted']}",
@@ -417,70 +433,70 @@ def get_pipeline_metrics(
 
 
 @mortgage_tool(
-    name="get_loans_by_status",
-    description="Get loans filtered by status with details",
+    name="get_loans_by_stage",
+    description="Get loans filtered by stage with details",
     agent_roles=["pipeline_analyst"],
     risk_level="LOW",
 )
-def get_loans_by_status(
-    status: str,
+def get_loans_by_stage(
+    stage: str,
     lo_id: Optional[str] = None,
-    branch_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
     limit: int = 50,
 ) -> ToolResult:
-    """Get loans by status."""
-    params = {"status": status, "limit": limit}
-    filters = ["l.status = :status"]
-    
+    """Get loans by stage."""
+    params = {"stage": stage, "limit": limit}
+    filters = ["l.stage = :stage"]
+
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")
         params["lo_id"] = lo_id
-    if branch_id:
-        filters.append("l.branch_id = :branch_id")
-        params["branch_id"] = branch_id
-    
+    if organization_id:
+        filters.append("l.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
     where_sql = " AND ".join(filters)
-    
+
     loans = execute_query(f"""
-        SELECT 
-            l.id, l.loan_number, l.loan_amount, l.status,
+        SELECT
+            l.id, l.loan_number, l.amount, l.stage,
             l.borrower_name, l.property_address, l.loan_type,
-            l.status_changed_at, l.expected_close_date, l.lock_expiration_date,
-            u.name as lo_name
+            l.stage_changed_at, l.closing_date, l.lock_expiration_date,
+            CONCAT(u.first_name, ' ', u.last_name) as lo_name
         FROM loans l
         LEFT JOIN users u ON u.id = l.loan_officer_id
         WHERE {where_sql}
-        ORDER BY l.status_changed_at DESC
+        ORDER BY l.stage_changed_at DESC
         LIMIT :limit
     """, params)
-    
+
     if not loans:
-        return ToolResult.no_data(f"No loans found with status '{status}'")
-    
+        return ToolResult.no_data(f"No loans found with stage '{stage}'")
+
     data = {
-        "status": status,
+        "stage": stage,
         "count": len(loans),
         "loans": [
             {
                 "id": loan["id"],
                 "loan_number": loan["loan_number"],
                 "borrower": loan["borrower_name"],
-                "amount": float(loan["loan_amount"] or 0),
-                "amount_formatted": format_currency(loan["loan_amount"]),
+                "amount": float(loan["amount"] or 0),
+                "amount_formatted": format_currency(loan["amount"]),
                 "loan_type": loan["loan_type"],
                 "property": loan["property_address"],
                 "lo_name": loan["lo_name"],
-                "days_in_status": days_between(loan["status_changed_at"], datetime.now()),
-                "expected_close": format_date(loan["expected_close_date"]),
+                "days_in_stage": days_between(loan["stage_changed_at"], datetime.now()),
+                "closing_date": format_date(loan["closing_date"]),
                 "lock_expires": format_date(loan["lock_expiration_date"]),
             }
             for loan in loans
         ],
     }
-    
+
     return ToolResult.success(
         data=data,
-        message=f"{len(loans)} loans in {status}",
+        message=f"{len(loans)} loans in {stage}",
     )
 
 
@@ -492,46 +508,46 @@ def get_loans_by_status(
 )
 def get_loan_aging_report(
     lo_id: Optional[str] = None,
-    branch_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
     threshold_days: int = 7,
 ) -> ToolResult:
     """Get loan aging report."""
     params = {"threshold": threshold_days}
-    filters = ["l.status NOT IN ('funded', 'cancelled', 'denied')"]
-    
+    filters = ["l.stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')"]
+
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")
         params["lo_id"] = lo_id
-    if branch_id:
-        filters.append("l.branch_id = :branch_id")
-        params["branch_id"] = branch_id
-    
+    if organization_id:
+        filters.append("l.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
     where_sql = " AND ".join(filters)
-    
+
     aging = execute_query(f"""
-        SELECT 
-            l.status,
+        SELECT
+            l.stage,
             COUNT(*) as count,
-            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.status_changed_at)) / 86400) as avg_days,
-            MAX(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.status_changed_at)) / 86400) as max_days,
-            COUNT(CASE WHEN EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.status_changed_at)) / 86400 > :threshold THEN 1 END) as over_threshold
+            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) as avg_days,
+            MAX(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) as max_days,
+            COUNT(CASE WHEN EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > :threshold THEN 1 END) as over_threshold
         FROM loans l
         WHERE {where_sql}
-        GROUP BY l.status
+        GROUP BY l.stage
         ORDER BY avg_days DESC
     """, params)
-    
+
     if not aging:
         return ToolResult.no_data("No active loans found")
-    
+
     total_over_threshold = sum(row["over_threshold"] or 0 for row in aging)
-    
+
     data = {
         "threshold_days": threshold_days,
         "total_over_threshold": total_over_threshold,
-        "by_status": [
+        "by_stage": [
             {
-                "status": row["status"],
+                "stage": row["stage"],
                 "count": row["count"],
                 "avg_days": round(float(row["avg_days"] or 0), 1),
                 "max_days": round(float(row["max_days"] or 0), 1),
@@ -540,7 +556,7 @@ def get_loan_aging_report(
             for row in aging
         ],
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"{total_over_threshold} loans over {threshold_days} day threshold",
@@ -555,38 +571,38 @@ def get_loan_aging_report(
 )
 def calculate_conversion_rates(
     lo_id: Optional[str] = None,
-    branch_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
     days: int = 90,
 ) -> ToolResult:
     """Calculate conversion rates between pipeline stages."""
     params = {"days": days}
     filters = ["l.created_at >= CURRENT_DATE - :days"]
-    
+
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")
         params["lo_id"] = lo_id
-    if branch_id:
-        filters.append("l.branch_id = :branch_id")
-        params["branch_id"] = branch_id
-    
+    if organization_id:
+        filters.append("l.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
     where_sql = " AND ".join(filters)
-    
+
     funnel = execute_single(f"""
-        SELECT 
+        SELECT
             COUNT(*) as total,
             COUNT(CASE WHEN application_date IS NOT NULL THEN 1 END) as applications,
-            COUNT(CASE WHEN submitted_to_uw_at IS NOT NULL THEN 1 END) as submitted,
-            COUNT(CASE WHEN approval_date IS NOT NULL THEN 1 END) as approved,
-            COUNT(CASE WHEN clear_to_close_at IS NOT NULL THEN 1 END) as ctc,
-            COUNT(CASE WHEN funded_at IS NOT NULL THEN 1 END) as funded,
-            COUNT(CASE WHEN status IN ('cancelled', 'denied') THEN 1 END) as fallout
+            COUNT(CASE WHEN uw_received_date IS NOT NULL THEN 1 END) as submitted,
+            COUNT(CASE WHEN loan_approved_date IS NOT NULL THEN 1 END) as approved,
+            COUNT(CASE WHEN clear_to_close_date IS NOT NULL THEN 1 END) as ctc,
+            COUNT(CASE WHEN funded_date IS NOT NULL THEN 1 END) as funded,
+            COUNT(CASE WHEN stage IN ('CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY') THEN 1 END) as fallout
         FROM loans l
         WHERE {where_sql}
     """, params)
-    
+
     def calc_rate(num, denom):
         return round((num / denom) * 100, 1) if denom > 0 else 0
-    
+
     data = {
         "period_days": days,
         "funnel": {
@@ -607,7 +623,7 @@ def calculate_conversion_rates(
             "overall_pull_through": calc_rate(funnel["funded"], funnel["applications"]),
         },
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Pull-through: {data['conversion_rates']['overall_pull_through']}%",
@@ -625,62 +641,62 @@ def predict_closing_timeline(
 ) -> ToolResult:
     """Predict closing timeline for a loan."""
     loan = execute_single("""
-        SELECT 
-            l.id, l.loan_number, l.status, l.loan_type,
-            l.application_date, l.submitted_to_uw_at, l.approval_date,
-            l.clear_to_close_at, l.expected_close_date
+        SELECT
+            l.id, l.loan_number, l.stage, l.loan_type,
+            l.application_date, l.uw_received_date, l.loan_approved_date,
+            l.clear_to_close_date, l.closing_date
         FROM loans l
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
+
     # Get historical averages for this loan type
     historical = execute_single("""
-        SELECT 
-            AVG(EXTRACT(EPOCH FROM (submitted_to_uw_at - application_date)) / 86400) as avg_app_to_submit,
-            AVG(EXTRACT(EPOCH FROM (approval_date - submitted_to_uw_at)) / 86400) as avg_submit_to_approve,
-            AVG(EXTRACT(EPOCH FROM (clear_to_close_at - approval_date)) / 86400) as avg_approve_to_ctc,
-            AVG(EXTRACT(EPOCH FROM (funded_at - clear_to_close_at)) / 86400) as avg_ctc_to_fund
+        SELECT
+            AVG(EXTRACT(EPOCH FROM (uw_received_date - application_date)) / 86400) as avg_app_to_submit,
+            AVG(EXTRACT(EPOCH FROM (loan_approved_date - uw_received_date)) / 86400) as avg_submit_to_approve,
+            AVG(EXTRACT(EPOCH FROM (clear_to_close_date - loan_approved_date)) / 86400) as avg_approve_to_ctc,
+            AVG(EXTRACT(EPOCH FROM (funded_date - clear_to_close_date)) / 86400) as avg_ctc_to_fund
         FROM loans
-        WHERE loan_type = :loan_type AND funded_at >= CURRENT_DATE - 180
+        WHERE loan_type = :loan_type AND funded_date >= CURRENT_DATE - 180
     """, {"loan_type": loan["loan_type"]})
-    
+
     # Calculate predicted close based on current stage
     now = datetime.now()
     remaining_days = 0
     stages_remaining = []
-    
-    status_order = ["application", "processing", "submitted", "underwriting", "approved", "clear_to_close"]
-    current_idx = status_order.index(loan["status"]) if loan["status"] in status_order else 0
-    
-    if current_idx < 2:  # Before submission
+
+    stage_order = ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "CLEAR_TO_CLOSE"]
+    current_idx = stage_order.index(loan["stage"]) if loan["stage"] in stage_order else 0
+
+    if current_idx < 5:  # Before UW_RECEIVED (submission)
         remaining_days += float(historical["avg_app_to_submit"] or 5)
         stages_remaining.append(("submission", float(historical["avg_app_to_submit"] or 5)))
-    if current_idx < 4:  # Before approval
+    if current_idx < 7:  # Before APPROVED
         remaining_days += float(historical["avg_submit_to_approve"] or 7)
         stages_remaining.append(("approval", float(historical["avg_submit_to_approve"] or 7)))
-    if current_idx < 5:  # Before CTC
+    if current_idx < 8:  # Before CLEAR_TO_CLOSE
         remaining_days += float(historical["avg_approve_to_ctc"] or 3)
         stages_remaining.append(("clear_to_close", float(historical["avg_approve_to_ctc"] or 3)))
-    
+
     remaining_days += float(historical["avg_ctc_to_fund"] or 5)
     stages_remaining.append(("funding", float(historical["avg_ctc_to_fund"] or 5)))
-    
+
     predicted_close = now + timedelta(days=remaining_days)
-    
+
     data = {
         "loan_id": loan_id,
         "loan_number": loan["loan_number"],
-        "current_status": loan["status"],
-        "expected_close_date": format_date(loan["expected_close_date"]),
+        "current_stage": loan["stage"],
+        "closing_date": format_date(loan["closing_date"]),
         "predicted_close_date": format_date(predicted_close),
         "remaining_days": round(remaining_days, 0),
         "stages_remaining": [{"stage": s[0], "days": round(s[1], 1)} for s in stages_remaining],
         "confidence": "high" if len(stages_remaining) <= 2 else "medium",
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Predicted close: {format_date(predicted_close)} ({round(remaining_days)} days)",
@@ -695,57 +711,62 @@ def predict_closing_timeline(
 )
 def get_bottleneck_analysis(
     lo_id: Optional[str] = None,
-    branch_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
 ) -> ToolResult:
     """Identify pipeline bottlenecks."""
     params = {}
-    filters = ["l.status NOT IN ('funded', 'cancelled', 'denied')"]
-    
+    filters = ["l.stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')"]
+
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")
         params["lo_id"] = lo_id
-    if branch_id:
-        filters.append("l.branch_id = :branch_id")
-        params["branch_id"] = branch_id
-    
+    if organization_id:
+        filters.append("l.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
     where_sql = " AND ".join(filters)
-    
+
     bottlenecks = execute_query(f"""
-        SELECT 
-            l.status,
+        SELECT
+            l.stage,
             COUNT(*) as count,
-            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.status_changed_at)) / 86400) as avg_days
+            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) as avg_days
         FROM loans l
         WHERE {where_sql}
-        GROUP BY l.status
-        HAVING AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.status_changed_at)) / 86400) > 5
+        GROUP BY l.stage
+        HAVING AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) > 5
         ORDER BY avg_days DESC
     """, params)
-    
+
     sla_comparison = []
     for row in bottlenecks:
-        status = row["status"]
+        stage = row["stage"]
         avg_days = float(row["avg_days"] or 0)
-        target = SLA_TARGETS.get(f"{status}_to_next", 5)
+        # Look up SLA target for this stage's transition
+        target = 5  # default
+        for key, val in SLA_TARGETS.items():
+            if key.startswith(stage + "_to_"):
+                target = val
+                break
         sla_comparison.append({
-            "status": status,
+            "stage": stage,
             "count": row["count"],
             "avg_days": round(avg_days, 1),
             "target_days": target,
             "over_sla": avg_days > target,
             "severity": "critical" if avg_days > target * 2 else "warning" if avg_days > target else "normal",
         })
-    
+
     data = {
         "bottlenecks": sla_comparison,
         "critical_count": len([b for b in sla_comparison if b["severity"] == "critical"]),
         "recommendations": [],
     }
-    
+
     for b in sla_comparison:
         if b["severity"] == "critical":
-            data["recommendations"].append(f"Review {b['count']} loans stuck in {b['status']} (avg {b['avg_days']} days)")
-    
+            data["recommendations"].append(f"Review {b['count']} loans stuck in {b['stage']} (avg {b['avg_days']} days)")
+
     return ToolResult.success(
         data=data,
         message=f"{data['critical_count']} critical bottlenecks identified",
@@ -754,63 +775,62 @@ def get_bottleneck_analysis(
 
 @mortgage_tool(
     name="compare_to_benchmark",
-    description="Compare pipeline metrics to company or industry benchmarks",
+    description="Compare pipeline metrics to company benchmarks (averages across all LOs)",
     agent_roles=["pipeline_analyst", "team_coach"],
     risk_level="LOW",
 )
 def compare_to_benchmark(
     lo_id: Optional[str] = None,
-    branch_id: Optional[str] = None,
-    benchmark_type: str = "company",
+    organization_id: Optional[str] = None,
 ) -> ToolResult:
-    """Compare to benchmarks."""
+    """Compare to company benchmarks."""
     params = {}
-    filters = ["l.funded_at >= CURRENT_DATE - 90"]
-    
+    filters = ["l.funded_date >= CURRENT_DATE - 90"]
+
     if lo_id:
         filters.append("l.loan_officer_id = :lo_id")
         params["lo_id"] = lo_id
-    if branch_id:
-        filters.append("l.branch_id = :branch_id")
-        params["branch_id"] = branch_id
-    
+    if organization_id:
+        filters.append("l.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
     where_sql = " AND ".join(filters)
-    
+
     # Get current metrics
     current = execute_single(f"""
-        SELECT 
+        SELECT
             COUNT(*) as funded_units,
-            COALESCE(SUM(loan_amount), 0) as funded_volume,
-            AVG(EXTRACT(EPOCH FROM (funded_at - application_date)) / 86400) as avg_cycle_time
+            COALESCE(SUM(amount), 0) as funded_volume,
+            AVG(EXTRACT(EPOCH FROM (funded_date - application_date)) / 86400) as avg_cycle_time
         FROM loans l
         WHERE {where_sql}
     """, params)
-    
-    # Get company benchmark
+
+    # Get company benchmark (average across all LOs)
     benchmark = execute_single("""
-        SELECT 
+        SELECT
             AVG(units) as avg_units,
             AVG(volume) as avg_volume,
             AVG(cycle_time) as avg_cycle_time
         FROM (
-            SELECT 
+            SELECT
                 loan_officer_id,
                 COUNT(*) as units,
-                SUM(loan_amount) as volume,
-                AVG(EXTRACT(EPOCH FROM (funded_at - application_date)) / 86400) as cycle_time
+                SUM(amount) as volume,
+                AVG(EXTRACT(EPOCH FROM (funded_date - application_date)) / 86400) as cycle_time
             FROM loans
-            WHERE funded_at >= CURRENT_DATE - 90
+            WHERE funded_date >= CURRENT_DATE - 90
             GROUP BY loan_officer_id
         ) lo_stats
     """)
-    
+
     def calc_diff(current_val, benchmark_val):
         if benchmark_val == 0:
             return 0
         return round(((current_val - benchmark_val) / benchmark_val) * 100, 1)
-    
+
     data = {
-        "benchmark_type": benchmark_type,
+        "benchmark_type": "company",
         "period_days": 90,
         "current": {
             "funded_units": current["funded_units"] or 0,
@@ -828,7 +848,7 @@ def compare_to_benchmark(
             "cycle_time_diff_pct": calc_diff(current["avg_cycle_time"] or 0, benchmark["avg_cycle_time"] or 1),
         },
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Units: {data['comparison']['units_diff_pct']}% vs benchmark",
@@ -842,40 +862,40 @@ def compare_to_benchmark(
     risk_level="LOW",
 )
 def get_lo_pipeline_breakdown(
-    branch_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
     include_closed: bool = False,
 ) -> ToolResult:
     """Get pipeline breakdown by LO."""
     params = {}
     filters = []
-    
+
     if not include_closed:
-        filters.append("l.status NOT IN ('funded', 'cancelled', 'denied')")
-    if branch_id:
-        filters.append("l.branch_id = :branch_id")
-        params["branch_id"] = branch_id
-    
+        filters.append("l.stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')")
+    if organization_id:
+        filters.append("l.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
     where_sql = " AND ".join(filters) if filters else "1=1"
-    
+
     breakdown = execute_query(f"""
-        SELECT 
+        SELECT
             u.id as lo_id,
-            u.name as lo_name,
+            CONCAT(u.first_name, ' ', u.last_name) as lo_name,
             COUNT(*) as count,
-            SUM(l.loan_amount) as volume,
-            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.status_changed_at)) / 86400) as avg_days
+            SUM(l.amount) as volume,
+            AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) as avg_days
         FROM loans l
         JOIN users u ON u.id = l.loan_officer_id
         WHERE {where_sql}
-        GROUP BY u.id, u.name
+        GROUP BY u.id, u.first_name, u.last_name
         ORDER BY volume DESC
     """, params)
-    
+
     if not breakdown:
         return ToolResult.no_data("No pipeline data found")
-    
+
     total_volume = sum(float(row["volume"] or 0) for row in breakdown)
-    
+
     data = {
         "total_volume": total_volume,
         "total_volume_formatted": format_currency(total_volume),
@@ -893,7 +913,7 @@ def get_lo_pipeline_breakdown(
             for row in breakdown
         ],
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"{len(breakdown)} LOs, {format_currency(total_volume)} total pipeline",
@@ -913,32 +933,36 @@ def get_lo_pipeline_breakdown(
 def check_trid_compliance(
     loan_id: str,
 ) -> ToolResult:
-    """Check TRID compliance."""
+    """Check TRID compliance using real Loan date columns and disclosure_events table."""
     loan = execute_single("""
-        SELECT 
-            l.id, l.loan_number, l.application_date, l.disclosure_sent_at,
-            l.closing_disclosure_sent_at, l.consummation_date,
-            l.le_revision_count, l.cd_revision_count
+        SELECT
+            l.id, l.loan_number, l.application_date,
+            l.initial_disclosures_sent_date,
+            l.initial_disclosures_signed_date,
+            l.cd_sent_to_borrower_date,
+            l.cd_acknowledged_date,
+            l.funded_date
         FROM loans l
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
+
     issues = []
     warnings = []
-    
+
     # LE timing - must be within 3 business days of application
-    if loan["application_date"] and loan["disclosure_sent_at"]:
-        le_days = days_between(loan["application_date"], loan["disclosure_sent_at"])
+    # Note: this checks calendar days as an approximation; real compliance uses business days
+    if loan["application_date"] and loan["initial_disclosures_sent_date"]:
+        le_days = days_between(loan["application_date"], loan["initial_disclosures_sent_date"])
         if le_days > 3:
             issues.append({
                 "type": "LE_TIMING",
                 "message": f"LE sent {le_days} days after application (max 3 business days)",
                 "severity": "high",
             })
-    elif loan["application_date"] and not loan["disclosure_sent_at"]:
+    elif loan["application_date"] and not loan["initial_disclosures_sent_date"]:
         days_since_app = days_between(loan["application_date"], datetime.now())
         if days_since_app > 2:
             issues.append({
@@ -946,26 +970,37 @@ def check_trid_compliance(
                 "message": f"LE not sent - {days_since_app} days since application",
                 "severity": "critical",
             })
-    
+
     # CD timing - must be 3 business days before closing
-    if loan["closing_disclosure_sent_at"] and loan["consummation_date"]:
-        cd_days = days_between(loan["closing_disclosure_sent_at"], loan["consummation_date"])
+    if loan["cd_sent_to_borrower_date"] and loan["funded_date"]:
+        cd_days = days_between(loan["cd_sent_to_borrower_date"], loan["funded_date"])
         if cd_days < 3:
             issues.append({
                 "type": "CD_TIMING",
                 "message": f"CD sent only {cd_days} days before closing (min 3 business days)",
                 "severity": "critical",
             })
-    
-    # Revision warnings
-    if loan["le_revision_count"] and loan["le_revision_count"] > 2:
+
+    # Check revision count from disclosure_events table
+    revision_counts = execute_single("""
+        SELECT
+            COUNT(CASE WHEN disclosure_type = 'revised_le' THEN 1 END) as le_revisions,
+            COUNT(CASE WHEN disclosure_type = 'revised_cd' THEN 1 END) as cd_revisions
+        FROM disclosure_events
+        WHERE loan_id = :loan_id
+    """, {"loan_id": loan_id})
+
+    le_revisions = revision_counts["le_revisions"] if revision_counts else 0
+    cd_revisions = revision_counts["cd_revisions"] if revision_counts else 0
+
+    if le_revisions > 2:
         warnings.append({
             "type": "EXCESSIVE_LE_REVISIONS",
-            "message": f"{loan['le_revision_count']} LE revisions - review for valid change circumstances",
+            "message": f"{le_revisions} LE revisions - review for valid change circumstances",
         })
-    
+
     is_compliant = len([i for i in issues if i["severity"] in ["high", "critical"]]) == 0
-    
+
     data = {
         "loan_id": loan_id,
         "loan_number": loan["loan_number"],
@@ -974,12 +1009,18 @@ def check_trid_compliance(
         "warnings": warnings,
         "timeline": {
             "application_date": format_date(loan["application_date"]),
-            "le_sent": format_date(loan["disclosure_sent_at"]),
-            "cd_sent": format_date(loan["closing_disclosure_sent_at"]),
-            "closing_date": format_date(loan["consummation_date"]),
+            "le_sent": format_date(loan["initial_disclosures_sent_date"]),
+            "le_signed": format_date(loan["initial_disclosures_signed_date"]),
+            "cd_sent": format_date(loan["cd_sent_to_borrower_date"]),
+            "cd_acknowledged": format_date(loan["cd_acknowledged_date"]),
+            "funded_date": format_date(loan["funded_date"]),
+        },
+        "revisions": {
+            "le_revisions": le_revisions,
+            "cd_revisions": cd_revisions,
         },
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"TRID {'Compliant' if is_compliant else 'NON-COMPLIANT'}: {len(issues)} issues",
@@ -988,59 +1029,74 @@ def check_trid_compliance(
 
 @mortgage_tool(
     name="check_respa_compliance",
-    description="Check RESPA Section 8 compliance for kickback/fee splitting violations",
+    description="Check RESPA compliance for affiliated business arrangements using available loan data",
     agent_roles=["compliance_checker"],
     risk_level="LOW",
 )
 def check_respa_compliance(
     loan_id: str,
 ) -> ToolResult:
-    """Check RESPA compliance."""
+    """Check RESPA compliance using available Loan string columns."""
     loan = execute_single("""
-        SELECT 
-            l.id, l.loan_number, l.referral_source, l.referral_fee_paid,
-            l.title_company_id, l.title_fee, l.appraisal_company_id, l.appraisal_fee
+        SELECT
+            l.id, l.loan_number, l.title_company, l.lender,
+            l.realtor_agent, l.loan_officer_name, l.organization_id
         FROM loans l
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
+
     issues = []
-    
-    # Check for referral fees
-    if loan["referral_fee_paid"] and float(loan["referral_fee_paid"]) > 0:
+
+    # Check for affiliated business arrangements by examining service providers
+    # In the real schema, title_company, lender, and realtor_agent are plain string columns.
+    # Flag these for manual AfBA disclosure verification.
+    providers = []
+    if loan["title_company"]:
+        providers.append({"name": loan["title_company"], "role": "title_company"})
+    if loan["lender"]:
+        providers.append({"name": loan["lender"], "role": "lender"})
+    if loan["realtor_agent"]:
+        providers.append({"name": loan["realtor_agent"], "role": "realtor"})
+
+    for provider in providers:
         issues.append({
-            "type": "REFERRAL_FEE",
-            "message": f"Referral fee of {format_currency(loan['referral_fee_paid'])} paid - verify not for referral of business",
-            "severity": "high",
+            "type": "AFFILIATED_BUSINESS_CHECK",
+            "message": f"Verify AfBA disclosure for {provider['role']}: {provider['name']}",
+            "severity": "low",
         })
-    
-    # Check affiliated business arrangements
-    affiliated = execute_query("""
-        SELECT provider_name, relationship_type, fee_amount
-        FROM loan_service_providers
-        WHERE loan_id = :loan_id AND is_affiliated = true
+
+    # No automated way to detect referral fees in current schema;
+    # flag for manual review if loan has a referral partner via lead
+    referral_check = execute_single("""
+        SELECT ld.referral_partner_id, rp.name as partner_name
+        FROM leads ld
+        JOIN loans l ON l.loan_number = ld.loan_number
+        LEFT JOIN referral_partners rp ON rp.id = ld.referral_partner_id
+        WHERE l.id = :loan_id AND ld.referral_partner_id IS NOT NULL
+        LIMIT 1
     """, {"loan_id": loan_id})
-    
-    for aff in affiliated:
+
+    if referral_check and referral_check["partner_name"]:
         issues.append({
-            "type": "AFFILIATED_BUSINESS",
-            "message": f"Affiliated provider: {aff['provider_name']} - verify AfBA disclosure provided",
+            "type": "REFERRAL_PARTNER",
+            "message": f"Referral partner: {referral_check['partner_name']} - verify no prohibited referral fees",
             "severity": "medium",
         })
-    
-    is_compliant = len([i for i in issues if i["severity"] == "high"]) == 0
-    
+
+    high_severity = len([i for i in issues if i["severity"] in ["high", "critical"]])
+    is_compliant = high_severity == 0
+
     data = {
         "loan_id": loan_id,
         "loan_number": loan["loan_number"],
         "is_compliant": is_compliant,
         "issues": issues,
-        "affiliated_providers": len(affiliated),
+        "service_providers": len(providers),
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"RESPA {'Compliant' if is_compliant else 'Review Required'}: {len(issues)} items to review",
@@ -1048,51 +1104,47 @@ def check_respa_compliance(
 
 
 @mortgage_tool(
-    name="check_fair_lending",
-    description="Check fair lending compliance and identify potential disparities",
+    name="check_pricing_consistency",
+    description="Check pricing consistency across similar loans to identify rate outliers",
     agent_roles=["compliance_checker"],
     risk_level="LOW",
 )
-def check_fair_lending(
+def check_pricing_consistency(
     loan_id: Optional[str] = None,
     lo_id: Optional[str] = None,
     days: int = 90,
 ) -> ToolResult:
-    """Check fair lending compliance."""
+    """Check pricing consistency (rate variance analysis)."""
     if loan_id:
         loan = execute_single("""
-            SELECT 
-                l.id, l.loan_number, l.interest_rate, l.loan_type,
-                l.borrower_credit_score, l.pricing_exception,
-                l.pricing_exception_reason
+            SELECT
+                l.id, l.loan_number, l.rate, l.loan_type
             FROM loans l
             WHERE l.id = :loan_id
         """, {"loan_id": loan_id})
-        
+
         if not loan:
             return ToolResult.no_data(f"Loan {loan_id} not found")
-        
-        # Compare to similar loans
+
+        # Compare to similar loans of same type
         comparable = execute_single("""
-            SELECT 
-                AVG(interest_rate) as avg_rate,
-                MIN(interest_rate) as min_rate,
-                MAX(interest_rate) as max_rate,
+            SELECT
+                AVG(rate) as avg_rate,
+                MIN(rate) as min_rate,
+                MAX(rate) as max_rate,
                 COUNT(*) as count
             FROM loans
             WHERE loan_type = :loan_type
-                AND borrower_credit_score BETWEEN :min_score AND :max_score
-                AND funded_at >= CURRENT_DATE - 90
+                AND rate IS NOT NULL
+                AND funded_date >= CURRENT_DATE - 90
         """, {
             "loan_type": loan["loan_type"],
-            "min_score": (loan["borrower_credit_score"] or 700) - 20,
-            "max_score": (loan["borrower_credit_score"] or 700) + 20,
         })
-        
+
         rate_variance = 0
         if comparable["avg_rate"]:
-            rate_variance = float(loan["interest_rate"] or 0) - float(comparable["avg_rate"])
-        
+            rate_variance = float(loan["rate"] or 0) - float(comparable["avg_rate"])
+
         flags = []
         if abs(rate_variance) > 0.25:
             flags.append({
@@ -1100,39 +1152,32 @@ def check_fair_lending(
                 "message": f"Rate is {rate_variance:+.3f}% from comparable average",
                 "severity": "medium" if abs(rate_variance) < 0.5 else "high",
             })
-        
-        if loan["pricing_exception"] and not loan["pricing_exception_reason"]:
-            flags.append({
-                "type": "UNDOCUMENTED_EXCEPTION",
-                "message": "Pricing exception without documented reason",
-                "severity": "high",
-            })
-        
+
         data = {
             "loan_id": loan_id,
             "loan_number": loan["loan_number"],
             "flags": flags,
             "rate_analysis": {
-                "loan_rate": float(loan["interest_rate"] or 0),
+                "loan_rate": float(loan["rate"] or 0),
                 "comparable_avg": float(comparable["avg_rate"] or 0),
                 "variance": round(rate_variance, 3),
                 "comparable_count": comparable["count"],
             },
         }
     else:
-        # Aggregate analysis
+        # Aggregate analysis by loan type
         analysis = execute_query("""
-            SELECT 
+            SELECT
                 loan_type,
                 COUNT(*) as count,
-                AVG(interest_rate) as avg_rate,
-                STDDEV(interest_rate) as rate_stddev,
-                COUNT(CASE WHEN pricing_exception THEN 1 END) as exceptions
+                AVG(rate) as avg_rate,
+                STDDEV(rate) as rate_stddev
             FROM loans
-            WHERE funded_at >= CURRENT_DATE - :days
+            WHERE funded_date >= CURRENT_DATE - :days
+                AND rate IS NOT NULL
             GROUP BY loan_type
         """, {"days": days})
-        
+
         data = {
             "period_days": days,
             "by_loan_type": [
@@ -1141,15 +1186,14 @@ def check_fair_lending(
                     "count": row["count"],
                     "avg_rate": round(float(row["avg_rate"] or 0), 3),
                     "rate_stddev": round(float(row["rate_stddev"] or 0), 3),
-                    "exception_rate": round((row["exceptions"] / row["count"]) * 100, 1) if row["count"] > 0 else 0,
                 }
                 for row in analysis
             ],
         }
-    
+
     return ToolResult.success(
         data=data,
-        message="Fair lending analysis complete",
+        message="Pricing consistency analysis complete",
     )
 
 
@@ -1195,7 +1239,7 @@ def get_state_requirements(
             "cooling_off": None,
         },
     }
-    
+
     if state_code.upper() not in state_reqs:
         return ToolResult.success(
             data={
@@ -1205,9 +1249,9 @@ def get_state_requirements(
             },
             message=f"No specific state rules found for {state_code}",
         )
-    
+
     reqs = state_reqs[state_code.upper()]
-    
+
     data = {
         "state": state_code.upper(),
         "licensing": reqs["licensing"],
@@ -1216,10 +1260,10 @@ def get_state_requirements(
         "prepayment_rules": reqs["prepayment_rules"],
         "cooling_off_period": reqs["cooling_off"],
     }
-    
+
     if loan_type:
         data["loan_type_specific"] = f"Review {loan_type} specific rules for {state_code}"
-    
+
     return ToolResult.success(
         data=data,
         message=f"Requirements for {state_code.upper()}: {len(reqs['disclosures'])} disclosures required",
@@ -1237,52 +1281,54 @@ def audit_loan_file(
 ) -> ToolResult:
     """Audit loan file for compliance."""
     loan = execute_single("""
-        SELECT 
-            l.*, u.name as lo_name, u.nmls_id as lo_nmls
+        SELECT
+            l.*,
+            CONCAT(u.first_name, ' ', u.last_name) as lo_name,
+            u.nmls_number as lo_nmls
         FROM loans l
         LEFT JOIN users u ON u.id = l.loan_officer_id
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
+
     audit_results = {
         "passed": [],
         "failed": [],
         "warnings": [],
     }
-    
+
     # NMLS check
     if loan["lo_nmls"]:
         audit_results["passed"].append({"check": "LO_NMLS", "message": f"NMLS #{loan['lo_nmls']} on file"})
     else:
         audit_results["failed"].append({"check": "LO_NMLS", "message": "LO NMLS ID missing"})
-    
+
     # Disclosure timing
-    if loan["application_date"] and loan["disclosure_sent_at"]:
-        le_days = days_between(loan["application_date"], loan["disclosure_sent_at"])
+    if loan["application_date"] and loan["initial_disclosures_sent_date"]:
+        le_days = days_between(loan["application_date"], loan["initial_disclosures_sent_date"])
         if le_days <= 3:
             audit_results["passed"].append({"check": "LE_TIMING", "message": f"LE sent in {le_days} days"})
         else:
             audit_results["failed"].append({"check": "LE_TIMING", "message": f"LE sent in {le_days} days (max 3)"})
-    
-    # Document checklist
+
+    # Document checklist — query the real documents table
     docs = execute_query("""
-        SELECT document_type, status FROM loan_documents WHERE loan_id = :loan_id
+        SELECT doc_type, status FROM documents WHERE loan_id = :loan_id
     """, {"loan_id": loan_id})
-    
-    required_docs = ["income_verification", "asset_verification", "credit_report", "appraisal", "title"]
+
+    required_docs = ["paystubs", "w2", "bank_statements", "credit_report", "appraisal"]
     for req_doc in required_docs:
-        found = any(d["document_type"] == req_doc and d["status"] == "approved" for d in docs)
+        found = any(d["doc_type"] == req_doc and d["status"] == "active" for d in docs)
         if found:
-            audit_results["passed"].append({"check": f"DOC_{req_doc.upper()}", "message": f"{req_doc} verified"})
+            audit_results["passed"].append({"check": f"DOC_{req_doc.upper()}", "message": f"{req_doc} on file"})
         else:
-            audit_results["warnings"].append({"check": f"DOC_{req_doc.upper()}", "message": f"{req_doc} not verified"})
-    
+            audit_results["warnings"].append({"check": f"DOC_{req_doc.upper()}", "message": f"{req_doc} not found"})
+
     total_checks = len(audit_results["passed"]) + len(audit_results["failed"]) + len(audit_results["warnings"])
     pass_rate = len(audit_results["passed"]) / total_checks * 100 if total_checks > 0 else 0
-    
+
     data = {
         "loan_id": loan_id,
         "loan_number": loan["loan_number"],
@@ -1296,7 +1342,7 @@ def audit_loan_file(
         "results": audit_results,
         "recommendation": "Review required" if audit_results["failed"] else "File compliant",
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Audit: {len(audit_results['failed'])} failures, {len(audit_results['warnings'])} warnings",
@@ -1312,52 +1358,65 @@ def audit_loan_file(
 def get_disclosure_timeline(
     loan_id: str,
 ) -> ToolResult:
-    """Get disclosure timeline."""
+    """Get disclosure timeline from Loan date columns and disclosure_events table."""
     loan = execute_single("""
-        SELECT 
+        SELECT
             l.id, l.loan_number, l.application_date,
-            l.disclosure_sent_at, l.disclosure_received_at,
-            l.closing_disclosure_sent_at, l.closing_disclosure_received_at,
-            l.consummation_date, l.le_revision_count, l.cd_revision_count
+            l.initial_disclosures_sent_date,
+            l.initial_disclosures_signed_date,
+            l.loan_estimate_sent_date,
+            l.cd_sent_to_borrower_date,
+            l.cd_acknowledged_date,
+            l.cd_received_signed_date,
+            l.funded_date
         FROM loans l
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
+
     timeline = []
-    
+
     if loan["application_date"]:
         timeline.append({"event": "Application", "date": format_date(loan["application_date"]), "status": "complete"})
-    
-    if loan["disclosure_sent_at"]:
-        timeline.append({"event": "LE Sent", "date": format_date(loan["disclosure_sent_at"]), "status": "complete"})
+
+    if loan["initial_disclosures_sent_date"]:
+        timeline.append({"event": "Initial Disclosures Sent", "date": format_date(loan["initial_disclosures_sent_date"]), "status": "complete"})
     else:
-        timeline.append({"event": "LE Sent", "date": None, "status": "pending"})
-    
-    if loan["disclosure_received_at"]:
-        timeline.append({"event": "LE Received", "date": format_date(loan["disclosure_received_at"]), "status": "complete"})
-    
-    if loan["closing_disclosure_sent_at"]:
-        timeline.append({"event": "CD Sent", "date": format_date(loan["closing_disclosure_sent_at"]), "status": "complete"})
-    
-    if loan["closing_disclosure_received_at"]:
-        timeline.append({"event": "CD Received", "date": format_date(loan["closing_disclosure_received_at"]), "status": "complete"})
-    
-    if loan["consummation_date"]:
-        timeline.append({"event": "Closing", "date": format_date(loan["consummation_date"]), "status": "complete"})
-    
+        timeline.append({"event": "Initial Disclosures Sent", "date": None, "status": "pending"})
+
+    if loan["initial_disclosures_signed_date"]:
+        timeline.append({"event": "Initial Disclosures Signed", "date": format_date(loan["initial_disclosures_signed_date"]), "status": "complete"})
+
+    if loan["cd_sent_to_borrower_date"]:
+        timeline.append({"event": "CD Sent", "date": format_date(loan["cd_sent_to_borrower_date"]), "status": "complete"})
+
+    if loan["cd_acknowledged_date"]:
+        timeline.append({"event": "CD Acknowledged", "date": format_date(loan["cd_acknowledged_date"]), "status": "complete"})
+
+    if loan["funded_date"]:
+        timeline.append({"event": "Funded", "date": format_date(loan["funded_date"]), "status": "complete"})
+
+    # Get revision counts from disclosure_events
+    revision_counts = execute_single("""
+        SELECT
+            COUNT(CASE WHEN disclosure_type = 'revised_le' THEN 1 END) as le_revisions,
+            COUNT(CASE WHEN disclosure_type = 'revised_cd' THEN 1 END) as cd_revisions
+        FROM disclosure_events
+        WHERE loan_id = :loan_id
+    """, {"loan_id": loan_id})
+
     data = {
         "loan_id": loan_id,
         "loan_number": loan["loan_number"],
         "timeline": timeline,
         "revisions": {
-            "le_revisions": loan["le_revision_count"] or 0,
-            "cd_revisions": loan["cd_revision_count"] or 0,
+            "le_revisions": revision_counts["le_revisions"] if revision_counts else 0,
+            "cd_revisions": revision_counts["cd_revisions"] if revision_counts else 0,
         },
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Timeline: {len([t for t in timeline if t['status'] == 'complete'])}/{len(timeline)} complete",
@@ -1373,26 +1432,26 @@ def get_disclosure_timeline(
 def check_tolerance_violations(
     loan_id: str,
 ) -> ToolResult:
-    """Check tolerance violations."""
+    """Check tolerance violations using the loan_fees table."""
     fees = execute_query("""
-        SELECT 
+        SELECT
             fee_name, fee_category, le_amount, cd_amount, tolerance_category
         FROM loan_fees
         WHERE loan_id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not fees:
         return ToolResult.no_data(f"No fee data for loan {loan_id}")
-    
+
     violations = []
     zero_tolerance_total = {"le": 0, "cd": 0}
     ten_percent_total = {"le": 0, "cd": 0}
-    
+
     for fee in fees:
         le_amt = float(fee["le_amount"] or 0)
         cd_amt = float(fee["cd_amount"] or 0)
         diff = cd_amt - le_amt
-        
+
         if fee["tolerance_category"] == "zero":
             zero_tolerance_total["le"] += le_amt
             zero_tolerance_total["cd"] += cd_amt
@@ -1405,11 +1464,11 @@ def check_tolerance_violations(
                     "difference": diff,
                     "cure_amount": diff,
                 })
-        
+
         elif fee["tolerance_category"] == "ten_percent":
             ten_percent_total["le"] += le_amt
             ten_percent_total["cd"] += cd_amt
-    
+
     # Check 10% category
     ten_pct_diff = ten_percent_total["cd"] - ten_percent_total["le"]
     ten_pct_allowed = ten_percent_total["le"] * 0.10
@@ -1423,9 +1482,9 @@ def check_tolerance_violations(
             "allowed": ten_pct_allowed,
             "cure_amount": ten_pct_diff - ten_pct_allowed,
         })
-    
+
     total_cure = sum(v.get("cure_amount", 0) for v in violations)
-    
+
     data = {
         "loan_id": loan_id,
         "violations": violations,
@@ -1434,7 +1493,7 @@ def check_tolerance_violations(
         "total_cure_formatted": format_currency(total_cure),
         "is_compliant": len(violations) == 0,
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"{len(violations)} tolerance violations, cure: {format_currency(total_cure)}",
@@ -1443,7 +1502,7 @@ def check_tolerance_violations(
 
 @mortgage_tool(
     name="get_compliance_history",
-    description="Get compliance history and past issues for loan or LO",
+    description="Get compliance alert history for loan or LO",
     agent_roles=["compliance_checker"],
     risk_level="LOW",
 )
@@ -1452,69 +1511,70 @@ def get_compliance_history(
     lo_id: Optional[str] = None,
     days: int = 365,
 ) -> ToolResult:
-    """Get compliance history."""
+    """Get compliance history from compliance_alerts table."""
     params = {"days": days}
-    
+
     if loan_id:
         history = execute_query("""
-            SELECT 
-                issue_type, severity, description, status,
-                identified_at, resolved_at, resolution_notes
-            FROM compliance_issues
+            SELECT
+                alert_type, severity, title, description, status,
+                created_at, resolved_at, resolution_notes
+            FROM compliance_alerts
             WHERE loan_id = :loan_id
-            ORDER BY identified_at DESC
+            ORDER BY created_at DESC
         """, {"loan_id": loan_id})
-        
+
         data = {
             "loan_id": loan_id,
-            "issues": [
+            "alerts": [
                 {
-                    "type": h["issue_type"],
+                    "type": h["alert_type"],
                     "severity": h["severity"],
+                    "title": h["title"],
                     "description": h["description"],
                     "status": h["status"],
-                    "identified": format_date(h["identified_at"]),
+                    "created": format_date(h["created_at"]),
                     "resolved": format_date(h["resolved_at"]),
                 }
                 for h in history
             ],
-            "total_issues": len(history),
-            "open_issues": len([h for h in history if h["status"] == "open"]),
+            "total_alerts": len(history),
+            "open_alerts": len([h for h in history if h["status"] == "open"]),
         }
     else:
         # LO or aggregate history
         params["lo_id"] = lo_id
-        
+
         summary = execute_query(f"""
-            SELECT 
-                issue_type,
+            SELECT
+                ca.alert_type,
                 COUNT(*) as count,
-                COUNT(CASE WHEN status = 'open' THEN 1 END) as open_count
-            FROM compliance_issues ci
-            JOIN loans l ON l.id = ci.loan_id
-            WHERE ci.identified_at >= CURRENT_DATE - :days
+                COUNT(CASE WHEN ca.status = 'open' THEN 1 END) as open_count
+            FROM compliance_alerts ca
+            JOIN loans l ON l.id = ca.loan_id
+            WHERE ca.created_at >= CURRENT_DATE - :days
             {"AND l.loan_officer_id = :lo_id" if lo_id else ""}
-            GROUP BY issue_type
+            GROUP BY ca.alert_type
             ORDER BY count DESC
         """, params)
-        
+
         data = {
             "period_days": days,
             "lo_id": lo_id,
             "by_type": [
                 {
-                    "type": s["issue_type"],
+                    "type": s["alert_type"],
                     "count": s["count"],
                     "open": s["open_count"],
                 }
                 for s in summary
             ],
-            "total_issues": sum(s["count"] for s in summary),
+            "total_alerts": sum(s["count"] for s in summary),
         }
-    
+
     return ToolResult.success(
         data=data,
-        message=f"Compliance history: {data.get('total_issues', 0)} issues found",
+        message=f"Compliance history: {data.get('total_alerts', 0)} alerts found",
     )
 
 
@@ -1533,59 +1593,58 @@ def get_lead_details(
 ) -> ToolResult:
     """Get lead details."""
     lead = execute_single("""
-        SELECT 
+        SELECT
             l.id, l.first_name, l.last_name, l.email, l.phone,
-            l.status, l.source, l.campaign, l.created_at,
-            l.assigned_to, l.lead_score, l.last_contact_at,
-            l.property_type, l.loan_purpose, l.estimated_amount,
-            l.estimated_credit_score, l.pre_approved,
-            u.name as assigned_to_name
+            l.stage, l.source, l.created_at,
+            l.owner_id, l.ai_score, l.last_contact,
+            l.property_type, l.loan_purpose, l.loan_amount,
+            l.credit_score, l.preapproval_amount,
+            CONCAT(u.first_name, ' ', u.last_name) as assigned_to_name
         FROM leads l
-        LEFT JOIN users u ON u.id = l.assigned_to
+        LEFT JOIN users u ON u.id = l.owner_id
         WHERE l.id = :lead_id
     """, {"lead_id": lead_id})
-    
+
     if not lead:
         return ToolResult.no_data(f"Lead {lead_id} not found")
-    
+
     # Get recent activities
     activities = execute_query("""
-        SELECT activity_type, description, created_at
-        FROM lead_activities
+        SELECT type, content, created_at
+        FROM activities
         WHERE lead_id = :lead_id
         ORDER BY created_at DESC
         LIMIT 5
     """, {"lead_id": lead_id})
-    
+
     data = {
         "id": lead["id"],
-        "name": f"{lead['first_name']} {lead['last_name']}",
+        "name": f"{lead['first_name'] or ''} {lead['last_name'] or ''}".strip(),
         "email": lead["email"],
         "phone": lead["phone"],
-        "status": lead["status"],
-        "score": lead["lead_score"],
+        "stage": lead["stage"],
+        "score": lead["ai_score"],
         "source": lead["source"],
-        "campaign": lead["campaign"],
         "assigned_to": lead["assigned_to_name"],
         "created_at": format_date(lead["created_at"]),
-        "last_contact": format_date(lead["last_contact_at"]),
+        "last_contact": format_date(lead["last_contact"]),
         "loan_interest": {
             "purpose": lead["loan_purpose"],
             "property_type": lead["property_type"],
-            "estimated_amount": float(lead["estimated_amount"] or 0),
-            "estimated_credit": lead["estimated_credit_score"],
-            "pre_approved": lead["pre_approved"],
+            "loan_amount": float(lead["loan_amount"] or 0),
+            "credit_score": lead["credit_score"],
+            "preapproval_amount": float(lead["preapproval_amount"] or 0),
         },
         "recent_activities": [
             {
-                "type": a["activity_type"],
-                "description": a["description"],
+                "type": a["type"],
+                "content": (a["content"] or "")[:200],
                 "date": format_date(a["created_at"]),
             }
             for a in activities
         ],
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Lead: {data['name']} - Score: {data['score']}",
@@ -1594,7 +1653,7 @@ def get_lead_details(
 
 @mortgage_tool(
     name="get_engagement_history",
-    description="Get complete engagement history for a lead",
+    description="Get activity/engagement history for a lead",
     agent_roles=["lead_nurturer"],
     risk_level="LOW",
 )
@@ -1602,52 +1661,50 @@ def get_engagement_history(
     lead_id: str,
     limit: int = 50,
 ) -> ToolResult:
-    """Get engagement history."""
-    engagements = execute_query("""
-        SELECT 
-            engagement_type, channel, direction,
-            subject, content_preview, outcome,
-            created_at, duration_seconds
-        FROM lead_engagements
-        WHERE lead_id = :lead_id
-        ORDER BY created_at DESC
+    """Get engagement history from the activities table."""
+    activities = execute_query("""
+        SELECT
+            a.type, a.content, a.duration, a.sentiment,
+            a.created_at, a.user_id,
+            CONCAT(u.first_name, ' ', u.last_name) as user_name
+        FROM activities a
+        LEFT JOIN users u ON u.id = a.user_id
+        WHERE a.lead_id = :lead_id
+        ORDER BY a.created_at DESC
         LIMIT :limit
     """, {"lead_id": lead_id, "limit": limit})
-    
-    if not engagements:
-        return ToolResult.no_data(f"No engagement history for lead {lead_id}")
-    
-    # Aggregate stats
-    by_channel = {}
-    for e in engagements:
-        channel = e["channel"]
-        if channel not in by_channel:
-            by_channel[channel] = {"count": 0, "responses": 0}
-        by_channel[channel]["count"] += 1
-        if e["outcome"] == "responded":
-            by_channel[channel]["responses"] += 1
-    
+
+    if not activities:
+        return ToolResult.no_data(f"No activity history for lead {lead_id}")
+
+    # Aggregate stats by activity type
+    by_type = {}
+    for a in activities:
+        atype = a["type"]
+        if atype not in by_type:
+            by_type[atype] = {"count": 0}
+        by_type[atype]["count"] += 1
+
     data = {
         "lead_id": lead_id,
-        "total_engagements": len(engagements),
-        "by_channel": by_channel,
-        "engagements": [
+        "total_activities": len(activities),
+        "by_type": by_type,
+        "activities": [
             {
-                "type": e["engagement_type"],
-                "channel": e["channel"],
-                "direction": e["direction"],
-                "subject": e["subject"],
-                "preview": e["content_preview"][:100] if e["content_preview"] else None,
-                "outcome": e["outcome"],
-                "date": format_date(e["created_at"]),
+                "type": a["type"],
+                "content": (a["content"] or "")[:200],
+                "duration": a["duration"],
+                "sentiment": a["sentiment"],
+                "user": a["user_name"],
+                "date": format_date(a["created_at"]),
             }
-            for e in engagements
+            for a in activities
         ],
     }
-    
+
     return ToolResult.success(
         data=data,
-        message=f"{len(engagements)} engagements found",
+        message=f"{len(activities)} activities found",
     )
 
 
@@ -1662,28 +1719,28 @@ def score_lead(
 ) -> ToolResult:
     """Score a lead."""
     lead = execute_single("""
-        SELECT 
-            l.id, l.lead_score, l.estimated_credit_score,
-            l.estimated_amount, l.pre_approved, l.source,
-            l.created_at, l.last_contact_at
+        SELECT
+            l.id, l.ai_score, l.credit_score,
+            l.loan_amount, l.preapproval_amount, l.source,
+            l.created_at, l.last_contact
         FROM leads l
         WHERE l.id = :lead_id
     """, {"lead_id": lead_id})
-    
+
     if not lead:
         return ToolResult.no_data(f"Lead {lead_id} not found")
-    
-    # Get engagement stats
-    engagement_stats = execute_single("""
-        SELECT 
+
+    # Get activity stats from the activities table
+    activity_stats = execute_single("""
+        SELECT
             COUNT(*) as total,
-            COUNT(CASE WHEN outcome = 'responded' THEN 1 END) as responses,
-            COUNT(CASE WHEN engagement_type = 'email_open' THEN 1 END) as opens,
-            COUNT(CASE WHEN engagement_type = 'link_click' THEN 1 END) as clicks
-        FROM lead_engagements
+            COUNT(CASE WHEN type = 'Email' THEN 1 END) as emails,
+            COUNT(CASE WHEN type = 'Call' THEN 1 END) as calls,
+            COUNT(CASE WHEN type = 'Meeting' THEN 1 END) as meetings
+        FROM activities
         WHERE lead_id = :lead_id AND created_at >= CURRENT_DATE - 30
     """, {"lead_id": lead_id})
-    
+
     # Calculate score components
     score_breakdown = {
         "profile": 0,
@@ -1691,28 +1748,29 @@ def score_lead(
         "recency": 0,
         "intent": 0,
     }
-    
+
     # Profile score (max 25)
-    if lead["estimated_credit_score"] and lead["estimated_credit_score"] >= 700:
+    if lead["credit_score"] and lead["credit_score"] >= 700:
         score_breakdown["profile"] += 10
-    if lead["estimated_amount"] and lead["estimated_amount"] >= 300000:
+    if lead["loan_amount"] and lead["loan_amount"] >= 300000:
         score_breakdown["profile"] += 10
-    if lead["pre_approved"]:
+    if lead["preapproval_amount"] and lead["preapproval_amount"] > 0:
         score_breakdown["profile"] += 5
-    
+
     # Engagement score (max 25)
-    if engagement_stats["responses"] >= 2:
+    total_activities = activity_stats["total"] or 0
+    if total_activities >= 5:
         score_breakdown["engagement"] += 15
-    elif engagement_stats["responses"] >= 1:
+    elif total_activities >= 2:
         score_breakdown["engagement"] += 10
-    if engagement_stats["opens"] >= 3:
+    if activity_stats["calls"] and activity_stats["calls"] >= 1:
         score_breakdown["engagement"] += 5
-    if engagement_stats["clicks"] >= 1:
+    if activity_stats["meetings"] and activity_stats["meetings"] >= 1:
         score_breakdown["engagement"] += 5
-    
+
     # Recency score (max 25)
-    if lead["last_contact_at"]:
-        days_since = days_between(lead["last_contact_at"], datetime.now())
+    if lead["last_contact"]:
+        days_since = days_between(lead["last_contact"], datetime.now())
         if days_since <= 3:
             score_breakdown["recency"] = 25
         elif days_since <= 7:
@@ -1721,7 +1779,7 @@ def score_lead(
             score_breakdown["recency"] = 15
         elif days_since <= 30:
             score_breakdown["recency"] = 10
-    
+
     # Intent score (max 25)
     high_intent_sources = ["rate_quote", "application_started", "referral"]
     if lead["source"] in high_intent_sources:
@@ -1730,9 +1788,9 @@ def score_lead(
         score_breakdown["intent"] = 15
     else:
         score_breakdown["intent"] = 10
-    
+
     total_score = sum(score_breakdown.values())
-    
+
     # Determine grade
     if total_score >= 80:
         grade = "A"
@@ -1742,21 +1800,21 @@ def score_lead(
         grade = "C"
     else:
         grade = "D"
-    
+
     data = {
         "lead_id": lead_id,
-        "previous_score": lead["lead_score"],
+        "previous_score": lead["ai_score"],
         "new_score": total_score,
         "grade": grade,
         "breakdown": score_breakdown,
-        "engagement_stats": {
-            "total": engagement_stats["total"],
-            "responses": engagement_stats["responses"],
-            "opens": engagement_stats["opens"],
-            "clicks": engagement_stats["clicks"],
+        "activity_stats": {
+            "total": activity_stats["total"] or 0,
+            "emails": activity_stats["emails"] or 0,
+            "calls": activity_stats["calls"] or 0,
+            "meetings": activity_stats["meetings"] or 0,
         },
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Lead score: {total_score} (Grade {grade})",
@@ -1774,31 +1832,31 @@ def suggest_followup(
 ) -> ToolResult:
     """Suggest follow-up action."""
     lead = execute_single("""
-        SELECT 
-            l.id, l.first_name, l.status, l.lead_score,
-            l.last_contact_at, l.preferred_contact_method,
-            l.loan_purpose, l.estimated_amount
+        SELECT
+            l.id, l.first_name, l.stage, l.ai_score,
+            l.last_contact, l.preferred_communication,
+            l.loan_purpose, l.loan_amount
         FROM leads l
         WHERE l.id = :lead_id
     """, {"lead_id": lead_id})
-    
+
     if not lead:
         return ToolResult.no_data(f"Lead {lead_id} not found")
-    
-    # Get last engagement
-    last_engagement = execute_single("""
-        SELECT engagement_type, channel, outcome, created_at
-        FROM lead_engagements
+
+    # Get last activity
+    last_activity = execute_single("""
+        SELECT type, content, sentiment, created_at
+        FROM activities
         WHERE lead_id = :lead_id
         ORDER BY created_at DESC
         LIMIT 1
     """, {"lead_id": lead_id})
-    
-    days_since_contact = days_between(lead["last_contact_at"], datetime.now()) if lead["last_contact_at"] else 999
-    
+
+    days_since_contact = days_between(lead["last_contact"], datetime.now()) if lead["last_contact"] else 999
+
     # Determine recommendation
     suggestions = []
-    
+
     if days_since_contact > 7:
         suggestions.append({
             "action": "call",
@@ -1806,24 +1864,33 @@ def suggest_followup(
             "reason": f"No contact in {days_since_contact} days",
             "script_hint": f"Check in on {lead['loan_purpose'] or 'loan'} interest",
         })
-    
-    if lead["lead_score"] and lead["lead_score"] >= 70:
+
+    if lead["ai_score"] and lead["ai_score"] >= 70:
         suggestions.append({
             "action": "schedule_meeting",
             "priority": "high",
             "reason": "High lead score indicates strong interest",
             "script_hint": "Offer consultation to discuss options",
         })
-    
-    if last_engagement and last_engagement["outcome"] != "responded":
-        channel = "email" if last_engagement["channel"] == "phone" else "phone"
-        suggestions.append({
-            "action": f"try_{channel}",
-            "priority": "medium",
-            "reason": f"No response to last {last_engagement['channel']} attempt",
-            "script_hint": f"Follow up via {channel}",
-        })
-    
+
+    if last_activity:
+        last_type = last_activity["type"]
+        # Suggest alternate channel
+        if last_type == "Call":
+            suggestions.append({
+                "action": "send_email",
+                "priority": "medium",
+                "reason": f"Last contact was a call - try email follow-up",
+                "script_hint": "Follow up via email with details discussed",
+            })
+        elif last_type == "Email":
+            suggestions.append({
+                "action": "make_call",
+                "priority": "medium",
+                "reason": "Last contact was email - try phone",
+                "script_hint": "Follow up via phone",
+            })
+
     if not suggestions:
         suggestions.append({
             "action": "nurture_email",
@@ -1831,16 +1898,16 @@ def suggest_followup(
             "reason": "Keep engaged with valuable content",
             "script_hint": "Send rate update or market info",
         })
-    
+
     data = {
         "lead_id": lead_id,
         "lead_name": lead["first_name"],
-        "current_status": lead["status"],
+        "current_stage": lead["stage"],
         "days_since_contact": days_since_contact,
         "suggestions": suggestions,
-        "preferred_channel": lead["preferred_contact_method"],
+        "preferred_channel": lead["preferred_communication"],
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Suggested: {suggestions[0]['action']} ({suggestions[0]['priority']} priority)",
@@ -1860,17 +1927,17 @@ def draft_message(
 ) -> ToolResult:
     """Draft outreach message."""
     lead = execute_single("""
-        SELECT 
+        SELECT
             l.id, l.first_name, l.last_name, l.email,
-            l.loan_purpose, l.property_type, l.estimated_amount,
-            l.source, l.campaign
+            l.loan_purpose, l.property_type, l.loan_amount,
+            l.source
         FROM leads l
         WHERE l.id = :lead_id
     """, {"lead_id": lead_id})
-    
+
     if not lead:
         return ToolResult.no_data(f"Lead {lead_id} not found")
-    
+
     # Template based on type and context
     templates = {
         "email": {
@@ -1905,9 +1972,9 @@ Best regards""",
             "followup": f"Hi {lead['first_name']}, following up on your mortgage inquiry. Rates are looking good - let me know if you'd like to chat!",
         },
     }
-    
+
     template_context = context or "initial"
-    
+
     if message_type == "email":
         template = templates["email"].get(template_context, templates["email"]["initial"])
         draft = {
@@ -1922,7 +1989,7 @@ Best regards""",
             "type": message_type,
             "content": template,
         }
-    
+
     data = {
         "lead_id": lead_id,
         "lead_name": f"{lead['first_name']} {lead['last_name']}",
@@ -1930,7 +1997,7 @@ Best regards""",
         "personalization_used": ["first_name", "loan_purpose"],
         "requires_review": True,
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Draft {message_type} created for {lead['first_name']}",
@@ -1953,10 +2020,10 @@ def schedule_outreach(
     lead = execute_single("""
         SELECT id, first_name, email, phone FROM leads WHERE id = :lead_id
     """, {"lead_id": lead_id})
-    
+
     if not lead:
         return ToolResult.no_data(f"Lead {lead_id} not found")
-    
+
     sequences = {
         "initial": [
             {"day": 0, "channel": "email", "template": "welcome"},
@@ -1976,10 +2043,10 @@ def schedule_outreach(
             {"day": 21, "channel": "email", "template": "check_in"},
         ],
     }
-    
+
     sequence = sequences.get(sequence_type, sequences["initial"])
     start = datetime.fromisoformat(start_date) if start_date else datetime.now()
-    
+
     scheduled = []
     for step in sequence:
         scheduled.append({
@@ -1989,10 +2056,10 @@ def schedule_outreach(
             "template": step["template"],
             "status": "scheduled",
         })
-    
+
     import uuid
     sequence_id = str(uuid.uuid4())[:8].upper()
-    
+
     data = {
         "sequence_id": sequence_id,
         "lead_id": lead_id,
@@ -2002,7 +2069,7 @@ def schedule_outreach(
         "steps": scheduled,
         "total_touchpoints": len(scheduled),
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Scheduled {len(scheduled)} touchpoints starting {start.strftime('%m/%d')}",
@@ -2012,7 +2079,7 @@ def schedule_outreach(
 
 @mortgage_tool(
     name="get_similar_converted_leads",
-    description="Find similar leads that converted to understand success patterns",
+    description="Find similar leads that converted to loans to understand success patterns",
     agent_roles=["lead_nurturer"],
     risk_level="LOW",
 )
@@ -2020,30 +2087,30 @@ def get_similar_converted_leads(
     lead_id: str,
     limit: int = 5,
 ) -> ToolResult:
-    """Find similar converted leads."""
+    """Find similar converted leads by matching via loan_number."""
     lead = execute_single("""
-        SELECT 
+        SELECT
             id, source, loan_purpose, property_type,
-            estimated_amount, estimated_credit_score
+            loan_amount, credit_score
         FROM leads
         WHERE id = :lead_id
     """, {"lead_id": lead_id})
-    
+
     if not lead:
         return ToolResult.no_data(f"Lead {lead_id} not found")
-    
-    # Find similar converted leads
+
+    # Find leads that have a matching funded loan (via loan_number match)
     similar = execute_query("""
-        SELECT 
-            l.id, l.first_name, l.source, l.loan_purpose,
-            l.estimated_amount, l.converted_at,
-            lo.loan_number, lo.loan_amount, lo.funded_at
-        FROM leads l
-        JOIN loans lo ON lo.lead_id = l.id
-        WHERE l.status = 'converted'
-            AND l.id != :lead_id
-            AND (l.source = :source OR l.loan_purpose = :purpose)
-        ORDER BY l.converted_at DESC
+        SELECT
+            ld.id, ld.first_name, ld.source, ld.loan_purpose,
+            ld.loan_amount as lead_loan_amount,
+            lo.loan_number, lo.amount as funded_amount, lo.funded_date
+        FROM leads ld
+        JOIN loans lo ON lo.loan_number = ld.loan_number
+        WHERE lo.stage = 'FUNDED'
+            AND ld.id != :lead_id
+            AND (ld.source = :source OR ld.loan_purpose = :purpose)
+        ORDER BY lo.funded_date DESC
         LIMIT :limit
     """, {
         "lead_id": lead_id,
@@ -2051,17 +2118,16 @@ def get_similar_converted_leads(
         "purpose": lead["loan_purpose"],
         "limit": limit,
     })
-    
+
     if not similar:
         return ToolResult.no_data("No similar converted leads found")
-    
+
     # Analyze patterns
-    avg_time_to_convert = 0
     common_sources = {}
     for s in similar:
         if s["source"]:
             common_sources[s["source"]] = common_sources.get(s["source"], 0) + 1
-    
+
     data = {
         "lead_id": lead_id,
         "similar_converted": [
@@ -2069,17 +2135,17 @@ def get_similar_converted_leads(
                 "id": s["id"],
                 "source": s["source"],
                 "loan_purpose": s["loan_purpose"],
-                "loan_amount": float(s["loan_amount"] or 0),
-                "converted_date": format_date(s["converted_at"]),
+                "funded_amount": float(s["funded_amount"] or 0),
+                "funded_date": format_date(s["funded_date"]),
             }
             for s in similar
         ],
         "patterns": {
             "common_sources": common_sources,
-            "avg_loan_amount": sum(float(s["loan_amount"] or 0) for s in similar) / len(similar),
+            "avg_loan_amount": sum(float(s["funded_amount"] or 0) for s in similar) / len(similar),
         },
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Found {len(similar)} similar converted leads",
@@ -2088,60 +2154,54 @@ def get_similar_converted_leads(
 
 @mortgage_tool(
     name="get_optimal_contact_time",
-    description="Determine optimal time to contact lead based on history",
+    description="Determine optimal time to contact lead based on activity history",
     agent_roles=["lead_nurturer"],
     risk_level="LOW",
 )
 def get_optimal_contact_time(
     lead_id: str,
 ) -> ToolResult:
-    """Get optimal contact time."""
-    # Get engagement history
-    engagements = execute_query("""
-        SELECT 
+    """Get optimal contact time based on activity patterns."""
+    # Get inbound activity patterns (when the lead was most responsive)
+    activities = execute_query("""
+        SELECT
             EXTRACT(DOW FROM created_at) as day_of_week,
-            EXTRACT(HOUR FROM created_at) as hour,
-            outcome
-        FROM lead_engagements
+            EXTRACT(HOUR FROM created_at) as hour
+        FROM activities
         WHERE lead_id = :lead_id
-            AND direction = 'inbound'
-            AND outcome = 'responded'
+            AND type IN ('Call', 'Email', 'SMS')
     """, {"lead_id": lead_id})
-    
+
     lead = execute_single("""
-        SELECT preferred_contact_time, timezone FROM leads WHERE id = :lead_id
+        SELECT preferred_communication FROM leads WHERE id = :lead_id
     """, {"lead_id": lead_id})
-    
-    if lead and lead["preferred_contact_time"]:
-        preferred = lead["preferred_contact_time"]
+
+    # Analyze patterns or use defaults
+    if activities:
+        hours = [int(a["hour"]) for a in activities]
+        preferred_hour = max(set(hours), key=hours.count) if hours else 10
+        preferred = f"{preferred_hour:02d}:00"
     else:
-        # Analyze patterns or use defaults
-        if engagements:
-            # Find most common response hour
-            hours = [int(e["hour"]) for e in engagements]
-            preferred_hour = max(set(hours), key=hours.count) if hours else 10
-            preferred = f"{preferred_hour:02d}:00"
-        else:
-            preferred = "10:00"  # Default
-    
+        preferred = "10:00"  # Default
+
     # Determine best days
-    if engagements:
-        days = [int(e["day_of_week"]) for e in engagements]
+    if activities:
+        days = [int(a["day_of_week"]) for a in activities]
         best_days = list(set(days))[:3] if days else [1, 2, 3]  # Mon, Tue, Wed default
     else:
         best_days = [1, 2, 3, 4]  # Weekdays
-    
+
     day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-    
+
     data = {
         "lead_id": lead_id,
         "optimal_time": preferred,
         "best_days": [day_names[d] for d in best_days],
-        "timezone": lead["timezone"] if lead else "America/New_York",
-        "based_on_responses": len(engagements),
+        "preferred_channel": lead["preferred_communication"] if lead else None,
+        "based_on_activities": len(activities),
         "recommendation": f"Contact on {day_names[best_days[0]]} around {preferred}",
     }
-    
+
     return ToolResult.success(
         data=data,
         message=data["recommendation"],
@@ -2161,99 +2221,98 @@ def get_optimal_contact_time(
 def get_missing_documents(
     loan_id: str,
 ) -> ToolResult:
-    """Get missing documents."""
+    """Get missing documents by comparing required doc types against documents table."""
     loan = execute_single("""
-        SELECT id, loan_number, loan_type, status FROM loans WHERE id = :loan_id
+        SELECT id, loan_number, loan_type, stage FROM loans WHERE id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
-    # Get document requirements and status
-    docs = execute_query("""
-        SELECT 
-            dr.document_type, dr.category, dr.is_required,
-            ld.status as doc_status, ld.uploaded_at, ld.expires_at
-        FROM document_requirements dr
-        LEFT JOIN loan_documents ld ON ld.loan_id = :loan_id 
-            AND ld.document_type = dr.document_type
-        WHERE dr.loan_type = :loan_type OR dr.loan_type IS NULL
-        ORDER BY dr.is_required DESC, dr.category
-    """, {"loan_id": loan_id, "loan_type": loan["loan_type"]})
-    
+
+    # Get all documents currently on file for this loan
+    existing_docs = execute_query("""
+        SELECT doc_type, doc_category, status, uploaded_at
+        FROM documents
+        WHERE loan_id = :loan_id
+    """, {"loan_id": loan_id})
+
+    existing_types = {d["doc_type"] for d in existing_docs}
+
+    # Build requirements from DOCUMENT_CATEGORIES constant
     missing = []
-    pending = []
     received = []
-    
-    for doc in docs:
-        doc_info = {
-            "type": doc["document_type"],
-            "category": doc["category"],
-            "required": doc["is_required"],
-        }
-        
-        if not doc["doc_status"]:
-            missing.append(doc_info)
-        elif doc["doc_status"] in ["pending", "requested"]:
-            doc_info["status"] = doc["doc_status"]
-            doc_info["requested_at"] = format_date(doc["uploaded_at"])
-            pending.append(doc_info)
-        else:
-            doc_info["status"] = doc["doc_status"]
-            received.append(doc_info)
-    
+
+    for category, doc_types in DOCUMENT_CATEGORIES.items():
+        for doc_type in doc_types:
+            if doc_type in existing_types:
+                received.append({
+                    "type": doc_type,
+                    "category": category,
+                    "status": next((d["status"] for d in existing_docs if d["doc_type"] == doc_type), "unknown"),
+                })
+            else:
+                # Income and assets are generally required; others depend on stage
+                is_required = category in ("income", "assets", "credit")
+                missing.append({
+                    "type": doc_type,
+                    "category": category,
+                    "required": is_required,
+                })
+
     data = {
         "loan_id": loan_id,
         "loan_number": loan["loan_number"],
         "missing": missing,
-        "pending": pending,
         "received_count": len(received),
         "missing_required": len([m for m in missing if m["required"]]),
-        "total_required": len([d for d in docs if d["is_required"]]),
+        "total_on_file": len(existing_docs),
     }
-    
+
     return ToolResult.success(
         data=data,
-        message=f"{len(missing)} missing, {len(pending)} pending documents",
+        message=f"{len(missing)} missing, {len(received)} on file",
     )
 
 
 @mortgage_tool(
     name="get_loan_conditions",
-    description="Get outstanding conditions for a loan",
+    description="Get outstanding compliance alerts/conditions for a loan",
     agent_roles=["document_tracker"],
     risk_level="LOW",
 )
 def get_loan_conditions(
     loan_id: str,
-    status: Optional[str] = None,  # open, cleared, waived
+    status: Optional[str] = None,  # open, acknowledged, resolved, expired
 ) -> ToolResult:
-    """Get loan conditions."""
+    """Get loan conditions from compliance_alerts table."""
     params = {"loan_id": loan_id}
-    filters = ["lc.loan_id = :loan_id"]
-    
+    filters = ["ca.loan_id = :loan_id"]
+
     if status:
-        filters.append("lc.status = :status")
+        filters.append("ca.status = :status")
         params["status"] = status
-    
+
     where_sql = " AND ".join(filters)
-    
+
     conditions = execute_query(f"""
-        SELECT 
-            lc.id, lc.condition_type, lc.category, lc.description,
-            lc.status, lc.priority, lc.due_date,
-            lc.created_at, lc.cleared_at, lc.cleared_by
-        FROM loan_conditions lc
+        SELECT
+            ca.id, ca.alert_type, ca.severity, ca.title,
+            ca.description, ca.status, ca.deadline_date,
+            ca.days_remaining, ca.created_at, ca.resolved_at,
+            ca.resolution_notes
+        FROM compliance_alerts ca
         WHERE {where_sql}
-        ORDER BY lc.priority DESC, lc.due_date ASC NULLS LAST
+        ORDER BY
+            CASE ca.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+            ca.deadline_date ASC NULLS LAST
     """, params)
-    
+
     if not conditions:
-        return ToolResult.no_data("No conditions found")
-    
+        return ToolResult.no_data("No conditions/alerts found")
+
     open_count = len([c for c in conditions if c["status"] == "open"])
-    past_due = len([c for c in conditions if c["due_date"] and c["due_date"] < date.today() and c["status"] == "open"])
-    
+    past_due = len([c for c in conditions if c["deadline_date"] and c["deadline_date"] < date.today() and c["status"] == "open"])
+
     data = {
         "loan_id": loan_id,
         "total": len(conditions),
@@ -2262,18 +2321,18 @@ def get_loan_conditions(
         "conditions": [
             {
                 "id": c["id"],
-                "type": c["condition_type"],
-                "category": c["category"],
+                "type": c["alert_type"],
+                "severity": c["severity"],
+                "title": c["title"],
                 "description": c["description"],
                 "status": c["status"],
-                "priority": c["priority"],
-                "due_date": format_date(c["due_date"]),
-                "is_past_due": c["due_date"] and c["due_date"] < date.today() and c["status"] == "open",
+                "deadline": format_date(c["deadline_date"]),
+                "is_past_due": bool(c["deadline_date"] and c["deadline_date"] < date.today() and c["status"] == "open"),
             }
             for c in conditions
         ],
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"{open_count} open conditions ({past_due} past due)",
@@ -2281,76 +2340,73 @@ def get_loan_conditions(
 
 
 @mortgage_tool(
-    name="track_document_request",
-    description="Track status of a document request",
+    name="track_document_status",
+    description="Track status of documents for a loan",
     agent_roles=["document_tracker"],
     risk_level="LOW",
 )
-def track_document_request(
-    request_id: Optional[str] = None,
+def track_document_status(
+    document_id: Optional[str] = None,
     loan_id: Optional[str] = None,
 ) -> ToolResult:
-    """Track document request."""
-    if request_id:
-        request = execute_single("""
-            SELECT 
-                dr.id, dr.loan_id, dr.document_type, dr.status,
-                dr.requested_at, dr.due_date, dr.reminder_count,
-                dr.last_reminder_at, dr.received_at,
-                l.loan_number, c.first_name, c.email
-            FROM document_requests dr
-            JOIN loans l ON l.id = dr.loan_id
-            LEFT JOIN contacts c ON c.id = l.borrower_id
-            WHERE dr.id = :request_id
-        """, {"request_id": request_id})
-        
-        if not request:
-            return ToolResult.no_data(f"Request {request_id} not found")
-        
+    """Track document status from documents table."""
+    if document_id:
+        doc = execute_single("""
+            SELECT
+                d.id, d.loan_id, d.doc_type, d.doc_category, d.status,
+                d.filename, d.uploaded_at, d.source,
+                l.loan_number, l.borrower_name, l.borrower_email
+            FROM documents d
+            JOIN loans l ON l.id = d.loan_id
+            WHERE d.id = :document_id
+        """, {"document_id": document_id})
+
+        if not doc:
+            return ToolResult.no_data(f"Document {document_id} not found")
+
         data = {
-            "request_id": request["id"],
-            "loan_number": request["loan_number"],
-            "document_type": request["document_type"],
-            "status": request["status"],
-            "borrower": request["first_name"],
-            "borrower_email": request["email"],
-            "requested_at": format_date(request["requested_at"]),
-            "due_date": format_date(request["due_date"]),
-            "reminder_count": request["reminder_count"] or 0,
-            "last_reminder": format_date(request["last_reminder_at"]),
-            "received_at": format_date(request["received_at"]),
-            "days_outstanding": days_between(request["requested_at"], datetime.now()) if request["status"] == "pending" else None,
+            "document_id": doc["id"],
+            "loan_number": doc["loan_number"],
+            "doc_type": doc["doc_type"],
+            "doc_category": doc["doc_category"],
+            "status": doc["status"],
+            "filename": doc["filename"],
+            "borrower": doc["borrower_name"],
+            "borrower_email": doc["borrower_email"],
+            "uploaded_at": format_date(doc["uploaded_at"]),
+            "source": doc["source"],
         }
     else:
-        # Get all requests for loan
-        requests = execute_query("""
-            SELECT 
-                dr.id, dr.document_type, dr.status,
-                dr.requested_at, dr.due_date, dr.received_at
-            FROM document_requests dr
-            WHERE dr.loan_id = :loan_id
-            ORDER BY dr.requested_at DESC
+        # Get all documents for loan
+        docs = execute_query("""
+            SELECT
+                d.id, d.doc_type, d.doc_category, d.status,
+                d.filename, d.uploaded_at
+            FROM documents d
+            WHERE d.loan_id = :loan_id
+            ORDER BY d.uploaded_at DESC
         """, {"loan_id": loan_id})
-        
+
         data = {
             "loan_id": loan_id,
-            "requests": [
+            "documents": [
                 {
-                    "id": r["id"],
-                    "document_type": r["document_type"],
-                    "status": r["status"],
-                    "requested": format_date(r["requested_at"]),
-                    "due": format_date(r["due_date"]),
-                    "received": format_date(r["received_at"]),
+                    "id": d["id"],
+                    "doc_type": d["doc_type"],
+                    "doc_category": d["doc_category"],
+                    "status": d["status"],
+                    "filename": d["filename"],
+                    "uploaded": format_date(d["uploaded_at"]),
                 }
-                for r in requests
+                for d in docs
             ],
-            "pending_count": len([r for r in requests if r["status"] == "pending"]),
+            "total_count": len(docs),
+            "active_count": len([d for d in docs if d["status"] == "active"]),
         }
-    
+
     return ToolResult.success(
         data=data,
-        message="Document request status retrieved",
+        message="Document status retrieved",
     )
 
 
@@ -2365,49 +2421,55 @@ def send_document_reminder(
     document_types: Optional[List[str]] = None,
     channel: str = "email",  # email, sms, both
 ) -> ToolResult:
-    """Send document reminder."""
+    """Send document reminder using borrower info from loan."""
     loan = execute_single("""
-        SELECT 
-            l.id, l.loan_number,
-            c.first_name, c.email, c.phone
+        SELECT
+            l.id, l.loan_number, l.borrower_name,
+            l.borrower_email, l.borrower_phone
         FROM loans l
-        JOIN contacts c ON c.id = l.borrower_id
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
-    # Get missing documents
+
+    # Get missing document types
     if document_types:
         missing = document_types
     else:
-        missing_docs = execute_query("""
-            SELECT document_type FROM document_requests
-            WHERE loan_id = :loan_id AND status = 'pending'
+        # Find required doc types not yet on file
+        existing = execute_query("""
+            SELECT doc_type FROM documents
+            WHERE loan_id = :loan_id AND status = 'active'
         """, {"loan_id": loan_id})
-        missing = [d["document_type"] for d in missing_docs]
-    
+        existing_types = {d["doc_type"] for d in existing}
+
+        all_required = []
+        for category in ("income", "assets", "credit"):
+            all_required.extend(DOCUMENT_CATEGORIES.get(category, []))
+
+        missing = [dt for dt in all_required if dt not in existing_types]
+
     if not missing:
-        return ToolResult.no_data("No pending documents to remind about")
-    
+        return ToolResult.no_data("No missing documents to remind about")
+
     import uuid
     reminder_id = str(uuid.uuid4())[:8].upper()
-    
+
     data = {
         "reminder_id": reminder_id,
         "loan_id": loan_id,
         "loan_number": loan["loan_number"],
-        "borrower": loan["first_name"],
+        "borrower": loan["borrower_name"],
         "documents": missing,
         "channel": channel,
         "sent_to": {
-            "email": loan["email"] if channel in ["email", "both"] else None,
-            "phone": loan["phone"] if channel in ["sms", "both"] else None,
+            "email": loan["borrower_email"] if channel in ["email", "both"] else None,
+            "phone": loan["borrower_phone"] if channel in ["sms", "both"] else None,
         },
         "status": "pending_approval",
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Reminder ready for {len(missing)} documents",
@@ -2427,27 +2489,25 @@ def escalate_issue(
     description: str,
     escalate_to: Optional[str] = None,
 ) -> ToolResult:
-    """Escalate document issue."""
+    """Escalate document issue to LO or specified user."""
     loan = execute_single("""
-        SELECT 
+        SELECT
             l.id, l.loan_number, l.loan_officer_id,
-            u.name as lo_name, u.manager_id,
-            m.name as manager_name
+            CONCAT(u.first_name, ' ', u.last_name) as lo_name
         FROM loans l
         JOIN users u ON u.id = l.loan_officer_id
-        LEFT JOIN users m ON m.id = u.manager_id
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
+
     if not loan:
         return ToolResult.no_data(f"Loan {loan_id} not found")
-    
+
     import uuid
     escalation_id = str(uuid.uuid4())[:8].upper()
-    
-    escalate_to_user = escalate_to or loan["manager_id"]
-    escalate_to_name = loan["manager_name"] if not escalate_to else escalate_to
-    
+
+    # Default escalation goes to the loan officer
+    escalate_to_name = escalate_to or loan["lo_name"]
+
     data = {
         "escalation_id": escalation_id,
         "loan_id": loan_id,
@@ -2459,7 +2519,7 @@ def escalate_issue(
         "escalated_at": datetime.now().isoformat(),
         "status": "open",
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"Issue escalated to {escalate_to_name}",
@@ -2475,64 +2535,53 @@ def escalate_issue(
 def get_document_timeline(
     loan_id: str,
 ) -> ToolResult:
-    """Get document timeline."""
+    """Get document timeline from the documents table."""
     docs = execute_query("""
-        SELECT 
-            ld.document_type, ld.category, ld.status,
-            ld.requested_at, ld.uploaded_at, ld.approved_at,
-            ld.approved_by
-        FROM loan_documents ld
-        WHERE ld.loan_id = :loan_id
-        ORDER BY ld.uploaded_at DESC NULLS LAST
+        SELECT
+            d.doc_type, d.doc_category, d.status,
+            d.uploaded_at, d.source,
+            CONCAT(u.first_name, ' ', u.last_name) as uploaded_by
+        FROM documents d
+        LEFT JOIN users u ON u.id = d.uploaded_by_user_id
+        WHERE d.loan_id = :loan_id
+        ORDER BY d.uploaded_at DESC NULLS LAST
     """, {"loan_id": loan_id})
-    
+
     if not docs:
         return ToolResult.no_data(f"No documents for loan {loan_id}")
-    
+
     # Build timeline
     timeline = []
     for doc in docs:
         events = []
-        if doc["requested_at"]:
-            events.append({"event": "requested", "date": doc["requested_at"]})
         if doc["uploaded_at"]:
-            events.append({"event": "uploaded", "date": doc["uploaded_at"]})
-        if doc["approved_at"]:
-            events.append({"event": "approved", "date": doc["approved_at"]})
-        
+            events.append({"event": "uploaded", "date": format_date(doc["uploaded_at"])})
+
         timeline.append({
-            "document_type": doc["document_type"],
-            "category": doc["category"],
+            "doc_type": doc["doc_type"],
+            "doc_category": doc["doc_category"],
             "current_status": doc["status"],
-            "events": [{"event": e["event"], "date": format_date(e["date"])} for e in events],
+            "source": doc["source"],
+            "uploaded_by": doc["uploaded_by"],
+            "events": events,
         })
-    
-    # Calculate average processing time
-    processing_times = []
-    for doc in docs:
-        if doc["uploaded_at"] and doc["approved_at"]:
-            processing_times.append(days_between(doc["uploaded_at"], doc["approved_at"]))
-    
-    avg_processing = sum(processing_times) / len(processing_times) if processing_times else 0
-    
+
     data = {
         "loan_id": loan_id,
         "total_documents": len(docs),
-        "approved": len([d for d in docs if d["status"] == "approved"]),
-        "pending": len([d for d in docs if d["status"] == "pending"]),
-        "avg_processing_days": round(avg_processing, 1),
+        "active": len([d for d in docs if d["status"] == "active"]),
         "timeline": timeline,
     }
-    
+
     return ToolResult.success(
         data=data,
-        message=f"{data['approved']}/{data['total_documents']} documents approved",
+        message=f"{data['active']}/{data['total_documents']} documents active",
     )
 
 
 @mortgage_tool(
     name="check_document_expiration",
-    description="Check for expiring or expired documents",
+    description="Check for expiring documents using loan-level expiration date columns",
     agent_roles=["document_tracker"],
     risk_level="LOW",
 )
@@ -2540,55 +2589,64 @@ def check_document_expiration(
     loan_id: Optional[str] = None,
     days_ahead: int = 30,
 ) -> ToolResult:
-    """Check document expiration."""
+    """Check document expiration using loan-level date columns (credit_docs_expire_date, appraisal_docs_expire_date)."""
     params = {"days_ahead": days_ahead}
-    
+
     if loan_id:
         params["loan_id"] = loan_id
-        loan_filter = "ld.loan_id = :loan_id AND"
+        loan_filter = "l.id = :loan_id AND"
     else:
         loan_filter = ""
-    
+
+    # Check loan-level expiration dates for credit docs and appraisal docs
     expiring = execute_query(f"""
-        SELECT 
-            ld.id, ld.loan_id, ld.document_type,
-            ld.expires_at, l.loan_number,
-            c.first_name as borrower
-        FROM loan_documents ld
-        JOIN loans l ON l.id = ld.loan_id
-        LEFT JOIN contacts c ON c.id = l.borrower_id
+        SELECT
+            l.id as loan_id, l.loan_number, l.borrower_name,
+            l.credit_docs_expire_date,
+            l.appraisal_docs_expire_date
+        FROM loans l
         WHERE {loan_filter}
-            ld.status = 'approved'
-            AND ld.expires_at IS NOT NULL
-            AND ld.expires_at <= CURRENT_DATE + :days_ahead
-            AND l.status NOT IN ('funded', 'cancelled', 'denied')
-        ORDER BY ld.expires_at ASC
+            l.stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')
+            AND (
+                (l.credit_docs_expire_date IS NOT NULL AND l.credit_docs_expire_date <= CURRENT_DATE + :days_ahead)
+                OR
+                (l.appraisal_docs_expire_date IS NOT NULL AND l.appraisal_docs_expire_date <= CURRENT_DATE + :days_ahead)
+            )
+        ORDER BY LEAST(COALESCE(l.credit_docs_expire_date, '9999-12-31'), COALESCE(l.appraisal_docs_expire_date, '9999-12-31')) ASC
     """, params)
-    
+
     if not expiring:
         return ToolResult.no_data("No expiring documents found")
-    
+
     expired = []
     expiring_soon = []
-    
     today = date.today()
-    for doc in expiring:
-        doc_info = {
-            "id": doc["id"],
-            "loan_id": doc["loan_id"],
-            "loan_number": doc["loan_number"],
-            "document_type": doc["document_type"],
-            "expires_at": format_date(doc["expires_at"]),
-            "borrower": doc["borrower"],
-        }
-        
-        if doc["expires_at"] < today:
-            doc_info["days_expired"] = days_between(doc["expires_at"], today)
-            expired.append(doc_info)
-        else:
-            doc_info["days_until_expiry"] = days_between(today, doc["expires_at"])
-            expiring_soon.append(doc_info)
-    
+
+    for loan in expiring:
+        for doc_type, expire_col in [("credit_docs", "credit_docs_expire_date"), ("appraisal_docs", "appraisal_docs_expire_date")]:
+            expire_date = loan[expire_col]
+            if expire_date is None:
+                continue
+            if isinstance(expire_date, datetime):
+                expire_date = expire_date.date()
+            if expire_date > today + timedelta(days=days_ahead):
+                continue
+
+            doc_info = {
+                "loan_id": loan["loan_id"],
+                "loan_number": loan["loan_number"],
+                "document_type": doc_type,
+                "expires_at": format_date(expire_date),
+                "borrower": loan["borrower_name"],
+            }
+
+            if expire_date < today:
+                doc_info["days_expired"] = (today - expire_date).days
+                expired.append(doc_info)
+            else:
+                doc_info["days_until_expiry"] = (expire_date - today).days
+                expiring_soon.append(doc_info)
+
     data = {
         "days_ahead": days_ahead,
         "expired": expired,
@@ -2596,7 +2654,7 @@ def check_document_expiration(
         "expired_count": len(expired),
         "expiring_count": len(expiring_soon),
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"{len(expired)} expired, {len(expiring_soon)} expiring within {days_ahead} days",
@@ -2605,51 +2663,92 @@ def check_document_expiration(
 
 @mortgage_tool(
     name="get_third_party_status",
-    description="Get status of third-party orders (appraisal, title, etc.)",
+    description="Get status of third-party orders (appraisal, title, insurance) from loan date columns",
     agent_roles=["document_tracker"],
     risk_level="LOW",
 )
 def get_third_party_status(
     loan_id: str,
 ) -> ToolResult:
-    """Get third-party order status."""
-    orders = execute_query("""
-        SELECT 
-            tpo.id, tpo.order_type, tpo.vendor_name,
-            tpo.status, tpo.ordered_at, tpo.due_date,
-            tpo.received_at, tpo.amount
-        FROM third_party_orders tpo
-        WHERE tpo.loan_id = :loan_id
-        ORDER BY tpo.ordered_at DESC
+    """Get third-party order status from loan date columns (no separate orders table)."""
+    loan = execute_single("""
+        SELECT
+            l.id, l.loan_number,
+            l.appraisal_ordered_date, l.appraisal_scheduled_date,
+            l.appraisal_completed_date, l.appraisal_received_date,
+            l.appraisal_value,
+            l.title_ordered_date, l.title_received_date,
+            l.insurance_ordered_date, l.insurance_received_date
+        FROM loans l
+        WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
-    
-    if not orders:
-        return ToolResult.no_data(f"No third-party orders for loan {loan_id}")
-    
-    pending = [o for o in orders if o["status"] in ["ordered", "in_progress"]]
+
+    if not loan:
+        return ToolResult.no_data(f"Loan {loan_id} not found")
+
+    orders = []
+
+    # Appraisal
+    appraisal_status = "not_ordered"
+    if loan["appraisal_received_date"]:
+        appraisal_status = "completed"
+    elif loan["appraisal_completed_date"]:
+        appraisal_status = "completed_awaiting_receipt"
+    elif loan["appraisal_scheduled_date"]:
+        appraisal_status = "scheduled"
+    elif loan["appraisal_ordered_date"]:
+        appraisal_status = "ordered"
+
+    orders.append({
+        "type": "appraisal",
+        "status": appraisal_status,
+        "ordered": format_date(loan["appraisal_ordered_date"]),
+        "scheduled": format_date(loan["appraisal_scheduled_date"]),
+        "completed": format_date(loan["appraisal_completed_date"]),
+        "received": format_date(loan["appraisal_received_date"]),
+        "value": float(loan["appraisal_value"] or 0) if loan["appraisal_value"] else None,
+    })
+
+    # Title
+    title_status = "not_ordered"
+    if loan["title_received_date"]:
+        title_status = "completed"
+    elif loan["title_ordered_date"]:
+        title_status = "ordered"
+
+    orders.append({
+        "type": "title",
+        "status": title_status,
+        "ordered": format_date(loan["title_ordered_date"]),
+        "received": format_date(loan["title_received_date"]),
+    })
+
+    # Insurance
+    insurance_status = "not_ordered"
+    if loan["insurance_received_date"]:
+        insurance_status = "completed"
+    elif loan["insurance_ordered_date"]:
+        insurance_status = "ordered"
+
+    orders.append({
+        "type": "insurance",
+        "status": insurance_status,
+        "ordered": format_date(loan["insurance_ordered_date"]),
+        "received": format_date(loan["insurance_received_date"]),
+    })
+
+    pending = [o for o in orders if o["status"] not in ("completed", "not_ordered")]
     completed = [o for o in orders if o["status"] == "completed"]
-    
+
     data = {
         "loan_id": loan_id,
-        "total_orders": len(orders),
+        "loan_number": loan["loan_number"],
+        "total_orders": len([o for o in orders if o["status"] != "not_ordered"]),
         "pending_count": len(pending),
         "completed_count": len(completed),
-        "orders": [
-            {
-                "id": o["id"],
-                "type": o["order_type"],
-                "vendor": o["vendor_name"],
-                "status": o["status"],
-                "ordered": format_date(o["ordered_at"]),
-                "due": format_date(o["due_date"]),
-                "received": format_date(o["received_at"]),
-                "amount": float(o["amount"] or 0),
-                "is_overdue": o["due_date"] and o["due_date"] < date.today() and o["status"] != "completed",
-            }
-            for o in orders
-        ],
+        "orders": orders,
     }
-    
+
     return ToolResult.success(
         data=data,
         message=f"{len(pending)} pending, {len(completed)} completed orders",
