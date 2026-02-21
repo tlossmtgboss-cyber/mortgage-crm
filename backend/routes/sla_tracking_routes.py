@@ -1687,8 +1687,11 @@ async def backfill_milestones(
             for lead_row in leads_without_milestones:
                 try:
                     lead_org = lead_row.organization_id or org_id
-                    track_lead_created(db, lead_row.id, organization_id=lead_org)
-                    results["leads_backfilled"] += 1
+                    milestone_id = track_lead_created(db, lead_row.id, organization_id=lead_org)
+                    if milestone_id:
+                        results["leads_backfilled"] += 1
+                    else:
+                        results["errors"].append(f"Lead {lead_row.id}: no milestone created (org={lead_org}, no SLA measure?)")
                 except Exception as e:
                     results["errors"].append(f"Lead {lead_row.id}: {str(e)[:100]}")
 
@@ -1709,11 +1712,14 @@ async def backfill_milestones(
             for loan_row in loans_without_milestones:
                 try:
                     loan_org = loan_row.organization_id or org_id
-                    track_loan_created(
+                    milestone_id = track_loan_created(
                         db, loan_row.id, loan_row.loan_number,
                         organization_id=loan_org
                     )
-                    results["loans_backfilled"] += 1
+                    if milestone_id:
+                        results["loans_backfilled"] += 1
+                    else:
+                        results["errors"].append(f"Loan {loan_row.id}: no milestone created (org={loan_org}, no SLA measure?)")
                 except Exception as e:
                     results["errors"].append(f"Loan {loan_row.id}: {str(e)[:100]}")
 

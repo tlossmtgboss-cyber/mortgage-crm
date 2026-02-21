@@ -133,14 +133,27 @@ def get_sla_measure_by_type(
     milestone_type: MilestoneType,
     organization_id: int = 1
 ) -> Optional[SLAMeasure]:
-    """Get SLA measure by milestone type."""
-    return db.query(SLAMeasure).filter(
+    """Get SLA measure by milestone type.
+    Falls back to org_id=1 (system defaults) if no measure found for the given org."""
+    measure = db.query(SLAMeasure).filter(
         and_(
             SLAMeasure.milestone_type == milestone_type,
             SLAMeasure.organization_id == organization_id,
             SLAMeasure.is_active == True
         )
     ).first()
+
+    # Fallback to system defaults (org 1) if no org-specific measure
+    if not measure and organization_id != 1:
+        measure = db.query(SLAMeasure).filter(
+            and_(
+                SLAMeasure.milestone_type == milestone_type,
+                SLAMeasure.organization_id == 1,
+                SLAMeasure.is_active == True
+            )
+        ).first()
+
+    return measure
 
 
 def get_all_sla_measures(
