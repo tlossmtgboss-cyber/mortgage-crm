@@ -718,30 +718,31 @@ def register_health_routes(app, get_db, **kwargs):
         try:
             # Find user
             user = db.execute(text(
-                "SELECT id, email, name FROM users WHERE email = 'tloss@cmgfi.com' LIMIT 1"
+                "SELECT id, email, first_name, last_name FROM users WHERE email = 'tloss@cmgfi.com' LIMIT 1"
             )).fetchone()
             if not user:
                 return {"error": "User not found"}
-            results["user"] = {"id": user[0], "email": user[1], "name": user[2]}
+            results["user"] = {"id": user[0], "email": user[1], "name": f"{user[2]} {user[3]}"}
+            uid = user[0]
 
-            # Get task counts by status
+            # Get task counts by status (tasks table uses owner_id)
             counts = db.execute(text(
-                "SELECT status, COUNT(*) FROM tasks WHERE assigned_to = :uid GROUP BY status ORDER BY status",
-            ), {"uid": user[0]}).fetchall()
+                "SELECT status, COUNT(*) FROM tasks WHERE owner_id = :uid GROUP BY status ORDER BY status"
+            ), {"uid": uid}).fetchall()
             results["task_counts_by_status"] = {r[0]: r[1] for r in counts}
 
             # Get total tasks
             total = db.execute(text(
-                "SELECT COUNT(*) FROM tasks WHERE assigned_to = :uid"
-            ), {"uid": user[0]}).scalar()
+                "SELECT COUNT(*) FROM tasks WHERE owner_id = :uid"
+            ), {"uid": uid}).scalar()
             results["total_tasks"] = total
 
             # Get recent completed tasks
             completed = db.execute(text(
                 "SELECT id, title, status, completed_at, updated_at FROM tasks "
-                "WHERE assigned_to = :uid AND status = 'completed' "
+                "WHERE owner_id = :uid AND status = 'completed' "
                 "ORDER BY COALESCE(completed_at, updated_at) DESC LIMIT 10"
-            ), {"uid": user[0]}).fetchall()
+            ), {"uid": uid}).fetchall()
             results["recent_completed"] = [
                 {"id": r[0], "title": r[1], "status": r[2],
                  "completed_at": str(r[3]) if r[3] else None,
@@ -752,9 +753,9 @@ def register_health_routes(app, get_db, **kwargs):
             # Get recent non-completed tasks
             active = db.execute(text(
                 "SELECT id, title, status, due_date, created_at FROM tasks "
-                "WHERE assigned_to = :uid AND status != 'completed' "
+                "WHERE owner_id = :uid AND status != 'completed' "
                 "ORDER BY created_at DESC LIMIT 10"
-            ), {"uid": user[0]}).fetchall()
+            ), {"uid": uid}).fetchall()
             results["recent_active"] = [
                 {"id": r[0], "title": r[1], "status": r[2],
                  "due_date": str(r[3]) if r[3] else None,
@@ -765,11 +766,20 @@ def register_health_routes(app, get_db, **kwargs):
             # Also check task_instances table if it exists
             try:
                 ti_counts = db.execute(text(
-                    "SELECT status, COUNT(*) FROM task_instances WHERE assigned_to = :uid GROUP BY status ORDER BY status"
-                ), {"uid": user[0]}).fetchall()
+                    "SELECT status, COUNT(*) FROM task_instances WHERE user_id = :uid GROUP BY status ORDER BY status"
+                ), {"uid": uid}).fetchall()
                 results["task_instance_counts"] = {r[0]: r[1] for r in ti_counts}
             except Exception:
                 results["task_instance_counts"] = "table not found or error"
+
+            # Also check ai_tasks (uses assigned_to_id)
+            try:
+                ai_counts = db.execute(text(
+                    "SELECT type, COUNT(*) FROM ai_tasks WHERE assigned_to_id = :uid GROUP BY type ORDER BY type"
+                ), {"uid": uid}).fetchall()
+                results["ai_task_counts"] = {str(r[0]): r[1] for r in ai_counts}
+            except Exception:
+                results["ai_task_counts"] = "table not found or error"
 
             return results
         except Exception as e:
