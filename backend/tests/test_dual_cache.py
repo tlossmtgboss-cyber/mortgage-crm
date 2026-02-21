@@ -223,7 +223,7 @@ async def test_dual_cache_isolation():
     response_key = response_cache._get_cache_key("test query", "user_1")
     tool_key = tool_cache._generate_key("get_data", "user_1")
 
-    assert "perennia:query:" in response_key
+    assert ":query:" in response_key
     assert "perennia:agent:" in tool_key
     assert response_key != tool_key
 

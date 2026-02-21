@@ -19,6 +19,13 @@ import sys
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Skip entire module on SQLite — borrower portal requires PostgreSQL features
+_TEST_DB_URL = os.getenv("DATABASE_URL", os.getenv("TEST_DATABASE_URL", ""))
+pytestmark = pytest.mark.skipif(
+    "sqlite" in _TEST_DB_URL.lower(),
+    reason="Borrower flow tests require PostgreSQL"
+)
+
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 

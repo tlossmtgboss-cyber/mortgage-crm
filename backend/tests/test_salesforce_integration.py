@@ -212,8 +212,8 @@ def test_database_schema():
     print("\n=== Testing Database Schema ===")
 
     db_url = os.getenv('DATABASE_URL')
-    if not db_url:
-        print("WARNING: DATABASE_URL not set, skipping schema test")
+    if not db_url or "sqlite" in db_url.lower():
+        print("WARNING: DATABASE_URL not set or is SQLite, skipping schema test")
         return True
 
     engine = create_engine(db_url)

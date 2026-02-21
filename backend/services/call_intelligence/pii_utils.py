@@ -66,7 +66,7 @@ CREDIT_CARD_REDACTED = "****-****-****-"
 # Only matches when preceded by account-related keywords to avoid false positives
 
 BANK_ACCOUNT_PATTERN = re.compile(
-    r'(?:account|acct|routing|aba)[\s#:]*(\d{4,8})[-\s]?(\d{4,9})\b',
+    r'(?:account|acct|routing|aba)[\s#:]*(?:number|num|no\.?)?[\s#:]*(\d{4,8})[-\s]?(\d{4,9})\b',
     re.IGNORECASE
 )
 
