@@ -31,6 +31,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config
+
       - name: Install dependencies
         working-directory: ./backend
         run: |
@@ -76,6 +79,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config
+
       - name: Install dependencies
         working-directory: ./backend
         run: |
@@ -120,6 +126,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config
 
       - name: Install dependencies
         working-directory: ./backend
@@ -173,6 +182,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config
+
       - name: Install dependencies
         working-directory: ./backend
         run: |
@@ -216,6 +228,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config
 
       - name: Install dependencies
         working-directory: ./backend
