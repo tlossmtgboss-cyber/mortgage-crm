@@ -187,6 +187,7 @@ class Subscription(Base):
 
     __table_args__ = (
         Index("ix_subscription_org_status", "organization_id", "status"),
+        {'extend_existing': True},
     )
 
     def is_active(self) -> bool:

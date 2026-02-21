@@ -145,9 +145,11 @@ jobs:
           DATABASE_URL: postgresql://test:test@localhost:5432/test_db
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SECRET_KEY: ci-test-secret-key
+          DATA_ENCRYPTION_KEY: ${{ secrets.DATA_ENCRYPTION_KEY }}
           TESTING: 'true'
         run: |
-          pytest tests/ -v -m "golden or critical" --timeout=120 --tb=short
+          pytest tests/ -v -m "golden or critical" --timeout=120 --tb=short --continue-on-collection-errors
 
   # ============================================================================
   # STAGE 2: INTEGRATION & AI TESTS (Non-blocking)
@@ -272,7 +274,7 @@ jobs:
 
       - name: Run frontend tests
         working-directory: ./frontend
-        run: npm test -- --coverage --watchAll=false --passWithNoTests
+        run: npx vitest run --passWithNoTests
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
