@@ -1095,6 +1095,41 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# VOICE AI RECEPTIONIST ROUTES
+# ============================================================================
+try:
+    from routes.voice_ai_receptionist_routes import webhook_router, sms_router, debug_router
+    app.include_router(webhook_router, tags=["Voice Webhooks"])
+    app.include_router(sms_router, tags=["SMS Messaging"])
+    app.include_router(debug_router, tags=["Debug"])
+    logger.info("✅ Voice AI Receptionist sub-routes loaded (webhooks, SMS, debug)")
+except Exception as e:
+    logger.error(f"❌ Voice AI Receptionist routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+try:
+    from ai_receptionist_dashboard_routes import router as ai_receptionist_dashboard_router
+    app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dashboard"])
+    logger.info("✅ AI Receptionist Dashboard routes loaded")
+except Exception as e:
+    logger.error(f"❌ AI Receptionist Dashboard routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# CALL QUEUE ROUTES
+# ============================================================================
+try:
+    from routes.call_queue_routes import router as call_queue_router
+    app.include_router(call_queue_router, tags=["Call Queues"])
+    logger.info("✅ Call Queue routes loaded")
+except Exception as e:
+    logger.error(f"❌ Call Queue routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================
 try:
