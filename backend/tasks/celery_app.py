@@ -70,6 +70,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.salesforce_sync_tasks",
             "tasks.call_intelligence_tasks",
             "tasks.video_render_tasks",
+            "tasks.report_tasks",
         ],
     )
 
@@ -229,6 +230,13 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.video_render_tasks.queue_pending_jobs",
         "schedule": crontab(minute="*/2"),  # Every 2 minutes
         "options": {"queue": "video_render"},
+    },
+
+    # Scheduled Report Delivery (Enterprise Readiness Domain 9, Check 9.11)
+    "deliver-scheduled-reports": {
+        "task": "tasks.report_tasks.deliver_scheduled_reports",
+        "schedule": crontab(minute="0"),  # Every hour (checks hour_utc match)
+        "options": {"queue": "low_priority"},
     },
 
     # Data Retention & DR Tasks

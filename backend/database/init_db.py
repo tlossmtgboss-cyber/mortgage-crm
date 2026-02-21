@@ -1463,6 +1463,37 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ data_subject_requests table note: {e}")
 
+        # Create scheduled_reports table (Enterprise Readiness Domain 9, Check 9.11)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS scheduled_reports (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        created_by_id INTEGER NOT NULL,
+                        report_type VARCHAR(50) NOT NULL,
+                        export_format VARCHAR(20) NOT NULL DEFAULT 'pdf',
+                        frequency VARCHAR(20) NOT NULL DEFAULT 'weekly',
+                        recipients JSONB NOT NULL DEFAULT '[]',
+                        title VARCHAR(255),
+                        day_of_week INTEGER,
+                        day_of_month INTEGER,
+                        hour_utc INTEGER NOT NULL DEFAULT 8,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        last_sent_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_scheduled_reports_org
+                        ON scheduled_reports (organization_id, is_active)
+                """))
+                conn.commit()
+                logger.info("✅ scheduled_reports table created/verified (ER-9.11)")
+        except Exception as e:
+            logger.warning(f"⚠️ scheduled_reports table note: {e}")
+
         # Run comprehensive column migration for all missing columns
         try:
             from migrations.add_all_missing_columns import run_migration

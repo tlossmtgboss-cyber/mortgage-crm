@@ -585,6 +585,21 @@ Respond ONLY with the JSON object, no additional text."""
                     continue
                 content = response.content[0].text
 
+                # Track token usage (Enterprise Readiness Check 6.13)
+                try:
+                    from services.performance_monitoring_service import perf_monitor
+                    usage = getattr(response, "usage", None)
+                    if usage:
+                        perf_monitor.track_token_usage(
+                            model=self.config.model,
+                            tokens_in=getattr(usage, "input_tokens", 0),
+                            tokens_out=getattr(usage, "output_tokens", 0),
+                            duration_ms=0,  # Duration tracked at higher level
+                            call_type="extraction",
+                        )
+                except Exception:
+                    pass  # Non-critical — don't break extraction on tracking failure
+
                 # Extract JSON from response
                 result = self._parse_json_response(content)
 
@@ -815,6 +830,22 @@ class OpenAIClient(BaseLLMClient):
                 if not content:
                     logger.warning("Empty message content from OpenAI API")
                     continue
+
+                # Track token usage (Enterprise Readiness Check 6.13)
+                try:
+                    from services.performance_monitoring_service import perf_monitor
+                    usage = getattr(response, "usage", None)
+                    if usage:
+                        perf_monitor.track_token_usage(
+                            model=self.config.model,
+                            tokens_in=getattr(usage, "prompt_tokens", 0),
+                            tokens_out=getattr(usage, "completion_tokens", 0),
+                            duration_ms=0,
+                            call_type="extraction",
+                        )
+                except Exception:
+                    pass
+
                 try:
                     result = json.loads(content)
                     return result

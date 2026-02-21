@@ -1095,6 +1095,22 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# REPORT EXPORT & PERFORMANCE MONITORING ROUTES (Enterprise Readiness Domain 6 + 9)
+# ============================================================================
+try:
+    from routes.report_export_routes import register_report_export_routes
+    register_report_export_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Report export & performance monitoring routes loaded (PDF, Excel, SLA compliance, scheduled delivery)")
+except Exception as e:
+    logger.error(f"❌ Report export routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # VOICE AI RECEPTIONIST ROUTES
 # ============================================================================
 try:
