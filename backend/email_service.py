@@ -36,6 +36,7 @@ class EmailService:
         # SendGrid configuration
         self.sendgrid_api_key = os.getenv('SENDGRID_API_KEY', '')
         self.use_sendgrid = bool(self.sendgrid_api_key) and SENDGRID_AVAILABLE
+        self._sendgrid_disabled_reason = None  # Set on auth failure to skip retries
 
         # SMTP fallback configuration
         self.smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
@@ -71,9 +72,12 @@ class EmailService:
             from_email: Override the default from_email address. Useful for AI conversations
                        where replies need to go to a specific inbound parse address.
         """
-        if self.use_sendgrid:
+        # Skip SendGrid if it previously failed with auth error (avoid retrying broken key)
+        if self.use_sendgrid and not self._sendgrid_disabled_reason:
             return self._send_via_sendgrid(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to, from_email)
         else:
+            if self._sendgrid_disabled_reason:
+                logger.debug(f"SendGrid skipped ({self._sendgrid_disabled_reason}), using SMTP")
             return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to, from_email)
 
     def _send_via_sendgrid(
@@ -142,7 +146,12 @@ class EmailService:
                 return False
 
         except Exception as e:
-            logger.error(f"Failed to send email via SendGrid: {type(e).__name__}")
+            error_name = type(e).__name__
+            logger.error(f"Failed to send email via SendGrid: {error_name}: {e}")
+            # Cache auth failures so we skip straight to SMTP for subsequent emails
+            if error_name in ('UnauthorizedError', 'ForbiddenError') or 'unauthorized' in str(e).lower():
+                self._sendgrid_disabled_reason = f"{error_name} — API key invalid/expired"
+                logger.warning(f"SendGrid disabled for this process: {self._sendgrid_disabled_reason}")
             # Try SMTP fallback if SendGrid fails
             if self.smtp_user:
                 logger.info("Attempting SMTP fallback...")
@@ -166,8 +175,16 @@ class EmailService:
             return False
 
         try:
-            # Use provided from_email or fall back to default
-            sender_email = from_email or self.from_email
+            # For Gmail SMTP, the From address must be the authenticated user.
+            # Use the desired from_email as Reply-To instead so replies go to the right place.
+            smtp_is_gmail = 'gmail' in self.smtp_host.lower()
+            if smtp_is_gmail:
+                sender_email = self.smtp_user
+                # Set reply-to to the intended from address if not already specified
+                if not reply_to and (from_email or self.from_email) != self.smtp_user:
+                    reply_to = from_email or self.from_email
+            else:
+                sender_email = from_email or self.from_email
 
             # Create message
             msg = MIMEMultipart('alternative')
@@ -216,7 +233,7 @@ class EmailService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email via SMTP: {type(e).__name__}")
+            logger.error(f"Failed to send email via SMTP: {type(e).__name__}: {e}")
             return False
 
     def format_daily_priorities_email(
