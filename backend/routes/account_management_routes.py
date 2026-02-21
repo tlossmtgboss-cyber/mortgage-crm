@@ -4040,3 +4040,9 @@ async def cleanup_account_by_api_key(
             },
             message=f"Account '{account_name}' cleaned up and invitation reset"
         )
+    except NotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cleaning up account {account_id}: {e}")
+        db.rollback()
+        raise DatabaseException(f"Failed to clean up account: {str(e)[:200]}")
