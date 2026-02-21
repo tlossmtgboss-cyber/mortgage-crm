@@ -725,73 +725,46 @@ def register_health_routes(app, get_db, **kwargs):
             ), {"uid": uid}).fetchall()
             results["tasks_for_uid_118"] = {r[0]: r[1] for r in counts}
 
-            # 2. Check ALL users who have tasks
-            user_tasks = db.execute(text(
-                "SELECT u.id, u.email, COUNT(*) as cnt FROM tasks t "
-                "JOIN users u ON u.id = t.owner_id "
-                "WHERE t.status IN ('pending', 'in_progress') "
-                "GROUP BY u.id, u.email ORDER BY cnt DESC LIMIT 10"
-            )).fetchall()
-            results["users_with_pending_tasks"] = [
-                {"user_id": r[0], "email": r[1], "count": r[2]} for r in user_tasks
-            ]
-
-            # 3. Simulate unified-tasks ORM query
+            # 2. Simulate unified-tasks ORM query
             try:
                 import main as main_module
                 MainTask = main_module.Task
-                MainAITask = main_module.AITask
-                MainTaskType = main_module.TaskType
-
-                ai_tasks = db.query(MainAITask).filter(
-                    MainAITask.assigned_to_id == uid,
-                    MainAITask.type != MainTaskType.COMPLETED
-                ).limit(50).all()
-                results["simulated_ai_tasks"] = len(ai_tasks)
-
                 workflow_tasks = db.query(MainTask).filter(
                     MainTask.owner_id == uid,
                     MainTask.status.in_(["pending", "in_progress"])
                 ).limit(200).all()
                 results["simulated_workflow_tasks"] = len(workflow_tasks)
-                results["simulated_workflow_sample"] = [
-                    {"id": t.id, "title": t.title, "status": t.status}
-                    for t in workflow_tasks[:3]
-                ]
             except Exception as e:
                 results["simulation_error"] = str(e)
 
-            # 4. Check what /api/v1/workflow-config/all-workflow-tasks returns
-            # (it generates tasks from lead/loan workflow state)
+            # 3. Check WorkflowConfiguration (needed by all-workflow-tasks)
             try:
-                from database.models.lead_loan import Lead, Loan
-                # Check leads with workflow assignments for user 118
-                leads_for_user = db.execute(text(
-                    "SELECT COUNT(*) FROM leads WHERE assigned_lo_id = :uid OR owner_id = :uid"
-                ), {"uid": uid}).scalar()
-                results["leads_assigned_to_user"] = leads_for_user
+                wf_count = db.execute(text(
+                    "SELECT COUNT(*) FROM workflow_configurations WHERE is_active = true"
+                )).scalar()
+                results["active_workflow_configs"] = wf_count
 
-                loans_for_user = db.execute(text(
-                    "SELECT COUNT(*) FROM loans WHERE loan_officer_id = :uid"
-                ), {"uid": uid}).scalar()
-                results["loans_assigned_to_user"] = loans_for_user
-            except Exception as e:
-                results["lead_loan_error"] = str(e)
-
-            # 5. Check if the frontend might be calling a different endpoint
-            # The frontend calls /api/v1/tasks which is different from /api/v1/unified-tasks
-            try:
-                tasks_endpoint_result = db.execute(text(
-                    "SELECT id, title, status, owner_id FROM tasks "
-                    "WHERE owner_id = :uid AND status IN ('pending', 'in_progress') "
-                    "ORDER BY due_date ASC NULLS LAST LIMIT 5"
-                ), {"uid": uid}).fetchall()
-                results["tasks_endpoint_sample"] = [
-                    {"id": r[0], "title": r[1], "status": r[2], "owner_id": r[3]}
-                    for r in tasks_endpoint_result
+                wf_with_days = db.execute(text(
+                    "SELECT wc.workflow_key, wc.workflow_name, COUNT(wd.id) as day_count "
+                    "FROM workflow_configurations wc "
+                    "LEFT JOIN workflow_days wd ON wd.workflow_id = wc.id AND wd.is_active = true "
+                    "WHERE wc.is_active = true "
+                    "GROUP BY wc.workflow_key, wc.workflow_name"
+                )).fetchall()
+                results["workflows_with_days"] = [
+                    {"key": r[0], "name": r[1], "active_days": r[2]} for r in wf_with_days
                 ]
             except Exception as e:
-                results["tasks_endpoint_error"] = str(e)
+                results["workflow_config_error"] = str(e)
+
+            # 4. Check _models state in workflow_config_routes
+            try:
+                from workflow_config_routes import _models
+                results["workflow_models_loaded"] = _models is not None
+                if _models:
+                    results["workflow_models_keys"] = list(_models.keys())
+            except Exception as e:
+                results["workflow_models_error"] = str(e)
 
             return results
         except Exception as e:
