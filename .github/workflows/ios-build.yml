@@ -41,10 +41,19 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        run: |
+          # List available Xcode versions, pick latest with iOS SDK
+          ls /Applications/ | grep Xcode | sort -V
+          # Try Xcode 16.1 first (includes iOS SDK), then 16.0, then default
+          sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer \
+            || sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer \
+            || sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer \
+            || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
       - name: Show Xcode version
-        run: xcodebuild -version
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep iOS || true
 
       - name: Install frontend dependencies
         working-directory: frontend
