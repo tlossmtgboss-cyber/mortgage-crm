@@ -3893,6 +3893,36 @@ async def emergency_admin_reset(
         raise DatabaseException("Failed to reset admin")
 
 
+@router.get("/find-accounts")
+async def find_accounts_by_api_key(
+    request: Request,
+    search: str = Query('', description="Search term"),
+    db: Session = Depends(get_db)
+):
+    """Find accounts by name using ADMIN_API_KEY auth."""
+    api_key = request.headers.get('X-API-Key', '')
+    expected_key = os.getenv('ADMIN_API_KEY', '')
+    if not api_key or not expected_key or api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    accounts = db.execute(text("""
+        SELECT id, name, status, owner_user_id, created_at
+        FROM tenant_accounts
+        WHERE (name ILIKE :search OR :search = '')
+          AND is_deleted = false
+        ORDER BY created_at DESC
+        LIMIT 20
+    """), {'search': f'%{search}%'}).fetchall()
+
+    return success_response(
+        data={'accounts': [
+            {'id': str(a[0]), 'name': a[1], 'status': a[2], 'owner_user_id': a[3],
+             'created_at': str(a[4])} for a in accounts
+        ]},
+        message=f"Found {len(accounts)} accounts"
+    )
+
+
 @router.delete("/cleanup-account/{account_id}")
 async def cleanup_account_by_api_key(
     account_id: str,
