@@ -819,10 +819,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Include Onboarding routes
     try:
-        from routes.onboarding_routes import router as onboarding_router, team_router, impersonation_router
+        from routes.onboarding_routes import router as onboarding_router, team_router, impersonation_router, invite_router
         app.include_router(onboarding_router, tags=["Onboarding"])
         app.include_router(team_router, tags=["Team"])
         app.include_router(impersonation_router, tags=["Impersonation"])
+        app.include_router(invite_router, tags=["Invites"])
         logger.info("✅ Onboarding routes loaded")
     except Exception as e:
         logger.warning(f"⚠️ Could not load Onboarding routes: {e}")

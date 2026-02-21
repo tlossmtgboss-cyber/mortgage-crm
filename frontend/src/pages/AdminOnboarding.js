@@ -59,9 +59,6 @@ const formatPhoneNumber = (value) => {
   return `(${phoneNumber.slice(0, 3)}) ${phoneNumber.slice(3, 6)}-${phoneNumber.slice(6, 10)}`;
 };
 
-// Special promo code for free Business plan access
-const FREE_ACCESS_PROMO_CODE = 'CHARLIE2016';
-
 function AdminOnboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -77,8 +74,8 @@ function AdminOnboarding() {
   // Invitation data
   const [invitation, setInvitation] = useState(null);
 
-  // Check if user has free access via promo code
-  const hasFreeAccess = (code) => code?.toUpperCase() === FREE_ACCESS_PROMO_CODE;
+  // Promo code validation state (validated server-side only)
+  const [promoValidated, setPromoValidated] = useState(false);
 
   // Step 1: Welcome/Password
   const [password, setPassword] = useState('');
@@ -188,8 +185,8 @@ function AdminOnboarding() {
   // Initialize promo code from URL parameter (if present)
   const [promoCode, setPromoCode] = useState(urlPromoCode || '');
 
-  // Check if current promo code grants free access
-  const isFreeAccess = hasFreeAccess(promoCode);
+  // Whether server has confirmed this promo code grants free access
+  const isFreeAccess = promoValidated;
 
   // Step 7: Complete
   const [completionData, setCompletionData] = useState(null);
@@ -1265,13 +1262,40 @@ function PaymentStep({
 
             <div className="form-section">
               <h3>Promo Code (Optional)</h3>
-              <div className="promo-input">
+              <div className="promo-input" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input
                   type="text"
                   placeholder="Enter code"
                   value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                  onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoValidated(false); }}
                 />
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ whiteSpace: 'nowrap' }}
+                  disabled={!promoCode || processing}
+                  onClick={async () => {
+                    try {
+                      const token = localStorage.getItem('token');
+                      const resp = await fetch('/api/v1/admin-onboarding/validate-promo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ promo_code: promoCode })
+                      });
+                      const data = await resp.json();
+                      if (resp.ok && data.data?.valid) {
+                        setPromoValidated(true);
+                        onError('');
+                      } else {
+                        setPromoValidated(false);
+                        onError(data.data?.message || 'Invalid promo code');
+                      }
+                    } catch { setPromoValidated(false); onError('Failed to validate promo code'); }
+                  }}
+                >
+                  Apply
+                </button>
+                {promoValidated && <span style={{ color: '#10b981', fontWeight: 'bold' }}>Valid</span>}
               </div>
             </div>
 

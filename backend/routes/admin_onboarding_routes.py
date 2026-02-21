@@ -433,7 +433,7 @@ async def start_onboarding(
         # Generate auth token
         try:
             import jwt
-            jwt_secret = os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY')
+            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
             if not jwt_secret:
                 logger.error("JWT_SECRET/SECRET_KEY not configured for onboarding token")
                 token = session_id  # Fallback to session_id if no secret
@@ -485,7 +485,7 @@ async def save_company_profile(
         # Decode token to get user
         try:
             import jwt
-            payload = jwt.decode(token, os.getenv('SECRET_KEY', ''), algorithms=['HS256'], options={"verify_aud": False})
+            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -549,7 +549,7 @@ async def save_user_profile(
 
         try:
             import jwt
-            payload = jwt.decode(token, os.getenv('SECRET_KEY', ''), algorithms=['HS256'], options={"verify_aud": False})
+            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -610,7 +610,7 @@ async def queue_team_invites(
 
         try:
             import jwt
-            payload = jwt.decode(token, os.getenv('SECRET_KEY', ''), algorithms=['HS256'], options={"verify_aud": False})
+            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -695,7 +695,7 @@ async def create_subscription(
 
         try:
             import jwt
-            payload = jwt.decode(token, os.getenv('SECRET_KEY', ''), algorithms=['HS256'], options={"verify_aud": False})
+            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -904,7 +904,7 @@ async def complete_onboarding(
 
         try:
             import jwt
-            payload = jwt.decode(token, os.getenv('SECRET_KEY', ''), algorithms=['HS256'], options={"verify_aud": False})
+            payload = jwt.decode(token, (os.getenv('SECRET_KEY') or '').strip(), algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -995,6 +995,49 @@ async def complete_onboarding(
         db.rollback()
         logger.error(f"Error completing onboarding: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/validate-promo")
+async def validate_promo_code(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Validate a promo code without revealing valid codes to the client"""
+    try:
+        body = await request.json()
+        code = (body.get('promo_code') or '').strip().upper()
+
+        # Server-side promo code validation
+        FREE_ACCESS_PROMO_CODE = os.getenv('FREE_ACCESS_PROMO_CODE', 'CHARLIE2016')
+
+        if code == FREE_ACCESS_PROMO_CODE:
+            return success_response(
+                data={'valid': True, 'type': 'free_access', 'message': 'Free Business Plan access granted!'},
+                message="Promo code is valid"
+            )
+
+        # Check Stripe promo codes if available
+        if STRIPE_AVAILABLE and code:
+            try:
+                promo = stripe.PromotionCode.list(code=code, active=True, limit=1)
+                if promo.data:
+                    return success_response(
+                        data={'valid': True, 'type': 'discount', 'message': 'Promo code applied!'},
+                        message="Promo code is valid"
+                    )
+            except Exception:
+                pass
+
+        return success_response(
+            data={'valid': False, 'message': 'Invalid or expired promo code'},
+            message="Invalid promo code"
+        )
+    except Exception as e:
+        logger.error(f"Error validating promo code: {e}")
+        return success_response(
+            data={'valid': False, 'message': 'Could not validate promo code'},
+            message="Validation error"
+        )
 
 
 @router.get("/plan-pricing")
