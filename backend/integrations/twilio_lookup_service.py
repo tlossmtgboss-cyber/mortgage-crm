@@ -79,8 +79,8 @@ class TwilioLookupService:
     ]
 
     def __init__(self):
-        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        self.account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
+        self.auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
         self.enabled = bool(
             TWILIO_AVAILABLE and
             self.account_sid and

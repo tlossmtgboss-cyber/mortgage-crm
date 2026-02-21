@@ -31,10 +31,10 @@ class SMSClient:
         """Initialize Twilio SMS client"""
         from twilio.rest import Client
 
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
-        api_key_sid = os.getenv("TWILIO_API_KEY_SID", "")
-        api_key_secret = os.getenv("TWILIO_API_KEY_SECRET", "")
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+        api_key_sid = os.getenv("TWILIO_API_KEY_SID", "").strip()
+        api_key_secret = os.getenv("TWILIO_API_KEY_SECRET", "").strip()
         self.from_number = os.getenv("TWILIO_PHONE_NUMBER", "")
 
         has_credentials = account_sid and self.from_number and (

@@ -64,7 +64,7 @@ from .data_contracts import (
     ExtractionMethod,
 )
 from .process_transcript import parse_transcript as parse_transcript_improved
-from .pii_utils import mask_pii_for_logging
+from .pii_utils import mask_pii_for_logging, redact_transcript_for_llm
 from .agents import (
     IdentityExtractionAgent,
     PropertyExtractionAgent,
@@ -215,6 +215,10 @@ class CallIntelligenceProcessor:
                 response.success = False
                 response.errors.append("No transcript content to process")
                 return response
+
+            # Redact PII before sending to external LLM APIs
+            segments, pii_stats = self._redact_segments_for_llm(segments)
+            response.pii_redaction_stats = pii_stats
 
             # Use unified extraction if available
             if self.use_unified and self._unified_extractor:
@@ -477,6 +481,49 @@ class CallIntelligenceProcessor:
         - Automatic role inference for 2-party conversations
         """
         return parse_transcript_improved(transcript)
+
+    def _redact_segments_for_llm(
+        self,
+        segments: List[TranscriptSegment],
+    ) -> tuple:
+        """
+        Redact PII from transcript segments before sending to external LLM APIs.
+
+        Creates new segment copies with redacted text so originals are preserved.
+        Redacts: SSN, DOB, phone, email, credit card, bank account numbers.
+        Preserves: names and addresses (needed for extraction).
+
+        Returns:
+            Tuple of (redacted_segments, aggregate_pii_stats)
+        """
+        aggregate_stats: Dict[str, int] = {}
+        redacted_segments = []
+
+        for segment in segments:
+            redacted_text, stats = redact_transcript_for_llm(segment.text)
+
+            # Accumulate stats across all segments
+            for key, count in stats.items():
+                aggregate_stats[key] = aggregate_stats.get(key, 0) + count
+
+            # Create new segment with redacted text (preserve all other fields)
+            redacted_segments.append(TranscriptSegment(
+                speaker=segment.speaker,
+                text=redacted_text,
+                index=segment.index,
+                start_time=segment.start_time,
+                end_time=segment.end_time,
+                confidence=segment.confidence,
+            ))
+
+        total = aggregate_stats.get("total", 0)
+        if total > 0:
+            logger.info(
+                f"PII redaction complete: {total} items redacted across "
+                f"{len(segments)} segments before LLM transmission"
+            )
+
+        return redacted_segments, aggregate_stats
 
     def _map_extractions(
         self,

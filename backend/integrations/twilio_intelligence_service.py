@@ -52,8 +52,8 @@ class TwilioIntelligenceService:
     """Twilio Voice Intelligence for call transcription and analysis"""
 
     def __init__(self):
-        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
         self.service_sid = os.getenv("TWILIO_INTELLIGENCE_SERVICE_SID", "")
 
         # Webhook URL for transcript completion

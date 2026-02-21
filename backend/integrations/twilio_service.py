@@ -15,10 +15,10 @@ class TwilioSMSClient:
     """Twilio SMS client for text messaging"""
 
     def __init__(self):
-        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
-        self.api_key_sid = os.getenv("TWILIO_API_KEY_SID", "")
-        self.api_key_secret = os.getenv("TWILIO_API_KEY_SECRET", "")
+        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+        self.api_key_sid = os.getenv("TWILIO_API_KEY_SID", "").strip()
+        self.api_key_secret = os.getenv("TWILIO_API_KEY_SECRET", "").strip()
         self.from_number = os.getenv("TWILIO_PHONE_NUMBER", "")
 
         # Check if we have credentials (either Auth Token or API Key)

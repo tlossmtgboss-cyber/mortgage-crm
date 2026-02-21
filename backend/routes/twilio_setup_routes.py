@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/twilio-setup", tags=["Twilio Setup"])
 
 # Master Twilio credentials from environment
-TWILIO_MASTER_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_MASTER_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_MASTER_ACCOUNT_SID = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
+TWILIO_MASTER_AUTH_TOKEN = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 # Dependency injection placeholders

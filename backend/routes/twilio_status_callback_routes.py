@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/v1/twilio", tags=["twilio-webhooks"])
 # CONFIGURATION
 # =============================================================================
 
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 
 # Status mapping: Twilio CallStatus -> call_attempts.status
 STATUS_MAP = {

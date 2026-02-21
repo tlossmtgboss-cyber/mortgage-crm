@@ -274,6 +274,9 @@ class CallIntelligenceResponse:
     batch_job_id: Optional[str] = None  # Batch job ID if processed as part of batch
     extraction_method: str = "unified"  # "unified", "parallel_agents", "streaming"
 
+    # PII redaction audit trail
+    pii_redaction_stats: Dict[str, int] = field(default_factory=dict)
+
     # Errors
     errors: List[str] = field(default_factory=list)
 
@@ -308,6 +311,7 @@ class CallIntelligenceResponse:
             "pending_review_count": self.pending_review_count,
             "batch_job_id": self.batch_job_id,
             "extraction_method": self.extraction_method,
+            "pii_redaction_stats": self.pii_redaction_stats,
             "errors": self.errors,
         }
 

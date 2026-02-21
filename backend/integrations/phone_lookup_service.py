@@ -127,8 +127,8 @@ class TwilioLookupProvider(PhoneLookupProvider):
     """Twilio Lookup API v2 implementation"""
 
     def __init__(self):
-        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        self.account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
+        self.auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
         self.client = None
         self._enabled = False
 

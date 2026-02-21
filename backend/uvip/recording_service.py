@@ -27,8 +27,8 @@ class TwilioRecordingService:
     """
 
     def __init__(self):
-        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
         self.from_number = os.getenv("TWILIO_PHONE_NUMBER", "")
 
         # Production domain for callbacks
