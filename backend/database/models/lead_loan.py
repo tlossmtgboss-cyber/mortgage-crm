@@ -409,6 +409,9 @@ class Loan(Base):
     present_monthly_payment = Column(Float)
     proposed_monthly_payment = Column(Float)
 
+    # Salesforce Integration
+    salesforce_id = Column(String, index=True)
+
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

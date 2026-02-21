@@ -489,11 +489,17 @@ class SalesforceSyncService:
         tracking_id: Optional[int]
     ) -> Optional[int]:
         """
-        Upsert record into the appropriate CRM table.
-        Handles leads and loans from Salesforce.
+        Upsert record into the appropriate CRM table using smart routing.
+
+        Instead of routing purely by target_entity from field mappings, this
+        examines the SF status to determine the correct destination:
+        - Prospects/Pre-Approved → leads table
+        - Active loans (Application through CTC) → loans table
+        - Funded/Closed → loans table + MUM promotion
+
+        Also handles cross-table transitions (e.g., lead → loan promotion).
         """
-        from sqlalchemy import text
-        from datetime import datetime, timezone
+        from sqlalchemy import text as sa_text
 
         # Get user who owns this integration
         profile = db.query(IntegrationProfile).filter(
@@ -506,18 +512,119 @@ class SalesforceSyncService:
         user_id = profile.user_id
         salesforce_id = data.pop('salesforce_id', None)
 
-        logger.info(f"Upserting to {target_entity}: salesforce_id={salesforce_id}")
+        # Extract email for cross-table lookup
+        email = (
+            data.get('email')
+            or data.get('borrower_email')
+            or data.get('Email')
+            or None
+        )
 
-        if target_entity == 'lead':
-            return await self._upsert_lead(db, user_id, salesforce_id, data)
-        elif target_entity == 'loan':
-            return await self._upsert_loan(db, user_id, salesforce_id, data)
-        elif target_entity == 'borrower':
-            # Borrower data goes into loan record
-            return await self._upsert_loan(db, user_id, salesforce_id, data)
+        # --- Step 1: Classify where this record SHOULD go ---
+        bucket = self._classify_record_bucket(data)
+
+        # --- Step 2: Find if this record already exists anywhere ---
+        existing = self._find_existing_record(db, salesforce_id, email, user_id)
+
+        logger.info(
+            f"Smart routing: sf_id={salesforce_id}, target_entity={target_entity}, "
+            f"bucket={bucket}, existing={existing}"
+        )
+
+        # --- Step 3: Handle transitions and routing ---
+
+        if existing and existing['table'] == 'mum_clients':
+            # Already in MUM — update MUM client data only
+            try:
+                set_parts = []
+                mum_data = {}
+                if data.get('borrower_name') or data.get('name'):
+                    mum_data['client_name'] = data.get('borrower_name') or data.get('name')
+                    set_parts.append("client_name = :client_name")
+                if data.get('borrower_email') or data.get('email'):
+                    mum_data['email'] = data.get('borrower_email') or data.get('email')
+                    set_parts.append("email = :email")
+                if data.get('borrower_phone') or data.get('phone'):
+                    mum_data['phone'] = data.get('borrower_phone') or data.get('phone')
+                    set_parts.append("phone = :phone")
+                if set_parts:
+                    mum_data['mum_id'] = existing['id']
+                    mum_data['sf_id'] = salesforce_id
+                    set_parts.append("salesforce_id = :sf_id")
+                    set_parts.append("updated_at = CURRENT_TIMESTAMP")
+                    db.execute(sa_text(f"""
+                        UPDATE mum_clients SET {', '.join(set_parts)}
+                        WHERE id = :mum_id
+                    """), mum_data)
+                    logger.info(f"Updated MUM client {existing['id']} from SF {salesforce_id}")
+            except Exception as e:
+                logger.warning(f"MUM client update failed (non-fatal): {e}")
+            return existing['id']
+
+        if existing and existing['table'] == 'loans':
+            # Record already exists as a loan
+            if bucket == 'lead':
+                # SF says prospect but CRM has it as a loan — don't regress
+                logger.warning(
+                    f"SF record {salesforce_id} is '{data.get('stage', '?')}' "
+                    f"but already exists as loan {existing['id']} — not regressing to lead"
+                )
+                # Still update the loan with latest data (but don't change stage)
+                data.pop('stage', None)
+                return await self._upsert_loan(db, user_id, salesforce_id, data)
+            elif bucket == 'loan_funded':
+                # Update loan to funded stage + MUM promotion
+                result_id = await self._upsert_loan(db, user_id, salesforce_id, data)
+                if result_id:
+                    self._try_mum_promotion(db, result_id, user_id)
+                return result_id
+            else:
+                # Normal loan update
+                return await self._upsert_loan(db, user_id, salesforce_id, data)
+
+        if existing and existing['table'] == 'leads':
+            # Record exists as a lead
+            if bucket == 'lead':
+                # Same bucket — update lead in place
+                # Remap loan fields to lead fields if data came from loan mappings
+                if target_entity in ('loan', 'borrower'):
+                    lead_data = self._remap_loan_fields_for_lead(data)
+                else:
+                    lead_data = data
+                # Map the SF status to a valid LeadStage value
+                sf_status = data.get('stage') or data.get('StageName') or data.get('Status')
+                if sf_status:
+                    lead_data['stage'] = self._map_sf_status_to_lead_stage(sf_status)
+                return await self._upsert_lead(db, user_id, salesforce_id, lead_data)
+            elif bucket in ('loan', 'loan_funded'):
+                # Promote lead → loan
+                loan_id = await self._promote_lead_to_loan(
+                    db, user_id, salesforce_id, existing['id'], data
+                )
+                if loan_id and bucket == 'loan_funded':
+                    self._try_mum_promotion(db, loan_id, user_id)
+                return loan_id
+
+        # --- Step 4: No existing record — create new in correct bucket ---
+        if bucket == 'lead':
+            # Remap loan fields to lead fields if needed
+            if target_entity in ('loan', 'borrower'):
+                lead_data = self._remap_loan_fields_for_lead(data)
+            else:
+                lead_data = data
+            # Map SF status to valid LeadStage
+            sf_status = data.get('stage') or data.get('StageName') or data.get('Status')
+            if sf_status:
+                lead_data['stage'] = self._map_sf_status_to_lead_stage(sf_status)
+            return await self._upsert_lead(db, user_id, salesforce_id, lead_data)
+        elif bucket == 'loan_funded':
+            loan_id = await self._upsert_loan(db, user_id, salesforce_id, data)
+            if loan_id:
+                self._try_mum_promotion(db, loan_id, user_id)
+            return loan_id
         else:
-            logger.warning(f"Unknown target entity: {target_entity}")
-            return None
+            # Default: active loan
+            return await self._upsert_loan(db, user_id, salesforce_id, data)
 
     # Valid columns on the leads table that can be set from Salesforce sync
     VALID_LEAD_COLUMNS = {
@@ -701,7 +808,8 @@ class SalesforceSyncService:
         db: Session,
         user_id: int,
         salesforce_id: str,
-        data: Dict[str, Any]
+        data: Dict[str, Any],
+        _skip_cross_table: bool = False,
     ) -> Optional[int]:
         """Upsert a loan from Salesforce data (Opportunity or Transaction Property)."""
         from sqlalchemy import text
@@ -721,6 +829,26 @@ class SalesforceSyncService:
                 WHERE salesforce_id = :sf_id
                 LIMIT 1
             """), {"sf_id": salesforce_id}).fetchone()
+
+        # Cross-table check: if not found in loans, check if it exists as a lead.
+        # If so, promote the lead to a loan instead of creating a duplicate.
+        # Skipped when called from _promote_lead_to_loan to prevent recursion.
+        if not existing and salesforce_id and not _skip_cross_table:
+            lead_row = db.execute(text("""
+                SELECT id FROM leads
+                WHERE salesforce_id = :sf_id
+                   OR meta_data->>'salesforce_id' = :sf_id
+                LIMIT 1
+            """), {"sf_id": salesforce_id}).fetchone()
+
+            if lead_row:
+                logger.info(
+                    f"SF record {salesforce_id} exists as lead {lead_row[0]} — "
+                    f"promoting to loan via _upsert_loan cross-table check"
+                )
+                return await self._promote_lead_to_loan(
+                    db, user_id, salesforce_id, lead_row[0], data
+                )
 
         # Build borrower_name from first+last if not directly provided
         if not data.get('borrower_name'):
@@ -1380,6 +1508,301 @@ class SalesforceSyncService:
             'Qualified': 'Pre-Qualified',
         }
         return status_mapping.get(sf_status, 'New')
+
+    # =========================================================================
+    # SMART ROUTING: Classify records by SF status and route to correct table
+    # =========================================================================
+
+    # SF statuses that indicate a prospect/lead (not yet an active loan)
+    LEAD_STATUSES = {
+        'New', 'Prospecting', 'Qualification', 'Pre-Qualified', 'Pre-Approved',
+        'Nurture', 'Open - Not Contacted', 'Working - Contacted',
+        'Needs Analysis', 'Long-Term Nurture',
+    }
+
+    # SF statuses that indicate a funded/closed loan (MUM candidate)
+    FUNDED_STATUSES = {
+        'Funded', 'Closed', 'Closed Won', 'Closed - Converted',
+    }
+
+    def _classify_record_bucket(self, data: Dict[str, Any]) -> str:
+        """
+        Classify a Salesforce record into 'lead', 'loan', or 'loan_funded'
+        based on the SF status value.
+
+        Returns:
+            'lead' - prospect/pre-approved, goes to leads table
+            'loan' - active loan (application through CTC), goes to loans table
+            'loan_funded' - funded/closed, goes to loans table + MUM promotion
+        """
+        # Check the stage/status field — could be in 'stage' (from field mapping)
+        # or raw SF field names
+        sf_status = (
+            data.get('stage')
+            or data.get('StageName')
+            or data.get('Status')
+            or ''
+        )
+
+        if not sf_status:
+            # No stage info — route based on data shape
+            if data.get('amount') or data.get('loan_number'):
+                return 'loan'
+            return 'lead'
+
+        # Check lead statuses first (exact match)
+        if sf_status in self.LEAD_STATUSES:
+            return 'lead'
+
+        # Check funded statuses
+        if sf_status in self.FUNDED_STATUSES:
+            return 'loan_funded'
+
+        # Check if _map_salesforce_stage maps this to FUNDED
+        mapped_stage = self._map_salesforce_stage(sf_status)
+        if mapped_stage == 'FUNDED':
+            return 'loan_funded'
+        if mapped_stage == 'CANCELLED':
+            return 'loan'  # Keep cancelled loans in loans table
+
+        # Everything else with a recognized loan stage goes to loans
+        # (APPLICATION, PROCESSING, SUBMITTED, UNDERWRITING, CTC, etc.)
+        return 'loan'
+
+    def _find_existing_record(
+        self,
+        db: Session,
+        salesforce_id: Optional[str],
+        email: Optional[str],
+        user_id: int,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Search across leads, loans, and mum_clients for an existing record
+        matching the given salesforce_id or email.
+
+        Returns:
+            Dict with {'table': 'leads'|'loans'|'mum_clients', 'id': int, 'stage': str}
+            or None if not found.
+        """
+        from sqlalchemy import text as sa_text
+
+        # 1. Check loans by salesforce_id
+        if salesforce_id:
+            row = db.execute(sa_text("""
+                SELECT id, stage FROM loans
+                WHERE salesforce_id = :sf_id
+                LIMIT 1
+            """), {"sf_id": salesforce_id}).fetchone()
+            if row:
+                return {"table": "loans", "id": row[0], "stage": row[1]}
+
+        # 2. Check leads by salesforce_id (column or meta_data)
+        if salesforce_id:
+            row = db.execute(sa_text("""
+                SELECT id, stage FROM leads
+                WHERE salesforce_id = :sf_id
+                   OR meta_data->>'salesforce_id' = :sf_id
+                LIMIT 1
+            """), {"sf_id": salesforce_id}).fetchone()
+            if row:
+                return {"table": "leads", "id": row[0], "stage": row[1]}
+
+        # 3. Check mum_clients by salesforce_id
+        if salesforce_id:
+            row = db.execute(sa_text("""
+                SELECT id FROM mum_clients
+                WHERE salesforce_id = :sf_id
+                LIMIT 1
+            """), {"sf_id": salesforce_id}).fetchone()
+            if row:
+                return {"table": "mum_clients", "id": row[0], "stage": None}
+
+        # 4. Fallback: leads by email (scoped to user)
+        if email:
+            row = db.execute(sa_text("""
+                SELECT id, stage FROM leads
+                WHERE LOWER(email) = LOWER(:email) AND owner_id = :user_id
+                LIMIT 1
+            """), {"email": email, "user_id": user_id}).fetchone()
+            if row:
+                return {"table": "leads", "id": row[0], "stage": row[1]}
+
+        # 5. Fallback: loans by borrower_email (scoped to user)
+        if email:
+            row = db.execute(sa_text("""
+                SELECT id, stage FROM loans
+                WHERE LOWER(borrower_email) = LOWER(:email) AND loan_officer_id = :user_id
+                LIMIT 1
+            """), {"email": email, "user_id": user_id}).fetchone()
+            if row:
+                return {"table": "loans", "id": row[0], "stage": row[1]}
+
+        return None
+
+    def _map_sf_status_to_lead_stage(self, sf_status: str) -> str:
+        """
+        Map a Salesforce status to a valid LeadStage enum string.
+        Values must EXACTLY match LeadStage enum (e.g., 'New' not 'NEW').
+        """
+        mapping = {
+            # SF Lead statuses
+            'New': 'New',
+            'Open - Not Contacted': 'New',
+            'Working - Contacted': 'Attempted Contact',
+            'Prospecting': 'Prospect',
+            'Qualification': 'Prospect',
+            'Needs Analysis': 'Prospect',
+            'Pre-Qualified': 'Pre-Qualified',
+            'Pre-Approved': 'Pre-Approved',
+            'Nurture': 'Long-Term Nurture',
+            'Long-Term Nurture': 'Long-Term Nurture',
+            'Closed - Not Converted': 'Withdrawn',
+            'Closed - Converted': 'Disclosed',
+            # SF Opportunity stages that might land here
+            'Application': 'Application',
+            'Funded': 'Closed',
+            'Closed Won': 'Closed',
+            'Closed': 'Closed',
+            'Closed Lost': 'Withdrawn',
+        }
+        return mapping.get(sf_status, 'New')
+
+    def _remap_loan_fields_for_lead(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Transform loan-shaped field names into lead-shaped field names.
+        Used when a Salesforce record needs to go to the leads table but
+        the field mappings targeted loan columns.
+        """
+        lead_data = {}
+
+        # Direct column name mappings (loan → lead)
+        field_map = {
+            'borrower_name': 'name',
+            'borrower_email': 'email',
+            'borrower_phone': 'phone',
+            'amount': 'loan_amount',
+            'property_city': 'city',
+            'property_state': 'state',
+            'property_zip': 'zip_code',
+            'rate': 'interest_rate',
+            'coborrower_name': 'co_applicant_name',
+            'co_borrower_email': 'co_applicant_email',
+            'purchase_price': 'property_value',
+        }
+
+        for key, value in data.items():
+            if value is None or value == '':
+                continue
+            if key in field_map:
+                lead_data[field_map[key]] = value
+            elif key in self.VALID_LEAD_COLUMNS:
+                # Field name is already valid for leads
+                lead_data[key] = value
+            # else: drop fields that have no lead equivalent
+
+        # Build name from first/last if not set
+        if not lead_data.get('name'):
+            first = data.get('borrower_first_name', '') or lead_data.get('first_name', '')
+            last = data.get('borrower_last_name', '') or lead_data.get('last_name', '')
+            combined = f"{first} {last}".strip()
+            if combined:
+                lead_data['name'] = combined
+
+        return lead_data
+
+    async def _promote_lead_to_loan(
+        self,
+        db: Session,
+        user_id: int,
+        salesforce_id: Optional[str],
+        lead_id: int,
+        loan_data: Dict[str, Any],
+    ) -> Optional[int]:
+        """
+        Promote an existing lead to a loan record.
+
+        1. Fetch lead data and merge as fallbacks into loan_data
+        2. Create/update the loan via _upsert_loan()
+        3. Mark the lead as 'Disclosed' (converted to active loan)
+
+        Returns the loan ID on success, None on failure.
+        """
+        from sqlalchemy import text as sa_text
+
+        # Fetch existing lead data for fallback values
+        lead_row = db.execute(sa_text("""
+            SELECT name, first_name, last_name, email, phone,
+                   property_type, property_address, city, state, zip_code,
+                   credit_score, loan_amount, loan_type, property_value,
+                   down_payment, annual_income, employer_name
+            FROM leads WHERE id = :lead_id
+        """), {"lead_id": lead_id}).fetchone()
+
+        if lead_row:
+            # Use lead data as fallbacks (SF data in loan_data takes precedence)
+            fallbacks = {
+                'borrower_name': lead_row.name,
+                'borrower_email': lead_row.email,
+                'borrower_phone': lead_row.phone,
+                'property_type': lead_row.property_type,
+                'property_address': lead_row.property_address,
+                'property_city': lead_row.city,
+                'property_state': lead_row.state,
+                'property_zip': lead_row.zip_code,
+                'loan_type': lead_row.loan_type,
+                'purchase_price': lead_row.property_value,
+                'down_payment': lead_row.down_payment,
+            }
+            if lead_row.loan_amount and not loan_data.get('amount'):
+                fallbacks['amount'] = lead_row.loan_amount
+
+            for key, fallback_val in fallbacks.items():
+                if fallback_val and not loan_data.get(key):
+                    loan_data[key] = fallback_val
+
+        # Create/update the loan (skip cross-table check to prevent recursion)
+        loan_id = await self._upsert_loan(
+            db, user_id, salesforce_id, loan_data, _skip_cross_table=True
+        )
+
+        if loan_id:
+            # Mark the lead as 'Disclosed' (converted) and store conversion metadata
+            db.execute(sa_text("""
+                UPDATE leads SET
+                    stage = 'Disclosed',
+                    stage_changed_at = CURRENT_TIMESTAMP,
+                    meta_data = COALESCE(meta_data, '{}'::jsonb) ||
+                        jsonb_build_object(
+                            'converted_to_loan_id', :loan_id::text,
+                            'converted_at', CURRENT_TIMESTAMP::text
+                        ),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :lead_id
+            """), {"loan_id": loan_id, "lead_id": lead_id})
+
+            logger.info(
+                f"Promoted lead {lead_id} to loan {loan_id} "
+                f"(salesforce_id={salesforce_id})"
+            )
+
+        return loan_id
+
+    def _try_mum_promotion(self, db: Session, loan_id: int, user_id: int) -> Optional[int]:
+        """
+        Attempt to promote a funded loan to MUM client.
+        Wrapped in try/except so failures don't block the sync.
+
+        Returns MUM client ID if promoted, None otherwise.
+        """
+        try:
+            from services.mum_promotion_service import maybe_promote_loan_to_mum
+            mum_id = maybe_promote_loan_to_mum(db, loan_id, user_id)
+            if mum_id:
+                logger.info(f"Smart routing auto-promoted loan {loan_id} to MUM client {mum_id}")
+            return mum_id
+        except Exception as e:
+            logger.warning(f"MUM promotion failed for loan {loan_id} (non-fatal): {e}")
+            return None
 
     # =========================================================================
     # IMPORT NEW CLIENTS FROM SALESFORCE
