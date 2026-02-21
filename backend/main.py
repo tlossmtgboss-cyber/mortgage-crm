@@ -1205,6 +1205,21 @@ try:
 except ImportError:
     pass
 
+# ============================================================================
+# STARTUP EVENT — Initialize scheduler for workflow task generation
+# ============================================================================
+@app.on_event("startup")
+async def startup_event():
+    """Initialize the scheduler on app startup for workflow task generation, SLA tracking, etc."""
+    try:
+        from services.scheduler_service import init_scheduler
+        init_scheduler()
+        logger.info("✅ Scheduler initialized and started (workflow tasks, SLA tracking, appointment reminders)")
+    except Exception as e:
+        logger.error(f"❌ Scheduler failed to start: {e}")
+        import traceback
+        traceback.print_exc()
+
 # MAIN
 # ============================================================================
 

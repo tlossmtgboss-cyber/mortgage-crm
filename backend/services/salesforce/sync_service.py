@@ -767,6 +767,13 @@ class SalesforceSyncService:
         if existing:
             # Update existing lead — also backfill organization_id if missing
             lead_id = existing[0]
+
+            # Capture old stage before update for SLA tracking
+            old_stage_row = db.execute(text(
+                "SELECT stage::text FROM leads WHERE id = :lid"
+            ), {"lid": lead_id}).fetchone()
+            old_stage = old_stage_row[0] if old_stage_row else None
+
             set_clauses = ", ".join([f"{k} = :{k}" for k in lead_data.keys()])
             if set_clauses:
                 lead_data['lead_id'] = lead_id
@@ -780,6 +787,16 @@ class SalesforceSyncService:
                     WHERE id = :lead_id
                 """), lead_data)
             logger.info(f"Updated lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
+
+            # Wire to SLA tracking — detect stage changes
+            new_stage = lead_data.get('stage')
+            if new_stage and new_stage != old_stage:
+                try:
+                    from services.sla_tracking_service import track_lead_stage_change
+                    track_lead_stage_change(db, lead_id, old_stage, new_stage, organization_id=org_id)
+                except Exception as e:
+                    logger.warning(f"SLA tracking hook failed for lead {lead_id} stage change: {e}")
+
             return lead_id
         else:
             # Create new lead
@@ -800,6 +817,14 @@ class SalesforceSyncService:
 
             lead_id = result.fetchone()[0]
             logger.info(f"Created lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
+
+            # Wire to SLA tracking — create initial milestone for new lead
+            try:
+                from services.sla_tracking_service import track_lead_created
+                track_lead_created(db, lead_id, organization_id=org_id)
+            except Exception as e:
+                logger.warning(f"SLA tracking hook failed for new lead {lead_id}: {e}")
+
             return lead_id
 
     # Valid columns on the loans table that can be set from Salesforce sync
@@ -917,6 +942,13 @@ class SalesforceSyncService:
             # Update existing loan — also backfill organization_id if missing
             loan_id = existing[0]
 
+            # Capture old stage before update for SLA tracking
+            old_stage_row = db.execute(text(
+                "SELECT stage::text, loan_number FROM loans WHERE id = :lid"
+            ), {"lid": loan_id}).fetchone()
+            old_stage = old_stage_row[0] if old_stage_row else None
+            loan_number = old_stage_row[1] if old_stage_row else None
+
             set_parts = [f"{k} = :{k}" for k in loan_data.keys()]
             set_parts.append("salesforce_id = :salesforce_id")
             set_parts.append("organization_id = COALESCE(organization_id, :org_id)")
@@ -931,6 +963,19 @@ class SalesforceSyncService:
                 WHERE id = :loan_id
             """), loan_data)
             logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
+
+            # Wire to SLA tracking — detect stage changes
+            new_stage = loan_data.get('stage')
+            if new_stage and new_stage != old_stage:
+                try:
+                    from services.sla_tracking_service import track_loan_stage_change
+                    track_loan_stage_change(
+                        db, loan_id, old_stage, new_stage,
+                        loan_number=loan_number, organization_id=org_id
+                    )
+                except Exception as e:
+                    logger.warning(f"SLA tracking hook failed for loan {loan_id} stage change: {e}")
+
             return loan_id
         else:
             # Use loan_number from Salesforce if provided, else generate one
@@ -960,6 +1005,16 @@ class SalesforceSyncService:
 
             loan_id = result.fetchone()[0]
             logger.info(f"Created loan {loan_id} ({loan_data['loan_number']}) from Salesforce {salesforce_id}")
+
+            # Wire to SLA tracking — create initial milestone for new loan
+            try:
+                from services.sla_tracking_service import track_loan_created
+                track_loan_created(
+                    db, loan_id, loan_data['loan_number'], organization_id=org_id
+                )
+            except Exception as e:
+                logger.warning(f"SLA tracking hook failed for new loan {loan_id}: {e}")
+
             return loan_id
 
     def _map_salesforce_stage(self, sf_stage: str) -> str:
@@ -2269,7 +2324,7 @@ class SalesforceSyncService:
         """), {"user_id": user_id}).fetchone()
         org_id = user_row.organization_id if user_row else None
 
-        db.execute(text("""
+        result = db.execute(text("""
             INSERT INTO leads (
                 name, first_name, last_name, email, phone, employer_name,
                 industry, source, stage, address, city, state, zip_code,
@@ -2284,6 +2339,7 @@ class SalesforceSyncService:
                                    'salesforce_source', 'auto_import'),
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
+            RETURNING id
         """), {
             "name": full_name,
             "first_name": first_name,
@@ -2305,7 +2361,16 @@ class SalesforceSyncService:
             "sf_type": sf_type,
         })
 
+        lead_id = result.fetchone()[0]
         logger.info(f"Created CRM lead from Salesforce {sf_type} {sf_id}: {first_name} {last_name} ({email})")
+
+        # Wire to SLA tracking — create initial milestone for new lead
+        try:
+            from services.sla_tracking_service import track_lead_created
+            track_lead_created(db, lead_id, organization_id=org_id)
+        except Exception as e:
+            logger.warning(f"SLA tracking hook failed for new SF lead {lead_id}: {e}")
+
         return True
 
     async def _create_crm_loan_if_new(
@@ -2403,7 +2468,24 @@ class SalesforceSyncService:
             "org_id": org_id,
         })
 
+        # Get the new loan's ID for SLA tracking
+        new_loan_row = db.execute(text("""
+            SELECT id FROM loans WHERE salesforce_id = :sf_id AND loan_officer_id = :user_id
+            LIMIT 1
+        """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
+
         logger.info(f"Created CRM loan from Salesforce Opportunity {sf_id}: {borrower_name} (${amount:,.0f}, stage={stage})")
+
+        # Wire to SLA tracking — create initial milestone for new loan
+        if new_loan_row:
+            try:
+                from services.sla_tracking_service import track_loan_created
+                track_loan_created(
+                    db, new_loan_row[0], loan_number, organization_id=org_id
+                )
+            except Exception as e:
+                logger.warning(f"SLA tracking hook failed for new SF loan {sf_id}: {e}")
+
         return True
 
     async def _get_contact_for_account(

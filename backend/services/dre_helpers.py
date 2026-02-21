@@ -1507,6 +1507,11 @@ def apply_extracted_data(extracted_data, db: Session) -> bool:
 
             logger.info(f"Applying extracted data to loan {loan.id} ({loan.loan_number})")
 
+            # Capture old stage for SLA tracking
+            _dre_old_stage = loan.stage
+            if _dre_old_stage and hasattr(_dre_old_stage, 'value'):
+                _dre_old_stage = _dre_old_stage.value
+
             if value := get_field_value(fields, "borrower_name"):
                 loan.borrower_name = str(value)
                 updated_fields.append("borrower_name")
@@ -1673,6 +1678,21 @@ def apply_extracted_data(extracted_data, db: Session) -> bool:
 
             db.commit()
             logger.info(f"✅ Applied {len(updated_fields)} fields to loan {loan.loan_number}: {', '.join(updated_fields)}")
+
+            # Wire to SLA tracking — detect stage changes from email parsing
+            new_stage = loan.stage
+            if new_stage and hasattr(new_stage, 'value'):
+                new_stage = new_stage.value
+            if new_stage and new_stage != _dre_old_stage:
+                try:
+                    from services.sla_tracking_service import track_loan_stage_change
+                    track_loan_stage_change(
+                        db, loan.id, _dre_old_stage, new_stage,
+                        loan_number=loan.loan_number,
+                        organization_id=getattr(loan, "organization_id", None),
+                    )
+                except Exception as e_sla:
+                    logger.warning(f"SLA tracking hook failed for DRE loan {loan.id}: {e_sla}")
 
             tasks_created = create_milestone_tasks(loan, updated_fields, db)
             if tasks_created:

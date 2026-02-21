@@ -181,6 +181,18 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             db.flush()
             logger.info(f"Loan {loan.loan_number} stage updated: {old_stage} -> {crm_stage} (from LOS milestone: {new_milestone})")
 
+            # Wire to SLA tracking
+            try:
+                from services.sla_tracking_service import track_loan_stage_change
+                old_stage_str = old_stage.value if hasattr(old_stage, 'value') else str(old_stage) if old_stage else None
+                track_loan_stage_change(
+                    db, loan.id, old_stage_str, crm_stage,
+                    loan_number=loan.loan_number,
+                    organization_id=getattr(loan, "organization_id", None),
+                )
+            except Exception as e:
+                logger.warning(f"SLA tracking hook failed for LOS loan {loan.id}: {e}")
+
     async def _handle_loan_update(db: Session, los_loan_id: str, payload: dict):
         """Handle general loan update from LOS."""
         loan = _find_loan_by_los_id(db, los_loan_id)

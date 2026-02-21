@@ -135,6 +135,7 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             raise HTTPException(status_code=404, detail="Loan not found")
 
         # Check if already funded or mark as funded
+        old_stage = loan.stage
         if loan.stage != LoanStage.FUNDED:
             loan.stage = LoanStage.FUNDED
             loan.funded_date = datetime.now(timezone.utc)
@@ -145,6 +146,20 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             raise HTTPException(status_code=500, detail="Failed to create MUM client")
 
         db.commit()
+
+        # Wire to SLA tracking — loan just moved to FUNDED
+        if old_stage != LoanStage.FUNDED:
+            try:
+                from services.sla_tracking_service import track_loan_stage_change
+                old_stage_str = old_stage.value if hasattr(old_stage, 'value') else str(old_stage) if old_stage else None
+                track_loan_stage_change(
+                    db, loan.id, old_stage_str, 'FUNDED',
+                    user_id=current_user.id,
+                    loan_number=loan.loan_number,
+                    organization_id=getattr(loan, "organization_id", None),
+                )
+            except Exception as e:
+                logger.warning(f"SLA tracking hook failed for MUM promotion loan {loan.id}: {e}")
 
         return {
             "status": "success",

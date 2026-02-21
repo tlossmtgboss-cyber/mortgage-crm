@@ -579,6 +579,19 @@ class LOSSyncService:
                     loan.stage = los_data.stage
                     loan.stage_changed_at = datetime.now(timezone.utc)
 
+                    # Wire to SLA tracking
+                    try:
+                        from services.sla_tracking_service import track_loan_stage_change
+                        old_str = current_stage.value if hasattr(current_stage, 'value') else str(current_stage) if current_stage else None
+                        new_str = los_data.stage.value if hasattr(los_data.stage, 'value') else str(los_data.stage)
+                        track_loan_stage_change(
+                            db, loan.id, old_str, new_str,
+                            loan_number=loan.loan_number,
+                            organization_id=getattr(loan, "organization_id", None),
+                        )
+                    except Exception as e_sla:
+                        logger.warning(f"SLA tracking hook failed for LOS sync loan {loan.id}: {e_sla}")
+
             try:
                 db.flush()
             except Exception as e:

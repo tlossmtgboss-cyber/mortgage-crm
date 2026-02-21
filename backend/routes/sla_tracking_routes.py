@@ -1646,3 +1646,86 @@ View the full report in HTML format.
     except Exception as e:
         logger.error(f"Failed to send SLA report email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send email")
+
+
+# ============================================================================
+# BACKFILL — Create milestones for existing leads/loans that are missing them
+# ============================================================================
+
+@router.post("/backfill-milestones")
+async def backfill_milestones(
+    dry_run: bool = Query(True, description="Preview only, don't create milestones"),
+    entity_type: str = Query("both", description="'leads', 'loans', or 'both'"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Backfill SLA milestones for existing leads/loans that have no milestone history.
+
+    This is a one-time catch-up for records created before SLA tracking was wired.
+    Safe to run multiple times — only creates milestones for entities that have none.
+    """
+    from services.sla_tracking_service import track_lead_created, track_loan_created
+
+    org_id = getattr(current_user, 'organization_id', None)
+    results = {"leads_found": 0, "leads_backfilled": 0, "loans_found": 0, "loans_backfilled": 0, "errors": []}
+
+    # Backfill leads
+    if entity_type in ("leads", "both"):
+        leads_without_milestones = db.execute(text("""
+            SELECT l.id, l.organization_id
+            FROM leads l
+            LEFT JOIN loan_milestone_history m ON m.lead_id = l.id
+            WHERE m.id IS NULL
+            AND l.stage IS NOT NULL
+            ORDER BY l.id
+        """)).fetchall()
+
+        results["leads_found"] = len(leads_without_milestones)
+
+        if not dry_run:
+            for lead_row in leads_without_milestones:
+                try:
+                    lead_org = lead_row.organization_id or org_id
+                    track_lead_created(db, lead_row.id, organization_id=lead_org)
+                    results["leads_backfilled"] += 1
+                except Exception as e:
+                    results["errors"].append(f"Lead {lead_row.id}: {str(e)[:100]}")
+
+    # Backfill loans
+    if entity_type in ("loans", "both"):
+        loans_without_milestones = db.execute(text("""
+            SELECT l.id, l.loan_number, l.organization_id
+            FROM loans l
+            LEFT JOIN loan_milestone_history m ON m.loan_id = l.id
+            WHERE m.id IS NULL
+            AND l.stage IS NOT NULL
+            ORDER BY l.id
+        """)).fetchall()
+
+        results["loans_found"] = len(loans_without_milestones)
+
+        if not dry_run:
+            for loan_row in loans_without_milestones:
+                try:
+                    loan_org = loan_row.organization_id or org_id
+                    track_loan_created(
+                        db, loan_row.id, loan_row.loan_number,
+                        organization_id=loan_org
+                    )
+                    results["loans_backfilled"] += 1
+                except Exception as e:
+                    results["errors"].append(f"Loan {loan_row.id}: {str(e)[:100]}")
+
+    if not dry_run:
+        db.commit()
+
+    return {
+        "dry_run": dry_run,
+        "results": results,
+        "message": (
+            f"DRY RUN: Found {results['leads_found']} leads, {results['loans_found']} loans without milestones"
+            if dry_run else
+            f"Backfilled {results['leads_backfilled']} leads, {results['loans_backfilled']} loans. {len(results['errors'])} errors."
+        )
+    }

@@ -537,6 +537,11 @@ async def update_loan(
         if field in update_data:
             old_values[field] = getattr(loan, field, None)
 
+    # Capture old stage for SLA tracking before any updates
+    old_stage = getattr(loan, 'stage', None)
+    if old_stage and hasattr(old_stage, 'value'):
+        old_stage = old_stage.value  # Convert enum to string
+
     # Fields that can be updated
     updatable_fields = [
         "loan_number", "borrower_name", "borrower_email", "borrower_phone",
@@ -586,6 +591,21 @@ async def update_loan(
         db.commit()
         db.refresh(loan)
         logger.info(f"Loan updated: {loan.loan_number} (ID: {loan.id})")
+
+        # Wire to SLA tracking — detect stage changes
+        if "stage" in update_data:
+            new_stage = update_data["stage"]
+            if new_stage != old_stage:
+                try:
+                    from services.sla_tracking_service import track_loan_stage_change
+                    track_loan_stage_change(
+                        db, loan.id, old_stage, new_stage,
+                        user_id=getattr(current_user, "id", None),
+                        loan_number=loan.loan_number,
+                        organization_id=getattr(loan, "organization_id", None),
+                    )
+                except Exception as e:
+                    logger.warning(f"SLA tracking hook failed for loan {loan.id} stage change: {e}")
 
         result = _loan_to_dict(loan)
 
