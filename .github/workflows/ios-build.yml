@@ -147,7 +147,6 @@ jobs:
       - name: Export IPA
         working-directory: frontend
         run: |
-          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath ${{ runner.temp }}/PerenniaAI.xcarchive \
             -exportOptionsPlist ios/ExportOptions-appstore.plist \
@@ -155,15 +154,24 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8 \
             -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
-            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
-            2>&1 | xcpretty
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+
+      - name: List export output
+        run: |
+          echo "=== Export directory contents ==="
+          ls -laR ${{ runner.temp }}/ipa/ || echo "ipa dir not found"
+          echo "=== Archive contents ==="
+          ls ${{ runner.temp }}/PerenniaAI.xcarchive/Products/ || echo "Products dir not found"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: PerenniaAI-${{ steps.version.outputs.version }}-${{ steps.version.outputs.build_number }}
-          path: ${{ runner.temp }}/ipa/*.ipa
+          path: |
+            ${{ runner.temp }}/ipa/*.ipa
+            ${{ runner.temp }}/ipa/**/*.ipa
           retention-days: 30
+          if-no-files-found: warn
 
       - name: Upload dSYM artifact
         uses: actions/upload-artifact@v4
@@ -175,15 +183,18 @@ jobs:
       - name: Upload to TestFlight
         if: ${{ github.event.inputs.skip_upload != 'true' }}
         run: |
-          IPA_FILE=$(find ${{ runner.temp }}/ipa -name "*.ipa" -print -quit)
+          # Search for IPA in export dir and runner temp
+          IPA_FILE=$(find ${{ runner.temp }} -name "*.ipa" -print -quit 2>/dev/null)
           if [ -n "$IPA_FILE" ]; then
+            echo "Found IPA: $IPA_FILE"
             xcrun altool --upload-app \
               --type ios \
               --file "$IPA_FILE" \
               --apiKey ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
               --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           else
-            echo "No IPA file found!"
+            echo "No IPA file found in ${{ runner.temp }}!"
+            find ${{ runner.temp }} -type f -name "*.ipa" -o -name "*.app" 2>/dev/null || true
             exit 1
           fi
 
