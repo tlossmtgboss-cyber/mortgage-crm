@@ -1183,8 +1183,33 @@ async def get_available_roles(
 
 
 # =============================================================================
-# TEMPORARY: Admin cleanup endpoint (for resetting test accounts)
+# TEMPORARY: Admin endpoints (for testing onboarding)
 # =============================================================================
+
+@router.get("/list-invitations")
+async def list_invitations(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """List subscriber invitations. Requires ADMIN_API_KEY."""
+    admin_key = request.headers.get('X-Admin-Key', '')
+    expected_key = (os.getenv('ADMIN_API_KEY') or '').strip()
+    if not admin_key or not expected_key or admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    invites = db.execute(text("""
+        SELECT id, token, email, company_name, status, created_at
+        FROM subscriber_invitations
+        ORDER BY created_at DESC LIMIT 20
+    """)).fetchall()
+
+    return success_response(
+        data={'invitations': [
+            {'id': str(i[0]), 'token': i[1], 'email': i[2], 'company': i[3], 'status': i[4], 'created': str(i[5])}
+            for i in invites
+        ]},
+        message=f"Found {len(invites)} invitations"
+    )
 
 @router.delete("/cleanup-test-account")
 async def cleanup_test_account(
