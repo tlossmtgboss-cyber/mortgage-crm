@@ -3891,3 +3891,122 @@ async def emergency_admin_reset(
         logger.error(f"Emergency admin reset failed: {e}")
         db.rollback()
         raise DatabaseException("Failed to reset admin")
+
+
+@router.delete("/cleanup-account/{account_id}")
+async def cleanup_account_by_api_key(
+    account_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Emergency account cleanup using ADMIN_API_KEY auth.
+    Deletes all dependent records, users, and soft-deletes the tenant account.
+    Also resets the subscriber invitation so onboarding can be retried.
+    """
+    api_key = request.headers.get('X-API-Key', '')
+    expected_key = os.getenv('ADMIN_API_KEY', '')
+    if not api_key or not expected_key or api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    try:
+        # Get account
+        account = db.execute(text("""
+            SELECT id, name, status FROM tenant_accounts WHERE id = :id
+        """), {'id': account_id}).fetchone()
+
+        if not account:
+            raise NotFoundException(f"Account {account_id} not found")
+
+        account_name = account[1]
+
+        # Get user IDs
+        user_rows = db.execute(text("""
+            SELECT id FROM users WHERE tenant_account_id = :account_id
+        """), {'account_id': account_id}).fetchall()
+        user_ids = [row[0] for row in user_rows]
+
+        deleted_from = []
+
+        if user_ids:
+            # Comprehensive FK cleanup - every table that references users.id
+            dependent_tables = [
+                ("user_assigned_roles", "user_id"),
+                ("user_active_role", "user_id"),
+                ("user_permissions", "user_id"),
+                ("user_page_permissions", "user_id"),
+                ("permission_requests", "employee_id"),
+                ("permissions", "user_id"),
+                ("api_keys", "user_id"),
+                ("refresh_tokens", "user_id"),
+                ("revoked_tokens", "user_id"),
+                ("security_certifications", "employee_id"),
+                ("microsoft_oauth_tokens", "user_id"),
+                ("microsoft_credentials", "user_id"),
+                ("audit_logs", "user_id"),
+                ("subscription_plans", "user_id"),
+                ("account_subscriptions", "user_id"),
+                ("email_tracking", "user_id"),
+                ("sms_messages", "user_id"),
+                ("call_logs", "user_id"),
+                ("voicemail_drops", "user_id"),
+                ("user_email_connections", "user_id"),
+                ("tasks", "assigned_to_id"),
+                ("tasks", "owner_id"),
+                ("workflow_tasks", "user_id"),
+                ("ai_chat_sessions", "user_id"),
+                ("ai_audit_logs", "user_id"),
+                ("dialer_sessions", "user_id"),
+                ("dialer_agents", "agent_id"),
+                ("user_settings", "user_id"),
+                ("notification_preferences", "user_id"),
+                ("impersonation_sessions", "manager_id"),
+                ("impersonation_sessions", "impersonated_user_id"),
+                ("employee_invites", "invited_by_user_id"),
+                ("employee_invites", "user_id"),
+                ("subscriber_invitations", "accepted_by_user_id"),
+                ("user_invitations", "invited_by"),
+            ]
+
+            for table_name, column_name in dependent_tables:
+                try:
+                    result = db.execute(text(f"""
+                        DELETE FROM {table_name} WHERE {column_name} IN :user_ids
+                    """), {'user_ids': tuple(user_ids)})
+                    if result.rowcount > 0:
+                        deleted_from.append(f"{table_name}.{column_name}: {result.rowcount}")
+                except Exception:
+                    pass
+
+            # Tenant-level records
+            try:
+                db.execute(text("DELETE FROM user_invitations WHERE organization_id = :id"), {'id': account_id})
+            except Exception:
+                pass
+
+        # Delete users
+        user_del = db.execute(text("DELETE FROM users WHERE tenant_account_id = :id"), {'id': account_id})
+
+        # Soft delete account
+        db.execute(text("""
+            UPDATE tenant_accounts SET is_deleted = true, status = 'deleted', updated_at = NOW()
+            WHERE id = :id
+        """), {'id': account_id})
+
+        # Reset associated subscriber invitation so it can be reused
+        db.execute(text("""
+            UPDATE subscriber_invitations
+            SET status = 'pending', accepted_at = NULL, accepted_by_user_id = NULL, updated_at = NOW()
+            WHERE accepted_by_user_id IN :user_ids OR company_name = :name
+        """), {'user_ids': tuple(user_ids) if user_ids else (0,), 'name': account_name})
+
+        db.commit()
+
+        return success_response(
+            data={
+                'account_id': account_id,
+                'name': account_name,
+                'users_deleted': user_del.rowcount,
+                'dependent_records_cleaned': deleted_from,
+            },
+            message=f"Account '{account_name}' cleaned up and invitation reset"
+        )
