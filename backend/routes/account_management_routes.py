@@ -2208,7 +2208,7 @@ async def delete_account(
         db.execute(text("""
             UPDATE tenant_accounts
             SET is_deleted = true,
-                status = 'deleted',
+                status = 'canceled',
                 updated_at = NOW()
             WHERE id = :account_id
         """), {'account_id': account_id})
@@ -4036,7 +4036,7 @@ async def cleanup_account_by_api_key(
 
         # Soft delete account
         db.execute(text("""
-            UPDATE tenant_accounts SET is_deleted = true, status = 'deleted', updated_at = NOW()
+            UPDATE tenant_accounts SET is_deleted = true, status = 'canceled', updated_at = NOW()
             WHERE id = :id
         """), {'id': account_id})
 
