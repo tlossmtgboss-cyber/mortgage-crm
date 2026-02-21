@@ -29,6 +29,11 @@ from salesforce_integration_models import (
     SyncQueueItem
 )
 from .oauth_service import salesforce_oauth
+
+
+class SalesforceTokenExpiredError(Exception):
+    """Raised when a Salesforce API call returns 401 INVALID_SESSION_ID."""
+    pass
 from .field_mapping_service import field_mapping
 from .http_client import get_sf_client, SF_TIMEOUT
 
@@ -97,22 +102,44 @@ class SalesforceSyncService:
             # Group mappings by source object
             mappings_by_object = self._group_mappings_by_object(mappings)
 
-            # Sync each object
+            # Sync each object (with 401 retry)
+            _token_refreshed = False
             for object_name, object_mappings in mappings_by_object.items():
                 if objects and object_name not in objects:
                     continue
 
-                object_result = await self._sync_object(
-                    db=db,
-                    access_token=access_token,
-                    instance_url=instance_url,
-                    integration_profile_id=integration_profile_id,
-                    object_name=object_name,
-                    mappings=object_mappings,
-                    direction=direction,
-                    full_sync=full_sync,
-                    batch_size=batch_size
-                )
+                try:
+                    object_result = await self._sync_object(
+                        db=db,
+                        access_token=access_token,
+                        instance_url=instance_url,
+                        integration_profile_id=integration_profile_id,
+                        object_name=object_name,
+                        mappings=object_mappings,
+                        direction=direction,
+                        full_sync=full_sync,
+                        batch_size=batch_size
+                    )
+                except SalesforceTokenExpiredError:
+                    if not _token_refreshed:
+                        logger.info(f"SF token expired during field-mapping sync, refreshing...")
+                        access_token, instance_url = await salesforce_oauth.force_refresh_and_get_token(
+                            db, integration_profile_id
+                        )
+                        _token_refreshed = True
+                        object_result = await self._sync_object(
+                            db=db,
+                            access_token=access_token,
+                            instance_url=instance_url,
+                            integration_profile_id=integration_profile_id,
+                            object_name=object_name,
+                            mappings=object_mappings,
+                            direction=direction,
+                            full_sync=full_sync,
+                            batch_size=batch_size
+                        )
+                    else:
+                        raise
 
                 result.records_processed += object_result.records_processed
                 result.records_succeeded += object_result.records_succeeded
@@ -305,6 +332,8 @@ class SalesforceSyncService:
                 headers=headers,
             )
 
+            if response.status_code == 401:
+                raise SalesforceTokenExpiredError(f"Salesforce query returned 401: {response.text[:200]}")
             if response.status_code != 200:
                 error = response.text
                 raise ValueError(f"Salesforce query failed: {error}")
@@ -1867,109 +1896,164 @@ class SalesforceSyncService:
                 return result
 
             user_id = profile.user_id
+            _token_refreshed = False  # Track if we've already refreshed once
 
             # ===== IMPORT SALESFORCE LEADS =====
+            sf_leads = []
             try:
                 sf_leads = await self._query_recent_sf_leads(
                     access_token, instance_url, days_back, limit
                 )
                 result['sf_leads_found'] = len(sf_leads)
-
-                for sf_lead in sf_leads:
+            except SalesforceTokenExpiredError:
+                # Token expired — refresh once and retry
+                if not _token_refreshed:
                     try:
-                        created = await self._create_crm_lead_if_new(
-                            db, sf_lead, 'Lead', user_id
+                        logger.info(f"Refreshing expired SF token for profile {integration_profile_id}")
+                        access_token, instance_url = await salesforce_oauth.force_refresh_and_get_token(
+                            db, integration_profile_id
                         )
-                        if created:
-                            result['new_leads_created'] += 1
-                        else:
-                            result['duplicates_skipped'] += 1
-                    except Exception as e:
-                        sf_id = sf_lead.get('Id', 'unknown')
-                        logger.error(f"Error importing SF Lead {sf_id}: {e}")
-                        result['errors'].append(f"Lead {sf_id}: {str(e)[:100]}")
-                        try:
-                            db.rollback()
-                        except Exception:
-                            pass
-
+                        _token_refreshed = True
+                        sf_leads = await self._query_recent_sf_leads(
+                            access_token, instance_url, days_back, limit
+                        )
+                        result['sf_leads_found'] = len(sf_leads)
+                    except Exception as refresh_err:
+                        logger.error(f"SF token refresh failed: {refresh_err}")
+                        result['errors'].append(f"Token refresh failed: {str(refresh_err)[:100]}")
+                        return result
+                else:
+                    result['errors'].append("SF token still invalid after refresh")
+                    return result
             except Exception as e:
                 logger.error(f"Error querying SF Leads: {e}")
                 result['errors'].append(f"Lead query: {str(e)[:100]}")
 
+            for sf_lead in sf_leads:
+                try:
+                    created = await self._create_crm_lead_if_new(
+                        db, sf_lead, 'Lead', user_id
+                    )
+                    if created:
+                        result['new_leads_created'] += 1
+                    else:
+                        result['duplicates_skipped'] += 1
+                except Exception as e:
+                    sf_id = sf_lead.get('Id', 'unknown')
+                    logger.error(f"Error importing SF Lead {sf_id}: {e}")
+                    result['errors'].append(f"Lead {sf_id}: {str(e)[:100]}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
             # ===== IMPORT SALESFORCE CONTACTS =====
+            sf_contacts = []
             try:
                 sf_contacts = await self._query_recent_sf_contacts(
                     access_token, instance_url, days_back, limit
                 )
                 result['sf_contacts_found'] = len(sf_contacts)
-
-                for sf_contact in sf_contacts:
+            except SalesforceTokenExpiredError:
+                if not _token_refreshed:
                     try:
-                        created = await self._create_crm_lead_if_new(
-                            db, sf_contact, 'Contact', user_id
+                        logger.info(f"Refreshing expired SF token for profile {integration_profile_id} (contacts)")
+                        access_token, instance_url = await salesforce_oauth.force_refresh_and_get_token(
+                            db, integration_profile_id
                         )
-                        if created:
-                            result['new_leads_created'] += 1
-                        else:
-                            result['duplicates_skipped'] += 1
-                    except Exception as e:
-                        sf_id = sf_contact.get('Id', 'unknown')
-                        logger.error(f"Error importing SF Contact {sf_id}: {e}")
-                        result['errors'].append(f"Contact {sf_id}: {str(e)[:100]}")
-                        try:
-                            db.rollback()
-                        except Exception:
-                            pass
-
+                        _token_refreshed = True
+                        sf_contacts = await self._query_recent_sf_contacts(
+                            access_token, instance_url, days_back, limit
+                        )
+                        result['sf_contacts_found'] = len(sf_contacts)
+                    except Exception as refresh_err:
+                        logger.error(f"SF token refresh failed (contacts): {refresh_err}")
+                        result['errors'].append(f"Token refresh failed: {str(refresh_err)[:100]}")
+                else:
+                    result['errors'].append("SF token still invalid after refresh (contacts)")
             except Exception as e:
                 logger.error(f"Error querying SF Contacts: {e}")
                 result['errors'].append(f"Contact query: {str(e)[:100]}")
 
+            for sf_contact in sf_contacts:
+                try:
+                    created = await self._create_crm_lead_if_new(
+                        db, sf_contact, 'Contact', user_id
+                    )
+                    if created:
+                        result['new_leads_created'] += 1
+                    else:
+                        result['duplicates_skipped'] += 1
+                except Exception as e:
+                    sf_id = sf_contact.get('Id', 'unknown')
+                    logger.error(f"Error importing SF Contact {sf_id}: {e}")
+                    result['errors'].append(f"Contact {sf_id}: {str(e)[:100]}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
             # ===== IMPORT SALESFORCE OPPORTUNITIES AS LOANS =====
+            sf_opps = []
             try:
                 sf_opps = await self._query_recent_sf_opportunities(
                     access_token, instance_url, days_back, limit
                 )
                 result['sf_opportunities_found'] = len(sf_opps)
-
-                for sf_opp in sf_opps:
+            except SalesforceTokenExpiredError:
+                if not _token_refreshed:
                     try:
-                        created = await self._create_crm_loan_if_new(
-                            db, sf_opp, user_id
+                        logger.info(f"Refreshing expired SF token for profile {integration_profile_id} (opportunities)")
+                        access_token, instance_url = await salesforce_oauth.force_refresh_and_get_token(
+                            db, integration_profile_id
                         )
-                        if created:
-                            result['new_loans_created'] += 1
-
-                            # Auto-promote to MUM if the new loan is already funded/closed
-                            sf_stage = self._map_salesforce_stage(sf_opp.get('StageName', ''))
-                            if sf_stage == 'FUNDED' or sf_opp.get('CloseDate'):
-                                try:
-                                    sf_id_val = sf_opp.get('Id')
-                                    loan_row = db.execute(text(
-                                        "SELECT id FROM loans WHERE salesforce_id = :sf_id AND loan_officer_id = :uid LIMIT 1"
-                                    ), {"sf_id": sf_id_val, "uid": user_id}).fetchone()
-                                    if loan_row:
-                                        from services.mum_promotion_service import maybe_promote_loan_to_mum
-                                        mum_id = maybe_promote_loan_to_mum(db, loan_row[0], user_id)
-                                        if mum_id:
-                                            logger.info(f"Import sync auto-promoted new loan {loan_row[0]} to MUM client {mum_id}")
-                                except Exception as mum_err:
-                                    logger.warning(f"MUM promotion failed for new SF loan {sf_opp.get('Id')}: {mum_err}")
-                        else:
-                            result['duplicates_skipped'] += 1
-                    except Exception as e:
-                        sf_id = sf_opp.get('Id', 'unknown')
-                        logger.error(f"Error importing SF Opportunity {sf_id}: {e}")
-                        result['errors'].append(f"Opportunity {sf_id}: {str(e)[:100]}")
-                        try:
-                            db.rollback()
-                        except Exception:
-                            pass
-
+                        _token_refreshed = True
+                        sf_opps = await self._query_recent_sf_opportunities(
+                            access_token, instance_url, days_back, limit
+                        )
+                        result['sf_opportunities_found'] = len(sf_opps)
+                    except Exception as refresh_err:
+                        logger.error(f"SF token refresh failed (opportunities): {refresh_err}")
+                        result['errors'].append(f"Token refresh failed: {str(refresh_err)[:100]}")
+                else:
+                    result['errors'].append("SF token still invalid after refresh (opportunities)")
             except Exception as e:
                 logger.error(f"Error querying SF Opportunities: {e}")
                 result['errors'].append(f"Opportunity query: {str(e)[:100]}")
+
+            for sf_opp in sf_opps:
+                try:
+                    created = await self._create_crm_loan_if_new(
+                        db, sf_opp, user_id
+                    )
+                    if created:
+                        result['new_loans_created'] += 1
+
+                        # Auto-promote to MUM if the new loan is already funded/closed
+                        sf_stage = self._map_salesforce_stage(sf_opp.get('StageName', ''))
+                        if sf_stage == 'FUNDED' or sf_opp.get('CloseDate'):
+                            try:
+                                sf_id_val = sf_opp.get('Id')
+                                loan_row = db.execute(text(
+                                    "SELECT id FROM loans WHERE salesforce_id = :sf_id AND loan_officer_id = :uid LIMIT 1"
+                                ), {"sf_id": sf_id_val, "uid": user_id}).fetchone()
+                                if loan_row:
+                                    from services.mum_promotion_service import maybe_promote_loan_to_mum
+                                    mum_id = maybe_promote_loan_to_mum(db, loan_row[0], user_id)
+                                    if mum_id:
+                                        logger.info(f"Import sync auto-promoted new loan {loan_row[0]} to MUM client {mum_id}")
+                            except Exception as mum_err:
+                                logger.warning(f"MUM promotion failed for new SF loan {sf_opp.get('Id')}: {mum_err}")
+                    else:
+                        result['duplicates_skipped'] += 1
+                except Exception as e:
+                    sf_id = sf_opp.get('Id', 'unknown')
+                    logger.error(f"Error importing SF Opportunity {sf_id}: {e}")
+                    result['errors'].append(f"Opportunity {sf_id}: {str(e)[:100]}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
             result['success'] = True
             db.commit()
@@ -2024,6 +2108,9 @@ class SalesforceSyncService:
                 records = data.get('records', [])
                 logger.info(f"Found {len(records)} recent SF Leads (last {days_back} days)")
                 return records
+            elif response.status_code == 401:
+                logger.warning(f"SF Lead query: token expired (401). Will attempt refresh.")
+                raise SalesforceTokenExpiredError("Lead query: 401 INVALID_SESSION_ID")
             else:
                 logger.error(f"SF Lead query failed: {response.status_code} {response.text[:200]}")
                 return []
@@ -2062,6 +2149,9 @@ class SalesforceSyncService:
                 records = data.get('records', [])
                 logger.info(f"Found {len(records)} recent SF Contacts (last {days_back} days)")
                 return records
+            elif response.status_code == 401:
+                logger.warning(f"SF Contact query: token expired (401). Will attempt refresh.")
+                raise SalesforceTokenExpiredError("Contact query: 401 INVALID_SESSION_ID")
             else:
                 logger.error(f"SF Contact query failed: {response.status_code} {response.text[:200]}")
                 return []
@@ -2098,6 +2188,9 @@ class SalesforceSyncService:
                 records = data.get('records', [])
                 logger.info(f"Found {len(records)} recent SF Opportunities (last {days_back} days)")
                 return records
+            elif response.status_code == 401:
+                logger.warning(f"SF Opportunity query: token expired (401). Will attempt refresh.")
+                raise SalesforceTokenExpiredError("Opportunity query: 401 INVALID_SESSION_ID")
             else:
                 logger.error(f"SF Opportunity query failed: {response.status_code} {response.text[:200]}")
                 return []
