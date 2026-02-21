@@ -713,81 +713,97 @@ def register_health_routes(app, get_db, **kwargs):
 
 
     @app.get("/diag/task-debug")
-    async def diag_task_debug(db: Session = Depends(get_db)):
-        """Temporary: debug why tasks page shows 0 for user 118."""
+    async def diag_task_debug(
+        request: Request,
+        db: Session = Depends(get_db)
+    ):
+        """Temporary: debug why tasks page shows 0."""
         results = {}
         try:
+            # Try to get the authenticated user (same as unified-tasks would)
+            auth_user = None
+            auth_uid = None
+            try:
+                auth_header = request.headers.get("Authorization", "")
+                token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+                if token:
+                    auth_user = await get_current_user(token=token, request=request, db=db)
+                    auth_uid = auth_user.id if auth_user else None
+                    results["authenticated_user"] = {
+                        "id": auth_uid,
+                        "email": getattr(auth_user, "email", None),
+                    }
+                else:
+                    results["authenticated_user"] = "no token provided"
+            except Exception as e:
+                results["auth_error"] = str(e)
+
+            # Use hardcoded uid=118 for comparison
             uid = 118
-            # 1. Raw task count by status
+
+            # 1. Raw task count
             counts = db.execute(text(
                 "SELECT status, COUNT(*) FROM tasks WHERE owner_id = :uid GROUP BY status"
             ), {"uid": uid}).fetchall()
-            results["tasks_by_status"] = {r[0]: r[1] for r in counts}
+            results["tasks_for_uid_118"] = {r[0]: r[1] for r in counts}
 
-            # 2. Sample pending tasks
-            pending = db.execute(text(
-                "SELECT id, title, status, owner_id, loan_id, lead_id, due_date FROM tasks "
-                "WHERE owner_id = :uid AND status IN ('pending', 'in_progress') LIMIT 5"
-            ), {"uid": uid}).fetchall()
-            results["sample_pending"] = [
-                {"id": r[0], "title": r[1], "status": r[2], "owner_id": r[3],
-                 "loan_id": r[4], "lead_id": r[5], "due_date": str(r[6]) if r[6] else None}
-                for r in pending
-            ]
+            # 2. If auth user differs, also check their tasks
+            if auth_uid and auth_uid != uid:
+                auth_counts = db.execute(text(
+                    "SELECT status, COUNT(*) FROM tasks WHERE owner_id = :uid GROUP BY status"
+                ), {"uid": auth_uid}).fetchall()
+                results[f"tasks_for_uid_{auth_uid}"] = {r[0]: r[1] for r in auth_counts}
 
-            # 3. Check what unified-tasks returns via ORM (same as the endpoint)
-            try:
-                from database.models.task import Task as TaskModel
-                orm_tasks = db.query(TaskModel).filter(
-                    TaskModel.owner_id == uid,
-                    TaskModel.status.in_(["pending", "in_progress"])
-                ).limit(5).all()
-                results["orm_query_count"] = len(orm_tasks)
-                results["orm_sample"] = [
-                    {"id": t.id, "title": t.title, "status": t.status, "owner_id": t.owner_id}
-                    for t in orm_tasks
-                ]
-            except Exception as e:
-                results["orm_error"] = str(e)
-
-            # 4. Check what the main module Task resolves to
+            # 3. Simulate unified-tasks endpoint logic
             try:
                 import main as main_module
                 MainTask = main_module.Task
-                results["main_task_tablename"] = MainTask.__tablename__
-                main_orm = db.query(MainTask).filter(
-                    MainTask.owner_id == uid,
+                MainAITask = main_module.AITask
+                MainTaskType = main_module.TaskType
+
+                target_uid = auth_uid or uid
+
+                # AI tasks query (same as unified-tasks)
+                ai_tasks = db.query(MainAITask).filter(
+                    MainAITask.assigned_to_id == target_uid,
+                    MainAITask.type != MainTaskType.COMPLETED
+                ).limit(50).all()
+                results["simulated_ai_tasks"] = len(ai_tasks)
+
+                # Workflow tasks query (same as unified-tasks)
+                workflow_tasks = db.query(MainTask).filter(
+                    MainTask.owner_id == target_uid,
                     MainTask.status.in_(["pending", "in_progress"])
-                ).limit(5).all()
-                results["main_orm_count"] = len(main_orm)
+                ).limit(200).all()
+                results["simulated_workflow_tasks"] = len(workflow_tasks)
+                results["simulated_workflow_sample"] = [
+                    {"id": t.id, "title": t.title, "status": t.status}
+                    for t in workflow_tasks[:3]
+                ]
+                results["simulated_target_uid"] = target_uid
             except Exception as e:
-                results["main_task_error"] = str(e)
+                results["simulation_error"] = str(e)
 
-            # 5. Check if unified-tasks endpoint itself throws an error
+            # 4. Check the actual unified-tasks response by calling it
             try:
-                from performance_cache import get_cached, cache_key
-                ck = cache_key("unified_tasks", uid)
-                cached = get_cached(ck)
-                results["unified_cache_exists"] = cached is not None
-                if cached:
-                    results["unified_cache_total"] = cached.get("total_count")
-                    results["unified_cache_counts"] = cached.get("counts_by_source")
+                import httpx
+                base = request.base_url
+                auth_header = request.headers.get("Authorization", "")
+                if auth_header:
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        resp = await client.get(
+                            f"{base}api/v1/unified-tasks",
+                            headers={"Authorization": auth_header}
+                        )
+                        results["unified_endpoint_status"] = resp.status_code
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            results["unified_endpoint_total"] = data.get("total_count")
+                            results["unified_endpoint_counts"] = data.get("counts_by_source")
+                        else:
+                            results["unified_endpoint_body"] = resp.text[:500]
             except Exception as e:
-                results["cache_error"] = str(e)
-
-            # 6. Check ai_tasks for this user
-            ai_count = db.execute(text(
-                "SELECT COUNT(*) FROM ai_tasks WHERE assigned_to_id = :uid"
-            ), {"uid": uid}).scalar()
-            results["ai_tasks_total"] = ai_count
-
-            # 7. Check workflow-config endpoint data
-            try:
-                from database.models.lead_loan import Lead as LeadModel
-                lead_count = db.query(LeadModel).count()
-                results["total_leads_for_workflow"] = lead_count
-            except Exception as e:
-                results["lead_count_error"] = str(e)
+                results["unified_call_error"] = str(e)
 
             return results
         except Exception as e:
