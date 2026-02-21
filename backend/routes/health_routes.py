@@ -713,6 +713,41 @@ def register_health_routes(app, get_db, **kwargs):
 
 
     # ========================================================================
+    # TEMP: Check funded loans not in MUM (remove after use)
+    # ========================================================================
+
+    @app.get("/diag/funded-not-mum")
+    async def diag_funded_not_mum(db: Session = Depends(get_db)):
+        """Temporary: show funded loans missing MUM client records."""
+        try:
+            rows = db.execute(text("""
+                SELECT l.id, l.loan_number, l.borrower_name, l.stage::text,
+                       l.funded_date, l.closing_date
+                FROM loans l
+                LEFT JOIN mum_clients mc ON mc.loan_number = l.loan_number
+                WHERE mc.id IS NULL
+                  AND (
+                    l.funded_date IS NOT NULL
+                    OR l.closing_date IS NOT NULL
+                    OR UPPER(l.stage::text) = 'FUNDED'
+                  )
+                ORDER BY COALESCE(l.funded_date, l.closing_date) DESC NULLS LAST
+            """)).fetchall()
+            return {
+                "funded_without_mum": len(rows),
+                "loans": [
+                    {
+                        "id": r[0], "loan_number": r[1], "borrower": r[2],
+                        "stage": r[3], "funded_date": str(r[4]) if r[4] else None,
+                        "closing_date": str(r[5]) if r[5] else None,
+                    }
+                    for r in rows
+                ],
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
+    # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
     # ========================================================================
 
