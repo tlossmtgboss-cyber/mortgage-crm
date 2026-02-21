@@ -239,7 +239,7 @@ class PIIAuditService:
                     session_id=entry.session_id,
                     organization_id=entry.organization_id,
                     success=entry.success,
-                    metadata=entry.metadata,
+                    meta_data=entry.metadata,
                 )
                 session.add(log)
                 session.commit()

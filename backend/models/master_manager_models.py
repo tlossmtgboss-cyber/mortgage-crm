@@ -893,7 +893,7 @@ class CandidateActivity(Base):
     #        note_added, document_uploaded, feedback_submitted
 
     description = Column(Text)
-    metadata = Column(JSON, default=dict)
+    meta_data = Column('metadata', JSON, default=dict)
     # Flexible data based on activity type
 
     # Associated entities

@@ -158,6 +158,9 @@ class Subscription(Base):
     current_period_end = Column(DateTime)
     trial_end = Column(DateTime)
 
+    # Grace period for payment failures (LIC-006)
+    grace_period_ends_at = Column(DateTime, nullable=True)
+
     # Cancellation
     cancel_at_period_end = Column(Boolean, default=False)
     canceled_at = Column(DateTime)
@@ -170,8 +173,8 @@ class Subscription(Base):
     current_ai_tokens_this_month = Column(Integer, default=0)
     current_storage_gb = Column(Numeric(10, 2), default=0)
 
-    # Metadata
-    metadata = Column(JSONB, default=dict)
+    # Metadata (Python attr 'meta_data' avoids conflict with SQLAlchemy's reserved .metadata)
+    meta_data = Column('metadata', JSONB, default=dict)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
@@ -268,7 +271,7 @@ class Invoice(Base):
 
     # Metadata
     notes = Column(Text)
-    metadata = Column(JSONB, default=dict)
+    meta_data = Column('metadata', JSONB, default=dict)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
@@ -320,7 +323,7 @@ class UsageRecord(Base):
     billed_invoice_id = Column(UUID(as_uuid=True), ForeignKey("invoices.id", ondelete="SET NULL"))
 
     # Metadata
-    metadata = Column(JSONB, default=dict)
+    meta_data = Column('metadata', JSONB, default=dict)
 
     # Relationships
     subscription = relationship("Subscription", back_populates="usage_records")

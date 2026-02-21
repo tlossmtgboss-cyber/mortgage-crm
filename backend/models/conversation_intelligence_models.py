@@ -199,8 +199,8 @@ class CICallRecording(Base):
     analysis_status = Column(String(20), default='pending')
     qa_status = Column(String(20), default='pending')
 
-    # Metadata
-    metadata = Column(JSONB, default={})
+    # Metadata (Python attr 'meta_data' avoids conflict with SQLAlchemy's reserved .metadata)
+    meta_data = Column('metadata', JSONB, default={})
     tags = Column(ARRAY(Text), default=[])
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -473,7 +473,7 @@ class CIRealtimeSession(Base):
     connection_id = Column(String(100))
 
     # Metadata
-    metadata = Column(JSONB, default={})
+    meta_data = Column('metadata', JSONB, default={})
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
