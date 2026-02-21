@@ -46,8 +46,10 @@ jobs:
         env:
           TESTING: 'true'
           DATABASE_URL: sqlite:///./test.db
+          SECRET_KEY: ci-test-secret-key
+          DATA_ENCRYPTION_KEY: ${{ secrets.DATA_ENCRYPTION_KEY }}
         run: |
-          pytest tests/ -v -m "unit" --timeout=30 --tb=short
+          pytest tests/ -v -m "unit" --timeout=30 --tb=short --continue-on-collection-errors
 
   contract-tests:
     name: API Contract Tests (Critical)

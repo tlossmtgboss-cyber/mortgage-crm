@@ -6,7 +6,7 @@ before being sent to external LLM APIs.
 """
 
 import pytest
-from backend.services.call_intelligence.pii_utils import (
+from services.call_intelligence.pii_utils import (
     redact_ssn,
     redact_dob,
     redact_phone,
