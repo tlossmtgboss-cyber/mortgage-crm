@@ -73,7 +73,7 @@ class SubscriptionEnforcementMiddleware(BaseHTTPMiddleware):
     def _check_grace_period_expired(self, request: Request, org_id: int) -> bool:
         """Check if the organization's subscription grace period has expired."""
         # Import here to avoid circular imports at module load time
-        from models.billing import Subscription, SubscriptionStatus
+        from models.billing import OrgSubscription, SubscriptionStatus
 
         db: Optional[Session] = getattr(request.state, 'db', None)
         if not db:
@@ -81,10 +81,10 @@ class SubscriptionEnforcementMiddleware(BaseHTTPMiddleware):
 
         try:
             subscription = db.execute(
-                select(Subscription).where(
-                    Subscription.organization_id == org_id,
-                    Subscription.status == SubscriptionStatus.PAST_DUE,
-                    Subscription.grace_period_ends_at.isnot(None),
+                select(OrgSubscription).where(
+                    OrgSubscription.organization_id == org_id,
+                    OrgSubscription.status == SubscriptionStatus.PAST_DUE,
+                    OrgSubscription.grace_period_ends_at.isnot(None),
                 )
             ).scalar_one_or_none()
 

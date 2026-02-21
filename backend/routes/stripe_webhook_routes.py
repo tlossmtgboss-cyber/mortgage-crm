@@ -26,7 +26,7 @@ from sqlalchemy import select
 
 from database import get_db
 from models.billing import (
-    Subscription, Invoice, PaymentMethod, StripeEvent,
+    OrgSubscription, Invoice, PaymentMethod, StripeEvent,
     SubscriptionStatus, InvoiceStatus,
 )
 
@@ -210,8 +210,8 @@ async def handle_invoice_paid(data: Dict[str, Any], db: Session) -> Dict[str, An
     # Update subscription period if applicable
     if stripe_subscription_id:
         subscription = db.execute(
-            select(Subscription).where(
-                Subscription.stripe_subscription_id == stripe_subscription_id
+            select(OrgSubscription).where(
+                OrgSubscription.stripe_subscription_id == stripe_subscription_id
             )
         ).scalar_one_or_none()
 
@@ -255,8 +255,8 @@ async def handle_invoice_payment_failed(data: Dict[str, Any], db: Session) -> Di
     # Update subscription status if past_due
     if stripe_subscription_id:
         subscription = db.execute(
-            select(Subscription).where(
-                Subscription.stripe_subscription_id == stripe_subscription_id
+            select(OrgSubscription).where(
+                OrgSubscription.stripe_subscription_id == stripe_subscription_id
             )
         ).scalar_one_or_none()
 
@@ -288,8 +288,8 @@ async def handle_subscription_created(data: Dict[str, Any], db: Session) -> Dict
 
     # Check if subscription already exists
     existing = db.execute(
-        select(Subscription).where(
-            Subscription.stripe_subscription_id == stripe_subscription_id
+        select(OrgSubscription).where(
+            OrgSubscription.stripe_subscription_id == stripe_subscription_id
         )
     ).scalar_one_or_none()
 
@@ -299,8 +299,8 @@ async def handle_subscription_created(data: Dict[str, Any], db: Session) -> Dict
 
     # Find organization by Stripe customer ID
     org_sub = db.execute(
-        select(Subscription).where(
-            Subscription.stripe_customer_id == stripe_customer_id
+        select(OrgSubscription).where(
+            OrgSubscription.stripe_customer_id == stripe_customer_id
         )
     ).scalar_one_or_none()
 
@@ -335,8 +335,8 @@ async def handle_subscription_updated(data: Dict[str, Any], db: Session) -> Dict
     stripe_subscription_id = data.get("id")
 
     subscription = db.execute(
-        select(Subscription).where(
-            Subscription.stripe_subscription_id == stripe_subscription_id
+        select(OrgSubscription).where(
+            OrgSubscription.stripe_subscription_id == stripe_subscription_id
         )
     ).scalar_one_or_none()
 
@@ -381,8 +381,8 @@ async def handle_subscription_deleted(data: Dict[str, Any], db: Session) -> Dict
     stripe_subscription_id = data.get("id")
 
     subscription = db.execute(
-        select(Subscription).where(
-            Subscription.stripe_subscription_id == stripe_subscription_id
+        select(OrgSubscription).where(
+            OrgSubscription.stripe_subscription_id == stripe_subscription_id
         )
     ).scalar_one_or_none()
 
@@ -405,8 +405,8 @@ async def handle_payment_method_attached(data: Dict[str, Any], db: Session) -> D
 
     # Find organization
     subscription = db.execute(
-        select(Subscription).where(
-            Subscription.stripe_customer_id == stripe_customer_id
+        select(OrgSubscription).where(
+            OrgSubscription.stripe_customer_id == stripe_customer_id
         )
     ).scalar_one_or_none()
 

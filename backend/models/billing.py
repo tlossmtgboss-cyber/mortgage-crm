@@ -8,10 +8,10 @@ Provides multi-tenant billing infrastructure:
 - Stripe integration
 
 Usage:
-    from models.billing import Subscription, Invoice, UsageRecord
+    from models.billing import OrgSubscription, Invoice, UsageRecord
 
     # Create subscription
-    subscription = Subscription(
+    subscription = OrgSubscription(
         organization_id=org.id,
         plan_id="professional",
         stripe_subscription_id="sub_xxx",
@@ -132,11 +132,12 @@ class Plan(Base):
 # SUBSCRIPTIONS
 # =============================================================================
 
-class Subscription(Base):
+class OrgSubscription(Base):
     """
     Organization subscription to a plan.
 
     Links an organization to their billing plan and Stripe subscription.
+    Renamed from 'Subscription' to avoid conflict with database.models.subscription.Subscription.
     """
     __tablename__ = "subscriptions"
 
@@ -279,7 +280,7 @@ class Invoice(Base):
                        onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    subscription = relationship("Subscription", back_populates="invoices")
+    subscription = relationship("OrgSubscription", back_populates="invoices")
 
     __table_args__ = (
         Index("ix_invoice_org_date", "organization_id", "invoice_date"),
@@ -327,7 +328,7 @@ class UsageRecord(Base):
     meta_data = Column('metadata', JSONB, default=dict)
 
     # Relationships
-    subscription = relationship("Subscription", back_populates="usage_records")
+    subscription = relationship("OrgSubscription", back_populates="usage_records")
 
     __table_args__ = (
         Index("ix_usage_org_date_type", "organization_id", "usage_date", "usage_type"),
