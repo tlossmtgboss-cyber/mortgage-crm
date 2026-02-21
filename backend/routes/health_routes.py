@@ -711,6 +711,70 @@ def register_health_routes(app, get_db, **kwargs):
                 content={"status": "unhealthy", "error": "Internal server error"}
             )
 
+    @app.get("/diag/tasks-status")
+    async def diag_tasks_status(db: Session = Depends(get_db)):
+        """Temporary diagnostic: check task status for a user."""
+        results = {}
+        try:
+            # Find user
+            user = db.execute(text(
+                "SELECT id, email, name FROM users WHERE email = 'tloss@cmgfi.com' LIMIT 1"
+            )).fetchone()
+            if not user:
+                return {"error": "User not found"}
+            results["user"] = {"id": user[0], "email": user[1], "name": user[2]}
+
+            # Get task counts by status
+            counts = db.execute(text(
+                "SELECT status, COUNT(*) FROM tasks WHERE assigned_to = :uid GROUP BY status ORDER BY status",
+            ), {"uid": user[0]}).fetchall()
+            results["task_counts_by_status"] = {r[0]: r[1] for r in counts}
+
+            # Get total tasks
+            total = db.execute(text(
+                "SELECT COUNT(*) FROM tasks WHERE assigned_to = :uid"
+            ), {"uid": user[0]}).scalar()
+            results["total_tasks"] = total
+
+            # Get recent completed tasks
+            completed = db.execute(text(
+                "SELECT id, title, status, completed_at, updated_at FROM tasks "
+                "WHERE assigned_to = :uid AND status = 'completed' "
+                "ORDER BY COALESCE(completed_at, updated_at) DESC LIMIT 10"
+            ), {"uid": user[0]}).fetchall()
+            results["recent_completed"] = [
+                {"id": r[0], "title": r[1], "status": r[2],
+                 "completed_at": str(r[3]) if r[3] else None,
+                 "updated_at": str(r[4]) if r[4] else None}
+                for r in completed
+            ]
+
+            # Get recent non-completed tasks
+            active = db.execute(text(
+                "SELECT id, title, status, due_date, created_at FROM tasks "
+                "WHERE assigned_to = :uid AND status != 'completed' "
+                "ORDER BY created_at DESC LIMIT 10"
+            ), {"uid": user[0]}).fetchall()
+            results["recent_active"] = [
+                {"id": r[0], "title": r[1], "status": r[2],
+                 "due_date": str(r[3]) if r[3] else None,
+                 "created_at": str(r[4]) if r[4] else None}
+                for r in active
+            ]
+
+            # Also check task_instances table if it exists
+            try:
+                ti_counts = db.execute(text(
+                    "SELECT status, COUNT(*) FROM task_instances WHERE assigned_to = :uid GROUP BY status ORDER BY status"
+                ), {"uid": user[0]}).fetchall()
+                results["task_instance_counts"] = {r[0]: r[1] for r in ti_counts}
+            except Exception:
+                results["task_instance_counts"] = "table not found or error"
+
+            return results
+        except Exception as e:
+            return {"error": str(e), "partial": results}
+
     # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
     # ========================================================================
