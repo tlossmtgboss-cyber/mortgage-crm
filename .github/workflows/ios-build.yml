@@ -131,9 +131,9 @@ jobs:
           xcodebuild clean archive \
             -project App.xcodeproj \
             -scheme App \
+            -sdk iphoneos \
             -configuration Release \
             -archivePath ${{ runner.temp }}/PerenniaAI.xcarchive \
-            -destination "generic/platform=iOS" \
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM=V5ZA5FZ2J8 \
             -allowProvisioningUpdates \
