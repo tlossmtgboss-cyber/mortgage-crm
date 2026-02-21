@@ -712,6 +712,87 @@ def register_health_routes(app, get_db, **kwargs):
             )
 
 
+    @app.get("/diag/task-debug")
+    async def diag_task_debug(db: Session = Depends(get_db)):
+        """Temporary: debug why tasks page shows 0 for user 118."""
+        results = {}
+        try:
+            uid = 118
+            # 1. Raw task count by status
+            counts = db.execute(text(
+                "SELECT status, COUNT(*) FROM tasks WHERE owner_id = :uid GROUP BY status"
+            ), {"uid": uid}).fetchall()
+            results["tasks_by_status"] = {r[0]: r[1] for r in counts}
+
+            # 2. Sample pending tasks
+            pending = db.execute(text(
+                "SELECT id, title, status, owner_id, loan_id, lead_id, due_date FROM tasks "
+                "WHERE owner_id = :uid AND status IN ('pending', 'in_progress') LIMIT 5"
+            ), {"uid": uid}).fetchall()
+            results["sample_pending"] = [
+                {"id": r[0], "title": r[1], "status": r[2], "owner_id": r[3],
+                 "loan_id": r[4], "lead_id": r[5], "due_date": str(r[6]) if r[6] else None}
+                for r in pending
+            ]
+
+            # 3. Check what unified-tasks returns via ORM (same as the endpoint)
+            try:
+                from database.models.task import Task as TaskModel
+                orm_tasks = db.query(TaskModel).filter(
+                    TaskModel.owner_id == uid,
+                    TaskModel.status.in_(["pending", "in_progress"])
+                ).limit(5).all()
+                results["orm_query_count"] = len(orm_tasks)
+                results["orm_sample"] = [
+                    {"id": t.id, "title": t.title, "status": t.status, "owner_id": t.owner_id}
+                    for t in orm_tasks
+                ]
+            except Exception as e:
+                results["orm_error"] = str(e)
+
+            # 4. Check what the main module Task resolves to
+            try:
+                import main as main_module
+                MainTask = main_module.Task
+                results["main_task_tablename"] = MainTask.__tablename__
+                main_orm = db.query(MainTask).filter(
+                    MainTask.owner_id == uid,
+                    MainTask.status.in_(["pending", "in_progress"])
+                ).limit(5).all()
+                results["main_orm_count"] = len(main_orm)
+            except Exception as e:
+                results["main_task_error"] = str(e)
+
+            # 5. Check if unified-tasks endpoint itself throws an error
+            try:
+                from performance_cache import get_cached, cache_key
+                ck = cache_key("unified_tasks", uid)
+                cached = get_cached(ck)
+                results["unified_cache_exists"] = cached is not None
+                if cached:
+                    results["unified_cache_total"] = cached.get("total_count")
+                    results["unified_cache_counts"] = cached.get("counts_by_source")
+            except Exception as e:
+                results["cache_error"] = str(e)
+
+            # 6. Check ai_tasks for this user
+            ai_count = db.execute(text(
+                "SELECT COUNT(*) FROM ai_tasks WHERE assigned_to_id = :uid"
+            ), {"uid": uid}).scalar()
+            results["ai_tasks_total"] = ai_count
+
+            # 7. Check workflow-config endpoint data
+            try:
+                from database.models.lead_loan import Lead as LeadModel
+                lead_count = db.query(LeadModel).count()
+                results["total_leads_for_workflow"] = lead_count
+            except Exception as e:
+                results["lead_count_error"] = str(e)
+
+            return results
+        except Exception as e:
+            return {"error": str(e), "partial": results}
+
     # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
     # ========================================================================
