@@ -46,7 +46,7 @@ def run_migrations():
 
         # Get current revision
         from alembic.runtime.migration import MigrationContext
-        from sqlalchemy import create_engine
+        from sqlalchemy import create_engine, inspect as sa_inspect
 
         engine = create_engine(os.environ["DATABASE_URL"])
         with engine.connect() as conn:
@@ -54,8 +54,24 @@ def run_migrations():
             current_rev = context.get_current_revision()
             logger.info(f"Current database revision: {current_rev or 'None (fresh database)'}")
 
-        # Run migrations
-        command.upgrade(alembic_cfg, "head")
+        if current_rev is None:
+            # Check if core tables already exist (created by init_db.py)
+            inspector = sa_inspect(engine)
+            existing_tables = inspector.get_table_names()
+            core_tables_exist = all(t in existing_tables for t in ["users", "organizations", "loans"])
+
+            if core_tables_exist:
+                # Database was bootstrapped by init_db.py without alembic stamps.
+                # Stamp at head so alembic knows all migrations are already applied.
+                logger.info("Database has existing tables but no alembic version stamp — stamping at head")
+                command.stamp(alembic_cfg, "head")
+            else:
+                # Truly fresh database — run all migrations
+                logger.info("Fresh database — running all migrations")
+                command.upgrade(alembic_cfg, "head")
+        else:
+            # Normal case: run pending migrations
+            command.upgrade(alembic_cfg, "head")
 
         # Get new revision
         with engine.connect() as conn:
