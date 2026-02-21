@@ -713,32 +713,10 @@ def register_health_routes(app, get_db, **kwargs):
 
 
     @app.get("/diag/task-debug")
-    async def diag_task_debug(
-        request: Request,
-        db: Session = Depends(get_db)
-    ):
+    async def diag_task_debug(db: Session = Depends(get_db)):
         """Temporary: debug why tasks page shows 0."""
         results = {}
         try:
-            # Try to get the authenticated user (same as unified-tasks would)
-            auth_user = None
-            auth_uid = None
-            try:
-                auth_header = request.headers.get("Authorization", "")
-                token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-                if token:
-                    auth_user = await get_current_user(token=token, request=request, db=db)
-                    auth_uid = auth_user.id if auth_user else None
-                    results["authenticated_user"] = {
-                        "id": auth_uid,
-                        "email": getattr(auth_user, "email", None),
-                    }
-                else:
-                    results["authenticated_user"] = "no token provided"
-            except Exception as e:
-                results["auth_error"] = str(e)
-
-            # Use hardcoded uid=118 for comparison
             uid = 118
 
             # 1. Raw task count
@@ -747,32 +725,32 @@ def register_health_routes(app, get_db, **kwargs):
             ), {"uid": uid}).fetchall()
             results["tasks_for_uid_118"] = {r[0]: r[1] for r in counts}
 
-            # 2. If auth user differs, also check their tasks
-            if auth_uid and auth_uid != uid:
-                auth_counts = db.execute(text(
-                    "SELECT status, COUNT(*) FROM tasks WHERE owner_id = :uid GROUP BY status"
-                ), {"uid": auth_uid}).fetchall()
-                results[f"tasks_for_uid_{auth_uid}"] = {r[0]: r[1] for r in auth_counts}
+            # 2. Check ALL users who have tasks
+            user_tasks = db.execute(text(
+                "SELECT u.id, u.email, COUNT(*) as cnt FROM tasks t "
+                "JOIN users u ON u.id = t.owner_id "
+                "WHERE t.status IN ('pending', 'in_progress') "
+                "GROUP BY u.id, u.email ORDER BY cnt DESC LIMIT 10"
+            )).fetchall()
+            results["users_with_pending_tasks"] = [
+                {"user_id": r[0], "email": r[1], "count": r[2]} for r in user_tasks
+            ]
 
-            # 3. Simulate unified-tasks endpoint logic
+            # 3. Simulate unified-tasks ORM query
             try:
                 import main as main_module
                 MainTask = main_module.Task
                 MainAITask = main_module.AITask
                 MainTaskType = main_module.TaskType
 
-                target_uid = auth_uid or uid
-
-                # AI tasks query (same as unified-tasks)
                 ai_tasks = db.query(MainAITask).filter(
-                    MainAITask.assigned_to_id == target_uid,
+                    MainAITask.assigned_to_id == uid,
                     MainAITask.type != MainTaskType.COMPLETED
                 ).limit(50).all()
                 results["simulated_ai_tasks"] = len(ai_tasks)
 
-                # Workflow tasks query (same as unified-tasks)
                 workflow_tasks = db.query(MainTask).filter(
-                    MainTask.owner_id == target_uid,
+                    MainTask.owner_id == uid,
                     MainTask.status.in_(["pending", "in_progress"])
                 ).limit(200).all()
                 results["simulated_workflow_tasks"] = len(workflow_tasks)
@@ -780,30 +758,40 @@ def register_health_routes(app, get_db, **kwargs):
                     {"id": t.id, "title": t.title, "status": t.status}
                     for t in workflow_tasks[:3]
                 ]
-                results["simulated_target_uid"] = target_uid
             except Exception as e:
                 results["simulation_error"] = str(e)
 
-            # 4. Check the actual unified-tasks response by calling it
+            # 4. Check what /api/v1/workflow-config/all-workflow-tasks returns
+            # (it generates tasks from lead/loan workflow state)
             try:
-                import httpx
-                base = request.base_url
-                auth_header = request.headers.get("Authorization", "")
-                if auth_header:
-                    async with httpx.AsyncClient(timeout=10) as client:
-                        resp = await client.get(
-                            f"{base}api/v1/unified-tasks",
-                            headers={"Authorization": auth_header}
-                        )
-                        results["unified_endpoint_status"] = resp.status_code
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            results["unified_endpoint_total"] = data.get("total_count")
-                            results["unified_endpoint_counts"] = data.get("counts_by_source")
-                        else:
-                            results["unified_endpoint_body"] = resp.text[:500]
+                from database.models.lead_loan import Lead, Loan
+                # Check leads with workflow assignments for user 118
+                leads_for_user = db.execute(text(
+                    "SELECT COUNT(*) FROM leads WHERE assigned_lo_id = :uid OR owner_id = :uid"
+                ), {"uid": uid}).scalar()
+                results["leads_assigned_to_user"] = leads_for_user
+
+                loans_for_user = db.execute(text(
+                    "SELECT COUNT(*) FROM loans WHERE loan_officer_id = :uid"
+                ), {"uid": uid}).scalar()
+                results["loans_assigned_to_user"] = loans_for_user
             except Exception as e:
-                results["unified_call_error"] = str(e)
+                results["lead_loan_error"] = str(e)
+
+            # 5. Check if the frontend might be calling a different endpoint
+            # The frontend calls /api/v1/tasks which is different from /api/v1/unified-tasks
+            try:
+                tasks_endpoint_result = db.execute(text(
+                    "SELECT id, title, status, owner_id FROM tasks "
+                    "WHERE owner_id = :uid AND status IN ('pending', 'in_progress') "
+                    "ORDER BY due_date ASC NULLS LAST LIMIT 5"
+                ), {"uid": uid}).fetchall()
+                results["tasks_endpoint_sample"] = [
+                    {"id": r[0], "title": r[1], "status": r[2], "owner_id": r[3]}
+                    for r in tasks_endpoint_result
+                ]
+            except Exception as e:
+                results["tasks_endpoint_error"] = str(e)
 
             return results
         except Exception as e:
