@@ -410,6 +410,22 @@ class WorkflowSLAService:
                     reason="Contact made via sibling task"
                 )
 
+            # Cancel redundant SLA warning tasks for same entity
+            sla_cancelled = 0
+            entity_id = task_instance.lead_id or task_instance.loan_id
+            entity_col = "lead_id" if task_instance.lead_id else "loan_id"
+            if entity_id:
+                sla_cancelled = self.db.execute(text(f"""
+                    UPDATE tasks
+                    SET status = 'cancelled', updated_at = NOW()
+                    WHERE {entity_col} = :entity_id
+                    AND sla_milestone_id IS NOT NULL
+                    AND status IN ('pending')
+                    AND workflow_task_instance_id IS NULL
+                """), {"entity_id": entity_id}).rowcount
+                if sla_cancelled:
+                    logger.info(f"Cancelled {sla_cancelled} SLA warning tasks for {entity_col}={entity_id}")
+
             self.db.commit()
 
             logger.info(f"Task instance {task_instance_id} completed ({completion_source}), {siblings_cancelled} siblings cancelled")
@@ -417,7 +433,8 @@ class WorkflowSLAService:
             return {
                 "success": True,
                 "message": "Task completed",
-                "siblings_cancelled": siblings_cancelled
+                "siblings_cancelled": siblings_cancelled,
+                "sla_tasks_cancelled": sla_cancelled
             }
 
         except SQLAlchemyError as e:
