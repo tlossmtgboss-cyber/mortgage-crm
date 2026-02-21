@@ -16,6 +16,44 @@ from database import get_db
 
 logger = logging.getLogger(__name__)
 
+
+def _log_receptionist_activity(
+    db: Session,
+    action_type: str,
+    channel: str = "voice",
+    client_name: str = None,
+    client_phone: str = None,
+    message_in: str = None,
+    message_out: str = None,
+    outcome_status: str = None,
+    conversation_id: str = None,
+    organization_id: int = None,
+    extra_data: dict = None,
+):
+    """Log an AI receptionist activity for dashboard analytics (REC-006)."""
+    try:
+        from ai_receptionist_dashboard_models import AIReceptionistActivity
+        activity = AIReceptionistActivity(
+            organization_id=organization_id,
+            action_type=action_type,
+            channel=channel,
+            client_name=client_name,
+            client_phone=client_phone,
+            message_in=message_in,
+            message_out=message_out,
+            outcome_status=outcome_status,
+            conversation_id=conversation_id,
+            extra_data=extra_data,
+        )
+        db.add(activity)
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to log receptionist activity: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
 router = APIRouter(prefix="/api/v1/voice", tags=["Voice AI Receptionist"])
 
 
@@ -724,6 +762,17 @@ async def vapi_voicemail_status_webhook(
 
             logger.info(f"Updated voicemail drop {voicemail_id}: status={voicemail_drop.status}")
 
+            # Log to AI receptionist dashboard analytics
+            _log_receptionist_activity(
+                db=db,
+                action_type="outbound_followup",
+                channel="voice",
+                client_name=getattr(voicemail_drop, 'contact_name', None),
+                client_phone=getattr(voicemail_drop, 'phone_number', None),
+                outcome_status=voicemail_drop.status,
+                extra_data={"voicemail_id": voicemail_id, "end_reason": end_reason, "duration": duration},
+            )
+
             # Send post-call confirmation SMS if voicemail was delivered
             if voicemail_drop.status == "delivered" and voicemail_drop.phone_number:
                 try:
@@ -949,6 +998,18 @@ async def twilio_sms_webhook(
             db.commit()
         except Exception as e:
             logger.error(f"Failed to log SMS activity: {e}")
+
+        # Log to AI receptionist dashboard analytics
+        _log_receptionist_activity(
+            db=db,
+            action_type="incoming_text",
+            channel="sms",
+            client_name=contact_name,
+            client_phone=from_number,
+            message_in=message_body[:500] if message_body else None,
+            outcome_status="received",
+            extra_data={"message_sid": message_sid, "num_media": num_media},
+        )
 
         # Generate AI response in background if enabled
         if conversation.ai_enabled:
