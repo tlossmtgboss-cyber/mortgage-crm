@@ -222,16 +222,5 @@ if __name__ == "__main__":
             print(f"RUN_MIGRATIONS.PY: Migration exception: {e}", flush=True)
             success = False
 
-        # Run cleanup after migrations (run regardless of migration success)
-        print("=" * 60, flush=True)
-        print("RUN_MIGRATIONS.PY: NOW RUNNING SAMPLE DATA CLEANUP...", flush=True)
-        print("=" * 60, flush=True)
-
-        try:
-            cleanup_success = run_sample_data_cleanup()
-            print(f"RUN_MIGRATIONS.PY: Cleanup completed with success={cleanup_success}", flush=True)
-        except Exception as e:
-            print(f"RUN_MIGRATIONS.PY: Cleanup exception: {e}", flush=True)
-
         print("RUN_MIGRATIONS.PY: All done, exiting...", flush=True)
         sys.exit(0 if success else 1)
