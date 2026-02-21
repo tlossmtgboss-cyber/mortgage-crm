@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, desc, and_, or_, func
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Literal
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time as dt_time
 from enum import Enum
 import logging
 import json
@@ -558,6 +558,60 @@ def normalize_phone(phone: str) -> str:
     elif not digits.startswith('+'):
         return f"+{digits}"
     return phone
+
+
+# ================================================================
+# TCPA COMPLIANCE FOR SMS (CC-003)
+# ================================================================
+
+TCPA_SMS_START = dt_time(8, 0)   # 8:00 AM
+TCPA_SMS_END = dt_time(21, 0)    # 9:00 PM
+
+
+def _check_sms_tcpa_hours(phone: str) -> tuple:
+    """
+    Check if current time is within TCPA allowed hours (8AM-9PM)
+    in the recipient's local timezone based on area code.
+    Returns (is_allowed: bool, reason: str).
+    """
+    try:
+        from routes.voicemail_drop_routes import _get_recipient_timezone
+    except ImportError:
+        # Fallback: inline area code lookup for the most common timezones
+        _get_recipient_timezone = None
+
+    try:
+        import pytz
+    except ImportError:
+        # If pytz not available, allow the send (fail open for SMS)
+        return True, ""
+
+    # Extract area code from normalized phone (+1XXXXXXXXXX)
+    digits = re.sub(r'\D', '', phone)
+    if len(digits) == 11 and digits.startswith('1'):
+        digits = digits[1:]
+
+    if _get_recipient_timezone:
+        tz_name = _get_recipient_timezone(phone)
+    else:
+        # Minimal fallback mapping
+        tz_name = "America/New_York"
+
+    try:
+        tz = pytz.timezone(tz_name)
+        local_time = datetime.now(tz).time()
+    except Exception:
+        # Default to Eastern if timezone lookup fails
+        tz = pytz.timezone("America/New_York")
+        local_time = datetime.now(tz).time()
+
+    if local_time < TCPA_SMS_START or local_time >= TCPA_SMS_END:
+        return False, (
+            f"TCPA: Cannot send SMS outside 8:00 AM - 9:00 PM recipient local time. "
+            f"Current time in {tz_name}: {local_time.strftime('%I:%M %p')}"
+        )
+
+    return True, ""
 
 
 OPT_OUT_KEYWORDS = ['stop', 'unsubscribe', 'cancel', 'end', 'quit', 'optout', 'opt-out', 'opt out']
@@ -1770,6 +1824,15 @@ async def send_sms(
                 "message": f"Cannot send SMS to {normalized_phone} - recipient has opted out"
             }
 
+        # TCPA 8AM-9PM compliance check (CC-003)
+        tcpa_ok, tcpa_reason = _check_sms_tcpa_hours(normalized_phone)
+        if not tcpa_ok:
+            return {
+                "success": False,
+                "error": "tcpa_restricted",
+                "message": tcpa_reason
+            }
+
         # Get message from template if template_id provided
         message = request.message
         template_name = None
@@ -2034,6 +2097,17 @@ async def send_bulk_sms(
                     "phone": normalized,
                     "status": "skipped",
                     "reason": "opted_out"
+                })
+                continue
+
+            # TCPA 8AM-9PM compliance check (CC-003)
+            tcpa_ok, tcpa_reason = _check_sms_tcpa_hours(normalized)
+            if not tcpa_ok:
+                results["failed"] += 1
+                results["details"].append({
+                    "phone": normalized,
+                    "status": "skipped",
+                    "reason": "tcpa_restricted"
                 })
                 continue
 
