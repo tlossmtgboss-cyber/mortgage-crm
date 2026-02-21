@@ -724,7 +724,7 @@ def register_health_routes(app, get_db, **kwargs):
             # Check loan 1514 specifically
             loan = db.execute(text("""
                 SELECT l.id, l.loan_number, l.borrower_name, l.stage::text as stage,
-                       l.funded_date, l.closing_date, l.status,
+                       l.funded_date, l.closing_date,
                        l.loan_officer_id, l.organization_id, l.rate, l.amount
                 FROM loans l WHERE l.id = 1514
             """)).fetchone()
@@ -733,9 +733,9 @@ def register_health_routes(app, get_db, **kwargs):
                     "id": loan[0], "loan_number": loan[1], "borrower": loan[2],
                     "stage": loan[3], "funded_date": str(loan[4]) if loan[4] else None,
                     "closing_date": str(loan[5]) if loan[5] else None,
-                    "status": loan[6], "lo_id": loan[7], "org_id": loan[8],
-                    "rate": str(loan[9]) if loan[9] else None,
-                    "amount": str(loan[10]) if loan[10] else None,
+                    "lo_id": loan[6], "org_id": loan[7],
+                    "rate": str(loan[8]) if loan[8] else None,
+                    "amount": str(loan[9]) if loan[9] else None,
                 }
 
                 # Check if MUM client exists for this loan number
