@@ -14,6 +14,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+try:
+    import boto3  # noqa: F401
+    HAS_BOTO3 = True
+except ImportError:
+    HAS_BOTO3 = False
+
 
 # Performance thresholds
 THRESHOLDS = {
@@ -214,6 +220,7 @@ class TestGooglePlacesAutocomplete:
         assert cache_misses == 1
 
 
+@pytest.mark.skipif(not HAS_BOTO3, reason="boto3 not installed")
 class TestDocumentUploadSpeed:
     """Test Suite: Document upload speed (S3)"""
 

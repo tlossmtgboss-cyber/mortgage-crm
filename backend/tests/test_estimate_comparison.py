@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+pytest.importorskip("boto3", reason="boto3 not installed")
+
 from services.estimate_parser_service import EstimateParserService, LoanEstimate, ComparisonResult
 
 

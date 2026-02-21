@@ -15,15 +15,24 @@ import time
 from unittest.mock import AsyncMock, patch, MagicMock
 
 
-# Check for redis module
+# Check for required modules
 try:
     import redis
     HAS_REDIS = True
 except ImportError:
     HAS_REDIS = False
 
+try:
+    from core.cache import RedisCache  # noqa: F401
+    HAS_CORE_CACHE = True
+except (ImportError, ModuleNotFoundError):
+    HAS_CORE_CACHE = False
 
-pytestmark = pytest.mark.skipif(not HAS_REDIS, reason="redis module not installed")
+
+pytestmark = pytest.mark.skipif(
+    not HAS_REDIS or not HAS_CORE_CACHE,
+    reason="redis or core.cache module not available"
+)
 
 
 # ============================================================================
