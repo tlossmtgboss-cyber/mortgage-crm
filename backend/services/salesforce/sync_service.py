@@ -1767,14 +1767,15 @@ class SalesforceSyncService:
 
         if loan_id:
             # Mark the lead as 'Disclosed' (converted) and store conversion metadata
+            # Use CAST() instead of :: to avoid SQLAlchemy text() parameter parsing issues
             db.execute(sa_text("""
                 UPDATE leads SET
                     stage = 'Disclosed',
                     stage_changed_at = CURRENT_TIMESTAMP,
-                    meta_data = COALESCE(meta_data, '{}'::jsonb) ||
+                    meta_data = COALESCE(meta_data, CAST('{}' AS jsonb)) ||
                         jsonb_build_object(
-                            'converted_to_loan_id', :loan_id::text,
-                            'converted_at', CURRENT_TIMESTAMP::text
+                            'converted_to_loan_id', CAST(:loan_id AS text),
+                            'converted_at', CAST(CURRENT_TIMESTAMP AS text)
                         ),
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :lead_id
