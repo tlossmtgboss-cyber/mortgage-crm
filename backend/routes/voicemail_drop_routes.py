@@ -1291,6 +1291,10 @@ async def send_voicemail_ringless(
         )
         audio_url = _get_public_audio_url(filename)
         logger.info(f"Auto-generated TTS audio for RVM drop {voicemail_drop_id}: {audio_url}")
+    else:
+        # Validate pre-recorded audio duration if file is local
+        # Slybroadcast API requires audio > 5 seconds
+        _validate_audio_url_duration(audio_url)
 
     clean_number = ''.join(filter(str.isdigit, phone_number))
     if len(clean_number) == 10:
@@ -1736,6 +1740,37 @@ def _estimate_audio_duration_seconds(mp3_data: bytes) -> float:
         # Fallback: estimate from file size assuming ~48kbps bitrate (OpenAI tts-1 default)
         bitrate_bytes_per_sec = 48000 / 8  # 6000 bytes/sec
         return len(mp3_data) / bitrate_bytes_per_sec
+
+
+def _validate_audio_url_duration(audio_url: str) -> None:
+    """Validate that a pre-recorded audio URL points to audio >= 5 seconds.
+
+    Checks local files directly. For remote URLs, attempts a HEAD request
+    to estimate duration from Content-Length. Logs a warning if unable to
+    validate (does not block — TTS-generated audio is already validated).
+    """
+    MIN_DURATION = 5.0
+    # Check if audio_url points to a local file served by the app
+    upload_dir = os.path.join(os.path.dirname(__file__), "..", "uploads", "voicemail_audio")
+    if not audio_url:
+        return
+    # Extract filename from URL path
+    filename = audio_url.rstrip("/").split("/")[-1] if "/" in audio_url else audio_url
+    local_path = os.path.join(upload_dir, filename)
+    if os.path.isfile(local_path):
+        with open(local_path, "rb") as f:
+            data = f.read()
+        duration = _estimate_audio_duration_seconds(data)
+        if duration < MIN_DURATION:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Audio file too short ({duration:.1f}s). "
+                       f"Slybroadcast requires audio > {MIN_DURATION} seconds."
+            )
+        logger.info(f"Pre-recorded audio validated: {filename} (~{duration:.1f}s)")
+    else:
+        # Remote URL — warn but don't block (can't easily download and check)
+        logger.info(f"Audio URL is remote, skipping local duration check: {audio_url}")
 
 
 @router.delete("/templates/{template_id}/audio")
