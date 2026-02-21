@@ -1410,6 +1410,18 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ audit_logs organization_id migration note: {e}")
 
+        # Make audit_logs user_id and changed_by_id nullable for system-level events
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE audit_logs ALTER COLUMN user_id DROP NOT NULL;
+                    ALTER TABLE audit_logs ALTER COLUMN changed_by_id DROP NOT NULL;
+                """))
+                conn.commit()
+                logger.info("✅ audit_logs: user_id/changed_by_id made nullable for system events")
+        except Exception as e:
+            logger.warning(f"⚠️ audit_logs nullable migration note: {e}")
+
         # Add grace_period_ends_at to subscriptions for payment failure grace period (LIC-006)
         try:
             with _engine.connect() as conn:
