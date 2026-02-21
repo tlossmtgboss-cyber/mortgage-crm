@@ -713,63 +713,6 @@ def register_health_routes(app, get_db, **kwargs):
 
 
     # ========================================================================
-    # TEMP: Check loan 1551 and find SF match (remove after use)
-    # ========================================================================
-
-    @app.get("/diag/loan-sf-check")
-    async def diag_loan_sf_check(db: Session = Depends(get_db)):
-        """Temporary: fix loan 1551 stage and normalize mixed-case stages."""
-        results = {}
-        try:
-            # 1. Fix loan 1551: set stage to WITHDRAWN (matches Salesforce)
-            db.execute(text("""
-                UPDATE loans SET stage = 'WITHDRAWN'
-                WHERE id = 1551 AND stage::text != 'WITHDRAWN'
-            """))
-            results["loan_1551_fixed"] = "Set to WITHDRAWN"
-
-            # 2. Normalize mixed-case stages to uppercase enum values
-            # Fix 'Funded' -> 'FUNDED'
-            r1 = db.execute(text("""
-                UPDATE loans SET stage = 'FUNDED'
-                WHERE stage::text = 'Funded'
-            """))
-            results["funded_normalized"] = r1.rowcount
-
-            # Fix 'Processing' -> 'PROCESSING'
-            r2 = db.execute(text("""
-                UPDATE loans SET stage = 'PROCESSING'
-                WHERE stage::text = 'Processing'
-            """))
-            results["processing_normalized"] = r2.rowcount
-
-            db.commit()
-
-            # 3. Show updated stage counts
-            stage_counts = db.execute(text("""
-                SELECT stage::text, COUNT(*) as cnt
-                FROM loans
-                GROUP BY stage::text
-                ORDER BY cnt DESC
-            """)).fetchall()
-            results["stage_counts_after"] = {r[0]: r[1] for r in stage_counts}
-
-            # 4. Verify loan 1551
-            loan = db.execute(text("""
-                SELECT id, loan_number, borrower_name, stage::text, salesforce_id
-                FROM loans WHERE id = 1551
-            """)).fetchone()
-            results["loan_1551_now"] = {
-                "id": loan[0], "loan_number": loan[1], "borrower": loan[2],
-                "stage": loan[3], "sf_id": loan[4]
-            } if loan else None
-
-            return results
-        except Exception as e:
-            db.rollback()
-            return {"error": str(e), "partial": results}
-
-    # ========================================================================
     # Ping endpoint (lines ~15504-15559 in inline_legacy_routes.py)
     # ========================================================================
 
