@@ -119,6 +119,7 @@ jobs:
       - name: Build and Archive
         working-directory: frontend/ios/App
         run: |
+          set -o pipefail
           xcodebuild clean archive \
             -project App.xcodeproj \
             -scheme App \
@@ -131,11 +132,12 @@ jobs:
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8 \
             -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
-            | xcpretty
+            2>&1 | xcpretty
 
       - name: Export IPA
         working-directory: frontend
         run: |
+          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath ${{ runner.temp }}/PerenniaAI.xcarchive \
             -exportOptionsPlist ios/ExportOptions-appstore.plist \
@@ -144,7 +146,7 @@ jobs:
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8 \
             -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
-            | xcpretty
+            2>&1 | xcpretty
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
