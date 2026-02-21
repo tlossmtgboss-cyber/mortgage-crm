@@ -1206,65 +1206,6 @@ function PaymentStep({
         <div className="payment-form">
           <form onSubmit={handleSubmit}>
             <div className="form-section">
-              <h3>Card Information</h3>
-              <div className="card-element-container">
-                <CardElement
-                  options={{
-                    style: {
-                      base: {
-                        fontSize: '16px',
-                        color: '#424770',
-                        '::placeholder': { color: '#aab7c4' }
-                      },
-                      invalid: { color: '#9e2146' }
-                    }
-                  }}
-                  onChange={(e) => setCardComplete(e.complete)}
-                />
-              </div>
-            </div>
-
-            <div className="form-section">
-              <h3>Billing Address</h3>
-              <div className="form-group">
-                <input
-                  type="text"
-                  placeholder="Street Address"
-                  value={billingAddress.line1}
-                  onChange={(e) => setBillingAddress({...billingAddress, line1: e.target.value})}
-                />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <input
-                    type="text"
-                    placeholder="City"
-                    value={billingAddress.city}
-                    onChange={(e) => setBillingAddress({...billingAddress, city: e.target.value})}
-                  />
-                </div>
-                <div className="form-group">
-                  <input
-                    type="text"
-                    placeholder="State"
-                    value={billingAddress.state}
-                    onChange={(e) => setBillingAddress({...billingAddress, state: e.target.value})}
-                    maxLength={2}
-                  />
-                </div>
-                <div className="form-group">
-                  <input
-                    type="text"
-                    placeholder="ZIP"
-                    value={billingAddress.postal_code}
-                    onChange={(e) => setBillingAddress({...billingAddress, postal_code: e.target.value})}
-                    maxLength={10}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="form-section">
               <h3>Promo Code (Optional)</h3>
               <div className="promo-input" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input
@@ -1299,21 +1240,96 @@ function PaymentStep({
                 >
                   Apply
                 </button>
-                {promoValidated && <span style={{ color: '#10b981', fontWeight: 'bold' }}>Valid</span>}
+                {promoValidated && <span style={{ color: '#10b981', fontWeight: 'bold' }}>Valid - No payment required!</span>}
               </div>
             </div>
+
+            {!promoValidated && (
+              <>
+                <div className="form-section">
+                  <h3>Card Information</h3>
+                  <div className="card-element-container">
+                    <CardElement
+                      options={{
+                        style: {
+                          base: {
+                            fontSize: '16px',
+                            color: '#424770',
+                            '::placeholder': { color: '#aab7c4' }
+                          },
+                          invalid: { color: '#9e2146' }
+                        }
+                      }}
+                      onChange={(e) => setCardComplete(e.complete)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-section">
+                  <h3>Billing Address</h3>
+                  <div className="form-group">
+                    <input
+                      type="text"
+                      placeholder="Street Address"
+                      value={billingAddress.line1}
+                      onChange={(e) => setBillingAddress({...billingAddress, line1: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <input
+                        type="text"
+                        placeholder="City"
+                        value={billingAddress.city}
+                        onChange={(e) => setBillingAddress({...billingAddress, city: e.target.value})}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <input
+                        type="text"
+                        placeholder="State"
+                        value={billingAddress.state}
+                        onChange={(e) => setBillingAddress({...billingAddress, state: e.target.value})}
+                        maxLength={2}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <input
+                        type="text"
+                        placeholder="ZIP"
+                        value={billingAddress.postal_code}
+                        onChange={(e) => setBillingAddress({...billingAddress, postal_code: e.target.value})}
+                        maxLength={10}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="button-row">
               <button type="button" className="btn-secondary" onClick={onBack} disabled={processing}>
                 Back
               </button>
-              <button
-                type="submit"
-                className="btn-primary btn-pay"
-                disabled={processing || !stripe || !cardComplete}
-              >
-                {processing ? 'Processing...' : `Pay $${totalPrice}/month`}
-              </button>
+              {promoValidated ? (
+                <button
+                  type="button"
+                  className="btn-primary btn-pay"
+                  onClick={handleFreeAccessComplete}
+                  disabled={processing}
+                  style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                >
+                  {processing ? 'Activating...' : 'Activate Free Access'}
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="btn-primary btn-pay"
+                  disabled={processing || !stripe || !cardComplete}
+                >
+                  {processing ? 'Processing...' : `Pay $${totalPrice}/month`}
+                </button>
+              )}
             </div>
           </form>
 
