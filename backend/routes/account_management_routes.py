@@ -2176,19 +2176,23 @@ async def delete_account(
 
             for table_name, column_name in dependent_tables:
                 try:
+                    savepoint = db.begin_nested()
                     db.execute(text(f"""
                         DELETE FROM {table_name} WHERE {column_name} IN :user_ids
                     """), {'user_ids': tuple(user_ids)})
+                    savepoint.commit()
                 except Exception:
-                    pass  # Table may not exist yet or column may differ
+                    savepoint.rollback()
 
             # Also clean up tenant-level records
             try:
+                savepoint = db.begin_nested()
                 db.execute(text("""
                     DELETE FROM user_invitations WHERE organization_id = :account_id
                 """), {'account_id': account_id})
+                savepoint.commit()
             except Exception:
-                pass
+                savepoint.rollback()
 
         # Clear owner FK before deleting users
         db.execute(text("""
@@ -4004,19 +4008,23 @@ async def cleanup_account_by_api_key(
 
             for table_name, column_name in dependent_tables:
                 try:
+                    savepoint = db.begin_nested()
                     result = db.execute(text(f"""
                         DELETE FROM {table_name} WHERE {column_name} IN :user_ids
                     """), {'user_ids': tuple(user_ids)})
                     if result.rowcount > 0:
                         deleted_from.append(f"{table_name}.{column_name}: {result.rowcount}")
+                    savepoint.commit()
                 except Exception:
-                    pass
+                    savepoint.rollback()
 
             # Tenant-level records
             try:
+                savepoint = db.begin_nested()
                 db.execute(text("DELETE FROM user_invitations WHERE organization_id = :id"), {'id': account_id})
+                savepoint.commit()
             except Exception:
-                pass
+                savepoint.rollback()
 
         # Clear owner FK on tenant account before deleting users
         db.execute(text("""
