@@ -33,6 +33,9 @@ team_router = APIRouter(prefix="/api/v1/team", tags=["Team"])
 # Secondary router for impersonation endpoints
 impersonation_router = APIRouter(prefix="/api/v1/impersonation", tags=["Impersonation"])
 
+# Public router for invite validation (no prefix - frontend expects /api/invite/{token})
+invite_router = APIRouter(tags=["Invites"])
+
 
 def get_current_user_dep():
     """Get current user dependency - imports from main at runtime to avoid circular imports"""
@@ -896,10 +899,16 @@ async def get_team_member_detail(
     current_user = await main.get_current_user(_extract_token(request), request, db)
 
     try:
-        # Get the user - no sample/demo data, only real users
+        # Get the user - enforce organization isolation
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+
+        # Verify the requested user belongs to the same organization
+        current_org = getattr(current_user, 'organization_id', None) or getattr(current_user, 'tenant_account_id', None)
+        target_org = getattr(user, 'organization_id', None) or getattr(user, 'tenant_account_id', None)
+        if current_org and target_org and str(current_org) != str(target_org):
+            raise HTTPException(status_code=403, detail="Not authorized to view this user")
 
         # Parse user_metadata if it exists
         user_metadata = {}
@@ -979,6 +988,12 @@ async def get_team_member_work_hours(
                 "work_hours_end": "17:00",
                 "work_days": ["monday", "tuesday", "wednesday", "thursday", "friday"]
             }
+
+        # Verify organization isolation
+        current_org = getattr(current_user, 'organization_id', None) or getattr(current_user, 'tenant_account_id', None)
+        target_org = getattr(user, 'organization_id', None) or getattr(user, 'tenant_account_id', None)
+        if current_org and target_org and str(current_org) != str(target_org):
+            raise HTTPException(status_code=403, detail="Not authorized to view this user")
 
         # Parse business_hours JSON if it exists
         business_hours = getattr(user, 'business_hours', None) or {}
@@ -1085,6 +1100,12 @@ async def update_team_member(
         if not user:
             raise HTTPException(status_code=404, detail="Team member not found")
 
+        # Verify organization isolation
+        current_org = getattr(current_user, 'organization_id', None) or getattr(current_user, 'tenant_account_id', None)
+        target_org = getattr(user, 'organization_id', None) or getattr(user, 'tenant_account_id', None)
+        if current_org and target_org and str(current_org) != str(target_org):
+            raise HTTPException(status_code=403, detail="Not authorized to modify this user")
+
         # Parse request body
         body = await request.json()
         first_name = body.get("first_name")
@@ -1158,6 +1179,16 @@ async def delete_team_member(
         if not user:
             raise HTTPException(status_code=404, detail="Team member not found")
 
+        # Verify organization isolation
+        current_org = getattr(current_user, 'organization_id', None) or getattr(current_user, 'tenant_account_id', None)
+        target_org = getattr(user, 'organization_id', None) or getattr(user, 'tenant_account_id', None)
+        if current_org and target_org and str(current_org) != str(target_org):
+            raise HTTPException(status_code=403, detail="Not authorized to delete this user")
+
+        # Prevent self-deletion
+        if current_user.id == member_id:
+            raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
         # Soft delete - just mark as inactive
         user.is_active = False
         db.commit()
@@ -1170,6 +1201,47 @@ async def delete_team_member(
         db.rollback()
         logger.error(f"Delete team member error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ============================================================================
+# INVITE VALIDATION ENDPOINTS (public, no auth required)
+# ============================================================================
+
+@invite_router.get("/api/invite/{token}")
+async def get_invite_details(token: str, db: Session = Depends(get_db)):
+    """Get invite details for employee invite acceptance page (public endpoint)."""
+    try:
+        from database.models.permission import EmployeeInvite, InviteStatus
+    except ImportError:
+        # Fallback: try importing from main
+        try:
+            import main
+            EmployeeInvite = main.EmployeeInvite
+            InviteStatus = main.InviteStatus
+        except AttributeError:
+            raise HTTPException(status_code=404, detail="Invite system not configured")
+
+    invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == token).first()
+
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found or has expired")
+
+    if invite.status != InviteStatus.PENDING:
+        raise HTTPException(status_code=400, detail=f"Invite has been {invite.status.value}")
+
+    if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+        invite.status = InviteStatus.EXPIRED
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invite has expired")
+
+    return {
+        "email": invite.email,
+        "first_name": invite.first_name,
+        "last_name": invite.last_name,
+        "job_title": getattr(invite, 'job_title', None),
+        "permission_role": invite.permission_role,
+        "expires_at": invite.expires_at.isoformat() if invite.expires_at else None
+    }
 
 
 # ============================================================================
@@ -1204,8 +1276,18 @@ async def start_impersonation(
         if not impersonated_user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Check authorization - only managers/admins can impersonate
-        # For now, allow any authenticated user (you can add role checks later)
+        # Check authorization - only managers/admins/site_admins can impersonate
+        allowed_roles = {'admin', 'site_admin', 'leadership', 'management'}
+        user_role = getattr(current_user, 'permission_role', None) or getattr(current_user, 'role', None) or ''
+        if user_role.lower() not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Only managers and administrators can impersonate other users"
+            )
+
+        # Prevent self-impersonation
+        if current_user.id == user_id:
+            raise HTTPException(status_code=400, detail="Cannot impersonate yourself")
 
         # Generate unique session token
         session_token = secrets.token_urlsafe(32)
