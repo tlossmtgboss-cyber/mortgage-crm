@@ -17,7 +17,7 @@ import os
 import hmac
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Request, HTTPException, Depends, Header
@@ -226,6 +226,11 @@ async def handle_invoice_paid(data: Dict[str, Any], db: Session) -> Dict[str, An
                 subscription.current_period_end = datetime.fromtimestamp(
                     period_end, tz=timezone.utc
                 )
+            # Clear grace period and restore active status on successful payment
+            if subscription.grace_period_ends_at:
+                subscription.grace_period_ends_at = None
+                subscription.status = SubscriptionStatus.ACTIVE
+                logger.info(f"Subscription {stripe_subscription_id} grace period cleared, restored to ACTIVE")
 
     return {"invoice_id": stripe_invoice_id, "status": "paid"}
 
@@ -243,9 +248,9 @@ async def handle_invoice_payment_failed(data: Dict[str, Any], db: Session) -> Di
 
     if invoice:
         invoice.status = InvoiceStatus.OPEN
-        invoice.metadata = invoice.metadata or {}
-        invoice.metadata["last_payment_error"] = data.get("last_payment_error", {})
-        invoice.metadata["attempt_count"] = attempt_count
+        invoice.meta_data = invoice.meta_data or {}
+        invoice.meta_data["last_payment_error"] = data.get("last_payment_error", {})
+        invoice.meta_data["attempt_count"] = attempt_count
 
     # Update subscription status if past_due
     if stripe_subscription_id:
@@ -257,12 +262,17 @@ async def handle_invoice_payment_failed(data: Dict[str, Any], db: Session) -> Di
 
         if subscription:
             subscription.status = SubscriptionStatus.PAST_DUE
+            # Set 14-day grace period on first failure only (don't extend on retries)
+            if not subscription.grace_period_ends_at:
+                subscription.grace_period_ends_at = datetime.now(timezone.utc) + timedelta(days=14)
+                logger.info(
+                    f"Subscription {stripe_subscription_id} grace period set: "
+                    f"expires {subscription.grace_period_ends_at.isoformat()}"
+                )
             logger.warning(
                 f"Subscription {stripe_subscription_id} marked past_due "
                 f"(attempt {attempt_count})"
             )
-
-    # TODO: Send notification to organization admin
 
     return {
         "invoice_id": stripe_invoice_id,

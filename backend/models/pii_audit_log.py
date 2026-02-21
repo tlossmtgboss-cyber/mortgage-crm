@@ -51,8 +51,8 @@ class PIIAuditLog(Base):
     # Result
     success = Column(Boolean, default=True)
 
-    # Additional metadata
-    metadata = Column(JSONB)
+    # Additional metadata (Python attr 'meta_data' avoids conflict with SQLAlchemy's reserved .metadata)
+    meta_data = Column('metadata', JSONB)
 
     # Indexes for compliance queries
     __table_args__ = (
