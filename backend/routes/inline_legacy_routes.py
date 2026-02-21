@@ -745,7 +745,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     # Include Data Reconciliation routes for email data extraction
     try:
         from routes.data_reconciliation_routes import router as data_reconciliation_router
-        app.include_router(data_reconciliation_router, tags=["Data Reconciliation"])
+        app.include_router(data_reconciliation_router, prefix="/api/v1/reconciliation", tags=["Data Reconciliation"])
         logger.info("✅ Data Reconciliation routes loaded")
     except Exception as e:
         logger.warning(f"⚠️ Could not load Data Reconciliation routes: {e}")
