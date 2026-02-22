@@ -210,14 +210,8 @@ scheduler = AsyncIOScheduler(
     }
 )
 
-# Use shared get_db from database.py to ensure consistent session management
-def get_db():
-    """Database session dependency - uses shared pool from database.py"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Use RLS-aware get_db from database.py — ensures tenant isolation for ALL routes
+get_db = _get_db_from_database
 
 # ============================================================================
 # ENUMS - imported from database.enums
@@ -856,13 +850,21 @@ async def get_current_user_flexible(
         return actual_user
 
     # Otherwise, treat it as a JWT token
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
-        email: str = payload.get("sub")
-        if email is None:
+    if _USE_SECURE_TOKENS:
+        # Use secure token verification with blacklist check (same as get_current_user)
+        token_data = _verify_secure_token(token, expected_type=TokenType.ACCESS)
+        if not token_data:
             raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+        email = token_data.sub
+    else:
+        # Legacy fallback
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
+            email: str = payload.get("sub")
+            if email is None:
+                raise credentials_exception
+        except JWTError:
+            raise credentials_exception
 
     actual_user = db.query(User).filter(User.email == email).first()
     if actual_user is None:
@@ -1107,6 +1109,22 @@ try:
     logger.info("✅ Report export & performance monitoring routes loaded (PDF, Excel, SLA compliance, scheduled delivery)")
 except Exception as e:
     logger.error(f"❌ Report export routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# AUDIT REPORT SHARE ROUTES (Public HTML audit report pages)
+# ============================================================================
+try:
+    from routes.audit_report_routes import register_audit_report_routes
+    register_audit_report_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Audit report share routes loaded (public HTML report pages)")
+except Exception as e:
+    logger.error(f"❌ Audit report share routes failed to load: {e}")
     import traceback
     traceback.print_exc()
 
