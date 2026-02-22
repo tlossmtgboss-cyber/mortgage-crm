@@ -2859,3 +2859,31 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             db.rollback()
             logger.error(f"Error clearing all CRM data: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Internal server error")
+
+    @app.get("/api/v1/admin/crm-data-counts")
+    async def get_crm_data_counts(
+        admin_key: str = Query(None),
+        db: Session = Depends(get_db),
+    ):
+        """Quick count of all CRM data tables for verification."""
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+
+        tables = [
+            "leads", "loans", "mum_clients", "tasks", "documents",
+            "smart_doc_requests", "smart_doc_items", "needs_list_items",
+            "needs_lists", "document_requests", "activities",
+            "stage_history", "workflow_task_instances", "sla_milestones",
+            "compliance_alerts", "referral_commissions",
+        ]
+        counts = {}
+        for tbl in tables:
+            try:
+                r = db.execute(text(f'SELECT COUNT(*) FROM "{tbl}"')).scalar()
+                counts[tbl] = r
+            except Exception:
+                db.rollback()
+                counts[tbl] = "(table not found)"
+
+        total = sum(v for v in counts.values() if isinstance(v, int))
+        return {"counts": counts, "total_rows": total}
