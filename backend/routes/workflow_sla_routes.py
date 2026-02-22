@@ -1347,7 +1347,8 @@ async def debug_imports(
 
     # Test main imports
     try:
-        from main import Lead, Loan, Task, User, Organization, Base
+        from database import Base
+        from database.models import Lead, Loan, Task, User, Organization
         results["main_imports"]["Lead"] = str(type(Lead))
         results["main_imports"]["Loan"] = str(type(Loan))
         results["main_imports"]["Task"] = str(type(Task))
@@ -1360,7 +1361,7 @@ async def debug_imports(
     # Test workflow_config_models
     try:
         from workflow_config_models import create_workflow_config_models
-        from main import Base
+        from database import Base
         workflow_models = create_workflow_config_models(Base)
         results["workflow_config_imports"]["WorkflowConfiguration"] = str(type(workflow_models.get('WorkflowConfiguration')))
         results["workflow_config_imports"]["WorkflowDayConfig"] = str(type(workflow_models.get('WorkflowDayConfig')))
@@ -2707,7 +2708,7 @@ async def verify_unified_tasks_for_user(
     This mimics the exact query used by /api/v1/unified-tasks.
     """
     from sqlalchemy.orm import joinedload
-    from main import Task
+    from database.models import Task
 
     try:
         # Same query as unified-tasks endpoint (with updated 200 limit)

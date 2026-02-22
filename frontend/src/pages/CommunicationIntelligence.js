@@ -5,6 +5,7 @@ import PowerDialer from './PowerDialer';
 import { useLayoutFix } from '../hooks/useLayoutFix';
 import { getAuthHeaders } from '../utils/auth';
 import './CommunicationIntelligence.css';
+import { toast } from '../utils/toast';
 
 function CommunicationIntelligence() {
   const navigate = useNavigate();
@@ -333,11 +334,11 @@ function CommunicationIntelligence() {
         loadStats();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || error.error || 'Failed to close conversation'}`);
+        toast.error(`Error: ${error.detail || error.error || 'Failed to close conversation'}`);
       }
     } catch (error) {
       console.error('Error closing conversation:', error);
-      alert('Failed to close conversation');
+      toast.error('Failed to close conversation');
     } finally {
       setProcessingId(null);
     }
@@ -366,11 +367,11 @@ function CommunicationIntelligence() {
         loadStats();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || error.error || 'Failed to process'}`);
+        toast.error(`Error: ${error.detail || error.error || 'Failed to process'}`);
       }
     } catch (error) {
       console.error('Error processing:', error);
-      alert('Failed to process');
+      toast.error('Failed to process');
     } finally {
       setProcessingId(null);
     }
@@ -406,11 +407,11 @@ function CommunicationIntelligence() {
         loadData();
         loadStats();
       } else {
-        alert('Failed to delete conversation');
+        toast.error('Failed to delete conversation');
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);
-      alert('Failed to delete conversation');
+      toast.error('Failed to delete conversation');
     }
   };
 
@@ -425,11 +426,11 @@ function CommunicationIntelligence() {
         loadData();
         loadStats();
       } else {
-        alert('Failed to delete SMS');
+        toast.error('Failed to delete SMS');
       }
     } catch (error) {
       console.error('Error deleting SMS:', error);
-      alert('Failed to delete SMS');
+      toast.error('Failed to delete SMS');
     }
   };
 
@@ -503,7 +504,7 @@ function CommunicationIntelligence() {
     loadStats();
 
     if (successCount < selectedConversationIds.size) {
-      alert(`Deleted ${successCount} conversations. Some failed.`);
+      toast.success(`Deleted ${successCount} conversations. Some failed.`);
     }
   };
 
@@ -532,7 +533,7 @@ function CommunicationIntelligence() {
     loadStats();
 
     if (successCount < selectedSmsIds.size) {
-      alert(`Deleted ${successCount} SMS messages. Some failed.`);
+      toast.success(`Deleted ${successCount} SMS messages. Some failed.`);
     }
   };
 

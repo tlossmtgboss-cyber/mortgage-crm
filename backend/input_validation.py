@@ -17,11 +17,11 @@ from typing import Optional, List, Any
 from datetime import datetime
 
 try:
-    import bleach
-    BLEACH_AVAILABLE = True
+    import nh3
+    NH3_AVAILABLE = True
 except ImportError:
-    BLEACH_AVAILABLE = False
-    logging.warning("bleach not installed - HTML sanitization disabled")
+    NH3_AVAILABLE = False
+    logging.warning("nh3 not installed - HTML sanitization disabled")
 
 try:
     import magic
@@ -48,9 +48,9 @@ def sanitize_text(text: str, max_length: int = 10000) -> str:
     if not text:
         return ""
 
-    if BLEACH_AVAILABLE:
+    if NH3_AVAILABLE:
         # Remove all HTML tags
-        cleaned = bleach.clean(text, tags=[], strip=True)
+        cleaned = nh3.clean(text, tags=set())
     else:
         # Fallback: basic HTML tag removal
         cleaned = re.sub(r'<[^>]+>', '', text)
@@ -75,40 +75,24 @@ def sanitize_html(html: str, max_length: int = 50000) -> str:
     if not html:
         return ""
 
-    if BLEACH_AVAILABLE:
-        allowed_tags = ['p', 'br', 'strong', 'em', 'b', 'i', 'ul', 'ol', 'li', 'a', 'span']
+    if NH3_AVAILABLE:
+        allowed_tags = {'p', 'br', 'strong', 'em', 'b', 'i', 'ul', 'ol', 'li', 'a', 'span'}
         allowed_attrs = {
-            'a': ['href', 'title'],  # No target="_blank" onclick etc
-            'span': ['class']
+            'a': {'href', 'title'},  # No target="_blank" onclick etc
+            'span': {'class'},
         }
 
-        cleaned = bleach.clean(
+        cleaned = nh3.clean(
             html,
             tags=allowed_tags,
             attributes=allowed_attrs,
-            strip=True
+            link_rel="noopener noreferrer",
         )
-
-        # Ensure links are safe
-        cleaned = bleach.linkify(cleaned, callbacks=[_sanitize_link])
     else:
         # Fallback: remove all HTML
         cleaned = re.sub(r'<[^>]+>', '', html)
 
     return cleaned.strip()[:max_length]
-
-
-def _sanitize_link(attrs, new=False):
-    """Callback for bleach.linkify to sanitize links"""
-    if (None, 'href') in attrs:
-        href = attrs[(None, 'href')]
-        # Block javascript: and data: URLs
-        if href.lower().startswith(('javascript:', 'data:', 'vbscript:')):
-            return None
-        # Ensure external links open safely
-        if href.startswith('http'):
-            attrs[(None, 'rel')] = 'noopener noreferrer'
-    return attrs
 
 
 def sanitize_filename(filename: str) -> str:

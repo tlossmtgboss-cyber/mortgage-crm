@@ -386,7 +386,8 @@ def track_extraction_context(method: str):
 
     try:
         yield tracker
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in track_extraction_metrics: {e}")
         tracker.set_failure()
         raise
     finally:

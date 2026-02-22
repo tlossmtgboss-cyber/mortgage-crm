@@ -872,7 +872,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                     try:
                         _vm_conn.execute(_vm_text(_stmt))
                         _vm_conn.commit()
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"Error executing voicemail ALTER statement: {e}")
                         _vm_conn.rollback()
                 # Index for RVM session lookups (used by webhook)
                 try:
@@ -881,7 +882,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                         "ON voicemail_drops (rvm_session_id)"
                     ))
                     _vm_conn.commit()
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error creating voicemail_drops RVM session index: {e}")
                     _vm_conn.rollback()
                 # Copy contact_phone -> phone_number for rows that used old column name
                 try:
@@ -890,7 +892,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                         "WHERE phone_number IS NULL AND contact_phone IS NOT NULL"
                     ))
                     _vm_conn.commit()
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error copying contact_phone to phone_number: {e}")
                     _vm_conn.rollback()
 
             logger.info("✅ Voicemail tables verified/created (columns synced)")
@@ -2090,8 +2093,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         for model in [CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings]:
             try:
                 model.__table__.create(engine, checkfirst=True)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error creating calendar sync table {model.__tablename__}: {e}")
         from routes.calendar_sync_routes import router as calendar_sync_router
         app.include_router(calendar_sync_router, tags=["Calendar Sync"])
         logger.info("✅ Calendar sync routes loaded")
@@ -2847,7 +2850,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                     "questions_loaded": len(engine.questions),
                     "sections": list(engine.section_order),
                 }
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error getting intake engine stats: {e}")
                 status["engine_available"] = False
 
         return status

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ApplicationSummaryReview.css';
+import { toast } from '../utils/toast';
 
 /**
  * ApplicationSummaryReview - AI-powered summary review before submission
@@ -244,7 +245,7 @@ const ApplicationSummaryReview = ({
   // Handle submit
   const handleSubmit = () => {
     if (!stats.requiredComplete) {
-      alert('Please complete all required fields before submitting.');
+      toast.success('Please complete all required fields before submitting.');
       return;
     }
     setShowConfirmation(true);

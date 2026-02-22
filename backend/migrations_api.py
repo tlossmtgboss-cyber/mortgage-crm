@@ -390,7 +390,8 @@ async def import_browser_guidelines(
                         try:
                             published_date = datetime.strptime(date_str, fmt)
                             break
-                        except Exception:
+                        except Exception as e:
+                            logger.exception(f"Failed to parse date string '{date_str}' with format '{fmt}': {e}")
                             continue
 
                 # Generate hash
@@ -593,8 +594,8 @@ async def add_concierge_responsible_column(
                     "status": "success",
                     "message": "Column concierge_responsible already exists"
                 }
-            except Exception:
-                pass  # Column doesn't exist, proceed with adding it
+            except Exception as e:
+                logger.exception(f"Column concierge_responsible check failed (proceeding to add): {e}")
 
             # Add the column
             conn.execute(text("""
@@ -1804,7 +1805,8 @@ async def delete_sample_data_endpoint(
                             )
                         """), {"names": seeded_borrower_names})
                         db.commit()
-                    except Exception:
+                    except Exception as e:
+                        logger.exception(f"Failed to delete related records from {table}: {e}")
                         db.rollback()
 
                 # Now delete the loans
@@ -2551,7 +2553,8 @@ async def migrate_leads_to_mum_clients(
         try:
             db.execute(text("ALTER TABLE mum_clients ALTER COLUMN ltv TYPE DECIMAL(7,4)"))
             db.commit()
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to alter mum_clients.ltv column type (may already be correct): {e}")
             db.rollback()  # Column might already be correct type
 
         # Get leads to migrate
@@ -2916,7 +2919,8 @@ async def fix_500_errors(
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id)"))
                 db.commit()
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to create idx_user_permissions_user index: {e}")
                 db.rollback()
 
             # ================================================================
@@ -3015,17 +3019,20 @@ async def fix_500_errors(
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_assigned ON ai_tasks(assigned_to_id)"))
                 db.commit()
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to create idx_ai_tasks_assigned index: {e}")
                 db.rollback()
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_status ON ai_tasks(status)"))
                 db.commit()
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to create idx_ai_tasks_status index: {e}")
                 db.rollback()
             try:
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_ai_tasks_created ON ai_tasks(created_at DESC)"))
                 db.commit()
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to create idx_ai_tasks_created index: {e}")
                 db.rollback()
 
             # ================================================================

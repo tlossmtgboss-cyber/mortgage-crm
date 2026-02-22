@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QuestionTypes } from '../config/purchaseQuestions';
 import {
+import { toast } from '../../../utils/toast';
   ChoiceInput,
   TextInput,
   EmailInput,
@@ -311,7 +312,7 @@ const QuestionRenderer = ({
                   className="econsent-btn disagree"
                   onClick={() => {
                     handleChange(false);
-                    alert('You have chosen not to consent to electronic documents. Paper documents will be mailed to you. You can still proceed with your application.');
+                    toast.success('You have chosen not to consent to electronic documents. Paper documents will be mailed to you. You can still proceed with your application.');
                   }}
                 >
                   I Do Not Agree
@@ -344,7 +345,7 @@ const QuestionRenderer = ({
                   className="credit-auth-btn decline"
                   onClick={() => {
                     handleChange(false);
-                    alert('Credit authorization is required to process your mortgage application. Without it, we cannot verify your creditworthiness.');
+                    toast.error('Credit authorization is required to process your mortgage application. Without it, we cannot verify your creditworthiness.');
                   }}
                 >
                   I Do Not Authorize

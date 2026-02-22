@@ -18,7 +18,7 @@ def check_sync_status():
         engine = create_engine(DATABASE_URL)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-        from main import IncomingDataEvent, ExtractedData, User
+        from database.models import IncomingDataEvent, ExtractedData, User
 
         db = SessionLocal()
 

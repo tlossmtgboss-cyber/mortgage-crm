@@ -1127,8 +1127,8 @@ async def process_analysis(
             """), {"id": analysis_id, "error": "Internal server error"})
             db.commit()
             db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error closing db after analysis failure: {e}")
 
 
 @router.get("/recordings/{recording_id}/analysis", response_model=AnalysisResponse)
@@ -1543,8 +1543,8 @@ async def realtime_websocket(
     finally:
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error closing WebSocket: {e}")
 
 
 @router.post("/realtime/sessions/{session_id}/end")

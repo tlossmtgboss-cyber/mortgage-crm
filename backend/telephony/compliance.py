@@ -13,6 +13,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 # Try to import pytz, fall back to zoneinfo if not available
 try:
     import pytz
@@ -77,7 +83,7 @@ class ComplianceChecker:
         """
         # Import here to avoid circular imports
         try:
-            from main import ContactDNCStatus
+            from database.models import ContactDNCStatus
         except ImportError:
             # Fallback for different import paths
             logger.warning("Could not import ContactDNCStatus model")
@@ -107,7 +113,7 @@ class ComplianceChecker:
             True if on DNC list
         """
         try:
-            from main import Lead
+            from database.models import Lead
             contact = self.db.query(Lead).filter(Lead.id == contact_id).first()
 
             if not contact:
@@ -132,7 +138,7 @@ class ComplianceChecker:
     def add_to_dnc(self, phone_number: str, reason: str, added_by_id: int) -> bool:
         """Add a phone number to the Do Not Call list"""
         try:
-            from main import ContactDNCStatus
+            from database.models import ContactDNCStatus
         except ImportError:
             logger.error("Could not import ContactDNCStatus model")
             return False
@@ -167,7 +173,7 @@ class ComplianceChecker:
     def remove_from_dnc(self, phone_number: str) -> bool:
         """Remove a phone number from the Do Not Call list"""
         try:
-            from main import ContactDNCStatus
+            from database.models import ContactDNCStatus
         except ImportError:
             return False
 
@@ -294,7 +300,7 @@ class ComplianceChecker:
             Tuple of (is_allowed, reason_if_blocked)
         """
         try:
-            from main import AgentTelephonySettings, CallLog
+            from database.models import AgentTelephonySettings, CallLog
         except ImportError:
             return True, None
 
@@ -338,7 +344,7 @@ class ComplianceChecker:
             Tuple of (is_locked, lock_info)
         """
         try:
-            from main import ActiveCall, User
+            from database.models import ActiveCall, User
         except ImportError:
             return False, None
 
@@ -384,7 +390,7 @@ class ComplianceChecker:
             True if lock acquired
         """
         try:
-            from main import ActiveCall
+            from database.models import ActiveCall
         except ImportError:
             return False
 
@@ -424,7 +430,7 @@ class ComplianceChecker:
     def release_soft_lock(self, phone_number: str, agent_id: int) -> bool:
         """Release a soft lock for a phone number"""
         try:
-            from main import ActiveCall
+            from database.models import ActiveCall
         except ImportError:
             return False
 
@@ -447,7 +453,7 @@ class ComplianceChecker:
     def release_lock_by_call_sid(self, call_sid: str):
         """Release lock by call SID (used in webhooks)"""
         try:
-            from main import ActiveCall
+            from database.models import ActiveCall
         except ImportError:
             return
 
@@ -462,7 +468,7 @@ class ComplianceChecker:
     def cleanup_expired_locks(self):
         """Remove all expired locks"""
         try:
-            from main import ActiveCall
+            from database.models import ActiveCall
         except ImportError:
             return
 
@@ -478,13 +484,102 @@ class ComplianceChecker:
             self.db.rollback()
 
     # =========================================================================
+    # Call Consent Check
+    # =========================================================================
+
+    def check_call_consent(
+        self,
+        phone_number: str,
+        contact_id: Optional[int] = None
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Check if the contact has granted call consent via ChannelPreference.
+
+        TCPA / FCC one-to-one consent rule (Jan 2025) requires explicit prior
+        consent before placing outbound calls.  We look up the contact's
+        ChannelPreference record (by lead_id or by matching Lead phone number)
+        and verify call_consent is True.
+
+        Args:
+            phone_number: The phone number being called (used for Lead lookup
+                          when contact_id is not provided).
+            contact_id:   Optional lead/contact ID for direct lookup.
+
+        Returns:
+            Tuple of (has_consent, denial_reason).
+            has_consent=True means the call may proceed.
+        """
+        try:
+            from database.models.communication import ChannelPreference
+        except ImportError:
+            try:
+                from database.models import ChannelPreference
+            except ImportError:
+                logger.warning(
+                    "Could not import ChannelPreference model — "
+                    "skipping call consent check"
+                )
+                return True, None
+
+        lead_id = contact_id
+
+        # If no explicit contact_id, try to resolve via Lead phone number
+        if not lead_id:
+            try:
+                from database.models.lead_loan import Lead
+            except ImportError:
+                try:
+                    from database.models import Lead
+                except ImportError:
+                    logger.warning(
+                        "Could not import Lead model — "
+                        "skipping call consent check"
+                    )
+                    return True, None
+
+            digits = self._normalize_phone(phone_number)
+            if digits:
+                lead = self.db.query(Lead).filter(
+                    Lead.phone.ilike(f"%{digits[-10:]}")
+                ).first()
+                if lead:
+                    lead_id = lead.id
+
+        if not lead_id:
+            # No matching contact found — cannot verify consent, block the call.
+            return False, (
+                "No contact record found for this phone number. "
+                "Cannot verify call consent — outbound call blocked."
+            )
+
+        # Look up ChannelPreference for this lead
+        pref = self.db.query(ChannelPreference).filter(
+            ChannelPreference.lead_id == lead_id
+        ).first()
+
+        if not pref:
+            return False, (
+                "No channel preference record found for contact. "
+                "Call consent has not been granted — outbound call blocked."
+            )
+
+        if not pref.call_consent:
+            return False, (
+                "Contact has not granted call consent. "
+                "Outbound call blocked per TCPA/FCC one-to-one consent rules."
+            )
+
+        return True, None
+
+    # =========================================================================
     # Full Compliance Check
     # =========================================================================
 
     def full_compliance_check(
         self,
         phone_number: str,
-        agent_id: int
+        agent_id: int,
+        contact_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Run all compliance checks for a phone number
@@ -492,6 +587,7 @@ class ComplianceChecker:
         Args:
             phone_number: Phone number to check
             agent_id: Agent attempting to call
+            contact_id: Optional lead/contact ID for consent lookup
 
         Returns:
             Dict with compliance status and any issues
@@ -502,6 +598,12 @@ class ComplianceChecker:
             "warnings": [],
             "phone_number": phone_number
         }
+
+        # Check call consent (TCPA/FCC one-to-one consent requirement)
+        has_consent, consent_reason = self.check_call_consent(phone_number, contact_id)
+        if not has_consent:
+            result["can_call"] = False
+            result["issues"].append(f"No call consent: {consent_reason}")
 
         # Check DNC status
         is_dnc, dnc_reason = self.check_dnc(phone_number)

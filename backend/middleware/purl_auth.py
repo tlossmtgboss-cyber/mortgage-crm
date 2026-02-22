@@ -320,7 +320,8 @@ class PURLAuditMiddleware:
                         user_agent=request.headers.get("user-agent")
                     )
                     db.commit()
-                except Exception:
+                except Exception as e:
+                    logger.exception(f"Failed to log PURL action and commit: {e}")
                     db.rollback()
                     raise
                 finally:

@@ -364,7 +364,8 @@ class ContentPersonalizationService:
             safe_env = Environment(loader=BaseLoader(), undefined=lambda *a, **k: "")
             template = safe_env.from_string(template_text)
             return template.render(**context)
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to safely render template: {e}")
             # Last resort: return template as-is
             return template_text
 
@@ -627,7 +628,8 @@ class ContentPersonalizationService:
                 fmt = format_str or self.FORMAT_PATTERNS["date"]
                 return value.strftime(fmt)
             return str(value)
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to format date value: {e}")
             return ""
 
     def _to_float(self, value: Any) -> float:

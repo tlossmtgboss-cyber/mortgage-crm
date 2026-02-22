@@ -4,6 +4,12 @@ Accounting Routes Package.
 This package contains all API routes for the accounting system.
 """
 
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 from .chart_of_accounts_routes import router as chart_of_accounts_router
 from .journal_entry_routes import router as journal_entry_router
 from .period_routes import router as period_router

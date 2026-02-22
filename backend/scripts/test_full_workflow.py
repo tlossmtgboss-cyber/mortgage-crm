@@ -5,11 +5,14 @@ Tests the complete lead-to-loan-to-MUM workflow with SLA milestone tracking.
 Creates 10 test people and simulates the entire mortgage process.
 """
 
+import logging
 import requests
 import json
 import time
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 BASE_URL = "https://app.perenniaai.com"
@@ -157,7 +160,8 @@ class WorkflowTester:
             if response.status_code == 200:
                 return response.json()
             return []
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_lead_milestones: {e}")
             return []
 
     def complete_milestone(self, milestone_id: int) -> bool:
@@ -169,7 +173,8 @@ class WorkflowTester:
                 headers=self._headers()
             )
             return response.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in complete_milestone: {e}")
             return False
 
     def start_milestone(self, lead_id: int = None, loan_id: int = None,
@@ -261,7 +266,8 @@ class WorkflowTester:
             if response.status_code == 200:
                 return response.json()
             return []
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_loan_milestones: {e}")
             return []
 
     def get_sla_dashboard(self) -> Dict:
@@ -274,7 +280,8 @@ class WorkflowTester:
             if response.status_code == 200:
                 return response.json()
             return {}
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_sla_dashboard: {e}")
             return {}
 
     def convert_to_mum(self, loan_id: int) -> bool:
@@ -285,7 +292,8 @@ class WorkflowTester:
                 headers=self._headers()
             )
             return response.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in convert_to_mum: {e}")
             return False
 
     def process_person(self, person: Dict, index: int) -> Dict:

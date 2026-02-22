@@ -5,8 +5,11 @@ Tools for the Voice OS Agent handling outbound calls, voicemail, and call analyt
 8 tools for call initiation, voicemail drops, transcription, and metrics.
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -105,8 +108,8 @@ def initiate_outbound_call(
                 "loan_id": int(contact_id) if contact_type != "lead" else None,
                 "notes": f"Outbound {purpose} call initiated",
             })
-    except Exception:
-        pass  # Log failure shouldn't block the call
+    except Exception as e:
+        logger.warning(f"Failed to log call in initiate_outbound_call: {e}")
 
     call_data = {
         "call_id": f"CALL-{call_id}",
@@ -197,8 +200,8 @@ def drop_voicemail(
                 "audio": audio_url,
                 "method": delivery_method,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to write voicemail drop record in drop_voicemail: {e}")
 
     drop_data = {
         "voicemail_id": f"VM-{vm_id}",
@@ -440,8 +443,8 @@ def schedule_callback(
                 "notes": notes,
                 "follow_up": callback_time,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to write callback record in schedule_callback: {e}")
 
     callback_data = {
         "callback_id": f"CB-{callback_id}",

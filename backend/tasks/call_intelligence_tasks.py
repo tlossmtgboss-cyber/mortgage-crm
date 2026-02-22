@@ -229,8 +229,8 @@ def process_batch_task(
             )
             db.commit()
             db.close()
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.warning(f"Error updating batch status to failed for {batch_id}: {e2}")
 
         return {
             "success": False,

@@ -636,7 +636,7 @@ class PURLWorkspaceService:
             lead_id = workspace.meta_data.get('lead_id') if workspace.meta_data else None
             if lead_id:
                 try:
-                    from main import Lead
+                    from database.models import Lead
                     lead = self.db.query(Lead).filter(Lead.id == int(lead_id)).first()
                     if lead:
                         lead_data = {
@@ -653,7 +653,7 @@ class PURLWorkspaceService:
             loan_officer_data = None
             if workspace.owner_user_id:
                 try:
-                    from main import User
+                    from database.models import User
                     lo_user = self.db.query(User).filter(User.id == workspace.owner_user_id).first()
                     if lo_user:
                         loan_officer_data = {

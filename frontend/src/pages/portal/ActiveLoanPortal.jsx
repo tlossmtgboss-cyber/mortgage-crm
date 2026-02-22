@@ -25,6 +25,7 @@ import TotalCostAnalysis from '../../components/Portal/TotalCostAnalysis';
 import PortalVideoMessages from '../../components/Portal/PortalVideoMessages';
 import VideoLightbox from '../../components/Portal/VideoLightbox';
 import '../PURLPortal.css';
+import { toast } from '../../utils/toast';
 
 // Tab components - Arrow/chevron style with notification dots or count badges
 const TabButton = ({ label, isActive, onClick, hasNotification, badgeCount, isFirst, isLast }) => (
@@ -1186,7 +1187,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       window.open(downloadData.download_url, '_blank');
     } catch (err) {
       console.error('Download failed:', err);
-      alert('Failed to download document');
+      toast.error('Failed to download document');
     }
   };
 
@@ -1237,7 +1238,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           setDocuments(docsData.documents || []);
         } catch (err) {
           console.error('Upload failed:', err);
-          alert(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
+          toast.error(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
         }
       }
     } finally {
@@ -1299,7 +1300,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
           setDocuments(docsData.documents || []);
         } catch (err) {
           console.error('Upload failed:', err);
-          alert(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
+          toast.error(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
         }
       }
     } finally {
@@ -1320,7 +1321,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       setTasks(tasksData.tasks || []);
     } catch (err) {
       console.error('Failed to update task:', err);
-      alert('Failed to update task');
+      toast.error('Failed to update task');
     }
   };
 
@@ -1339,7 +1340,7 @@ export default function ActiveLoanPortal({ data, slug, subStage, onRefresh }) {
       loadMessages();
     } catch (err) {
       console.error('Failed to send message:', err);
-      alert('Failed to send message');
+      toast.error('Failed to send message');
     } finally {
       setSendingMessage(false);
     }

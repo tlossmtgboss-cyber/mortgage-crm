@@ -497,7 +497,8 @@ Respond with JSON: {{"bullets": ["point 1", "point 2", ...], "one_liner": "one s
                 if text.startswith("json"):
                     text = text[4:]
             return json.loads(text)
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to parse call summary response as JSON: {e}")
             return {"bullets": [], "one_liner": response.content[0].text[:200]}
 
 

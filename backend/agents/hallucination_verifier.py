@@ -465,7 +465,8 @@ class HallucinationVerifier:
 
             return VerificationStatus.UNSUPPORTED, None
 
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to verify numeric claim: {e}")
             return VerificationStatus.UNABLE_TO_VERIFY, None
 
     def _parse_number(self, value: Any) -> Optional[float]:

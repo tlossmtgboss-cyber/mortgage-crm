@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './BottleneckLoans.css';
+import { toast } from '../utils/toast';
 
 // Mock data for bottlenecks with affected loans
 const bottleneckData = {
@@ -149,7 +150,7 @@ function BottleneckLoans() {
   };
 
   const handleCreateTask = (loan) => {
-    alert(`Creating AI task for ${loan.processor} to follow up on ${loan.borrowerName}'s loan (${loan.id})`);
+    toast.info(`Creating AI task for ${loan.processor} to follow up on ${loan.borrowerName}'s loan (${loan.id})`);
   };
 
   if (loading) {

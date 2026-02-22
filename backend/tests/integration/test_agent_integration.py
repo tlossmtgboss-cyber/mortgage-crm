@@ -219,13 +219,14 @@ class TestAgentToolIntegration:
             Tests the interface contract without PostgreSQL-specific syntax.
             """
             # Get basic pipeline counts using SQLite-compatible SQL
+            # Loan model uses 'amount' (not 'loan_amount') and 'stage' (not 'status')
             result = session.execute(text("""
                 SELECT
                     COUNT(*) as total_count,
-                    COALESCE(SUM(loan_amount), 0) as total_volume,
-                    COUNT(CASE WHEN status IN ('clear_to_close', 'docs_out', 'docs_back') THEN 1 END) as closing_soon
+                    COALESCE(SUM(amount), 0) as total_volume,
+                    COUNT(CASE WHEN stage IN ('clear_to_close', 'docs_out', 'docs_back') THEN 1 END) as closing_soon
                 FROM loans
-                WHERE status NOT IN ('funded', 'cancelled', 'denied')
+                WHERE stage NOT IN ('funded', 'cancelled', 'denied')
             """))
             row = result.fetchone()
 
@@ -308,29 +309,26 @@ class TestDatabaseCRUD:
     async def test_can_insert_and_query_lead(self, db_session):
         """Test inserting and querying a lead"""
         from sqlalchemy import text
-        import uuid
 
-        lead_id = str(uuid.uuid4())
-
-        # Insert a test lead
+        # Lead.id is Integer, Lead uses 'stage' (not 'status'), 'name' is NOT NULL
         db_session.execute(
             text("""
-                INSERT INTO leads (id, first_name, last_name, email, status)
-                VALUES (:id, :first_name, :last_name, :email, :status)
+                INSERT INTO leads (name, first_name, last_name, email, stage)
+                VALUES (:name, :first_name, :last_name, :email, :stage)
             """),
             {
-                "id": lead_id,
+                "name": "Test User",
                 "first_name": "Test",
                 "last_name": "User",
                 "email": "test@example.com",
-                "status": "new",
+                "stage": "New",
             }
         )
 
         # Query it back
         result = db_session.execute(
-            text("SELECT first_name, last_name FROM leads WHERE id = :id"),
-            {"id": lead_id}
+            text("SELECT first_name, last_name FROM leads WHERE email = :email"),
+            {"email": "test@example.com"}
         )
         row = result.fetchone()
 
@@ -342,29 +340,25 @@ class TestDatabaseCRUD:
     async def test_can_insert_and_query_loan(self, db_session):
         """Test inserting and querying a loan"""
         from sqlalchemy import text
-        import uuid
 
-        loan_id = str(uuid.uuid4())
-
-        # Insert a test loan
+        # Loan.id is Integer, uses 'amount' (not 'loan_amount'), 'stage' (not 'status')
         db_session.execute(
             text("""
-                INSERT INTO loans (id, loan_number, borrower_name, loan_amount, status)
-                VALUES (:id, :loan_number, :borrower_name, :loan_amount, :status)
+                INSERT INTO loans (loan_number, borrower_name, amount, stage)
+                VALUES (:loan_number, :borrower_name, :amount, :stage)
             """),
             {
-                "id": loan_id,
                 "loan_number": "2024-TEST-001",
                 "borrower_name": "Test Borrower",
-                "loan_amount": 400000,
-                "status": "processing",
+                "amount": 400000,
+                "stage": "processing",
             }
         )
 
         # Query it back
         result = db_session.execute(
-            text("SELECT loan_number, loan_amount FROM loans WHERE id = :id"),
-            {"id": loan_id}
+            text("SELECT loan_number, amount FROM loans WHERE loan_number = :ln"),
+            {"ln": "2024-TEST-001"}
         )
         row = result.fetchone()
 

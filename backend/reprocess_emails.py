@@ -20,7 +20,8 @@ async def reprocess_unextracted_emails():
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
         # Import the processing function from main
-        from main import process_microsoft_email_to_dre, IncomingDataEvent, ExtractedData
+        from database.models import IncomingDataEvent, ExtractedData
+        from main import process_microsoft_email_to_dre
 
         db = SessionLocal()
 

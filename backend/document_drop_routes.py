@@ -184,7 +184,8 @@ async def upload_document(
     """
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
     try:
-        from main import Document, DocumentType, DocumentCategory
+        from database.enums import DocumentType, DocumentCategory
+        from database.models import Document
 
         # Read file content with size limit
         content = await file.read(MAX_FILE_SIZE + 1)
@@ -351,7 +352,7 @@ async def get_documents(
     Get documents for a borrower or loan
     """
     try:
-        from main import Document
+        from database.models import Document
 
         query = db.query(Document).filter(Document.status == "active")
 

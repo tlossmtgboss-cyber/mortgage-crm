@@ -35,7 +35,7 @@ class RoleAssignmentService:
 
     def _load_models(self):
         """Load required models."""
-        from main import Lead, Loan, User
+        from database.models import Lead, Loan, User
         from models.user_onboarding import Role
 
         self.Lead = Lead

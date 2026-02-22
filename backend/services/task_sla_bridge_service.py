@@ -161,7 +161,7 @@ class TaskSLABridgeService:
 
     def _load_models(self):
         """Load required models dynamically to avoid circular imports."""
-        from main import Lead, Loan, Task, User
+        from database.models import Lead, Loan, Task, User
 
         self.Lead = Lead
         self.Loan = Loan

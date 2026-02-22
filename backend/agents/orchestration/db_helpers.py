@@ -55,7 +55,7 @@ def get_organization_for_agent(
 
         # Try to get organization by ID
         if organization_id:
-            from main import Organization
+            from database.models import Organization
             org = db.query(Organization).filter(
                 Organization.id == organization_id,
                 Organization.is_active == True
@@ -63,7 +63,7 @@ def get_organization_for_agent(
 
         # Fallback: Get organization via user
         if not org and user_id:
-            from main import User, Organization
+            from database.models import User, Organization
             user = db.query(User).filter(User.id == user_id).first()
             if user and user.organization_id:
                 org = db.query(Organization).filter(
@@ -142,7 +142,7 @@ def get_user_profile_for_agent(
     try:
         # Try to get lead
         if lead_id:
-            from main import Lead
+            from database.models import Lead
             lead = db.query(Lead).filter(Lead.id == lead_id).first()
             if lead:
                 return {
@@ -159,7 +159,7 @@ def get_user_profile_for_agent(
 
         # Try to get contact (using Lead model - no separate Contact model exists)
         if contact_id:
-            from main import Lead as Contact
+            from database.models import Lead as Contact
             contact = db.query(Contact).filter(Contact.id == contact_id).first()
             if contact:
                 return {
@@ -174,7 +174,7 @@ def get_user_profile_for_agent(
 
         # Try to get user (for internal users)
         if user_id:
-            from main import User
+            from database.models import User
             user = db.query(User).filter(User.id == user_id).first()
             if user:
                 return {
@@ -257,7 +257,7 @@ def update_organization_branding(
         True if updated successfully
     """
     try:
-        from main import Organization
+        from database.models import Organization
         org = db.query(Organization).filter(Organization.id == organization_id).first()
 
         if not org:

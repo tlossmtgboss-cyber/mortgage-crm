@@ -70,7 +70,7 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 
 def get_models():
     """Runtime import for models to avoid circular imports."""
-    from main import User, Lead, Task, IntegrationCredential, CalendarMapping
+    from database.models import User, Lead, Task, IntegrationCredential, CalendarMapping
     return User, Lead, Task, IntegrationCredential, CalendarMapping
 
 

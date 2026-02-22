@@ -17,6 +17,7 @@ import MilestoneProgressTracker from '../components/MilestoneProgressTracker';
 import PreApprovalLetterModal from '../components/PreApprovalLetterModal';
 import { activitiesAPI } from '../services/api';
 import './PartnerClientDetail.css';
+import { toast } from '../utils/toast';
 
 // API base URL
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -243,7 +244,7 @@ const ActivityTimelineCard = ({ activities, stageHistory, chatMessages, clientId
       }
     } catch (error) {
       console.error('Failed to add note:', error);
-      alert('Failed to add note. Please try again.');
+      toast.error('Failed to add note. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

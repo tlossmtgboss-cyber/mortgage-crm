@@ -211,8 +211,8 @@ class AIUsageTracker:
             # Don't fail the main request if logging fails
             try:
                 self.db.rollback()
-            except Exception:
-                pass  # Session may be in an invalid state
+            except Exception as e2:
+                logger.exception(f"Failed to rollback DB session after AI usage logging failure: {e2}")
 
     def create_message(
         self,
@@ -452,8 +452,8 @@ def log_ai_usage(
         logger.error(f"Failed to log AI usage: {e}")
         try:
             db.rollback()
-        except Exception:
-            pass  # Session may be in an invalid state
+        except Exception as e2:
+            logger.exception(f"Failed to rollback DB session after AI usage logging failure: {e2}")
         return request_id
 
 

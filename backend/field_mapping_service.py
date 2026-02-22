@@ -79,11 +79,13 @@ def transform_date(v):
             excel_epoch = datetime(1899, 12, 30)
             return (excel_epoch + timedelta(days=v)).isoformat()
         return datetime.fromisoformat(str(v).replace('/', '-')).isoformat()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Error parsing date with fromisoformat: {e}")
         try:
             from dateutil import parser
             return parser.parse(str(v)).isoformat()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error parsing date with dateutil: {e}")
             return None
 
 

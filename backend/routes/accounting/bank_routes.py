@@ -20,6 +20,9 @@ import os
 import json
 import hashlib
 import hmac
+import logging
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from models.accounting.core import (
@@ -47,6 +50,12 @@ try:
     PLAID_AVAILABLE = True
 except ImportError:
     PLAID_AVAILABLE = False
+
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
 
 router = APIRouter(prefix="/api/v1/accounting/banking", tags=["Banking"])
 
@@ -716,8 +725,8 @@ async def disconnect_plaid_account(
         try:
             request = ItemRemoveRequest(access_token=plaid_item.access_token)
             client.item_remove(request)
-        except Exception:
-            pass  # Continue even if Plaid removal fails
+        except Exception as e:
+            logger.warning(f"Error removing Plaid item (continuing): {e}")
 
     # Check if other accounts use this plaid item
     other_accounts = db.query(BankAccount).filter(
@@ -779,7 +788,8 @@ async def handle_plaid_webhook(
 
     try:
         payload = json.loads(body)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Error parsing Plaid webhook JSON: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     webhook_type = payload.get('webhook_type')

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './WorkflowConfigEditor.css';
+import { toast } from '../utils/toast';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -364,7 +365,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error('Error saving workflow:', err);
-      alert('Failed to save workflow. Please try again.');
+      toast.error('Failed to save workflow. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -596,7 +597,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     // Check if role already exists
     if (responsibilityRoles.some(r => r.key === roleKey)) {
-      alert('A role with this name already exists');
+      toast.error('A role with this name already exists');
       return;
     }
 
@@ -662,7 +663,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     const toField = toFieldMap[toRoleKey];
 
     if (!fromField || !toField) {
-      alert('Invalid role selection');
+      toast.error('Invalid role selection');
       return;
     }
 
@@ -701,7 +702,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       setReassignToRole('');
     } catch (err) {
       console.error('Error reassigning tasks:', err);
-      alert('Failed to reassign tasks. Please try again.');
+      toast.error('Failed to reassign tasks. Please try again.');
     } finally {
       setSaving(false);
     }

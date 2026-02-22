@@ -29,7 +29,7 @@ async def _require_auth(
 ):
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     from database import get_db as db_getter
     db = next(db_getter())
     try:

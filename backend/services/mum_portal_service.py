@@ -146,7 +146,7 @@ class MUMPortalService:
         if not owner_user_id and client.loan_officer_email:
             # Try to find LO by email
             try:
-                from main import User
+                from database.models import User
                 lo = self.db.query(User).filter(
                     User.email == client.loan_officer_email
                 ).first()
@@ -286,7 +286,7 @@ class MUMPortalService:
         loan_officer = None
         if workspace.owner_user_id:
             try:
-                from main import User
+                from database.models import User
                 lo = self.db.query(User).filter(User.id == workspace.owner_user_id).first()
                 if lo:
                     loan_officer = {

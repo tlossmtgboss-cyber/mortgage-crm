@@ -1087,8 +1087,8 @@ class DataAccuracyTest(TestCase):
                     json_match = re.search(r'\{.*\}', response, re.DOTALL)
                     if json_match:
                         response = json.loads(json_match.group())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error parsing JSON from AI response: {e}")
 
             if not isinstance(response, dict):
                 return self._create_result(

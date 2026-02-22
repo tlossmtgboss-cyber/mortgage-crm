@@ -375,8 +375,8 @@ class BlogPDFExtractionService:
                     if document:
                         document.processing_error = str(e)
                         db_session.commit()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to save processing error to document record: {e}")
             return False
 
     def get_content_chunks(

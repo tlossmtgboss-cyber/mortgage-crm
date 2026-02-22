@@ -288,7 +288,8 @@ async def voice_workflow_websocket(
                     audio_base64 = message.get("data", "")
                     try:
                         audio_bytes = base64.b64decode(audio_base64)
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Invalid base64 audio in voice_workflow_websocket: {e}")
                         await websocket.send_json({
                             "type": WebSocketMessageType.ERROR.value,
                             "error": "Invalid base64 audio data"
@@ -400,8 +401,8 @@ async def voice_workflow_websocket(
                         "type": WebSocketMessageType.ERROR.value,
                         "error": "Internal server error"
                     })
-                except Exception:
-                    pass  # Connection might be closed
+                except Exception as e:
+                    logger.warning(f"Failed to send error to websocket in voice_workflow_websocket: {e}")
 
     except Exception as e:
         import traceback

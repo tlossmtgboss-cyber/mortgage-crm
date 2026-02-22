@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 import logging
 
 from database import get_db, Base, engine
-from main import get_current_user
+from auth.dependencies import get_current_user
 
 from models.sla_tracking import (
     SLAMeasure,
@@ -687,7 +687,7 @@ async def get_milestone_drilldown(
     Returns detailed loan information for each milestone matching the filters.
     """
     try:
-        from main import Loan, Lead
+        from database.models import Loan, Lead
 
         # Tenant isolation
         org_id = getattr(current_user, 'organization_id', None)

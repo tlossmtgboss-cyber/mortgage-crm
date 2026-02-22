@@ -641,7 +641,7 @@ def get_db():
 
 def get_current_user():
     """Get current authenticated user from main app"""
-    from main import get_current_user as main_get_current_user
+    from auth.dependencies import get_current_user as main_get_current_user
     return main_get_current_user
 
 

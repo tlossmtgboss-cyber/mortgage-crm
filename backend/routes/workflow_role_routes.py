@@ -371,7 +371,8 @@ async def get_default_role_assignments(
         # Auto-seed: ensure roles table exists and is populated
         try:
             count = db.execute(text("SELECT COUNT(*) FROM roles WHERE is_active = true")).scalar()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error querying roles table in get_default_role_assignments: {e}")
             count = 0
 
         if count == 0:

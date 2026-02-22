@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../services/accountingApi';
 import { usePermissions } from '../../contexts/PermissionContext';
 import './JournalEntries.css';
+import { toast } from '../../utils/toast';
 
 function JournalEntries() {
   const navigate = useNavigate();
@@ -169,14 +170,14 @@ function JournalEntries() {
       setShowModal(true);
     } catch (err) {
       console.error('Error fetching entry details:', err);
-      alert('Failed to load entry details');
+      toast.error('Failed to load entry details');
     }
   };
 
   // Open edit modal
   const openEditModal = async (entry) => {
     if (entry.status !== 'draft') {
-      alert('Only draft entries can be edited.');
+      toast.error('Only draft entries can be edited.');
       return;
     }
     setModalMode('edit');
@@ -200,7 +201,7 @@ function JournalEntries() {
       setShowModal(true);
     } catch (err) {
       console.error('Error fetching entry details:', err);
-      alert('Failed to load entry details');
+      toast.error('Failed to load entry details');
     }
   };
 
@@ -237,7 +238,7 @@ function JournalEntries() {
   // Remove line
   const removeLine = (index) => {
     if (formData.lines.length <= 2) {
-      alert('Journal entry must have at least 2 lines.');
+      toast.error('Journal entry must have at least 2 lines.');
       return;
     }
     setFormData(prev => ({
@@ -251,12 +252,12 @@ function JournalEntries() {
     const { totalDebit, totalCredit, isBalanced } = calculateTotals(formData.lines);
 
     if (!isBalanced) {
-      alert(`Entry is not balanced. Debits: ${formatCurrency(totalDebit)}, Credits: ${formatCurrency(totalCredit)}`);
+      toast.error(`Entry is not balanced. Debits: ${formatCurrency(totalDebit)}, Credits: ${formatCurrency(totalCredit)}`);
       return;
     }
 
     if (!formData.description) {
-      alert('Please enter a description for the journal entry.');
+      toast.error('Please enter a description for the journal entry.');
       return;
     }
 
@@ -265,7 +266,7 @@ function JournalEntries() {
     );
 
     if (validLines.length < 2) {
-      alert('Journal entry must have at least 2 valid lines.');
+      toast.error('Journal entry must have at least 2 valid lines.');
       return;
     }
 
@@ -296,7 +297,7 @@ function JournalEntries() {
       fetchEntries();
     } catch (err) {
       console.error('Error saving entry:', err);
-      alert(err.response?.data?.detail || 'Failed to save journal entry. Please try again.');
+      toast.error(err.response?.data?.detail || 'Failed to save journal entry. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -305,7 +306,7 @@ function JournalEntries() {
   // Post entry
   const handlePost = async (entry) => {
     if (entry.status !== 'draft') {
-      alert('Only draft entries can be posted.');
+      toast.error('Only draft entries can be posted.');
       return;
     }
 
@@ -318,14 +319,14 @@ function JournalEntries() {
       fetchEntries();
     } catch (err) {
       console.error('Error posting entry:', err);
-      alert(err.response?.data?.detail || 'Failed to post entry.');
+      toast.error(err.response?.data?.detail || 'Failed to post entry.');
     }
   };
 
   // Void entry
   const handleVoid = async (entry) => {
     if (entry.status !== 'posted') {
-      alert('Only posted entries can be voided.');
+      toast.error('Only posted entries can be voided.');
       return;
     }
 
@@ -337,14 +338,14 @@ function JournalEntries() {
       fetchEntries();
     } catch (err) {
       console.error('Error voiding entry:', err);
-      alert(err.response?.data?.detail || 'Failed to void entry.');
+      toast.error(err.response?.data?.detail || 'Failed to void entry.');
     }
   };
 
   // Reverse entry
   const handleReverse = async (entry) => {
     if (entry.status !== 'posted') {
-      alert('Only posted entries can be reversed.');
+      toast.error('Only posted entries can be reversed.');
       return;
     }
 
@@ -357,14 +358,14 @@ function JournalEntries() {
       fetchEntries();
     } catch (err) {
       console.error('Error reversing entry:', err);
-      alert(err.response?.data?.detail || 'Failed to reverse entry.');
+      toast.error(err.response?.data?.detail || 'Failed to reverse entry.');
     }
   };
 
   // Delete draft entry
   const handleDelete = async (entry) => {
     if (entry.status !== 'draft') {
-      alert('Only draft entries can be deleted.');
+      toast.success('Only draft entries can be deleted.');
       return;
     }
 
@@ -377,7 +378,7 @@ function JournalEntries() {
       fetchEntries();
     } catch (err) {
       console.error('Error deleting entry:', err);
-      alert(err.response?.data?.detail || 'Failed to delete entry.');
+      toast.error(err.response?.data?.detail || 'Failed to delete entry.');
     }
   };
 

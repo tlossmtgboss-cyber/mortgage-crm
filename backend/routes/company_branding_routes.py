@@ -45,7 +45,7 @@ async def _require_auth(
         raise HTTPException(status_code=401, detail="Not authenticated")
     if not _get_current_user_func:
         raise HTTPException(status_code=503, detail="Auth not configured")
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     from database import get_db as db_getter
     db = next(db_getter())
     try:
@@ -65,7 +65,7 @@ async def _get_current_user(
     """Get the authenticated user for endpoint-level injection."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     from database import get_db as db_getter
     db = next(db_getter())
     try:

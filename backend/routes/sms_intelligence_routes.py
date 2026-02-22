@@ -28,9 +28,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 def _get_current_user():
     """Lazy import auth dependency for router-level protection."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 router = APIRouter(
@@ -600,8 +606,9 @@ def _check_sms_tcpa_hours(phone: str) -> tuple:
     try:
         tz = pytz.timezone(tz_name)
         local_time = datetime.now(tz).time()
-    except Exception:
+    except Exception as e:
         # Default to Eastern if timezone lookup fails
+        logger.error(f"Error in TCPA timezone lookup: {e}")
         tz = pytz.timezone("America/New_York")
         local_time = datetime.now(tz).time()
 
@@ -816,8 +823,8 @@ async def match_sms_to_entity(phone_number: str, db: Session, user_id: int) -> D
                 "match_confidence": 0.95,
                 "client_name": result[1]
             }
-    except Exception:
-        pass  # borrower_phone column may not exist
+    except Exception as e:
+        logger.error(f"Error matching phone to loan borrower: {e}")
 
     # Check leads table
     try:
@@ -837,8 +844,8 @@ async def match_sms_to_entity(phone_number: str, db: Session, user_id: int) -> D
                 "match_confidence": 0.9,
                 "client_name": result[1]
             }
-    except Exception:
-        pass  # leads table may have different structure
+    except Exception as e:
+        logger.error(f"Error matching phone to lead: {e}")
 
     return {
         "matched_borrower_id": None,

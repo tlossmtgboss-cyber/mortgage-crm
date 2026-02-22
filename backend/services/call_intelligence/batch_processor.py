@@ -395,8 +395,8 @@ class BatchProcessor:
             logger.warning(f"Failed to save batch job: {e}")
             try:
                 self.db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error during rollback in _save_batch_job: {e}")
 
     def _load_batch_job(self, batch_id: str) -> Optional[BatchJob]:
         """Load batch job from database."""

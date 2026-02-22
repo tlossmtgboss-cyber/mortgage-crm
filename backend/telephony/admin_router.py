@@ -9,9 +9,16 @@ import os
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 # Import dependencies directly from main
-from main import get_db, get_current_user
+from auth.dependencies import get_current_user
+from database import get_db
 
 
 # Keep set_dependencies for backwards compatibility (no-op now)
@@ -32,7 +39,8 @@ def list_caller_ids(
     """List all verified caller IDs for the organization"""
     try:
         # Direct database session
-        from main import SessionLocal, VerifiedCallerId
+        from database import SessionLocal
+        from database.models import VerifiedCallerId
         db = SessionLocal()
         try:
             caller_ids = db.query(VerifiedCallerId).all()
@@ -66,7 +74,8 @@ def verify_caller_id(
 ):
     """Start verification process for a new caller ID"""
     try:
-        from main import SessionLocal, VerifiedCallerId
+        from database import SessionLocal
+        from database.models import VerifiedCallerId
         from telephony.provider import get_telephony_provider, TelephonyError
         from telephony.schemas import validate_phone_number
 
@@ -139,7 +148,8 @@ def verify_caller_id(
 def delete_caller_id(caller_id_id: int, current_user=Depends(get_current_user)):
     """Delete a caller ID"""
     try:
-        from main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
+        from database import SessionLocal
+        from database.models import VerifiedCallerId, AgentTelephonySettings
 
         db = SessionLocal()
         try:
@@ -178,7 +188,8 @@ def delete_caller_id(caller_id_id: int, current_user=Depends(get_current_user)):
 def set_default_caller_id(caller_id_id: int, current_user=Depends(get_current_user)):
     """Set a verified caller ID as the default"""
     try:
-        from main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
+        from database import SessionLocal
+        from database.models import VerifiedCallerId, AgentTelephonySettings
 
         db = SessionLocal()
         try:
@@ -231,7 +242,8 @@ def get_telephony_status(current_user=Depends(get_current_user)):
         today_calls = 0
 
         try:
-            from main import SessionLocal, VerifiedCallerId, CallLog
+            from database import SessionLocal
+            from database.models import VerifiedCallerId, CallLog
             db = SessionLocal()
             try:
                 verified_count = db.query(VerifiedCallerId).filter(

@@ -845,6 +845,22 @@ class SalesforceSyncService:
                 + (f", warnings={recon_result.warnings}" if recon_result.warnings else "")
             )
 
+            # Disposition: revert stage if a disposition task was created (LO must apply)
+            if recon_result.should_create_disposition and recon_result.disposition_task_id:
+                try:
+                    old_stage_value = old_data.get("stage")
+                    if old_stage_value:
+                        self.db.execute(text(
+                            "UPDATE loans SET stage = :old_stage WHERE id = :loan_id"
+                        ), {"old_stage": old_stage_value, "loan_id": loan_id})
+                        self.db.commit()
+                        logger.info(
+                            f"Disposition task {recon_result.disposition_task_id} created for "
+                            f"loan {loan_id}, stage reverted to {old_stage_value} (change deferred)"
+                        )
+                except Exception as e:
+                    logger.warning(f"Could not revert stage for disposition on loan {loan_id}: {e}")
+
             # Promote to MUM only when reconciliation says so
             if recon_result.should_promote_mum:
                 try:

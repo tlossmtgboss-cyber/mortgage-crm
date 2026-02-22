@@ -68,7 +68,8 @@ def register_audit_report_routes(app, get_db, get_current_user, **kwargs):
         try:
             current_user = await get_current_user(request=request, db=db)
             user_id = current_user.id
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error during JWT auth, falling back to publish key: {e}")
             # Check for publish key header
             publish_key = request.headers.get("X-Audit-Publish-Key", "")
             expected_key = os.getenv("AUDIT_PUBLISH_KEY", "")

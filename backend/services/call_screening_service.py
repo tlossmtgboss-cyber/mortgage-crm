@@ -456,8 +456,8 @@ class CallScreeningService:
             logger.error(f"Failed to log screening decision: {e}")
             try:
                 self.db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to rollback after screening log failure: {e}")
 
 
 # Helper functions for use in other parts of the codebase

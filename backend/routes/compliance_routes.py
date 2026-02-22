@@ -422,8 +422,8 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                     "is_on_dnc": is_dnc,
                     "reason": reason,
                 }
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error checking DNC status: {e}")
 
         return result
 

@@ -309,7 +309,8 @@ class PerenniaCache:
                                 data = json.loads(cached_data)
                                 if pattern.lower() in data.get("query", "").lower():
                                     matching_keys.append(key)
-                            except Exception:
+                            except Exception as e:
+                                logger.exception(f"Failed to parse cached data for pattern matching: {e}")
                                 continue
 
                     if matching_keys:
@@ -357,7 +358,8 @@ class PerenniaCache:
                                 data = json.loads(cached_data)
                                 if data.get("intent") == intent:
                                     matching_keys.append(key)
-                            except Exception:
+                            except Exception as e:
+                                logger.exception(f"Failed to parse cached data for intent matching: {e}")
                                 continue
 
                     if matching_keys:

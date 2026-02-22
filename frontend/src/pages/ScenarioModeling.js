@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { profitabilityAPI } from '../services/api';
 import './ScenarioModeling.css';
+import { toast } from '../utils/toast';
 
 const ScenarioModeling = () => {
   const navigate = useNavigate();
@@ -85,7 +86,7 @@ const ScenarioModeling = () => {
   // Save scenario
   const saveScenario = async () => {
     if (!scenarioName.trim()) {
-      alert('Please enter a scenario name');
+      toast.error('Please enter a scenario name');
       return;
     }
 
@@ -103,12 +104,12 @@ const ScenarioModeling = () => {
       };
 
       await profitabilityAPI.createScenario(data);
-      alert('Scenario saved successfully!');
+      toast.success('Scenario saved successfully!');
       loadSavedScenarios();
       setScenarioName('');
     } catch (err) {
       console.error('Failed to save scenario:', err);
-      alert('Failed to save scenario');
+      toast.error('Failed to save scenario');
     }
   };
 

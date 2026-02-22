@@ -9,7 +9,10 @@ sentiment intensity, and thread-level tone trends.
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 import re
+import logging
 from collections import Counter
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -1640,8 +1643,8 @@ def find_contact_phone(
                     "role": u.get("role"),
                     "match_score": 100 if search_name in (u.get("name") or "").lower() else 80,
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error searching team members in find_contact_phone: {e}")
 
     # Search leads
     try:
@@ -1664,8 +1667,8 @@ def find_contact_phone(
                     "stage": l.get("stage"),
                     "match_score": 90 if search_name in (l.get("name") or "").lower() else 70,
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error searching leads in find_contact_phone: {e}")
 
     # Search loan borrowers
     try:
@@ -1689,8 +1692,8 @@ def find_contact_phone(
                     "stage": loan.get("stage"),
                     "match_score": 85 if search_name in (loan.get("borrower_name") or "").lower() else 65,
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error searching loan borrowers in find_contact_phone: {e}")
 
     # Search partners/referral sources
     try:
@@ -1715,8 +1718,8 @@ def find_contact_phone(
                     "partner_type": p.get("partner_type"),
                     "match_score": 75,
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error searching partners in find_contact_phone: {e}")
 
     # Sort by match score
     results.sort(key=lambda x: x.get("match_score", 0), reverse=True)

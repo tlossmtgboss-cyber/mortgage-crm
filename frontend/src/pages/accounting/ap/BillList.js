@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function BillList() {
   const navigate = useNavigate();
@@ -244,7 +245,7 @@ function BillList() {
       fetchBills();
     } catch (err) {
       console.error('Error saving bill:', err);
-      alert('Failed to save bill');
+      toast.error('Failed to save bill');
     }
   };
 
@@ -256,7 +257,7 @@ function BillList() {
       fetchBills();
     } catch (err) {
       console.error('Error approving bill:', err);
-      alert('Failed to approve bill');
+      toast.error('Failed to approve bill');
     }
   };
 
@@ -268,7 +269,7 @@ function BillList() {
       fetchBills();
     } catch (err) {
       console.error('Error voiding bill:', err);
-      alert('Failed to void bill');
+      toast.error('Failed to void bill');
     }
   };
 

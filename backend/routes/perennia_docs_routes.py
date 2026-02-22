@@ -1708,7 +1708,8 @@ async def get_docs_system_summary(
             try:
                 count = db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
                 summary[table] = count
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error querying table {table} in system_summary: {e}")
                 summary[table] = "table_not_found"
 
         # Get request status breakdown
@@ -1719,7 +1720,8 @@ async def get_docs_system_summary(
                 GROUP BY status
             """))
             summary["requests_by_status"] = {row[0]: row[1] for row in status_breakdown}
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error querying requests_by_status in system_summary: {e}")
             summary["requests_by_status"] = {}
 
         # Get document status breakdown
@@ -1730,7 +1732,8 @@ async def get_docs_system_summary(
                 GROUP BY status
             """))
             summary["documents_by_status"] = {row[0]: row[1] for row in doc_status}
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error querying documents_by_status in system_summary: {e}")
             summary["documents_by_status"] = {}
 
         return {

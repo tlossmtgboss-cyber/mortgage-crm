@@ -287,7 +287,8 @@ async def process_email(
         extracted = request.extracted_fields
 
         # Import models here to avoid circular imports
-        from main import Lead, Loan, Document, DocumentType, DocumentCategory
+        from database.enums import DocumentType, DocumentCategory
+        from database.models import Lead, Loan, Document
 
         result = {
             "success": False,
@@ -348,7 +349,7 @@ async def search_matches(
     Search for matching leads and loans based on email/name/loan number
     """
     try:
-        from main import Lead, Loan
+        from database.models import Lead, Loan
 
         leads = []
         loans = []
@@ -423,7 +424,7 @@ async def search_for_matches(
     db: Session
 ) -> Dict[str, Any]:
     """Search database for matching entities based on extracted data"""
-    from main import Lead, Loan
+    from database.models import Lead, Loan
 
     matches = {
         "leads": [],
@@ -495,7 +496,7 @@ async def process_as_lead(
     db: Session
 ) -> Dict[str, Any]:
     """Create or update a lead from email data"""
-    from main import Lead
+    from database.models import Lead
 
     # Merge user answers with extracted fields
     fields = {**extracted_fields, **user_answers}
@@ -601,7 +602,7 @@ async def process_as_loan(
     db: Session
 ) -> Dict[str, Any]:
     """Create or update a loan from email data"""
-    from main import Loan
+    from database.models import Loan
 
     # Merge user answers with extracted fields
     fields = {**extracted_fields, **user_answers}
@@ -706,7 +707,8 @@ async def archive_email(
     db: Session
 ) -> Dict[str, Any]:
     """Archive email as a document attached to a borrower/loan"""
-    from main import Document, DocumentType, DocumentCategory
+    from database.enums import DocumentType, DocumentCategory
+    from database.models import Document
 
     # Create document record
     doc = Document(

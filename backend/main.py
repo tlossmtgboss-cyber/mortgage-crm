@@ -448,7 +448,8 @@ try:
             with SessionLocal() as db:
                 db.execute(text("SELECT 1"))
                 return True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Database health check failed: {e}")
             return False
 
     health_checker.register_check("database", check_database)
@@ -480,7 +481,8 @@ try:
             try:
                 from services.redis_cache import redis_cache
                 return await redis_cache.health_check()
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Redis health check failed: {e}")
                 return False
         health_checker.register_check("redis", check_redis)
 
@@ -1157,6 +1159,22 @@ try:
     logger.info("✅ Enterprise readiness routes loaded (data quality, security, onboarding, white-label, import templates)")
 except Exception as e:
     logger.error(f"❌ Enterprise readiness routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# ENCOMPASS LOS INTEGRATION ROUTES
+# ============================================================================
+try:
+    from routes.encompass_integration_routes import register_encompass_integration_routes
+    register_encompass_integration_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("Encompass LOS integration routes loaded (connect, sync, search, import)")
+except Exception as e:
+    logger.error(f"Encompass integration routes failed to load: {e}")
     import traceback
     traceback.print_exc()
 

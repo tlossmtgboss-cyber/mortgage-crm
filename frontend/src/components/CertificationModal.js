@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './CertificationModal.css';
+import { toast } from '../utils/toast';
 
 const CertificationModal = ({ certificationId, onClose, onComplete }) => {
   const [cert, setCert] = useState(null);
@@ -29,12 +30,12 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
         const data = await response.json();
         setCert(data);
       } else {
-        alert('Failed to load certification');
+        toast.error('Failed to load certification');
         onClose();
       }
     } catch (err) {
       console.error('Error loading certification:', err);
-      alert('Failed to load certification');
+      toast.error('Failed to load certification');
       onClose();
     } finally {
       setLoading(false);
@@ -71,10 +72,10 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
       if (response.ok) {
         onComplete();
       } else {
-        alert('Failed to certify access');
+        toast.error('Failed to certify access');
       }
     } catch (err) {
-      alert('Failed to certify access');
+      toast.error('Failed to certify access');
       console.error(err);
     } finally {
       setSubmitting(false);
@@ -103,10 +104,10 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
       if (response.ok) {
         onComplete();
       } else {
-        alert('Failed to skip certification');
+        toast.error('Failed to skip certification');
       }
     } catch (err) {
-      alert('Failed to skip certification');
+      toast.error('Failed to skip certification');
       console.error(err);
     } finally {
       setSubmitting(false);

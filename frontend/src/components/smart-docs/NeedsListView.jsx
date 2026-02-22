@@ -11,6 +11,7 @@ import SmartDocumentUpload from './SmartDocumentUpload';
 import DocumentStatusCard from './DocumentStatusCard';
 import { smartDocsAPI } from '../../services/smartDocsApi';
 import './NeedsListView.css';
+import { toast } from '../../utils/toast';
 
 const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
   const {
@@ -114,10 +115,10 @@ const NeedsListView = ({ loanId, borrowerId, onDocumentUploaded }) => {
       setShowDocuSignModal(false);
       setSelectedRequest(null);
       refresh();
-      alert('Document request sent to client portal for signature!');
+      toast.success('Document request sent to client portal for signature!');
     } catch (err) {
       console.error('Failed to send to portal:', err);
-      alert('Failed to send to portal: ' + err.message);
+      toast.error('Failed to send to portal: ' + err.message);
     } finally {
       setDocuSignLoading(false);
     }

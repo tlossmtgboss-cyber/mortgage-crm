@@ -79,7 +79,8 @@ def get_db():
     try:
         yield session
         session.commit()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_db session: {e}")
         session.rollback()
         raise
     finally:

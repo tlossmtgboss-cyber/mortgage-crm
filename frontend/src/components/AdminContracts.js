@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { platformContractsAPI } from '../services/platformContractsApi';
 import './AdminContracts.css';
+import { toast } from '../utils/toast';
 
 const CONTRACT_TYPES = {
   license_agreement: 'License Agreement',
@@ -119,7 +120,7 @@ function AdminContracts() {
       const data = await platformContractsAPI.getDownloadUrl(contract.id);
       window.open(data.download_url, '_blank');
     } catch (err) {
-      alert('Failed to get download URL: ' + err.message);
+      toast.error('Failed to get download URL: ' + err.message);
     }
   };
 
@@ -130,7 +131,7 @@ function AdminContracts() {
       fetchContracts();
       fetchSummary();
     } catch (err) {
-      alert('Failed to send for signature: ' + err.message);
+      toast.error('Failed to send for signature: ' + err.message);
     }
   };
 
@@ -142,7 +143,7 @@ function AdminContracts() {
       fetchContracts();
       fetchSummary();
     } catch (err) {
-      alert(`Failed to ${action} contract: ` + err.message);
+      toast.error(`Failed to ${action} contract: ` + err.message);
     }
   };
 
@@ -157,7 +158,7 @@ function AdminContracts() {
         await platformContractsAPI.uploadContractPdf(contract.id, file);
         fetchContracts();
       } catch (err) {
-        alert('Failed to upload PDF: ' + err.message);
+        toast.error('Failed to upload PDF: ' + err.message);
       }
     };
     input.click();
@@ -196,7 +197,7 @@ function AdminContracts() {
       fetchContracts();
       fetchSummary();
     } catch (err) {
-      alert('Failed to create contract: ' + err.message);
+      toast.error('Failed to create contract: ' + err.message);
     } finally {
       setCreating(false);
     }

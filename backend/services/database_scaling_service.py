@@ -103,8 +103,8 @@ class DatabaseScalingService:
         if self.redis:
             try:
                 await self.redis.aclose()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error closing Redis connection: {e}")
             self.redis = None
             self._enabled = False
 
@@ -191,8 +191,8 @@ class DatabaseScalingService:
                 }
                 await self.redis.lpush("db_scaling:alerts", json.dumps(alert_data))
                 await self.redis.ltrim("db_scaling:alerts", 0, 99)  # Keep last 100
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error storing alert in Redis: {e}")
 
     # =========================================================================
     # QUERY CACHING
@@ -384,8 +384,8 @@ class DatabaseScalingService:
                     "issue": f"{stale} stale idle connections",
                     "action": "Consider running /api/v1/performance/database/terminate-idle"
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error checking stale idle connections: {e}")
 
         return status
 

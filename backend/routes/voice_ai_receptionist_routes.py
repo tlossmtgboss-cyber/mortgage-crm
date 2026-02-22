@@ -51,8 +51,8 @@ def _log_receptionist_activity(
         logger.warning(f"Failed to log receptionist activity: {e}")
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to rollback in _log_receptionist_activity: {e}")
 
 router = APIRouter(prefix="/api/v1/voice", tags=["Voice AI Receptionist"])
 
@@ -871,8 +871,9 @@ async def twilio_sms_webhook(
                 ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE
             """))
             db.commit()
-        except Exception:
+        except Exception as e:
             db.rollback()
+            logger.warning(f"Failed to add sms_messages columns in twilio_sms_webhook: {e}")
 
         # Normalize phone numbers
         def normalize_phone(phone):

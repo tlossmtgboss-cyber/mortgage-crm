@@ -237,7 +237,8 @@ class CallComplianceService:
                 WHERE state = :state
             """), {"state": state}).fetchone()
             return result[0] if result else None
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to get custom disclosure for state {state}: {e}")
             return None
 
     def _get_state_notes(self, state: str) -> str:
@@ -389,7 +390,8 @@ class CallComplianceService:
                 AND (expires_at IS NULL OR expires_at > :now)
             """), {"phone_number": clean_number, "now": datetime.utcnow()}).fetchone()
             return result is not None
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to check DNC list for phone number: {e}")
             return False
 
     def add_to_dnc_list(
@@ -547,8 +549,8 @@ class CallComplianceService:
                 WHERE DATE(timestamp) BETWEEN :start_date AND :end_date
             """), {"start_date": start_date, "end_date": end_date}).fetchone()
             report.total_calls = calls_result[0] if calls_result else 0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to get call counts for compliance report: {e}")
 
         # Get consent records
         try:
@@ -564,8 +566,8 @@ class CallComplianceService:
             if consent_result:
                 report.consent_obtained = consent_result[1] or 0
                 report.consent_declined = consent_result[2] or 0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to get consent records for compliance report: {e}")
 
         # Get violations
         try:
@@ -589,8 +591,8 @@ class CallComplianceService:
                     detected_at=row[7],
                     resolved=row[8]
                 ))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to get violations for compliance report: {e}")
 
         report.non_compliant_calls = len(report.violations)
         report.compliant_calls = max(0, report.total_calls - report.non_compliant_calls)

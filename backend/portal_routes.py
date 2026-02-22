@@ -17,6 +17,9 @@ from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field
+import logging
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from middleware.purl_auth import require_purl_token, PURLAuthContext
@@ -25,7 +28,7 @@ from utils.auth import require_admin
 # Lazy import to avoid circular dependencies
 def get_current_user_dep():
     """Get current user dependency - lazy import to avoid circular imports"""
-    from main import get_current_user
+    from auth.dependencies import get_current_user
     return get_current_user
 
 from models.portal_models import (
@@ -1149,8 +1152,8 @@ class MultiLoanPortalService:
             if loan.get("property_address") and isinstance(loan["property_address"], str):
                 try:
                     loan["property_address"] = json.loads(loan["property_address"])
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to parse property_address JSON: {e}")
             loans.append(loan)
 
         return loans
@@ -1576,8 +1579,8 @@ def get_portal_by_token(
         try:
             import json
             property_address = json.loads(property_address)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to parse property_address JSON string: {e}")
 
     return {
         "loan_id": loan_data["loan_id"],

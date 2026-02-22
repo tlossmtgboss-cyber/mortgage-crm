@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import { voicemailAPI } from '../../services/api';
 import './MarketingSettings.css';
+import { toast } from '../../utils/toast';
 
 const VOICE_OPTIONS = [
   { id: 'alloy', label: 'Alloy', desc: 'Neutral, balanced' },
@@ -169,7 +170,7 @@ function VoicemailSettings() {
       await loadTemplates();
     } catch (err) {
       console.error('Error uploading audio:', err);
-      alert('Failed to upload audio. Max 10MB, formats: mp3, wav, ogg, m4a.');
+      toast.error('Failed to upload audio. Max 10MB, formats: mp3, wav, ogg, m4a.');
     }
   };
 
@@ -249,7 +250,7 @@ function VoicemailSettings() {
     } catch (err) {
       console.error(`Error ${action} campaign:`, err);
       setLoadError(err.response?.data?.detail || `Failed to ${action} campaign. Please try again.`);
-      alert(err.response?.data?.detail || `Failed to ${action} campaign`);
+      toast.error(err.response?.data?.detail || `Failed to ${action} campaign`);
     }
   };
 

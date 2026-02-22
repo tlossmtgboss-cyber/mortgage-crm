@@ -54,7 +54,8 @@ async def get_user_from_request(request: Request) -> Optional[Dict[str, Any]]:
         # If we have user_id, try to look up user from database
         if user_id or user_email:
             try:
-                from main import SessionLocal, User
+                from database import SessionLocal
+                from database.models import User
                 db = SessionLocal()
                 try:
                     if user_id:
@@ -426,7 +427,8 @@ async def handle_create_task(args: Dict[str, Any], request: Request) -> Dict[str
         return {"success": False, "error": "Authentication required"}
 
     try:
-        from main import SessionLocal, Task
+        from database import SessionLocal
+        from database.models import Task
         from datetime import datetime
 
         db = SessionLocal()
@@ -486,7 +488,9 @@ async def handle_get_pipeline(args: Dict[str, Any], request: Request) -> Dict[st
 async def handle_search_leads(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
     """Search leads handler - query leads from database"""
     try:
-        from main import SessionLocal, Lead, LeadStage
+        from database import SessionLocal
+        from database.enums import LeadStage
+        from database.models import Lead
         from datetime import datetime
 
         db = SessionLocal()
@@ -626,7 +630,9 @@ async def handle_lead_status_insights(args: Dict[str, Any], request: Request) ->
     """
     try:
         # Get database session
-        from main import SessionLocal, Lead, LeadStage
+        from database import SessionLocal
+        from database.enums import LeadStage
+        from database.models import Lead
         from datetime import datetime, timezone
         from collections import defaultdict
 
@@ -758,7 +764,9 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
     - Last contact date and notes
     """
     try:
-        from main import SessionLocal, Lead, LeadStage
+        from database import SessionLocal
+        from database.enums import LeadStage
+        from database.models import Lead
         from datetime import datetime
 
         db = SessionLocal()
@@ -845,7 +853,9 @@ async def handle_get_pipeline_metrics(args: Dict[str, Any], request: Request) ->
     - Velocity: recent fundings and average days to close
     """
     try:
-        from main import SessionLocal, Loan, LoanStage
+        from database import SessionLocal
+        from database.enums import LoanStage
+        from database.models import Loan
         from datetime import datetime, timedelta
         from sqlalchemy import func
 
@@ -925,7 +935,7 @@ async def handle_get_tasks(args: Dict[str, Any], request: Request) -> Dict[str, 
         List of tasks with details
     """
     try:
-        from main import SessionLocal
+        from database import SessionLocal
         from datetime import datetime
         from sqlalchemy import text
 
@@ -1058,7 +1068,9 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
     Returns actionable items with phone numbers for immediate action.
     """
     try:
-        from main import SessionLocal, Lead, Loan, LeadStage, LoanStage
+        from database import SessionLocal
+        from database.enums import LeadStage, LoanStage
+        from database.models import Lead, Loan
         from datetime import datetime, timedelta
         from sqlalchemy import text
 
@@ -1339,7 +1351,9 @@ async def handle_get_stale_leads(args: Dict[str, Any], request: Request) -> Dict
         include_never_contacted: Include leads never contacted (default True)
     """
     try:
-        from main import SessionLocal, Lead, LeadStage
+        from database import SessionLocal
+        from database.enums import LeadStage
+        from database.models import Lead
         from datetime import datetime, timedelta
         from sqlalchemy import or_, and_
 
@@ -1449,7 +1463,9 @@ async def handle_get_top_leads(args: Dict[str, Any], request: Request) -> Dict[s
     Perfect for "Call my top 3 leads right now" queries.
     """
     try:
-        from main import SessionLocal, Lead, LeadStage
+        from database import SessionLocal
+        from database.enums import LeadStage
+        from database.models import Lead
         from datetime import datetime
         from sqlalchemy import desc, case
 

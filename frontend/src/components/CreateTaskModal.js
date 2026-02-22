@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../utils/api/client';
 import './CreateTaskModal.css';
+import { toast } from '../utils/toast';
 
 function CreateTaskModal({ isOpen, onClose, lead, onTaskCreated }) {
   const [title, setTitle] = useState('');
@@ -46,7 +47,7 @@ function CreateTaskModal({ isOpen, onClose, lead, onTaskCreated }) {
         onTaskCreated(data);
       }
 
-      alert('Task created successfully!');
+      toast.success('Task created successfully!');
       onClose();
     } catch (err) {
       console.error('Error creating task:', err);

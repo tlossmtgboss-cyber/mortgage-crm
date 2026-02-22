@@ -357,7 +357,8 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                     """), {"domain_pattern": f"%@{email_domain}"}).fetchone()
                     if org_row:
                         org_id = org_row[0]
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error determining org_id from email domain: {e}")
                 pass  # Best effort — org_id can be NULL
 
             result = db.execute(text("""

@@ -11,7 +11,8 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 from datetime import datetime, date, timedelta
 from database import get_db
-from main import get_current_user, User
+from auth.dependencies import get_current_user
+from database.models import User
 import json
 import os
 from sqlalchemy.exc import SQLAlchemyError

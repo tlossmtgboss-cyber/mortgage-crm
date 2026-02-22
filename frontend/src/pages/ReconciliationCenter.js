@@ -4,6 +4,7 @@ import { API_BASE_URL, emailDraftsAPI } from '../services/api';
 import { useLayoutFix } from '../hooks/useLayoutFix';
 import { sanitizeHTML } from '../utils/sanitize';
 import './ReconciliationCenter.css';
+import { toast } from '../utils/toast';
 
 function ReconciliationCenter() {
   const navigate = useNavigate();
@@ -260,7 +261,7 @@ function ReconciliationCenter() {
   // Create new referral partner
   const handleCreateReferralPartner = async () => {
     if (!newReferralPartner.name.trim()) {
-      alert('Please enter a name for the referral partner');
+      toast.error('Please enter a name for the referral partner');
       return;
     }
 
@@ -283,11 +284,11 @@ function ReconciliationCenter() {
         setNewReferralPartner({ name: '', company: '', email: '', phone: '', type: 'realtor' });
       } else {
         const error = await response.json();
-        alert(`Failed to create referral partner: ${error.detail || 'Unknown error'}`);
+        toast.error(`Failed to create referral partner: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating referral partner:', error);
-      alert('Error creating referral partner');
+      toast.error('Error creating referral partner');
     }
   };
 
@@ -392,7 +393,7 @@ function ReconciliationCenter() {
       if (selectedDraft?.id === draftId) setSelectedDraft(null);
     } catch (error) {
       console.error('Error sending draft:', error);
-      alert('Failed to send email: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to send email: ' + (error.response?.data?.detail || error.message));
     } finally {
       setDraftActionLoading(null);
     }
@@ -577,7 +578,7 @@ function ReconciliationCenter() {
       await proceedWithApproval(itemId);
     } catch (error) {
       console.error('Error approving item:', error);
-      alert(`Error approving item: ${error.message}`);
+      toast.error(`Error approving item: ${error.message}`);
       setProcessingAction(false);
     }
   };
@@ -697,11 +698,11 @@ function ReconciliationCenter() {
         fetchCompletedItems();
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to approve item: ${errorData.detail || response.statusText}`);
+        toast.error(`Failed to approve item: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error approving item:', error);
-      alert(`Error approving item: ${error.message}`);
+      toast.error(`Error approving item: ${error.message}`);
     } finally {
       setProcessingAction(false);
     }
@@ -741,7 +742,7 @@ function ReconciliationCenter() {
 
       // Validate form
       if (!newBorrowerForm.first_name || !newBorrowerForm.last_name) {
-        alert('Please enter first name and last name');
+        toast.error('Please enter first name and last name');
         setProcessingAction(false);
         return;
       }
@@ -808,11 +809,11 @@ function ReconciliationCenter() {
         fetchCompletedItems();
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to create borrower: ${errorData.detail || response.statusText}`);
+        toast.error(`Failed to create borrower: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error creating borrower:', error);
-      alert(`Error creating borrower: ${error.message}`);
+      toast.error(`Error creating borrower: ${error.message}`);
     } finally {
       setProcessingAction(false);
     }
@@ -862,11 +863,11 @@ function ReconciliationCenter() {
         fetchCompletedItems();
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to reject item: ${errorData.detail || response.statusText}`);
+        toast.error(`Failed to reject item: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error rejecting item:', error);
-      alert(`Error rejecting item: ${error.message}`);
+      toast.error(`Error rejecting item: ${error.message}`);
     } finally {
       setProcessingAction(false);
     }
@@ -927,11 +928,11 @@ function ReconciliationCenter() {
         setDeleteFromInboxOverride(null);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        alert(`Failed to delete item: ${errorData.detail || response.statusText}`);
+        toast.error(`Failed to delete item: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error deleting item:', error);
-      alert(`Error deleting item: ${error.message}`);
+      toast.error(`Error deleting item: ${error.message}`);
     } finally {
       setProcessingAction(false);
     }
@@ -1102,7 +1103,7 @@ function ReconciliationCenter() {
 
   const bulkApprove = async () => {
     if (selectedItems.size === 0) {
-      alert('Please select items to approve');
+      toast.error('Please select items to approve');
       return;
     }
 
@@ -1142,12 +1143,12 @@ function ReconciliationCenter() {
     setSelectedItems(new Set());
     setBulkProcessing(false);
 
-    alert(`Successfully approved ${successCount} out of ${selectedItems.size} items`);
+    toast.success(`Successfully approved ${successCount} out of ${selectedItems.size} items`);
   };
 
   const bulkReject = async () => {
     if (selectedItems.size === 0) {
-      alert('Please select items to reject');
+      toast.error('Please select items to reject');
       return;
     }
 
@@ -1186,7 +1187,7 @@ function ReconciliationCenter() {
     setSelectedItems(new Set());
     setBulkProcessing(false);
 
-    alert(`Successfully rejected ${successCount} out of ${selectedItems.size} items`);
+    toast.success(`Successfully rejected ${successCount} out of ${selectedItems.size} items`);
   };
 
   // Pending Review bulk selection functions

@@ -3,6 +3,7 @@ import EmailReconciliationModal from './EmailReconciliationModal';
 import DocumentDropModal from './DocumentDropModal';
 import { emailDropAPI, documentDropAPI } from '../services/api';
 import './EmailDropZone.css';
+import { toast } from '../utils/toast';
 
 /**
  * EmailDropZone - Drag and drop component for email and document files
@@ -221,7 +222,7 @@ function EmailDropZone({ children }) {
     if (content && content.length > 20) {
       await handleDraggedContent(content, contentType);
     } else {
-      alert('No valid file or email content detected. Try:\n1. Save the email as .eml file and drag that\n2. Or copy/paste the email content');
+      toast.error('No valid file or email content detected. Try:\n1. Save the email as .eml file and drag that\n2. Or copy/paste the email content');
     }
   }, []);
 
@@ -271,7 +272,7 @@ function EmailDropZone({ children }) {
       setShowChoiceModal(true);
     } catch (error) {
       console.error('Failed to parse email:', error);
-      alert('Failed to parse email file. Please try again.');
+      toast.error('Failed to parse email file. Please try again.');
     }
     setParsing(false);
   };
@@ -302,7 +303,7 @@ function EmailDropZone({ children }) {
       setShowChoiceModal(true);
     } catch (error) {
       console.error('Failed to parse dragged content:', error);
-      alert('Could not parse this email. Try saving it as a .eml file first.');
+      toast.error('Could not parse this email. Try saving it as a .eml file first.');
     }
     setParsing(false);
   };
@@ -491,13 +492,13 @@ function EmailDropZone({ children }) {
         data.userAnswers || {}
       );
       if (result.success) {
-        alert(`Success! ${result.message}`);
+        toast.success(`Success! ${result.message}`);
       } else {
-        alert(`Warning: ${result.message}`);
+        toast.warning(`Warning: ${result.message}`);
       }
     } catch (error) {
       console.error('Failed to process email:', error);
-      alert('Failed to process email. Please try again.');
+      toast.error('Failed to process email. Please try again.');
     }
     setShowReconciliationModal(false);
     setEmailData(null);
@@ -513,7 +514,7 @@ function EmailDropZone({ children }) {
     console.log('Document upload complete:', result);
     setShowDocumentModal(false);
     setDocumentFile(null);
-    alert(`Document uploaded successfully!`);
+    toast.success(`Document uploaded successfully!`);
   };
 
   return (

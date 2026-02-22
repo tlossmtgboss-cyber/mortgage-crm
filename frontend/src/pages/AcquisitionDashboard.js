@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { acquisitionAPI } from '../services/acquisitionApi';
 import './AcquisitionDashboard.css';
+import { toast } from '../utils/toast';
 
 function AcquisitionDashboard() {
   const navigate = useNavigate();
@@ -85,7 +86,7 @@ function AcquisitionDashboard() {
       fetchDashboardData();
     } catch (err) {
       console.error('Error launching campaign:', err);
-      alert('Failed to launch campaign. Please try again.');
+      toast.error('Failed to launch campaign. Please try again.');
     } finally {
       setLaunching(false);
     }

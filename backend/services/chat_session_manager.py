@@ -380,7 +380,8 @@ class ChatSessionManager:
                 if match:
                     try:
                         value = config['extract'](match)
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"Error extracting intent signal value: {e}")
                         value = match.group(0)
 
                     detected.append({

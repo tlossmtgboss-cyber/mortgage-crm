@@ -13,7 +13,7 @@ Usage:
 
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Date,
+    Column, Integer, String, Float, Boolean, DateTime, Date, Numeric,
     Text, ForeignKey, JSON, Index
 )
 from sqlalchemy.orm import relationship
@@ -43,7 +43,7 @@ class ReferralPartner(Base):
     referrals_in = Column(Integer, default=0)
     referrals_out = Column(Integer, default=0)
     closed_loans = Column(Integer, default=0)
-    volume = Column(Float, default=0.0)
+    volume = Column(Numeric(18, 2), default=0.0)
     reciprocity_score = Column(Float, default=0.0)
     status = Column(String, default="active")
     loyalty_tier = Column(String, default="bronze")
@@ -111,17 +111,17 @@ class MUMClient(Base):
     closing_date = Column("closing_date", DateTime, nullable=False)  # NOT NULL in DB
     first_payment_date = Column("first_payment_date", DateTime, nullable=False)  # NOT NULL in DB
     days_since_funding = Column(Integer)
-    original_rate = Column(Float)
-    current_rate = Column(Float)
+    original_rate = Column(Numeric(8, 4))
+    current_rate = Column(Numeric(8, 4))
     # Database has several NOT NULL columns that we need to map to
-    interest_rate = Column("interest_rate", Float, nullable=False)  # NOT NULL in DB
-    original_loan_amount = Column("original_loan_amount", Float, nullable=False)  # NOT NULL in DB
-    current_loan_amount = Column("current_loan_amount", Float, nullable=False)  # NOT NULL in DB
-    appraisal_value_at_closing = Column("appraisal_value_at_closing", Float, nullable=False)  # NOT NULL in DB
-    current_property_value = Column("current_property_value", Float, nullable=False)  # NOT NULL in DB
-    loan_balance = Column(Float)  # Keep as separate column for compatibility
+    interest_rate = Column("interest_rate", Numeric(8, 4), nullable=False)  # NOT NULL in DB
+    original_loan_amount = Column("original_loan_amount", Numeric(18, 2), nullable=False)  # NOT NULL in DB
+    current_loan_amount = Column("current_loan_amount", Numeric(18, 2), nullable=False)  # NOT NULL in DB
+    appraisal_value_at_closing = Column("appraisal_value_at_closing", Numeric(18, 2), nullable=False)  # NOT NULL in DB
+    current_property_value = Column("current_property_value", Numeric(18, 2), nullable=False)  # NOT NULL in DB
+    loan_balance = Column(Numeric(18, 2))  # Keep as separate column for compatibility
     refinance_opportunity = Column(Boolean, default=False)
-    estimated_savings = Column(Float)
+    estimated_savings = Column(Numeric(18, 2))
     engagement_score = Column(Integer)
     status = Column(String)
     notes = Column(Text)
@@ -144,8 +144,8 @@ class MUMClient(Base):
     # Valuation & Refinance fields (computed by agents)
     term = Column(Integer, default=360)
     maturity_date = Column(DateTime)
-    estimated_equity = Column(Float)
-    current_ltv = Column(Float)
+    estimated_equity = Column(Numeric(18, 2))
+    current_ltv = Column(Numeric(8, 4))
     refi_score = Column(Integer, default=0)
     property_state = Column(String)
     property_zip = Column(String)

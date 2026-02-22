@@ -142,8 +142,8 @@ class SFUService:
                 is_host,
             )
             return token
-        except Exception:
-            logger.exception("Failed to generate LiveKit token")
+        except Exception as e:
+            logger.exception(f"Failed to generate LiveKit token: {e}")
             return None
 
     # -----------------------------------------------------------------------

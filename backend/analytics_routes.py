@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
 def get_db():
     """Database session dependency - imported from main"""
-    from main import SessionLocal
+    from database import SessionLocal
     db = SessionLocal()
     try:
         yield db
@@ -26,7 +26,7 @@ def get_db():
 
 def get_current_user(db: Session):
     """Get current user - simplified for analytics"""
-    from main import get_current_user as main_get_current_user
+    from auth.dependencies import get_current_user as main_get_current_user
     return main_get_current_user
 
 

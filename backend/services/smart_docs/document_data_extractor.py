@@ -389,7 +389,8 @@ class DocumentDataExtractor:
             # Try to decode as text
             try:
                 return file_content.decode("utf-8")
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to decode file content as UTF-8: {e}")
                 return ""
 
     def _extract_text_from_pdf(self, file_content: bytes) -> str:

@@ -286,8 +286,8 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                 )
         except HTTPException:
             raise
-        except Exception:
-            pass  # Account lockout not available or columns missing, skip check
+        except Exception as e:
+            logger.debug(f"Account lockout check skipped in login: {e}")
 
         if not user.hashed_password:
             logger.warning("Login attempt for user with no password set")
@@ -310,8 +310,8 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                     )
             except HTTPException:
                 raise  # Re-raise the 423 HTTPException
-            except Exception:
-                pass  # Account lockout not available or columns missing, skip recording
+            except Exception as e:
+                logger.debug(f"Failed to record failed login attempt in login: {e}")
 
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -331,8 +331,9 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
         try:
             user.last_activity_at = datetime.now(timezone.utc)
             db.commit()
-        except Exception:
-            db.rollback()  # Column may not exist yet; don't block login
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"Failed to update last_activity_at in login: {e}")
 
         # Create tokens with user context for proper security
         tenant_id = str(user.organization_id) if hasattr(user, 'organization_id') and user.organization_id else None

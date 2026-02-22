@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { leadsAPI, loansAPI } from '../services/api';
 import './EmailReconciliationModal.css';
+import { toast } from '../utils/toast';
 
 /**
  * EmailReconciliationModal - Reconciliation workflow for imported emails
@@ -76,7 +77,7 @@ function EmailReconciliationModal({ emailData, onClose, onComplete }) {
 
   const handleApprove = async () => {
     if (!selectedAction) {
-      alert('Please select an action');
+      toast.error('Please select an action');
       return;
     }
 
@@ -92,7 +93,7 @@ function EmailReconciliationModal({ emailData, onClose, onComplete }) {
       onComplete(selectedAction, result);
     } catch (error) {
       console.error('Failed to process:', error);
-      alert('Failed to process email. Please try again.');
+      toast.error('Failed to process email. Please try again.');
     }
     setSubmitting(false);
   };

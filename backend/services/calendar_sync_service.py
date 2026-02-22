@@ -1359,7 +1359,8 @@ class CalendarSyncService:
                 return datetime.strptime(sf_datetime[:19], "%Y-%m-%dT%H:%M:%S")
             else:
                 return datetime.strptime(sf_datetime[:19], "%Y-%m-%dT%H:%M:%S")
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to parse Salesforce datetime '{sf_datetime}': {e}")
             return None
 
     # =========================================================================
@@ -1590,8 +1591,8 @@ class CalendarSyncService:
                             # SF event deleted, remove mapping
                             self.db.delete(event.sync_mapping)
                             self.db.commit()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to check/remove Salesforce event mapping: {e}")
 
         # Reset sync status
         event.sync_status = SyncStatus.PENDING.value

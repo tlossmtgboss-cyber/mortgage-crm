@@ -428,7 +428,8 @@ def track_metric(metric_name: str, tags: List[str] = None, track_timing: bool = 
             try:
                 result = await func(*args, **kwargs)
                 return result
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in tracked async function {func.__name__}: {e}")
                 success = False
                 raise
             finally:
@@ -448,7 +449,8 @@ def track_metric(metric_name: str, tags: List[str] = None, track_timing: bool = 
             try:
                 result = func(*args, **kwargs)
                 return result
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in tracked sync function {func.__name__}: {e}")
                 success = False
                 raise
             finally:

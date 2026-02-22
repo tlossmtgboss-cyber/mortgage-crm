@@ -34,7 +34,7 @@ async def _require_auth(
     """Require valid authentication for performance monitoring endpoints."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     user = await get_current_user_flexible(
         token=credentials.credentials, request=None, db=db
     )
@@ -621,7 +621,8 @@ async def get_scaling_alerts():
         for alert_str in alerts_raw:
             try:
                 alerts.append(json.loads(alert_str))
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error parsing alert JSON: {e}")
                 continue
 
         return {

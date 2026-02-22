@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { rateMonitorAPI, rateSheetAPI } from '../services/api';
 import RateTargetModal from '../components/RateTargetModal';
 import './RateMonitor.css';
+import { toast } from '../utils/toast';
 
 function RateMonitor() {
   const navigate = useNavigate();
@@ -139,7 +140,7 @@ function RateMonitor() {
     const allowedTypes = ['.pdf', '.xlsx', '.xls', '.csv'];
     const ext = '.' + file.name.split('.').pop().toLowerCase();
     if (!allowedTypes.includes(ext)) {
-      alert('Please upload a PDF, Excel, or CSV file');
+      toast.error('Please upload a PDF, Excel, or CSV file');
       return;
     }
 
@@ -152,14 +153,14 @@ function RateMonitor() {
         setUploadProgress('Processing...');
         await loadRateSheets();
         setUploadProgress(null);
-        alert(`Rate sheet uploaded! ${result.rate_sheet_id ? 'Parsing in progress.' : ''}`);
+        toast.success(`Rate sheet uploaded! ${result.rate_sheet_id ? 'Parsing in progress.' : ''}`);
       } else {
-        alert(result.error || 'Upload failed');
+        toast.error(result.error || 'Upload failed');
         setUploadProgress(null);
       }
     } catch (err) {
       console.error('Upload failed:', err);
-      alert('Failed to upload rate sheet');
+      toast.error('Failed to upload rate sheet');
       setUploadProgress(null);
     } finally {
       setUploading(false);
@@ -186,14 +187,14 @@ function RateMonitor() {
     try {
       const result = await rateSheetAPI.scanForOpportunities(sheetId);
       if (result.success) {
-        alert(`Scan complete! Found ${result.opportunities_created} opportunities from ${result.loans_scanned} loans.`);
+        toast.success(`Scan complete! Found ${result.opportunities_created} opportunities from ${result.loans_scanned} loans.`);
         await loadOpportunities();
       } else {
-        alert(result.error || 'Scan failed');
+        toast.error(result.error || 'Scan failed');
       }
     } catch (err) {
       console.error('Scan failed:', err);
-      alert('Failed to scan for opportunities');
+      toast.error('Failed to scan for opportunities');
     }
   };
 
@@ -209,7 +210,7 @@ function RateMonitor() {
       }
     } catch (err) {
       console.error('Delete failed:', err);
-      alert('Failed to delete rate sheet');
+      toast.error('Failed to delete rate sheet');
     }
   };
 
@@ -244,14 +245,14 @@ function RateMonitor() {
       }
 
       if (result.success) {
-        alert('Outreach initiated!');
+        toast.success('Outreach initiated!');
         await loadOpportunities();
       } else {
-        alert(result.error || 'Outreach failed');
+        toast.error(result.error || 'Outreach failed');
       }
     } catch (err) {
       console.error('Outreach failed:', err);
-      alert('Failed to initiate outreach');
+      toast.error('Failed to initiate outreach');
     } finally {
       setProcessingOutreach(false);
     }
@@ -259,7 +260,7 @@ function RateMonitor() {
 
   const handleBulkOutreach = async () => {
     if (selectedOpportunities.length === 0) {
-      alert('Please select opportunities first');
+      toast.error('Please select opportunities first');
       return;
     }
 
@@ -268,12 +269,12 @@ function RateMonitor() {
     setProcessingOutreach(true);
     try {
       const result = await rateSheetAPI.bulkOutreach(selectedOpportunities, false);
-      alert(`Outreach complete: ${result.success_count} succeeded, ${result.error_count} failed`);
+      toast.success(`Outreach complete: ${result.success_count} succeeded, ${result.error_count} failed`);
       setSelectedOpportunities([]);
       await loadOpportunities();
     } catch (err) {
       console.error('Bulk outreach failed:', err);
-      alert('Bulk outreach failed');
+      toast.error('Bulk outreach failed');
     } finally {
       setProcessingOutreach(false);
     }
@@ -322,7 +323,7 @@ function RateMonitor() {
       loadDashboard();
     } catch (err) {
       console.error('Failed to save target:', err);
-      alert('Failed to save target: ' + (err.response?.data?.detail || err.message));
+      toast.error('Failed to save target: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -335,7 +336,7 @@ function RateMonitor() {
       loadDashboard();
     } catch (err) {
       console.error('Failed to delete target:', err);
-      alert('Failed to delete target');
+      toast.error('Failed to delete target');
     }
   };
 
@@ -355,14 +356,14 @@ function RateMonitor() {
     try {
       const result = await rateMonitorAPI.initiateCall(alertId);
       if (result.status === 'initiated') {
-        alert('Call initiated successfully!');
+        toast.success('Call initiated successfully!');
         loadAlerts();
       } else {
-        alert(result.message || 'Call could not be initiated');
+        toast.success(result.message || 'Call could not be initiated');
       }
     } catch (err) {
       console.error('Failed to initiate call:', err);
-      alert('Failed to initiate call');
+      toast.error('Failed to initiate call');
     }
   };
 

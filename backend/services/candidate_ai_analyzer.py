@@ -135,8 +135,8 @@ class CandidateAIAnalyzer:
         # Reset transaction state before storing (in case earlier queries had issues)
         try:
             self.db.rollback()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to rollback transaction before storing analysis for candidate {candidate_id}: {e}")
 
         # Store results in database
         await self._store_analysis(candidate_id, analysis)
@@ -246,9 +246,8 @@ class CandidateAIAnalyzer:
                         }
                         for post in social_activity
                     ]
-            except Exception:
-                # Table may not exist, that's okay
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to query social media posts for candidate {candidate_id}: {e}")
 
         if include_interviews:
             # Try mm_interviews table first
@@ -275,9 +274,8 @@ class CandidateAIAnalyzer:
                         }
                         for i in interviews
                     ]
-            except Exception:
-                # Table may not exist, that's okay
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to query interviews for candidate {candidate_id}: {e}")
 
             # Also include interview notes from candidate record
             interview_notes = getattr(candidate, 'interview_notes', None)
@@ -318,9 +316,8 @@ class CandidateAIAnalyzer:
                             "type": n.note_type,
                             "date": str(n.created_at)
                         })
-            except Exception:
-                # Table may not exist, that's okay
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to query candidate notes for candidate {candidate_id}: {e}")
 
             if notes_list:
                 data["notes"] = notes_list

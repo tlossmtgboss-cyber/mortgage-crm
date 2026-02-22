@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './OnboardingWizard.css';
+import { toast } from '../utils/toast';
 
 function OnboardingWizard() {
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ function OnboardingWizard() {
 
   const handleAddTeamMember = () => {
     if (!newMember.name || !newMember.role) {
-      alert('Please fill in name and role');
+      toast.error('Please fill in name and role');
       return;
     }
 
@@ -118,7 +119,7 @@ function OnboardingWizard() {
       setWorkflows(mockWorkflows);
     } catch (error) {
       console.error('Failed to generate workflows:', error);
-      alert('Failed to generate workflows. Please try again.');
+      toast.error('Failed to generate workflows. Please try again.');
     } finally {
       setGeneratingWorkflows(false);
     }
@@ -126,12 +127,12 @@ function OnboardingWizard() {
 
   const handleNext = async () => {
     if (currentStep === 2 && uploadedFiles.length === 0) {
-      alert('Please upload at least one document');
+      toast.error('Please upload at least one document');
       return;
     }
 
     if (currentStep === 3 && teamMembers.length === 0) {
-      alert('Please add at least one team member');
+      toast.error('Please add at least one team member');
       return;
     }
 
@@ -159,7 +160,7 @@ function OnboardingWizard() {
       navigate('/dashboard');
     } catch (error) {
       console.error('Failed to complete onboarding:', error);
-      alert('Failed to complete onboarding. Please try again.');
+      toast.error('Failed to complete onboarding. Please try again.');
     } finally {
       setLoading(false);
     }

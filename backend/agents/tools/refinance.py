@@ -4,8 +4,11 @@ Tools for scoring refinance opportunities, calculating savings,
 identifying candidates, and comparing scenarios.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool, ToolResult, ToolError,
@@ -36,8 +39,8 @@ def _get_market_rate() -> float:
         """)
         if row and row["value"]:
             return float(row["value"])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error fetching market rate from settings: {e}")
     return DEFAULT_MARKET_RATE
 
 
@@ -1009,7 +1012,8 @@ def batch_update_refi_scores(
                         })
 
                     updated += 1
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error scoring refi for client {client.get('id', 'unknown')}: {e}")
                     errors += 1
 
             if not dry_run:

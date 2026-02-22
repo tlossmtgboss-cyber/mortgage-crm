@@ -12,6 +12,7 @@ Specialized agent for post-close client management with 8 tools:
 8. get_referral_opportunities - Identify referral potential
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from ..utils.financial_calcs import calculate_ltv, calculate_rate_savings
 from datetime import datetime, date, timedelta
@@ -27,6 +28,8 @@ from .base import (
     ToolResult,
     AgentRegistry
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -585,9 +588,8 @@ class PortfolioAgent(SpecializedAgent):
                             "date": r.date_of_birth.isoformat() if r.date_of_birth else None,
                             "days_until": int(r.days_until or 0) if r.days_until and r.days_until >= 0 else 365 + int(r.days_until or 0)
                         })
-                except Exception:
-                    # Contacts table may not exist or have DOB
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to query birthday contacts: {e}")
 
             # Sort by days until
             clients.sort(key=lambda x: x.get("days_until", 999))

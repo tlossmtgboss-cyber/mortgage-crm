@@ -21,6 +21,12 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 # Security scheme
 security = HTTPBearer(auto_error=False)
 
@@ -82,7 +88,7 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ):
     """Get current authenticated user."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     # Use the flexible auth from main.py
     return await get_current_user_flexible(request=request, db=db)
 
@@ -491,7 +497,7 @@ async def get_public_microsite(
     including theme, configuration, profile, and user info.
     """
     try:
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite as Microsite, MicrositeTheme, MicrositeProfile
 
         # Find user by slug
@@ -616,7 +622,7 @@ async def get_public_microsite(
 async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
     """One-time setup endpoint for tim-loss microsite with bio and theme colors."""
     try:
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite as Microsite, MicrositeTheme
 
         # Find tim-loss user
@@ -672,7 +678,7 @@ async def setup_tim_loss_microsite(db: Session = Depends(get_db)):
 async def add_testimonials_page_for_user(user_slug: str, db: Session = Depends(get_db)):
     """One-time endpoint to add a Testimonials page for a user's microsite."""
     try:
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite as Microsite, MicrositeContentPage, PageType
 
         # Find user
@@ -790,7 +796,7 @@ async def add_testimonials_page_for_user(user_slug: str, db: Session = Depends(g
 async def add_services_page_for_user(user_slug: str, db: Session = Depends(get_db)):
     """One-time endpoint to add a Services/Loan Programs page for a user's microsite."""
     try:
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite as Microsite, MicrositeContentPage, PageType
 
         # Find user
@@ -889,7 +895,7 @@ async def add_services_page_for_user(user_slug: str, db: Session = Depends(get_d
 async def add_about_page_for_user(user_slug: str, db: Session = Depends(get_db)):
     """One-time endpoint to add an About page for a user's microsite."""
     try:
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite as Microsite, MicrositeContentPage, PageType
 
         # Find user
@@ -1762,7 +1768,7 @@ async def get_public_microsite_pages(
     Get all enabled pages for a public microsite.
     """
     try:
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
 
         # Find user by slug
@@ -1830,7 +1836,7 @@ async def get_public_page(
     Get a specific public page by slug.
     """
     try:
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite as Microsite, MicrositeContentPage
 
         # Find user by slug

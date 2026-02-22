@@ -141,10 +141,8 @@ class DocumentIntakeEngine:
         Returns:
             Dict with processing result
         """
-        from main import (
-            EmailIntake, AttachmentIntake, Task,
-            EmailIntakeMatchStatus, AttachmentClassificationStatus
-        )
+        from database.enums import EmailIntakeMatchStatus, AttachmentClassificationStatus
+        from database.models import EmailIntake, AttachmentIntake, Task
 
         try:
             # 1. Parse the email
@@ -319,7 +317,7 @@ class DocumentIntakeEngine:
         3. Loan number in subject/body
         4. Thread matching (In-Reply-To header)
         """
-        from main import Lead, Loan
+        from database.models import Lead, Loan
 
         candidates = []
 
@@ -505,7 +503,7 @@ class DocumentIntakeEngine:
         match_result: MatchResult
     ) -> Any:
         """Create a task for classifying the documents"""
-        from main import Task
+        from database.models import Task
 
         # Determine assignee
         assignee_id = await self._determine_assignee(match_result)
@@ -542,7 +540,7 @@ class DocumentIntakeEngine:
 
     async def _determine_assignee(self, match_result: MatchResult) -> int:
         """Determine who should be assigned the classification task"""
-        from main import Loan, User
+        from database.models import Loan, User
 
         # If matched to a loan, assign to loan officer
         if match_result.loan_id:
@@ -585,10 +583,8 @@ class DocumentClassificationHandler:
         """
         Classify an attachment and create the Document record.
         """
-        from main import (
-            AttachmentIntake, Document, EmailIntake,
-            AttachmentClassificationStatus, DocumentType, DocumentCategory
-        )
+        from database.enums import AttachmentClassificationStatus, DocumentType, DocumentCategory
+        from database.models import AttachmentIntake, Document, EmailIntake
 
         # Get the attachment
         attachment = self.db.query(AttachmentIntake).filter(
@@ -661,7 +657,8 @@ class DocumentClassificationHandler:
         reason: str
     ) -> Dict[str, Any]:
         """Mark an attachment as discarded (junk/irrelevant)"""
-        from main import AttachmentIntake, AttachmentClassificationStatus
+        from database.enums import AttachmentClassificationStatus
+        from database.models import AttachmentIntake
 
         attachment = self.db.query(AttachmentIntake).filter(
             AttachmentIntake.id == attachment_id
@@ -690,7 +687,8 @@ class DocumentClassificationHandler:
         """
         Complete the classification task after all attachments are classified.
         """
-        from main import Task, AttachmentIntake, EmailIntake, AttachmentClassificationStatus
+        from database.enums import AttachmentClassificationStatus
+        from database.models import Task, AttachmentIntake, EmailIntake
 
         task = self.db.query(Task).filter(Task.id == task_id).first()
         if not task:

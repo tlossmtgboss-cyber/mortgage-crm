@@ -107,8 +107,8 @@ def maybe_promote_loan_to_mum(
                 logger.warning(f"MUM idempotent check failed for loan {loan_id}: {e}")
                 try:
                     fresh_db.rollback()
-                except Exception:
-                    pass
+                except Exception as e2:
+                    logger.exception(f"Failed to rollback after MUM idempotent check failure for loan {loan_id}: {e2}")
 
         # Determine the owner: use the loan officer, fall back to the triggering user
         owner_user_id = loan['loan_officer_id'] or user_id
@@ -133,11 +133,12 @@ def maybe_promote_loan_to_mum(
                 ).fetchone()
                 if row and row[0]:
                     loan_rate = float(row[0])
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to fetch interest_rate for loan {loan_id}: {e}")
                 try:
                     fresh_db.rollback()
-                except Exception:
-                    pass
+                except Exception as e2:
+                    logger.exception(f"Failed to rollback after interest_rate fetch failure for loan {loan_id}: {e2}")
 
         # Estimate property value (80% LTV assumption)
         estimated_property_value = loan['appraisal_value'] or (loan_amount * 1.25 if loan_amount else 0.0)
@@ -165,11 +166,12 @@ def maybe_promote_loan_to_mum(
                 ).fetchone()
                 if lead_row and (lead_row[0] or lead_row[1]):
                     client_name = f"{lead_row[0] or ''} {lead_row[1] or ''}".strip()
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to resolve client name from leads for loan {loan_id}: {e}")
                 try:
                     fresh_db.rollback()
-                except Exception:
-                    pass
+                except Exception as e2:
+                    logger.exception(f"Failed to rollback after client name resolution failure for loan {loan_id}: {e2}")
         if not client_name or _looks_like_sf_id:
             client_name = f"Client - {loan['loan_number']}"
 
@@ -309,14 +311,14 @@ def maybe_promote_loan_to_mum(
         logger.error(traceback.format_exc())
         try:
             fresh_db.rollback()
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.exception(f"Failed to rollback after MUM promotion failure for loan {loan_id}: {e2}")
         return None
     finally:
         try:
             fresh_db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to close fresh DB session after MUM promotion for loan {loan_id}: {e}")
 
 
 def maybe_promote_loan_to_mum_by_raw_data(

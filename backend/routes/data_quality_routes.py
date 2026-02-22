@@ -604,7 +604,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
             """), params).mappings().first()
             total_leads = total_leads_result["cnt"] if total_leads_result else 0
             metrics["total_leads"] = total_leads
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_data_quality_summary (total_leads): {e}")
             total_leads = 0
             metrics["total_leads"] = 0
 
@@ -617,7 +618,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                   {org_filter_l}
             """), params).mappings().first()
             metrics["leads_missing_contact"] = missing_contact["cnt"] if missing_contact else 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_data_quality_summary (leads_missing_contact): {e}")
             metrics["leads_missing_contact"] = 0
 
         # Leads missing email only
@@ -628,7 +630,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                   {org_filter_l}
             """), params).mappings().first()
             metrics["leads_missing_email"] = missing_email["cnt"] if missing_email else 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_data_quality_summary (leads_missing_email): {e}")
             metrics["leads_missing_email"] = 0
 
         # Leads missing phone only
@@ -639,7 +642,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                   {org_filter_l}
             """), params).mappings().first()
             metrics["leads_missing_phone"] = missing_phone["cnt"] if missing_phone else 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_data_quality_summary (leads_missing_phone): {e}")
             metrics["leads_missing_phone"] = 0
 
         # Tasks missing titles (empty or null)
@@ -650,7 +654,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                   {org_filter_t}
             """), params).mappings().first()
             metrics["tasks_missing_title"] = tasks_no_title["cnt"] if tasks_no_title else 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_data_quality_summary (tasks_missing_title): {e}")
             metrics["tasks_missing_title"] = 0
 
         # Total tasks
@@ -659,7 +664,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 SELECT COUNT(*) as cnt FROM tasks WHERE 1=1 {org_filter_t}
             """), params).mappings().first()
             metrics["total_tasks"] = total_tasks["cnt"] if total_tasks else 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_data_quality_summary (total_tasks): {e}")
             metrics["total_tasks"] = 0
 
         # Leads with duplicate names (potential duplicates)
@@ -672,7 +678,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
                 ) dupes
             """), params).mappings().first()
             metrics["potential_duplicate_leads"] = duplicate_names["cnt"] if duplicate_names else 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_data_quality_summary (potential_duplicate_leads): {e}")
             metrics["potential_duplicate_leads"] = 0
 
         # Calculate overall quality score (0-100)

@@ -465,8 +465,8 @@ async def run_benchmarks(iterations: int = 10) -> Dict[str, Any]:
                             successes += 1
                     else:
                         successes += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error executing tool {tool_name}: {e}")
 
                 duration = (time.time() - start) * 1000
                 times.append(duration)

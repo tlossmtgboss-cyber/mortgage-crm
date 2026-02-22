@@ -9,6 +9,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useCloseCountdown, useCloseCalendar } from '../../hooks/usePortalData';
 import { closeOnTimeApi } from '../../services/portalApi';
 import './CloseOnTimeCalendar.css';
+import { toast } from '../../utils/toast';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
@@ -87,7 +88,7 @@ export default function CloseOnTimeCalendar({
       document.body.removeChild(a);
     } catch (err) {
       console.error('Failed to download calendar:', err);
-      alert(err.message || 'Failed to download milestone calendar');
+      toast.error(err.message || 'Failed to download milestone calendar');
     } finally {
       setDownloadingCalendar(false);
     }

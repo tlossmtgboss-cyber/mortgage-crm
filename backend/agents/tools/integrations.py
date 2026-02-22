@@ -5,8 +5,11 @@ Tools for the Integrations Agent managing external system connections.
 8 tools for LOS, CRM, vendor, and third-party integrations.
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -258,7 +261,8 @@ def trigger_credit_pull(
                 "pull_type": pull_type,
             })
         logged = True
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error logging credit pull: {e}")
         logged = False
 
     data = {

@@ -60,8 +60,8 @@ class CRMContextService:
         # Clear any previous failed transaction state
         try:
             db.rollback()
-        except Exception:
-            pass  # No active transaction to rollback
+        except Exception as e:
+            logger.exception(f"Failed to rollback previous transaction state: {e}")
 
         try:
             context = {
@@ -83,8 +83,8 @@ class CRMContextService:
             logger.error(f"Error getting CRM context: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # No active transaction to rollback
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after CRM context error: {e2}")
             return {}
 
     @staticmethod
@@ -207,8 +207,8 @@ class CRMContextService:
             logger.error(f"Error getting leads context: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # No active transaction to rollback
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after leads context error: {e2}")
             return {"total": 0, "by_status": {}, "recent_leads": []}
 
     @staticmethod
@@ -640,8 +640,8 @@ class CRMContextService:
             logger.error(f"Error getting referral partners: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # No active transaction to rollback
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after referral partners error: {e2}")
             return {"total": 0, "partners": [], "most_profitable": None}
 
     @staticmethod
@@ -766,8 +766,8 @@ class CRMContextService:
             logger.error(f"Error getting team performance: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # No active transaction to rollback
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after team performance error: {e2}")
             return {
                 "total_team_members": 0,
                 "processors": {"count": 0, "members": [], "underperformers": []},
@@ -927,8 +927,8 @@ class CRMContextService:
             logger.error(f"Error getting loan officer performance: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # No active transaction to rollback
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after loan officer performance error: {e2}")
             return {
                 "total_loan_officers": 0,
                 "loan_officers": [],
@@ -1221,8 +1221,8 @@ class CRMContextService:
             logger.error(f"Error getting pipeline efficiency context: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # No active transaction to rollback
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after pipeline efficiency error: {e2}")
             return {
                 "overall_efficiency": 75,
                 "pipeline_health": "unknown",
@@ -1293,8 +1293,8 @@ class CRMContextService:
             logger.error(f"Error getting top referral borrowers: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # No active transaction to rollback
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after top referral borrowers error: {e2}")
             return {
                 "total": 0,
                 "borrowers": [],

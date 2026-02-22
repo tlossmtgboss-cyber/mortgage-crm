@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def _get_current_user():
     """Lazy import auth dependency for router-level protection."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 router = APIRouter(
@@ -392,8 +392,8 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
             demo_user = db.execute(text("SELECT id FROM users WHERE email = 'admin@perenniaai.com' LIMIT 1")).fetchone()
             if demo_user:
                 user_id = demo_user.id
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error fetching demo user: {e}")
 
         # Ensure conversation tables exist
         try:

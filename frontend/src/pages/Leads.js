@@ -10,6 +10,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import './Leads.css';
+import { toast } from '../utils/toast';
 
 function Leads() {
   const navigate = useNavigate();
@@ -101,6 +102,8 @@ function Leads() {
   ];
 
   const statusOptions = [
+    // Lead stages
+    { label: 'Lead Stages', isHeader: true },
     'New',
     'Attempted Contact',
     'Prospect',
@@ -110,6 +113,27 @@ function Leads() {
     'Long-Term Nurture',
     'Withdrawn',
     'Does Not Qualify',
+    // Active Loan stages
+    { label: 'Active Loan Stages', isHeader: true },
+    'Disclosed',
+    'Processing',
+    'Submitted',
+    'Underwriting',
+    'UW Received',
+    'Conditional Approval',
+    'Approved',
+    'Suspended',
+    'CTC',
+    'Clear to Close',
+    'Closing',
+    'Docs',
+    'Docs Out',
+    'Cancelled',
+    'Denied',
+    'Dead',
+    // MUM (Funded)
+    { label: 'MUM / Closed', isHeader: true },
+    'Funded',
   ];
 
   // Check if master user on mount
@@ -211,14 +235,14 @@ function Leads() {
         if (data.errors && data.errors.length > 0) {
           message += `\n\nErrors:\n${data.errors.join('\n')}`;
         }
-        alert(message);
+        toast.info(message);
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to create tasks'}`);
+        toast.error(`Error: ${error.detail || 'Failed to create tasks'}`);
       }
     } catch (err) {
       console.error('Error creating duplicate tasks:', err);
-      alert('Failed to create duplicate tasks');
+      toast.error('Failed to create duplicate tasks');
     }
   };
 
@@ -255,7 +279,7 @@ function Leads() {
       // Validate required fields
       const fullName = `${primaryBorrower.first_name || ''} ${primaryBorrower.last_name || ''}`.trim();
       if (!fullName) {
-        alert('Please enter at least a first name or last name');
+        toast.error('Please enter at least a first name or last name');
         return;
       }
 
@@ -328,7 +352,7 @@ function Leads() {
            ? err.response.data.detail
            : JSON.stringify(err.response.data.detail))
         : err.message;
-      alert('Failed to save lead: ' + errorMsg);
+      toast.error('Failed to save lead: ' + errorMsg);
     }
   };
 
@@ -405,7 +429,7 @@ function Leads() {
       loadLeads();
     } catch (err) {
       console.error('Failed to delete lead:', err);
-      alert('Failed to delete lead: ' + (err.response?.data?.detail || err.message));
+      toast.error('Failed to delete lead: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -454,14 +478,14 @@ function Leads() {
       localStorage.removeItem('leads_data_time');
       loadLeads();
 
-      alert(result.message || `Successfully deleted ${result.deleted_count} leads`);
+      toast.success(result.message || `Successfully deleted ${result.deleted_count} leads`);
     } catch (err) {
       console.error('Failed to bulk delete leads:', err);
       const errorDetail = err.response?.data?.detail;
       const errorMessage = typeof errorDetail === 'string'
         ? errorDetail
         : (errorDetail?.message || err.message || 'Unknown error');
-      alert('Failed to delete leads: ' + errorMessage);
+      toast.error('Failed to delete leads: ' + errorMessage);
     }
   };
 
@@ -496,14 +520,14 @@ function Leads() {
         if (cs.mum_clients_updated > 0) parts.push(`${cs.mum_clients_updated} MUM client${cs.mum_clients_updated > 1 ? 's' : ''}`);
         if (parts.length > 0) msg += `\nAlso cascaded to ${parts.join(' and ')}.`;
       }
-      alert(msg);
+      toast.info(msg);
     } catch (err) {
       console.error('Failed to bulk update leads:', err);
       const errorDetail = err.response?.data?.detail;
       const errorMessage = typeof errorDetail === 'string'
         ? errorDetail
         : (errorDetail?.message || err.message || 'Unknown error');
-      alert('Failed to update leads: ' + errorMessage);
+      toast.error('Failed to update leads: ' + errorMessage);
     }
   };
 
@@ -588,6 +612,7 @@ function Leads() {
 
   const getStatusColor = (status) => {
     const colors = {
+      // Lead stages
       'New': 'blue',
       'Attempted Contact': 'teal',
       'Prospect': 'yellow',
@@ -598,6 +623,25 @@ function Leads() {
       'Long-Term Nurture': 'purple',
       'Withdrawn': 'red',
       'Does Not Qualify': 'gray',
+      // Active Loan stages
+      'Disclosed': 'orange',
+      'Processing': 'orange',
+      'Submitted': 'orange',
+      'Underwriting': 'yellow',
+      'UW Received': 'yellow',
+      'Conditional Approval': 'cyan',
+      'Approved': 'green',
+      'Suspended': 'red',
+      'CTC': 'green',
+      'Clear to Close': 'green',
+      'Closing': 'green',
+      'Docs': 'green',
+      'Docs Out': 'green',
+      'Cancelled': 'red',
+      'Denied': 'red',
+      'Dead': 'gray',
+      // MUM
+      'Funded': 'green',
     };
     return colors[status] || 'gray';
   };
@@ -662,12 +706,12 @@ function Leads() {
         if (c.loans_updated > 0) parts.push(`${c.loans_updated} loan${c.loans_updated > 1 ? 's' : ''}`);
         if (c.mum_clients_updated > 0) parts.push(`${c.mum_clients_updated} MUM client${c.mum_clients_updated > 1 ? 's' : ''}`);
         if (parts.length > 0) {
-          alert(`Status cascaded to ${parts.join(' and ')}`);
+          toast.info(`Status cascaded to ${parts.join(' and ')}`);
         }
       }
     } catch (err) {
       console.error('Failed to update status:', err);
-      alert('Failed to update status');
+      toast.error('Failed to update status');
     }
   };
 
@@ -750,15 +794,38 @@ function Leads() {
             className="bulk-status-select"
           >
             <option value="">Change Status To...</option>
-            <option value="New">New</option>
-            <option value="Attempted Contact">Attempted Contact</option>
-            <option value="Prospect">Prospect</option>
-            <option value="Application">Application</option>
-            <option value="Pre-Qualified">Pre-Qualified</option>
-            <option value="Pre-Approved">Pre-Approved</option>
-            <option value="Long-Term Nurture">Nurture</option>
-            <option value="Withdrawn">Withdrawn</option>
-            <option value="Does Not Qualify">Does Not Qualify</option>
+            <optgroup label="Lead Stages">
+              <option value="New">New</option>
+              <option value="Attempted Contact">Attempted Contact</option>
+              <option value="Prospect">Prospect</option>
+              <option value="Application">Application</option>
+              <option value="Pre-Qualified">Pre-Qualified</option>
+              <option value="Pre-Approved">Pre-Approved</option>
+              <option value="Long-Term Nurture">Nurture</option>
+              <option value="Withdrawn">Withdrawn</option>
+              <option value="Does Not Qualify">Does Not Qualify</option>
+            </optgroup>
+            <optgroup label="Active Loan Stages">
+              <option value="Disclosed">Disclosed</option>
+              <option value="Processing">Processing</option>
+              <option value="Submitted">Submitted</option>
+              <option value="Underwriting">Underwriting</option>
+              <option value="UW Received">UW Received</option>
+              <option value="Conditional Approval">Conditional Approval</option>
+              <option value="Approved">Approved</option>
+              <option value="Suspended">Suspended</option>
+              <option value="CTC">CTC</option>
+              <option value="Clear to Close">Clear to Close</option>
+              <option value="Closing">Closing</option>
+              <option value="Docs">Docs</option>
+              <option value="Docs Out">Docs Out</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="Denied">Denied</option>
+              <option value="Dead">Dead</option>
+            </optgroup>
+            <optgroup label="MUM / Closed">
+              <option value="Funded">Funded</option>
+            </optgroup>
           </select>
           <button
             className="btn-primary"
@@ -1356,15 +1423,30 @@ function Leads() {
             }}
           >
             <div className="status-dropdown-header">Change Status</div>
-            <div className="status-dropdown-options">
-              {statusOptions.map((status) => (
-                <button
-                  key={status}
-                  className={`status-dropdown-option status-${getStatusColor(status)}`}
-                  onClick={() => handleStatusChange(status)}
-                >
-                  {status}
-                </button>
+            <div className="status-dropdown-options" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {statusOptions.map((status, idx) => (
+                status.isHeader ? (
+                  <div key={status.label} className="status-dropdown-section-header" style={{
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    color: '#6b7280',
+                    borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
+                    marginTop: idx > 0 ? '4px' : 0,
+                    letterSpacing: '0.05em',
+                  }}>
+                    {status.label}
+                  </div>
+                ) : (
+                  <button
+                    key={status}
+                    className={`status-dropdown-option status-${getStatusColor(status)}`}
+                    onClick={() => handleStatusChange(status)}
+                  >
+                    {status}
+                  </button>
+                )
               ))}
             </div>
           </div>

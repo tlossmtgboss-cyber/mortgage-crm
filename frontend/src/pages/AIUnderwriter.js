@@ -4,6 +4,7 @@ import GuidelineUpdatesSidebar from '../components/GuidelineUpdatesSidebar';
 import GuidelineNotificationBadge from '../components/GuidelineNotificationBadge';
 import EscalationPanel from '../components/EscalationPanel';
 import './AIUnderwriter.css';
+import { toast } from '../utils/toast';
 
 // View modes
 const VIEW_MODES = [
@@ -273,7 +274,7 @@ function AIUnderwriter() {
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
+      toast.error('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
       return;
     }
 

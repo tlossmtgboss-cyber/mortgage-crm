@@ -122,8 +122,8 @@ def calculate_lock_score(scenario: LoanScenario) -> int:
                 score += 5   # Some urgency
             elif days_to_close > 45:
                 score -= 10  # Can wait
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to parse close date in calculate_lock_score: {e}")
 
     # Market volatility impact
     if scenario.volatility_indicator == "high":
@@ -167,7 +167,8 @@ def determine_recommendation(score: int, scenario: LoanScenario) -> dict:
         try:
             close_date = datetime.fromisoformat(scenario.contract_close_date.replace('Z', '+00:00'))
             days_to_close = (close_date - datetime.now()).days
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to parse close date in determine_recommendation: {e}")
             days_to_close = 30
 
     # Determine action

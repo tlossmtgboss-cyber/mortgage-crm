@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function PlaidConnect() {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ function PlaidConnect() {
       openPlaidLink(data?.link_token);
     } catch (err) {
       console.error('Error creating link token:', err);
-      alert('Failed to initialize bank connection. Please try again.');
+      toast.error('Failed to initialize bank connection. Please try again.');
       setConnecting(false);
     }
   };
@@ -116,10 +117,10 @@ function PlaidConnect() {
 
       setConnecting(false);
       fetchInstitutions();
-      alert('Bank connected successfully! Accounts will begin syncing shortly.');
+      toast.success('Bank connected successfully! Accounts will begin syncing shortly.');
     } catch (err) {
       console.error('Error exchanging token:', err);
-      alert('Failed to complete bank connection. Please try again.');
+      toast.error('Failed to complete bank connection. Please try again.');
       setConnecting(false);
     }
   };
@@ -135,7 +136,7 @@ function PlaidConnect() {
       openPlaidLink(data?.link_token);
     } catch (err) {
       console.error('Error updating connection:', err);
-      alert('Failed to update connection. Please try again.');
+      toast.error('Failed to update connection. Please try again.');
       setConnecting(false);
     }
   };
@@ -151,7 +152,7 @@ function PlaidConnect() {
       fetchInstitutions();
     } catch (err) {
       console.error('Error disconnecting:', err);
-      alert('Failed to disconnect. Please try again.');
+      toast.error('Failed to disconnect. Please try again.');
     }
   };
 
@@ -159,11 +160,11 @@ function PlaidConnect() {
   const handleSync = async (institution) => {
     try {
       await accountingAPI.syncPlaidItem(institution.id);
-      alert('Sync initiated. Transactions will be updated shortly.');
+      toast.success('Sync initiated. Transactions will be updated shortly.');
       fetchInstitutions();
     } catch (err) {
       console.error('Error syncing:', err);
-      alert('Failed to sync. Please try again.');
+      toast.error('Failed to sync. Please try again.');
     }
   };
 

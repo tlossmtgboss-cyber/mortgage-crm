@@ -1297,8 +1297,8 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
         for sql in add_column_sqls:
             try:
                 db.execute(text(sql))
-            except Exception:
-                pass  # Column might already exist
+            except Exception as e:
+                logger.debug(f"Skipping agent_profiles column migration: {e}")
 
         # Add missing columns to agent_executions
         execution_columns = [
@@ -1321,8 +1321,8 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
         for sql in execution_columns:
             try:
                 db.execute(text(sql))
-            except Exception:
-                pass  # Column might already exist or table doesn't exist
+            except Exception as e:
+                logger.debug(f"Skipping agent_executions column migration: {e}")
 
         # Add missing columns to agent_alerts
         alert_columns = [
@@ -1342,8 +1342,8 @@ async def setup_agent_tables(db: Session = Depends(get_db)):
         for sql in alert_columns:
             try:
                 db.execute(text(sql))
-            except Exception:
-                pass  # Column might already exist or table doesn't exist
+            except Exception as e:
+                logger.debug(f"Skipping agent_alerts column migration: {e}")
 
         db.commit()
 

@@ -1222,8 +1222,8 @@ class SalesforceSyncService:
                     result['errors'].append(f"Lead {lead.id}: {str(e)[:100]}")
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after lead {lead.id} sync error: {e2}")
 
             # ===== SYNC LOANS =====
             # Get CRM loans with borrower email addresses
@@ -1271,8 +1271,8 @@ class SalesforceSyncService:
                     result['errors'].append(f"Loan {loan.id}: {str(e)[:100]}")
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after loan {loan.id} sync error: {e2}")
 
             result['success'] = True
             db.commit()
@@ -1288,8 +1288,8 @@ class SalesforceSyncService:
             result['errors'].append(str(e))
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after email-based sync failure: {e2}")
 
         return result
 
@@ -1999,8 +1999,8 @@ class SalesforceSyncService:
                     result['errors'].append(f"Lead {sf_id}: {str(e)[:100]}")
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after SF Lead {sf_id} import error: {e2}")
 
             # ===== IMPORT SALESFORCE CONTACTS =====
             sf_contacts = []
@@ -2045,8 +2045,8 @@ class SalesforceSyncService:
                     result['errors'].append(f"Contact {sf_id}: {str(e)[:100]}")
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after SF Contact {sf_id} import error: {e2}")
 
             # ===== IMPORT SALESFORCE OPPORTUNITIES AS LOANS =====
             sf_opps = []
@@ -2107,8 +2107,8 @@ class SalesforceSyncService:
                     result['errors'].append(f"Opportunity {sf_id}: {str(e)[:100]}")
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after SF Opportunity {sf_id} import error: {e2}")
 
             result['success'] = True
             db.commit()
@@ -2125,8 +2125,8 @@ class SalesforceSyncService:
             result['errors'].append(str(e))
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after new client import failure: {e2}")
 
         return result
 
@@ -2434,8 +2434,8 @@ class SalesforceSyncService:
                 borrower_email = contact_info.get('email')
                 borrower_phone = contact_info.get('phone')
                 borrower_name = contact_info.get('full_name')
-            except Exception:
-                pass  # Best-effort
+            except Exception as e:
+                logger.exception(f"Failed to get contact info for account {account_id}: {e}")
 
         # Use contact name if available, otherwise fall back to Opportunity Name
         if not borrower_name:
@@ -3363,8 +3363,8 @@ class SalesforceSyncService:
                     # Rollback to recover from any transaction errors
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after outbound loan push error: {e2}")
 
         # Sync Leads
         if sync_leads:
@@ -3392,8 +3392,8 @@ class SalesforceSyncService:
                     # Rollback to recover from any transaction errors
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after outbound lead push error: {e2}")
 
         # Sync Emails
         if sync_emails:
@@ -3421,8 +3421,8 @@ class SalesforceSyncService:
                     # Rollback to recover from any transaction errors
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after outbound email push error: {e2}")
 
         # Sync Calendar Events
         if sync_calendar:
@@ -3449,8 +3449,8 @@ class SalesforceSyncService:
                     # Rollback to recover from any transaction errors
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.exception(f"Failed to rollback after outbound calendar push error: {e2}")
 
         # Check overall success
         total_failed = sum([

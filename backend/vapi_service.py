@@ -354,7 +354,7 @@ We'll call you at this number at the scheduled time.
     async def _find_lead_by_phone(self, phone_number: str):
         """Find lead by phone number."""
         try:
-            from main import Lead
+            from database.models import Lead
             from sqlalchemy import or_
 
             # Clean phone number
@@ -811,7 +811,7 @@ class VapiCRMIntegration:
             if not voicemail_drop_id or metadata.get("type") != "voicemail_drop":
                 return  # Not a voicemail drop call
 
-            from main import VoicemailDrop, VoicemailEvent
+            from database.models import VoicemailDrop, VoicemailEvent
 
             try:
                 drop_id_int = int(voicemail_drop_id)
@@ -1077,7 +1077,7 @@ class VapiCRMIntegration:
     async def _create_or_update_lead(self, vapi_call: VapiCall) -> None:
         """Create or update lead from call data"""
         try:
-            from main import Lead  # Import your CRM Lead model
+            from database.models import Lead
 
             # Check if lead exists with this phone number
             lead = self.db.query(Lead).filter(
@@ -1224,7 +1224,8 @@ class VapiCRMIntegration:
             return None
         try:
             return datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error parsing datetime string '{dt_string}': {e}")
             return None
 
     async def create_outbound_call(
@@ -1235,7 +1236,7 @@ class VapiCRMIntegration:
     ) -> VapiCall:
         """Initiate outbound call to a lead"""
         try:
-            from main import Lead
+            from database.models import Lead
 
             lead = self.db.query(Lead).filter(Lead.id == lead_id).first()
             if not lead or not lead.phone:
@@ -1276,7 +1277,7 @@ class VapiCRMIntegration:
         Returns: caller type, loan status, assigned team members, routing suggestion
         """
         try:
-            from main import Lead
+            from database.models import Lead
             from vapi_models import StaffAvailability
 
             # Clean and format phone number
@@ -1360,7 +1361,7 @@ class VapiCRMIntegration:
         Creates routing log and handles transfer via Vapi API
         """
         try:
-            from main import User
+            from database.models import User
             from vapi_models import CallRoutingLog, StaffAvailability, VapiCall
 
             # 1. Get recipient's availability and phone number

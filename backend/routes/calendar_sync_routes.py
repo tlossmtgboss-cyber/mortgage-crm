@@ -909,5 +909,6 @@ def _verify_webhook_signature(body: bytes, signature: str, secret: str) -> bool:
         ).digest()
         expected_b64 = base64.b64encode(expected).decode('utf-8')
         return hmac.compare_digest(signature, expected_b64)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error verifying Nylas webhook signature: {e}")
         return False

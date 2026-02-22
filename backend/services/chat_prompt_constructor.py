@@ -8,9 +8,12 @@ This service constructs phase-appropriate system prompts for the chat AI:
 - Loan officer context integration
 """
 
+import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from sqlalchemy.exc import SQLAlchemyError
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -282,8 +285,8 @@ class PromptConstructor:
                     from datetime import datetime
                     dt = datetime.fromisoformat(last_msg.replace('Z', '+00:00'))
                     parts.append(f"\nLast interaction: {dt.strftime('%B %d at %I:%M %p')}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to parse last interaction timestamp: {e}")
 
             known_context = self.session_context_summary.get('context_summary', 'General mortgage questions')
             parts.append(f"Known context: {known_context}")

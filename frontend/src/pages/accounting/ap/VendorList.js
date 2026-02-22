@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function VendorList() {
   const navigate = useNavigate();
@@ -150,7 +151,7 @@ function VendorList() {
   // Save vendor
   const handleSave = async () => {
     if (!formData.name) {
-      alert('Please enter a vendor name.');
+      toast.error('Please enter a vendor name.');
       return;
     }
 
@@ -167,7 +168,7 @@ function VendorList() {
       fetchVendors();
     } catch (err) {
       console.error('Error saving vendor:', err);
-      alert(err.response?.data?.detail || 'Failed to save vendor.');
+      toast.error(err.response?.data?.detail || 'Failed to save vendor.');
     } finally {
       setSaving(false);
     }

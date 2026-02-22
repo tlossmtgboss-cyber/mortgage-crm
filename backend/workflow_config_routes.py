@@ -1061,7 +1061,7 @@ async def get_users_for_assignment(
     current_user = Depends(get_current_user)
 ):
     """Get list of users that can be assigned to workflow roles"""
-    from main import User
+    from database.models import User
 
     query = db.query(User).filter(User.is_active == True)
 
@@ -1507,7 +1507,7 @@ async def get_lead_workflow_tasks(
 
     WorkflowConfiguration = _models['WorkflowConfiguration']
     # Import Lead model from main module
-    from main import Lead
+    from database.models import Lead
 
     try:
         # Get lead info using ORM
@@ -1641,7 +1641,7 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
         return []
 
     WorkflowConfiguration = _models['WorkflowConfiguration']
-    from main import Lead, Loan
+    from database.models import Lead, Loan
     from datetime import datetime, timedelta
 
     all_tasks = []

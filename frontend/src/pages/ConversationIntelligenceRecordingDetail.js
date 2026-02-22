@@ -12,6 +12,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+import { toast } from '../utils/toast';
   useRecordingDetail,
   useTranscriptionPolling,
   useQARubrics,
@@ -151,7 +152,7 @@ function ConversationIntelligenceRecordingDetail() {
   // Handle clip creation
   const handleCreateClip = async () => {
     if (!clipForm.title || clipForm.endTime <= clipForm.startTime) {
-      alert('Please provide a title and valid time range');
+      toast.error('Please provide a title and valid time range');
       return;
     }
 
@@ -166,9 +167,9 @@ function ConversationIntelligenceRecordingDetail() {
       });
       setIsCreatingClip(false);
       setClipForm({ title: '', description: '', category: 'general', startTime: 0, endTime: 0 });
-      alert('Coaching clip created successfully!');
+      toast.success('Coaching clip created successfully!');
     } catch (err) {
-      alert('Failed to create clip: ' + err.message);
+      toast.error('Failed to create clip: ' + err.message);
     }
   };
 
@@ -235,7 +236,7 @@ function ConversationIntelligenceRecordingDetail() {
               className="cird-btn cird-btn-sm"
               onClick={() => {
                 navigator.clipboard.writeText(transcription.transcriptText);
-                alert('Transcript copied to clipboard!');
+                toast.success('Transcript copied to clipboard!');
               }}
             >
               <i className="fas fa-copy"></i> Copy

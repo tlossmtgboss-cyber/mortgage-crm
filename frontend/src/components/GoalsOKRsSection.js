@@ -3,6 +3,7 @@ import goalsApi from '../services/goalsApi';
 import GoalCard from './GoalCard';
 import GoalModal from './GoalModal';
 import './GoalsOKRsSection.css';
+import { toast } from '../utils/toast';
 
 const GoalsOKRsSection = ({ userId, isManager = true }) => {
   const [goals, setGoals] = useState([]);
@@ -67,7 +68,7 @@ const GoalsOKRsSection = ({ userId, isManager = true }) => {
       await loadGoals();
     } catch (err) {
       console.error('Error deleting goal:', err);
-      alert('Failed to delete goal');
+      toast.error('Failed to delete goal');
     }
   };
 

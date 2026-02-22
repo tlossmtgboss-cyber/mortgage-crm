@@ -44,7 +44,7 @@ router = APIRouter(prefix="/api/v1/conversation-intelligence", tags=["Conversati
 
 def _get_current_user():
     """Lazy import to avoid circular dependency."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 
@@ -284,7 +284,8 @@ async def create_lead_from_conversation(
         owner_id: Optional owner (loan officer) ID to assign the lead to
     """
     # Lazy import to avoid circular import
-    from main import Lead, LeadStage
+    from database.enums import LeadStage
+    from database.models import Lead
 
     try:
         agent = create_qualification_agent()

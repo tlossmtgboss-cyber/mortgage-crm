@@ -23,8 +23,8 @@ from sqlalchemy import func, or_
 from db import get_db
 
 # Import from main.py
-from main import (
-    get_current_user,
+from auth.dependencies import get_current_user
+from database.models import (
     User,
     UserJobDescription,
     Skill,
@@ -36,6 +36,8 @@ from main import (
     GoalManagerAssessment,
     GoalResponsibility,
     UserSkillAssessment,
+)
+from schemas.core import (
     UpdateJobDescriptionRequest,
     JobDescriptionResponse,
     SkillCreate,
@@ -46,6 +48,12 @@ from main import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
 
 router = APIRouter(prefix="/api/v1", tags=["HR Management"])
 

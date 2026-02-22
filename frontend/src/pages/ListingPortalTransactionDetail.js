@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+import { toast } from '../utils/toast';
   getTransaction,
   addParty,
   sendPortalInvite,
@@ -100,7 +101,7 @@ const ListingPortalTransactionDetail = () => {
   const handleAddParty = async (e) => {
     e.preventDefault();
     if (!partyForm.email || !partyForm.first_name || !partyForm.last_name) {
-      alert('Please fill in required fields');
+      toast.error('Please fill in required fields');
       return;
     }
 
@@ -123,7 +124,7 @@ const ListingPortalTransactionDetail = () => {
       fetchTransaction();
     } catch (err) {
       console.error('Failed to add party:', err);
-      alert('Failed to add party: ' + err.message);
+      toast.error('Failed to add party: ' + err.message);
     } finally {
       setAddingParty(false);
     }
@@ -133,10 +134,10 @@ const ListingPortalTransactionDetail = () => {
     try {
       setSendingInvite((prev) => ({ ...prev, [partyId]: true }));
       await sendPortalInvite(transactionId, partyId);
-      alert('Portal invite sent successfully!');
+      toast.success('Portal invite sent successfully!');
     } catch (err) {
       console.error('Failed to send invite:', err);
-      alert('Failed to send invite: ' + err.message);
+      toast.error('Failed to send invite: ' + err.message);
     } finally {
       setSendingInvite((prev) => ({ ...prev, [partyId]: false }));
     }
@@ -155,7 +156,7 @@ const ListingPortalTransactionDetail = () => {
       fetchTransaction();
     } catch (err) {
       console.error('Failed to update milestone:', err);
-      alert('Failed to update milestone: ' + err.message);
+      toast.error('Failed to update milestone: ' + err.message);
     }
   };
 
@@ -170,7 +171,7 @@ const ListingPortalTransactionDetail = () => {
       fetchMessages();
     } catch (err) {
       console.error('Failed to send message:', err);
-      alert('Failed to send message: ' + err.message);
+      toast.error('Failed to send message: ' + err.message);
     } finally {
       setSendingMessage(false);
     }

@@ -21,16 +21,9 @@ logger = logging.getLogger(__name__)
 
 # Runtime imports from main.py to avoid circular imports
 try:
-    from main import (
-        get_current_user,
-        ProcessTemplate,
-        Lead,
-        Loan,
-        Activity,
-        User,
-        LeadStage,
-        LoanStage,
-    )
+    from auth.dependencies import get_current_user
+    from database.enums import LeadStage, LoanStage
+    from database.models import ProcessTemplate, Lead, Loan, Activity, User
 except ImportError:
     # Fallback for testing or standalone execution
     async def get_current_user():

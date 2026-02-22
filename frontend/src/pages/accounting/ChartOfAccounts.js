@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../services/accountingApi';
 import { usePermissions } from '../../contexts/PermissionContext';
 import './ChartOfAccounts.css';
+import { toast } from '../../utils/toast';
 
 function ChartOfAccounts() {
   const navigate = useNavigate();
@@ -298,7 +299,7 @@ function ChartOfAccounts() {
       fetchAccounts();
     } catch (err) {
       console.error('Error saving account:', err);
-      alert(err.response?.data?.detail || 'Failed to save account. Please try again.');
+      toast.error(err.response?.data?.detail || 'Failed to save account. Please try again.');
     } finally {
       setSaving(false);
     }

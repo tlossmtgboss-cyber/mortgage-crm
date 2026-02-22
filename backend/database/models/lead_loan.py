@@ -17,7 +17,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric
 )
 from sqlalchemy.orm import relationship, validates
 
@@ -81,9 +81,9 @@ class Lead(Base):
 
     # Loan qualification
     loan_type = Column(String)
-    preapproval_amount = Column(Float)
+    preapproval_amount = Column(Numeric(18, 2))
     credit_score = Column(Integer)
-    debt_to_income = Column(Float)
+    debt_to_income = Column(Numeric(8, 4))
 
     # Assignment
     owner_id = Column(Integer, ForeignKey("users.id"))
@@ -97,21 +97,21 @@ class Lead(Base):
     state = Column(String)
     zip_code = Column(String)
     property_type = Column(String)
-    property_value = Column(Float)
-    down_payment = Column(Float)
+    property_value = Column(Numeric(18, 2))
+    down_payment = Column(Numeric(18, 2))
 
     # Financial Information
     employment_status = Column(String)
-    annual_income = Column(Float)
-    monthly_debts = Column(Float)
+    annual_income = Column(Numeric(18, 2))
+    monthly_debts = Column(Numeric(18, 2))
     first_time_buyer = Column(Boolean, default=False)
 
     # Loan Details
-    loan_amount = Column(Float)
-    interest_rate = Column(Float)
+    loan_amount = Column(Numeric(18, 2))
+    interest_rate = Column(Numeric(8, 4))
     loan_term = Column(Integer)
-    apr = Column(Float)
-    points = Column(Float)
+    apr = Column(Numeric(8, 4))
+    points = Column(Numeric(8, 4))
     lock_date = Column(DateTime)
     lock_expiration = Column(DateTime)
     closing_date = Column(DateTime)
@@ -119,12 +119,12 @@ class Lead(Base):
     loan_officer = Column(String)
     processor = Column(String)
     underwriter = Column(String)
-    appraisal_value = Column(Float)
-    ltv = Column(Float)
-    cltv = Column(Float)
-    dti = Column(Float)
-    dti_front = Column(Float)
-    dti_back = Column(Float)
+    appraisal_value = Column(Numeric(18, 2))
+    ltv = Column(Numeric(8, 4))
+    cltv = Column(Numeric(8, 4))
+    dti = Column(Numeric(8, 4))
+    dti_front = Column(Numeric(8, 4))
+    dti_back = Column(Numeric(8, 4))
     program = Column(String)
     status_date = Column(DateTime)
 
@@ -148,7 +148,7 @@ class Lead(Base):
     # PRD Section 4.1 - Rate Lock Intelligence
     buying_timeline_category = Column(SQLEnum(BuyingTimelineCategory))
     borrower_risk_profile = Column(SQLEnum(BorrowerRiskProfile))
-    target_payment = Column(Float)
+    target_payment = Column(Numeric(18, 2))
     expected_purchase_date = Column(DateTime)
 
     # PRD Section 4.3 - Referral Fields
@@ -182,30 +182,30 @@ class Lead(Base):
 
     # Salesforce Sync - Financial Details
     rate_type = Column(String)
-    monthly_payment = Column(Float)
-    property_tax = Column(Float)
-    hazard_insurance = Column(Float)
-    mortgage_insurance = Column(Float)
-    hoa_amount = Column(Float)
-    origination_fee = Column(Float)
-    estimated_prepaid_interest = Column(Float)
-    index_rate = Column(Float)
-    margin = Column(Float)
+    monthly_payment = Column(Numeric(18, 2))
+    property_tax = Column(Numeric(18, 2))
+    hazard_insurance = Column(Numeric(18, 2))
+    mortgage_insurance = Column(Numeric(18, 2))
+    hoa_amount = Column(Numeric(18, 2))
+    origination_fee = Column(Numeric(18, 2))
+    estimated_prepaid_interest = Column(Numeric(18, 2))
+    index_rate = Column(Numeric(8, 4))
+    margin = Column(Numeric(8, 4))
 
     # Salesforce Sync - LTV/Purpose
     loan_purpose = Column(String)
     file_state = Column(String)
 
     # Salesforce Sync - 2nd Loan
-    second_loan_amount = Column(Float)
-    second_loan_rate = Column(Float)
-    second_loan_payment = Column(Float)
+    second_loan_amount = Column(Numeric(18, 2))
+    second_loan_rate = Column(Numeric(8, 4))
+    second_loan_payment = Column(Numeric(18, 2))
 
     # Salesforce Sync - Housing Expenses
-    present_housing_expense = Column(Float)
-    proposed_housing_expense = Column(Float)
-    present_monthly_payment = Column(Float)
-    proposed_monthly_payment = Column(Float)
+    present_housing_expense = Column(Numeric(18, 2))
+    proposed_housing_expense = Column(Numeric(18, 2))
+    present_monthly_payment = Column(Numeric(18, 2))
+    proposed_monthly_payment = Column(Numeric(18, 2))
 
     # Salesforce Integration
     salesforce_id = Column(String)
@@ -215,6 +215,24 @@ class Lead(Base):
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Valid lead stages (from LeadStage enum values)
+    _VALID_LEAD_STAGES = frozenset(s.value for s in LeadStage)
+
+    @validates('stage')
+    def validate_stage(self, key, value):
+        """Validate lead stage against LeadStage enum values."""
+        if value is None:
+            return value
+        if hasattr(value, 'value'):
+            value = value.value
+        value = str(value)
+        if value not in self._VALID_LEAD_STAGES:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Lead stage '{value}' not in LeadStage enum — allowing for backward compat"
+            )
+        return value
 
     # Relationships
     organization = relationship("Organization", backref="leads")
@@ -259,10 +277,10 @@ class Loan(Base):
     loan_type = Column(String)
 
     # Financials
-    amount = Column(Float, nullable=False)
-    purchase_price = Column(Float)
-    down_payment = Column(Float)
-    rate = Column(Float)
+    amount = Column(Numeric(18, 2), nullable=False)
+    purchase_price = Column(Numeric(18, 2))
+    down_payment = Column(Numeric(18, 2))
+    rate = Column(Numeric(8, 4))
     term = Column(Integer, default=360)
 
     # Property
@@ -303,7 +321,7 @@ class Loan(Base):
     appraisal_ordered_date = Column(DateTime)
     appraisal_scheduled_date = Column(DateTime)
     appraisal_completed_date = Column(DateTime)
-    appraisal_value = Column(Float)
+    appraisal_value = Column(Numeric(18, 2))
     appraisal_received_date = Column(DateTime)
     appraisal_docs_expire_date = Column(DateTime)
 
@@ -320,7 +338,7 @@ class Loan(Base):
     lock_term_days = Column(Integer)
     float_down_available = Column(Boolean, default=False)
     float_down_terms = Column(String)
-    extension_cost_estimate = Column(Float)
+    extension_cost_estimate = Column(Numeric(18, 2))
     volatility_score = Column(Integer, default=50)
     borrower_risk_profile = Column(SQLEnum(BorrowerRiskProfile))
     lock_score = Column(Integer)
@@ -394,47 +412,61 @@ class Loan(Base):
 
     # Salesforce Sync - Financials
     rate_type = Column(String)
-    monthly_payment = Column(Float)
-    property_tax = Column(Float)
-    hazard_insurance = Column(Float)
-    mortgage_insurance = Column(Float)
-    hoa_amount = Column(Float)
-    origination_fee = Column(Float)
-    estimated_prepaid_interest = Column(Float)
-    points = Column(Float)
-    index_rate = Column(Float)
-    margin = Column(Float)
-    ltv = Column(Float)
-    cltv = Column(Float)
+    monthly_payment = Column(Numeric(18, 2))
+    property_tax = Column(Numeric(18, 2))
+    hazard_insurance = Column(Numeric(18, 2))
+    mortgage_insurance = Column(Numeric(18, 2))
+    hoa_amount = Column(Numeric(18, 2))
+    origination_fee = Column(Numeric(18, 2))
+    estimated_prepaid_interest = Column(Numeric(18, 2))
+    points = Column(Numeric(8, 4))
+    index_rate = Column(Numeric(8, 4))
+    margin = Column(Numeric(8, 4))
+    ltv = Column(Numeric(8, 4))
+    cltv = Column(Numeric(8, 4))
     loan_purpose = Column(String)
     file_state = Column(String)
 
     # Salesforce Sync - 2nd Loan
-    second_loan_amount = Column(Float)
-    second_loan_rate = Column(Float)
-    second_loan_payment = Column(Float)
+    second_loan_amount = Column(Numeric(18, 2))
+    second_loan_rate = Column(Numeric(8, 4))
+    second_loan_payment = Column(Numeric(18, 2))
 
     # Salesforce Sync - Housing Expenses
-    present_housing_expense = Column(Float)
-    proposed_housing_expense = Column(Float)
-    present_monthly_payment = Column(Float)
-    proposed_monthly_payment = Column(Float)
+    present_housing_expense = Column(Numeric(18, 2))
+    proposed_housing_expense = Column(Numeric(18, 2))
+    present_monthly_payment = Column(Numeric(18, 2))
+    proposed_monthly_payment = Column(Numeric(18, 2))
 
     # Salesforce Integration
     salesforce_id = Column(String, index=True)
+
+    # Encompass LOS Integration
+    encompass_loan_id = Column(String, index=True, nullable=True)
+    encompass_last_synced_at = Column(DateTime, nullable=True)
+    encompass_sync_status = Column(String, nullable=True)  # "synced", "pending", "error"
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    # Valid loan stages (from LoanStage enum values)
+    _VALID_LOAN_STAGES = frozenset(s.value for s in LoanStage)
+
     @validates('stage')
     def validate_stage(self, key, value):
-        """Convert enum values to plain strings for the String column."""
+        """Convert enum values to plain strings and validate against LoanStage."""
         if value is None:
             return value
         if hasattr(value, 'value'):
-            return value.value
-        return str(value)
+            value = value.value
+        value = str(value).upper()
+        if value not in self._VALID_LOAN_STAGES:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Loan stage '{value}' not in LoanStage enum — allowing for backward compat"
+            )
+        return value
 
     # Relationships
     organization = relationship("Organization", backref="loans")

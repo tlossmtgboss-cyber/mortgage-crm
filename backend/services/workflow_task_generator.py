@@ -55,7 +55,7 @@ class TaskGeneratorService:
 
     def _load_models(self):
         """Load required models."""
-        from main import Lead, Loan, Task, User
+        from database.models import Lead, Loan, Task, User
         from models.user_onboarding import Role
 
         self.Lead = Lead
@@ -430,7 +430,8 @@ class TaskGeneratorService:
                     """), {"uid": user_id}).scalar() or 0
                     if pending_count < self.MAX_PENDING_TASKS_PER_USER:
                         return user_id, role_id
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Error checking task capacity for user {user_id}: {e}")
                     # On error, allow assignment anyway
                     return user_id, role_id
 

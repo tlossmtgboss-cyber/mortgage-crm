@@ -17,7 +17,7 @@ from sqlalchemy import func, and_, or_
 from pydantic import BaseModel
 
 from database import get_db
-from main import get_current_user
+from auth.dependencies import get_current_user
 from utils.auth import require_platform_admin
 
 logger = logging.getLogger(__name__)

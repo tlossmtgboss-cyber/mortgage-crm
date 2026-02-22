@@ -38,9 +38,10 @@ async def get_current_user(*args, **kwargs):
     global _get_current_user
     if _get_current_user is None:
         try:
-            from main import get_current_user as _gcu
+            from auth.dependencies import get_current_user as _gcu
             _get_current_user = _gcu
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to import get_current_user from main: {e}")
             from fastapi import HTTPException as _HTTPException
             async def fallback(*a, **kw):
                 raise _HTTPException(status_code=503, detail="Authentication service not initialized")
@@ -53,7 +54,8 @@ def get_db_connection():
         try:
             from auto_import_routes import get_db_connection as _gdbc
             _get_db_connection = _gdbc
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to import get_db_connection from auto_import_routes: {e}")
             import psycopg2
             import os
             def fallback():
@@ -681,7 +683,8 @@ def ensure_import_columns_exist(conn, destination: str):
         try:
             cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to add column {col_name} to {table_name}: {e}")
             conn.rollback()
 
     cursor.close()
@@ -1167,13 +1170,13 @@ async def execute_import(
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close cursor during import cleanup: {e}")
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close connection during import cleanup: {e}")
 
 
 @router.get("/stage-values")
@@ -1204,13 +1207,13 @@ async def get_all_stage_values(
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close cursor during stage-values cleanup: {e}")
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close connection during stage-values cleanup: {e}")
 
 
 @router.post("/fix-stages")
@@ -1302,13 +1305,13 @@ async def fix_lead_stage_values(
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close cursor during fix-stages cleanup: {e}")
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close connection during fix-stages cleanup: {e}")
 
 
 @router.post("/fix-owner-assignment")
@@ -1388,13 +1391,13 @@ async def fix_owner_assignment(
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close cursor during fix-owner cleanup: {e}")
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close connection during fix-owner cleanup: {e}")
 
 
 @router.get("/check-unassigned")
@@ -1464,10 +1467,10 @@ async def check_unassigned_records(
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close cursor during check-unassigned cleanup: {e}")
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close connection during check-unassigned cleanup: {e}")

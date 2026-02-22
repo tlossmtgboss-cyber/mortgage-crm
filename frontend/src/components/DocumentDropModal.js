@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { documentDropAPI, leadsAPI, loansAPI } from '../services/api';
 import './DocumentDropModal.css';
+import { toast } from '../utils/toast';
 
 /**
  * DocumentDropModal - Modal for handling dropped document files
@@ -87,7 +88,7 @@ function DocumentDropModal({ file, onClose, onComplete }) {
 
   const handleUpload = async () => {
     if (!selectedDocType) {
-      alert('Please select a document type');
+      toast.error('Please select a document type');
       return;
     }
 
@@ -100,7 +101,7 @@ function DocumentDropModal({ file, onClose, onComplete }) {
       onComplete(result);
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Failed to upload document. Please try again.');
+      toast.error('Failed to upload document. Please try again.');
     }
     setUploading(false);
   };

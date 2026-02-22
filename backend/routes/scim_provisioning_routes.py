@@ -379,7 +379,8 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         try:
             body = await request.json()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error parsing SCIM create user JSON body: {e}")
             raise HTTPException(
                 status_code=400,
                 detail=_scim_error(400, "Invalid JSON body"),
@@ -517,7 +518,8 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         try:
             body = await request.json()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error parsing SCIM replace user JSON body: {e}")
             raise HTTPException(
                 status_code=400,
                 detail=_scim_error(400, "Invalid JSON body"),
@@ -662,7 +664,8 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
 
         try:
             body = await request.json()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error parsing SCIM patch user JSON body: {e}")
             raise HTTPException(
                 status_code=400,
                 detail=_scim_error(400, "Invalid JSON body"),

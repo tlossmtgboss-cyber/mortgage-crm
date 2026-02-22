@@ -13,6 +13,9 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pydantic import BaseModel, Field, EmailStr
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from models.accounting.core import (
@@ -23,10 +26,16 @@ from models.accounting.accounts_receivable import (
     ARCustomer, ARInvoice, ARInvoiceLine, ARPayment, ARPaymentApplication
 )
 
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 def _get_current_user():
     """Lazy import auth dependency for router-level protection."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 router = APIRouter(
@@ -140,8 +149,8 @@ def generate_invoice_number(db: Session, org_id: int) -> str:
         try:
             num = int(last.invoice_number.replace("INV-", ""))
             return f"INV-{num + 1:06d}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error parsing invoice number: {e}")
     return "INV-000001"
 
 
@@ -155,8 +164,8 @@ def generate_payment_number(db: Session, org_id: int) -> str:
         try:
             num = int(last.payment_number.replace("PMT-", ""))
             return f"PMT-{num + 1:06d}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error parsing payment number: {e}")
     return "PMT-000001"
 
 

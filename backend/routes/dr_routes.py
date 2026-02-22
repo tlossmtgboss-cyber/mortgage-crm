@@ -139,7 +139,8 @@ def register_dr_routes(app, get_db, get_current_user, **kwargs):
             redis_client = redis_lib.from_url(
                 redis_url, socket_timeout=5
             )
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error connecting to Redis: {e}")
             redis_client = None
 
         from services.graceful_degradation import GracefulDegradation

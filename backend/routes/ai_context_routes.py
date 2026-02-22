@@ -198,7 +198,8 @@ async def get_loan_context_for_ai(
             """),
             {"loan_id": loan_id}
         ).fetchall()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching workflow alerts for loan {loan_id}: {e}")
         alerts = []
 
     return {
@@ -391,7 +392,8 @@ async def get_ai_context_summary(
             """),
             base_params
         ).scalar()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching pending tasks in get_ai_context_summary: {e}")
         pending_tasks = 0
 
     # Get MUM client count and total equity
@@ -406,7 +408,8 @@ async def get_ai_context_summary(
             """),
             base_params
         ).fetchone()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching MUM stats in get_ai_context_summary: {e}")
         mum_stats = (0, 0)
 
     return {
@@ -519,7 +522,8 @@ async def get_user_profile_context_for_ai(
             """),
             base_params
         ).fetchone()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching task stats in get_user_profile_context_for_ai: {e}")
         db.rollback()
         task_stats = (0, 0, 0, 0)
 
@@ -535,7 +539,8 @@ async def get_user_profile_context_for_ai(
             """),
             base_params
         ).fetchone()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching lead stats in get_user_profile_context_for_ai: {e}")
         db.rollback()
         lead_stats = (0, 0)
 
@@ -552,7 +557,8 @@ async def get_user_profile_context_for_ai(
             """),
             base_params
         ).fetchone()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching loan stats in get_user_profile_context_for_ai: {e}")
         db.rollback()
         loan_stats = (0, 0, 0)
 
@@ -565,7 +571,8 @@ async def get_user_profile_context_for_ai(
             """),
             base_params
         ).scalar()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching recent activities in get_user_profile_context_for_ai: {e}")
         db.rollback()
         recent_activities = 0
 

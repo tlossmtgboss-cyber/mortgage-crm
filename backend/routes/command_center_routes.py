@@ -568,7 +568,8 @@ async def get_command_center(
         if _get_all_workflow_tasks_logic:
             try:
                 workflow_tasks = _get_all_workflow_tasks_logic(db, current_user, days_ahead=14)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error fetching workflow tasks: {e}")
                 workflow_tasks = []
         else:
             workflow_tasks = []

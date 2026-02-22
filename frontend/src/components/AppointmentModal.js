@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './AppointmentModal.css';
+import { toast } from '../utils/toast';
 
 function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
   const [title, setTitle] = useState('');
@@ -68,7 +69,7 @@ function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
         onAppointmentCreated(data);
       }
 
-      alert('Appointment scheduled successfully!');
+      toast.success('Appointment scheduled successfully!');
       onClose();
     } catch (err) {
       console.error('Error creating appointment:', err);

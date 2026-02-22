@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function CustomerList() {
   const navigate = useNavigate();
@@ -161,7 +162,7 @@ function CustomerList() {
   // Save customer
   const handleSave = async () => {
     if (!formData.name) {
-      alert('Please enter a customer name.');
+      toast.error('Please enter a customer name.');
       return;
     }
 
@@ -183,7 +184,7 @@ function CustomerList() {
       fetchCustomers();
     } catch (err) {
       console.error('Error saving customer:', err);
-      alert(err.response?.data?.detail || 'Failed to save customer. Please try again.');
+      toast.error(err.response?.data?.detail || 'Failed to save customer. Please try again.');
     } finally {
       setSaving(false);
     }

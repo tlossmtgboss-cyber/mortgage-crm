@@ -7,12 +7,15 @@ Layered Testing Strategy:
 - e2e: Full conversation flow tests
 - regression: Golden response comparisons
 """
+import logging
 import pytest
 import os
 import json
 import asyncio
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from dataclasses import dataclass
@@ -39,6 +42,13 @@ from database import get_db
 # =============================================================================
 
 TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///./test_perennia.db")
+
+# Remove stale test DB file so ORM tables are recreated with all current columns
+if "sqlite:///" in TEST_DATABASE_URL and "memory" not in TEST_DATABASE_URL:
+    _db_path = TEST_DATABASE_URL.replace("sqlite:///", "")
+    if os.path.exists(_db_path):
+        os.remove(_db_path)
+
 test_engine = create_engine(
     TEST_DATABASE_URL,
     connect_args={"check_same_thread": False} if "sqlite" in TEST_DATABASE_URL else {}
@@ -48,89 +58,30 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_eng
 
 @pytest.fixture(scope="session")
 def db_engine():
-    """Create test database engine for the session"""
-    # Create tables needed for integration tests
+    """Create test database engine for the session.
+
+    Creates ORM tables individually to match the real schema.  Tables are
+    created one-by-one so a broken FK reference on an unrelated model
+    (e.g. workflow_task_instances) doesn't block the whole batch.
+    """
+    from db import Base
+    # Import models so their tables are registered on Base.metadata
+    try:
+        from database.models import Lead, Loan, User  # noqa: F401
+    except Exception as e:
+        logger.debug(f"Model import skipped in db_engine: {e}")
+
+    # Create each ORM table individually — skip tables whose FK targets
+    # are missing (SQLite ignores FK enforcement by default anyway).
+    for table in Base.metadata.tables.values():
+        try:
+            table.create(bind=test_engine, checkfirst=True)
+        except Exception as e:
+            logger.debug(f"Skipping table {table.name} creation in db_engine: {e}")
+
+    # Create lightweight tables used only by estimate-parser tests
+    # (these are NOT ORM models — they use raw SQL in the route handlers)
     with test_engine.connect() as conn:
-        # Create leads table
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS leads (
-                id TEXT PRIMARY KEY,
-                first_name TEXT,
-                last_name TEXT,
-                email TEXT,
-                phone TEXT,
-                status TEXT DEFAULT 'new',
-                source TEXT,
-                campaign TEXT,
-                loan_purpose TEXT,
-                property_type TEXT,
-                estimated_amount REAL,
-                estimated_credit_score INTEGER,
-                pre_approved INTEGER DEFAULT 0,
-                lead_score INTEGER DEFAULT 0,
-                assigned_to TEXT,
-                preferred_contact_method TEXT,
-                preferred_contact_time TEXT,
-                timezone TEXT,
-                last_contact_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-
-        # Create loans table
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS loans (
-                id TEXT PRIMARY KEY,
-                loan_number TEXT,
-                borrower_name TEXT,
-                borrower_id TEXT,
-                loan_amount REAL,
-                interest_rate REAL,
-                loan_type TEXT,
-                property_address TEXT,
-                status TEXT DEFAULT 'lead',
-                loan_officer_id TEXT,
-                branch_id TEXT,
-                application_date TIMESTAMP,
-                disclosure_sent_at TIMESTAMP,
-                disclosure_received_at TIMESTAMP,
-                closing_disclosure_sent_at TIMESTAMP,
-                closing_disclosure_received_at TIMESTAMP,
-                consummation_date TIMESTAMP,
-                submitted_to_uw_at TIMESTAMP,
-                approval_date TIMESTAMP,
-                clear_to_close_at TIMESTAMP,
-                funded_at TIMESTAMP,
-                expected_close_date DATE,
-                lock_expiration_date DATE,
-                le_revision_count INTEGER DEFAULT 0,
-                cd_revision_count INTEGER DEFAULT 0,
-                borrower_credit_score INTEGER,
-                pricing_exception INTEGER DEFAULT 0,
-                pricing_exception_reason TEXT,
-                referral_source TEXT,
-                referral_fee_paid REAL,
-                title_company_id TEXT,
-                title_fee REAL,
-                appraisal_company_id TEXT,
-                appraisal_fee REAL,
-                status_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """))
-
-        # Create users table for joins
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS users (
-                id TEXT PRIMARY KEY,
-                name TEXT,
-                email TEXT,
-                nmls_id TEXT,
-                manager_id TEXT
-            )
-        """))
-
-        # Create estimate_parse_cache table for estimate parser tests
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS estimate_parse_cache (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,7 +95,6 @@ def db_engine():
             )
         """))
 
-        # Create estimate_parse_failures table for estimate parser tests
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS estimate_parse_failures (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -156,7 +106,6 @@ def db_engine():
             )
         """))
 
-        # Create estimate_comparisons table for estimate parser tests
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS estimate_comparisons (
                 id TEXT PRIMARY KEY,
@@ -265,6 +214,10 @@ def application_id():
 def authenticated_client(db_session, mock_user):
     """Create test client with authentication mocked"""
     from main import get_current_user, get_current_user_flexible
+    from auth.dependencies import (
+        get_current_user as auth_dep_gcu,
+        get_current_user_flexible as auth_dep_gcuf,
+    )
 
     def override_get_db():
         try:
@@ -278,10 +231,12 @@ def authenticated_client(db_session, mock_user):
     async def override_get_current_user_flexible():
         return mock_user
 
-    # Override all auth-related dependencies
+    # Override all auth-related dependencies — both main.py and auth.dependencies references
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[get_current_user_flexible] = override_get_current_user_flexible
+    app.dependency_overrides[auth_dep_gcu] = override_get_current_user
+    app.dependency_overrides[auth_dep_gcuf] = override_get_current_user_flexible
 
     # Also override route-specific auth wrappers
     try:
@@ -308,8 +263,8 @@ def authenticated_client(db_session, mock_user):
         try:
             workflow_sla_routes._get_current_user = original_get_current_user
             workflow_sla_routes._get_db = original_get_db
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to restore workflow_sla_routes overrides in authenticated_client: {e}")
 
     app.dependency_overrides.clear()
 

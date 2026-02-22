@@ -22,7 +22,8 @@ import uuid
 import logging
 
 from database import get_db
-from main import get_current_user, User
+from auth.dependencies import get_current_user
+from database.models import User
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
@@ -333,9 +334,9 @@ def _activate_sequence(db: Session, sequence_id: str, campaign_id: str, channel:
             "sequence_id": sequence_id,
             "channel": channel,
         })
-    except Exception:
+    except Exception as e:
         # Table may not exist yet - log and continue
-        logger.debug(f"campaign_sequence_associations table may not exist, skipping association")
+        logger.debug(f"campaign_sequence_associations table may not exist, skipping association: {e}")
 
     logger.info(f"Activated {channel} sequence {sequence_id} for campaign {campaign_id}")
 

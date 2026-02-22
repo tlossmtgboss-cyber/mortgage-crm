@@ -178,6 +178,13 @@ def register_los_webhook_routes(app, get_db, **kwargs):
         if old_stage != crm_stage:
             loan.stage = crm_stage
             loan.stage_changed_at = datetime.now(timezone.utc)
+
+            # Update Encompass sync tracking columns
+            if hasattr(loan, "encompass_last_synced_at"):
+                loan.encompass_last_synced_at = datetime.now(timezone.utc)
+            if hasattr(loan, "encompass_sync_status"):
+                loan.encompass_sync_status = "synced"
+
             db.flush()
             logger.info(f"Loan {loan.loan_number} stage updated: {old_stage} -> {crm_stage} (from LOS milestone: {new_milestone})")
 
@@ -194,17 +201,67 @@ def register_los_webhook_routes(app, get_db, **kwargs):
                 logger.warning(f"SLA tracking hook failed for LOS loan {loan.id}: {e}")
 
     async def _handle_loan_update(db: Session, los_loan_id: str, payload: dict):
-        """Handle general loan update from LOS."""
+        """Handle general loan update from LOS.
+
+        If auto_pull_on_webhook is enabled for the loan's organization,
+        performs a full pull from Encompass. Otherwise, just notes the event.
+        """
         loan = _find_loan_by_los_id(db, los_loan_id)
         if not loan:
             logger.info(f"LOS loan {los_loan_id} not linked to CRM - skipping update")
             return
 
-        # For general updates, we note the event but don't auto-pull
-        # (bidirectional sync should be triggered explicitly to avoid conflicts)
-        loan.updated_at = datetime.now(timezone.utc)
-        db.flush()
-        logger.info(f"Noted LOS update for loan {loan.loan_number}")
+        # Check if auto-pull is enabled for this org
+        auto_pull = False
+        org_id = getattr(loan, "organization_id", None)
+        if org_id:
+            try:
+                from database.models.encompass_config import EncompassConfig
+                config = db.query(EncompassConfig).filter(
+                    EncompassConfig.organization_id == org_id,
+                    EncompassConfig.is_active == True,  # noqa: E712
+                ).first()
+                if config and config.auto_pull_on_webhook:
+                    auto_pull = True
+            except Exception as e:
+                logger.warning(f"Could not check auto_pull config for org {org_id}: {e}")
+
+        if auto_pull:
+            # Perform full pull from Encompass
+            try:
+                from services.los_integration.encompass_oauth_service import EncompassOAuthService
+                from services.los_integration.sync_service import LOSSyncService
+
+                oauth_service = EncompassOAuthService()
+                client = await oauth_service.get_authenticated_client(db=db, org_id=org_id)
+                sync_service = LOSSyncService(client=client)
+                result = await sync_service.pull_from_los(
+                    db=db, loan_id=loan.id, los_loan_id=los_loan_id,
+                )
+
+                # Update Encompass sync status columns
+                loan.encompass_last_synced_at = datetime.now(timezone.utc)
+                loan.encompass_sync_status = (
+                    "synced" if result.status.value == "success" else "error"
+                )
+                db.flush()
+
+                logger.info(
+                    f"Auto-pulled LOS update for loan {loan.loan_number}: "
+                    f"{result.status.value} ({result.fields_synced} fields synced)"
+                )
+            except Exception as e:
+                logger.error(f"Auto-pull failed for loan {loan.loan_number}: {e}")
+                loan.encompass_sync_status = "error"
+                loan.updated_at = datetime.now(timezone.utc)
+                db.flush()
+        else:
+            # Just note the event
+            loan.updated_at = datetime.now(timezone.utc)
+            if hasattr(loan, "encompass_sync_status"):
+                loan.encompass_sync_status = "pending"
+            db.flush()
+            logger.info(f"Noted LOS update for loan {loan.loan_number} (auto-pull disabled)")
 
     async def _handle_document_event(db: Session, los_loan_id: str, event_type: str, payload: dict):
         """Handle document events from LOS."""
@@ -275,37 +332,62 @@ def register_los_webhook_routes(app, get_db, **kwargs):
     # -----------------------------------------------------------------
 
     def _find_loan_by_los_id(db: Session, los_loan_id: str):
-        """Find a CRM loan by its LOS loan ID (stored in user_metadata)."""
+        """Find a CRM loan by its LOS loan ID.
+
+        Checks the dedicated encompass_loan_id column first (fast indexed query),
+        then falls back to scanning user_metadata JSON for backward compatibility.
+        """
         from database.models.lead_loan import Loan
-        from sqlalchemy import cast, String
 
         if not los_loan_id:
             return None
 
-        # Search in user_metadata JSON for los_loan_id
-        # SQLite: use LIKE on the JSON text
-        # PostgreSQL: use JSON operators
+        # Primary: query dedicated encompass_loan_id column (indexed)
         try:
-            # Try PostgreSQL JSON operator first
+            loan = db.query(Loan).filter(
+                Loan.encompass_loan_id == los_loan_id
+            ).first()
+            if loan:
+                return loan
+        except Exception as e:
+            logger.warning(f"Error querying encompass_loan_id column: {e}")
+
+        # Fallback: search in user_metadata JSON for backward compatibility
+        try:
+            # Try PostgreSQL JSON operator
             loan = db.query(Loan).filter(
                 Loan.user_metadata["los_loan_id"].astext == los_loan_id
             ).first()
             if loan:
+                # Migrate: set the dedicated column for future lookups
+                if hasattr(loan, "encompass_loan_id") and not loan.encompass_loan_id:
+                    loan.encompass_loan_id = los_loan_id
+                    try:
+                        db.flush()
+                    except Exception:
+                        pass
                 return loan
         except Exception:
             pass
 
-        # Fallback: scan loans with user_metadata
+        # Last resort: full scan of user_metadata
         try:
             loans = db.query(Loan).filter(
                 Loan.user_metadata.isnot(None)
-            ).all()
+            ).limit(500).all()
             for loan in loans:
                 meta = loan.user_metadata if isinstance(loan.user_metadata, dict) else {}
                 if meta.get("los_loan_id") == los_loan_id or meta.get("encompass_guid") == los_loan_id:
+                    # Migrate: set the dedicated column for future lookups
+                    if hasattr(loan, "encompass_loan_id") and not loan.encompass_loan_id:
+                        loan.encompass_loan_id = los_loan_id
+                        try:
+                            db.flush()
+                        except Exception:
+                            pass
                     return loan
         except Exception as e:
-            logger.error(f"Error searching for LOS loan ID: {e}")
+            logger.error(f"Error searching for LOS loan ID in user_metadata: {e}")
 
         return None
 

@@ -136,7 +136,7 @@ async def update_calculator_config(
     db: Session = Depends(get_db)
 ):
     """Update production calculator configuration (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "") if request else ""
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -177,7 +177,7 @@ class QuizTemplateCreate(BaseModel):
 @router.get("/quiz/templates/all")
 async def get_all_quiz_templates(request: Request = None, db: Session = Depends(get_db)):
     """Get all quiz templates (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "") if request else ""
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -214,7 +214,7 @@ async def get_all_quiz_templates(request: Request = None, db: Session = Depends(
 @router.post("/quiz/templates")
 async def create_quiz_template(template: QuizTemplateCreate, request: Request = None, db: Session = Depends(get_db)):
     """Create a new quiz template (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "") if request else ""
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -247,7 +247,7 @@ async def create_quiz_template(template: QuizTemplateCreate, request: Request = 
 @router.delete("/quiz/templates/{template_id}")
 async def delete_quiz_template(template_id: int, request: Request = None, db: Session = Depends(get_db)):
     """Soft delete a quiz template (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "") if request else ""
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -271,7 +271,7 @@ async def delete_quiz_template(template_id: int, request: Request = None, db: Se
 @router.post("/admin/run-assessment-migration")
 async def run_assessment_migration(request: Request = None, db: Session = Depends(get_db)):
     """Run the assessment tables migration (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "") if request else ""
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)

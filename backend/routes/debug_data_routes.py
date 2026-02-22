@@ -27,9 +27,15 @@ def register_debug_data_routes(
     **kwargs
 ):
     """Register debug data and email routes."""
-    from main import (
-        User, ExtractedData, IncomingDataEvent, MicrosoftOAuthToken,
-        CalendarEvent, ReferralPartner, Task, Loan
+    from database.models import (
+        User,
+        ExtractedData,
+        IncomingDataEvent,
+        MicrosoftOAuthToken,
+        CalendarEvent,
+        ReferralPartner,
+        Task,
+        Loan,
     )
     from schemas.core import ErrorFixRequest, MicrosoftSyncSettings
     from services.dre_helpers import get_entity_name, create_milestone_tasks

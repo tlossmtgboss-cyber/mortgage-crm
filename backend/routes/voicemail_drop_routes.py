@@ -246,7 +246,8 @@ def check_calling_hours(phone_number: str) -> Tuple[bool, str]:
     tz_name = _get_recipient_timezone(phone_number)
     try:
         tz = ZoneInfo(tz_name)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error creating timezone '{tz_name}' in check_calling_hours: {e}")
         tz = ZoneInfo("America/New_York")
 
     recipient_now = datetime.now(tz)
@@ -260,27 +261,23 @@ def check_calling_hours(phone_number: str) -> Tuple[bool, str]:
     return True, ""
 
 
-_dnc_scrub_warned = False  # Only warn once per process to avoid log spam
-
-
-def _check_national_dnc_scrub_freshness():
+def _check_national_dnc_scrub_freshness() -> Tuple[bool, str]:
     """
-    Warn if the National DNC Registry scrub data is stale.
+    Block outbound calls/voicemails if the National DNC Registry scrub data is stale.
     TCPA requires scrubbing against the National DNC Registry at least every 31 days.
     Set NATIONAL_DNC_LAST_SCRUB env var (ISO date) after each scrub.
-    """
-    global _dnc_scrub_warned
-    if _dnc_scrub_warned:
-        return
 
+    Returns (is_stale, message). If is_stale is True, the operation MUST be blocked.
+    """
     last_scrub_date = os.getenv("NATIONAL_DNC_LAST_SCRUB")
     if not last_scrub_date:
-        logger.warning(
-            "NATIONAL_DNC_LAST_SCRUB env var not set. "
-            "TCPA requires National DNC Registry scrubbing every 31 days."
+        msg = (
+            "National DNC scrub is stale: NATIONAL_DNC_LAST_SCRUB env var not set. "
+            "TCPA requires National DNC Registry scrubbing every 31 days. "
+            "All outbound calls are blocked until a valid scrub date is configured."
         )
-        _dnc_scrub_warned = True
-        return
+        logger.error(msg)
+        return True, msg
 
     try:
         scrub_dt = datetime.fromisoformat(last_scrub_date)
@@ -288,14 +285,23 @@ def _check_national_dnc_scrub_freshness():
             scrub_dt = scrub_dt.replace(tzinfo=timezone.utc)
         days_since = (datetime.now(timezone.utc) - scrub_dt).days
         if days_since > 31:
-            logger.warning(
+            msg = (
                 f"National DNC Registry scrub is {days_since} days old (max 31). "
-                "TCPA requires re-scrubbing. Update NATIONAL_DNC_LAST_SCRUB after scrub."
+                "TCPA requires re-scrubbing. All outbound calls are blocked until "
+                "NATIONAL_DNC_LAST_SCRUB is updated after a fresh scrub."
             )
-            _dnc_scrub_warned = True
+            logger.error(msg)
+            return True, msg
     except (ValueError, TypeError) as e:
-        logger.warning(f"Invalid NATIONAL_DNC_LAST_SCRUB format: {e}")
-        _dnc_scrub_warned = True
+        msg = (
+            f"Invalid NATIONAL_DNC_LAST_SCRUB format: {e}. "
+            "Cannot verify DNC scrub freshness. All outbound calls are blocked "
+            "until a valid ISO date is set."
+        )
+        logger.error(msg)
+        return True, msg
+
+    return False, ""
 
 
 def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
@@ -321,7 +327,11 @@ def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
         return True, f"Phone number is on Do Not Call list (reason: {dnc[1] or 'N/A'})"
 
     # Check National DNC Registry scrub freshness (TCPA requires scrub every 31 days)
-    _check_national_dnc_scrub_freshness()
+    # This is a BLOCKING check — stale scrub data means we cannot verify DNC status,
+    # so all outbound calls must be blocked per TCPA safe harbor requirements.
+    is_stale, stale_msg = _check_national_dnc_scrub_freshness()
+    if is_stale:
+        return True, stale_msg
 
     return False, ""
 
@@ -1421,8 +1431,8 @@ async def send_voicemail_ringless(
 
             try:
                 result = response.json()
-            except Exception:
-                logger.error(f"Drop Cowboy non-JSON response: {response.text[:500]}")
+            except Exception as e:
+                logger.error(f"Drop Cowboy non-JSON response: {response.text[:500]}: {e}")
                 raise HTTPException(status_code=502, detail="Drop Cowboy returned invalid response")
 
             msg_id = str(result.get("id", result.get("message_id", "")))
@@ -2409,8 +2419,8 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
             campaign.status = "failed"
             db.commit()
             logger.info(f"Campaign {campaign_id} marked failed. Progress: {sent_so_far} sent, {failed_so_far} failed")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error marking campaign {campaign_id} as failed: {e}")
     finally:
         db.close()
 
@@ -2609,7 +2619,8 @@ def _verify_revocation_token(token: str) -> Optional[dict]:
         if payload.get("exp") and datetime.fromisoformat(payload["exp"]) < datetime.now(timezone.utc):
             return None
         return payload
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in _verify_revocation_token: {e}")
         return None
 
 
@@ -2644,8 +2655,8 @@ async def revoke_consent(
             if staff_user:
                 is_authenticated = True
                 logger.info(f"Consent revocation by staff user {staff_user.id}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error checking staff auth in revoke_consent: {e}")
 
         # Try signed revocation token (public opt-out link)
         if not is_authenticated and revocation_token:
@@ -2895,8 +2906,8 @@ async def rvm_webhook(
 
         try:
             data = await request.json()
-        except Exception:
-            logger.warning(f"RVM webhook: unrecognized body format: {body_text[:200]}")
+        except Exception as e:
+            logger.warning(f"RVM webhook: unrecognized body format: {body_text[:200]}: {e}")
             return Response(content="OK", media_type="text/plain")
 
         foreign_id = str(data.get("foreign_id", ""))

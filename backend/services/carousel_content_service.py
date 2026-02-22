@@ -454,7 +454,8 @@ Return a JSON array of slides, each with:
             if token in self.TOKEN_PATTERNS:
                 try:
                     return str(self.TOKEN_PATTERNS[token](data))
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Token resolution failed for '{token}': {e}")
                     return match.group(0)  # Keep original if error
             return match.group(0)  # Keep original if unknown token
 
@@ -539,7 +540,8 @@ def format_date(date_value) -> str:
         if isinstance(date_value, str):
             date_value = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
         return date_value.strftime("%B %d, %Y")
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Date formatting failed in format_date: {e}")
         return str(date_value) if date_value else ""
 
 

@@ -18,7 +18,7 @@ def clear_tasks():
         db = SessionLocal()
 
         # Import Task model
-        from main import Task
+        from database.models import Task
 
         # Get count of tasks before deletion
         task_count = db.query(Task).count()

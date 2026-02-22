@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function BankTransactions() {
   const navigate = useNavigate();
@@ -158,7 +159,7 @@ function BankTransactions() {
   // Handle categorize/match
   const handleCategorize = async () => {
     if (!categorizeForm.account_id) {
-      alert('Please select an account to categorize this transaction.');
+      toast.error('Please select an account to categorize this transaction.');
       return;
     }
 
@@ -174,7 +175,7 @@ function BankTransactions() {
       fetchTransactions();
     } catch (err) {
       console.error('Error categorizing transaction:', err);
-      alert('Failed to categorize transaction');
+      toast.error('Failed to categorize transaction');
     }
   };
 
@@ -192,7 +193,7 @@ function BankTransactions() {
       fetchTransactions();
     } catch (err) {
       console.error('Error batch categorizing:', err);
-      alert('Failed to categorize transactions');
+      toast.error('Failed to categorize transactions');
     }
   };
 
@@ -207,7 +208,7 @@ function BankTransactions() {
       fetchTransactions();
     } catch (err) {
       console.error('Error excluding transaction:', err);
-      alert('Failed to exclude transaction');
+      toast.error('Failed to exclude transaction');
     }
   };
 
@@ -218,7 +219,7 @@ function BankTransactions() {
       fetchTransactions();
     } catch (err) {
       console.error('Error undoing:', err);
-      alert('Failed to undo');
+      toast.error('Failed to undo');
     }
   };
 

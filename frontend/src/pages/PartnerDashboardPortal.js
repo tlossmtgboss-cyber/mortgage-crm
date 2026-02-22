@@ -13,6 +13,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { partnersAPI, activitiesAPI } from '../services/api';
 import './PartnerDashboardPortal.css';
+import { toast } from '../utils/toast';
 
 // Activity type configuration
 const ACTIVITY_TYPE_CONFIG = {
@@ -457,7 +458,7 @@ function DashboardTab({ partner, stats, categories, activities = [], partnerId, 
         if (partner.assigned_lo_email) {
           window.location.href = `mailto:${partner.assigned_lo_email}?subject=Partner Portal Message from ${partner.name}`;
         } else {
-          alert('Loan officer contact information not available. Please contact support.');
+          toast.error('Loan officer contact information not available. Please contact support.');
         }
         break;
       default:
@@ -1350,7 +1351,7 @@ function MicropageTab({ partner, partnerId }) {
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error('Error saving micropage settings:', err);
-      alert('Failed to save settings. Please try again.');
+      toast.error('Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -1365,7 +1366,7 @@ function MicropageTab({ partner, partnerId }) {
       setDeployed(true);
     } catch (err) {
       console.error('Error deploying micropage:', err);
-      alert('Failed to deploy micropage. Please try again.');
+      toast.error('Failed to deploy micropage. Please try again.');
     } finally {
       setDeploying(false);
     }
@@ -1380,7 +1381,7 @@ function MicropageTab({ partner, partnerId }) {
       setDeployed(false);
     } catch (err) {
       console.error('Error disabling micropage:', err);
-      alert('Failed to disable micropage. Please try again.');
+      toast.error('Failed to disable micropage. Please try again.');
     }
   };
 
@@ -1554,7 +1555,7 @@ function MicropageTab({ partner, partnerId }) {
               className="copy-btn"
               onClick={() => {
                 navigator.clipboard.writeText(micropageUrl);
-                alert('Link copied to clipboard!');
+                toast.success('Link copied to clipboard!');
               }}
             >
               Copy

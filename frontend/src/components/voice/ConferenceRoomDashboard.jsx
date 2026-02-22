@@ -1,6 +1,7 @@
 // Conference Room Dashboard - Manage and monitor conference calls
 import React, { useState, useEffect, useCallback } from 'react';
 import './ConferenceRoomDashboard.css';
+import { toast } from '../../utils/toast';
 
 const ConferenceRoomDashboard = () => {
   const [conferences, setConferences] = useState([]);
@@ -94,7 +95,7 @@ const ConferenceRoomDashboard = () => {
       fetchConferences();
       setSelectedConference(null);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -116,10 +117,10 @@ const ConferenceRoomDashboard = () => {
       }
 
       const data = await response.json();
-      alert(`Joining conference. Dial-in: ${data.dial_in_number || 'Check your phone'}`);
+      toast.success(`Joining conference. Dial-in: ${data.dial_in_number || 'Check your phone'}`);
       fetchConferences();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -645,7 +646,7 @@ const QuickJoinModal = ({ onClose, apiBaseUrl }) => {
       }
 
       const data = await response.json();
-      alert(`Joining conference. ${data.message || 'Check your phone for the call.'}`);
+      toast.info(`Joining conference. ${data.message || 'Check your phone for the call.'}`);
       onClose();
     } catch (err) {
       setError(err.message);

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { partnersAPI } from '../services/api';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './ReferralPartners.css';
+import { toast } from '../utils/toast';
 
 // Mock referral partners data
 const generateMockPartners = () => {
@@ -84,7 +85,7 @@ function ReferralPartners() {
            ? error.response.data.detail
            : JSON.stringify(error.response.data.detail))
         : error.message || 'Unknown error';
-      alert('Failed to create referral partner: ' + errorMsg);
+      toast.error('Failed to create referral partner: ' + errorMsg);
     }
   };
 

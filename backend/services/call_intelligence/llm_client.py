@@ -597,8 +597,8 @@ Respond ONLY with the JSON object, no additional text."""
                             duration_ms=0,  # Duration tracked at higher level
                             call_type="extraction",
                         )
-                except Exception:
-                    pass  # Non-critical — don't break extraction on tracking failure
+                except Exception as e:
+                    logger.warning(f"Token usage tracking failed in extract_structured_data (Anthropic): {e}")
 
                 # Extract JSON from response
                 result = self._parse_json_response(content)
@@ -843,8 +843,8 @@ class OpenAIClient(BaseLLMClient):
                             duration_ms=0,
                             call_type="extraction",
                         )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Token usage tracking failed in extract_structured_data (OpenAI): {e}")
 
                 try:
                     result = json.loads(content)

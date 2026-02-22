@@ -55,14 +55,15 @@ async def _get_current_user(
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        from main import get_current_user_flexible
+        from auth.dependencies import get_current_user_flexible
         user = await get_current_user_flexible(
             token=credentials.credentials, request=None, db=db
         )
         return user
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_current_user_from_token: {e}")
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 

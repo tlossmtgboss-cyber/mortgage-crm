@@ -8,6 +8,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
+import { toast } from '../../utils/toast';
   useRealtorLoan,
   useRealtorTimeline,
   useRealtorConditions,
@@ -270,7 +271,7 @@ function LettersPanel({ loanId, permissions, onGenerateLetter }) {
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(getShareUrl(letter.share_token));
-                      alert('Share link copied to clipboard!');
+                      toast.success('Share link copied to clipboard!');
                     }}
                     className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
                     title="Copy Share Link"

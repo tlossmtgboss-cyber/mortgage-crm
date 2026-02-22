@@ -80,8 +80,8 @@ class AIMetricsService:
             logger.error(f"Error ensuring metrics table exists: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in ensure_table_exists (rollback): {e2}")
             return False
 
     @staticmethod
@@ -121,8 +121,8 @@ class AIMetricsService:
             logger.error(f"Error recording metric: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in record_metric (rollback): {e2}")
             return False
 
     @staticmethod
@@ -429,8 +429,8 @@ class AIMetricsService:
             logger.error(f"Error recording hallucination report: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in record_hallucination_report (rollback): {e2}")
             return False
 
     @staticmethod
@@ -536,8 +536,8 @@ class AIMetricsService:
             logger.error(f"Error getting hallucination metrics: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in get_hallucination_metrics (rollback): {e2}")
             return HallucinationMetrics(
                 avg_faithfulness_score=1.0,
                 avg_hallucination_rate=0.0,
@@ -662,8 +662,8 @@ class AIMetricsService:
             logger.error(f"Error getting agent performance: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in get_agent_performance (rollback): {e2}")
             return AgentPerformanceMetrics(
                 avg_response_time_ms=0,
                 p50_response_time_ms=0,
@@ -784,8 +784,8 @@ class AIMetricsService:
             logger.error(f"Error getting business metrics: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in get_business_metrics (rollback): {e2}")
             return BusinessMetrics(
                 total_queries=0,
                 unique_users=0,
@@ -878,8 +878,8 @@ class AIMetricsService:
             logger.error(f"Error getting AI quality metrics: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in get_ai_quality_metrics (rollback): {e2}")
             return AIQualityMetrics(
                 intent_accuracy=0,
                 intent_confidence_avg=0,
@@ -944,8 +944,8 @@ class AIMetricsService:
             logger.error(f"Error getting response time breakdown: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in get_response_time_breakdown (rollback): {e2}")
             return {"breakdown_by_query_type": [], "period_days": days}
 
     @staticmethod

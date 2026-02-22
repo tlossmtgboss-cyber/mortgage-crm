@@ -12,6 +12,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
+import { toast } from '../utils/toast';
   useTeamDashboard,
   useRecordings,
   useCoachingClips,
@@ -96,11 +97,11 @@ function ConversationIntelligence() {
     setProcessingPending(true);
     try {
       const result = await summaryApi.processPending({ limit: 50 });
-      alert(`Processed ${result.processed} summaries. ${result.errors?.length || 0} errors.`);
+      toast.success(`Processed ${result.processed} summaries. ${result.errors?.length || 0} errors.`);
       fetchSummaries();
     } catch (error) {
       console.error('Failed to process pending:', error);
-      alert('Failed to process pending summaries');
+      toast.error('Failed to process pending summaries');
     } finally {
       setProcessingPending(false);
     }

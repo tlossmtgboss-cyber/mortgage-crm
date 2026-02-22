@@ -95,6 +95,67 @@ def get_tool_count_for_intent(intent: str) -> int:
 
 
 # =============================================================================
+# TOOL REGISTRY BRIDGE
+# =============================================================================
+
+def create_tool_functions_from_registry(
+    agent_role: Optional[str] = None,
+) -> Dict[str, Callable]:
+    """
+    Bridge: wrap @mortgage_tool registry functions as async callables.
+
+    The tool_registry contains 160+ tools registered via the @mortgage_tool
+    decorator in agents/tools/. This function wraps each sync tool function
+    in an async wrapper and translates ToolResult to plain dict, making
+    them compatible with the LangGraph gather node.
+
+    Args:
+        agent_role: Optional role filter (e.g., "pipeline_analyst").
+                    If None, returns all registered tools.
+
+    Returns:
+        Dict mapping tool name to async callable(args) -> dict
+    """
+    try:
+        from .tools import tool_registry
+    except ImportError:
+        logger.warning("[TOOL_LOADER] Could not import tool_registry — registry bridge disabled")
+        return {}
+
+    if agent_role:
+        tool_defs = tool_registry.get_for_agent(agent_role)
+        registry_tools = {td.name: td for td in tool_defs}
+    else:
+        registry_tools = tool_registry.get_all()
+
+    wrapped = {}
+
+    for name, tool_def in registry_tools.items():
+        fn = tool_def.func
+        # Create async wrapper that converts ToolResult → dict
+        async def _async_wrapper(args, _fn=fn, _name=name):
+            try:
+                result = _fn(**args) if isinstance(args, dict) else _fn(args)
+                # ToolResult objects have a .to_dict() method
+                if hasattr(result, 'to_dict'):
+                    return result.to_dict()
+                if isinstance(result, dict):
+                    return result
+                return {"status": "success", "data": result}
+            except Exception as e:
+                logger.error(f"Registry tool '{_name}' failed: {e}")
+                return {"status": "error", "error": str(e)}
+
+        wrapped[name] = _async_wrapper
+
+    logger.info(
+        f"[TOOL_LOADER] Loaded {len(wrapped)} tools from registry"
+        + (f" (role={agent_role})" if agent_role else "")
+    )
+    return wrapped
+
+
+# =============================================================================
 # DYNAMIC TOOL CREATION
 # =============================================================================
 
@@ -108,7 +169,8 @@ def create_scoped_tools(
     Create tool functions scoped to a specific intent.
 
     This is the main entry point for dynamic tool loading. It creates
-    only the tool functions needed for the classified intent.
+    only the tool functions needed for the classified intent, merging
+    inline tools (from service.py) with registry tools (from @mortgage_tool).
 
     Args:
         db: Database session
@@ -121,13 +183,17 @@ def create_scoped_tools(
     """
     from .service import create_tool_functions_from_main
 
-    # Start with base tools
-    all_tools = create_tool_functions_from_main(db, current_user)
+    # Layer 1: Registry tools (160+ tools, no db/user context)
+    all_tools = create_tool_functions_from_registry()
+
+    # Layer 2: Inline tools (26 tools with db/user context — take precedence)
+    inline_tools = create_tool_functions_from_main(db, current_user)
+    all_tools.update(inline_tools)
 
     # Get tool names for this intent
     needed_tools = get_tools_for_intent(intent)
 
-    # Filter to only needed tools (from base tools that exist)
+    # Filter to only needed tools
     scoped_tools = {}
     for name in needed_tools:
         if name in all_tools:
@@ -151,8 +217,8 @@ def create_all_tools(db: Session, current_user: Any) -> Dict[str, Callable]:
     """
     Create all available tool functions.
 
-    Use this when you need the full toolset (e.g., for streaming chat
-    that might handle any query type).
+    Merges inline tools (with db/user context) with registry tools
+    (stateless). Inline tools take precedence for duplicate names.
 
     Args:
         db: Database session
@@ -162,7 +228,16 @@ def create_all_tools(db: Session, current_user: Any) -> Dict[str, Callable]:
         Dictionary of all available tool functions
     """
     from .service import create_tool_functions_from_main
-    return create_tool_functions_from_main(db, current_user)
+
+    # Registry tools first (lower priority)
+    all_tools = create_tool_functions_from_registry()
+
+    # Inline tools override (higher priority — have db/user context)
+    inline_tools = create_tool_functions_from_main(db, current_user)
+    all_tools.update(inline_tools)
+
+    logger.info(f"[TOOL_LOADER] Total tools available: {len(all_tools)}")
+    return all_tools
 
 
 # =============================================================================

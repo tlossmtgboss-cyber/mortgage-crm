@@ -576,15 +576,15 @@ async def debug_modules(
                         except Exception as inner_e:
                             try:
                                 conn.rollback()  # Rollback failed permission insert
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.error(f"Error rolling back permission insert in enable_all_modules: {e}")
                             results.setdefault("perm_errors", []).append(f"{perm}: {str(inner_e)[:50]}")
 
                 except SQLAlchemyError as e:
                     try:
                         conn.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.error(f"Error rolling back admin operation in enable_all_modules: {e2}")
                     results["admin_error"] = str(e)
 
             # Check if table exists
@@ -802,8 +802,8 @@ async def clear_demo_data(
                 except SQLAlchemyError as e:
                     try:
                         conn.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.error(f"Error rolling back truncate of {table_name} in clear_demo_data: {e2}")
                     error_str = str(e).lower()
                     if "does not exist" in error_str or "undefined table" in error_str:
                         deleted[table_name] = "table not found"
@@ -822,8 +822,8 @@ async def clear_demo_data(
                 except SQLAlchemyError as e:
                     try:
                         conn.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.error(f"Error rolling back child table truncate in clear_demo_data: {e2}")
                     error_str = str(e).lower()
                     if "does not exist" not in error_str and "undefined table" not in error_str:
                         # Don't log if table doesn't exist
@@ -836,8 +836,8 @@ async def clear_demo_data(
                 ))
                 conn.commit()
                 deleted["activity_logs"] = result.rowcount
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error clearing activity_logs in clear_demo_data: {e}")
 
         total_deleted = sum(v for v in deleted.values() if isinstance(v, int))
 

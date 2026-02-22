@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './DocumentIntakeManager.css';
+import { toast } from '../utils/toast';
 
 function DocumentIntakeManager() {
   const [loading, setLoading] = useState(true);
@@ -499,7 +500,7 @@ function AttachmentClassifier({
 
   const handleSubmitClassification = () => {
     if (!selectedType || !selectedCategory) {
-      alert('Please select document type and category');
+      toast.error('Please select document type and category');
       return;
     }
 
@@ -516,7 +517,7 @@ function AttachmentClassifier({
 
   const handleSubmitDiscard = () => {
     if (!discardReason) {
-      alert('Please provide a reason for discarding');
+      toast.error('Please provide a reason for discarding');
       return;
     }
     onDiscard(attachment.id, discardReason);

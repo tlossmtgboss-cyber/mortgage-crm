@@ -233,7 +233,8 @@ class CIIntegrationService:
         if isinstance(metadata, str):
             try:
                 metadata = json.loads(metadata)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to parse recording metadata in _determine_capture_mode: {e}")
                 metadata = {}
 
         if metadata.get("meeting_platform") in ["zoom", "teams", "meet"]:
@@ -369,8 +370,8 @@ class CIIntegrationService:
                 """), {"session_id": session_id, "error": json.dumps(str(e))})
                 db.commit()
                 db.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to update session status to failed in _run_agents_async: {e}")
 
 
 async def trigger_call_monitoring_agents(

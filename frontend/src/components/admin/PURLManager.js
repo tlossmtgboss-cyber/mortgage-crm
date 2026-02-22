@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAuthHeaders } from '../../utils/auth';
 import './PURLManager.css';
+import { toast } from '../../utils/toast';
 
 // =============================================================================
 // API CLIENT
@@ -153,7 +154,7 @@ export default function PURLManager() {
       setShowCreateModal(false);
       loadWorkspaces();
     } catch (err) {
-      alert('Failed to create workspace: ' + err.message);
+      toast.error('Failed to create workspace: ' + err.message);
     }
   };
 
@@ -700,14 +701,14 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(purlUrl);
-    alert('PURL copied to clipboard!');
+    toast.success('PURL copied to clipboard!');
   };
 
   const handleViewPortal = () => {
     if (purlUrl) {
       window.open(purlUrl, '_blank');
     } else {
-      alert('No portal URL available. Click "Generate Portal Link" to create one.');
+      toast.info('No portal URL available. Click "Generate Portal Link" to create one.');
     }
   };
 
@@ -730,7 +731,7 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
       }
       loadDetails();
     } catch (err) {
-      alert('Failed to generate portal link: ' + err.message);
+      toast.error('Failed to generate portal link: ' + err.message);
     }
   };
 
@@ -744,11 +745,11 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
       if (result.portal_url) {
         setPurlUrl(result.portal_url);
         navigator.clipboard.writeText(result.portal_url);
-        alert('Token created! Portal URL copied to clipboard.');
+        toast.success('Token created! Portal URL copied to clipboard.');
       }
       loadDetails();
     } catch (err) {
-      alert('Failed to create token: ' + err.message);
+      toast.error('Failed to create token: ' + err.message);
     }
   };
 
@@ -758,7 +759,7 @@ function WorkspaceDetailsModal({ workspace, onClose, onRefresh }) {
       await purlAdminApi.revokeToken(tokenId, 'Revoked by admin');
       loadDetails();
     } catch (err) {
-      alert('Failed to revoke token: ' + err.message);
+      toast.error('Failed to revoke token: ' + err.message);
     }
   };
 

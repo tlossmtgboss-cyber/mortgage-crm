@@ -1,6 +1,7 @@
 // Call Queue Dashboard - Manage and monitor call queues
 import React, { useState, useEffect, useCallback } from 'react';
 import './CallQueueDashboard.css';
+import { toast } from '../../utils/toast';
 
 const CallQueueDashboard = () => {
   const [queues, setQueues] = useState([]);
@@ -91,10 +92,10 @@ const CallQueueDashboard = () => {
       }
 
       const data = await response.json();
-      alert(`Connecting to caller: ${data.caller_name || data.caller_phone}`);
+      toast.info(`Connecting to caller: ${data.caller_name || data.caller_phone}`);
       fetchQueues();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 

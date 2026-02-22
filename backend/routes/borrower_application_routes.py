@@ -1310,8 +1310,8 @@ async def delete_document(
     if doc.storage_key:
         try:
             Path(doc.storage_key).unlink(missing_ok=True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to delete storage file in delete_document: {e}")
 
     db.delete(doc)
     db.commit()
@@ -1906,8 +1906,8 @@ async def get_lo_application_detail(
             WHERE application_id = :app_id ORDER BY created_at DESC
         """), {"app_id": application_id}).fetchall()
         notes = [{"id": n[0], "note": n[1], "created_at": n[2].isoformat() if n[2] else None, "created_by": n[3]} for n in notes_result]
-    except Exception:
-        pass  # Notes table may not exist
+    except Exception as e:
+        logger.warning(f"Failed to fetch application notes in get_lo_application_detail: {e}")
 
     return {
         "id": application.id,
@@ -2018,8 +2018,9 @@ async def add_lo_application_note(
             )
         """))
         db.commit()
-    except Exception:
+    except Exception as e:
         db.rollback()
+        logger.warning(f"Failed to create application_notes table in add_lo_application_note: {e}")
 
     # Insert note
     try:

@@ -628,7 +628,8 @@ class AIFileAnalysisService:
                 ORDER BY created_at DESC
             """), {"loan_id": loan_id})
             return [dict(row._mapping) for row in result.fetchall()]
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to get loan documents for loan_id {loan_id}: {e}")
             return []
 
     def _get_loan_conditions(self, loan_id: int) -> List[Dict]:
@@ -643,7 +644,8 @@ class AIFileAnalysisService:
                 ORDER BY priority DESC, due_date ASC
             """), {"loan_id": loan_id})
             return [dict(row._mapping) for row in result.fetchall()]
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to get loan conditions for loan_id {loan_id}: {e}")
             return []
 
     def _get_borrower_data(self, lead_id: Optional[int]) -> Optional[Dict]:
@@ -663,7 +665,8 @@ class AIFileAnalysisService:
             if row:
                 return dict(row._mapping)
             return None
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to get borrower data for lead_id {lead_id}: {e}")
             return None
 
     def _get_document(self, document_id: int) -> Optional[Dict]:
@@ -678,7 +681,8 @@ class AIFileAnalysisService:
             if row:
                 return dict(row._mapping)
             return None
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to get document {document_id}: {e}")
             return None
 
     def _check_missing_documents(

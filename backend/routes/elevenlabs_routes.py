@@ -43,9 +43,10 @@ def _decrypt_api_key(encrypted_key: str) -> str:
     """Decrypt an API key from storage."""
     try:
         return _get_fernet().decrypt(encrypted_key.encode()).decode()
-    except Exception:
+    except Exception as e:
         # If decryption fails, key may be stored in plaintext (pre-migration)
         # Return as-is so existing keys still work
+        logger.error(f"Error in _decrypt_api_key: {e}")
         return encrypted_key
 
 

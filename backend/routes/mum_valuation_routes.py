@@ -53,8 +53,8 @@ def _get_market_rate(db: Session) -> float:
         row = db.execute(text("SELECT value FROM settings WHERE key = 'current_market_rate' LIMIT 1")).fetchone()
         if row and row[0]:
             return float(row[0])
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in _get_market_rate: {e}")
     return DEFAULT_MARKET_RATE
 
 
@@ -77,7 +77,7 @@ async def batch_recalculate(
     """
     # Auth check — require platform admin or site admin
     try:
-        from main import get_current_user
+        from auth.dependencies import get_current_user
         auth_header = request.headers.get("Authorization", "")
         token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
         current_user = await get_current_user(token, request, db)

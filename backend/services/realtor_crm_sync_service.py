@@ -426,7 +426,8 @@ class RealtorConnectionManager:
                     "type": RealtorSyncMessage.HEARTBEAT,
                     "timestamp": datetime.utcnow().isoformat()
                 })
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error sending heartbeat to realtor {realtor_id}: {e}")
                 disconnected.append(realtor_id)
 
         for realtor_id in disconnected:

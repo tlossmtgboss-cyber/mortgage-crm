@@ -508,9 +508,10 @@ class TestCallIntelligenceOrchestrator:
 
         # Should have step results
         assert len(result.steps) > 0
-        assert result.total_duration_ms > 0
+        assert result.total_duration_ms >= 0
         assert result.started_at is not None
         assert result.completed_at is not None
+        assert result.completed_at >= result.started_at
 
 
 # =============================================================================

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import VerificationModal from './VerificationModal';
 import './Step1Registration.css';
+import { toast } from '../../../utils/toast';
 
 const Step1Registration = ({ data, onChange }) => {
   const [formData, setFormData] = useState({
@@ -145,11 +146,11 @@ const Step1Registration = ({ data, onChange }) => {
         setShowEmailModal(true);
       } else {
         const error = await response.json();
-        alert(error.detail || 'Failed to send verification email');
+        toast.error(error.detail || 'Failed to send verification email');
       }
     } catch (error) {
       console.error('Error sending email verification:', error);
-      alert('Failed to send verification email');
+      toast.error('Failed to send verification email');
     } finally {
       setIsSubmitting(false);
     }
@@ -181,11 +182,11 @@ const Step1Registration = ({ data, onChange }) => {
         setShowPhoneModal(true);
       } else {
         const error = await response.json();
-        alert(error.detail || 'Failed to send verification SMS');
+        toast.error(error.detail || 'Failed to send verification SMS');
       }
     } catch (error) {
       console.error('Error sending SMS verification:', error);
-      alert('Failed to send verification SMS');
+      toast.error('Failed to send verification SMS');
     } finally {
       setIsSubmitting(false);
     }

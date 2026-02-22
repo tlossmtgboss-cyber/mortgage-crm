@@ -62,7 +62,8 @@ async def get_current_user(
                 if isinstance(raw_metadata, str):
                     try:
                         metadata = json.loads(raw_metadata)
-                    except Exception:
+                    except Exception as e:
+                        logger.exception(f"Failed to parse user metadata JSON: {e}")
                         metadata = {}
                 else:
                     metadata = raw_metadata
@@ -378,7 +379,7 @@ async def send_email(
         if include_signature:
             try:
                 # Get user's email signature from main app
-                from main import EmailSignature
+                from database.models import EmailSignature
                 from utils.email_signature import generate_email_signature_html
                 signature = db.execute(
                     text("SELECT * FROM email_signatures WHERE user_id = :user_id"),
@@ -495,7 +496,8 @@ async def sync_emails(
         )
 
         # Process emails through extraction pipeline for reconciliation
-        from main import process_microsoft_email_to_dre, IncomingDataEvent, ExtractedData
+        from database.models import IncomingDataEvent, ExtractedData
+        from main import process_microsoft_email_to_dre
         from sqlalchemy import text
 
         processed_count = 0
@@ -632,7 +634,8 @@ async def cron_sync_all_gmail(
             if isinstance(settings, str):
                 try:
                     settings = json.loads(settings)
-                except Exception:
+                except Exception as e:
+                    logger.exception(f"Failed to parse Gmail settings JSON: {e}")
                     settings = {}
 
             token_data = settings.get('gmail_tokens')
@@ -656,7 +659,8 @@ async def cron_sync_all_gmail(
                 )
 
                 # Process emails through extraction pipeline
-                from main import process_microsoft_email_to_dre, IncomingDataEvent, ExtractedData
+                from database.models import IncomingDataEvent, ExtractedData
+                from main import process_microsoft_email_to_dre
 
                 # Also queue ALL emails to Email Intelligence system
                 queued_to_intelligence = 0

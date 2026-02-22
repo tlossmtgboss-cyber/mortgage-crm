@@ -61,7 +61,7 @@ async def verify_vapi_request(request: Request):
 
 def get_current_user_flexible():
     """Lazy import auth dependency"""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 
@@ -176,7 +176,7 @@ async def assistant_request_webhook(
 
         # Customize assistant behavior based on caller
         try:
-            from main import Lead
+            from database.models import Lead
             lead = db.query(Lead).filter(Lead.phone == phone_number).first()
 
             if lead:
@@ -229,7 +229,7 @@ async def get_lead_info_function(
     Called by Vapi to personalize conversation
     """
     try:
-        from main import Lead
+        from database.models import Lead
         from sqlalchemy import or_
 
         data = await request.json()
@@ -289,7 +289,8 @@ async def update_lead_status_function(
     Called by Vapi when conversation progresses the lead
     """
     try:
-        from main import Lead, LeadStage
+        from database.enums import LeadStage
+        from database.models import Lead
         from sqlalchemy import or_
         from datetime import datetime, timezone
 
@@ -374,7 +375,7 @@ async def create_task_function(
     If priority is high, sends SMS notification to task owner
     """
     try:
-        from main import Task, Lead, User
+        from database.models import Task, Lead, User
         from sqlalchemy import or_
         from datetime import datetime, timezone, timedelta
         from integrations.twilio_service import TwilioSMSClient
@@ -490,7 +491,8 @@ async def schedule_appointment_function(
     Called by Vapi when customer requests appointment
     """
     try:
-        from main import Activity, ActivityType, Lead, Task
+        from database.enums import ActivityType
+        from database.models import Activity, Lead, Task
         from sqlalchemy import or_
         from datetime import datetime, timezone
 
@@ -673,7 +675,7 @@ async def submit_preapproval_application_function(
     Called by Vapi when customer wants to apply for pre-approval
     """
     try:
-        from main import Lead, Task
+        from database.models import Lead, Task
         from sqlalchemy import or_
         from datetime import datetime, timezone
 
@@ -811,7 +813,8 @@ async def schedule_calendly_appointment_function(
     Now automatically sends the Calendly link via SMS!
     """
     try:
-        from main import Lead, Task, Activity, ActivityType
+        from database.enums import ActivityType
+        from database.models import Lead, Task, Activity
         from sqlalchemy import or_
         from vapi_service import AIReceptionistSMSService
 

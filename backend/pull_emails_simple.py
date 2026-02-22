@@ -25,7 +25,7 @@ def pull_emails():
         engine = create_engine(DATABASE_URL)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-        from main import MicrosoftOAuthToken
+        from database.models import MicrosoftOAuthToken
 
         db = SessionLocal()
 

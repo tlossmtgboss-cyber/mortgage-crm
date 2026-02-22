@@ -52,7 +52,7 @@ class OutreachRequest(BaseModel):
 
 def get_current_user_flexible():
     """Get current user - flexible for auth or no auth."""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 

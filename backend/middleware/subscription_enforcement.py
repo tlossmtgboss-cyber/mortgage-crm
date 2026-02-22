@@ -93,5 +93,6 @@ class SubscriptionEnforcementMiddleware(BaseHTTPMiddleware):
 
             now = datetime.now(timezone.utc)
             return subscription.grace_period_ends_at < now
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to check subscription grace period expiry: {e}")
             return False

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { decisionLabAPI } from '../../services/decisionLabApi';
 import './ConfidenceResults.css';
+import { toast } from '../../utils/toast';
 
 const READINESS_LEVELS = {
   NOT_READY: { label: 'Not Ready Yet', color: '#ef4444', bg: '#fef2f2' },
@@ -282,7 +283,7 @@ function ConfidenceResults({ sessionId, score, onBuildScenario, onRetakeAssessme
             className="share-btn"
             onClick={() => {
               navigator.clipboard.writeText(window.location.href);
-              alert('Link copied to clipboard!');
+              toast.success('Link copied to clipboard!');
             }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

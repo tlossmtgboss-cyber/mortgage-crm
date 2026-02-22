@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { onboardingAPI, teamAPI } from '../services/api';
 import './OnboardingWizard.css';
+import { toast } from '../utils/toast';
 
 const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [currentStep, setCurrentStep] = useState(0); // Start at overview page
@@ -223,13 +224,13 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       const validTypes = ['.pdf', '.docx', '.xlsx', '.csv', '.doc', '.xls', '.txt'];
       const fileExt = '.' + file.name.split('.').pop().toLowerCase();
       if (!validTypes.includes(fileExt)) {
-        alert(`${file.name}: Invalid file type. Please upload PDF, DOCX, XLSX, or CSV files.`);
+        toast.error(`${file.name}: Invalid file type. Please upload PDF, DOCX, XLSX, or CSV files.`);
         return false;
       }
 
       // Check file size
       if (file.size > MAX_FILE_SIZE) {
-        alert(`${file.name}: File too large. Maximum size is 50MB.`);
+        toast.error(`${file.name}: File too large. Maximum size is 50MB.`);
         return false;
       }
 
@@ -240,7 +241,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     const combinedFiles = [...currentFiles, ...validFiles];
 
     if (combinedFiles.length > MAX_FILES) {
-      alert(`Maximum ${MAX_FILES} files allowed. Only adding first ${MAX_FILES - currentFiles.length} files.`);
+      toast.warning(`Maximum ${MAX_FILES} files allowed. Only adding first ${MAX_FILES - currentFiles.length} files.`);
       updateField('sopFiles', combinedFiles.slice(0, MAX_FILES));
     } else {
       updateField('sopFiles', combinedFiles);
@@ -346,7 +347,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     } catch (error) {
       console.error('Error parsing documents:', error);
       setIsProcessing(false);
-      alert('Failed to parse documents. Please try again.');
+      toast.error('Failed to parse documents. Please try again.');
 
       // Fallback to sample data in case of error
       const generatedMilestones = [
@@ -733,7 +734,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       setTaskEditModal(null);
     } catch (error) {
       console.error('Failed to save task:', error);
-      alert('Failed to save task changes. Please try again.');
+      toast.error('Failed to save task changes. Please try again.');
     }
   };
 
@@ -759,7 +760,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
   const handleSaveNewRole = () => {
     if (!newRoleForm.role_title || !newRoleForm.role_name) {
-      alert('Please enter both role title and role name');
+      toast.error('Please enter both role title and role name');
       return;
     }
 
@@ -2441,7 +2442,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
       } catch (error) {
         console.error('Salesforce OAuth error:', error);
-        alert('Failed to connect to Salesforce. Please ensure the integration is configured in your environment.');
+        toast.error('Failed to connect to Salesforce. Please ensure the integration is configured in your environment.');
       }
     }
     // Handle Microsoft 365 OAuth flow
@@ -2486,7 +2487,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
       } catch (error) {
         console.error('Microsoft 365 OAuth error:', error);
-        alert('Microsoft 365 integration is being configured. Please go to Settings > Integrations to complete the connection with proper OAuth authentication.');
+        toast.success('Microsoft 365 integration is being configured. Please go to Settings > Integrations to complete the connection with proper OAuth authentication.');
       }
     }
     else {
@@ -2510,7 +2511,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       if (response.ok) {
         const data = await response.json();
         if (data.connected) {
-          alert('✅ Salesforce connected successfully!');
+          toast.success('✅ Salesforce connected successfully!');
           // Update formData to reflect connection
           setFormData(prevData => ({
             ...prevData,
@@ -2538,7 +2539,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       if (response.ok) {
         const data = await response.json();
         if (data.connected) {
-          alert('✅ Microsoft 365 connected successfully! Your email: ' + data.email_address);
+          toast.success('✅ Microsoft 365 connected successfully! Your email: ' + data.email_address);
           // Update formData to reflect connection
           setFormData(prevData => ({
             ...prevData,
@@ -2830,7 +2831,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     console.log('Helpdesk ticket submitted for:', helpdeskModal.feature);
     // In production, this would send to your helpdesk system
     setHelpdeskModal(null);
-    alert('Support ticket submitted! Our team will contact you shortly.');
+    toast.success('Support ticket submitted! Our team will contact you shortly.');
   };
 
   const renderTestGoLive = () => (

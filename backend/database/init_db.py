@@ -377,6 +377,31 @@ def init_db():
                         END $$;
                     """))
 
+                    # Add SF disposition columns to tasks table
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='sf_proposed_stage') THEN
+                                ALTER TABLE tasks ADD COLUMN sf_proposed_stage VARCHAR(50);
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='sf_current_stage') THEN
+                                ALTER TABLE tasks ADD COLUMN sf_current_stage VARCHAR(50);
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='sf_raw_stage') THEN
+                                ALTER TABLE tasks ADD COLUMN sf_raw_stage VARCHAR(200);
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='disposition_action') THEN
+                                ALTER TABLE tasks ADD COLUMN disposition_action VARCHAR(20);
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='disposition_date') THEN
+                                ALTER TABLE tasks ADD COLUMN disposition_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='disposition_by') THEN
+                                ALTER TABLE tasks ADD COLUMN disposition_by INTEGER;
+                            END IF;
+                        END $$;
+                    """))
+
                     # Create email_intakes table for document intake
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS email_intakes (
@@ -804,8 +829,8 @@ def init_db():
                         ]:
                             try:
                                 raw_cursor.execute(f"ALTER TYPE loanstage ADD VALUE IF NOT EXISTS '{loanstage_val}'")
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.exception(f"Failed to add loanstage enum value '{loanstage_val}': {e}")
                         raw_cursor.close()
                         raw_conn.close()
                         logger.info("✅ Ensured all loanstage enum values exist")

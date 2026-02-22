@@ -371,7 +371,7 @@ class VerificationTokenService:
         Returns:
             Verification token string
         """
-        from main import EmailVerificationToken  # Import here to avoid circular imports
+        from database.models import EmailVerificationToken
 
         # Delete any existing tokens for this user
         db.query(EmailVerificationToken).filter(
@@ -406,7 +406,7 @@ class VerificationTokenService:
         Returns:
             User ID if valid, None otherwise
         """
-        from main import EmailVerificationToken
+        from database.models import EmailVerificationToken
 
         token_record = db.query(EmailVerificationToken).filter(
             EmailVerificationToken.token == token

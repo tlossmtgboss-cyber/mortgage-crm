@@ -343,8 +343,8 @@ async def diagnose_salesforce_connection(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in diagnose_salesforce_connection (rollback): {e}")
 
     diagnosis = {
         "profiles": [],
@@ -420,8 +420,8 @@ async def test_schema_query(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in test_schema_query (rollback): {e}")
 
     result = {
         "profile_id": profile_id,
@@ -468,8 +468,8 @@ async def trigger_discovery_for_profile(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in trigger_discovery_for_profile (rollback): {e}")
 
     try:
         # Get profile
@@ -506,8 +506,8 @@ async def test_mapping_debug(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in test_mapping_debug (rollback): {e}")
 
     try:
         # Create a simple test mapping
@@ -563,8 +563,8 @@ async def debug_schema_for_object(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in debug_schema_for_object (rollback): {e}")
 
     result = {
         "profile_id": profile_id,
@@ -654,8 +654,8 @@ async def debug_create_mapping(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in debug_create_single_mapping (rollback): {e}")
 
     result = {
         "profile_id": profile_id,
@@ -730,8 +730,8 @@ async def get_loans_status_debug(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in get_loans_status_debug (rollback): {e}")
 
     try:
         # Get loan counts
@@ -783,8 +783,8 @@ async def import_funded_loans_to_mum_debug(
     """
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in import_funded_loans_to_mum_debug (rollback): {e}")
 
     try:
         results = {'imported': 0, 'skipped': 0, 'errors': []}
@@ -1003,8 +1003,8 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
                 try:
                     # Ensure clean transaction state before query
                     db.rollback()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error in get_current_user_id (rollback): {e}")
                 result = db.execute(
                     text("SELECT id FROM users WHERE email = :email"),
                     {"email": email}
@@ -1016,8 +1016,8 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
         logger.warning(f"Failed to extract user ID: {e}")
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error in get_current_user_id (rollback after SQLAlchemyError): {e}")
     return None
 
 
@@ -1034,8 +1034,8 @@ def get_integration_profile(db: Session, user_id: int) -> Optional[IntegrationPr
     try:
         # Ensure clean transaction state
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in get_integration_profile (rollback): {e}")
     return db.query(IntegrationProfile).filter(
         IntegrationProfile.user_id == user_id,
         IntegrationProfile.provider == 'salesforce'
@@ -1095,8 +1095,8 @@ async def connect_salesforce(
                     # Ensure clean transaction state before query
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(f"Error in salesforce_connect (rollback): {e}")
                     result = db.execute(
                         text("SELECT id FROM users WHERE email = :email"),
                         {"email": email}
@@ -1125,8 +1125,8 @@ async def connect_salesforce(
         # Ensure clean session state
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error in salesforce_connect (session rollback): {e}")
 
         logger.info(f"Generating Salesforce auth URL for user {user_id}, return_url: {return_url}")
         try:
@@ -1309,8 +1309,8 @@ async def get_debug_status(
     """Debug Salesforce integration status. Requires ADMIN_API_KEY."""
     try:
         db.rollback()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error in get_debug_status (rollback): {e}")
 
     debug_info = {
         "user_auth": None,
@@ -1419,8 +1419,8 @@ async def discover_schema(
     except Exception as e:
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.error(f"Error in discover_schema (rollback): {e2}")
         logger.error(f"Schema discovery failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
@@ -2964,7 +2964,8 @@ async def full_sync_pipeline(
                         db.add(mapping)
                         db.commit()
                         created += 1
-                    except Exception:
+                    except Exception as e:
+                        logger.error(f"Error in full_sync_pipeline (create mapping): {e}")
                         db.rollback()
 
             if created > 0 or profile.status != 'active':
@@ -3200,7 +3201,8 @@ async def admin_run_all_syncs(
                             db.add(mapping)
                             db.commit()
                             created += 1
-                        except Exception:
+                        except Exception as e:
+                            logger.error(f"Error in admin_run_all_syncs (create mapping): {e}")
                             db.rollback()
 
                 if created > 0 or profile.status != 'active':

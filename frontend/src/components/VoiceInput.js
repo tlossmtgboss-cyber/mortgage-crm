@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './VoiceInput.css';
+import { toast } from '../utils/toast';
 
 const VoiceInput = ({ onTranscriptChange, onSend, placeholder = "Type or speak your message..." }) => {
   const [isListening, setIsListening] = useState(false);
@@ -59,7 +60,7 @@ const VoiceInput = ({ onTranscriptChange, onSend, placeholder = "Type or speak y
       setIsListening(false);
 
       if (event.error === 'not-allowed') {
-        alert('Microphone access denied. Please allow microphone access in your browser settings.');
+        toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
       }
     };
 

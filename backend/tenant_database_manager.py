@@ -65,7 +65,8 @@ class TenantDatabaseManager:
         try:
             yield session
             session.commit()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in master_db_session: {e}")
             session.rollback()
             raise
         finally:
@@ -175,7 +176,8 @@ class TenantDatabaseManager:
         try:
             yield session
             session.commit()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in tenant_db_session for tenant {tenant_id}: {e}")
             session.rollback()
             raise
         finally:

@@ -6,6 +6,7 @@ import ReconciliationDetailPanel from './shared/ReconciliationDetailPanel';
 import CallDetailPanel from './shared/CallDetailPanel';
 import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import './ActionSidebar.css';
+import { toast } from '../utils/toast';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -381,7 +382,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       setTimeout(() => fetchData(), 500);
     } catch (err) {
       console.error('Complete task error:', err);
-      alert('Failed to complete task. Please try again.');
+      toast.error('Failed to complete task. Please try again.');
     } finally {
       setCompletingTask(false);
     }
@@ -391,7 +392,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const handleMakeCall = async (item) => {
     const phone = item.phone || item.entity_phone || item.borrower_phone;
     if (!phone) {
-      alert('No phone number available for this contact');
+      toast.error('No phone number available for this contact');
       return;
     }
 
@@ -418,12 +419,12 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
         await handleCompleteTask(item);
       } else {
         const error = await response.json();
-        alert(`Call failed: ${error.detail || 'Unknown error'}`);
+        toast.error(`Call failed: ${error.detail || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('Call error:', err);
       // Show error - dialer not configured
-      alert(`Could not initiate call. Please ensure the Twilio dialer is configured, or call ${phone} directly.`);
+      toast.error(`Could not initiate call. Please ensure the Twilio dialer is configured, or call ${phone} directly.`);
     } finally {
       setCallInProgress(false);
     }
@@ -456,7 +457,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   const handleStartPowerDial = async () => {
     const callItems = getCallItems().filter(item => selectedCallIds.has(item.id));
     if (callItems.length === 0) {
-      alert('Please select contacts to call');
+      toast.error('Please select contacts to call');
       return;
     }
 

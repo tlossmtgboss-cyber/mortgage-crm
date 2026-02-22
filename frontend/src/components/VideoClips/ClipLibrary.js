@@ -5,6 +5,7 @@ import ClipPlayer from './ClipPlayer';
 import ScheduleMeetingButton from './ScheduleMeetingButton';
 import { sanitizeText } from '../../utils/sanitize';
 import './ClipLibrary.css';
+import { toast } from '../../utils/toast';
 
 const ClipLibrary = () => {
   // State
@@ -86,7 +87,7 @@ const ClipLibrary = () => {
       // Copy share URL to clipboard
       if (response.data.share_url) {
         navigator.clipboard.writeText(response.data.share_url);
-        alert('Share link copied to clipboard!');
+        toast.success('Share link copied to clipboard!');
       }
 
       setShowShareModal(null);
@@ -100,7 +101,7 @@ const ClipLibrary = () => {
       });
     } catch (err) {
       console.error('Error creating share:', err);
-      alert('Failed to create share link');
+      toast.error('Failed to create share link');
     }
   };
 
@@ -111,7 +112,7 @@ const ClipLibrary = () => {
       setClips(prev => prev.filter(c => c.id !== clipId));
     } catch (err) {
       console.error('Error deleting clip:', err);
-      alert('Failed to delete clip');
+      toast.error('Failed to delete clip');
     }
   };
 
@@ -305,7 +306,7 @@ const ClipLibrary = () => {
                   onClick={() => {
                     const url = `${window.location.origin}/watch/${clip.share_token}`;
                     navigator.clipboard.writeText(url);
-                    alert('Link copied!');
+                    toast.success('Link copied!');
                   }}
                   disabled={clip.status !== 'ready'}
                 >

@@ -330,8 +330,8 @@ class WorkflowScheduler:
                         "severity": severity,
                         "message": f"Task overdue {hours_overdue:.0f}h - escalated to {chain_config['target']}",
                     })
-                except Exception:
-                    pass  # Alert table may not support all fields
+                except Exception as e:
+                    logger.exception(f"Failed to insert escalation alert record: {e}")
 
                 # Send notification to appropriate target
                 self._send_escalation_notification(

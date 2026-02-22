@@ -416,7 +416,7 @@ def create_sla_warning_task(
     Returns the task ID if created, None if task already exists or creation failed.
     """
     # Import Task model here to avoid circular imports
-    from main import Task
+    from database.models import Task
 
     try:
         # Check if task already exists for this milestone
@@ -1291,7 +1291,7 @@ def complete_sla_task_with_date(
         Dict with result details including loan_updated, milestone_completed status
     """
     # Import Task and Loan models here to avoid circular imports
-    from main import Task, Loan
+    from database.models import Task, Loan
 
     result = {
         "success": False,
@@ -1391,7 +1391,7 @@ def get_sla_tasks_for_user(
 
     Returns list of tasks with SLA milestone information.
     """
-    from main import Task, Loan, Lead
+    from database.models import Task, Loan, Lead
 
     query = db.query(Task).filter(
         Task.owner_id == user_id,

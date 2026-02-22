@@ -13,8 +13,12 @@ Notes:
 - mfa_enabled may already exist from add_account_management_tables migration
 - All new columns are nullable to avoid breaking existing rows
 """
+import logging
+
 from alembic import op
 import sqlalchemy as sa
+
+logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic
 revision = '009b_security'
@@ -149,8 +153,8 @@ def _upgrade_sqlite():
         try:
             bind.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
             print(f"Added {table}.{column}")
-        except Exception:
-            print(f"{table}.{column} already exists - skipping")
+        except Exception as e:
+            print(f"{table}.{column} already exists - skipping: {e}")
 
 
 def downgrade():

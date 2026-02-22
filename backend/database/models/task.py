@@ -121,6 +121,14 @@ class Task(Base):
     workflow_task_instance_id = Column(Integer, nullable=True)
     task_group_key = Column(String(100), nullable=True)
 
+    # SF Disposition fields (populated when related_type='sf_disposition')
+    sf_proposed_stage = Column(String(50), nullable=True)
+    sf_current_stage = Column(String(50), nullable=True)
+    sf_raw_stage = Column(String(200), nullable=True)
+    disposition_action = Column(String(20), nullable=True)  # 'applied' or 'dismissed'
+    disposition_date = Column(DateTime, nullable=True)
+    disposition_by = Column(Integer, nullable=True)
+
 
 # ============================================================================
 # ESCALATION & HANDOFF (Module 3 Gap Fix)

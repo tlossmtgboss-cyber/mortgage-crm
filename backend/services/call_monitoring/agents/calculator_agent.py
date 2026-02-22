@@ -336,8 +336,8 @@ IMPORTANT: Only extract data explicitly stated. Flag when you make assumptions."
                     ), {"lid": lead_id}).fetchone()
                     if row and row[0]:
                         buyer_type = row[0]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error fetching buyer_type for lead {lead_id}: {e}")
 
             suggested = self._suggest_calculations(merged_data, buyer_type=buyer_type)
             for calc_type in suggested:

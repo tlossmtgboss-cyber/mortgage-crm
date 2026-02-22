@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function PaymentList() {
   const navigate = useNavigate();
@@ -232,15 +233,15 @@ function PaymentList() {
   // Save payment
   const handleSave = async () => {
     if (!formData.customer_id) {
-      alert('Please select a customer.');
+      toast.error('Please select a customer.');
       return;
     }
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      alert('Please enter a payment amount.');
+      toast.error('Please enter a payment amount.');
       return;
     }
     if (!formData.deposit_to_account_id) {
-      alert('Please select a deposit account.');
+      toast.error('Please select a deposit account.');
       return;
     }
 
@@ -263,7 +264,7 @@ function PaymentList() {
       fetchPayments();
     } catch (err) {
       console.error('Error saving payment:', err);
-      alert(err.response?.data?.detail || 'Failed to save payment.');
+      toast.error(err.response?.data?.detail || 'Failed to save payment.');
     } finally {
       setSaving(false);
     }
@@ -280,7 +281,7 @@ function PaymentList() {
       fetchPayments();
     } catch (err) {
       console.error('Error deleting payment:', err);
-      alert('Failed to delete payment.');
+      toast.error('Failed to delete payment.');
     }
   };
 

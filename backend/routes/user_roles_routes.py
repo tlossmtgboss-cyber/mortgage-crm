@@ -263,7 +263,8 @@ async def switch_active_role(
             ON CONFLICT (user_id)
             DO UPDATE SET active_role_id = :role_id, switched_at = :now
         """), {"user_id": user_id, "role_id": role_id, "now": now})
-    except Exception:
+    except Exception as e:
+        logger.debug(f"PostgreSQL upsert failed in switch_active_role, trying SQLite fallback: {e}")
         # SQLite fallback using INSERT OR REPLACE
         db.execute(text("""
             INSERT OR REPLACE INTO user_active_role (user_id, active_role_id, switched_at)
@@ -469,7 +470,8 @@ async def assign_user_roles(
             VALUES (:user_id, :role_id, :now)
             ON CONFLICT (user_id) DO NOTHING
         """), {"user_id": user_id, "role_id": primary_role_id, "now": now})
-    except Exception:
+    except Exception as e:
+        logger.debug(f"PostgreSQL upsert failed in assign_user_roles, trying SQLite fallback: {e}")
         # SQLite fallback - check if exists first
         existing = db.execute(text("""
             SELECT 1 FROM user_active_role WHERE user_id = :user_id

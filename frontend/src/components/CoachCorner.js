@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { aiAPI } from '../services/api';
 import VoiceInput from './VoiceInput';
 import './CoachCorner.css';
+import { toast } from '../utils/toast';
 
 const CoachCorner = ({ isOpen, onClose }) => {
   const [mode, setMode] = useState(null);
@@ -223,7 +224,7 @@ const CoachCorner = ({ isOpen, onClose }) => {
 
   const handleAskQuestion = () => {
     if (!customMessage.trim()) {
-      alert('Please enter your question');
+      toast.error('Please enter your question');
       return;
     }
     callCoach('tactical_advice', customMessage);
@@ -253,7 +254,7 @@ const CoachCorner = ({ isOpen, onClose }) => {
       });
 
       // Show success message
-      alert(`AI Command Executed:\n\n${aiResponse.response}`);
+      toast.info(`AI Command Executed:\n\n${aiResponse.response}`);
     } catch (error) {
       console.error('AI Chat error:', error);
       setAiChatResponse({
@@ -261,7 +262,7 @@ const CoachCorner = ({ isOpen, onClose }) => {
         message: 'Failed to execute AI command. Please try again.',
         error: error.message
       });
-      alert('Failed to execute AI command. Please try again.');
+      toast.error('Failed to execute AI command. Please try again.');
     } finally {
       setAiChatLoading(false);
     }

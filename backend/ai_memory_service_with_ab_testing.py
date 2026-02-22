@@ -10,7 +10,7 @@ import anthropic
 import json
 
 from integrations.pinecone_service import vector_memory
-from main import ConversationMemory, Lead, Loan, User
+from database.models import ConversationMemory, Lead, Loan, User
 from ab_testing.experiment_service import ExperimentService
 
 logger = logging.getLogger(__name__)

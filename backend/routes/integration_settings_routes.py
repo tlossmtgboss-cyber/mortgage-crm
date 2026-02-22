@@ -494,8 +494,8 @@ async def get_all_integrations(
                     """), {"user_id": int(user_id)}).fetchone()
                     if retell_result:
                         connected_providers.add("retell")
-                except Exception:
-                    pass  # Table may not exist yet
+                except Exception as e:
+                    logger.warning(f"Error checking Retell config: {e}")
 
                 # Check for Salesforce connection in integration_profiles table
                 try:
@@ -506,8 +506,8 @@ async def get_all_integrations(
                     """), {"user_id": int(user_id)}).fetchall()
                     for row in sf_result:
                         connected_providers.add(row[0])
-                except Exception:
-                    pass  # Table may not exist yet
+                except Exception as e:
+                    logger.warning(f"Error checking integration_profiles: {e}")
 
             except SQLAlchemyError as e:
                 logger.warning(f"Could not fetch connected integrations: {e}")

@@ -523,8 +523,8 @@ class SchedulingService:
                     start=start,
                     end=end,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error checking slot availability: {e}")
 
         # Check against in-memory scheduled items
         for followup in self._scheduled.values():

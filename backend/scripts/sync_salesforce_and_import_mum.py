@@ -146,15 +146,18 @@ class SalesforceImporter:
                             if transform == "decimal" and value:
                                 try:
                                     value = float(value)
-                                except Exception:
+                                except Exception as e:
+                                    logger.error(f"Error converting decimal field '{crm_field}' value '{value}': {e}")
                                     continue
                             elif transform == "date" and value:
                                 try:
                                     value = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                                except Exception:
+                                except Exception as e:
+                                    logger.error(f"Error parsing ISO date for field '{crm_field}' value '{value}': {e}")
                                     try:
                                         value = datetime.strptime(value[:10], "%Y-%m-%d").date()
-                                    except Exception:
+                                    except Exception as e2:
+                                        logger.error(f"Error parsing date fallback for field '{crm_field}' value '{value}': {e2}")
                                         continue
                             elif transform == "stage_mapping":
                                 from services.salesforce_sync_service import STAGE_MAPPING
@@ -162,7 +165,8 @@ class SalesforceImporter:
                             elif transform == "integer" and value:
                                 try:
                                     value = int(value)
-                                except Exception:
+                                except Exception as e:
+                                    logger.error(f"Error converting integer field '{crm_field}' value '{value}': {e}")
                                     continue
 
                             loan_data[crm_field] = value

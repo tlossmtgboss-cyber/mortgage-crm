@@ -90,14 +90,18 @@ def _sa_type(type_str: str):
     return type_map.get(type_str, sa.String)()
 
 
+import logging
+logger = logging.getLogger(__name__)
+
+
 def _add_column_safe_sqlite(conn, table_name: str, column_name: str, sql_type: str) -> bool:
     """Add a column if it doesn't already exist (SQLite). Returns True if added."""
     try:
         conn.execute(sa.text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {sql_type}"))
         print(f"  Added {table_name}.{column_name} ({sql_type})")
         return True
-    except Exception:
-        print(f"  {table_name}.{column_name} already exists - skipping")
+    except Exception as e:
+        print(f"  {table_name}.{column_name} already exists - skipping: {e}")
         return False
 
 

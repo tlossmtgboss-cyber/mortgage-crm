@@ -34,7 +34,7 @@ async def _require_auth(
     if not _get_current_user_func:
         raise HTTPException(status_code=503, detail="Auth not configured")
     # Lazy import to avoid circular imports
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     from database import get_db as db_getter
     db = next(db_getter())
     try:

@@ -23,8 +23,12 @@ Document models:
 All columns are nullable to support existing data that predates multi-tenancy.
 RLS policies use the same fail-closed pattern as 006_enable_row_level_security.py.
 """
+import logging
+
 from alembic import op
 import sqlalchemy as sa
+
+logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic
 revision = '009_enterprise_readiness_p0'
@@ -208,8 +212,8 @@ def downgrade():
         index_name = INDEX_NAMES.get(table, f'ix_{table}_organization_id')
         try:
             op.drop_index(index_name, table_name=table)
-        except Exception:
-            pass  # Index may not exist
+        except Exception as e:
+            logger.error(f"Error dropping index {index_name}: {e}")
 
         try:
             op.drop_column(table, 'organization_id')

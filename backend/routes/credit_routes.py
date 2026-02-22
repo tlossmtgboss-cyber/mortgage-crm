@@ -25,17 +25,19 @@ router = APIRouter(prefix="/api/v1", tags=["Credit Reports"])
 
 def get_db_session():
     """Get database session - lazy import to avoid circular dependency"""
-    from main import get_db
+    from database import get_db
     return get_db
 
 def get_current_user_dep():
     """Get current user dependency - lazy import"""
-    from main import get_current_user
+    from auth.dependencies import get_current_user
     return get_current_user
 
 def get_models():
     """Get models - lazy import"""
-    from main import User, Document, Lead, Loan, Base, engine, DocumentCategory
+    from database import Base, engine
+    from database.enums import DocumentCategory
+    from database.models import User, Document, Lead, Loan
     return User, Document, Lead, Loan, Base, engine, DocumentCategory
 
 def get_filters():
@@ -237,7 +239,8 @@ async def get_loan_credit_reports(
     current_user = Depends(get_current_user_dep())
 ):
     """Get credit reports, items, and summary for a loan."""
-    from main import Loan, Document, DocumentCategory
+    from database.enums import DocumentCategory
+    from database.models import Loan, Document
     filter_leads_by_permissions, filter_loans_by_permissions = get_filters()
 
     ensure_tables()
@@ -266,8 +269,8 @@ async def get_loan_credit_reports(
         try:
             if r.doc_category and (r.doc_category.value == "Credit" or str(r.doc_category) == "Credit"):
                 credit_reports.append(r)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error checking doc_category for credit report: {e}")
 
     # Get credit items from database
     from sqlalchemy import text
@@ -355,7 +358,8 @@ async def get_lead_credit_reports(
     current_user = Depends(get_current_user_dep())
 ):
     """Get credit reports, items, and summary for a lead."""
-    from main import Lead, Document, DocumentCategory
+    from database.enums import DocumentCategory
+    from database.models import Lead, Document
 
     ensure_tables()
 
@@ -383,8 +387,8 @@ async def get_lead_credit_reports(
         try:
             if r.doc_category and (r.doc_category.value == "Credit" or str(r.doc_category) == "Credit"):
                 credit_reports.append(r)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error checking doc_category for credit report: {e}")
 
     # Get credit items from database
     from sqlalchemy import text
@@ -523,7 +527,7 @@ async def analyze_credit_report(
     current_user = Depends(get_current_user_dep()),
 ):
     """Trigger AI analysis of a credit report document."""
-    from main import Document
+    from database.models import Document
     from sqlalchemy import text
 
     ensure_tables()

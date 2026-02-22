@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import './CallRoutingConfig.css';
+import { toast } from '../utils/toast';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -89,14 +90,14 @@ function CallRoutingConfig() {
 
       const data = await res.json();
       if (data.success) {
-        alert('Phone number configured for intelligent routing!');
+        toast.success('Phone number configured for intelligent routing!');
         fetchData();
       } else {
-        alert(`Configuration failed: ${data.error}`);
+        toast.error(`Configuration failed: ${data.error}`);
       }
     } catch (err) {
       console.error('Configure error:', err);
-      alert('Failed to configure phone number');
+      toast.error('Failed to configure phone number');
     } finally {
       setConfiguring(false);
     }
@@ -111,13 +112,13 @@ function CallRoutingConfig() {
 
       const data = await res.json();
       if (data.success) {
-        alert('Migration completed successfully!');
+        toast.success('Migration completed successfully!');
       } else {
-        alert(`Migration failed: ${data.error}`);
+        toast.error(`Migration failed: ${data.error}`);
       }
     } catch (err) {
       console.error('Migration error:', err);
-      alert('Failed to run migration');
+      toast.error('Failed to run migration');
     }
   };
 

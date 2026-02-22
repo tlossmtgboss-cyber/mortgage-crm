@@ -101,8 +101,8 @@ async def check_phase2_permission_migration(db: Session = Depends(lambda: get_db
         try:
             db.execute(text("SELECT permission_role FROM users LIMIT 1"))
             results["permission_role_column_exists"] = True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"permission_role column check failed: {e}")
 
         try:
             result = db.execute(text("SELECT COUNT(*) FROM permission_templates"))
@@ -111,14 +111,14 @@ async def check_phase2_permission_migration(db: Session = Depends(lambda: get_db
 
             templates = db.execute(text("SELECT id, name, category FROM permission_templates"))
             results["templates"] = [{"id": t[0], "name": t[1], "category": t[2]} for t in templates]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"permission_templates table check failed: {e}")
 
         try:
             db.execute(text("SELECT COUNT(*) FROM user_permissions LIMIT 1"))
             results["user_permissions_table_exists"] = True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"user_permissions table check failed: {e}")
 
         results["migration_complete"] = (
             results["permission_role_column_exists"] and

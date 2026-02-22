@@ -26,12 +26,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, case, text
 
 # Runtime imports from main.py to avoid circular imports
-from main import (
-    get_db, get_current_user,
-    User, Lead, Loan, Task, ReferralPartner, AIColleagueAction,
-    LeadStage, LoanStage,
-    get_cached, set_cached
-)
+from auth.dependencies import get_current_user
+from database import get_db
+from database.enums import LeadStage, LoanStage
+from database.models import User, Lead, Loan, Task, ReferralPartner, AIColleagueAction
+from main import get_cached, set_cached
 
 logger = logging.getLogger(__name__)
 
@@ -1038,7 +1037,8 @@ async def get_dashboard(
             query_filters.append(Loan.loan_officer_id == current_user.id)
 
         total_loan_count = db.query(Loan).filter(*query_filters).count()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (total_loan_count): {e}")
         total_loan_count = 0
 
     # Calculate average time to close from funded loans
@@ -1056,7 +1056,8 @@ async def get_dashboard(
             query_filters.append(Loan.loan_officer_id == current_user.id)
 
         funded_loans_recent = db.query(Loan).filter(*query_filters).all()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (funded_loans_recent): {e}")
         funded_loans_recent = []
 
     # Calculate avg time to close
@@ -1083,7 +1084,8 @@ async def get_dashboard(
             query_filters.append(Loan.loan_officer_id == current_user.id)
 
         total_applications = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 1
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (total_applications): {e}")
         total_applications = 1
 
     funded_count = len(funded_loans_recent)
@@ -1103,7 +1105,8 @@ async def get_dashboard(
             query_filters.append(Loan.loan_officer_id == current_user.id)
 
         loans_behind = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (loans_behind): {e}")
         loans_behind = 0
 
     # Calculate automation rate from AI agent actions
@@ -1117,7 +1120,8 @@ async def get_dashboard(
             query_filters.append(Task.owner_id == current_user.id)
 
         total_tasks = db.query(func.count(Task.id)).filter(*query_filters).scalar() or 1
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (total_tasks): {e}")
         total_tasks = 1
 
     try:
@@ -1130,7 +1134,8 @@ async def get_dashboard(
             query_filters.append(AIColleagueAction.user_id == current_user.id)
 
         ai_tasks_count = db.query(func.count(AIColleagueAction.id)).filter(*query_filters).scalar() or 0
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (ai_tasks_count): {e}")
         ai_tasks_count = 0
 
     automation_rate = int((ai_tasks_count / (total_tasks + ai_tasks_count) * 100)) if (total_tasks + ai_tasks_count) > 0 else 0
@@ -1162,23 +1167,27 @@ async def get_dashboard(
     # Calculate trend values from historical data
     try:
         trends = calculate_efficiency_trends(db, current_user.id, org_id=org_id, branch_user_ids=branch_user_ids)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (efficiency_trends): {e}")
         trends = {"overall_trend": "stable", "time_to_close_change": 0, "pull_through_change": 0, "loans_behind_change": 0, "automation_change": 0}
 
     # Build efficiency dict with safe helper function calls
     try:
         stage_perf = calculate_stage_performance(db, current_user.id, thirty_days_ago, org_id=org_id, branch_user_ids=branch_user_ids) if total_loan_count > 0 else []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (stage_performance): {e}")
         stage_perf = []
 
     try:
         team_perf = calculate_team_performance(db, current_user.id, thirty_days_ago, org_id=org_id, branch_user_ids=branch_user_ids) if total_loan_count > 0 else []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (team_performance): {e}")
         team_perf = []
 
     try:
         bottlenecks = calculate_bottlenecks(db, current_user.id, org_id=org_id, branch_user_ids=branch_user_ids) if loans_behind > 0 else []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (bottlenecks): {e}")
         bottlenecks = []
 
     efficiency = {
@@ -1213,7 +1222,8 @@ async def get_dashboard(
         from middleware.report_access import get_report_scope, get_scope_description
         scope = get_report_scope(current_user)
         scope_info = get_scope_description(scope)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_dashboard (scope_info): {e}")
         scope_info = "Personal data"
 
     result = {

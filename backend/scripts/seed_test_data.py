@@ -14,12 +14,15 @@ Usage:
     python scripts/seed_test_data.py                # Full run: backup, wipe, seed
 """
 
+import logging
 import os
 import sys
 import json
 import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,11 +32,16 @@ from sqlalchemy.orm import sessionmaker
 from passlib.context import CryptContext
 
 # Import models
-from main import (
-    Base, User, Lead, Loan, MUMClient, Task, AITask, Activity,
-    LeadStage, LoanStage, RateLockStatus, RateLockRecommendation,
-    BuyingTimelineCategory, BorrowerRiskProfile
+from database import Base
+from database.enums import (
+    LeadStage,
+    LoanStage,
+    RateLockStatus,
+    RateLockRecommendation,
+    BuyingTimelineCategory,
+    BorrowerRiskProfile,
 )
+from database.models import User, Lead, Loan, MUMClient, Task, AITask, Activity
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -154,28 +162,32 @@ def backup_data(db):
     try:
         mum_clients = db.execute(text("SELECT * FROM mum_clients")).fetchall()
         backup["mum_clients"] = [dict(row._mapping) for row in mum_clients] if mum_clients else []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error backing up mum_clients in create_backup: {e}")
         backup["mum_clients"] = []
 
     # Backup tasks
     try:
         tasks = db.execute(text("SELECT * FROM tasks")).fetchall()
         backup["tasks"] = [dict(row._mapping) for row in tasks] if tasks else []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error backing up tasks in create_backup: {e}")
         backup["tasks"] = []
 
     # Backup AI tasks
     try:
         ai_tasks = db.execute(text("SELECT * FROM ai_tasks")).fetchall()
         backup["ai_tasks"] = [dict(row._mapping) for row in ai_tasks] if ai_tasks else []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error backing up ai_tasks in create_backup: {e}")
         backup["ai_tasks"] = []
 
     # Backup activities
     try:
         activities = db.execute(text("SELECT * FROM activities")).fetchall()
         backup["activities"] = [dict(row._mapping) for row in activities] if activities else []
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error backing up activities in create_backup: {e}")
         backup["activities"] = []
 
     # Write backup file

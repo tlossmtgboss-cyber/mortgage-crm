@@ -3,6 +3,7 @@ import './SmartScheduler.css';
 import RecordingPlayer from './VideoMeetings/RecordingPlayer';
 import { sanitizeText, SafeHTML } from '../utils/sanitize';
 import { getAuthHeaders } from '../utils/auth';
+import { toast } from '../utils/toast';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -207,7 +208,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
         if (newWindow) {
           newWindow.location.href = data.meeting.join_url;
         } else {
-          alert(`Meeting created! Open this link: ${window.location.origin}${data.meeting.join_url}`);
+          toast.success(`Meeting created! Open this link: ${window.location.origin}${data.meeting.join_url}`);
         }
         fetchData();
       } else {
@@ -372,7 +373,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
 
       if (response.ok) {
         fetchData();
-        alert('Default meeting types created!');
+        toast.success('Default meeting types created!');
       }
     } catch (err) {
       console.error('Seed templates error:', err);
@@ -409,14 +410,14 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
         setEditingType(null);
         resetTypeForm();
         fetchData();
-        alert(isEditing ? 'Meeting type updated!' : 'Meeting type created!');
+        toast.success(isEditing ? 'Meeting type updated!' : 'Meeting type created!');
       } else {
         const err = await response.json();
-        alert(`Failed to save: ${err.detail}`);
+        toast.error(`Failed to save: ${err.detail}`);
       }
     } catch (err) {
       console.error('Save type error:', err);
-      alert('Failed to save meeting type');
+      toast.error('Failed to save meeting type');
     }
   };
 
@@ -430,10 +431,10 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
 
       if (response.ok) {
         fetchData();
-        alert('Meeting type deleted!');
+        toast.success('Meeting type deleted!');
       } else {
         const err = await response.json();
-        alert(`Failed to delete: ${err.detail}`);
+        toast.error(`Failed to delete: ${err.detail}`);
       }
     } catch (err) {
       console.error('Delete type error:', err);
@@ -492,7 +493,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
     setBookingLinks([...bookingLinks, newLink]);
     setShowNewLinkModal(false);
     setLinkForm({ slug: '', link_name: '', description: '', meeting_type_ids: [] });
-    alert('Booking link created!');
+    toast.success('Booking link created!');
   };
 
   // Save settings
@@ -502,10 +503,10 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
       // Simulate save - in production this would call an API
       await new Promise(resolve => setTimeout(resolve, 500));
       setConfig(JSON.parse(JSON.stringify(editableConfig)));
-      alert('Settings saved successfully!');
+      toast.success('Settings saved successfully!');
     } catch (err) {
       console.error('Save settings error:', err);
-      alert('Failed to save settings');
+      toast.error('Failed to save settings');
     } finally {
       setSavingSettings(false);
     }
@@ -660,10 +661,10 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
     try {
       // Simulate save - in production this would call an API
       await new Promise(resolve => setTimeout(resolve, 500));
-      alert('Landing page settings saved successfully!');
+      toast.success('Landing page settings saved successfully!');
     } catch (err) {
       console.error('Save landing page error:', err);
-      alert('Failed to save landing page settings');
+      toast.error('Failed to save landing page settings');
     } finally {
       setSavingLandingPage(false);
     }
@@ -1142,7 +1143,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
                   className="copy-btn"
                   onClick={() => {
                     navigator.clipboard.writeText(`${window.location.origin}/meeting/book/${link.slug}`);
-                    alert('Link copied!');
+                    toast.success('Link copied!');
                   }}
                 >
                   Copy Link
@@ -1459,10 +1460,10 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
       setSavingReminders(true);
       try {
         await new Promise(resolve => setTimeout(resolve, 500));
-        alert('Reminder settings saved successfully!');
+        toast.success('Reminder settings saved successfully!');
       } catch (err) {
         console.error('Save reminders error:', err);
-        alert('Failed to save reminder settings');
+        toast.error('Failed to save reminder settings');
       } finally {
         setSavingReminders(false);
       }

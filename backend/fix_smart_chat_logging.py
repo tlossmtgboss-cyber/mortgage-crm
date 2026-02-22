@@ -9,6 +9,10 @@ This modifies the smart-chat endpoint to:
 This way we capture all attempts, not just successful ones.
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # The fixed endpoint code that should replace lines 2388-2466 in main.py:
 
 FIXED_ENDPOINT = '''
@@ -118,8 +122,8 @@ async def smart_chat_with_memory(
                     impact_score=0.0,
                     metadata={"error": "Internal server error"}
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error updating AI action outcome: {e}")
 
         return {
             "success": False,

@@ -311,7 +311,7 @@ class ExperimentService:
             # If no role in context but we have user_id, query the database
             if not user_role and user_id:
                 try:
-                    from main import User
+                    from database.models import User
                     user = self.db.query(User).filter(User.id == user_id).first()
                     if user:
                         # Check permission_role first, then fall back to role

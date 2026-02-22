@@ -29,6 +29,7 @@ import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import CurrencyInput from '../components/common/CurrencyInput';
 import './LeadDetail.css';
+import { toast } from '../utils/toast';
 
 // Mock lead data generator (same as Leads.js)
 const generateMockLeads = () => {
@@ -162,8 +163,10 @@ function LeadDetail() {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
 
-  // Status options for leads
+  // Status options — all stages across Lead, Active Loan, and MUM
   const statusOptions = [
+    // Lead stages
+    { label: 'Lead Stages', isHeader: true },
     'New',
     'Attempted Contact',
     'Prospect',
@@ -173,8 +176,27 @@ function LeadDetail() {
     'Long-Term Nurture',
     'Withdrawn',
     'Does Not Qualify',
-    'Disclosed',  // Converts lead to active loan
-    'Funded',     // Converts lead to funded loan (MUM)
+    // Active Loan stages
+    { label: 'Active Loan Stages', isHeader: true },
+    'Disclosed',
+    'Processing',
+    'Submitted',
+    'Underwriting',
+    'UW Received',
+    'Conditional Approval',
+    'Approved',
+    'Suspended',
+    'CTC',
+    'Clear to Close',
+    'Closing',
+    'Docs',
+    'Docs Out',
+    'Cancelled',
+    'Denied',
+    'Dead',
+    // MUM (Funded)
+    { label: 'MUM / Closed', isHeader: true },
+    'Funded',
   ];
 
   // Circle of Influence state
@@ -486,7 +508,7 @@ function LeadDetail() {
             errorMessage = loanError.message || 'Unknown error';
           }
 
-          alert(`Could not convert lead to ${newStatus}: ${errorMessage}`);
+          toast.error(`Could not convert lead to ${newStatus}: ${errorMessage}`);
           setStatusSaving(false);
           return;
         }
@@ -506,7 +528,7 @@ function LeadDetail() {
       console.log(`Status updated to: ${newStatus}`);
     } catch (error) {
       console.error('Error updating status:', error);
-      alert(`Error updating status: ${error.message || 'Unknown error'}`);
+      toast.error(`Error updating status: ${error.message || 'Unknown error'}`);
       // Revert on error
       setFormData(prev => ({ ...prev, stage: lead?.stage }));
       setLead(prev => ({ ...prev, stage: lead?.stage }));
@@ -518,6 +540,7 @@ function LeadDetail() {
   // Get color for status badge
   const getStatusColor = (status) => {
     const colors = {
+      // Lead stages
       'New': '#2196F3',
       'Attempted Contact': '#FF9800',
       'Prospect': '#9C27B0',
@@ -527,8 +550,25 @@ function LeadDetail() {
       'Long-Term Nurture': '#607D8B',
       'Withdrawn': '#F44336',
       'Does Not Qualify': '#795548',
-      'Disclosed': '#00C853',  // Bright green - converts to active loan
-      'Funded': '#FFD700',     // Gold - funded loan (MUM)
+      // Active Loan stages
+      'Disclosed': '#00C853',
+      'Processing': '#FF9800',
+      'Submitted': '#FF9800',
+      'Underwriting': '#FFC107',
+      'UW Received': '#FFC107',
+      'Conditional Approval': '#00BCD4',
+      'Approved': '#4CAF50',
+      'Suspended': '#F44336',
+      'CTC': '#4CAF50',
+      'Clear to Close': '#4CAF50',
+      'Closing': '#4CAF50',
+      'Docs': '#4CAF50',
+      'Docs Out': '#4CAF50',
+      'Cancelled': '#F44336',
+      'Denied': '#F44336',
+      'Dead': '#9E9E9E',
+      // MUM
+      'Funded': '#FFD700',
     };
     return colors[status] || '#999';
   };
@@ -632,7 +672,7 @@ function LeadDetail() {
       setBorrowers(borrowersList);
     } catch (error) {
       console.error('Failed to load lead data:', error);
-      alert('Failed to load lead details');
+      toast.error('Failed to load lead details');
       navigate('/leads');
     } finally {
       setLoading(false);
@@ -846,13 +886,13 @@ function LeadDetail() {
 
       if (response.ok) {
         await loadEmailDrafts();
-        alert('Draft saved successfully!');
+        toast.success('Draft saved successfully!');
       } else {
         throw new Error('Failed to save draft');
       }
     } catch (error) {
       console.error('Error saving draft:', error);
-      alert('Failed to save draft');
+      toast.error('Failed to save draft');
     } finally {
       setDraftLoading(false);
     }
@@ -882,13 +922,13 @@ function LeadDetail() {
         setShowDraftModal(false);
         setSelectedDraft(null);
         await loadEmailDrafts();
-        alert('Draft deleted');
+        toast.success('Draft deleted');
       } else {
         throw new Error('Failed to delete draft');
       }
     } catch (error) {
       console.error('Error deleting draft:', error);
-      alert('Failed to delete draft');
+      toast.error('Failed to delete draft');
     } finally {
       setDraftLoading(false);
     }
@@ -934,14 +974,14 @@ function LeadDetail() {
         setSelectedDraft(null);
         await loadEmailDrafts();
         await loadEmails();
-        alert('Email sent successfully!');
+        toast.success('Email sent successfully!');
       } else {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to send email');
       }
     } catch (error) {
       console.error('Error sending email:', error);
-      alert('Failed to send email: ' + error.message);
+      toast.error('Failed to send email: ' + error.message);
     } finally {
       setDraftLoading(false);
     }
@@ -1244,7 +1284,7 @@ function LeadDetail() {
       console.log('Lead updated successfully!');
     } catch (error) {
       console.error('Failed to update lead:', error);
-      alert('Failed to update lead');
+      toast.error('Failed to update lead');
     }
   };
 
@@ -1353,7 +1393,7 @@ function LeadDetail() {
       console.error('Failed to add note:', error);
       console.error('Error response:', error.response?.data);
       const errorMsg = error.response?.data?.detail || 'Failed to add note. Please check console for details.';
-      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      toast.error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setNoteLoading(false);
     }
@@ -1441,12 +1481,12 @@ function LeadDetail() {
         setFormData(newBorrower.data);
       }
 
-      alert(`${fullName} has been added successfully!`);
+      toast.success(`${fullName} has been added successfully!`);
     } catch (error) {
       console.error('Failed to add borrower:', error);
       console.error('Error response:', error.response?.data);
       const errorMsg = error.response?.data?.detail || error.message || 'Failed to add borrower. Please check console for details.';
-      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      toast.error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     }
   };
 
@@ -1455,7 +1495,7 @@ function LeadDetail() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      toast.error('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
       return;
     }
 
@@ -1485,9 +1525,9 @@ function LeadDetail() {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       if (event.error === 'no-speech') {
-        alert('No speech detected. Please try again.');
+        toast.error('No speech detected. Please try again.');
       } else {
-        alert(`Error occurred: ${event.error}`);
+        toast.error(`Error occurred: ${event.error}`);
       }
     };
 
@@ -1521,7 +1561,7 @@ function LeadDetail() {
       setShowApplicationModal(true);
     } catch (err) {
       console.error('Error creating application:', err);
-      alert('Failed to create application link. Please try again.');
+      toast.error('Failed to create application link. Please try again.');
     } finally {
       setApplicationLoading(false);
     }
@@ -1533,7 +1573,7 @@ function LeadDetail() {
 
     try {
       await navigator.clipboard.writeText(applicationLink.url);
-      alert('Application link copied to clipboard!');
+      toast.success('Application link copied to clipboard!');
     } catch (err) {
       console.error('Failed to copy:', err);
       // Fallback for older browsers
@@ -1543,7 +1583,7 @@ function LeadDetail() {
       textArea.select();
       document.execCommand('copy');
       document.body.removeChild(textArea);
-      alert('Application link copied to clipboard!');
+      toast.success('Application link copied to clipboard!');
     }
   };
 
@@ -1659,7 +1699,7 @@ function LeadDetail() {
         errorMessage = err.message;
       }
 
-      alert(`Failed to access/create client portal: ${errorMessage}`);
+      toast.error(`Failed to access/create client portal: ${errorMessage}`);
     } finally {
       setClientPortalLoading(false);
     }
@@ -1671,7 +1711,7 @@ function LeadDetail() {
 
     try {
       await navigator.clipboard.writeText(clientPortalData.url);
-      alert('Client portal link copied to clipboard!');
+      toast.success('Client portal link copied to clipboard!');
     } catch (err) {
       console.error('Failed to copy:', err);
       // Fallback for older browsers
@@ -1681,7 +1721,7 @@ function LeadDetail() {
       textArea.select();
       document.execCommand('copy');
       document.body.removeChild(textArea);
-      alert('Client portal link copied to clipboard!');
+      toast.success('Client portal link copied to clipboard!');
     }
   };
 
@@ -1690,7 +1730,7 @@ function LeadDetail() {
       case 'call':
         // Use click-to-dial - calls your phone first, then bridges to the contact
         if (!lead.phone) {
-          alert('No phone number available for this lead');
+          toast.error('No phone number available for this lead');
           return;
         }
         try {
@@ -1702,20 +1742,20 @@ function LeadDetail() {
             lead_id: lead.id
           });
           if (result.success) {
-            alert(`Calling your phone now... When you answer, you'll be connected to ${lead.name || 'the contact'}.`);
+            toast.success(`Calling your phone now... When you answer, you'll be connected to ${lead.name || 'the contact'}.`);
           } else {
             // If click-to-dial fails (no settings configured), fall back to tel: link
             if (result.error?.includes('cell phone not configured') || result.error?.includes('caller ID')) {
-              alert('Click-to-dial is not configured. Please set up your phone number in Settings > Telephony.\n\nFalling back to phone app...');
+              toast.error('Click-to-dial is not configured. Please set up your phone number in Settings > Telephony.\n\nFalling back to phone app...');
               window.open(`tel:${lead.phone}`, '_self');
             } else {
-              alert(`Call failed: ${result.error || 'Unknown error'}`);
+              toast.error(`Call failed: ${result.error || 'Unknown error'}`);
             }
           }
         } catch (err) {
           console.error('Click-to-dial error:', err);
           // Fall back to tel: link if API call fails
-          alert('Click-to-dial service unavailable. Opening phone app instead...');
+          toast.error('Click-to-dial service unavailable. Opening phone app instead...');
           window.open(`tel:${lead.phone}`, '_self');
         }
         break;
@@ -1865,30 +1905,50 @@ function LeadDetail() {
                     zIndex: 1000,
                     minWidth: '200px',
                     marginTop: '4px',
-                    overflow: 'hidden'
+                    maxHeight: '400px',
+                    overflowY: 'auto'
                   }}
                 >
-                  {statusOptions.map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => handleStatusChange(status)}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        padding: '12px 16px',
-                        border: 'none',
-                        background: (formData.stage || lead?.stage) === status ? '#f0f0f0' : 'white',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        fontSize: '14px',
-                        borderLeft: `4px solid ${getStatusColor(status)}`,
-                        transition: 'background 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
-                      onMouseLeave={(e) => e.target.style.background = (formData.stage || lead?.stage) === status ? '#f0f0f0' : 'white'}
-                    >
-                      {status}
-                    </button>
+                  {statusOptions.map((status, idx) => (
+                    status.isHeader ? (
+                      <div
+                        key={status.label}
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          color: '#6b7280',
+                          borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
+                          marginTop: idx > 0 ? '4px' : 0,
+                          letterSpacing: '0.05em',
+                          background: '#fafafa',
+                        }}
+                      >
+                        {status.label}
+                      </div>
+                    ) : (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusChange(status)}
+                        style={{
+                          display: 'block',
+                          width: '100%',
+                          padding: '12px 16px',
+                          border: 'none',
+                          background: (formData.stage || lead?.stage) === status ? '#f0f0f0' : 'white',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontSize: '14px',
+                          borderLeft: `4px solid ${getStatusColor(status)}`,
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+                        onMouseLeave={(e) => e.target.style.background = (formData.stage || lead?.stage) === status ? '#f0f0f0' : 'white'}
+                      >
+                        {status}
+                      </button>
+                    )
                   ))}
                 </div>
               </>
@@ -4476,9 +4536,9 @@ function LeadDetail() {
                   onClick={async () => {
                     try {
                       await purlAPI.resendInvite(clientPortalData.workspace_id);
-                      alert('Invitation email sent to borrower!');
+                      toast.success('Invitation email sent to borrower!');
                     } catch (err) {
-                      alert('Failed to send invitation: ' + (err.response?.data?.detail || err.message));
+                      toast.error('Failed to send invitation: ' + (err.response?.data?.detail || err.message));
                     }
                   }}
                   className="btn btn-secondary"

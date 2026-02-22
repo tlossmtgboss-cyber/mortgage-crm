@@ -20,7 +20,7 @@ Usage:
         try:
             result = await api_call()
             breaker.record_success()
-        except Exception:
+        except Exception as e:
             breaker.record_failure()
 """
 

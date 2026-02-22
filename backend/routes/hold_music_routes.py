@@ -38,7 +38,8 @@ def _validate_audio_url(url: str) -> bool:
         if host.startswith("172.") and 16 <= int(host.split(".")[1]) <= 31:
             return False
         return True
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in _validate_audio_url: {e}")
         return False
 
 
@@ -59,7 +60,7 @@ async def get_current_user_optional(request: Request, db: Session = Depends(get_
     Lazy imports from main to avoid circular imports.
     """
     try:
-        from main import get_current_user_flexible as auth_func
+        from auth.dependencies import get_current_user_flexible as auth_func
         return await auth_func(request, db)
     except Exception as e:
         logger.debug(f"Auth failed (optional): {e}")
@@ -198,7 +199,8 @@ async def create_hold_music(
         # For SQLite compatibility
         try:
             music_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in create_hold_music: {e}")
             music_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -240,7 +242,8 @@ async def list_hold_music(
             if hasattr(row, 'comfort_messages') and row.comfort_messages:
                 try:
                     comfort_msgs = json.loads(row.comfort_messages)
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error parsing comfort_messages JSON in list_hold_music: {e}")
                     comfort_msgs = None
 
             music_list.append({
@@ -315,7 +318,8 @@ async def get_hold_music(
         if result.comfort_messages:
             try:
                 comfort_msgs = json.loads(result.comfort_messages)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error parsing comfort_messages JSON in get_hold_music: {e}")
                 comfort_msgs = None
 
         return {

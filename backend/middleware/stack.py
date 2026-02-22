@@ -205,7 +205,8 @@ def configure_production_hardening(
                 with session_local() as db:
                     db.execute(text("SELECT 1"))
                     return True
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Database health check failed: {e}")
                 return False
 
         health_checker.register_check("database", check_database)
@@ -248,7 +249,8 @@ def configure_datadog_monitoring(
                 try:
                     from services.redis_cache import redis_cache
                     return await redis_cache.health_check()
-                except Exception:
+                except Exception as e:
+                    logger.exception(f"Redis health check failed: {e}")
                     return False
 
             health_checker.register_check("redis", check_redis)

@@ -103,7 +103,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 lead_query = _apply_lead_scope(lead_query, scope, Lead)
                 all_leads = lead_query.all()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (lead query): {e}")
                 all_leads = []
 
             starts_count = len(all_leads)
@@ -115,7 +116,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 apps_query = _apply_loan_scope(apps_query, scope, Loan)
                 apps_count = apps_query.scalar() or 0
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (apps query): {e}")
                 apps_count = 0
 
             try:
@@ -126,7 +128,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 funded_query = _apply_loan_scope(funded_query, scope, Loan)
                 funded_count = funded_query.scalar() or 0
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (funded query): {e}")
                 funded_count = 0
 
             try:
@@ -137,7 +140,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 credit_query = _apply_lead_scope(credit_query, scope, Lead)
                 credit_pulls = credit_query.scalar() or 0
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (credit pulls query): {e}")
                 credit_pulls = 0
 
             try:
@@ -148,7 +152,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 cancelled_query = _apply_loan_scope(cancelled_query, scope, Loan)
                 cancelled_count = cancelled_query.scalar() or 0
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (cancelled query): {e}")
                 cancelled_count = 0
 
             denied_count = 0
@@ -161,7 +166,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 uw_query = _apply_loan_scope(uw_query, scope, Loan)
                 uw_count = uw_query.scalar() or 0
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (UW query): {e}")
                 uw_count = 0
 
             try:
@@ -172,7 +178,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 ctc_query = _apply_loan_scope(ctc_query, scope, Loan)
                 ctc_count = ctc_query.scalar() or 0
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (CTC query): {e}")
                 ctc_count = 0
 
             locked_funded = funded_count
@@ -210,7 +217,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 funded_loans_query = _apply_loan_scope(funded_loans_query, scope, Loan)
                 funded_loans = funded_loans_query.all()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (funded loans query): {e}")
                 funded_loans = []
 
             current_avg_amount = sum(loan.amount for loan in funded_loans if loan.amount) / len(funded_loans) if funded_loans else 0
@@ -246,7 +254,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
                 )
                 funded_all_query = _apply_loan_scope(funded_all_query, scope, Loan)
                 funded_loans_all = funded_all_query.all()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in get_scorecard (funded loans all query): {e}")
                 funded_loans_all = []
 
             total_funded_units = len(funded_loans_all)
@@ -337,7 +346,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
 
             start_date_str = start.strftime("%Y-%m-%d")
             end_date_str = end.strftime("%Y-%m-%d")
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in export_scorecard (date parsing): {e}")
             raise HTTPException(status_code=400, detail="Invalid date format")
 
         scope = _get_scope(current_user)
@@ -349,7 +359,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             )
             lead_query = _apply_lead_scope(lead_query, scope, Lead)
             starts_count = lead_query.count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in export_scorecard (starts query): {e}")
             starts_count = 0
 
         try:
@@ -358,7 +369,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             )
             apps_query = _apply_loan_scope(apps_query, scope, Loan)
             apps_count = apps_query.scalar() or 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in export_scorecard (apps query): {e}")
             apps_count = 0
 
         try:
@@ -368,7 +380,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             )
             funded_query = _apply_loan_scope(funded_query, scope, Loan)
             funded_count = funded_query.scalar() or 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in export_scorecard (funded query): {e}")
             funded_count = 0
 
         try:
@@ -378,7 +391,8 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
             )
             funded_loans_query = _apply_loan_scope(funded_loans_query, scope, Loan)
             funded_loans_all = funded_loans_query.all()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in export_scorecard (funded loans query): {e}")
             funded_loans_all = []
 
         total_funded_volume = sum(

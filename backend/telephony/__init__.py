@@ -1,4 +1,11 @@
 # Telephony module for Click-to-Dial and Power Dialer
+
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 from .provider import (
     TelephonyProvider,
     TwilioProvider,

@@ -104,13 +104,13 @@ def _store_pkce_verifier(state: str, verifier: str) -> None:
             logger.warning(f"Database error storing PKCE, using memory fallback: {type(e).__name__}: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass  # Rollback may fail if connection is broken
+            except Exception as e:
+                logger.exception(f"Failed to rollback after PKCE storage error: {e}")
         finally:
             try:
                 db.close()
-            except Exception:
-                pass  # Close may fail if connection is broken
+            except Exception as e:
+                logger.exception(f"Failed to close DB session after PKCE storage: {e}")
 
     # Fallback to memory storage
     _pkce_store_memory[state] = (verifier, expires_at)
@@ -143,13 +143,13 @@ def _get_pkce_verifier(state: str) -> Optional[str]:
             logger.warning(f"Database error retrieving PKCE, checking memory: {type(e).__name__}: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to rollback after PKCE retrieval error: {e}")
         finally:
             try:
                 db.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close DB session after PKCE retrieval: {e}")
 
     # Fallback to memory storage
     stored = _pkce_store_memory.pop(state, None)

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './VoiceOSDashboard.css';
+import { toast } from '../utils/toast';
 
 const VoiceOSDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -229,13 +230,13 @@ const VoiceOSDashboard = () => {
 
       if (data.success) {
         setConfig({ ...config, voice: selectedVoice });
-        alert('Voice configuration saved! Your AI receptionist will now use the ' +
+        toast.success('Voice configuration saved! Your AI receptionist will now use the ' +
               voiceOptions.find(v => v.id === selectedVoice).name + ' voice.');
       } else {
-        alert('Error saving configuration: ' + (data.error || 'Unknown error'));
+        toast.error('Error saving configuration: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
-      alert('Error saving configuration: ' + error.message);
+      toast.error('Error saving configuration: ' + error.message);
     } finally {
       setSaving(false);
     }

@@ -22,6 +22,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 @contextmanager
@@ -36,7 +42,7 @@ def get_db_connection():
 
 def _get_current_user():
     """Lazy import auth dependency for router-level protection."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 router = APIRouter(
@@ -709,15 +715,15 @@ async def run_dialer_migration(admin_key: str = Query(...)):
             for alter in alter_sql:
                 try:
                     conn.execute(text(alter))
-                except Exception:
-                    pass  # Column may already exist
+                except Exception as e:
+                    logger.debug(f"Skipping column migration in run_dialer_migration: {e}")
 
             # Create indexes
             for idx in index_sql:
                 try:
                     conn.execute(text(idx))
-                except Exception:
-                    pass  # Index may already exist
+                except Exception as e:
+                    logger.debug(f"Skipping index creation in run_dialer_migration: {e}")
 
             conn.commit()
         return {"status": "success", "message": "Call history table created/updated with Twilio columns"}

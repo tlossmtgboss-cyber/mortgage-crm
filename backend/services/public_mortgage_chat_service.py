@@ -42,7 +42,7 @@ class PublicMortgageChatService:
 
     def _load_loan_officer_info(self):
         """Load loan officer information for context"""
-        from main import User
+        from database.models import User
         from microsite_models import UserMicrosite
 
         # Get user by slug
@@ -76,7 +76,7 @@ class PublicMortgageChatService:
 
             # First, try to get work hours from User Profile (business_hours field)
             try:
-                from main import User
+                from database.models import User
                 user = self.db.query(User).filter(User.id == user_id).first()
                 if user and hasattr(user, 'business_hours') and user.business_hours:
                     user_hours = user.business_hours
@@ -185,7 +185,8 @@ class PublicMortgageChatService:
             try:
                 start_hour, start_min = map(int, start_time_str.split(":"))
                 end_hour, end_min = map(int, end_time_str.split(":"))
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error parsing business hours for {day_name}: {e}")
                 continue
 
             # Generate slots for this day
@@ -286,7 +287,8 @@ class PublicMortgageChatService:
 
         try:
             from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
-            from main import Lead, LeadStage
+            from database.enums import LeadStage
+            from database.models import Lead
 
             # Generate appointment ID
             appointment_id = f"APPT-{uuid.uuid4().hex[:8].upper()}"

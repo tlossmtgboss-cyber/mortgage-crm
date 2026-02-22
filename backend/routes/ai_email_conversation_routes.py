@@ -888,14 +888,16 @@ def parse_raw_email(raw_email: str) -> tuple:
                     payload = part.get_content()
                     if isinstance(payload, bytes):
                         payload = payload.decode('utf-8', errors='ignore')
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error getting multipart content in parse_raw_email: {e}")
                     try:
                         payload = part.get_payload(decode=True)
                         if payload:
                             payload = payload.decode('utf-8', errors='ignore')
                         else:
                             continue
-                    except Exception:
+                    except Exception as e2:
+                        logger.error(f"Error getting multipart payload fallback in parse_raw_email: {e2}")
                         continue
 
                 if content_type == "text/plain" and not text_body:
@@ -909,14 +911,16 @@ def parse_raw_email(raw_email: str) -> tuple:
                 payload = msg.get_content()
                 if isinstance(payload, bytes):
                     payload = payload.decode('utf-8', errors='ignore')
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error getting single-part content in parse_raw_email: {e}")
                 try:
                     payload = msg.get_payload(decode=True)
                     if payload:
                         payload = payload.decode('utf-8', errors='ignore')
                     else:
                         payload = ""
-                except Exception:
+                except Exception as e2:
+                    logger.error(f"Error getting single-part payload fallback in parse_raw_email: {e2}")
                     payload = ""
 
             if content_type == "text/plain":
@@ -941,8 +945,8 @@ def parse_raw_email(raw_email: str) -> tuple:
                     return "", body
                 else:
                     return body, ""
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.error(f"Error in fallback email body extraction in parse_raw_email: {e2}")
         return "", ""
 
 

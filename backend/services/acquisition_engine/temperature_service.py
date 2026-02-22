@@ -303,7 +303,7 @@ class TemperatureService:
         """
         try:
             # Import Lead model
-            from main import Lead
+            from database.models import Lead
 
             lead = self.db.query(Lead).filter(Lead.id == lead_id).first()
             if not lead:

@@ -34,7 +34,7 @@ async def _get_authenticated_user(
     """Get current authenticated user for Teams endpoints."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return await get_current_user_flexible(token=credentials.credentials, request=None, db=db)
 
 router = APIRouter(

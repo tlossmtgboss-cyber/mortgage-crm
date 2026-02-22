@@ -39,8 +39,8 @@ class QueryExecutor:
         """
         try:
             db.rollback()  # Clear any failed transactions
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to rollback DB session before query execution: {e}")
 
         logger.info(f"Executing {query_type} for user {user_id} with params {params}")
 
@@ -351,8 +351,8 @@ class QueryExecutor:
             logger.error(f"Query execution error: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.exception(f"Failed to rollback DB session after query execution error: {e2}")
             return {
                 "success": False,
                 "error": "Internal server error",

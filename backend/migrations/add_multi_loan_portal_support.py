@@ -211,7 +211,8 @@ def run_migration_sqlite(db: Session):
     try:
         db.execute(text("SELECT portal_mode FROM purl_loans LIMIT 1"))
         logger.info("portal_mode column already exists")
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking portal_mode column, will add: {e}")
         db.execute(text("""
             ALTER TABLE purl_loans ADD COLUMN portal_mode VARCHAR(20) DEFAULT 'transaction'
         """))
@@ -220,7 +221,8 @@ def run_migration_sqlite(db: Session):
     try:
         db.execute(text("SELECT refinanced_from_loan_id FROM purl_loans LIMIT 1"))
         logger.info("refinanced_from_loan_id column already exists")
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking refinanced_from_loan_id column, will add: {e}")
         db.execute(text("""
             ALTER TABLE purl_loans ADD COLUMN refinanced_from_loan_id INTEGER
         """))
@@ -229,7 +231,8 @@ def run_migration_sqlite(db: Session):
     try:
         db.execute(text("SELECT paid_off_date FROM purl_loans LIMIT 1"))
         logger.info("paid_off_date column already exists")
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking paid_off_date column, will add: {e}")
         db.execute(text("""
             ALTER TABLE purl_loans ADD COLUMN paid_off_date TIMESTAMP
         """))
@@ -238,7 +241,8 @@ def run_migration_sqlite(db: Session):
     try:
         db.execute(text("SELECT paid_off_reason FROM purl_loans LIMIT 1"))
         logger.info("paid_off_reason column already exists")
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking paid_off_reason column, will add: {e}")
         db.execute(text("""
             ALTER TABLE purl_loans ADD COLUMN paid_off_reason VARCHAR(50)
         """))

@@ -13,6 +13,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import './MicrositeWizard.css';
+import { toast } from '../../utils/toast';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -305,7 +306,7 @@ const MicrositeWizard = () => {
       });
 
       if (response.ok) {
-        alert('Your microsite is now live!');
+        toast.success('Your microsite is now live!');
       } else {
         throw new Error('Failed to publish');
       }

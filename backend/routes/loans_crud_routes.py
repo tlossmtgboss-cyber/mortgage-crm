@@ -33,11 +33,11 @@ router = APIRouter(prefix="/api/v1/loans", tags=["Loans CRUD"])
 # ============================================================================
 
 def get_current_user_dep():
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 def get_models():
-    from main import Loan, User
+    from database.models import Loan, User
     return Loan, User
 
 def get_permission_functions():
@@ -196,8 +196,8 @@ def _ensure_loans_columns():
                         f"ALTER TABLE loans ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
                     ))
                     added += 1
-                except Exception:
-                    pass  # Column might already exist or type conflict
+                except Exception as e:
+                    logger.error(f"Error adding column {col_name}: {e}")
             conn.commit()
             logger.info(f"✅ Loans table column sync complete ({len(columns)} checked)")
 

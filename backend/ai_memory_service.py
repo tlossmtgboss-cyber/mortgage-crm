@@ -16,7 +16,7 @@ import json
 import hashlib
 
 from integrations.pinecone_service import vector_memory
-from main import ConversationMemory, Lead, Loan, User
+from database.models import ConversationMemory, Lead, Loan, User
 from ai_receptionist_dashboard_models import AIReceptionistMetricsDaily, AIReceptionistActivity
 from models.profitability import EmployeeCost, ProfitabilityLoan, LoanAttribution, ProfitabilityRole
 from sqlalchemy import func

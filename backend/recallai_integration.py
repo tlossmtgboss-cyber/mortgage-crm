@@ -39,7 +39,8 @@ def _is_safe_url(url: str) -> bool:
         except ValueError:
             pass  # Not an IP literal, allow
         return True
-    except Exception:
+    except Exception as e:
+        logger.exception(f"Failed to validate URL safety: {e}")
         return False
 
 
@@ -51,8 +52,10 @@ RECALLAI_API_BASE = "https://us-west-2.recall.ai/api/v1"
 # Import get_db and auth from main
 # Note: RecallAIBot model does not exist yet - guarded to prevent import crash
 try:
-    from main import get_db, get_current_user, User
-    from main import RecallAIBot
+    from auth.dependencies import get_current_user
+    from database import get_db
+    from database.models import User
+    from database.models import RecallAIBot
 except ImportError:
     RecallAIBot = None
 
@@ -373,13 +376,13 @@ async def process_video_call_recording(
         lead_name = None
 
         if bot_record.user_id:
-            from main import User
+            from database.models import User
             user = db.query(User).filter(User.id == bot_record.user_id).first()
             if user:
                 user_email = user.email
 
         if bot_record.lead_id:
-            from main import Lead
+            from database.models import Lead
             lead = db.query(Lead).filter(Lead.id == bot_record.lead_id).first()
             if lead:
                 lead_name = lead.name

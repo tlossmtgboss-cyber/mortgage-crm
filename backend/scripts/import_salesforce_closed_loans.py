@@ -552,8 +552,8 @@ class SalesforceClosedLoansImporter:
                     logger.error(f"Failed to import {opp.get('Id')}: {e}")
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(f"Error during rollback in import_opportunities: {e}")
 
             db.commit()
 

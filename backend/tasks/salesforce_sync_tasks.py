@@ -77,8 +77,8 @@ async def sync_emails_from_salesforce(
         # Rollback to recover from any transaction errors
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.error(f"Error in sync_emails_from_salesforce (rollback): {e2}")
         return {
             'success': False,
             'emails_synced': 0,
@@ -175,8 +175,8 @@ async def sync_calendar_from_salesforce(
         # Rollback to recover from any transaction errors
         try:
             db.rollback()
-        except Exception:
-            pass
+        except Exception as e2:
+            logger.error(f"Error in sync_calendar_from_salesforce (rollback): {e2}")
         return {
             'success': False,
             'events_synced': 0,
@@ -311,8 +311,8 @@ async def sync_all_users_salesforce(
                         results['errors'].append(f"Client sync: {str(e)[:100]}")
                         try:
                             db.rollback()
-                        except Exception:
-                            pass
+                        except Exception as e2:
+                            logger.error(f"Error in sync_all_users_salesforce (client sync rollback): {e2}")
 
                 # ===== IMPORT NEW CLIENTS: Create CRM records for new SF records =====
                 if import_new_clients:
@@ -335,8 +335,8 @@ async def sync_all_users_salesforce(
                         results['errors'].append(f"New client import: {str(e)[:100]}")
                         try:
                             db.rollback()
-                        except Exception:
-                            pass
+                        except Exception as e2:
+                            logger.error(f"Error in sync_all_users_salesforce (import rollback): {e2}")
 
                 # ===== INBOUND: Pull emails from Salesforce =====
                 if sync_emails:
@@ -357,8 +357,8 @@ async def sync_all_users_salesforce(
                         # Rollback to recover from any transaction errors
                         try:
                             db.rollback()
-                        except Exception:
-                            pass
+                        except Exception as e2:
+                            logger.error(f"Error in sync_all_users_salesforce (email sync rollback): {e2}")
 
                 # ===== INBOUND: Pull calendar from Salesforce =====
                 if sync_calendar:
@@ -380,8 +380,8 @@ async def sync_all_users_salesforce(
                         # Rollback to recover from any transaction errors
                         try:
                             db.rollback()
-                        except Exception:
-                            pass
+                        except Exception as e2:
+                            logger.error(f"Error in sync_all_users_salesforce (calendar sync rollback): {e2}")
 
                 # NO OUTBOUND SYNC - Data flows Salesforce → CRM only
 
@@ -390,8 +390,8 @@ async def sync_all_users_salesforce(
                     # CRITICAL: Ensure clean transaction state before updating
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.error(f"Error in sync_all_users_salesforce (pre-update rollback): {e2}")
 
                     # Re-fetch profile to ensure we have a valid object in the current transaction
                     from salesforce_integration_models import IntegrationProfile as IP
@@ -404,8 +404,8 @@ async def sync_all_users_salesforce(
                     logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.error(f"Error in sync_all_users_salesforce (commit rollback): {e2}")
 
             except Exception as e:
                 logger.error(f"Sync failed for user {profile.user_id}: {e}")
@@ -413,8 +413,8 @@ async def sync_all_users_salesforce(
                 # Rollback to ensure clean state for next profile
                 try:
                     db.rollback()
-                except Exception:
-                    pass
+                except Exception as e2:
+                    logger.error(f"Error in sync_all_users_salesforce (profile rollback): {e2}")
 
         results['completed_at'] = datetime.utcnow().isoformat()
 
@@ -658,8 +658,8 @@ async def trigger_user_sync(
                 results['inbound']['email_sync'] = {'success': False, 'error': str(e)}
                 try:
                     db.rollback()
-                except Exception:
-                    pass
+                except Exception as e2:
+                    logger.error(f"Error in trigger_user_sync (email rollback): {e2}")
 
         if sync_calendar:
             try:
@@ -671,8 +671,8 @@ async def trigger_user_sync(
                 results['inbound']['calendar_sync'] = {'success': False, 'error': str(e)}
                 try:
                     db.rollback()
-                except Exception:
-                    pass
+                except Exception as e2:
+                    logger.error(f"Error in trigger_user_sync (calendar rollback): {e2}")
 
         # NO OUTBOUND SYNC - Data flows Salesforce → CRM only
 
@@ -681,8 +681,8 @@ async def trigger_user_sync(
             # CRITICAL: Ensure clean transaction state before updating
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in trigger_user_sync (pre-update rollback): {e2}")
 
             from salesforce_integration_models import IntegrationProfile as IP
             fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
@@ -694,8 +694,8 @@ async def trigger_user_sync(
             logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in trigger_user_sync (commit rollback): {e2}")
 
         return results
 

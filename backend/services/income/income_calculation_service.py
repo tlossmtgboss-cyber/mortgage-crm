@@ -669,7 +669,8 @@ class IncomeCalculationService:
                 if not value:
                     return Decimal(0)
             return Decimal(str(value))
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error converting value to Decimal: {e}")
             return Decimal(0)
 
     def _get_pay_frequency_multiplier(self, frequency: str) -> int:

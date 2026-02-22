@@ -4,6 +4,7 @@ import AddSkillModal from './AddSkillModal';
 import AssessSkillModal from './AssessSkillModal';
 import responsibilitiesApi from '../services/responsibilitiesApi';
 import './SkillsAssessmentSection.css';
+import { toast } from '../utils/toast';
 
 const SkillsAssessmentSection = ({ userId, isManager = true }) => {
   const [skills, setSkills] = useState([]);
@@ -69,7 +70,7 @@ const SkillsAssessmentSection = ({ userId, isManager = true }) => {
       await loadSkills();
     } catch (err) {
       console.error('Error removing skill:', err);
-      alert('Failed to remove skill');
+      toast.error('Failed to remove skill');
     }
   };
 

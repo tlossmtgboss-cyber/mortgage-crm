@@ -3,11 +3,14 @@ Scoring Engine for Intake
 Computes Underwriting Truth Score and LO Readiness Score
 """
 
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 from .models import (
     Session, Scores, ScoreBreakdown, TruthBand, Flag,
     FlagCategory, FlagSeverity
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ScoringResult:
@@ -367,8 +370,8 @@ class ScoringEngine:
                             return True
                     return False
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to evaluate bonus condition: {e}")
 
         return False
 

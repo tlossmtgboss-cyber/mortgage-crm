@@ -7,7 +7,7 @@ import random
 # Avoid circular import - models are accessed through db.query()
 # Type hints use string literals to avoid import at runtime
 if TYPE_CHECKING:
-    from main import VerificationToken
+    from database.models import VerificationToken
 
 
 def generate_verification_code() -> str:
@@ -22,7 +22,7 @@ def create_verification_token(
 ):
     """Create a new verification token"""
     # Import here to avoid circular import
-    from main import VerificationToken
+    from database.models import VerificationToken
 
     token = generate_verification_code()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
@@ -48,7 +48,7 @@ def verify_token(
 ):
     """Verify a token and mark it as used"""
     # Import here to avoid circular import
-    from main import VerificationToken
+    from database.models import VerificationToken
 
     token_obj = db.query(VerificationToken).filter(
         and_(
@@ -76,7 +76,7 @@ def count_recent_verifications(
 ) -> int:
     """Count verification attempts in the last N hours"""
     # Import here to avoid circular import
-    from main import VerificationToken
+    from database.models import VerificationToken
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
@@ -94,7 +94,7 @@ def count_recent_verifications(
 def cleanup_expired_tokens(db: Session) -> int:
     """Delete expired tokens (run as scheduled job)"""
     # Import here to avoid circular import
-    from main import VerificationToken
+    from database.models import VerificationToken
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=1)
 

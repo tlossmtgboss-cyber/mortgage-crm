@@ -312,8 +312,8 @@ class PerformanceService:
             total_files = errors.error_count or 1
             error_count = errors.rework_count or 0
             rework_count = errors.rework_count or 0
-        except Exception:
-            # Table might not have revision_count column
+        except Exception as e:
+            logger.warning(f"Error querying quality metrics in _get_daily_quality_metrics: {e}")
             total_files = 1
             error_count = 0
             rework_count = 0
@@ -624,7 +624,8 @@ class PerformanceService:
 
             total = errors.total or 1
             rework = errors.rework_count or 0
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error querying quality metrics in _get_period_quality_metrics: {e}")
             total = 1
             rework = 0
 

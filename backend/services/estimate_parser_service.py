@@ -636,8 +636,8 @@ class EstimateParserService:
             # Clean up S3 file (optional - lifecycle rule will also clean it)
             try:
                 self.s3_client.delete_object(Bucket=bucket, Key=s3_key)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error cleaning up S3 file {s3_key}: {e}")
 
     def _extract_text_from_blocks(self, blocks: List[Dict]) -> str:
         """Extract text from Textract blocks"""

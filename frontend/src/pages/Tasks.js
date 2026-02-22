@@ -9,6 +9,7 @@ import TasksSkeleton from '../components/shared/TasksSkeleton';
 import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import { getAuthHeaders } from '../utils/auth';
 import './Tasks.css';
+import { toast } from '../utils/toast';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -390,7 +391,7 @@ function Tasks() {
     const tasksToDial = phoneTasks.filter(t => tasksToDialIds.includes(t.id));
 
     if (tasksToDial.length === 0) {
-      alert('No tasks to dial');
+      toast.error('No tasks to dial');
       return;
     }
 
@@ -573,7 +574,7 @@ function Tasks() {
   // Handler functions
   const handleSend = (taskId, method, _message) => { // eslint-disable-line no-unused-vars
     // method and message are passed from the shared TaskDetailPanel component
-    alert(`Task sent via ${method || 'Email'}!`);
+    toast.success(`Task sent via ${method || 'Email'}!`);
     handleComplete(taskId);
   };
 
@@ -624,7 +625,7 @@ function Tasks() {
       emitTaskCompleted(taskId, 'tasks-page');
     } catch (error) {
       console.error('Error deleting task:', error);
-      alert('Failed to delete task. Please try again.');
+      toast.error('Failed to delete task. Please try again.');
     }
   };
 
@@ -673,7 +674,7 @@ function Tasks() {
     setBulkDeleting(false);
 
     if (failCount > 0) {
-      alert(`Deleted ${successCount} tasks. ${failCount} failed.`);
+      toast.success(`Deleted ${successCount} tasks. ${failCount} failed.`);
     }
   };
 
@@ -1091,17 +1092,17 @@ function Tasks() {
         await leadsAPI.update(leadId, { stage: newStatus });
         // Update the selected task's stage locally
         setSelectedTask(prev => ({ ...prev, stage: newStatus }));
-        alert(`Lead status updated to "${LEAD_STAGES.find(s => s.value === newStatus)?.label || newStatus}"`);
+        toast.success(`Lead status updated to "${LEAD_STAGES.find(s => s.value === newStatus)?.label || newStatus}"`);
       } else if (loanId) {
         await loansAPI.update(loanId, { stage: newStatus });
         setSelectedTask(prev => ({ ...prev, stage: newStatus }));
-        alert(`Loan status updated to "${newStatus}"`);
+        toast.success(`Loan status updated to "${newStatus}"`);
       } else {
-        alert('No lead or loan associated with this task');
+        toast.error('No lead or loan associated with this task');
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status. Please try again.');
+      toast.error('Failed to update status. Please try again.');
     } finally {
       setUpdatingStatus(false);
     }
@@ -1134,10 +1135,10 @@ function Tasks() {
       handleComplete(taskId);
 
       // Show success message
-      alert('AI action approved and sent!');
+      toast.success('AI action approved and sent!');
     } catch (error) {
       console.error('Error approving AI task:', error);
-      alert('Failed to approve task');
+      toast.error('Failed to approve task');
     }
   };
 

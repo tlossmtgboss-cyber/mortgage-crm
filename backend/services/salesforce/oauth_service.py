@@ -153,8 +153,8 @@ class SalesforceOAuthService:
             logger.error(f"Failed to store OAuth state in database: {type(e).__name__}: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.exception(f"Failed to rollback after OAuth state storage failure: {e2}")
             # Re-raise with more detail
             raise Exception(f"OAuth state storage failed ({type(e).__name__}): {e}")
 
@@ -428,7 +428,8 @@ class SalesforceOAuthService:
             # Try to use existing token
             access_token = decrypt_value(profile.access_token_encrypted)
             return access_token, profile.instance_url
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to decrypt access token, attempting refresh: {e}")
             # If decryption fails or token is invalid, refresh it
             access_token = await self.refresh_access_token(db, integration_profile_id)
             return access_token, profile.instance_url

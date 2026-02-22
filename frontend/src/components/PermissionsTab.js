@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { permissionsAPI } from '../services/api';
 import PermissionDiffModal from './PermissionDiffModal';
 import './PermissionsTab.css';
+import { toast } from '../utils/toast';
 
 function PermissionsTab({ userId }) {
   const [loading, setLoading] = useState(true);
@@ -67,7 +68,7 @@ function PermissionsTab({ userId }) {
       await fetchData();
     } catch (error) {
       console.error('Failed to apply template:', error);
-      alert('Failed to apply template. Please try again.');
+      toast.error('Failed to apply template. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -87,10 +88,10 @@ function PermissionsTab({ userId }) {
 
       // Refresh to get updated data
       await fetchData();
-      alert('Permissions saved successfully!');
+      toast.success('Permissions saved successfully!');
     } catch (error) {
       console.error('Failed to save permissions:', error);
-      alert('Failed to save permissions. Please try again.');
+      toast.error('Failed to save permissions. Please try again.');
     } finally {
       setSaving(false);
     }

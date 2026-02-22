@@ -19,7 +19,7 @@ def enable_auto_delete():
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
         # Import models after engine is created
-        from main import MicrosoftOAuthToken
+        from database.models import MicrosoftOAuthToken
 
         db = SessionLocal()
 

@@ -116,8 +116,8 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
                     "SELECT type_id, label FROM custom_buyer_types WHERE user_id = :uid ORDER BY label"
                 ), {"uid": current_user.id}).fetchall()
                 custom_types = [{"id": r[0], "label": r[1]} for r in rows]
-            except Exception:
-                pass  # Table may not exist yet
+            except Exception as e:
+                logger.warning(f"Error fetching custom_buyer_types (table may not exist): {e}")
 
             all_buyer_types = DEFAULT_BUYER_TYPES + custom_types
 
@@ -139,8 +139,8 @@ def register_calculator_settings_routes(app, get_db, get_current_user, **kwargs)
                     }
                     for r in rows
                 ]
-            except Exception:
-                pass  # Table may not exist yet
+            except Exception as e:
+                logger.warning(f"Error fetching calculator_buyer_type_assignments (table may not exist): {e}")
 
             return {
                 "calculator_types": CALCULATOR_TYPES,

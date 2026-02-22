@@ -271,6 +271,9 @@ from .los_sync import (
     LosSyncLog,
 )
 
+# Encompass LOS configuration
+from .encompass_config import EncompassConfig
+
 # Compliance models (TRID, ECOA, HMDA)
 from .compliance import (
     LoanFee,
@@ -542,6 +545,11 @@ __all__ = [
     # =====================
     "LosFieldMapping",
     "LosSyncLog",
+
+    # =====================
+    # Encompass LOS Config
+    # =====================
+    "EncompassConfig",
 
     # =====================
     # Compliance (TRID, ECOA, HMDA)

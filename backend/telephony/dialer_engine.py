@@ -21,6 +21,12 @@ from .websocket import ws_manager, DialerEvent
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 class SessionState(str, Enum):
     """Dialer session states"""
@@ -89,7 +95,7 @@ class DialerEngine:
 
     def get_agent_settings(self) -> Optional[Dict[str, Any]]:
         """Get telephony settings for the current agent"""
-        from main import AgentTelephonySettings
+        from database.models import AgentTelephonySettings
 
         settings = self.db.query(AgentTelephonySettings).filter(
             AgentTelephonySettings.user_id == self.agent_id
@@ -128,10 +134,8 @@ class DialerEngine:
         Returns:
             Dict with session info or error
         """
-        from main import (
-            DialerSession, DialerSessionTask, AITask, Lead, Loan,
-            DialerSessionStatus, DialerTaskStatus
-        )
+        from database.enums import DialerSessionStatus, DialerTaskStatus
+        from database.models import DialerSession, DialerSessionTask, AITask, Lead, Loan
 
         # Check if agent has an active session
         existing = self.db.query(DialerSession).filter(
@@ -226,7 +230,7 @@ class DialerEngine:
 
     def get_session_status(self, session_id: int) -> Optional[Dict[str, Any]]:
         """Get current status of a dialer session"""
-        from main import DialerSession, DialerSessionTask
+        from database.models import DialerSession, DialerSessionTask
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id
@@ -277,7 +281,8 @@ class DialerEngine:
         Returns:
             Task info dict or None if no more tasks
         """
-        from main import DialerSessionTask, DialerTaskStatus
+        from database.enums import DialerTaskStatus
+        from database.models import DialerSessionTask
 
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.session_id == session_id,
@@ -315,9 +320,8 @@ class DialerEngine:
         Returns:
             Dict with call result
         """
-        from main import (
-            DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus
-        )
+        from database.enums import DialerSessionStatus, DialerTaskStatus
+        from database.models import DialerSession, DialerSessionTask
 
         # Verify session is active
         session = self.db.query(DialerSession).filter(
@@ -340,10 +344,11 @@ class DialerEngine:
         if not task:
             return {"success": False, "error": "Task not found in session"}
 
-        # Run compliance checks
+        # Run compliance checks (pass lead_id for consent verification)
         compliance_result = self.compliance.full_compliance_check(
             task.contact_phone,
-            self.agent_id
+            self.agent_id,
+            contact_id=getattr(task, 'lead_id', None)
         )
 
         if not compliance_result["can_call"]:
@@ -481,9 +486,8 @@ class DialerEngine:
         Returns:
             Dict with next action
         """
-        from main import (
-            DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus, CallLog, CallOutcome
-        )
+        from database.enums import DialerSessionStatus, DialerTaskStatus, CallOutcome
+        from database.models import DialerSession, DialerSessionTask, CallLog
 
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.id == task_id,
@@ -649,7 +653,7 @@ class DialerEngine:
         Returns:
             Dict with result
         """
-        from main import DialerSessionTask, CallLog
+        from database.models import DialerSessionTask, CallLog
 
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.id == task_id,
@@ -674,7 +678,7 @@ class DialerEngine:
         # Handle callback scheduling
         if schedule_callback and disposition == "callback_scheduled":
             # Create a new AITask for the callback (same model as source tasks)
-            from main import AITask
+            from database.models import AITask
 
             # Create callback task linked to same lead/loan
             callback_task = AITask(
@@ -699,7 +703,8 @@ class DialerEngine:
 
     def pause_session(self, session_id: int) -> Dict[str, Any]:
         """Pause an active session"""
-        from main import DialerSession, DialerSessionStatus
+        from database.enums import DialerSessionStatus
+        from database.models import DialerSession
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id,
@@ -719,7 +724,8 @@ class DialerEngine:
 
     def resume_session(self, session_id: int) -> Dict[str, Any]:
         """Resume a paused session"""
-        from main import DialerSession, DialerSessionStatus
+        from database.enums import DialerSessionStatus
+        from database.models import DialerSession
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id,
@@ -739,7 +745,8 @@ class DialerEngine:
 
     def stop_session(self, session_id: int) -> Dict[str, Any]:
         """Stop a session completely"""
-        from main import DialerSession, DialerSessionStatus, DialerSessionTask
+        from database.enums import DialerSessionStatus
+        from database.models import DialerSession, DialerSessionTask
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id,
@@ -771,7 +778,8 @@ class DialerEngine:
 
     def skip_task(self, session_id: int, task_id: int, reason: str = "manual_skip") -> Dict[str, Any]:
         """Skip a task in the session"""
-        from main import DialerSessionTask, DialerTaskStatus
+        from database.enums import DialerTaskStatus
+        from database.models import DialerSessionTask
 
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.id == task_id,
@@ -822,13 +830,14 @@ def click_to_dial(
     Returns:
         Dict with call result
     """
-    from main import AgentTelephonySettings, CallLog, CallOutcome
+    from database.enums import CallOutcome
+    from database.models import AgentTelephonySettings, CallLog
 
     provider = get_telephony_provider()
     compliance = ComplianceChecker(db_session)
 
-    # Run compliance checks
-    compliance_result = compliance.full_compliance_check(phone_number, agent_id)
+    # Run compliance checks (pass lead_id for consent verification)
+    compliance_result = compliance.full_compliance_check(phone_number, agent_id, contact_id=lead_id)
 
     if not compliance_result["can_call"]:
         return {

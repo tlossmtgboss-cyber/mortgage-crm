@@ -277,7 +277,8 @@ def get_db_with_tenant(org_id: int):
                 f"Background worker: Skipping RLS (non-PostgreSQL database) for org_id={org_id}"
             )
         yield db
-    except Exception:
+    except Exception as e:
+        logger.exception(f"Error in tenant-scoped DB session for org_id={org_id}: {e}")
         db.rollback()
         raise
     finally:
@@ -389,7 +390,8 @@ def _safe_state(obj) -> dict:
             val = getattr(obj, col.key, None)
             state[col.key] = _serialize(val)
         return state
-    except Exception:
+    except Exception as e:
+        logger.exception(f"Failed to extract safe state from ORM object: {e}")
         return {}
 
 

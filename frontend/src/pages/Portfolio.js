@@ -5,6 +5,7 @@ import CalendarSidebar from '../components/CalendarSidebar';
 import RateMonitorWidget from '../components/RateMonitorWidget';
 import { getUserEffectiveRole } from '../config/roleConfig';
 import './Portfolio.css';
+import { toast } from '../utils/toast';
 
 function Portfolio() {
   const navigate = useNavigate();
@@ -231,7 +232,7 @@ function Portfolio() {
            ? error.response.data.detail
            : JSON.stringify(error.response.data.detail))
         : error.message || 'Unknown error';
-      alert('Failed to create MUM client: ' + errorMsg);
+      toast.error('Failed to create MUM client: ' + errorMsg);
     }
   };
 

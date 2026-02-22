@@ -306,7 +306,7 @@ class _UserWithPermissions:
 
 async def get_current_user(request: Request = None, db: Session = Depends(get_db)):
     """Auth dependency using real auth from main, wrapped with permission support."""
-    from main import get_current_user as _main_auth
+    from auth.dependencies import get_current_user as _main_auth
     from fastapi.security import OAuth2PasswordBearer
     _scheme = OAuth2PasswordBearer(tokenUrl="token")
     # Extract token from Authorization header
@@ -473,7 +473,8 @@ async def get_agent_settings(
                     token_limits=TokenLimits(**config.get('token_limits', {})),
                 )
                 cost_estimate = calculate_cost_estimate(mock_settings)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error calculating cost estimate: {e}")
                 pass  # Cost estimate is optional
 
         return success_response(

@@ -26,6 +26,12 @@ import enum
 # Current implementation uses main.py Base
 # from backend.main import Base
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 class SessionStatus(str, enum.Enum):
     """Dialer session states"""

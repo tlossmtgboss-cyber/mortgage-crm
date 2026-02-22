@@ -5,8 +5,11 @@ Tools for the Onboarding Assistant Agent helping new users get started.
 8 tools for user onboarding, setup guidance, and training.
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -356,7 +359,8 @@ def complete_step(
                 "feedback": feedback,
             })
         persisted = True
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error persisting onboarding progress: {e}")
         persisted = False
 
     completion = {

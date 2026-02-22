@@ -4,8 +4,11 @@ Tools for calculating home values, equity positions, amortization,
 maturity dates, and batch updating MUM client valuations.
 """
 
+import logging
 from datetime import datetime, date, timedelta, timezone
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool, ToolResult, ToolError,
@@ -506,7 +509,8 @@ def batch_update_valuations(
                         "equity": round(equity, 2),
                         "ltv": round(ltv, 1),
                     })
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error updating valuation for client {client['id']}: {e}")
                     errors += 1
 
             if not dry_run:

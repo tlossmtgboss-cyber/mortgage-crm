@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function BankAccounts() {
   const navigate = useNavigate();
@@ -141,7 +142,7 @@ function BankAccounts() {
       fetchAccounts();
     } catch (err) {
       console.error('Error saving bank account:', err);
-      alert('Failed to save bank account');
+      toast.error('Failed to save bank account');
     }
   };
 
@@ -153,7 +154,7 @@ function BankAccounts() {
       fetchAccounts();
     } catch (err) {
       console.error('Error updating account:', err);
-      alert('Failed to update account');
+      toast.error('Failed to update account');
     }
   };
 
@@ -161,11 +162,11 @@ function BankAccounts() {
   const handleSync = async (account) => {
     try {
       await accountingAPI.syncBankTransactions(account.id);
-      alert('Sync initiated. Transactions will be updated shortly.');
+      toast.success('Sync initiated. Transactions will be updated shortly.');
       fetchAccounts();
     } catch (err) {
       console.error('Error syncing transactions:', err);
-      alert('Failed to sync transactions');
+      toast.error('Failed to sync transactions');
     }
   };
 

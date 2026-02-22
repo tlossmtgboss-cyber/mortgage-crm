@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 def _get_auth_dep():
     """Get auth dependency at runtime to avoid circular imports."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 router = APIRouter(dependencies=[Depends(_get_auth_dep())])
@@ -99,7 +99,7 @@ from database import get_db
 
 # Import authentication dependency
 try:
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
 except ImportError:
     # Fallback if main not available
     async def get_current_user_flexible():

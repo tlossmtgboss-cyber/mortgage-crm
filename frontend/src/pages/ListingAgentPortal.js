@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
+import { toast } from '../utils/toast';
   authenticateMagicLink,
   validateSession,
   getPortalDashboard,
@@ -166,7 +167,7 @@ const ListingAgentPortal = () => {
       fetchMessages();
     } catch (err) {
       console.error('Failed to send message:', err);
-      alert('Failed to send message. Please try again.');
+      toast.error('Failed to send message. Please try again.');
     } finally {
       setSendingMessage(false);
     }

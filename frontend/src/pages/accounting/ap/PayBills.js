@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function PayBills() {
   const navigate = useNavigate();
@@ -168,12 +169,12 @@ function PayBills() {
   // Handle payment submission
   const handleSubmitPayment = async () => {
     if (selectedBills.length === 0) {
-      alert('Please select at least one bill to pay.');
+      toast.error('Please select at least one bill to pay.');
       return;
     }
 
     if (!paymentForm.bank_account_id) {
-      alert('Please select a bank account.');
+      toast.error('Please select a bank account.');
       return;
     }
 
@@ -202,7 +203,7 @@ function PayBills() {
       fetchPayments();
     } catch (err) {
       console.error('Error creating payment:', err);
-      alert('Failed to create payment');
+      toast.error('Failed to create payment');
     }
   };
 
@@ -214,7 +215,7 @@ function PayBills() {
       fetchPayments();
     } catch (err) {
       console.error('Error voiding payment:', err);
-      alert('Failed to void payment');
+      toast.error('Failed to void payment');
     }
   };
 

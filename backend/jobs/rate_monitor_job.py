@@ -202,7 +202,7 @@ class RateMonitorJob:
 
         # Get MUM client data
         try:
-            from main import MUMClient
+            from database.models import MUMClient
             mum_client = self.db.query(MUMClient).filter(
                 MUMClient.id == target.mum_client_id
             ).first()

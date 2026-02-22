@@ -8,10 +8,14 @@ API endpoints for AI-powered loan file analysis:
 - Batch analysis for pipeline review
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 # Import from main app
 import sys
@@ -247,7 +251,8 @@ async def get_pipeline_readiness(
         """), params)
 
         loans = [dict(row._mapping) for row in result.fetchall()]
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error fetching loans for pipeline readiness: {e}")
         loans = []
 
     # Run quick checks on each loan

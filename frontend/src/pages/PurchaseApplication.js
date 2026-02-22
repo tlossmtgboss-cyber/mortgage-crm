@@ -4,6 +4,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import EmployerAutocomplete from '../components/EmployerAutocomplete';
 import PaymentCalculator from '../components/PaymentCalculator';
 import './AdaptiveURLA.css';
+import { toast } from '../utils/toast';
 
 /**
  * PurchaseApplication - Streamlined Home Purchase Application
@@ -2438,7 +2439,7 @@ export default function PurchaseApplication() {
 
     const handleEmailContinue = async () => {
       if (!userAccount.email || !userAccount.email.includes('@')) {
-        alert('Please enter a valid email address');
+        toast.error('Please enter a valid email address');
         return;
       }
 
@@ -2458,11 +2459,11 @@ export default function PurchaseApplication() {
           setEmailSent(true);
         } else {
           const data = await response.json();
-          alert(data.detail || 'Failed to send login link. Please try again.');
+          toast.error(data.detail || 'Failed to send login link. Please try again.');
         }
       } catch (error) {
         console.error('Email login error:', error);
-        alert('Failed to send login link. Please try again.');
+        toast.error('Failed to send login link. Please try again.');
       } finally {
         setEmailSending(false);
       }
@@ -5434,7 +5435,7 @@ export default function PurchaseApplication() {
                   className="econsent-btn disagree"
                   onClick={() => {
                     setEConsentAgreed(false);
-                    alert('You have chosen not to consent to electronic documents. Paper documents will be mailed to you. You can still proceed with your application.');
+                    toast.success('You have chosen not to consent to electronic documents. Paper documents will be mailed to you. You can still proceed with your application.');
                   }}
                 >
                   I Do Not Agree
@@ -5495,7 +5496,7 @@ export default function PurchaseApplication() {
                   className="econsent-btn disagree"
                   onClick={() => {
                     setCreditAuthAgreed(false);
-                    alert('Credit authorization is required to process your mortgage application. Without it, we cannot verify your creditworthiness.');
+                    toast.error('Credit authorization is required to process your mortgage application. Without it, we cannot verify your creditworthiness.');
                   }}
                 >
                   I Do Not Authorize

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function InvoiceList() {
   const navigate = useNavigate();
@@ -176,7 +177,7 @@ function InvoiceList() {
   // Open edit modal
   const openEditModal = async (invoice) => {
     if (invoice.status !== 'draft') {
-      alert('Only draft invoices can be edited.');
+      toast.error('Only draft invoices can be edited.');
       return;
     }
     setModalMode('edit');
@@ -203,7 +204,7 @@ function InvoiceList() {
       setShowModal(true);
     } catch (err) {
       console.error('Error fetching invoice:', err);
-      alert('Failed to load invoice details.');
+      toast.error('Failed to load invoice details.');
     }
   };
 
@@ -251,7 +252,7 @@ function InvoiceList() {
   // Remove line
   const removeLine = (index) => {
     if (formData.lines.length <= 1) {
-      alert('Invoice must have at least 1 line item.');
+      toast.error('Invoice must have at least 1 line item.');
       return;
     }
     setFormData(prev => ({
@@ -263,7 +264,7 @@ function InvoiceList() {
   // Save invoice
   const handleSave = async (asDraft = true) => {
     if (!formData.customer_id) {
-      alert('Please select a customer.');
+      toast.error('Please select a customer.');
       return;
     }
 
@@ -272,7 +273,7 @@ function InvoiceList() {
     );
 
     if (validLines.length === 0) {
-      alert('Invoice must have at least 1 valid line item.');
+      toast.error('Invoice must have at least 1 valid line item.');
       return;
     }
 
@@ -306,7 +307,7 @@ function InvoiceList() {
       fetchInvoices();
     } catch (err) {
       console.error('Error saving invoice:', err);
-      alert(err.response?.data?.detail || 'Failed to save invoice. Please try again.');
+      toast.error(err.response?.data?.detail || 'Failed to save invoice. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -315,7 +316,7 @@ function InvoiceList() {
   // Send invoice
   const handleSend = async (invoice) => {
     if (invoice.status !== 'draft') {
-      alert('Only draft invoices can be sent.');
+      toast.success('Only draft invoices can be sent.');
       return;
     }
 
@@ -326,14 +327,14 @@ function InvoiceList() {
       fetchInvoices();
     } catch (err) {
       console.error('Error sending invoice:', err);
-      alert('Failed to send invoice.');
+      toast.error('Failed to send invoice.');
     }
   };
 
   // Void invoice
   const handleVoid = async (invoice) => {
     if (invoice.status === 'paid') {
-      alert('Paid invoices cannot be voided.');
+      toast.error('Paid invoices cannot be voided.');
       return;
     }
 
@@ -345,7 +346,7 @@ function InvoiceList() {
       fetchInvoices();
     } catch (err) {
       console.error('Error voiding invoice:', err);
-      alert('Failed to void invoice.');
+      toast.error('Failed to void invoice.');
     }
   };
 

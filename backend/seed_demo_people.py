@@ -19,7 +19,8 @@ import json
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import SessionLocal, logger
+from database import SessionLocal
+from main import logger
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

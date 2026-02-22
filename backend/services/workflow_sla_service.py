@@ -43,7 +43,8 @@ class WorkflowSLAService:
 
     def _load_models(self):
         """Load required models dynamically to avoid circular imports."""
-        from main import Lead, Loan, Task, User, Organization, Base
+        from database import Base
+        from database.models import Lead, Loan, Task, User, Organization
         from workflow_config_models import create_workflow_config_models
         from models.user_onboarding import Role
 

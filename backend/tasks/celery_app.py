@@ -290,7 +290,8 @@ def check_celery_health() -> dict:
                         channel = conn.channel()
                         queue = channel.queue_declare(queue_name, passive=True)
                         result["queues"][queue_name] = queue.message_count
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Error checking queue {queue_name}: {e}")
                     result["queues"][queue_name] = "unknown"
         else:
             result["status"] = "degraded"

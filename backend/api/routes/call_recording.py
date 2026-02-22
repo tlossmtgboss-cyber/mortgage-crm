@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from database.models import User, Task, Lead, Loan
-from main import get_current_user
+from auth.dependencies import get_current_user
 import logging
 import json
 
@@ -328,7 +328,8 @@ def create_followup_task(
         if summary.followUpDate:
             try:
                 due_date = datetime.fromisoformat(summary.followUpDate.replace("Z", "+00:00"))
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to parse followUpDate '{summary.followUpDate}': {e}")
                 due_date = datetime.utcnow() + timedelta(days=1)
         else:
             due_date = datetime.utcnow() + timedelta(days=1)

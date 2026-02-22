@@ -335,7 +335,8 @@ class PortalConnectionManager:
         for conn in all_connections:
             try:
                 await conn.send_json({"type": "PING", "timestamp": datetime.utcnow().isoformat()})
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to send ping to WebSocket connection: {e}")
                 disconnected.append(conn)
 
         for conn in disconnected:

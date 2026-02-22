@@ -172,8 +172,8 @@ class TranscriptionService:
                 "word_count": word_count,
                 "confidence": round(overall_confidence, 4),
             }
-        except Exception:
-            logger.exception("Failed to format Deepgram response")
+        except Exception as e:
+            logger.exception(f"Failed to format Deepgram response: {e}")
             return _empty_transcript()
 
     # ------------------------------------------------------------------
@@ -504,8 +504,8 @@ class WhisperTranscriptionService:
                 "word_count": word_count,
                 "confidence": overall_confidence,
             }
-        except Exception:
-            logger.exception("Failed to format Whisper response")
+        except Exception as e:
+            logger.exception(f"Failed to format Whisper response: {e}")
             return _empty_transcript()
 
     # Expose the same static helpers so callers can use either service

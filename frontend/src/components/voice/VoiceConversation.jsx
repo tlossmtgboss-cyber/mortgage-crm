@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import useVoiceWebSocket from './hooks/useVoiceWebSocket';
 import useAudioRecorder from './hooks/useAudioRecorder';
 import './VoiceConversation.css';
+import { toast } from '../../utils/toast';
 
 const VoiceConversation = () => {
   // Section toggle
@@ -216,13 +217,13 @@ const VoiceConversation = () => {
 
       if (data.success) {
         setSavedVoice(selectedVoice);
-        alert('Voice preference saved! Aria will now use this voice.');
+        toast.success('Voice preference saved! Aria will now use this voice.');
       } else {
-        alert('Failed to save voice preference');
+        toast.error('Failed to save voice preference');
       }
     } catch (error) {
       console.error('Error saving voice:', error);
-      alert('Error saving voice preference');
+      toast.error('Error saving voice preference');
     } finally {
       setSaving(false);
     }

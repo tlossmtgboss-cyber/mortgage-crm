@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
     """Register AI chat routes (autonomous task execution)."""
-    from main import User
+    from database.models import User
 
     # Extract functions passed from main.py via kwargs
     log_ai_action_to_mission_control = kwargs.get('log_ai_action_to_mission_control')
@@ -339,8 +339,8 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                             "iterations": iteration + 1
                         }
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error updating AI action outcome on success: {e}")
 
             return {
                 "success": True,
@@ -361,8 +361,8 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                         outcome="failure",
                         metadata={"error": "Task execution failed"}
                     )
-            except Exception:
-                pass  # Don't fail main response if logging fails
+            except Exception as e:
+                logger.warning(f"Error updating AI action outcome on failure: {e}")
 
             raise HTTPException(status_code=500, detail="Internal server error")
 

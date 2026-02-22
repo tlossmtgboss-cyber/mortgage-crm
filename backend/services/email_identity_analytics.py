@@ -565,7 +565,8 @@ class MonitoringAlerts:
                 else:
                     checks["avg_resolution_time_ok"] = True
                     metrics["avg_resolution_time_ms"] = None
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to query average resolution time: {e}")
                 checks["avg_resolution_time_ok"] = True
                 metrics["avg_resolution_time_ms"] = None
 

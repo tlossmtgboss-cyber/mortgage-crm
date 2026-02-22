@@ -2434,23 +2434,23 @@ async def stream_audio_to_transcript(websocket: WebSocket, session_id: str):
         logger.error(f"[AudioStream] Error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": "Audio stream error"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error sending error message to websocket: {e}")
     finally:
         if deepgram_ws:
             try:
                 await deepgram_ws.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error closing deepgram websocket: {e}")
         if db:
             try:
                 db.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error closing db session: {e}")
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error closing websocket: {e}")
         logger.info(f"[AudioStream] Session {session_id} audio stream closed")
 
 

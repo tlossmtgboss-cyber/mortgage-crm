@@ -17,10 +17,9 @@ from sqlalchemy import func
 from pydantic import BaseModel, EmailStr, field_validator
 
 # Import from main.py
-from main import (
-    get_db, get_current_user,
-    Organization, User, Lead, Loan, Branch
-)
+from auth.dependencies import get_current_user
+from database import get_db
+from database.models import Organization, User, Lead, Loan, Branch
 
 logger = logging.getLogger(__name__)
 

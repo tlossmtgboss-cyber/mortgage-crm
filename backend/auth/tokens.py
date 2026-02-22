@@ -65,7 +65,8 @@ def load_rsa_keys() -> Tuple[Optional[str], Optional[str]]:
             import base64
             try:
                 private_key = base64.b64decode(env_private).decode('utf-8')
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to base64-decode AUTH_PRIVATE_KEY, using raw value: {e}")
                 private_key = env_private
         else:
             private_key = env_private
@@ -75,7 +76,8 @@ def load_rsa_keys() -> Tuple[Optional[str], Optional[str]]:
             import base64
             try:
                 public_key = base64.b64decode(env_public).decode('utf-8')
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to base64-decode AUTH_PUBLIC_KEY, using raw value: {e}")
                 public_key = env_public
         else:
             public_key = env_public

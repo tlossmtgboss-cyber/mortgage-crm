@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PipelineEfficiency.css';
+import { toast } from '../utils/toast';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -187,7 +188,7 @@ function PipelineEfficiency() {
             <option value="90days">Last 90 Days</option>
             <option value="year">Last Year</option>
           </select>
-          <button className="btn-export" onClick={() => alert('Export feature coming soon')}>
+          <button className="btn-export" onClick={() => toast.info('Export feature coming soon')}>
             Export Report
           </button>
         </div>

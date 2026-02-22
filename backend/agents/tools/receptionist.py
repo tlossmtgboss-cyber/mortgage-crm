@@ -5,8 +5,11 @@ Tools for the AI Receptionist Agent handling inbound calls and routing.
 8 tools for call handling, qualification, routing, and callback management.
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -416,8 +419,8 @@ def create_callback_request(
                 "notes": notes,
                 "follow_up": preferred_time,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error writing callback request to DB: {e}")
 
     callback = {
         "callback_id": f"CB-{callback_id}",
@@ -565,8 +568,8 @@ def log_call_interaction(
             row = result.fetchone()
             if row:
                 db_id = row[0]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error writing call log to DB: {e}")
 
     log_entry = {
         "call_id": call_id,

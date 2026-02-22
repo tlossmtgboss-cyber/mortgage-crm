@@ -26,10 +26,16 @@ from models.accounting.core import (
 )
 from models.accounting.budgeting import BudgetTemplate, BudgetItem
 
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 def _get_current_user():
     """Lazy import auth dependency for router-level protection."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 router = APIRouter(

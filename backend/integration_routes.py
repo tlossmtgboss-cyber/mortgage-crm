@@ -175,7 +175,7 @@ async def send_sms(
             raise HTTPException(status_code=500, detail="Failed to send SMS")
 
         # Log SMS in database
-        from main import SMSMessage  # Import model
+        from database.models import SMSMessage
         sms_record = SMSMessage(
             user_id=current_user.id,
             lead_id=request.lead_id,
@@ -214,7 +214,7 @@ async def get_sms_history(
 ):
     """Get SMS message history"""
 
-    from main import SMSMessage
+    from database.models import SMSMessage
 
     query = db.query(SMSMessage).filter(SMSMessage.user_id == current_user.id)
 
@@ -356,7 +356,7 @@ async def sms_webhook(
         logger.info(f"Received SMS from {from_number}: {body}")
 
         # Store incoming SMS
-        from main import SMSMessage
+        from database.models import SMSMessage
         sms_record = SMSMessage(
             to_number=to_number,
             from_number=from_number,
@@ -445,7 +445,7 @@ async def send_email(
             raise HTTPException(status_code=500, detail="Failed to send email")
 
         # Log email
-        from main import EmailMessage
+        from database.models import EmailMessage
         email_record = EmailMessage(
             user_id=current_user.id,
             lead_id=request.lead_id,
@@ -503,7 +503,7 @@ async def email_webhook(
         logger.info(f"Received email from {payload.from_email}: {payload.subject}")
 
         # Store email
-        from main import EmailMessage
+        from database.models import EmailMessage
         email_record = EmailMessage(
             from_email=payload.from_email,
             to_email=payload.to_email,
@@ -570,7 +570,7 @@ async def send_teams_message(
             raise HTTPException(status_code=500, detail="Failed to send Teams message")
 
         # Log Teams message
-        from main import TeamsMessage
+        from database.models import TeamsMessage
         teams_record = TeamsMessage(
             user_id=current_user.id,
             lead_id=request.lead_id,

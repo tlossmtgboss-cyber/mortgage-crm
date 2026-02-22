@@ -297,8 +297,8 @@ class RiskDetectionService:
 
             if results:
                 return [{"date": r.period_start, "capacity_pct": r.capacity_pct or 0} for r in results]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to query capacity history for user {user_id}: {e}")
 
         # Fallback to capacity table
         capacity_query = text("""
@@ -312,8 +312,8 @@ class RiskDetectionService:
             if result:
                 # Return current capacity for all days (no history)
                 return [{"capacity_pct": result.capacity_pct or 0}] * days
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to query fallback capacity for user {user_id}: {e}")
 
         return []
 
@@ -349,7 +349,8 @@ class RiskDetectionService:
 
             # Cap and convert to 0-100 scale
             return min(100, max(0, trend_pct * 2))
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to calculate capacity trend for user {user_id}: {e}")
             return 0
 
     async def _calculate_error_trend(self, user_id: int) -> float:
@@ -380,7 +381,8 @@ class RiskDetectionService:
                 return min(100, increase * 20)  # 5% increase = 100 score
 
             return 0
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to calculate error trend for user {user_id}: {e}")
             return 0
 
     async def _calculate_overtime_pattern(self, user_id: int) -> float:
@@ -404,8 +406,8 @@ class RiskDetectionService:
             if result and result.total_tasks > 0:
                 overtime_pct = (result.after_hours or 0) / result.total_tasks * 100
                 return min(100, overtime_pct * 2)  # 50% after hours = 100 score
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to calculate overtime pattern for user {user_id}: {e}")
 
         return 0
 
@@ -425,8 +427,8 @@ class RiskDetectionService:
 
             if result and result.total > 0:
                 return (result.overdue or 0) / result.total * 100
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to calculate overdue rate for user {user_id}: {e}")
 
         return 0
 
@@ -458,8 +460,8 @@ class RiskDetectionService:
                         return 80  # 90+ days without recorded leave
                     elif days_active > 60:
                         return 50
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to calculate vacation factor for user {user_id}: {e}")
 
         return 30  # Default moderate score
 
@@ -730,7 +732,8 @@ class RiskDetectionService:
                 return 60
 
             return 0
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to calculate performance decline for user {user_id}: {e}")
             return 0
 
     async def _calculate_engagement_drop(self, user_id: int) -> float:
@@ -764,7 +767,8 @@ class RiskDetectionService:
                 return min(100, drop_pct)
 
             return 0
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to calculate engagement drop for user {user_id}: {e}")
             return 0
 
     async def _calculate_chronic_overload(self, user_id: int) -> float:
@@ -792,7 +796,8 @@ class RiskDetectionService:
                     return 30
 
             return 0
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to calculate chronic overload for user {user_id}: {e}")
             return 0
 
     def _calculate_promotion_stagnation(self, user) -> float:
@@ -970,8 +975,8 @@ class RiskDetectionService:
 
                 if backup_result and backup_result.backup_user_ids:
                     backup_users = [{"user_id": uid} for uid in backup_result.backup_user_ids]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to query backup users for role {r.role_name}: {e}")
 
             spof_risks.append(SPOFRisk(
                 user_id=r.user_id,

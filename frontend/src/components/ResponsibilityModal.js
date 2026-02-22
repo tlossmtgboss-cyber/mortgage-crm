@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ResponsibilityModal.css';
+import { toast } from '../utils/toast';
 
 /**
  * ResponsibilityModal - Add/Edit responsibility modal
@@ -137,7 +138,7 @@ function ResponsibilityModal({ responsibility, onSave, onClose, availableSkills,
     e.preventDefault();
 
     if (!newSkill.name.trim()) {
-      alert('Skill name is required');
+      toast.error('Skill name is required');
       return;
     }
 
@@ -156,7 +157,7 @@ function ResponsibilityModal({ responsibility, onSave, onClose, availableSkills,
       setIsDirty(true);
     } catch (error) {
       console.error('Error adding skill:', error);
-      alert(error.message || 'Failed to add skill');
+      toast.error(error.message || 'Failed to add skill');
     } finally {
       setAddingSkill(false);
     }

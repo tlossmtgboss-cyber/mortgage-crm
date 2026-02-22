@@ -159,7 +159,8 @@ async def voice_chat(
         try:
             user_tz = pytz.timezone(user_timezone)
             user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error parsing user timezone: {e}")
             user_timezone = "America/Chicago"
             user_tz = pytz.timezone(user_timezone)
             user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)

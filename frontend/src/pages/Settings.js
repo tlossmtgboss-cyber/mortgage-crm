@@ -22,6 +22,7 @@ import BusinessOpsDashboard from './BusinessOpsDashboard';
 import IntegrationSettings from './IntegrationSettings';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Settings.css';
+import { toast } from '../utils/toast';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -1032,11 +1033,11 @@ function Settings() {
       } else {
         const error = await response.json();
         console.error('[Calendly] OAuth init failed:', error);
-        alert('Failed to initiate Calendly connection. Please try again.');
+        toast.error('Failed to initiate Calendly connection. Please try again.');
       }
     } catch (error) {
       console.error('[Calendly] Error initiating OAuth:', error);
-      alert('Error connecting to Calendly: ' + error.message);
+      toast.error('Error connecting to Calendly: ' + error.message);
     } finally {
       setLoadingCalendly(false);
     }
@@ -1072,14 +1073,14 @@ function Settings() {
         newConnected.delete('calendly');
         setConnectedIntegrations(newConnected);
 
-        alert('Calendly disconnected successfully');
+        toast.success('Calendly disconnected successfully');
       } else {
         const error = await response.json();
-        alert(`Failed to disconnect: ${error.detail || 'Please try again'}`);
+        toast.error(`Failed to disconnect: ${error.detail || 'Please try again'}`);
       }
     } catch (error) {
       console.error('[Calendly] Error disconnecting:', error);
-      alert('Error disconnecting Calendly: ' + error.message);
+      toast.error('Error disconnecting Calendly: ' + error.message);
     } finally {
       setLoadingCalendly(false);
     }
@@ -1105,14 +1106,14 @@ function Settings() {
           syncToSmartScheduler: data.sync_to_smart_scheduler,
           autoCreateContacts: data.auto_create_contacts
         }));
-        alert('Settings updated successfully');
+        toast.success('Settings updated successfully');
       } else {
         const error = await response.json();
-        alert(`Failed to update settings: ${error.detail || 'Please try again'}`);
+        toast.error(`Failed to update settings: ${error.detail || 'Please try again'}`);
       }
     } catch (error) {
       console.error('[Calendly] Error updating settings:', error);
-      alert('Error updating settings: ' + error.message);
+      toast.error('Error updating settings: ' + error.message);
     } finally {
       setLoadingCalendly(false);
     }
@@ -1189,13 +1190,13 @@ function Settings() {
 
   const createCalendarMapping = async () => {
     if (!selectedStage || !selectedEventType) {
-      alert('Please select both a lead stage and a calendar type');
+      toast.error('Please select both a lead stage and a calendar type');
       return;
     }
 
     const eventType = calendlyEventTypes.find(et => et.uri.includes(selectedEventType));
     if (!eventType) {
-      alert('Event type not found');
+      toast.error('Event type not found');
       return;
     }
 
@@ -1215,16 +1216,16 @@ function Settings() {
       });
 
       if (response.ok) {
-        alert('Calendar mapping saved successfully!');
+        toast.success('Calendar mapping saved successfully!');
         setSelectedStage('');
         setSelectedEventType('');
         fetchCalendarMappings();
       } else {
-        alert('Failed to save calendar mapping');
+        toast.error('Failed to save calendar mapping');
       }
     } catch (error) {
       console.error('Error creating calendar mapping:', error);
-      alert('Error saving calendar mapping');
+      toast.error('Error saving calendar mapping');
     }
   };
 
@@ -1260,7 +1261,7 @@ function Settings() {
 
   const createApiKey = async () => {
     if (!newApiKeyName.trim()) {
-      alert('Please enter a name for the API key');
+      toast.error('Please enter a name for the API key');
       return;
     }
 
@@ -1279,15 +1280,15 @@ function Settings() {
         setCreatedKey(data.key);
         setNewApiKeyName('');
         fetchApiKeys();
-        alert('API key created successfully! Make sure to copy it now - you won\'t be able to see it again.');
+        toast.success('API key created successfully! Make sure to copy it now - you won\'t be able to see it again.');
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
         console.error('Failed to create API key:', response.status, errorData);
-        alert(`Failed to create API key: ${errorData.detail || errorData.message || 'Unknown error'}`);
+        toast.error(`Failed to create API key: ${errorData.detail || errorData.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating API key:', error);
-      alert(`Error creating API key: ${error.message}`);
+      toast.error(`Error creating API key: ${error.message}`);
     }
   };
 
@@ -1301,14 +1302,14 @@ function Settings() {
       });
 
       if (response.ok) {
-        alert('API key revoked successfully');
+        toast.success('API key revoked successfully');
         fetchApiKeys();
       } else {
-        alert('Failed to revoke API key');
+        toast.error('Failed to revoke API key');
       }
     } catch (error) {
       console.error('Error revoking API key:', error);
-      alert('Error revoking API key');
+      toast.error('Error revoking API key');
     }
   };
 
@@ -1332,13 +1333,13 @@ const API_BASE_URL = isProduction
       const data = await response.json();
 
       if (data.success) {
-        alert(`✅ Migration Successful!\n\n${data.message}\n\nNow click "Sync Now" to pull in emails.`);
+        toast.success(`✅ Migration Successful!\n\n${data.message}\n\nNow click "Sync Now" to pull in emails.`);
       } else {
-        alert(`❌ Migration Failed:\n\n${data.message || data.error || 'Unknown error'}`);
+        toast.error(`❌ Migration Failed:\n\n${data.message || data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Migration error:', error);
-      alert(`❌ Migration Error:\n\n${error.message}`);
+      toast.error(`❌ Migration Error:\n\n${error.message}`);
     }
   };
 
@@ -1355,13 +1356,13 @@ const API_BASE_URL = isProduction
       const data = await response.json();
 
       if (data.success) {
-        alert(`✅ Success!\n\n${data.message}\n\nGo to Reconciliation tab to see the tasks.`);
+        toast.success(`✅ Success!\n\n${data.message}\n\nGo to Reconciliation tab to see the tasks.`);
       } else {
-        alert(`❌ Failed:\n\n${data.error || 'Unknown error'}`);
+        toast.error(`❌ Failed:\n\n${data.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Create tasks error:', error);
-      alert(`❌ Error:\n\n${error.message}`);
+      toast.error(`❌ Error:\n\n${error.message}`);
     }
   };
 
@@ -1393,7 +1394,7 @@ const API_BASE_URL = isProduction
   const handleAddUser = async (e) => {
     e.preventDefault();
     if (!newUser.email || !newUser.first_name || !newUser.last_name) {
-      alert('First name, last name, and email are required');
+      toast.error('First name, last name, and email are required');
       return;
     }
 
@@ -1457,10 +1458,10 @@ const API_BASE_URL = isProduction
 
       // Reload users list
       await loadUsers();
-      alert('Invitation sent! The user will receive an email to set up their account.');
+      toast.success('Invitation sent! The user will receive an email to set up their account.');
     } catch (err) {
       console.error('Failed to invite user:', err);
-      alert(err.message || 'Failed to invite user');
+      toast.error(err.message || 'Failed to invite user');
     } finally {
       setAddingUser(false);
     }
@@ -1489,7 +1490,7 @@ const API_BASE_URL = isProduction
 
   const handleBulkDelete = async () => {
     if (selectedUsers.length === 0) {
-      alert('No users selected');
+      toast.error('No users selected');
       return;
     }
 
@@ -1581,14 +1582,14 @@ const API_BASE_URL = isProduction
       await loadUsers();
 
       if (failCount === 0) {
-        alert(`Successfully deleted ${successCount} user(s)`);
+        toast.success(`Successfully deleted ${successCount} user(s)`);
       } else {
         const errorDetails = errors.length > 0 ? `\n\nErrors:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n...and ${errors.length - 5} more` : ''}` : '';
-        alert(`Deleted ${successCount} user(s). Failed to delete ${failCount} user(s).${errorDetails}`);
+        toast.error(`Deleted ${successCount} user(s). Failed to delete ${failCount} user(s).${errorDetails}`);
       }
     } catch (err) {
       console.error('Bulk delete failed:', err);
-      alert('Failed to delete users');
+      toast.error('Failed to delete users');
     } finally {
       setDeletingUsers(false);
     }
@@ -1613,7 +1614,7 @@ const API_BASE_URL = isProduction
       await loadUsers();
     } catch (err) {
       console.error('Failed to update user:', err);
-      alert('Failed to update user status');
+      toast.error('Failed to update user status');
     }
   };
 
@@ -1636,7 +1637,7 @@ const API_BASE_URL = isProduction
       await loadUsers();
     } catch (err) {
       console.error('Failed to update user:', err);
-      alert('Failed to update user verification');
+      toast.error('Failed to update user verification');
     }
   };
 
@@ -1660,7 +1661,7 @@ const API_BASE_URL = isProduction
       setEditingUser(null);
     } catch (err) {
       console.error('Failed to update role:', err);
-      alert('Failed to update user role');
+      toast.error('Failed to update user role');
     }
   };
 
@@ -1668,7 +1669,7 @@ const API_BASE_URL = isProduction
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
     if (currentUser.id === userId) {
-      alert('You cannot delete your own account. Please contact another administrator.');
+      toast.error('You cannot delete your own account. Please contact another administrator.');
       return;
     }
 
@@ -1676,7 +1677,7 @@ const API_BASE_URL = isProduction
       const token = localStorage.getItem('token');
 
       if (!token) {
-        alert('You are not authenticated. Please log in again.');
+        toast.error('You are not authenticated. Please log in again.');
         return;
       }
 
@@ -1690,11 +1691,11 @@ const API_BASE_URL = isProduction
         throw new Error(errorData.detail || 'Failed to delete user');
       }
 
-      alert('User deleted successfully');
+      toast.success('User deleted successfully');
       await loadUsers();
     } catch (err) {
       console.error('Failed to delete user:', err);
-      alert(err.message || 'Failed to delete user');
+      toast.error(err.message || 'Failed to delete user');
     }
   };
 
@@ -1816,7 +1817,7 @@ const API_BASE_URL = isProduction
 
   const submitItTicket = async () => {
     if (!newTicket.description.trim()) {
-      alert('Please describe the problem');
+      toast.error('Please describe the problem');
       return;
     }
 
@@ -1834,7 +1835,7 @@ const API_BASE_URL = isProduction
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Ticket created! AI diagnosis: ${data.root_cause}`);
+        toast.success(`Ticket created! AI diagnosis: ${data.root_cause}`);
 
         // Reset form
         setNewTicket({
@@ -1851,11 +1852,11 @@ const API_BASE_URL = isProduction
         fetchItTickets();
       } else {
         const error = await response.json();
-        alert(`Failed to submit ticket: ${error.detail || 'Unknown error'}`);
+        toast.error(`Failed to submit ticket: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error submitting ticket:', error);
-      alert('Error submitting ticket. Please try again.');
+      toast.error('Error submitting ticket. Please try again.');
     } finally {
       setSubmittingTicket(false);
     }
@@ -1872,14 +1873,14 @@ const API_BASE_URL = isProduction
       });
 
       if (response.ok) {
-        alert('Fix approved! You can now execute the commands.');
+        toast.success('Fix approved! You can now execute the commands.');
         fetchItTickets();
       } else {
-        alert('Failed to approve fix');
+        toast.error('Failed to approve fix');
       }
     } catch (error) {
       console.error('Error approving ticket:', error);
-      alert('Error approving ticket');
+      toast.error('Error approving ticket');
     }
   };
 
@@ -1898,16 +1899,16 @@ const API_BASE_URL = isProduction
       });
 
       if (response.ok) {
-        alert('Ticket marked as resolved!');
+        toast.success('Ticket marked as resolved!');
         setResolutionNotes('');
         setSelectedTicket(null);
         fetchItTickets();
       } else {
-        alert('Failed to resolve ticket');
+        toast.error('Failed to resolve ticket');
       }
     } catch (error) {
       console.error('Error resolving ticket:', error);
-      alert('Error resolving ticket');
+      toast.error('Error resolving ticket');
     }
   };
 
@@ -2130,7 +2131,7 @@ const API_BASE_URL = isProduction
       );
 
       if (!popup) {
-        alert('Popup was blocked! Please allow popups for this site and try again.');
+        toast.error('Popup was blocked! Please allow popups for this site and try again.');
         setLoadingGmail(false);
         return;
       }
@@ -2159,7 +2160,7 @@ const API_BASE_URL = isProduction
           if (popup && !popup.closed) {
             popup.close();
           }
-          alert('Gmail connected successfully!');
+          toast.success('Gmail connected successfully!');
         } else if (event.data && event.data.type === 'GMAIL_OAUTH_ERROR') {
           clearInterval(checkPopup);
           window.removeEventListener('message', handleMessage);
@@ -2168,7 +2169,7 @@ const API_BASE_URL = isProduction
           if (popup && !popup.closed) {
             popup.close();
           }
-          alert('Failed to connect Gmail: ' + (event.data.error || 'Unknown error'));
+          toast.error('Failed to connect Gmail: ' + (event.data.error || 'Unknown error'));
         }
       };
 
@@ -2193,9 +2194,9 @@ const API_BASE_URL = isProduction
 
               if (result.type === 'GMAIL_OAUTH_SUCCESS') {
                 await checkGmailStatus();
-                alert('Gmail connected successfully!');
+                toast.success('Gmail connected successfully!');
               } else if (result.type === 'GMAIL_OAUTH_ERROR') {
-                alert('Failed to connect Gmail: ' + (result.error || 'Unknown error'));
+                toast.error('Failed to connect Gmail: ' + (result.error || 'Unknown error'));
               }
               return;
             }
@@ -2214,7 +2215,7 @@ const API_BASE_URL = isProduction
 
     } catch (error) {
       console.error('Error connecting Gmail:', error);
-      alert('Failed to connect Gmail: ' + error.message);
+      toast.error('Failed to connect Gmail: ' + error.message);
       setLoadingGmail(false);
     }
   };
@@ -2243,7 +2244,7 @@ const API_BASE_URL = isProduction
       }
     } catch (error) {
       console.error('Error disconnecting Gmail:', error);
-      alert('Failed to disconnect Gmail');
+      toast.error('Failed to disconnect Gmail');
     }
   };
 
@@ -2304,7 +2305,7 @@ const API_BASE_URL = isProduction
         // Check if popup was blocked
         if (!popup || popup.closed || typeof popup.closed === 'undefined') {
           setLoadingMicrosoft(false);
-          alert('Popup was blocked! Please allow popups for this site and try again.\n\nLook for a popup blocker icon in your browser\'s address bar.');
+          toast.error('Popup was blocked! Please allow popups for this site and try again.\n\nLook for a popup blocker icon in your browser\'s address bar.');
           return;
         }
 
@@ -2330,9 +2331,9 @@ const API_BASE_URL = isProduction
 
                 if (result.type === 'MICROSOFT_OAUTH_SUCCESS') {
                   await checkMicrosoftStatus();
-                  alert('Microsoft 365 connected successfully!');
+                  toast.success('Microsoft 365 connected successfully!');
                 } else if (result.type === 'MICROSOFT_OAUTH_ERROR') {
-                  alert('Failed to connect Microsoft 365: ' + (result.error || 'Unknown error'));
+                  toast.error('Failed to connect Microsoft 365: ' + (result.error || 'Unknown error'));
                 }
                 return;
               }
@@ -2364,7 +2365,7 @@ const API_BASE_URL = isProduction
             }
             setLoadingMicrosoft(false);
             await checkMicrosoftStatus();
-            alert('Microsoft 365 connected successfully!');
+            toast.success('Microsoft 365 connected successfully!');
           } else if (event.data?.type === 'MICROSOFT_OAUTH_ERROR') {
             clearInterval(pollTimer);
             window.removeEventListener('message', handleMessage);
@@ -2373,7 +2374,7 @@ const API_BASE_URL = isProduction
               popup.close();
             }
             setLoadingMicrosoft(false);
-            alert('Failed to connect Microsoft 365: ' + (event.data.error || 'Unknown error'));
+            toast.error('Failed to connect Microsoft 365: ' + (event.data.error || 'Unknown error'));
           }
         };
 
@@ -2395,7 +2396,7 @@ const API_BASE_URL = isProduction
       }
     } catch (error) {
       console.error('Error connecting Microsoft:', error);
-      alert('Failed to connect Microsoft 365: ' + error.message);
+      toast.error('Failed to connect Microsoft 365: ' + error.message);
       setLoadingMicrosoft(false);
     }
   };
@@ -2427,7 +2428,7 @@ const API_BASE_URL = isProduction
       }
     } catch (error) {
       console.error('Error disconnecting Microsoft:', error);
-      alert('Failed to disconnect Microsoft 365');
+      toast.error('Failed to disconnect Microsoft 365');
     }
   };
 
@@ -2444,13 +2445,13 @@ const API_BASE_URL = isProduction
       const data = await response.json();
 
       if (response.ok) {
-        alert(`Sync complete! ${data.processed_count || data.emails_synced || 0} emails processed.`);
+        toast.success(`Sync complete! ${data.processed_count || data.emails_synced || 0} emails processed.`);
         checkMicrosoftStatus();
       } else {
         // Show the actual error from backend
         const errorMsg = data.error || data.detail || 'Sync failed';
         if (errorMsg.includes('not connected')) {
-          alert('Microsoft 365 is not connected. Please connect your account first.');
+          toast.error('Microsoft 365 is not connected. Please connect your account first.');
           checkMicrosoftStatus();
         } else if (errorMsg === 'needs_reauth' || (response.status === 401 && errorMsg.includes('reauth'))) {
           // Token refresh failed - automatically trigger reconnection
@@ -2469,12 +2470,12 @@ const API_BASE_URL = isProduction
             connectMicrosoft365();
           }
         } else {
-          alert(`Sync failed: ${errorMsg}`);
+          toast.error(`Sync failed: ${errorMsg}`);
         }
       }
     } catch (error) {
       console.error('Error syncing Microsoft:', error);
-      alert('Failed to sync Microsoft emails. Please check your connection and try again.');
+      toast.error('Failed to sync Microsoft emails. Please check your connection and try again.');
     } finally {
       setSyncingMicrosoft(false);
     }
@@ -2493,12 +2494,12 @@ const API_BASE_URL = isProduction
       const data = await response.json();
 
       if (response.ok) {
-        alert(`Calendar sync complete! ${data.events_synced || 0} events processed.`);
+        toast.success(`Calendar sync complete! ${data.events_synced || 0} events processed.`);
       } else {
         // Show the actual error from backend
         const errorMsg = data.error || data.detail || 'Calendar sync failed';
         if (errorMsg.includes('not connected')) {
-          alert('Microsoft 365 is not connected. Please connect your account first.');
+          toast.error('Microsoft 365 is not connected. Please connect your account first.');
           checkMicrosoftStatus();
         } else if (errorMsg === 'needs_reauth' || (response.status === 401 && errorMsg.includes('reauth'))) {
           // Token refresh failed - automatically trigger reconnection
@@ -2517,12 +2518,12 @@ const API_BASE_URL = isProduction
             connectMicrosoft365();
           }
         } else {
-          alert(`Calendar sync failed: ${errorMsg}`);
+          toast.error(`Calendar sync failed: ${errorMsg}`);
         }
       }
     } catch (error) {
       console.error('Error syncing calendar:', error);
-      alert('Failed to sync Outlook calendar. Please check your connection and try again.');
+      toast.error('Failed to sync Outlook calendar. Please check your connection and try again.');
     } finally {
       setSyncingCalendar(false);
     }
@@ -2977,13 +2978,13 @@ const API_BASE_URL = isProduction
                           });
                           const data = await response.json();
                           if (response.ok) {
-                            alert(`Gmail sync complete! ${data.processed_count} emails processed.`);
+                            toast.success(`Gmail sync complete! ${data.processed_count} emails processed.`);
                           } else {
-                            alert(`Sync failed: ${data.detail || 'Unknown error'}`);
+                            toast.error(`Sync failed: ${data.detail || 'Unknown error'}`);
                           }
                         } catch (error) {
                           console.error('Gmail sync error:', error);
-                          alert('Failed to sync Gmail');
+                          toast.error('Failed to sync Gmail');
                         } finally {
                           setLoadingGmail(false);
                         }
@@ -4481,7 +4482,7 @@ const API_BASE_URL = isProduction
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(createdKey);
-                          alert('API key copied to clipboard!');
+                          toast.success('API key copied to clipboard!');
                         }}
                         className="btn-copy"
                       >
@@ -4778,7 +4779,7 @@ const API_BASE_URL = isProduction
                                 <button
                                   onClick={() => {
                                     navigator.clipboard.writeText(cmd.command);
-                                    alert('Command copied!');
+                                    toast.success('Command copied!');
                                   }}
                                   className="btn-copy-cmd"
                                 >
@@ -6365,7 +6366,7 @@ const API_BASE_URL = isProduction
 
                       if (response.ok) {
                         const result = await response.json();
-                        alert(`✅ Success! Cleared:\n` +
+                        toast.success(`✅ Success! Cleared:\n` +
                               `- ${result.deleted.tasks || 0} tasks\n` +
                               `- ${result.deleted.ai_tasks || 0} AI tasks\n` +
                               `- ${result.deleted.process_tasks || 0} process tasks\n` +
@@ -6379,11 +6380,11 @@ const API_BASE_URL = isProduction
                               `Your CRM is now ready for workflow-based tasks!`);
                       } else {
                         const error = await response.json();
-                        alert(`❌ Error: ${error.detail || 'Failed to clear data'}`);
+                        toast.error(`❌ Error: ${error.detail || 'Failed to clear data'}`);
                       }
                     } catch (error) {
                       console.error('Error clearing data:', error);
-                      alert(`❌ Error clearing data: ${error.message}`);
+                      toast.error(`❌ Error clearing data: ${error.message}`);
                     }
                   }}
                   style={{
@@ -6501,9 +6502,9 @@ const API_BASE_URL = isProduction
                       <button className="btn-secondary" onClick={async () => {
                         try {
                           const health = await agentAPI.getSystemHealth();
-                          alert(JSON.stringify(health, null, 2));
+                          toast.info(JSON.stringify(health, null, 2));
                         } catch (e) {
-                          alert('Failed to fetch system health: ' + e.message);
+                          toast.error('Failed to fetch system health: ' + e.message);
                         }
                       }}>
                         Run Health Check

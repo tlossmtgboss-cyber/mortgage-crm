@@ -135,7 +135,8 @@ class WorkflowDialerIntegration:
             Dict with session info or error
         """
         try:
-            from main import DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus
+            from database.enums import DialerSessionStatus, DialerTaskStatus
+            from database.models import DialerSession, DialerSessionTask
             from telephony.dialer_engine import DialerEngine
 
             # Use the existing dialer engine for session creation
@@ -361,7 +362,8 @@ class WorkflowDialerIntegration:
             Dict with result
         """
         try:
-            from main import DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus
+            from database.enums import DialerSessionStatus, DialerTaskStatus
+            from database.models import DialerSession, DialerSessionTask
 
             # Verify session exists and is active
             session = self.db.query(DialerSession).filter(

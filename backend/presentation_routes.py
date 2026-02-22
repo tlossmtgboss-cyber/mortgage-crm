@@ -242,7 +242,7 @@ def get_presentation_data(
     Returns home value, loan balance, current rate, and calculated monthly payment.
     """
     # Import here to avoid circular imports
-    from main import Loan
+    from database.models import Loan
 
     loan = db.query(Loan).filter(Loan.id == loan_id).first()
     if not loan:
@@ -586,7 +586,7 @@ def submit_quote_request(
         raise HTTPException(status_code=400, detail=f"Invalid quote type: {request.quote_type}")
 
     # Get loan officer from loan for assignment
-    from main import Loan
+    from database.models import Loan
     loan = db.query(Loan).filter(Loan.id == loan_id).first()
     assigned_to = loan.loan_officer_id if loan else None
 
@@ -727,7 +727,7 @@ def get_pending_quotes_for_user(
     except ImportError:
         raise HTTPException(status_code=501, detail="Presentation models not yet migrated")
 
-    from main import Loan
+    from database.models import Loan
 
     requests = db.query(QuoteRequest).filter(
         QuoteRequest.assigned_to_user_id == user_id,

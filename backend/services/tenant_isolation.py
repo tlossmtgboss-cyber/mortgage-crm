@@ -304,7 +304,7 @@ def filter_leads_by_tenant(
     Returns:
         Filtered query
     """
-    from main import Lead  # Import here to avoid circular imports
+    from database.models import Lead
 
     query = tenant.filter_query(db.query(Lead), Lead)
 
@@ -332,7 +332,7 @@ def filter_loans_by_tenant(
     Returns:
         Filtered query
     """
-    from main import Loan  # Import here to avoid circular imports
+    from database.models import Loan
 
     query = tenant.filter_query(db.query(Loan), Loan)
 
@@ -425,7 +425,7 @@ def backfill_organization_id_for_user(db: Session, user_id: int, organization_id
         user_id: The user ID
         organization_id: The organization ID to set
     """
-    from main import Lead, Loan, Task, Activity, ReferralPartner  # Import here
+    from database.models import Lead, Loan, Task, Activity, ReferralPartner
 
     # Update leads
     db.query(Lead).filter(

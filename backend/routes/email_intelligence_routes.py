@@ -26,6 +26,13 @@ from database import get_db, Base, engine
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 router = APIRouter(prefix="/api/v1/email-intelligence", tags=["email-intelligence"])
 
 
@@ -802,7 +809,7 @@ async def get_current_user_id(
     db: Session = Depends(get_db),
 ) -> int:
     """Extract authenticated user ID from JWT token."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     user = await get_current_user_flexible(token=token, request=request, db=db)
@@ -2373,7 +2380,8 @@ class ConversationIntelligenceService:
         if isinstance(analysis, str):
             try:
                 analysis = json.loads(analysis)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in process_email (parse ai_analysis JSON): {e}")
                 analysis = {}
 
         if not analysis and self.anthropic_api_key:
@@ -2461,8 +2469,8 @@ class ConversationIntelligenceService:
         # Update email status - handle potential transaction failures
         try:
             self.db.rollback()  # Clear any failed transaction state
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error in process_email (pre-update rollback): {e}")
 
         try:
             self.db.execute(text("""
@@ -2488,8 +2496,8 @@ class ConversationIntelligenceService:
             result["errors"].append(f"Status update failed: {str(e)}")
             try:
                 self.db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in process_email (post-update rollback): {e2}")
 
         return result
 
@@ -2639,7 +2647,8 @@ class ConversationIntelligenceService:
             if isinstance(attachments, str):
                 try:
                     attachments = json.loads(attachments)
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error in _apply_disposition (parse attachments JSON): {e}")
                     attachments = []
 
             docs_mentioned = analysis.get('documents_attached', []) or analysis.get('documents_mentioned', [])
@@ -2768,7 +2777,8 @@ class ConversationIntelligenceService:
         if isinstance(received_at, str):
             try:
                 received_at = datetime.fromisoformat(received_at.replace('Z', '+00:00'))
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in _create_sla_tracker (parse received_at): {e}")
                 received_at = datetime.now(timezone.utc)
 
         due_at = received_at + timedelta(hours=sla_hours)
@@ -3009,7 +3019,8 @@ async def batch_process_emails_with_intelligence(
         if isinstance(analysis, str):
             try:
                 analysis = json.loads(analysis)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in batch_process_emails_with_intelligence (parse analysis JSON): {e}")
                 analysis = {}
 
         try:
@@ -3160,8 +3171,8 @@ async def get_sla_tracking(
             if isinstance(due_at, str):
                 try:
                     due_at = datetime.fromisoformat(due_at.replace('Z', '+00:00'))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error in get_sla_tracking (parse due_at): {e}")
             if isinstance(due_at, datetime):
                 is_overdue = due_at < datetime.now(timezone.utc)
 

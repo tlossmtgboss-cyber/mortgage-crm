@@ -33,33 +33,33 @@ router = APIRouter(prefix="/api/v1", tags=["permissions"])
 # =============================================================================
 
 def _get_user_model():
-    from main import User
+    from database.models import User
     return User
 
 def _get_lead_model():
-    from main import Lead
+    from database.models import Lead
     return Lead
 
 def _get_loan_model():
-    from main import Loan
+    from database.models import Loan
     return Loan
 
 def _get_mum_client_model():
-    from main import MUMClient
+    from database.models import MUMClient
     return MUMClient
 
 def _get_audit_log_model():
-    from main import AuditLog
+    from database.models import AuditLog
     return AuditLog
 
 def _get_current_user():
-    from main import get_current_user
+    from auth.dependencies import get_current_user
     return get_current_user
 
 
 async def _current_user_dep(request: Request, db: Session = Depends(get_db)):
     """Proper FastAPI dependency that resolves to the actual user object."""
-    from main import get_current_user
+    from auth.dependencies import get_current_user
     auth = request.headers.get("Authorization", "")
     token = auth[7:] if auth.startswith("Bearer ") else ""
     return await get_current_user(token, request, db)
@@ -251,8 +251,8 @@ def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:
         logger.error(f"Get user permissions error for user {user_id}: {e}")
         try:
             db.rollback()  # Recover from SQL errors (e.g., missing table)
-        except Exception:
-            pass  # Session may be in an invalid state
+        except Exception as e:
+            logger.error(f"Error during rollback in get_user_permissions: {e}")
         return {}
 
 

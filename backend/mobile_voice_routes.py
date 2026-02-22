@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any, AsyncGenerator, TYPE_CHECKING
 import uuid
 
 if TYPE_CHECKING:
-    from main import User
+    from database.models import User
 
 # Database and auth imports
 from database import get_db
@@ -313,7 +313,7 @@ class AriaVoiceAgent:
             # - Pre-approval letter generation
             # - And much more
             from agents.service import AIAgentService
-            from main import User
+            from database.models import User
             from sqlalchemy import text
 
             logger.info(f"[AriaVoiceAgent] Processing via orchestrator: '{transcript}' for user {self.user_id}")
@@ -716,14 +716,14 @@ async def mobile_voice_websocket(
                 "type": "error",
                 "message": "Internal server error"
             })
-        except Exception:
-            pass  # Client may have disconnected
+        except Exception as e:
+            logger.warning(f"Error sending error to WebSocket client: {e}")
 
     finally:
         try:
             await session.close()
-        except Exception:
-            pass  # Session may already be closed
+        except Exception as e:
+            logger.warning(f"Error closing voice session: {e}")
 
 
 # =============================================================================
@@ -873,7 +873,7 @@ async def get_current_user_lazy(
     db: Session = Depends(get_db)
 ):
     """Get current user with lazy import to avoid circular import issues"""
-    from main import get_current_user
+    from auth.dependencies import get_current_user
     return await get_current_user(token, request, db)
 
 

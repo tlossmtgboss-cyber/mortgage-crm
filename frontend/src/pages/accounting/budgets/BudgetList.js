@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function BudgetList() {
   const navigate = useNavigate();
@@ -252,7 +253,7 @@ function BudgetList() {
       fetchBudgets();
     } catch (err) {
       console.error('Error saving budget:', err);
-      alert('Failed to save budget');
+      toast.error('Failed to save budget');
     }
   };
 
@@ -264,7 +265,7 @@ function BudgetList() {
       fetchBudgets();
     } catch (err) {
       console.error('Error approving budget:', err);
-      alert('Failed to approve budget');
+      toast.error('Failed to approve budget');
     }
   };
 
@@ -276,7 +277,7 @@ function BudgetList() {
       fetchBudgets();
     } catch (err) {
       console.error('Error deleting budget:', err);
-      alert('Failed to delete budget');
+      toast.error('Failed to delete budget');
     }
   };
 
@@ -291,7 +292,7 @@ function BudgetList() {
       fetchBudgets();
     } catch (err) {
       console.error('Error copying budget:', err);
-      alert('Failed to copy budget');
+      toast.error('Failed to copy budget');
     }
   };
 

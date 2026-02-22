@@ -8,10 +8,14 @@ Provides REST API for:
 - Webhook handling
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 from services.vidyard_service import (
     get_vidyard_service,
@@ -296,7 +300,8 @@ async def handle_webhook(
     """
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error parsing JSON in handle_webhook: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     result = service.handle_webhook(payload)

@@ -3,9 +3,12 @@ Perennia AI - Pipeline Analysis Tools
 Tools for the Pipeline Analyst agent to track and analyze loan pipeline metrics.
 """
 
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool, ToolResult, ToolError,
@@ -479,9 +482,9 @@ def predict_closing_timeline(
             """
             avg_times_result = execute_query(avg_times_query)
             avg_times = {row["stage"]: row["avg_days"] or SLA_TARGETS.get(row["stage"], 3) for row in avg_times_result}
-        except Exception:
+        except Exception as e:
             # Table may not exist, use defaults
-            pass
+            logger.warning(f"Error querying stage_history for avg times: {e}")
 
         # Fill in defaults for missing stages
         for stage_name, sla in SLA_TARGETS.items():
@@ -800,9 +803,9 @@ def compare_to_benchmark(
             """
             stage_times = execute_query(stage_times_query, params)
             stage_time_dict = {row["stage"]: row["avg_days"] for row in stage_times}
-        except Exception:
+        except Exception as e:
             # Table may not exist, use empty dict (will fall back to defaults below)
-            pass
+            logger.warning(f"Error querying stage_history for benchmark times: {e}")
 
         comparisons = []
 

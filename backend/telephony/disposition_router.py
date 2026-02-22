@@ -11,9 +11,16 @@ import base64
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 # Import dependencies directly from main
-from main import get_db, get_current_user
+from auth.dependencies import get_current_user
+from database import get_db
 
 
 # Keep set_dependencies for backwards compatibility (no-op now)
@@ -47,10 +54,8 @@ async def submit_task_disposition(
     - Auto-task creation for follow-ups and referrals
     - DNC flag handling
     """
-    from main import (
-        DialerSessionTask, CallLog, DialerSession, DialerSessionStatus,
-        Task, Lead as Contact
-    )
+    from database.enums import DialerSessionStatus
+    from database.models import DialerSessionTask, CallLog, DialerSession, Task, Lead as Contact
     from telephony.websocket import ws_manager
     from telephony.dialer_engine import DialerEngine
 
@@ -204,7 +209,7 @@ async def submit_call_log_disposition(
 
     Use this endpoint for standalone calls (not part of a dialer session)
     """
-    from main import CallLog, Task, Lead as Contact
+    from database.models import CallLog, Task, Lead as Contact
 
     call_log = db.query(CallLog).filter(
         CallLog.id == call_log_id,

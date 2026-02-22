@@ -27,6 +27,12 @@ def _safe_column_name(col: str) -> str:
         return col
     return ''
 
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 router = APIRouter(prefix="/api/v1/circle-of-cashflow", tags=["circle-of-cashflow"], dependencies=[Depends(require_auth)])
 
 # Pydantic Models
@@ -82,7 +88,7 @@ class ReferralCreate(BaseModel):
 
 # Database dependency
 def get_db():
-    from main import engine
+    from database import engine
     from sqlalchemy.orm import sessionmaker
     SessionLocal = sessionmaker(bind=engine)
     db = SessionLocal()

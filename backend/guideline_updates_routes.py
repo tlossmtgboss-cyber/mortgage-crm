@@ -22,7 +22,7 @@ async def get_current_user_lazy(
     db: Session = Depends(get_db)
 ):
     """Lazy import auth dependency to avoid circular imports"""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return await _get_current_user_flexible(request, db)
 
 

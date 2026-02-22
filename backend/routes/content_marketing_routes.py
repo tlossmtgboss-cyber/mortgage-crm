@@ -34,54 +34,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 # ============================================================================
 # AUTH DEPENDENCY
 # ============================================================================
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """
-    Extract current user from JWT token in Authorization header.
-    Falls back to the first admin user for backward compatibility.
-    """
+    """Get current user -- delegates to canonical auth."""
+    from auth.dependencies import get_current_user as _main_get_current_user
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-
-    if token:
-        try:
-            import jwt as pyjwt
-            import os
-            secret = os.getenv("SECRET_KEY", "your-secret-key")
-            payload = pyjwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
-            email = payload.get("sub")
-            if email:
-                user = db.execute(
-                    text("SELECT * FROM users WHERE email = :email"),
-                    {"email": email}
-                ).fetchone()
-                if user:
-                    return user
-        except Exception:
-            pass
-
-        # Try API key
-        if token.startswith("sk_"):
-            try:
-                api_key = db.execute(
-                    text("SELECT user_id FROM api_keys WHERE key = :key AND is_active = true"),
-                    {"key": token}
-                ).fetchone()
-                if api_key:
-                    user = db.execute(
-                        text("SELECT * FROM users WHERE id = :id"),
-                        {"id": api_key.user_id}
-                    ).fetchone()
-                    if user:
-                        return user
-            except Exception:
-                pass
-
-    raise HTTPException(status_code=401, detail="Authentication required")
+    return await _main_get_current_user(token=token, request=request, db=db)
 
 
 router = APIRouter(

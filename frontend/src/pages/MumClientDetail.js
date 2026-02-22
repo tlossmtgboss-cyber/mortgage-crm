@@ -17,6 +17,7 @@ import EscalationModal from '../components/EscalationModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import RateMonitorWidget from '../components/RateMonitorWidget';
 import './LeadDetail.css';
+import { toast } from '../utils/toast';
 
 // Mock lead data generator (same as Leads.js)
 const generateMockLeads = () => {
@@ -201,7 +202,7 @@ function MumClientDetail() {
 
         if (!clientData) {
           console.error('❌ Lead not found in mock data');
-          alert('Failed to load lead details');
+          toast.error('Failed to load lead details');
           navigate('/portfolio');
           return;
         }
@@ -248,7 +249,7 @@ function MumClientDetail() {
       setBorrowers(borrowersList);
     } catch (error) {
       console.error('Failed to load lead data:', error);
-      alert('Failed to load lead details');
+      toast.error('Failed to load lead details');
       navigate('/mum');
     } finally {
       setLoading(false);
@@ -331,10 +332,10 @@ function MumClientDetail() {
       }
 
       setEditing(false);
-      alert('Lead updated successfully!');
+      toast.success('Lead updated successfully!');
     } catch (error) {
       console.error('Failed to update lead:', error);
-      alert('Failed to update lead');
+      toast.error('Failed to update lead');
     }
   };
 
@@ -432,7 +433,7 @@ function MumClientDetail() {
       console.error('Failed to add note:', error);
       console.error('Error response:', error.response?.data);
       const errorMsg = error.response?.data?.detail || 'Failed to add note. Please check console for details.';
-      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      toast.error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setNoteLoading(false);
     }
@@ -520,12 +521,12 @@ function MumClientDetail() {
         setFormData(newBorrower.data);
       }
 
-      alert(`${fullName} has been added successfully!`);
+      toast.success(`${fullName} has been added successfully!`);
     } catch (error) {
       console.error('Failed to add borrower:', error);
       console.error('Error response:', error.response?.data);
       const errorMsg = error.response?.data?.detail || error.message || 'Failed to add borrower. Please check console for details.';
-      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      toast.error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     }
   };
 
@@ -534,7 +535,7 @@ function MumClientDetail() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      toast.error('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
       return;
     }
 
@@ -564,9 +565,9 @@ function MumClientDetail() {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       if (event.error === 'no-speech') {
-        alert('No speech detected. Please try again.');
+        toast.error('No speech detected. Please try again.');
       } else {
-        alert(`Error occurred: ${event.error}`);
+        toast.error(`Error occurred: ${event.error}`);
       }
     };
 
@@ -616,7 +617,7 @@ function MumClientDetail() {
           const appUrl = `${window.location.origin}/apply/refinance`;
           window.open(appUrl, '_blank');
         } else {
-          alert('Client email is required to send application');
+          toast.error('Client email is required to send application');
         }
         break;
       case 'client_portal':
@@ -631,7 +632,7 @@ function MumClientDetail() {
           }
         } catch (error) {
           console.error('Failed to open client portal:', error);
-          alert('Failed to open client portal. Please try again.');
+          toast.error('Failed to open client portal. Please try again.');
         }
         break;
       case 'escalation':

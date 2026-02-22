@@ -237,7 +237,8 @@ CREATE TABLE {table}_default PARTITION OF {table}_partitioned DEFAULT;
                     "partition_ready": ready,
                     "partition_type": "hash" if table in cls.HASH_PARTITION_TABLES else "time",
                 })
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to query partition readiness for table '{table}': {e}")
                 results.append({"table": table, "estimated_rows": 0, "partition_ready": False})
 
         return {

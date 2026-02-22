@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { partnersAPI, leadsAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import './ReferralPartnerDetail.css';
+import { toast } from '../utils/toast';
 
 // Mock referral partners data
 const generateMockPartners = () => {
@@ -96,7 +97,7 @@ function ReferralPartnerDetail() {
 
         if (is404) {
           // Partner genuinely doesn't exist - show error and redirect
-          alert('Referral partner not found. This partner may have been deleted or the ID is incorrect.');
+          toast.error('Referral partner not found. This partner may have been deleted or the ID is incorrect.');
           navigate('/referral-partners');
           return;
         }
@@ -107,7 +108,7 @@ function ReferralPartnerDetail() {
         partnerData = mockPartners.find(p => p.id === parseInt(id));
 
         if (!partnerData) {
-          alert('Referral partner not found');
+          toast.error('Referral partner not found');
           navigate('/referral-partners');
           return;
         }
@@ -126,7 +127,7 @@ function ReferralPartnerDetail() {
       setReferrals(partnerReferrals);
     } catch (error) {
       console.error('Failed to load partner data:', error);
-      alert('Failed to load referral partner details');
+      toast.error('Failed to load referral partner details');
       navigate('/referral-partners');
     } finally {
       setLoading(false);
@@ -194,10 +195,10 @@ function ReferralPartnerDetail() {
       // Reload partner data to show the newly assigned lead
       await loadPartnerData();
 
-      alert(`${lead.name} has been added to ${partner.name}'s ${categoryNames[searchCategory]}!`);
+      toast.success(`${lead.name} has been added to ${partner.name}'s ${categoryNames[searchCategory]}!`);
     } catch (error) {
       console.error('Failed to assign lead:', error);
-      alert('Failed to assign lead to partner. Please try again.');
+      toast.error('Failed to assign lead to partner. Please try again.');
     }
   };
 
@@ -320,10 +321,10 @@ function ReferralPartnerDetail() {
       await partnersAPI.update(id, dataToSave);
       setPartner(prev => ({ ...prev, ...dataToSave }));
       setShowEditModal(false);
-      alert('Partner profile updated successfully!');
+      toast.success('Partner profile updated successfully!');
     } catch (error) {
       console.error('Failed to save partner:', error);
-      alert('Failed to save partner. Please try again.');
+      toast.error('Failed to save partner. Please try again.');
     } finally {
       setSaving(false);
     }

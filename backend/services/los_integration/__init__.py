@@ -26,6 +26,7 @@ from .base import BaseLOSClient, LOSConfig, LOSSyncStatus, LOSFieldMapping
 from .encompass_client import EncompassClient
 from .sync_service import LOSSyncService
 from .error_handler import LOSErrorHandler, LOSCircuitBreaker, LOSError, LOSRetryableError
+from .encompass_oauth_service import EncompassOAuthService
 
 __all__ = [
     "BaseLOSClient",
@@ -38,4 +39,5 @@ __all__ = [
     "LOSCircuitBreaker",
     "LOSError",
     "LOSRetryableError",
+    "EncompassOAuthService",
 ]

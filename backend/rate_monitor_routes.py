@@ -144,7 +144,7 @@ class AlertResponse(BaseModel):
 
 def get_current_user_flexible():
     """Lazy import auth dependency."""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 
@@ -188,7 +188,7 @@ async def list_targets(
 
         # Get MUM client info
         try:
-            from main import MUMClient
+            from database.models import MUMClient
             mum_client = db.query(MUMClient).filter(MUMClient.id == target.mum_client_id).first()
             if mum_client:
                 target_dict['client_name'] = mum_client.client_name
@@ -227,7 +227,7 @@ async def create_target(
     # Verify MUM client exists (if provided)
     if request.mum_client_id:
         try:
-            from main import MUMClient
+            from database.models import MUMClient
             mum_client = db.query(MUMClient).filter(MUMClient.id == request.mum_client_id).first()
             if not mum_client:
                 raise HTTPException(404, f"MUM client {request.mum_client_id} not found")
@@ -429,7 +429,7 @@ async def check_target_opportunity(
     # If linked to MUM client, get data from there
     if target.mum_client_id:
         try:
-            from main import MUMClient
+            from database.models import MUMClient
             mum_client = db.query(MUMClient).filter(MUMClient.id == target.mum_client_id).first()
             if mum_client:
                 client_name = mum_client.client_name
@@ -511,7 +511,7 @@ async def check_opportunity(
     """
     # Get MUM client
     try:
-        from main import MUMClient
+        from database.models import MUMClient
         mum_client = db.query(MUMClient).filter(MUMClient.id == mum_client_id).first()
         if not mum_client:
             raise HTTPException(404, f"MUM client {mum_client_id} not found")
@@ -604,7 +604,7 @@ async def list_alerts(
         alert_dict = alert.to_dict()
 
         try:
-            from main import MUMClient
+            from database.models import MUMClient
             mum_client = db.query(MUMClient).filter(MUMClient.id == alert.mum_client_id).first()
             if mum_client:
                 alert_dict['client_name'] = mum_client.client_name
@@ -639,7 +639,7 @@ async def get_alert(
 
     # Get MUM client info
     try:
-        from main import MUMClient
+        from database.models import MUMClient
         mum_client = db.query(MUMClient).filter(MUMClient.id == alert.mum_client_id).first()
         if mum_client:
             result['client'] = {
@@ -714,7 +714,7 @@ async def initiate_call(
 
     # Get MUM client
     try:
-        from main import MUMClient
+        from database.models import MUMClient
         mum_client = db.query(MUMClient).filter(MUMClient.id == alert.mum_client_id).first()
         if not mum_client:
             raise HTTPException(404, "MUM client not found")
@@ -793,7 +793,7 @@ async def test_call_target(
     # If linked to MUM client, get data from there
     if target.mum_client_id and not phone:
         try:
-            from main import MUMClient
+            from database.models import MUMClient
             mum_client = db.query(MUMClient).filter(MUMClient.id == target.mum_client_id).first()
             if mum_client:
                 phone = mum_client.phone
@@ -1114,7 +1114,8 @@ async def get_dashboard(
             active_monitors = db.query(RateMonitorTarget).filter(
                 RateMonitorTarget.is_active == True
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (active_monitors): {e}")
             active_monitors = 0
 
         # Auto-call enabled
@@ -1123,7 +1124,8 @@ async def get_dashboard(
                 RateMonitorTarget.is_active == True,
                 RateMonitorTarget.auto_call_enabled == True
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (auto_call_enabled): {e}")
             auto_call_enabled = 0
 
         # Pending alerts
@@ -1131,7 +1133,8 @@ async def get_dashboard(
             pending_alerts = db.query(RateMonitorAlert).filter(
                 RateMonitorAlert.status == 'pending'
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (pending_alerts): {e}")
             pending_alerts = 0
 
         # Alerts by priority
@@ -1140,7 +1143,8 @@ async def get_dashboard(
                 RateMonitorAlert.status == 'pending',
                 RateMonitorAlert.priority == 'high'
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (high_priority): {e}")
             high_priority = 0
 
         # Alerts triggered today
@@ -1149,7 +1153,8 @@ async def get_dashboard(
             alerts_today = db.query(RateMonitorAlert).filter(
                 func.date(RateMonitorAlert.created_at) == today
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (alerts_today): {e}")
             alerts_today = 0
 
         # Conversions this month
@@ -1159,7 +1164,8 @@ async def get_dashboard(
                 RateMonitorAlert.converted_to_application == True,
                 RateMonitorAlert.conversion_date >= first_of_month
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (conversions): {e}")
             conversions = 0
 
         # Calls made this month
@@ -1168,7 +1174,8 @@ async def get_dashboard(
                 RateMonitorAlert.auto_call_attempted == True,
                 RateMonitorAlert.created_at >= datetime.combine(first_of_month, datetime.min.time())
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (calls_made): {e}")
             calls_made = 0
 
         # Appointments scheduled this month
@@ -1177,7 +1184,8 @@ async def get_dashboard(
                 RateMonitorAlert.appointment_scheduled_at.isnot(None),
                 RateMonitorAlert.appointment_scheduled_at >= datetime.combine(first_of_month, datetime.min.time())
             ).count()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (appointments): {e}")
             appointments = 0
 
         # Total potential savings from pending alerts
@@ -1185,14 +1193,16 @@ async def get_dashboard(
             pending_savings = db.query(func.sum(RateMonitorAlert.monthly_savings)).filter(
                 RateMonitorAlert.status == 'pending'
             ).scalar() or 0
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (pending_savings): {e}")
             pending_savings = 0
 
         # Get current rates for display
         try:
             service = OptimalBlueService(db)
             rates = await service.get_current_rates()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in get_dashboard (current_rates): {e}")
             rates = {'30_year': {'rate': None, 'is_mock': True}, '15_year': {'rate': None, 'is_mock': True}}
 
         return {

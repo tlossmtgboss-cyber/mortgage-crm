@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAuthHeaders } from '../../utils/auth';
 import './InviteManagementTable.css';
+import { toast } from '../../utils/toast';
 
 const InviteManagementTable = ({ onInviteNew }) => {
   const [invites, setInvites] = useState([]);
@@ -48,11 +49,11 @@ const InviteManagementTable = ({ onInviteNew }) => {
       if (response.ok) {
         loadInvites();
       } else {
-        alert('Failed to revoke invite');
+        toast.error('Failed to revoke invite');
       }
     } catch (error) {
       console.error('Error revoking invite:', error);
-      alert('Failed to revoke invite');
+      toast.error('Failed to revoke invite');
     } finally {
       setActionLoading(null);
     }

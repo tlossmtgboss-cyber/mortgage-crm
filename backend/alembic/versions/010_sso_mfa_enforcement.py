@@ -16,6 +16,9 @@ Enterprise Readiness:
 
 from alembic import op
 import sqlalchemy as sa
+import logging
+
+logger = logging.getLogger(__name__)
 
 # revision identifiers, used by Alembic
 revision = '010_sso_mfa_enforcement'
@@ -54,8 +57,8 @@ def upgrade():
         for col, col_type in [("sso_enforced", "BOOLEAN"), ("mfa_required", "BOOLEAN")]:
             try:
                 op.add_column("organizations", sa.Column(col, sa.Boolean(), server_default="false"))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error adding column {col} to organizations (may already exist): {e}")
     else:
         for col in ["sso_enforced", "mfa_required"]:
             if not _column_exists(conn, "organizations", col):
@@ -70,8 +73,8 @@ def upgrade():
         for col_name, col_type in user_cols:
             try:
                 op.add_column("users", sa.Column(col_name, col_type, nullable=True))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error adding column {col_name} to users (may already exist): {e}")
     else:
         for col_name, col_type in user_cols:
             if not _column_exists(conn, "users", col_name):

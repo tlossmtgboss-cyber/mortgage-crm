@@ -1112,7 +1112,8 @@ def get_morning_briefing(db: Session, user_id: int) -> Dict[str, Any]:
             AND created_at > NOW() - INTERVAL '24 hours'
         """)
         recent_count = db.execute(count_query, {"user_id": user_id}).scalar() or 0
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error getting recent email count: {e}")
         recent_count = 0
 
     briefing = {

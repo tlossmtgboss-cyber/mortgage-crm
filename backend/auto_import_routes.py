@@ -33,8 +33,9 @@ from database import get_db, SessionLocal
 # Import get_current_user - catch any exception (not just ImportError) because
 # running via `python3 main.py` causes __main__ vs main module name conflict
 try:
-    from main import get_current_user
-except Exception:
+    from auth.dependencies import get_current_user
+except Exception as e:
+    logger.exception(f"Failed to import get_current_user from main: {e}")
     from fastapi import HTTPException as _HTTPException
     async def get_current_user():
         raise _HTTPException(status_code=503, detail="Authentication service not initialized")
@@ -913,13 +914,13 @@ async def get_import_history(
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close database cursor: {e}")
         if conn:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to close database connection: {e}")
 
 
 @router.get("/field-mappings")

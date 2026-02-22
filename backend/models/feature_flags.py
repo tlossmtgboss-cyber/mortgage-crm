@@ -10,7 +10,7 @@ import enum
 # Will be imported from main.py's Base
 def get_base():
     """Lazy import to avoid circular dependencies"""
-    from main import Base
+    from database import Base
     return Base
 
 

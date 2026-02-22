@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { processTemplatesAPI } from '../services/api';
 import './ProcessTemplates.css';
+import { toast } from '../utils/toast';
 
 function ProcessTemplates() {
   const [roles, setRoles] = useState([]);
@@ -85,7 +86,7 @@ function ProcessTemplates() {
       setEditingTask(null);
     } catch (error) {
       console.error('Error updating task:', error);
-      alert('Failed to update task');
+      toast.error('Failed to update task');
     }
   };
 
@@ -105,7 +106,7 @@ function ProcessTemplates() {
       });
     } catch (error) {
       console.error('Error adding task:', error);
-      alert('Failed to add task');
+      toast.error('Failed to add task');
     }
   };
 
@@ -115,7 +116,7 @@ function ProcessTemplates() {
       await loadTemplates(selectedRole);
     } catch (error) {
       console.error('Error deleting task:', error);
-      alert('Failed to delete task');
+      toast.error('Failed to delete task');
     }
   };
 

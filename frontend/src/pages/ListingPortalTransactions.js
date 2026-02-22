@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+import { toast } from '../utils/toast';
   listTransactions,
   createTransaction,
   formatCurrency,
@@ -99,7 +100,7 @@ const ListingPortalTransactions = () => {
   const handleCreateTransaction = async (e) => {
     e.preventDefault();
     if (!createForm.loan_id || !createForm.property_address) {
-      alert('Please select a loan and enter a property address');
+      toast.error('Please select a loan and enter a property address');
       return;
     }
 
@@ -124,7 +125,7 @@ const ListingPortalTransactions = () => {
       fetchTransactions();
     } catch (err) {
       console.error('Failed to create transaction:', err);
-      alert('Failed to create transaction: ' + err.message);
+      toast.error('Failed to create transaction: ' + err.message);
     } finally {
       setCreating(false);
     }

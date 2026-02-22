@@ -11,6 +11,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import avatarApi, { AVATAR_STATUS, JOB_STATUS, EMOTIONS } from '../services/avatarApi';
 import vidyardApi, { VIDYARD_STATUS, VIDYARD_VIDEO_STATUS, VIDYARD_LANGUAGES } from '../services/vidyardApi';
 import './AvatarStudio.css';
+import { toast } from '../utils/toast';
 
 // Provider options
 const PROVIDERS = {
@@ -152,7 +153,7 @@ const VidyardVideoGenerator = ({ onJobCreated }) => {
       });
 
       if (result.error) {
-        alert('Generation failed: ' + result.message);
+        toast.error('Generation failed: ' + result.message);
         setGenerating(false);
         return;
       }
@@ -165,11 +166,11 @@ const VidyardVideoGenerator = ({ onJobCreated }) => {
         }
       );
 
-      alert('Video generated successfully!');
+      toast.success('Video generated successfully!');
       if (onJobCreated) onJobCreated();
     } catch (error) {
       console.error('Generation failed:', error);
-      alert('Generation failed: ' + error.message);
+      toast.error('Generation failed: ' + error.message);
     } finally {
       setGenerating(false);
       setJobStatus(null);
@@ -334,7 +335,7 @@ const CreateAvatarModal = ({ onClose, onCreate }) => {
       onClose();
     } catch (error) {
       console.error('Failed to create avatar:', error);
-      alert('Failed to create avatar: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to create avatar: ' + (error.response?.data?.detail || error.message));
     } finally {
       setLoading(false);
     }
@@ -410,13 +411,13 @@ const VideoUpload = ({ avatar, onUploadComplete }) => {
     // Validate file type
     const validTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
     if (!validTypes.includes(selectedFile.type)) {
-      alert('Please upload a valid video file (MP4, MOV, or WebM)');
+      toast.error('Please upload a valid video file (MP4, MOV, or WebM)');
       return;
     }
 
     // Validate file size (max 500MB)
     if (selectedFile.size > 500 * 1024 * 1024) {
-      alert('File size must be less than 500MB');
+      toast.error('File size must be less than 500MB');
       return;
     }
 
@@ -434,7 +435,7 @@ const VideoUpload = ({ avatar, onUploadComplete }) => {
       onUploadComplete();
     } catch (error) {
       console.error('Upload failed:', error);
-      alert('Upload failed: ' + (error.response?.data?.detail || error.message));
+      toast.error('Upload failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setUploading(false);
       setFile(null);
@@ -597,7 +598,7 @@ const VoicePreview = ({ avatar }) => {
       setAudioUrl(result.preview?.audio_url);
     } catch (error) {
       console.error('Preview failed:', error);
-      alert('Failed to generate preview: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to generate preview: ' + (error.response?.data?.detail || error.message));
     } finally {
       setGenerating(false);
     }
@@ -683,10 +684,10 @@ const VideoGenerator = ({ avatar, onJobCreated }) => {
 
       // Job completed
       if (onJobCreated) onJobCreated();
-      alert('Video generated successfully!');
+      toast.success('Video generated successfully!');
     } catch (error) {
       console.error('Generation failed:', error);
-      alert('Generation failed: ' + error.message);
+      toast.error('Generation failed: ' + error.message);
     } finally {
       setGenerating(false);
       setActiveJob(null);
@@ -910,7 +911,7 @@ const AvatarStudio = () => {
       await loadAvatars();
     } catch (error) {
       console.error('Failed to delete avatar:', error);
-      alert('Failed to delete avatar');
+      toast.error('Failed to delete avatar');
     }
   };
 

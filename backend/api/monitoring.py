@@ -162,7 +162,8 @@ async def cache_keys_summary():
                         data = json.loads(cached_data)
                         intent = data.get("intent", "unknown")
                         intent_counts[intent] = intent_counts.get(intent, 0) + 1
-                except Exception:
+                except Exception as e:
+                    logger.exception(f"Failed to parse cached intent data: {e}")
                     intent_counts["parse_error"] = intent_counts.get("parse_error", 0) + 1
 
             if cursor == 0:

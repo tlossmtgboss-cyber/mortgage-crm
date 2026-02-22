@@ -15,6 +15,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
+import { toast } from '../utils/toast';
   api,
   useWorkspaceData,
   useWorkspaceMilestones,
@@ -925,7 +926,7 @@ export default function PURLPortal() {
       window.open(data.download_url, '_blank');
     } catch (err) {
       console.error('Download failed:', err);
-      alert('Failed to download document');
+      toast.error('Failed to download document');
     }
   };
 
@@ -977,7 +978,7 @@ export default function PURLPortal() {
           setDocuments(docsData.documents || []);
         } catch (err) {
           console.error('Upload failed:', err);
-          alert(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
+          toast.error(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
         }
       }
     } finally {
@@ -1038,10 +1039,10 @@ export default function PURLPortal() {
       const docsData = await api.getWorkspaceDocuments(slug);
       setDocuments(docsData.documents || []);
 
-      alert(`${task.title} uploaded successfully! It will be reviewed shortly.`);
+      toast.success(`${task.title} uploaded successfully! It will be reviewed shortly.`);
     } catch (err) {
       console.error('Task document upload failed:', err);
-      alert(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
+      toast.error(`Failed to upload ${file.name}: ${err.message || 'Unknown error'}`);
     }
   };
 
@@ -1057,7 +1058,7 @@ export default function PURLPortal() {
       setTasks(tasksData.tasks || []);
     } catch (err) {
       console.error('Failed to update task:', err);
-      alert('Failed to update task');
+      toast.error('Failed to update task');
     }
   };
 
@@ -1075,7 +1076,7 @@ export default function PURLPortal() {
       loadMessages();
     } catch (err) {
       console.error('Failed to send message:', err);
-      alert('Failed to send message');
+      toast.error('Failed to send message');
     }
   };
 

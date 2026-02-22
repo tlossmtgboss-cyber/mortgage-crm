@@ -22,7 +22,9 @@ from services.disc.motivators_service import MotivatorsService, MotivatorResult
 from services.disc.wheel_calculator import WheelCalculator, WheelPosition
 from services.disc.content_generator import DISCContentGenerator
 from sqlalchemy.exc import SQLAlchemyError
+import logging
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/disc", tags=["DISC Assessment"])
 
@@ -814,7 +816,7 @@ async def list_assessments():
 async def run_disc_migration(request: Request = None):
     """Run DISC migration (admin only)."""
     from database import get_db as _get_db
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     db = next(_get_db())
     auth_header = request.headers.get("Authorization", "") if request else ""
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
@@ -915,26 +917,26 @@ async def download_disc_pdf(candidate_id: int):
             import json
             try:
                 generated_content['communication_tips'] = json.loads(disc[15]) if isinstance(disc[15], str) else disc[15]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error parsing communication_tips JSON in download_disc_pdf: {e}")
         if disc[16]:  # strengths
             import json
             try:
                 generated_content['strengths'] = json.loads(disc[16]) if isinstance(disc[16], str) else disc[16]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error parsing strengths JSON in download_disc_pdf: {e}")
         if disc[17]:  # stress_behaviors
             import json
             try:
                 generated_content['stress_behaviors'] = json.loads(disc[17]) if isinstance(disc[17], str) else disc[17]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error parsing stress_behaviors JSON in download_disc_pdf: {e}")
         if disc[18]:  # improvements
             import json
             try:
                 generated_content['improvements'] = json.loads(disc[18]) if isinstance(disc[18], str) else disc[18]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error parsing improvements JSON in download_disc_pdf: {e}")
 
         # Generate PDF
         pdf_bytes = await generate_disc_report(

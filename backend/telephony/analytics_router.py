@@ -9,9 +9,16 @@ import logging
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 
 # Import dependencies directly from main
-from main import get_db, get_current_user
+from auth.dependencies import get_current_user
+from database import get_db
 
 
 # Keep set_dependencies for backwards compatibility (no-op now)
@@ -41,7 +48,7 @@ def get_daily_summary(
     - Disposition breakdown
     """
     try:
-        from main import CallLog
+        from database.models import CallLog
 
         # Use today if not specified
         if not target_date:
@@ -107,7 +114,7 @@ def get_disposition_breakdown(
 
     Returns disposition counts with percentages
     """
-    from main import CallLog
+    from database.models import CallLog
 
     start_time = datetime.combine(start_date, datetime.min.time())
     end_time = datetime.combine(end_date, datetime.max.time())
@@ -165,7 +172,7 @@ def get_connect_rate_by_hour(
 
     Useful for optimizing call timing - find the best hours to make calls
     """
-    from main import CallLog
+    from database.models import CallLog
 
     start_time = datetime.combine(start_date, datetime.min.time())
     end_time = datetime.combine(end_date, datetime.max.time())
@@ -231,7 +238,7 @@ def get_agent_performance(
 
     Preset ranges: today, last_7_days, last_30_days, this_month
     """
-    from main import CallLog
+    from database.models import CallLog
 
     # Calculate date range
     today = date.today()
@@ -333,7 +340,7 @@ def get_session_analytics(
 
     Returns session-level metrics including completion rates
     """
-    from main import DialerSession, DialerSessionTask
+    from database.models import DialerSession, DialerSessionTask
 
     # Default to last 30 days
     if not end_date:

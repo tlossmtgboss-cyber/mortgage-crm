@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import responsibilitiesApi from '../services/responsibilitiesApi';
 import './SkillModal.css';
+import { toast } from '../utils/toast';
 
 const AddSkillModal = ({ userId, onSave, onClose }) => {
   const [availableSkills, setAvailableSkills] = useState([]);
@@ -30,7 +31,7 @@ const AddSkillModal = ({ userId, onSave, onClose }) => {
     e.preventDefault();
 
     if (!selectedSkillId) {
-      alert('Please select a skill');
+      toast.error('Please select a skill');
       return;
     }
 
@@ -41,7 +42,7 @@ const AddSkillModal = ({ userId, onSave, onClose }) => {
         required_proficiency: requiredProficiency
       });
     } catch (err) {
-      alert('Failed to add skill');
+      toast.error('Failed to add skill');
       console.error(err);
     } finally {
       setSaving(false);

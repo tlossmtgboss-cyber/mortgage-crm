@@ -36,12 +36,9 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 # Import database session
-try:
-    from main import SessionLocal, logger
-except ImportError:
-    from database import SessionLocal
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
+from database import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import goalsApi from '../services/goalsApi';
 import './AssessmentModal.css';
+import { toast } from '../utils/toast';
 
 const SelfAssessmentModal = ({ goal, userId, onClose, onSave }) => {
   const [formData, setFormData] = useState({
@@ -34,7 +35,7 @@ const SelfAssessmentModal = ({ goal, userId, onClose, onSave }) => {
       onSave();
       onClose();
     } catch (err) {
-      alert('Failed to save assessment');
+      toast.error('Failed to save assessment');
       console.error(err);
     } finally {
       setSaving(false);

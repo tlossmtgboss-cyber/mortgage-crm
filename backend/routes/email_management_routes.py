@@ -549,8 +549,8 @@ def register_email_management_routes(app, get_db, get_current_user, **kwargs):
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_user ON email_drafts(user_id)"))
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_lead ON email_drafts(lead_id)"))
                 db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_status ON email_drafts(status)"))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error creating email_drafts indexes: {e}")
 
             db.commit()
             return {"success": True, "message": "Email drafts table created"}

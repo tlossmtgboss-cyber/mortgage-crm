@@ -96,8 +96,8 @@ class SalesforceCalendarSyncService:
                     # Rollback to recover from any transaction errors (e.g., constraint violations)
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.exception(f"Failed to rollback after Event processing error: {e}")
 
             # Process Task records
             for sf_task in tasks:
@@ -113,8 +113,8 @@ class SalesforceCalendarSyncService:
                     # Rollback to recover from any transaction errors
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.exception(f"Failed to rollback after Task processing error: {e}")
 
             # Log sync event
             self._log_sync_event(db, integration_profile_id, result)
@@ -240,7 +240,8 @@ class SalesforceCalendarSyncService:
         if start_time:
             try:
                 start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to parse Event StartDateTime '{start_time}': {e}")
                 start_dt = datetime.now(timezone.utc)
         else:
             start_dt = datetime.now(timezone.utc)
@@ -248,7 +249,8 @@ class SalesforceCalendarSyncService:
         if end_time:
             try:
                 end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to parse Event EndDateTime '{end_time}': {e}")
                 end_dt = start_dt + timedelta(hours=1)
         else:
             end_dt = start_dt + timedelta(hours=1)
@@ -327,7 +329,8 @@ class SalesforceCalendarSyncService:
         if activity_date:
             try:
                 due_date = datetime.fromisoformat(activity_date)
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to parse Task ActivityDate '{activity_date}': {e}")
                 due_date = datetime.now(timezone.utc)
         else:
             due_date = datetime.now(timezone.utc)

@@ -1120,8 +1120,8 @@ async def run_page_permissions_migration(
                         VALUES (:name, :display_name, :description, :icon, :order)
                         ON CONFLICT (name) DO NOTHING
                     """), {"name": name, "display_name": display_name, "description": description, "icon": icon, "order": order})
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error seeding category {name}: {e}")
 
             results["data_seeded"].append(f"categories: {len(categories)}")
             db.commit()
@@ -1159,8 +1159,8 @@ async def run_page_permissions_migration(
                             VALUES (:cat_id, :name, :path, :description, :icon, :order)
                             ON CONFLICT (path) DO NOTHING
                         """), {"cat_id": cat_id, "name": name, "path": path, "description": description, "icon": icon, "order": order})
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(f"Error seeding page {name}: {e}")
 
             results["data_seeded"].append(f"pages: {len(pages)}")
             db.commit()
@@ -1176,8 +1176,8 @@ async def run_page_permissions_migration(
                         VALUES (:page_id, 'admin', TRUE, TRUE, TRUE, TRUE)
                         ON CONFLICT (page_id, role) DO NOTHING
                     """), {"page_id": page_id})
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error seeding admin permission for page {page_id}: {e}")
 
             results["data_seeded"].append(f"permissions: {len(page_ids)} pages x admin role")
             db.commit()
@@ -1196,8 +1196,8 @@ async def run_page_permissions_migration(
         for idx_sql in indexes:
             try:
                 db.execute(text(idx_sql))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error creating index: {e}")
 
         db.commit()
         results["indexes_created"] = len(indexes)

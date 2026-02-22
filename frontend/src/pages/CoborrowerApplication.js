@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { coborrowerAPI } from '../services/api';
 import './BorrowerApplication.css';
+import { toast } from '../utils/toast';
 
 const CoborrowerApplication = () => {
   const { token } = useParams();
@@ -172,7 +173,7 @@ const CoborrowerApplication = () => {
   // Handle credit authorization
   const handleCreditAuth = async () => {
     if (!formData.credit_auth.authorized) {
-      alert('Please check the authorization box to proceed.');
+      toast.error('Please check the authorization box to proceed.');
       return;
     }
 
@@ -192,10 +193,10 @@ const CoborrowerApplication = () => {
         }
       }));
 
-      alert('Credit authorization captured successfully.');
+      toast.success('Credit authorization captured successfully.');
     } catch (err) {
       console.error('Credit auth failed:', err);
-      alert('Failed to capture credit authorization. Please try again.');
+      toast.error('Failed to capture credit authorization. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -207,22 +208,22 @@ const CoborrowerApplication = () => {
     const { personal_info, income, declarations, credit_auth } = formData;
 
     if (!personal_info.first_name || !personal_info.last_name || !personal_info.email) {
-      alert('Please complete all required personal information fields.');
+      toast.success('Please complete all required personal information fields.');
       return;
     }
 
     if (!personal_info.ssn || !personal_info.date_of_birth) {
-      alert('Please provide your Social Security Number and Date of Birth.');
+      toast.error('Please provide your Social Security Number and Date of Birth.');
       return;
     }
 
     if (!income.monthly_income) {
-      alert('Please provide your monthly income information.');
+      toast.error('Please provide your monthly income information.');
       return;
     }
 
     if (!credit_auth.authorized || !credit_auth.authorized_at) {
-      alert('Please complete the credit authorization before submitting.');
+      toast.success('Please complete the credit authorization before submitting.');
       return;
     }
 
@@ -231,11 +232,11 @@ const CoborrowerApplication = () => {
       await coborrowerAPI.submit(token);
 
       // Show success and redirect
-      alert('Thank you! Your co-borrower information has been submitted successfully.');
+      toast.success('Thank you! Your co-borrower information has been submitted successfully.');
       navigate(`/coborrower/${token}/submitted`);
     } catch (err) {
       console.error('Submit failed:', err);
-      alert('Failed to submit. Please try again.');
+      toast.error('Failed to submit. Please try again.');
     } finally {
       setSubmitting(false);
     }

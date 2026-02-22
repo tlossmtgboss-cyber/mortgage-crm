@@ -112,7 +112,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                         WHERE table_name = 'integration_profiles'
                     )
                 """)).scalar()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error checking integration_profiles table in get_salesforce_sync_status: {e}")
                 profiles_exist = False
 
             if not profiles_exist:
@@ -1597,8 +1598,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             # Try to get lead count
             lead_count = db.execute(text("SELECT COUNT(*) FROM leads")).scalar()
             total_leads = lead_count or 0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error fetching lead count in get_admin_stats: {e}")
 
         try:
             # Try to get loan count and MTD volume
@@ -1613,8 +1614,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 AND funded_at >= date_trunc('month', CURRENT_DATE)
             """)).scalar()
             mtd_volume = float(mtd_result or 0)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error fetching loan count/MTD volume in get_admin_stats: {e}")
 
         return {
             "total_users": total_users,
@@ -1956,8 +1957,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                         ).scalar()
                         if count and count > 0:
                             tables_with_data.append((table_name, column_name, count))
-                    except Exception:
-                        pass  # Table or column may not exist
+                    except Exception as e:
+                        logger.error(f"Error scanning FK table {table_name}.{column_name} for user {user_id}: {e}")
             except Exception as e:
                 logger.warning(f"FK scan failed: {e}")
 
@@ -1986,8 +1987,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     safe_ct = _safe_identifier(child_table)
                     safe_cc = _safe_identifier(child_col)
                     db.execute(text(f"DELETE FROM {safe_ct} WHERE {safe_cc} IN ({parent_subquery})"), params)
-                except Exception:
-                    pass  # Table may not exist or no matching data
+                except Exception as e:
+                    logger.error(f"Error cascading delete from {child_table}.{child_col} for user {user_id}: {e}")
 
             # =========================================================================
             # STEP 3: Clean only tables that have data for this user
@@ -2116,8 +2117,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     for table_name, column_name in cleanup_tables:
                         try:
                             db.execute(text(f"DELETE FROM {_safe_identifier(table_name)} WHERE {_safe_identifier(column_name)} = :user_id"), params)
-                        except Exception:
-                            pass  # Table may not exist or no matching data
+                        except Exception as e:
+                            logger.error(f"Error cleaning up {table_name}.{column_name} for sample user deletion: {e}")
 
                     # Delete the user
                     db.execute(text("DELETE FROM users WHERE id = :user_id"), params)

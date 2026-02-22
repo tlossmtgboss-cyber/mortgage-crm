@@ -70,7 +70,8 @@ class SafeJSONEncoder(json.JSONEncoder):
         # Last resort - convert to string
         try:
             return str(obj)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in SafeJSONEncoder.default: {e}")
             return f"<non-serializable: {type(obj).__name__}>"
 
 

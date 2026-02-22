@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { complianceApi } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import './ComplianceDashboard.css';
+import { toast } from '../utils/toast';
 
 const ComplianceDashboard = () => {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ const ComplianceDashboard = () => {
       setDepartmentData(deptRes.data.departments || []);
     } catch (err) {
       console.error('Error loading compliance data:', err);
-      alert('Failed to load compliance data. Please ensure you have admin/management access.');
+      toast.error('Failed to load compliance data. Please ensure you have admin/management access.');
     } finally {
       setLoading(false);
     }
@@ -50,7 +51,7 @@ const ComplianceDashboard = () => {
       link.click();
       link.remove();
     } catch (err) {
-      alert('Failed to export report');
+      toast.error('Failed to export report');
       console.error(err);
     }
   };

@@ -242,7 +242,7 @@ class DuplicateDetectionService:
         Returns:
             Created task info
         """
-        from main import Task
+        from database.models import Task
 
         record_type = duplicate_info['type']
         record_1 = duplicate_info['record_1']

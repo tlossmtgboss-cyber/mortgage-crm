@@ -11,12 +11,19 @@ from pydantic import BaseModel, Field
 from datetime import datetime, date
 from database import get_db
 from services.recruiting_service import RecruitingService
-from main import get_current_user, User
+from auth.dependencies import get_current_user
+from database.models import User
 from sqlalchemy.exc import SQLAlchemyError
 import logging
 import os
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 

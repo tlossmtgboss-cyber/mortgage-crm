@@ -27,7 +27,7 @@ async def get_current_user_optional(request: Request, db: Session = Depends(get_
     Lazy imports from main to avoid circular imports.
     """
     try:
-        from main import get_current_user_flexible as auth_func
+        from auth.dependencies import get_current_user_flexible as auth_func
         return await auth_func(request, db)
     except Exception as e:
         logger.debug(f"Auth failed (optional): {e}")
@@ -133,7 +133,8 @@ async def create_ivr_menu(
 
         try:
             menu_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in create_ivr_menu: {e}")
             menu_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -428,7 +429,8 @@ async def create_ivr_option(
 
         try:
             option_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in add_menu_option: {e}")
             option_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -934,7 +936,8 @@ async def apply_ivr_template(
 
         try:
             menu_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in create_template_menu: {e}")
             menu_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Create options

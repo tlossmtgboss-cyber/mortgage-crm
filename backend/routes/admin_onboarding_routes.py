@@ -205,7 +205,8 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
                 return None
         else:
             data = audit_result.new_values
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_invite_data: {e}")
         return None
 
     # Check expiration
@@ -215,8 +216,8 @@ def get_invite_data(db: Session, token: str) -> Optional[dict]:
             expires_at = datetime.fromisoformat(expires_at_str.replace('Z', '+00:00'))
             if datetime.now(timezone.utc) > expires_at:
                 return {'expired': True, **data}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error in get_invite_data (expiry check): {e}")
 
     return {
         'audit_id': audit_result.id,
@@ -448,7 +449,8 @@ async def start_onboarding(
                     jwt_secret,
                     algorithm='HS256'
                 )
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in start_onboarding (JWT encode): {e}")
             token = session_id  # Fallback
 
         return success_response(
@@ -493,7 +495,8 @@ async def save_company_profile(
             jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
             payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in save_company_profile (JWT decode): {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant
@@ -558,7 +561,8 @@ async def save_user_profile(
             jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
             payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in save_user_profile (JWT decode): {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Update user profile
@@ -619,7 +623,8 @@ async def queue_team_invites(
             jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
             payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in queue_team_invites (JWT decode): {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
 
         if invites.skip:
@@ -705,7 +710,8 @@ async def create_subscription(
             jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
             payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in create_subscription (JWT decode): {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant
@@ -820,8 +826,8 @@ async def create_subscription(
                 promo = stripe.PromotionCode.list(code=payment.promo_code, active=True, limit=1)
                 if promo.data:
                     coupon_id = promo.data[0].coupon.id
-            except Exception:
-                pass  # Ignore invalid promo codes
+            except Exception as e:
+                logger.error(f"Error in create_subscription (promo code lookup): {e}")
 
         # Create subscription
         subscription_params = {
@@ -915,7 +921,8 @@ async def complete_onboarding(
             jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
             payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
             email = payload.get('sub')
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in complete_onboarding (JWT decode): {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Get user and tenant with pending invites
@@ -1058,8 +1065,8 @@ async def validate_promo_code(
                         data={'valid': True, 'type': 'discount', 'message': 'Promo code applied!'},
                         message="Promo code is valid"
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error in validate_promo_code (Stripe lookup): {e}")
 
         return success_response(
             data={'valid': False, 'message': 'Invalid or expired promo code'},
@@ -1305,7 +1312,8 @@ async def cleanup_test_account(
                     sp = db.begin_nested()
                     db.execute(text(f"DELETE FROM {table_name} WHERE {col} = ANY(:ids)"), {'ids': user_ids})
                     sp.commit()
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error in cleanup_test_account (delete {table_name}.{col}): {e}")
                     sp.rollback()
 
             # Delete users
@@ -1313,7 +1321,8 @@ async def cleanup_test_account(
                 sp = db.begin_nested()
                 db.execute(text("DELETE FROM users WHERE tenant_account_id = :tid"), {'tid': account_id})
                 sp.commit()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in cleanup_test_account (delete users): {e}")
                 sp.rollback()
 
         # Mark account as canceled
@@ -1323,7 +1332,8 @@ async def cleanup_test_account(
                 "UPDATE tenant_accounts SET status = 'canceled', is_deleted = true WHERE id = :id"
             ), {'id': account_id})
             sp.commit()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in cleanup_test_account (mark canceled): {e}")
             sp.rollback()
 
         # Reset subscriber invitation for reuse

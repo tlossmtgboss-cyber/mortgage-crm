@@ -316,8 +316,8 @@ class ModelVersionTracker:
             logger.warning(f"Failed to record extraction version: {e}")
             try:
                 self.db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error during rollback in record_extraction: {e}")
 
     def compare_versions(
         self,

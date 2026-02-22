@@ -720,8 +720,8 @@ class SEOKeywordService:
             try:
                 self.add_keyword(kw, user_id, organization_id, "mortgage")
                 added += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error seeding keyword '{kw}': {e}")
 
         return {"success": True, "keywords_added": added}
 

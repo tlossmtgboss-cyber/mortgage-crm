@@ -77,7 +77,7 @@ async def get_current_user_id(
     db: Session = Depends(get_db),
 ) -> int:
     """Extract authenticated user ID from JWT token."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     if not token:
@@ -87,7 +87,8 @@ async def get_current_user_id(
         return user.id
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.exception(f"Failed to validate user credentials: {e}")
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 

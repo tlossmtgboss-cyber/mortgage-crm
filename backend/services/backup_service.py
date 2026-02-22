@@ -207,8 +207,9 @@ class BackupVerificationService:
                         checksum_input.encode()
                     ).hexdigest()[:16]
                     table_result["max_id"] = max_id
-                except Exception:
+                except Exception as e:
                     # Table may not have 'id' column
+                    logger.error(f"Error computing checksum for {table_name}: {e}")
                     table_result["checksum"] = hashlib.sha256(
                         f"{table_name}:{count}".encode()
                     ).hexdigest()[:16]

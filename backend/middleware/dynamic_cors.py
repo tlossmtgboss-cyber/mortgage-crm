@@ -104,7 +104,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         try:
             parsed = urlparse(origin)
             hostname = parsed.hostname or ""
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to parse origin URL '{origin}': {e}")
             hostname = ""
 
         if hostname == "perenniaai.com" or hostname.endswith(".perenniaai.com"):

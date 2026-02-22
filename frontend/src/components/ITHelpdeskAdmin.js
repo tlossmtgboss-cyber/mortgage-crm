@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAuthHeaders } from '../utils/auth';
 import './ITHelpdeskAdmin.css';
+import { toast } from '../utils/toast';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -95,17 +96,17 @@ function ITHelpdeskAdmin() {
           setSelectedTicket({ ...selectedTicket, status: newStatus });
         }
       } else {
-        alert('Failed to update ticket status');
+        toast.error('Failed to update ticket status');
       }
     } catch (error) {
       console.error('Error updating ticket status:', error);
-      alert('Error updating ticket status');
+      toast.error('Error updating ticket status');
     }
   };
 
   const assignTicket = async (ticketId) => {
     if (!assignedTo) {
-      alert('Please select a team member to assign');
+      toast.error('Please select a team member to assign');
       return;
     }
 
@@ -117,21 +118,21 @@ function ITHelpdeskAdmin() {
       });
 
       if (response.ok) {
-        alert('Ticket assigned successfully');
+        toast.success('Ticket assigned successfully');
         fetchTickets();
         setAssignedTo('');
       } else {
-        alert('Failed to assign ticket');
+        toast.error('Failed to assign ticket');
       }
     } catch (error) {
       console.error('Error assigning ticket:', error);
-      alert('Error assigning ticket');
+      toast.error('Error assigning ticket');
     }
   };
 
   const addAdminNote = async (ticketId) => {
     if (!adminNotes.trim()) {
-      alert('Please enter a note');
+      toast.error('Please enter a note');
       return;
     }
 
@@ -143,15 +144,15 @@ function ITHelpdeskAdmin() {
       });
 
       if (response.ok) {
-        alert('Note added successfully');
+        toast.success('Note added successfully');
         setAdminNotes('');
         fetchTickets();
       } else {
-        alert('Failed to add note');
+        toast.error('Failed to add note');
       }
     } catch (error) {
       console.error('Error adding note:', error);
-      alert('Error adding note');
+      toast.error('Error adding note');
     }
   };
 

@@ -397,7 +397,7 @@ class RefinanceCallService:
             # Send follow-up SMS if call was answered
             if duration and duration > 30 and alert.mum_client_id:
                 try:
-                    from main import MUMClient
+                    from database.models import MUMClient
                     mum_client = self.db.query(MUMClient).filter(
                         MUMClient.id == alert.mum_client_id
                     ).first()

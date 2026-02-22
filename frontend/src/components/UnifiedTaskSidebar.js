@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './UnifiedTaskSidebar.css';
+import { toast } from '../utils/toast';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -202,7 +203,7 @@ Loan Officer`;
   // Voice recognition for Train AI
   const startListening = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice recognition is not supported in your browser. Please use Chrome or Edge.');
+      toast.error('Voice recognition is not supported in your browser. Please use Chrome or Edge.');
       return;
     }
 

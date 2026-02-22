@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { accountingAPI } from '../../../services/accountingApi';
 import { usePermissions } from '../../../contexts/PermissionContext';
 import '../AccountingShared.css';
+import { toast } from '../../../utils/toast';
 
 function BankReconciliation() {
   const navigate = useNavigate();
@@ -136,7 +137,7 @@ function BankReconciliation() {
   // Start new reconciliation
   const handleStartReconciliation = async () => {
     if (!selectedAccount || !statementDate || !statementBalance) {
-      alert('Please fill in all required fields.');
+      toast.error('Please fill in all required fields.');
       return;
     }
 
@@ -151,7 +152,7 @@ function BankReconciliation() {
       setShowSetupModal(false);
     } catch (err) {
       console.error('Error starting reconciliation:', err);
-      alert('Failed to start reconciliation');
+      toast.error('Failed to start reconciliation');
     }
   };
 
@@ -162,7 +163,7 @@ function BankReconciliation() {
       setActiveReconciliation(data);
     } catch (err) {
       console.error('Error resuming reconciliation:', err);
-      alert('Failed to resume reconciliation');
+      toast.error('Failed to resume reconciliation');
     }
   };
 
@@ -196,10 +197,10 @@ function BankReconciliation() {
         cleared_transaction_ids: Array.from(clearedTransactions),
       });
       setSaving(false);
-      alert('Progress saved.');
+      toast.success('Progress saved.');
     } catch (err) {
       console.error('Error saving progress:', err);
-      alert('Failed to save progress');
+      toast.error('Failed to save progress');
       setSaving(false);
     }
   };
@@ -207,7 +208,7 @@ function BankReconciliation() {
   // Complete reconciliation
   const handleComplete = async () => {
     if (Math.abs(reconciliationSummary.difference) > 0.01) {
-      alert('The reconciliation does not balance. Please review your cleared transactions.');
+      toast.success('The reconciliation does not balance. Please review your cleared transactions.');
       return;
     }
 
@@ -224,10 +225,10 @@ function BankReconciliation() {
       setActiveReconciliation(null);
       fetchReconciliationHistory();
       setSaving(false);
-      alert('Reconciliation completed successfully!');
+      toast.success('Reconciliation completed successfully!');
     } catch (err) {
       console.error('Error completing reconciliation:', err);
-      alert('Failed to complete reconciliation');
+      toast.error('Failed to complete reconciliation');
       setSaving(false);
     }
   };
@@ -244,7 +245,7 @@ function BankReconciliation() {
       fetchReconciliationHistory();
     } catch (err) {
       console.error('Error canceling reconciliation:', err);
-      alert('Failed to cancel reconciliation');
+      toast.error('Failed to cancel reconciliation');
     }
   };
 

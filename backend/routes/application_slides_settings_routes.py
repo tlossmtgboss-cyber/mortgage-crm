@@ -322,7 +322,8 @@ async def save_application_slides_config(
                 ALTER TABLE application_slides_config
                 ADD COLUMN IF NOT EXISTS app_type VARCHAR(20) DEFAULT 'purchase'
             """))
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error adding app_type column: {e}")
             pass  # Column might already exist
 
         # Check if config exists for this org and app type

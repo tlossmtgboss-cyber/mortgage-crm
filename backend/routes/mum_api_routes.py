@@ -180,10 +180,11 @@ async def get_mum_clients_portfolio(
                         try:
                             client.client_name = resolved
                             db.commit()
-                        except Exception:
+                        except Exception as e:
                             db.rollback()
-                except Exception:
-                    pass
+                            logger.warning(f"Failed to update client_name in get_mum_clients_portfolio: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to resolve lead name in get_mum_clients_portfolio: {e}")
             if not display_name or _is_sf_id:
                 display_name = f"Client - {client.loan_number}"
 

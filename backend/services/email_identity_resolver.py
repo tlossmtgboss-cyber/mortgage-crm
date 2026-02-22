@@ -198,8 +198,8 @@ class EmailIdentityResolver:
                 self._custom_domain_cache[row[0].lower()] = (row[1], row[2], row[3])
 
             logger.info(f"Loaded {len(result)} custom domain mappings")
-        except Exception:
-            # Table doesn't exist, use defaults only
+        except Exception as e:
+            logger.exception(f"Failed to load custom domain mappings (table may not exist): {e}")
             # Must rollback to clear the failed transaction state in PostgreSQL
             self.db.rollback()
 

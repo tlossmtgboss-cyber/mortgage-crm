@@ -36,7 +36,7 @@ def safe_isoformat(dt_value) -> Optional[str]:
 
 def get_current_user_flexible():
     """Lazy import auth dependency"""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 
@@ -185,7 +185,8 @@ async def create_conference(
 
         try:
             conf_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in create_conference: {e}")
             conf_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -594,7 +595,8 @@ async def add_participant(
 
         try:
             participant_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in add_participant: {e}")
             participant_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Dial out to add participant
@@ -1119,7 +1121,8 @@ async def create_quick_conference(
 
         try:
             conf_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in quick_conference: {e}")
             conf_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()

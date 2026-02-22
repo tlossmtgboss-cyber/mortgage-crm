@@ -685,7 +685,8 @@ def example_10_custom_domain_mappings():
                 }
                 for row in result
             ]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error listing known domains: {e}")
             return []
 
     # Example custom domains to add:

@@ -5,9 +5,12 @@ Tools for video consultations, async video, and meeting analytics.
 8 tools for video meetings, recordings, summaries, and insights.
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 import secrets
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -106,7 +109,8 @@ def schedule_video_meeting(
                 "meeting_link": meeting_data["meeting_link"],
             })
         meeting_data["persisted"] = True
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error persisting meeting data: {e}")
         meeting_data["persisted"] = False
 
     return ToolResult.success(

@@ -31,6 +31,13 @@ from services.confidence_engine_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 router = APIRouter(prefix="/api/v1/decision-lab", tags=["Decision Lab"], dependencies=[Depends(require_auth)])
 
 
@@ -714,7 +721,7 @@ async def create_overlay(
     db: Session = Depends(get_db)
 ):
     """Create a new education overlay (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -754,7 +761,7 @@ async def update_overlay(
     db: Session = Depends(get_db)
 ):
     """Update an existing education overlay (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -809,7 +816,7 @@ async def delete_overlay(
     db: Session = Depends(get_db)
 ):
     """Delete an education overlay (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "") if request else ""
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -934,7 +941,7 @@ async def seed_questions(
     db: Session = Depends(get_db)
 ):
     """Seed initial confidence questions and education content (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -964,7 +971,7 @@ async def debug_tables(
 ):
     """Debug endpoint to check table state (admin only)."""
     import json
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)
@@ -1030,7 +1037,7 @@ async def run_migration(
     db: Session = Depends(get_db)
 ):
     """Run the Borrower Confidence Engine migration (admin only)."""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     await get_current_user_flexible(token=token, request=request, db=db)

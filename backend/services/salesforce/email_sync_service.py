@@ -94,8 +94,8 @@ class SalesforceEmailSyncService:
                     # Rollback to recover from any transaction errors (e.g., constraint violations)
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.exception(f"Failed to rollback after EmailMessage processing error: {e}")
 
             # Process Email Tasks
             for sf_task in email_tasks:
@@ -111,8 +111,8 @@ class SalesforceEmailSyncService:
                     # Rollback to recover from any transaction errors
                     try:
                         db.rollback()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.exception(f"Failed to rollback after Email Task processing error: {e}")
 
             # Log sync event
             self._log_sync_event(db, integration_profile_id, result)
@@ -242,7 +242,8 @@ class SalesforceEmailSyncService:
         if message_date:
             try:
                 received_at = datetime.fromisoformat(message_date.replace('Z', '+00:00'))
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to parse EmailMessage MessageDate '{message_date}': {e}")
                 received_at = datetime.now(timezone.utc)
         else:
             received_at = datetime.now(timezone.utc)
@@ -322,7 +323,8 @@ class SalesforceEmailSyncService:
         if created_date:
             try:
                 received_at = datetime.fromisoformat(created_date.replace('Z', '+00:00'))
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to parse Email Task CreatedDate '{created_date}': {e}")
                 received_at = datetime.now(timezone.utc)
         else:
             received_at = datetime.now(timezone.utc)

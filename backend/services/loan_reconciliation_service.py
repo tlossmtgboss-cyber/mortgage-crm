@@ -45,6 +45,8 @@ class ReconciliationResult:
     should_pause_sla: bool = False
     should_stop_workflows: bool = False
     should_trigger_compliance: bool = False
+    should_create_disposition: bool = False
+    disposition_task_id: Optional[int] = None
     is_backward_movement: bool = False
     warnings: List[str] = field(default_factory=list)
     admin_review_reason: Optional[str] = None
@@ -86,6 +88,30 @@ COMPLIANCE_TRIGGER_STAGES = {"DENIED"}
 # Stages that are "active" in the pipeline (positive ordinal)
 ACTIVE_STAGES = {stage for stage, order in STAGE_ORDER.items() if order > 0 and stage not in FUNDED_STAGES}
 
+# Maps each CRM stage to the loans table date field stamped on disposition
+STAGE_TO_DATE_FIELD: Dict[str, Optional[str]] = {
+    "APPLICATION": "application_date",
+    "DISCLOSED": "initial_disclosures_sent_date",
+    "PROCESSING": "file_received_date",
+    "SUBMITTED": "uw_received_date",
+    "UNDERWRITING": "uw_received_date",
+    "UW_RECEIVED": "uw_received_date",
+    "CONDITIONAL_APPROVAL": "conditional_approval_date",
+    "APPROVED": "loan_approved_date",
+    "CTC": "clear_to_close_date",
+    "CLEAR_TO_CLOSE": "clear_to_close_date",
+    "CLOSING": "scheduled_closing_date",
+    "DOCS_OUT": "docs_out_date",
+    "FUNDED": "funded_date",
+    "SUSPENDED": "suspended_date",
+    "WITHDRAWN": "withdrawn_date",
+    "CANCELLED": None,
+    "DENIED": None,
+    "DEAD": None,
+    "DOES_NOT_QUALIFY": None,
+    "NURTURE": None,
+}
+
 
 # =============================================================================
 # Service
@@ -125,8 +151,8 @@ class LoanReconciliationService:
         if self._own_db is not None:
             try:
                 self._own_db.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error in _close_own_db: {e}")
             self._own_db = None
 
     def reconcile(
@@ -206,6 +232,21 @@ class LoanReconciliationService:
         if raw_sf_stage:
             self._store_raw_sf_stage(loan_id, raw_sf_stage)
 
+        # --- Create disposition task for LO review (defers stage application) ---
+        if result.should_create_disposition:
+            loan_info = self._get_loan_info(loan_id)
+            if loan_info and loan_info.get("loan_officer_id"):
+                task_id = self._create_disposition_task(
+                    loan_id=loan_id,
+                    old_stage=result.old_stage,
+                    new_stage=result.new_stage,
+                    raw_sf_stage=result.salesforce_raw_stage,
+                    owner_id=loan_info["loan_officer_id"],
+                    loan_number=loan_info.get("loan_number", ""),
+                    borrower_name=loan_info.get("borrower_name", ""),
+                )
+                result.disposition_task_id = task_id
+
         # Clean up our own session
         self._close_own_db()
 
@@ -224,7 +265,7 @@ class LoanReconciliationService:
     ) -> ReconciliationResult:
         """Determine the reconciliation action for a given transition."""
 
-        # Funded → promote to MUM
+        # Funded → promote to MUM (auto-applies, no disposition needed)
         if new_stage in FUNDED_STAGES:
             return ReconciliationResult(
                 action=ReconciliationAction.PROMOTE_TO_MUM,
@@ -234,7 +275,7 @@ class LoanReconciliationService:
                 should_promote_mum=True,
             )
 
-        # Suspended → pause SLA timers
+        # Suspended → pause SLA timers (disposition task for LO review)
         if new_stage in PAUSE_STAGES:
             return ReconciliationResult(
                 action=ReconciliationAction.PAUSE_SLA,
@@ -242,9 +283,10 @@ class LoanReconciliationService:
                 new_stage=new_stage,
                 salesforce_raw_stage=raw_sf_stage,
                 should_pause_sla=True,
+                should_create_disposition=True,
             )
 
-        # Terminal stages → archive + stop workflows
+        # Terminal stages → archive + stop workflows (disposition task for LO review)
         if new_stage in ARCHIVE_STAGES:
             return ReconciliationResult(
                 action=ReconciliationAction.ARCHIVE,
@@ -253,9 +295,10 @@ class LoanReconciliationService:
                 salesforce_raw_stage=raw_sf_stage,
                 should_stop_workflows=True,
                 should_trigger_compliance=new_stage in COMPLIANCE_TRIGGER_STAGES,
+                should_create_disposition=True,
             )
 
-        # Reactivation: from terminal/paused back to active
+        # Reactivation: from terminal/paused back to active (disposition task for LO review)
         if old_stage and old_stage in (ARCHIVE_STAGES | PAUSE_STAGES | FUNDED_STAGES):
             if new_stage and STAGE_ORDER.get(new_stage, 0) > 0:
                 return ReconciliationResult(
@@ -264,19 +307,133 @@ class LoanReconciliationService:
                     new_stage=new_stage,
                     salesforce_raw_stage=raw_sf_stage,
                     warnings=[f"Reactivation from {old_stage} to {new_stage}"],
+                    should_create_disposition=True,
                 )
 
-        # Normal forward progression
+        # Normal forward progression (disposition task for LO review)
         return ReconciliationResult(
             action=ReconciliationAction.ALLOW,
             old_stage=old_stage,
             new_stage=new_stage,
             salesforce_raw_stage=raw_sf_stage,
+            should_create_disposition=True,
         )
 
     # -------------------------------------------------------------------------
     # Helpers
     # -------------------------------------------------------------------------
+
+    def _get_loan_info(self, loan_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch loan officer, loan number, and borrower name for a loan."""
+        try:
+            own_db = self._get_own_db()
+            row = own_db.execute(text("""
+                SELECT loan_officer_id, loan_number, borrower_name, organization_id
+                FROM loans WHERE id = :loan_id
+            """), {"loan_id": loan_id}).fetchone()
+            if row:
+                return {
+                    "loan_officer_id": row[0],
+                    "loan_number": row[1],
+                    "borrower_name": row[2],
+                    "organization_id": row[3],
+                }
+            return None
+        except Exception as e:
+            logger.warning(f"Could not fetch loan info for {loan_id}: {e}")
+            try:
+                self._get_own_db().rollback()
+            except Exception as e2:
+                logger.error(f"Error in _get_loan_info (rollback): {e2}")
+            return None
+
+    def _create_disposition_task(
+        self,
+        loan_id: int,
+        old_stage: Optional[str],
+        new_stage: Optional[str],
+        raw_sf_stage: Optional[str],
+        owner_id: int,
+        loan_number: str,
+        borrower_name: str,
+    ) -> Optional[int]:
+        """Create a disposition task for an LO to review a Salesforce stage change.
+
+        Returns the task ID, or None on failure. Deduplicates against existing
+        pending disposition tasks for the same loan + proposed stage.
+        """
+        try:
+            own_db = self._get_own_db()
+
+            # Dedup: check for existing pending disposition task with same loan + proposed stage
+            existing = own_db.execute(text("""
+                SELECT id FROM tasks
+                WHERE loan_id = :loan_id
+                  AND sf_proposed_stage = :proposed
+                  AND status = 'pending'
+                  AND related_type = 'sf_disposition'
+                LIMIT 1
+            """), {"loan_id": loan_id, "proposed": new_stage}).fetchone()
+
+            if existing:
+                logger.info(
+                    f"Disposition task already exists (task {existing[0]}) "
+                    f"for loan {loan_id} → {new_stage}, skipping"
+                )
+                return existing[0]
+
+            old_display = old_stage or "Unknown"
+            new_display = new_stage or "Unknown"
+            sla_date_field = STAGE_TO_DATE_FIELD.get(new_stage) if new_stage else None
+
+            title = f"SF Status Change: {old_display} → {new_display} — {borrower_name or 'Unknown'}"
+            description = (
+                f"Salesforce reports a stage change for loan {loan_number or loan_id}.\n\n"
+                f"Current CRM stage: {old_display}\n"
+                f"Proposed new stage: {new_display}\n"
+                f"Raw Salesforce value: {raw_sf_stage or 'N/A'}\n\n"
+                f"Click 'Apply' to update the loan stage"
+                + (f" and stamp {sla_date_field}" if sla_date_field else "")
+                + f".\nClick 'Dismiss' to keep the current stage unchanged."
+            )
+
+            result = own_db.execute(text("""
+                INSERT INTO tasks (
+                    title, description, status, priority,
+                    owner_id, loan_id, related_type,
+                    sf_proposed_stage, sf_current_stage, sf_raw_stage,
+                    sla_date_field, due_date, created_at, updated_at
+                ) VALUES (
+                    :title, :description, 'pending', 'high',
+                    :owner_id, :loan_id, 'sf_disposition',
+                    :proposed, :current, :raw,
+                    :sla_field, NOW() + INTERVAL '1 day', NOW(), NOW()
+                )
+                RETURNING id
+            """), {
+                "title": title,
+                "description": description,
+                "owner_id": owner_id,
+                "loan_id": loan_id,
+                "proposed": new_stage,
+                "current": old_stage,
+                "raw": raw_sf_stage,
+                "sla_field": sla_date_field,
+            })
+            task_id = result.fetchone()[0]
+            own_db.commit()
+            logger.info(
+                f"Created disposition task {task_id} for loan {loan_id}: "
+                f"{old_display} → {new_display}"
+            )
+            return task_id
+        except Exception as e:
+            logger.warning(f"Could not create disposition task for loan {loan_id}: {e}")
+            try:
+                self._get_own_db().rollback()
+            except Exception as e2:
+                logger.error(f"Error in _create_disposition_task (rollback): {e2}")
+            return None
 
     def _is_duplicate_transition(self, loan_id: int, from_stage: str, to_stage: str) -> bool:
         """Check if the same transition was logged within the dedup window."""
@@ -300,8 +457,8 @@ class LoanReconciliationService:
             logger.debug(f"Dedup check unavailable (table may not exist yet): {e}")
             try:
                 self._get_own_db().rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in _is_duplicate_transition (rollback): {e2}")
             return False
 
     def _log_unmapped_stage(self, loan_id: int, raw_stage: str) -> None:
@@ -331,8 +488,8 @@ class LoanReconciliationService:
             logger.warning(f"Could not create admin task for unmapped stage: {e}")
             try:
                 self._get_own_db().rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in _log_unmapped_stage (rollback): {e2}")
 
     def _write_audit_log(self, loan_id: int, result: ReconciliationResult) -> None:
         """Insert an entry into loan_state_audit_log."""
@@ -364,8 +521,8 @@ class LoanReconciliationService:
             logger.debug(f"Could not write audit log (table may not exist yet): {e}")
             try:
                 self._get_own_db().rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in _write_audit_log (rollback): {e2}")
 
     def _store_raw_sf_stage(self, loan_id: int, raw_stage: str) -> None:
         """Persist the original Salesforce stage value on the loan record."""
@@ -379,5 +536,5 @@ class LoanReconciliationService:
             logger.debug(f"Could not store raw SF stage (column may not exist yet): {e}")
             try:
                 self._get_own_db().rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error in _store_raw_sf_stage (rollback): {e2}")

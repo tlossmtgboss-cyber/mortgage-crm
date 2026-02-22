@@ -88,8 +88,8 @@ class UserContextManager:
             # Rollback to clear any failed transaction state
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error rolling back in get_context: {e2}")
             return {
                 'profile': {'role': 'loan_officer', 'name': 'User'},
                 'summary': 'User context unavailable.',
@@ -149,8 +149,8 @@ class UserContextManager:
             logger.error(f"Error getting user profile: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error rolling back in _get_profile: {e2}")
             return {'role': 'loan_officer', 'name': 'User'}
 
     @staticmethod
@@ -241,8 +241,8 @@ class UserContextManager:
             logger.error(f"Error getting performance metrics: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error rolling back in _get_performance_metrics: {e2}")
             return {
                 'performance_tier': 'unknown',
                 'active_loans': 0,
@@ -283,8 +283,8 @@ class UserContextManager:
             logger.error(f"Error getting preferences: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error rolling back in _get_preferences: {e2}")
             return UserContextManager.DEFAULT_PREFERENCES.copy()
 
     @staticmethod
@@ -356,8 +356,8 @@ class UserContextManager:
             logger.error(f"Error learning preferences: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error rolling back in _learn_preferences_from_history: {e2}")
             return {}
 
     @staticmethod
@@ -450,8 +450,8 @@ class UserContextManager:
             logger.error(f"Error getting behavioral patterns: {e}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e2:
+                logger.error(f"Error rolling back in _get_behavioral_patterns: {e2}")
             return {
                 'work_pattern': 'unknown',
                 'common_topics': [],

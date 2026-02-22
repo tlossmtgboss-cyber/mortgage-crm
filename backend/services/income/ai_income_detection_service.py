@@ -535,7 +535,8 @@ class AIIncomeDetectionService:
         if field_name in ["tax_year"]:
             try:
                 return int(cleaned)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error converting tax_year value '{cleaned}' to int in _clean_value: {e}")
                 return None
 
         if field_name in [
@@ -549,7 +550,8 @@ class AIIncomeDetectionService:
         ]:
             try:
                 return Decimal(cleaned)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error converting '{field_name}' value '{cleaned}' to Decimal in _clean_value: {e}")
                 return None
 
         return cleaned
@@ -572,8 +574,8 @@ class AIIncomeDetectionService:
             value = Decimal(matched_value.replace(",", "").replace("$", ""))
             if Decimal("10") < value < Decimal("10000000"):
                 base_confidence += 10
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error parsing matched_value '{matched_value}' in _calculate_match_confidence: {e}")
 
         # Reduce for ambiguous matches
         if matched_value.count(".") > 1:
@@ -640,8 +642,8 @@ class AIIncomeDetectionService:
                     year = int(match.group(1))
                     if 2000 <= year <= 2030:
                         return year
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error parsing tax year from match in _extract_tax_year: {e}")
 
         return None
 

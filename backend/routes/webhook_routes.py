@@ -352,7 +352,8 @@ def _ensure_webhook_log_table(db: Session):
             )
         """))
         db.commit()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in _ensure_webhook_log_table: {e}")
         db.rollback()
 
 
@@ -403,7 +404,8 @@ async def inbound_webhook(
     # Parse payload
     try:
         payload = await request.json()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error parsing inbound webhook payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # Ensure log table exists
@@ -449,7 +451,8 @@ async def inbound_webhook(
                     WHERE id = :id
                 """), {"id": log_id})
                 db.commit()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error updating webhook log to completed: {e}")
                 db.rollback()
 
         return {"success": True, "event_type": event_type, "result": result}
@@ -464,7 +467,8 @@ async def inbound_webhook(
                     WHERE id = :id
                 """), {"id": log_id, "err": str(e)[:500]})
                 db.commit()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error updating webhook log to failed: {e}")
                 db.rollback()
         raise HTTPException(status_code=500, detail="Webhook processing failed")
 

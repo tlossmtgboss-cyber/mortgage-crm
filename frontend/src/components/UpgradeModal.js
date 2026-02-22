@@ -1,6 +1,7 @@
 import React from 'react';
 import { useModules } from '../contexts/ModuleContext';
 import './UpgradeModal.css';
+import { toast } from '../utils/toast';
 
 /**
  * Modal that appears when user clicks on a locked feature
@@ -34,14 +35,14 @@ function UpgradeModal({ isOpen, onClose, module }) {
         await refreshModules();
         onClose();
         // Show success message
-        alert(`14-day free trial started for ${module.module_name}!`);
+        toast.success(`14-day free trial started for ${module.module_name}!`);
       } else {
         const error = await response.json();
-        alert(error.detail || 'Failed to start trial');
+        toast.error(error.detail || 'Failed to start trial');
       }
     } catch (error) {
       console.error('Error starting trial:', error);
-      alert('Failed to start trial. Please try again.');
+      toast.error('Failed to start trial. Please try again.');
     }
   };
 

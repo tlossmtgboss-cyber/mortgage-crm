@@ -29,17 +29,18 @@ router = APIRouter(prefix="/api/v1/leads", tags=["Leads CRUD"])
 
 def get_current_user_dep():
     """Get current user dependency - lazy import"""
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     return get_current_user_flexible
 
 def get_models():
     """Get models - lazy import"""
-    from main import Lead, User, LeadStage
+    from database.enums import LeadStage
+    from database.models import Lead, User
     return Lead, User, LeadStage
 
 def get_schemas():
     """Get Pydantic schemas - lazy import"""
-    from main import LeadCreate, LeadResponse
+    from schemas.core import LeadCreate, LeadResponse
     return LeadCreate, LeadResponse
 
 def get_permission_functions():

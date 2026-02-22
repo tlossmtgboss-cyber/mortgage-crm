@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import responsibilitiesApi from '../services/responsibilitiesApi';
 import './GoalModal.css';
+import { toast } from '../utils/toast';
 
 const GoalModal = ({ goal, userId, onSave, onClose }) => {
   const [formData, setFormData] = useState({
@@ -48,7 +49,7 @@ const GoalModal = ({ goal, userId, onSave, onClose }) => {
 
   const addKeyResult = () => {
     if (formData.key_results.length >= 5) {
-      alert('Maximum 5 key results per goal');
+      toast.error('Maximum 5 key results per goal');
       return;
     }
     setFormData({
@@ -59,7 +60,7 @@ const GoalModal = ({ goal, userId, onSave, onClose }) => {
 
   const removeKeyResult = (index) => {
     if (formData.key_results.length <= 1) {
-      alert('At least one key result is required');
+      toast.error('At least one key result is required');
       return;
     }
     const updated = formData.key_results.filter((_, i) => i !== index);
@@ -113,7 +114,7 @@ const GoalModal = ({ goal, userId, onSave, onClose }) => {
     try {
       await onSave(formData);
     } catch (err) {
-      alert('Failed to save goal. Please try again.');
+      toast.error('Failed to save goal. Please try again.');
       console.error(err);
     } finally {
       setSaving(false);

@@ -3,6 +3,8 @@ Mission Control API Routes
 System Health & AI Performance Monitoring
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -10,6 +12,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date
 from pydantic import BaseModel
 from routes.auth_deps import require_auth
+
+logger = logging.getLogger(__name__)
 # Lazy import for get_db to avoid circular dependency with main.py
 def get_db():
     """Wrapper for get_db to avoid circular import with main.py."""
@@ -591,9 +595,9 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                                     ELSE 0 END
                         """)
                         db.execute(upsert_query, {"name": name, "status": status, "latency": latency_ms, "error": error_msg})
-                    except Exception:
+                    except Exception as e:
                         # Table may not exist or have different schema - just log result
-                        pass
+                        logger.error(f"Error upserting integration status: {e}")
 
                 except Exception as e:
                     results["integrations"][name] = {

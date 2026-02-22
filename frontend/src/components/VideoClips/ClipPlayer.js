@@ -3,6 +3,7 @@ import axios from 'axios';
 import { sanitizeText, sanitizeHTML, SafeHTML } from '../../utils/sanitize';
 import ScheduleMeetingButton from './ScheduleMeetingButton';
 import './ClipPlayer.css';
+import { toast } from '../../utils/toast';
 
 const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) => {
   // State
@@ -265,7 +266,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
       loadComments();
     } catch (err) {
       console.error('Error adding comment:', err);
-      alert('Failed to add comment');
+      toast.error('Failed to add comment');
     }
   };
 

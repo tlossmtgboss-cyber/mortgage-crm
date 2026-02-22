@@ -614,7 +614,7 @@ async def review_document(
     Admin-only endpoint for document reviewers.
     """
     # Require CRM user auth (not portal session) for admin actions
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     try:
         auth_header = http_request.headers.get("Authorization", "") if http_request else ""
         token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
@@ -623,7 +623,8 @@ async def review_document(
             raise HTTPException(status_code=401, detail="Authentication required")
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error authenticating user for document review: {e}")
         raise HTTPException(status_code=401, detail="Authentication required")
     document = db.execute(text("""
         SELECT id, loan_id, lead_id, request_id, status

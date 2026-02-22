@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './DealAlerts.css';
+import { toast } from '../utils/toast';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -536,7 +537,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
 
       if (response.ok) {
         const result = await response.json();
-        alert(`Scan complete: ${result.alerts_generated} new alerts generated`);
+        toast.success(`Scan complete: ${result.alerts_generated} new alerts generated`);
         fetchData();
       }
     } catch (error) {

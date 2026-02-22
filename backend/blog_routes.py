@@ -841,8 +841,8 @@ async def process_document_background(doc_id: str, file_path: str, user_id: int)
             if doc:
                 doc.processing_error = str(e)
                 db.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to save processing error to document record: {e}")
     finally:
         db.close()
 

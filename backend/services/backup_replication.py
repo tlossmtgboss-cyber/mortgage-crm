@@ -142,7 +142,8 @@ def configure_s3_replication(
                 ),
             }
             result["status"] = "configured"
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to check S3 bucket replication status: {e}")
             result["current_replication"] = {"configured": False}
 
     return result
@@ -349,7 +350,8 @@ def verify_replication_status(
         else:
             result["status"] = "configured_but_disabled"
 
-    except Exception:
+    except Exception as e:
+        logger.exception(f"Failed to check replication configuration: {e}")
         result["replication_configured"] = False
         result["status"] = "not_configured"
 

@@ -233,7 +233,8 @@ class ChatSystemBootstrap:
             try:
                 await self.components.redis_client.ping()
                 health["redis"] = True
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Redis health check ping failed: {e}")
                 health["redis"] = False
 
         # Check circuit breaker

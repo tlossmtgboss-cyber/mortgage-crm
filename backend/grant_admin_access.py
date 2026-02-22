@@ -4,9 +4,12 @@ Grant full admin access to a user.
 Usage: python grant_admin_access.py [user_email_or_id]
 """
 
+import logging
 import os
 import sys
 from sqlalchemy import create_engine, text
+
+logger = logging.getLogger(__name__)
 
 # Use production database — requires PROD_DATABASE_URL or DATABASE_URL to be set
 DATABASE_URL = os.getenv("PROD_DATABASE_URL") or os.getenv("DATABASE_URL")
@@ -137,7 +140,8 @@ def grant_admin_access(user_identifier):
         try:
             result = conn.execute(text("SELECT 1 FROM user_permissions LIMIT 1"))
             table_exists = True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error checking user_permissions table: {e}")
             table_exists = False
 
         if table_exists:

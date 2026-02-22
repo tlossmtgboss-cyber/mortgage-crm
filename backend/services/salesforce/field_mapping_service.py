@@ -490,7 +490,8 @@ class FieldMappingService:
                 if output_format == 'iso8601':
                     return dt.isoformat()
                 return dt.strftime('%Y-%m-%d')
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to format date value '{value}': {e}")
                 return value
 
         elif transform_type == TransformType.CURRENCY_CONVERT.value:
@@ -498,7 +499,8 @@ class FieldMappingService:
                 num_value = float(value)
                 decimal_places = config.get('decimalPlaces', 2) if config else 2
                 return round(num_value, decimal_places)
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to convert currency value '{value}': {e}")
                 return value
 
         elif transform_type == TransformType.PHONE_FORMAT.value:

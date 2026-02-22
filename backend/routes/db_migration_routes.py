@@ -1783,8 +1783,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             for stmt in alter_statements:
                 try:
                     db.execute(text(stmt))
-                except Exception:
-                    pass  # Column may already exist
+                except Exception as e:
+                    logger.warning(f"Error adding column (may already exist): {e}")
             db.commit()
 
             # Check if rules already exist
@@ -2709,8 +2709,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
                 try:
                     db.execute(text(idx_sql))
                     db.commit()
-                except Exception:
-                    pass  # Index might already exist
+                except Exception as e:
+                    logger.warning(f"Error creating index (may already exist): {e}")
 
             return {"status": "success", "message": "Follow Up Boss tables created successfully", "details": results}
 

@@ -240,7 +240,8 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
                     f"SELECT COUNT(*) FROM {table} WHERE organization_id = :org_id"
                 ), {"org_id": org_id}).scalar() or 0
                 export_summary["tables"][table] = count
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error exporting table {table}: {e}")
                 export_summary["tables"][table] = "skipped"
 
         # Log export event

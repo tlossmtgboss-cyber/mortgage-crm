@@ -119,8 +119,8 @@ async def import_document_notification_email(
             results["activity_error"] = str(e)
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error during rollback in process_document_email: {e}")
 
         # 2. Create conversation log entry for email intelligence
         try:

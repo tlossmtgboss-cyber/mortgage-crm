@@ -16,7 +16,7 @@ import uuid
 from database import get_db
 
 if TYPE_CHECKING:
-    from main import User, Lead, Task
+    from database.models import User, Lead, Task
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +32,13 @@ async def get_current_user_lazy(
     db: Session = Depends(get_db)
 ):
     """Lazy import wrapper to avoid circular imports"""
-    from main import get_current_user
+    from auth.dependencies import get_current_user
     return await get_current_user(token, request, db)
 
 
 def get_models():
     """Lazy import models to avoid circular imports"""
-    from main import User, Lead, Task
+    from database.models import User, Lead, Task
     return User, Lead, Task
 
 

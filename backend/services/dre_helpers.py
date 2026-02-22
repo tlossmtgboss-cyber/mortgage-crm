@@ -89,8 +89,8 @@ def generate_ai_insights(loan) -> str:
                 closing_dt = datetime.combine(loan.closing_date, datetime.min.time()).replace(tzinfo=timezone.utc)
             if (closing_dt - datetime.now(timezone.utc)).days < 7:
                 insights.append("🔥 Closing date approaching - prioritize tasks")
-        except Exception:
-            pass  # Skip closing date insight if there's any issue
+        except Exception as e:
+            logger.exception(f"Failed to calculate closing date insight: {e}")
 
     if loan.rate and loan.rate > 7.0:
         insights.append("💰 Higher rate loan - consider rate lock strategies")
@@ -1062,8 +1062,8 @@ def get_entity_name(entity_type: str, entity_id, db: Session) -> str:
                 loan = db.query(Loan).filter(Loan.id == entity_id).first()
                 if loan:
                     return loan.borrower_name if loan.borrower_name else f"Portfolio Loan #{entity_id}"
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(f"Failed to look up portfolio Loan for entity_id {entity_id}: {e}")
             mum_client = db.query(MUMClient).filter(MUMClient.id == entity_id).first()
             return mum_client.name if mum_client and mum_client.name else f"Portfolio Client #{entity_id}"
         elif entity_type == "partner":
@@ -2285,7 +2285,8 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                 for script in soup(["script", "style"]):
                     script.decompose()
                 raw_text = soup.get_text(separator='\n', strip=True)
-            except Exception:
+            except Exception as e:
+                logger.exception(f"Failed to parse HTML body with BeautifulSoup: {e}")
                 raw_text = re.sub(r'<[^>]+>', '', body_content)
                 raw_text = raw_text.replace('&nbsp;', ' ').replace('&amp;', '&')
         else:
@@ -2300,8 +2301,8 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                 try:
                     from email.utils import parsedate_to_datetime
                     parsed_received_at = parsedate_to_datetime(received_at)
-                except Exception:
-                    logger.warning(f"Could not parse date: {received_at}")
+                except Exception as e:
+                    logger.exception(f"Could not parse date '{received_at}': {e}")
                     parsed_received_at = datetime.now(timezone.utc)
 
         db_event = IncomingDataEvent(

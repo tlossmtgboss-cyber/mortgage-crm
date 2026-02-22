@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './AccessAuditTab.css';
 import { auditAPI } from '../services/api';
+import { toast } from '../utils/toast';
 
 const AccessAuditTab = ({ userId }) => {
   // State for Audit Log
@@ -60,7 +61,7 @@ const AccessAuditTab = ({ userId }) => {
       setAuditPagination(prev => ({ ...prev, total: response.total || 0 }));
     } catch (error) {
       console.error('Error loading audit log:', error);
-      alert('Failed to load audit log');
+      toast.error('Failed to load audit log');
     } finally {
       setAuditLoading(false);
     }
@@ -74,7 +75,7 @@ const AccessAuditTab = ({ userId }) => {
       setSessions(response.sessions || []);
     } catch (error) {
       console.error('Error loading sessions:', error);
-      alert('Failed to load active sessions');
+      toast.error('Failed to load active sessions');
     } finally {
       setSessionsLoading(false);
     }
@@ -100,12 +101,12 @@ const AccessAuditTab = ({ userId }) => {
 
     try {
       await auditAPI.revokeSession(userId, sessionId, reason);
-      alert('Session revoked successfully');
+      toast.success('Session revoked successfully');
       loadSessions();
       loadAuditLog();
     } catch (error) {
       console.error('Error revoking session:', error);
-      alert('Failed to revoke session');
+      toast.error('Failed to revoke session');
     }
   };
 
@@ -116,26 +117,26 @@ const AccessAuditTab = ({ userId }) => {
 
     try {
       await auditAPI.revokeAllSessions(userId, reason);
-      alert('All sessions revoked successfully');
+      toast.success('All sessions revoked successfully');
       loadSessions();
       loadAuditLog();
     } catch (error) {
       console.error('Error revoking all sessions:', error);
-      alert('Failed to revoke all sessions');
+      toast.error('Failed to revoke all sessions');
     }
   };
 
   // Handle emergency revocation
   const handleEmergencyRevoke = async () => {
     if (!emergencyForm.details.trim()) {
-      alert('Please provide details for the emergency revocation');
+      toast.error('Please provide details for the emergency revocation');
       return;
     }
 
     try {
       setEmergencyLoading(true);
       await auditAPI.emergencyRevoke(userId, emergencyForm);
-      alert('Emergency access revocation completed successfully');
+      toast.success('Emergency access revocation completed successfully');
       setShowEmergencyModal(false);
       setEmergencyForm({
         reason: 'security_incident',
@@ -148,7 +149,7 @@ const AccessAuditTab = ({ userId }) => {
       loadAuditLog();
     } catch (error) {
       console.error('Error during emergency revocation:', error);
-      alert('Failed to complete emergency revocation');
+      toast.error('Failed to complete emergency revocation');
     } finally {
       setEmergencyLoading(false);
     }

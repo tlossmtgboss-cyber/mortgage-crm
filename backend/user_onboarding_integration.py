@@ -1084,7 +1084,8 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                     import json
                     try:
                         user_metadata = json.loads(user_metadata)
-                    except Exception:
+                    except Exception as e:
+                        logger.exception(f"Failed to parse user_metadata JSON for user_id={user_id}: {e}")
                         continue
 
                 if user_metadata and hmac.compare_digest(user_metadata.get("invitation_token") or "", token):
@@ -1202,7 +1203,8 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                     import json
                     try:
                         user_metadata = json.loads(user_metadata_raw)
-                    except Exception:
+                    except Exception as e:
+                        logger.exception(f"Failed to parse user_metadata JSON for user_id={user_id}: {e}")
                         continue
                 else:
                     user_metadata = user_metadata_raw

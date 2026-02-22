@@ -252,8 +252,8 @@ class ClamAVScanner:
         if clamd:
             try:
                 return clamd.version()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error getting ClamAV version: {e}")
         return None
 
 

@@ -282,7 +282,8 @@ def get_user_creation_routes(
 
         try:
             data = await request.json()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error parsing JSON in create_user: {e}")
             raise HTTPException(status_code=400, detail="Invalid JSON body")
 
         email = data.get('email')

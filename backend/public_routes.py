@@ -149,7 +149,8 @@ async def create_demo_user(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Lazy imports to avoid circular dependency
-    from main import User, Subscription, OnboardingProgress, get_password_hash
+    from database.models import User, Subscription, OnboardingProgress
+    from main import get_password_hash
 
     demo_email = "demo@test.com"
     demo_password = _os.getenv("DEMO_USER_PASSWORD") or _secrets.token_urlsafe(16)
@@ -435,7 +436,7 @@ async def verify_email(verification: EmailVerification, db: Session = Depends(ge
     Verify user's email address with token
     """
     # Lazy import to avoid circular dependency
-    from main import User
+    from database.models import User
 
     user_id = VerificationTokenService.verify_token(db, verification.token)
 
@@ -469,7 +470,7 @@ async def resend_verification(email: EmailStr, db: Session = Depends(get_db)):
     Resend verification email
     """
     # Lazy import to avoid circular dependency
-    from main import User
+    from database.models import User
 
     user = db.query(User).filter(User.email == email).first()
 
@@ -566,7 +567,7 @@ async def get_onboarding_progress(user_id: int, db: Session = Depends(get_db)):
     Get onboarding progress for a user
     """
     # Lazy import to avoid circular dependency
-    from main import OnboardingProgress
+    from database.models import OnboardingProgress
 
     progress = db.query(OnboardingProgress).filter(
         OnboardingProgress.user_id == user_id
@@ -594,7 +595,7 @@ async def update_onboarding_step(
     Update onboarding step progress
     """
     # Lazy import to avoid circular dependency
-    from main import OnboardingProgress
+    from database.models import OnboardingProgress
 
     progress = db.query(OnboardingProgress).filter(
         OnboardingProgress.user_id == user_id
@@ -638,7 +639,7 @@ async def upload_onboarding_documents(
     In production, this would use file upload and storage (S3, etc.)
     """
     # Lazy import to avoid circular dependency
-    from main import OnboardingProgress
+    from database.models import OnboardingProgress
 
     progress = db.query(OnboardingProgress).filter(
         OnboardingProgress.user_id == user_id
@@ -671,7 +672,7 @@ async def add_team_member(
     Add a team member during onboarding
     """
     # Lazy import to avoid circular dependency
-    from main import TeamMember, OnboardingProgress
+    from database.models import TeamMember, OnboardingProgress
 
     db_member = TeamMember(
         user_id=user_id,
@@ -737,7 +738,7 @@ async def generate_workflows(
     documents and generate custom workflows
     """
     # Lazy import to avoid circular dependency
-    from main import TeamMember, OnboardingProgress, Workflow
+    from database.models import TeamMember, OnboardingProgress, Workflow
 
     # Get team members
     team_members = db.query(TeamMember).filter(TeamMember.user_id == user_id).all()
@@ -896,7 +897,7 @@ async def submit_mortgage_planner_questionnaire(
     3. Creates tasks to get introductions to excellent-rated professionals
     4. Creates tasks to make referrals when borrower needs professionals
     """
-    from main import Lead, Task
+    from database.models import Lead, Task
     from sqlalchemy import text
 
     try:
@@ -913,7 +914,7 @@ async def submit_mortgage_planner_questionnaire(
             lead.phone = submission.phone
         else:
             # Create new lead
-            from main import LeadStage
+            from database.enums import LeadStage
             lead = Lead(
                 name=submission.name,
                 email=submission.email,
@@ -1144,7 +1145,7 @@ async def search_partners_public(
     - limit: Maximum results to return (default 10)
     """
     try:
-        from main import ReferralPartner
+        from database.models import ReferralPartner
         from sqlalchemy import or_, func
 
         # Include active partners and those with null/unknown status
@@ -1207,7 +1208,7 @@ async def get_realtors_public(
     Now also includes all active partners with empty/unknown types to be more inclusive.
     """
     try:
-        from main import ReferralPartner
+        from database.models import ReferralPartner
         from sqlalchemy import or_, func
 
         # Include realtor-type partners AND partners with empty/unknown types

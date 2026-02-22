@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import './RealtorDashboard.css';
+import { toast } from '../utils/toast';
 
 /**
  * RealtorDashboard - Realtor Partner Dashboard
@@ -125,7 +126,7 @@ const RealtorDashboard = () => {
       loadDashboard(); // Refresh data
     } catch (err) {
       console.error('Referral submission error:', err);
-      alert('Failed to submit referral. Please try again.');
+      toast.error('Failed to submit referral. Please try again.');
     } finally {
       setSubmitting(false);
     }

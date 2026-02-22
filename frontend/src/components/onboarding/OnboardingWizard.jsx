@@ -7,6 +7,7 @@ import Step3AIPreferences from './steps/Step3AIPreferences';
 import Step4Training from './steps/Step4Training';
 import Step5Confirmation from './steps/Step5Confirmation';
 import './OnboardingWizard.css';
+import { toast } from '../../utils/toast';
 
 const TOTAL_STEPS = 5;
 const API_BASE = 'https://api.perenniaai.com/api';
@@ -248,14 +249,14 @@ const OnboardingWizard = () => {
     // Save current step data
     const saved = await saveStep(currentStepData);
     if (!saved) {
-      alert('Please fix the errors before proceeding.');
+      toast.error('Please fix the errors before proceeding.');
       return;
     }
 
     // Mark step as complete
     const completed = await completeStep();
     if (!completed) {
-      alert('Error completing step. Please try again.');
+      toast.error('Error completing step. Please try again.');
       return;
     }
 
@@ -308,11 +309,11 @@ const OnboardingWizard = () => {
         // Navigate to dashboard
         navigate('/dashboard?onboarding=complete');
       } else {
-        alert('Error completing onboarding. Please try again.');
+        toast.error('Error completing onboarding. Please try again.');
       }
     } catch (error) {
       console.error('Error completing onboarding:', error);
-      alert('Error completing onboarding. Please try again.');
+      toast.error('Error completing onboarding. Please try again.');
     } finally {
       setIsSaving(false);
     }

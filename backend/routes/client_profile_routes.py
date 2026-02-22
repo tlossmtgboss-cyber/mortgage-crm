@@ -1055,7 +1055,11 @@ async def get_unified_tasks(
                 "sla_milestone_id": task.sla_milestone_id,
                 "sla_milestone_type": task.sla_milestone_type,
                 "sla_date_field": task.sla_date_field,
-                "related_type": task.related_type
+                "related_type": task.related_type,
+                # SF Disposition fields
+                "sf_proposed_stage": getattr(task, 'sf_proposed_stage', None),
+                "sf_current_stage": getattr(task, 'sf_current_stage', None),
+                "is_disposition": getattr(task, 'related_type', None) == 'sf_disposition',
             })
 
         # 3. Get pending reconciliation items (batch fetch events separately to avoid N+1)
@@ -1164,6 +1168,215 @@ async def get_unified_tasks(
 
     except Exception as e:
         logger.error(f"Error fetching unified tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/disposition-tasks/{task_id}/apply")
+async def apply_disposition_task(
+    task_id: int,
+    body: dict = Body(default={}),
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Apply a Salesforce disposition task — updates loan stage and stamps SLA date.
+    """
+    main = get_main_module()
+    Task = main.Task
+    Loan = main.Loan
+
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if not task.sf_proposed_stage:
+        raise HTTPException(status_code=400, detail="Not a disposition task")
+    if task.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Task already {task.status}")
+
+    loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Parse optional disposition_date or default to now
+    disposition_date_str = body.get("disposition_date")
+    if disposition_date_str:
+        try:
+            disposition_dt = datetime.fromisoformat(disposition_date_str)
+        except (ValueError, TypeError):
+            disposition_dt = datetime.now(timezone.utc)
+    else:
+        disposition_dt = datetime.now(timezone.utc)
+
+    old_stage = str(loan.stage) if loan.stage else None
+
+    try:
+        # 1. Update loan stage
+        loan.stage = task.sf_proposed_stage
+        loan.stage_changed_at = disposition_dt
+
+        # 2. Stamp SLA date field
+        sla_date_field = task.sla_date_field
+        date_stamped = None
+        if sla_date_field and hasattr(loan, sla_date_field):
+            setattr(loan, sla_date_field, disposition_dt)
+            date_stamped = sla_date_field
+
+        # 3. Mark task as completed
+        task.status = "completed"
+        task.disposition_action = "applied"
+        task.disposition_date = datetime.now(timezone.utc)
+        task.disposition_by = current_user.id
+        task.completed_at = datetime.now(timezone.utc)
+
+        # 4. Write audit log
+        try:
+            db.execute(text("""
+                INSERT INTO loan_state_audit_log (
+                    loan_id, from_stage, to_stage, action,
+                    is_backward_movement, warnings, metadata, created_at
+                ) VALUES (
+                    :loan_id, :from_stage, :to_stage, 'disposition_applied',
+                    false, '[]',
+                    :metadata, NOW()
+                )
+            """), {
+                "loan_id": loan.id,
+                "from_stage": old_stage,
+                "to_stage": task.sf_proposed_stage,
+                "metadata": json.dumps({
+                    "task_id": task_id,
+                    "applied_by": current_user.id,
+                    "sla_date_field": sla_date_field,
+                    "disposition_date": disposition_dt.isoformat(),
+                }),
+            })
+        except Exception as audit_err:
+            logger.warning(f"Could not write audit log for disposition apply: {audit_err}")
+
+        # 5. Track SLA stage change
+        try:
+            from services.sla_tracking_service import track_loan_stage_change
+            track_loan_stage_change(
+                db=db,
+                loan_id=loan.id,
+                old_stage=old_stage,
+                new_stage=task.sf_proposed_stage,
+                user_id=current_user.id,
+                loan_number=loan.loan_number,
+                organization_id=getattr(loan, 'organization_id', None),
+            )
+        except Exception as sla_err:
+            logger.warning(f"SLA tracking after disposition apply failed: {sla_err}")
+
+        # 6. If FUNDED, trigger MUM promotion
+        if task.sf_proposed_stage == "FUNDED":
+            try:
+                from services.mum_promotion_service import maybe_promote_loan_to_mum
+                maybe_promote_loan_to_mum(db=db, loan_id=loan.id, user_id=current_user.id)
+            except Exception as mum_err:
+                logger.warning(f"MUM promotion after disposition apply failed: {mum_err}")
+
+        db.commit()
+
+        # Invalidate unified-tasks cache
+        try:
+            from performance_cache import cache_key, invalidate_cache
+            invalidate_cache(cache_key("unified_tasks", current_user.id))
+        except Exception as e:
+            logger.warning(f"Error invalidating unified_tasks cache after apply: {e}")
+
+        return {
+            "status": "applied",
+            "task_id": task_id,
+            "loan_id": loan.id,
+            "new_stage": task.sf_proposed_stage,
+            "old_stage": old_stage,
+            "sla_date_field": date_stamped,
+            "date_stamped": disposition_dt.isoformat() if date_stamped else None,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error applying disposition task {task_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/disposition-tasks/{task_id}/dismiss")
+async def dismiss_disposition_task(
+    task_id: int,
+    body: dict = Body(default={}),
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Dismiss a Salesforce disposition task — stage stays unchanged, reason logged.
+    """
+    main = get_main_module()
+    Task = main.Task
+
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if not task.sf_proposed_stage:
+        raise HTTPException(status_code=400, detail="Not a disposition task")
+    if task.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Task already {task.status}")
+
+    reason = body.get("reason", "")
+
+    try:
+        # Mark task as completed (dismissed)
+        task.status = "completed"
+        task.disposition_action = "dismissed"
+        task.disposition_date = datetime.now(timezone.utc)
+        task.disposition_by = current_user.id
+        task.completed_at = datetime.now(timezone.utc)
+
+        # Write audit log
+        try:
+            db.execute(text("""
+                INSERT INTO loan_state_audit_log (
+                    loan_id, from_stage, to_stage, action,
+                    is_backward_movement, warnings, metadata, created_at
+                ) VALUES (
+                    :loan_id, :from_stage, :to_stage, 'disposition_dismissed',
+                    false, '[]',
+                    :metadata, NOW()
+                )
+            """), {
+                "loan_id": task.loan_id,
+                "from_stage": task.sf_current_stage,
+                "to_stage": task.sf_proposed_stage,
+                "metadata": json.dumps({
+                    "task_id": task_id,
+                    "dismissed_by": current_user.id,
+                    "reason": reason,
+                }),
+            })
+        except Exception as audit_err:
+            logger.warning(f"Could not write audit log for disposition dismiss: {audit_err}")
+
+        db.commit()
+
+        # Invalidate unified-tasks cache
+        try:
+            from performance_cache import cache_key, invalidate_cache
+            invalidate_cache(cache_key("unified_tasks", current_user.id))
+        except Exception as e:
+            logger.warning(f"Error invalidating unified_tasks cache after dismiss: {e}")
+
+        return {
+            "status": "dismissed",
+            "task_id": task_id,
+            "loan_id": task.loan_id,
+            "dismissed_stage": task.sf_proposed_stage,
+            "current_stage": task.sf_current_stage,
+            "reason": reason,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error dismissing disposition task {task_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

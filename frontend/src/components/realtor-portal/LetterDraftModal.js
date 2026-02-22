@@ -7,6 +7,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useLetterGeneration } from '../../hooks/useRealtorPortal';
+import { toast } from '../../utils/toast';
 
 // =============================================================================
 // LETTER DRAFT MODAL COMPONENT
@@ -149,7 +150,7 @@ export default function LetterDraftModal({
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(generatedLetter?.share_url || '');
-                      alert('Share link copied to clipboard!');
+                      toast.success('Share link copied to clipboard!');
                     }}
                     className="block w-full px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                   >

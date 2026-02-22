@@ -258,8 +258,8 @@ class DeepgramVoiceAgentSession:
         if self.deepgram_ws:
             try:
                 await self.deepgram_ws.close()
-            except Exception:
-                pass  # WebSocket may already be closed
+            except Exception as e:
+                logger.exception(f"Failed to close Deepgram WebSocket (may already be closed): {e}")
 
         logger.info(f"[VoiceAgent] Session {self.session_id} closed")
 
@@ -337,8 +337,8 @@ async def voice_agent_websocket(
                 "type": "error",
                 "message": "Internal server error"
             })
-        except Exception:
-            pass  # Client may have disconnected
+        except Exception as e:
+            logger.exception(f"Failed to send error message to WebSocket client (may have disconnected): {e}")
 
     finally:
         if session:

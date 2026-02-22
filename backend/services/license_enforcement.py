@@ -390,9 +390,8 @@ def _get_license_info(db: Session, user, state: str) -> Optional[Dict[str, Any]]
                 "status": row[1],
                 "expiration_date": str(row[2]) if row[2] else None,
             }
-    except Exception:
-        # Table doesn't exist - that's fine
-        pass
+    except Exception as e:
+        logger.exception(f"Failed to query lo_licenses table (may not exist): {e}")
 
     return None
 
@@ -432,8 +431,8 @@ def _get_all_licenses(db: Session, user) -> List[Dict[str, Any]]:
                     "status": row[1],
                     "expiration_date": str(row[2]) if row[2] else None,
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(f"Failed to query lo_licenses table for all licenses: {e}")
 
     return licenses
 

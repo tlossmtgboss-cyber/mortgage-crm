@@ -20,6 +20,7 @@ import IncomeCalculatorModal from '../components/income/IncomeCalculatorModal';
 import ESignModal from '../components/esign/ESignModal';
 import RequestDocumentModal from '../components/smart-docs/RequestDocumentModal';
 import './SmartDocsClientDetail.css';
+import { toast } from '../utils/toast';
 
 function SmartDocsClientDetail() {
   const { loanId } = useParams();
@@ -243,7 +244,7 @@ function SmartDocsClientDetail() {
           document_ids: Array.from(selectedDocs)
         })
       });
-      alert('Documents merged and email sent!');
+      toast.success('Documents merged and email sent!');
     } catch (err) {
       console.error('Error merging and emailing:', err);
     } finally {
@@ -283,7 +284,7 @@ function SmartDocsClientDetail() {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      alert('Document emailed!');
+      toast.success('Document emailed!');
     } catch (err) {
       console.error('Error emailing document:', err);
     }
@@ -310,15 +311,15 @@ function SmartDocsClientDetail() {
       );
 
       if (response.ok) {
-        alert('Document approved!');
+        toast.success('Document approved!');
         fetchClientData(); // Refresh data
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to approve document'}`);
+        toast.error(`Error: ${error.detail || 'Failed to approve document'}`);
       }
     } catch (err) {
       console.error('Error approving document:', err);
-      alert('Error approving document');
+      toast.error('Error approving document');
     } finally {
       setActionLoading(false);
     }
@@ -354,15 +355,15 @@ function SmartDocsClientDetail() {
       );
 
       if (response.ok) {
-        alert('Document rejected');
+        toast.success('Document rejected');
         fetchClientData();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to reject document'}`);
+        toast.error(`Error: ${error.detail || 'Failed to reject document'}`);
       }
     } catch (err) {
       console.error('Error rejecting document:', err);
-      alert('Error rejecting document');
+      toast.error('Error rejecting document');
     } finally {
       setActionLoading(false);
     }
@@ -389,15 +390,15 @@ function SmartDocsClientDetail() {
       );
 
       if (response.ok) {
-        alert('Document deleted');
+        toast.success('Document deleted');
         fetchClientData();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to delete document'}`);
+        toast.error(`Error: ${error.detail || 'Failed to delete document'}`);
       }
     } catch (err) {
       console.error('Error deleting document:', err);
-      alert('Error deleting document');
+      toast.error('Error deleting document');
     } finally {
       setActionLoading(false);
     }
@@ -432,15 +433,15 @@ function SmartDocsClientDetail() {
       );
 
       if (response.ok) {
-        alert('Document re-requested! Borrower will be notified.');
+        toast.success('Document re-requested! Borrower will be notified.');
         fetchClientData();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to re-request document'}`);
+        toast.error(`Error: ${error.detail || 'Failed to re-request document'}`);
       }
     } catch (err) {
       console.error('Error re-requesting document:', err);
-      alert('Error re-requesting document');
+      toast.error('Error re-requesting document');
     } finally {
       setActionLoading(false);
     }
@@ -453,7 +454,7 @@ function SmartDocsClientDetail() {
     // Need the document_id, not the request id
     const documentId = selectedDoc.document_id;
     if (!documentId) {
-      alert('Cannot change type: document has not been uploaded yet');
+      toast.error('Cannot change type: document has not been uploaded yet');
       setEditingDocType(false);
       return;
     }
@@ -482,14 +483,14 @@ function SmartDocsClientDetail() {
         ));
         setSelectedDoc(prev => ({ ...prev, doc_type: editDocTypeValue }));
         setEditingDocType(false);
-        alert('Document type updated successfully!');
+        toast.success('Document type updated successfully!');
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to update document type'}`);
+        toast.error(`Error: ${error.detail || 'Failed to update document type'}`);
       }
     } catch (err) {
       console.error('Error updating document type:', err);
-      alert('Error updating document type');
+      toast.error('Error updating document type');
     } finally {
       setActionLoading(false);
     }

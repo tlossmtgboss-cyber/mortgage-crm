@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import './AdminPanel.css';
+import { toast } from '../utils/toast';
 
 /**
  * AdminPanel - Administrative Dashboard
@@ -283,7 +284,7 @@ const AdminPanel = () => {
       }
     } catch (err) {
       console.error('Error refreshing Mission Control:', err);
-      alert('Failed to refresh system health checks');
+      toast.error('Failed to refresh system health checks');
     } finally {
       setMissionControlRefreshing(false);
     }
@@ -386,7 +387,7 @@ const AdminPanel = () => {
       loadSecurityData();
     } catch (err) {
       console.error('Error unblocking IP:', err);
-      alert('Failed to unblock IP');
+      toast.error('Failed to unblock IP');
     }
   };
 
@@ -464,14 +465,14 @@ const AdminPanel = () => {
         setShowUserModal(false);
         // Show temp password if one was generated
         if (response.data?.temp_password) {
-          alert(`User created successfully!\n\nTemporary Password: ${response.data.temp_password}\n\nPlease share this password with the user securely. They will need to change it on first login.`);
+          toast.success(`User created successfully!\n\nTemporary Password: ${response.data.temp_password}\n\nPlease share this password with the user securely. They will need to change it on first login.`);
         }
       }
       loadDashboard();
     } catch (err) {
       console.error('Save user error:', err);
       const errorMsg = err.response?.data?.detail || 'Failed to save user. Please try again.';
-      alert(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -509,19 +510,17 @@ const AdminPanel = () => {
 
       // Show credentials
       const password = response.data?.temp_password || testAccountForm.password || 'Check email for password';
-      alert(
-        `Test account created successfully!\n\n` +
+      toast.success(`Test account created successfully!\n\n` +
         `Email: ${testAccountForm.email}\n` +
         `Password: ${password}\n` +
         `Role: ${testAccountForm.role}\n\n` +
         `You can now:\n` +
         `1. Log out and log in with these credentials\n` +
-        `2. Or use the Impersonate feature to view as this user`
-      );
+        `2. Or use the Impersonate feature to view as this user`);
     } catch (err) {
       console.error('Create test account error:', err);
       const errorMsg = err.response?.data?.detail || 'Failed to create test account. Please try again.';
-      alert(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setCreatingTestAccount(false);
     }
@@ -1271,7 +1270,7 @@ const AdminPanel = () => {
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(getMicrositeUrl(lo));
-                          alert('URL copied!');
+                          toast.success('URL copied!');
                         }}
                       >
                         Copy

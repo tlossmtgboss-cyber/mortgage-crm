@@ -111,7 +111,7 @@ class FollowUpBossSyncService:
             List of created stage mappings
         """
         # Get CRM stage names
-        from main import LeadStage
+        from database.enums import LeadStage
         crm_stages = {s.value: s.name for s in LeadStage}
 
         created_mappings = []
@@ -190,7 +190,8 @@ class FollowUpBossSyncService:
         Returns:
             Tuple of (lead_id, is_new)
         """
-        from main import Lead, LeadStage
+        from database.enums import LeadStage
+        from database.models import Lead
 
         fub_person_id = fub_person.get("id")
         if not fub_person_id:
@@ -340,7 +341,8 @@ class FollowUpBossSyncService:
         Returns:
             Activity ID if created
         """
-        from main import Activity, ActivityType
+        from database.enums import ActivityType
+        from database.models import Activity
 
         fub_note_id = fub_note.get("id")
         fub_person_id = fub_note.get("personId")
@@ -427,7 +429,7 @@ class FollowUpBossSyncService:
         Returns:
             True if sync successful
         """
-        from main import Lead
+        from database.models import Lead
 
         lead = self.db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
@@ -539,7 +541,8 @@ class FollowUpBossSyncService:
         Returns:
             True if sync successful
         """
-        from main import Activity, ActivityType
+        from database.enums import ActivityType
+        from database.models import Activity
 
         activity = self.db.query(Activity).filter(Activity.id == activity_id).first()
         if not activity:

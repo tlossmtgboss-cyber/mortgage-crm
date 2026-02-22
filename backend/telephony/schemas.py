@@ -4,6 +4,12 @@ from typing import Optional, List
 from datetime import datetime
 import re
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 # Note: Using string enums to match current implementation in main.py
 # When migrating to UUID models, import from telephony.models instead
 

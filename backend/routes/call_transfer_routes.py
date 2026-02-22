@@ -36,7 +36,7 @@ def safe_isoformat(dt_value) -> Optional[str]:
 
 def get_current_user_flexible():
     """Lazy import auth dependency"""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 
@@ -329,7 +329,8 @@ async def initiate_cold_transfer(
 
         try:
             transfer_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in initiate_cold_transfer: {e}")
             transfer_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -529,7 +530,8 @@ async def initiate_warm_transfer(
 
         try:
             transfer_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching RETURNING id in initiate_warm_transfer: {e}")
             transfer_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()
@@ -673,8 +675,8 @@ async def complete_warm_transfer(
             if transfer.consultation_call_sid:
                 try:
                     client.calls(transfer.consultation_call_sid).update(status="completed")
-                except Exception:
-                    pass  # Call may already be ended
+                except Exception as e:
+                    logger.error(f"Error ending consultation call in cancel_warm_transfer: {e}")
 
             # Update original call to return from hold
             return_url = f"{base_url}/api/v1/transfers/twiml/warm-cancel?transfer_id={request.transfer_id}"

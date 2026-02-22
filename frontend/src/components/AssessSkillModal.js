@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './SkillModal.css';
+import { toast } from '../utils/toast';
 
 const AssessSkillModal = ({ skill, userId, onSave, onClose }) => {
   const [formData, setFormData] = useState({
@@ -51,7 +52,7 @@ const AssessSkillModal = ({ skill, userId, onSave, onClose }) => {
     try {
       await onSave(formData);
     } catch (err) {
-      alert('Failed to save assessment');
+      toast.error('Failed to save assessment');
       console.error(err);
     } finally {
       setSaving(false);

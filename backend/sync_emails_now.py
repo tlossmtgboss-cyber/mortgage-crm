@@ -20,7 +20,8 @@ async def sync_emails():
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
         # Import after engine is created
-        from main import MicrosoftOAuthToken, User, fetch_microsoft_emails, process_microsoft_email_to_dre
+        from database.models import MicrosoftOAuthToken, User
+        from main import fetch_microsoft_emails, process_microsoft_email_to_dre
 
         db = SessionLocal()
 

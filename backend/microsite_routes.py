@@ -26,6 +26,12 @@ def get_db():
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: EXPERIMENTAL
+# This module is in the experimental tier -- frozen, no SLA.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 router = APIRouter(prefix="/api/v1/public", tags=["Microsite"])
 
 
@@ -99,7 +105,7 @@ async def get_lo_profile(
     """
     try:
         # Try to import User model
-        from main import User
+        from database.models import User
 
         # First try to find by slug
         user = db.query(User).filter(
@@ -157,7 +163,7 @@ async def submit_microsite_lead(
     """
     try:
         # Try to import Lead model
-        from main import Lead
+        from database.models import Lead
 
         # Check if Lead model has the required fields
         lead_dict = {
@@ -199,7 +205,7 @@ async def submit_microsite_lead(
         # Send notification email to LO (async, don't block)
         try:
             if lead_data.loan_officer_id:
-                from main import User
+                from database.models import User
                 lo = db.query(User).filter(User.id == lead_data.loan_officer_id).first()
                 if lo and lo.email:
                     # Import and send notification email
@@ -259,7 +265,7 @@ async def list_loan_officers(
     This can be used for a directory page or search functionality.
     """
     try:
-        from main import User
+        from database.models import User
 
         # Query active users who are loan officers
         query = db.query(User).filter(

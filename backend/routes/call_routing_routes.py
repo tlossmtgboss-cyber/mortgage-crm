@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/v1/call-routing", tags=["call-routing"])
 
 def get_current_user_flexible():
     """Lazy import auth dependency"""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 

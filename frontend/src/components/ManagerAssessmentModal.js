@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import goalsApi from '../services/goalsApi';
 import './AssessmentModal.css';
+import { toast } from '../utils/toast';
 
 const ManagerAssessmentModal = ({ goal, userId, onClose, onSave }) => {
   const [notes, setNotes] = useState('');
@@ -16,7 +17,7 @@ const ManagerAssessmentModal = ({ goal, userId, onClose, onSave }) => {
     e.preventDefault();
 
     if (!notes.trim()) {
-      alert('Please enter feedback notes');
+      toast.error('Please enter feedback notes');
       return;
     }
 
@@ -26,7 +27,7 @@ const ManagerAssessmentModal = ({ goal, userId, onClose, onSave }) => {
       onSave();
       onClose();
     } catch (err) {
-      alert('Failed to save feedback');
+      toast.error('Failed to save feedback');
       console.error(err);
     } finally {
       setSaving(false);

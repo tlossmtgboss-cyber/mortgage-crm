@@ -119,7 +119,8 @@ class LeadStatusInsightsService:
             Dict with context, summary, by_status, bottlenecks, priority_focus_areas, trend_metrics
         """
         # Import Lead model here to avoid circular imports
-        from main import Lead, LeadStage
+        from database.enums import LeadStage
+        from database.models import Lead
 
         # Normalize status keys to enum values
         if include_statuses:
@@ -299,8 +300,8 @@ class LeadStatusInsightsService:
                             updated = updated.replace(tzinfo=timezone.utc)
                         days = (now - updated).days
                         days_in_status.append(max(0, days))
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.exception(f"Failed to calculate days in status for lead: {e}")
 
             avg_days = round(statistics.mean(days_in_status), 1) if days_in_status else 0.0
             median_days = round(statistics.median(days_in_status), 1) if days_in_status else 0.0
@@ -359,8 +360,8 @@ class LeadStatusInsightsService:
 
             if len(leads_at_or_past) > 0:
                 return round((len(leads_advanced) / len(leads_at_or_past)) * 100, 1)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.exception(f"Failed to calculate conversion rate for status '{status}': {e}")
 
         return 0.0
 

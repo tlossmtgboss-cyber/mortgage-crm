@@ -8,6 +8,7 @@ import RolesResponsibilitiesTab from '../components/RolesResponsibilitiesTab';
 import WorkflowMilestonesTab from '../components/WorkflowMilestonesTab';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './TeamMemberProfile.css';
+import { toast } from '../utils/toast';
 
 function TeamMemberProfile() {
   const { id } = useParams();
@@ -33,7 +34,7 @@ function TeamMemberProfile() {
       setFormData(data);
     } catch (error) {
       console.error('Failed to load team member:', error);
-      alert('Failed to load team member details');
+      toast.error('Failed to load team member details');
     } finally {
       setLoading(false);
     }
@@ -44,10 +45,10 @@ function TeamMemberProfile() {
       await teamAPI.updateMember(id, formData);
       setMember(formData);
       setEditing(false);
-      alert('Team member updated successfully!');
+      toast.success('Team member updated successfully!');
     } catch (error) {
       console.error('Failed to update team member:', error);
-      alert('Failed to update team member');
+      toast.error('Failed to update team member');
     }
   };
 
@@ -61,13 +62,13 @@ function TeamMemberProfile() {
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+      toast.error('Please select an image file');
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB');
+      toast.error('File size must be less than 5MB');
       return;
     }
 
@@ -95,10 +96,10 @@ function TeamMemberProfile() {
       setFormData(prev => ({ ...prev, photo_url: photoUrl }));
       setMember(prev => ({ ...prev, photo_url: photoUrl }));
 
-      alert('Photo uploaded successfully!');
+      toast.success('Photo uploaded successfully!');
     } catch (error) {
       console.error('Failed to upload photo:', error);
-      alert('Failed to upload photo. Please try again.');
+      toast.error('Failed to upload photo. Please try again.');
     } finally {
       setUploadingPhoto(false);
     }

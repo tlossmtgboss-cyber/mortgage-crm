@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { aiAPI } from '../../services/api';
 import { sanitizeHTML } from '../../utils/sanitize';
 import './TaskDetailPanel.css';
+import { toast } from '../../utils/toast';
 
 /**
  * Shared TaskDetailPanel Component
@@ -559,7 +560,7 @@ const TaskDetailPanel = ({
   // Handle SLA task completion with date
   const handleCompleteSlaTask = async () => {
     if (!slaMilestoneDate) {
-      alert('Please enter the milestone completion date');
+      toast.error('Please enter the milestone completion date');
       return;
     }
 
@@ -597,13 +598,13 @@ const TaskDetailPanel = ({
       if (result.milestone_completed) {
         message += ' SLA milestone marked as complete.';
       }
-      alert(message);
+      toast.info(message);
 
       // Call parent's onComplete to remove from list
       onComplete && onComplete(task.id);
     } catch (error) {
       console.error('Error completing SLA task:', error);
-      alert(error.message || 'Failed to complete SLA task');
+      toast.error(error.message || 'Failed to complete SLA task');
     } finally {
       setCompletingSla(false);
     }

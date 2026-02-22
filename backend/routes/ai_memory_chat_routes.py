@@ -274,8 +274,8 @@ async def smart_chat_with_memory(
                     impact_score=0.0,
                     metadata={"error": "Internal server error"}
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error updating AI action on failure: {e}")
 
         return {
             "success": False,

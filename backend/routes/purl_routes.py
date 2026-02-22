@@ -21,7 +21,7 @@ from database import get_db
 
 # Use TYPE_CHECKING to avoid circular import - User is only needed for type hints
 if TYPE_CHECKING:
-    from main import User
+    from database.models import User
 from sqlalchemy.exc import SQLAlchemyError
 
 # Lazy import wrapper for get_current_user to avoid circular import
@@ -31,7 +31,7 @@ def get_authenticated_user():
     Lazy import wrapper for get_current_user to avoid circular import.
     Returns the get_current_user dependency from main module.
     """
-    from main import get_current_user
+    from auth.dependencies import get_current_user
     return get_current_user
 
 # Models and schemas
@@ -1125,7 +1125,7 @@ async def search_contacts_for_workspace(
     Search leads by name for workspace creation.
     Returns leads that match the search query along with their existing workspace status.
     """
-    from main import Lead
+    from database.models import Lead
     from sqlalchemy import or_, cast, String
 
     search_term = f"%{q}%"
@@ -1214,7 +1214,7 @@ async def create_workspace(
     db: Session = Depends(get_db)
 ):
     """Create a new PURL workspace with duplicate prevention."""
-    from main import Lead
+    from database.models import Lead
 
     org_id = get_user_org_id(current_user)
 

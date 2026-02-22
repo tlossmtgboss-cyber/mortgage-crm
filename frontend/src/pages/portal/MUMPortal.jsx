@@ -19,6 +19,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { mumPortalAPI } from '../../services/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
 import './MUMPortal.css';
+import { toast } from '../../utils/toast';
 
 // Helper functions
 const formatCurrency = (amount) => {
@@ -366,11 +367,11 @@ const HomeownerResources = () => (
         <span className="resource-icon">📋</span>
         <span>Tax Deduction Guide</span>
       </button>
-      <button type="button" className="resource-link" onClick={() => alert('Insurance review coming soon!')}>
+      <button type="button" className="resource-link" onClick={() => toast.info('Insurance review coming soon!')}>
         <span className="resource-icon">🛡️</span>
         <span>Insurance Review</span>
       </button>
-      <button type="button" className="resource-link" onClick={() => alert('Renovation calculator coming soon!')}>
+      <button type="button" className="resource-link" onClick={() => toast.info('Renovation calculator coming soon!')}>
         <span className="resource-icon">🏗️</span>
         <span>Renovation ROI Calculator</span>
       </button>
@@ -721,16 +722,16 @@ export default function MUMPortal({ data, slug, onRefresh }) {
             <div className="documents-section">
               <h3>Important Documents</h3>
               <div className="document-links">
-                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
+                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
                   <span>📄</span> Closing Disclosure
                 </button>
-                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
+                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
                   <span>📄</span> Promissory Note
                 </button>
-                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
+                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
                   <span>📄</span> Deed of Trust
                 </button>
-                <button type="button" className="doc-link" onClick={() => alert('Document access coming soon!')}>
+                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
                   <span>📄</span> Title Insurance Policy
                 </button>
               </div>
@@ -874,7 +875,7 @@ export default function MUMPortal({ data, slug, onRefresh }) {
                         </span>
                       )}
                     </div>
-                    <button className="download-btn" onClick={() => alert('Document download coming soon!')}>
+                    <button className="download-btn" onClick={() => toast.info('Document download coming soon!')}>
                       Download
                     </button>
                   </div>

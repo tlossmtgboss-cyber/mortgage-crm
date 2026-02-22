@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
+import { toast } from '../../utils/toast';
   getCandidateFullProfile,
   updateCandidateStatus,
   updateCandidateProduction,
@@ -1109,7 +1110,7 @@ const RecruitDetail = () => {
                       setCandidate(refreshed);
                     } catch (err) {
                       console.error('Failed to create portal workspace:', err);
-                      alert('Failed to create portal. Please try again.');
+                      toast.error('Failed to create portal. Please try again.');
                       return;
                     }
                   }

@@ -63,7 +63,7 @@ def calc_wait_time(entered_at) -> float:
 
 def get_current_user_flexible():
     """Lazy import auth dependency"""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 
@@ -188,7 +188,8 @@ async def create_queue(
 
         try:
             queue_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error fetching queue_id from RETURNING clause: {e}")
             queue_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         # Create Twilio queue
@@ -490,7 +491,8 @@ async def add_queue_member(
 
         try:
             member_id = result.fetchone()[0]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error fetching member_id from RETURNING clause: {e}")
             member_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
         db.commit()

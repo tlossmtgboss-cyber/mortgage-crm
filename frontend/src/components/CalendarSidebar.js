@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { schedulerAPI, crmCalendarAPI } from '../services/api';
 import './CalendarSidebar.css';
+import { toast } from '../utils/toast';
 
 // v1.5 - Fixed timezone handling for appointments
 console.log('[CalendarSidebar] v1.5 loaded - fixed timezone handling');
@@ -489,15 +490,15 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
     // Validate required fields
     if (!appointmentForm.attendee_name?.trim()) {
-      alert('Please enter a contact name');
+      toast.error('Please enter a contact name');
       return;
     }
     if (!appointmentForm.attendee_email?.trim()) {
-      alert('Please enter a contact email');
+      toast.error('Please enter a contact email');
       return;
     }
     if (!appointmentForm.date) {
-      alert('Please select a date');
+      toast.error('Please select a date');
       return;
     }
 
@@ -537,7 +538,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
       const msg = Array.isArray(detail)
         ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join(', ')
         : detail || error.message;
-      alert('Failed to create appointment: ' + msg);
+      toast.error('Failed to create appointment: ' + msg);
     }
   };
 
@@ -593,7 +594,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
       loadAppointments();
     } catch (error) {
       console.error('Failed to update appointment:', error);
-      alert('Failed to update appointment: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to update appointment: ' + (error.response?.data?.detail || error.message));
     } finally {
       setSaving(false);
     }
@@ -613,7 +614,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
       loadAppointments();
     } catch (error) {
       console.error('Failed to cancel appointment:', error);
-      alert('Failed to cancel appointment: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to cancel appointment: ' + (error.response?.data?.detail || error.message));
     } finally {
       setSaving(false);
     }

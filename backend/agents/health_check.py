@@ -794,7 +794,8 @@ async def check_e2e_workflow():
         try:
             result = await executor.execute("get_pipeline_metrics", {}, "e2e_test")
             scenario_results.append(("Pipeline Check", getattr(result, 'success', True)))
-        except Exception:
+        except Exception as e:
+            logger.exception(f"E2E pipeline check failed: {e}")
             scenario_results.append(("Pipeline Check", False))
 
         # Step 2: Compliance check
@@ -802,7 +803,8 @@ async def check_e2e_workflow():
         try:
             result = await executor.execute("get_state_requirements", {"state": "TX"}, "e2e_test")
             scenario_results.append(("Compliance Check", getattr(result, 'success', True)))
-        except Exception:
+        except Exception as e:
+            logger.exception(f"E2E compliance check failed: {e}")
             scenario_results.append(("Compliance Check", False))
 
         # Step 3: Lead scoring
@@ -810,7 +812,8 @@ async def check_e2e_workflow():
         try:
             result = await executor.execute("get_lead_details", {"lead_id": 1}, "e2e_test")
             scenario_results.append(("Lead Lookup", getattr(result, 'success', True) if hasattr(result, 'success') else True))
-        except Exception:
+        except Exception as e:
+            logger.exception(f"E2E lead lookup failed: {e}")
             scenario_results.append(("Lead Lookup", False))
 
         successful = sum(1 for _, success in scenario_results if success)

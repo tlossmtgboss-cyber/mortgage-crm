@@ -16,7 +16,7 @@ from database import get_db
 
 # Handle import of get_current_user (avoid circular import issues)
 try:
-    from main import get_current_user
+    from auth.dependencies import get_current_user
 except ImportError:
     from fastapi import HTTPException as _HTTPException
     async def get_current_user():

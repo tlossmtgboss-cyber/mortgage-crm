@@ -508,7 +508,7 @@ function LoanDetail() {
       loadLoanData();
     } catch (error) {
       console.error('Failed to add note:', error);
-      alert('Failed to add note');
+      toast.error('Failed to add note');
     } finally {
       setNoteLoading(false);
     }
@@ -539,7 +539,7 @@ function LoanDetail() {
         loanData = mockLoans.find(loan => loan.id === parseInt(id));
 
         if (!loanData) {
-          alert('Loan not found');
+          toast.error('Loan not found');
           navigate('/loans');
           return;
         }
@@ -577,7 +577,7 @@ function LoanDetail() {
       setBorrowers(borrowersList);
     } catch (error) {
       console.error('Failed to load loan data:', error);
-      alert('Failed to load loan details');
+      toast.error('Failed to load loan details');
       navigate('/loans');
     } finally {
       setLoading(false);
@@ -589,10 +589,10 @@ function LoanDetail() {
       await loansAPI.update(id, formData);
       setLoan(formData);
       setEditing(false);
-      alert('Loan updated successfully!');
+      toast.success('Loan updated successfully!');
     } catch (error) {
       console.error('Failed to save loan:', error);
-      alert('Failed to save changes');
+      toast.error('Failed to save changes');
     }
   };
 
@@ -744,7 +744,7 @@ function LoanDetail() {
 
   const handleSaveTeamMember = async () => {
     if (!teamMemberForm.name || !teamMemberForm.role) {
-      alert('Please enter a name and role');
+      toast.error('Please enter a name and role');
       return;
     }
 
@@ -768,7 +768,7 @@ function LoanDetail() {
           await loadTeamMembers();
           setShowTeamMemberModal(false);
         } else {
-          alert('Failed to update team member');
+          toast.error('Failed to update team member');
         }
       } else {
         // Create new member
@@ -792,15 +792,15 @@ function LoanDetail() {
 
           // Notify if referral partner was created
           if (data.referral_partner_created) {
-            alert(`${teamMemberForm.name} has been added and saved as a referral partner.`);
+            toast.success(`${teamMemberForm.name} has been added and saved as a referral partner.`);
           }
         } else {
-          alert('Failed to add team member');
+          toast.error('Failed to add team member');
         }
       }
     } catch (error) {
       console.error('Error saving team member:', error);
-      alert('Error saving team member');
+      toast.error('Error saving team member');
     } finally {
       setTeamMemberLoading(false);
     }
@@ -819,11 +819,11 @@ function LoanDetail() {
       if (response.ok) {
         await loadTeamMembers();
       } else {
-        alert('Failed to remove team member');
+        toast.error('Failed to remove team member');
       }
     } catch (error) {
       console.error('Error deleting team member:', error);
-      alert('Error removing team member');
+      toast.error('Error removing team member');
     }
   };
 
@@ -840,7 +840,7 @@ function LoanDetail() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      toast.error('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
       return;
     }
 
@@ -867,7 +867,7 @@ function LoanDetail() {
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
-      alert(`Voice recognition error: ${event.error}`);
+      toast.error(`Voice recognition error: ${event.error}`);
     };
 
     recognition.onend = () => {

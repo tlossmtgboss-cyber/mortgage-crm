@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './VerificationModal.css';
+import { toast } from '../../../utils/toast';
 
 const VerificationModal = ({ type, contact, onClose, onVerified }) => {
   const [code, setCode] = useState('');
@@ -107,14 +108,14 @@ const VerificationModal = ({ type, contact, onClose, onVerified }) => {
         setCanResend(false);
         setCode('');
         setError('');
-        alert('A new verification code has been sent.');
+        toast.success('A new verification code has been sent.');
       } else {
         const errorData = await response.json();
-        alert(errorData.detail || 'Failed to resend code');
+        toast.error(errorData.detail || 'Failed to resend code');
       }
     } catch (error) {
       console.error('Resend error:', error);
-      alert('Failed to resend code. Please try again.');
+      toast.error('Failed to resend code. Please try again.');
     }
   };
 

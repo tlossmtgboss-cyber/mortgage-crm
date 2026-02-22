@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ExperimentsDashboard.css';
+import { toast } from '../utils/toast';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -114,7 +115,7 @@ function ExperimentsDashboard() {
       // Validate variants
       const totalAllocation = newExperiment.variants.reduce((sum, v) => sum + parseFloat(v.traffic_allocation), 0);
       if (Math.abs(totalAllocation - 100) > 0.01) {
-        alert('Variant traffic allocation must sum to 100%');
+        toast.error('Variant traffic allocation must sum to 100%');
         return;
       }
 
@@ -135,12 +136,12 @@ function ExperimentsDashboard() {
         throw new Error(errorData.detail || 'Failed to create experiment');
       }
 
-      alert('Experiment created successfully!');
+      toast.success('Experiment created successfully!');
       setShowCreateModal(false);
       resetForm();
       loadExperiments();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
   };
 
@@ -158,13 +159,13 @@ function ExperimentsDashboard() {
 
       if (!response.ok) throw new Error('Failed to start experiment');
 
-      alert('Experiment started successfully!');
+      toast.success('Experiment started successfully!');
       loadExperiments();
       if (selectedExperiment?.id === experimentId) {
         loadExperimentDetails(experimentId);
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
   };
 
@@ -182,13 +183,13 @@ function ExperimentsDashboard() {
 
       if (!response.ok) throw new Error('Failed to stop experiment');
 
-      alert('Experiment stopped successfully!');
+      toast.success('Experiment stopped successfully!');
       loadExperiments();
       if (selectedExperiment?.id === experimentId) {
         loadExperimentDetails(experimentId);
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
   };
 
@@ -209,11 +210,11 @@ function ExperimentsDashboard() {
         throw new Error(errorData.detail || 'Failed to delete experiment');
       }
 
-      alert('Experiment deleted successfully!');
+      toast.success('Experiment deleted successfully!');
       setSelectedExperiment(null);
       loadExperiments();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     }
   };
 
@@ -258,7 +259,7 @@ function ExperimentsDashboard() {
 
   const removeVariant = (index) => {
     if (newExperiment.variants.length <= 2) {
-      alert('Must have at least 2 variants');
+      toast.error('Must have at least 2 variants');
       return;
     }
 

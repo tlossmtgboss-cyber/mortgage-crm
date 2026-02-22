@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { getAuthHeaders } from '../utils/auth';
 import './EmailIntelligence.css';
+import { toast } from '../utils/toast';
 
 function EmailIntelligence() {
   const navigate = useNavigate();
@@ -240,11 +241,11 @@ function EmailIntelligence() {
       } else {
         const error = await response.json();
         console.error('Process error:', error);
-        alert(`Error: ${error.detail || error.error || 'Failed to process email'}`);
+        toast.error(`Error: ${error.detail || error.error || 'Failed to process email'}`);
       }
     } catch (error) {
       console.error('Error processing email:', error);
-      alert('Failed to process email');
+      toast.error('Failed to process email');
     } finally {
       setProcessingId(null);
     }

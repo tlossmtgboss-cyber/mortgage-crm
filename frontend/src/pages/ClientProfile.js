@@ -162,7 +162,7 @@ function ClientProfile() {
 
         if (!loanData) {
           console.error('❌ Lead not found in mock data');
-          alert('Lead not found in mock data');
+          toast.error('Lead not found in mock data');
           navigate('/loans');
           return;
         }
@@ -209,7 +209,7 @@ function ClientProfile() {
       setBorrowers(borrowersList);
     } catch (error) {
       console.error('Failed to load lead data:', error);
-      alert('Failed to load lead details');
+      toast.error('Failed to load lead details');
       navigate('/loans');
     } finally {
       setLoading(false);
@@ -350,10 +350,10 @@ function ClientProfile() {
       }
 
       setEditing(false);
-      alert('Lead updated successfully!');
+      toast.success('Lead updated successfully!');
     } catch (error) {
       console.error('Failed to update lead:', error);
-      alert('Failed to update lead');
+      toast.error('Failed to update lead');
     }
   };
 
@@ -451,7 +451,7 @@ function ClientProfile() {
       console.error('Failed to add note:', error);
       console.error('Error response:', error.response?.data);
       const errorMsg = error.response?.data?.detail || 'Failed to add note. Please check console for details.';
-      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      toast.error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setNoteLoading(false);
     }
@@ -539,12 +539,12 @@ function ClientProfile() {
         setFormData(newBorrower.data);
       }
 
-      alert(`${fullName} has been added successfully!`);
+      toast.success(`${fullName} has been added successfully!`);
     } catch (error) {
       console.error('Failed to add borrower:', error);
       console.error('Error response:', error.response?.data);
       const errorMsg = error.response?.data?.detail || error.message || 'Failed to add borrower. Please check console for details.';
-      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      toast.error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     }
   };
 
@@ -553,7 +553,7 @@ function ClientProfile() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      toast.error('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
       return;
     }
 
@@ -583,9 +583,9 @@ function ClientProfile() {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       if (event.error === 'no-speech') {
-        alert('No speech detected. Please try again.');
+        toast.error('No speech detected. Please try again.');
       } else {
-        alert(`Error occurred: ${event.error}`);
+        toast.error(`Error occurred: ${event.error}`);
       }
     };
 

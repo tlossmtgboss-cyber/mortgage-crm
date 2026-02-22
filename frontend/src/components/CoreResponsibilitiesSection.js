@@ -5,6 +5,7 @@ import ResponsibilityModal from './ResponsibilityModal';
 import ArchivedResponsibilitiesModal from './ArchivedResponsibilitiesModal';
 import responsibilitiesApi from '../services/responsibilitiesApi';
 import './CoreResponsibilitiesSection.css';
+import { toast } from '../utils/toast';
 
 /**
  * CoreResponsibilitiesSection - Main component for Tab 2, Section B
@@ -99,7 +100,7 @@ function CoreResponsibilitiesSection({ userId, userEmail }) {
       console.error('Error reordering responsibilities:', err);
       // Rollback on error
       loadAllData();
-      alert('Failed to reorder responsibilities. Please try again.');
+      toast.error('Failed to reorder responsibilities. Please try again.');
     }
   };
 
@@ -150,7 +151,7 @@ function CoreResponsibilitiesSection({ userId, userEmail }) {
       setArchivedResponsibilities(prev => [...prev, archived]);
     } catch (err) {
       console.error('Error archiving responsibility:', err);
-      alert('Failed to archive responsibility. Please try again.');
+      toast.error('Failed to archive responsibility. Please try again.');
     } finally {
       setArchiving(false);
     }
@@ -166,7 +167,7 @@ function CoreResponsibilitiesSection({ userId, userEmail }) {
       setResponsibilities(prev => [...prev, restored]);
     } catch (err) {
       console.error('Error restoring responsibility:', err);
-      alert('Failed to restore responsibility. Please try again.');
+      toast.error('Failed to restore responsibility. Please try again.');
     } finally {
       setRestoring(false);
     }

@@ -10,7 +10,7 @@ Usage:
 
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime,
+    Column, Integer, String, Float, Boolean, DateTime, Numeric,
     Text, ForeignKey, JSON
 )
 from sqlalchemy.orm import relationship
@@ -23,8 +23,8 @@ class SubscriptionPlan(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     description = Column(Text)
-    price_monthly = Column(Float, nullable=False)
-    price_yearly = Column(Float)
+    price_monthly = Column(Numeric(18, 2), nullable=False)
+    price_yearly = Column(Numeric(18, 2))
     stripe_price_id = Column(String)
     features = Column(JSON)  # List of features
     user_limit = Column(Integer, default=5)
@@ -55,7 +55,7 @@ class PromoCode(Base):
     code = Column(String, unique=True, index=True, nullable=False)
     description = Column(String)
     discount_type = Column(String, default="percentage")  # percentage, fixed, trial_extension
-    discount_value = Column(Float, default=0)  # percentage (0-100) or fixed dollar amount
+    discount_value = Column(Numeric(18, 2), default=0)  # percentage (0-100) or fixed dollar amount
     trial_days = Column(Integer, default=0)  # additional trial days
     max_uses = Column(Integer)  # null = unlimited
     current_uses = Column(Integer, default=0)

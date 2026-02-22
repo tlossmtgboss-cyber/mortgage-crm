@@ -501,8 +501,8 @@ async def get_notifications(
         # Return empty notifications on error (e.g., table doesn't exist) instead of 500
         try:
             db.rollback()
-        except Exception:
-            pass  # Session may be in an invalid state
+        except Exception as e:
+            logger.error(f"Error during rollback in get_notifications: {e}")
         return {
             "notifications": [],
             "unread_count": 0,

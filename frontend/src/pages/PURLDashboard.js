@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { getAuthHeaders } from '../utils/auth';
 import './PURLDashboard.css';
+import { toast } from '../utils/toast';
 
 /**
  * PURLDashboard - Overview of all client portals
@@ -84,7 +85,7 @@ function PURLDashboard() {
       .map(ws => ws.id);
 
     if (selectedIds.length === 0) {
-      alert('No inactive leads to send reminders to.');
+      toast.info('No inactive leads to send reminders to.');
       return;
     }
 
@@ -98,10 +99,10 @@ function PURLDashboard() {
         { workspace_ids: selectedIds },
         { headers: getAuthHeaders() }
       );
-      alert(`Reminders sent to ${selectedIds.length} leads!`);
+      toast.success(`Reminders sent to ${selectedIds.length} leads!`);
     } catch (error) {
       console.error('Bulk resend failed:', error);
-      alert('Failed to send bulk reminders.');
+      toast.error('Failed to send bulk reminders.');
     }
   };
 
@@ -337,7 +338,7 @@ function PURLDashboard() {
                         title="Copy Portal Link"
                         onClick={() => {
                           navigator.clipboard.writeText(`${PURL_DOMAIN}/portal/${workspace.slug}`);
-                          alert('Portal link copied!');
+                          toast.success('Portal link copied!');
                         }}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

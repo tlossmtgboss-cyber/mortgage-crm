@@ -13,7 +13,8 @@ Keeps: Your user account and company settings
 import sys
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from main import Base, User, Lead, Loan, AITask, ReferralPartner, MUMClient, Branch
+from database import Base
+from database.models import User, Lead, Loan, AITask, ReferralPartner, MUMClient, Branch
 
 # Database connection
 DATABASE_URL = "sqlite:///./mortgage_crm.db"

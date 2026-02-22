@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import './UserProfile.css';
+import { toast } from '../utils/toast';
 
 function UserProfile() {
   const { userId, id } = useParams(); // Support both /team/:userId and legacy /user/:id routes
@@ -36,7 +37,7 @@ function UserProfile() {
     localStorage.setItem('viewAsUserId', actualUserId);
 
     // Navigate to dashboard to see it from this user's perspective
-    alert(`Switching to view as user ${memberData.user.email}. You will now see the CRM from their perspective.`);
+    toast.info(`Switching to view as user ${memberData.user.email}. You will now see the CRM from their perspective.`);
     navigate('/');
     window.location.reload(); // Reload to apply the context
   };
@@ -48,7 +49,7 @@ function UserProfile() {
       localStorage.setItem('user', originalUser);
       localStorage.removeItem('originalUser');
       localStorage.removeItem('viewAsUserId');
-      alert('Returning to your own view');
+      toast.info('Returning to your own view');
       navigate('/');
       window.location.reload();
     }

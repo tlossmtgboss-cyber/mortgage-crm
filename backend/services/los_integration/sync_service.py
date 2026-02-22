@@ -251,18 +251,50 @@ DEFAULT_FIELD_MAPPINGS: List[LOSFieldMapping] = [
 
     # Disclosures
     LOSFieldMapping("loan_estimate_sent_date", "Fields/3152", "pull"),
+    LOSFieldMapping("initial_disclosures_sent_date", "Fields/3152", "pull"),
+    LOSFieldMapping("initial_disclosures_signed_date", "Fields/3153", "pull"),
     LOSFieldMapping("cd_sent_to_borrower_date", "Fields/CD1.X1", "pull"),
+    LOSFieldMapping("cd_acknowledged_date", "Fields/CD1.X3", "pull"),
+
+    # Appraisal dates
+    LOSFieldMapping("appraisal_ordered_date", "Fields/APPRAISAL.X1", "pull"),
+    LOSFieldMapping("appraisal_scheduled_date", "Fields/APPRAISAL.X2", "pull"),
+    LOSFieldMapping("appraisal_completed_date", "Fields/APPRAISAL.X3", "pull"),
+    LOSFieldMapping("appraisal_received_date", "Fields/APPRAISAL.X4", "pull"),
+    LOSFieldMapping("appraisal_value", "Fields/356", "pull"),
+
+    # Title dates
+    LOSFieldMapping("title_ordered_date", "Fields/VEND.X39", "pull"),
+    LOSFieldMapping("title_received_date", "Fields/VEND.X40", "pull"),
+
+    # Insurance dates
+    LOSFieldMapping("insurance_ordered_date", "Fields/VEND.X41", "pull"),
+    LOSFieldMapping("insurance_received_date", "Fields/VEND.X42", "pull"),
+
+    # Milestone dates
+    LOSFieldMapping("uw_received_date", "Fields/2015", "pull"),
+    LOSFieldMapping("loan_approved_date", "Fields/2301", "pull"),
+    LOSFieldMapping("conditional_approval_date", "Fields/2302", "pull"),
+    LOSFieldMapping("clear_to_close_date", "Fields/CTC.X1", "pull"),
+    LOSFieldMapping("docs_ordered_date", "Fields/DOCS.X1", "pull"),
+    LOSFieldMapping("docs_out_date", "Fields/DOCS.X2", "pull"),
+    LOSFieldMapping("scheduled_closing_date", "Fields/763", "pull"),
+    LOSFieldMapping("first_payment_date", "Fields/682", "pull"),
 
     # Financial ratios
     LOSFieldMapping("ltv", "Fields/353", "pull"),
     LOSFieldMapping("cltv", "Fields/976", "pull"),
     LOSFieldMapping("down_payment", "Fields/1771", "bidirectional"),
+    LOSFieldMapping("monthly_payment", "Fields/5", "pull"),
 
     # Team
     LOSFieldMapping("loan_officer_name", "Fields/317", "push"),
     LOSFieldMapping("loan_officer_email", "Fields/VEND.X263", "push"),
     LOSFieldMapping("processor", "Fields/362", "pull"),
+    LOSFieldMapping("processor_email", "Fields/VEND.X264", "pull"),
     LOSFieldMapping("underwriter", "Fields/VEND.X23", "pull"),
+    LOSFieldMapping("closer", "Fields/VEND.X24", "pull"),
+    LOSFieldMapping("title_company", "Fields/VEND.X5", "pull"),
 ]
 
 
@@ -454,8 +486,8 @@ class LOSSyncService:
                 try:
                     from dateutil.parser import parse as parse_date
                     los_last_modified = parse_date(raw_last_mod)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to parse LOS lastModified timestamp '{raw_last_mod}': {e}")
 
             # Initialize conflict detector (Check 7.5)
             conflict_detector = ConflictDetector(strategy=self.conflict_resolution)
@@ -703,21 +735,181 @@ class LOSSyncService:
         logger.info(f"Updated {len(new_mappings)} field mappings")
         return len(new_mappings)
 
+    # =========================================================================
+    # Import: Create CRM Loans from LOS data
+    # =========================================================================
+
+    async def import_from_los(
+        self,
+        db: Session,
+        los_loan_ids: List[str],
+        organization_id: Optional[int] = None,
+        assign_to_lo_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Import loans from LOS into the CRM by creating new Loan records.
+
+        For each Encompass GUID, pulls the loan data from the LOS and creates
+        a new CRM Loan record linked via encompass_loan_id. Skips any GUIDs
+        that are already linked to an existing CRM loan.
+
+        Args:
+            db: Database session
+            los_loan_ids: List of Encompass loan GUIDs to import
+            organization_id: Organization to assign imported loans to
+            assign_to_lo_id: Loan officer to assign imported loans to
+
+        Returns:
+            Dict with import results: imported, skipped, failed counts and details
+        """
+        from database.models.lead_loan import Loan
+
+        imported = []
+        skipped = []
+        failed = []
+
+        for los_id in los_loan_ids:
+            # Check if already linked
+            existing = db.query(Loan).filter(
+                Loan.encompass_loan_id == los_id
+            ).first()
+            if existing:
+                skipped.append({
+                    "los_loan_id": los_id,
+                    "crm_loan_id": existing.id,
+                    "loan_number": existing.loan_number,
+                    "reason": "Already linked to CRM loan",
+                })
+                continue
+
+            try:
+                # Pull loan data from LOS
+                los_data = await self.client.pull_loan(los_id)
+
+                # Check if a loan with the same loan_number already exists
+                if los_data.loan_number:
+                    existing_by_number = db.query(Loan).filter(
+                        Loan.loan_number == los_data.loan_number
+                    ).first()
+                    if existing_by_number:
+                        # Link existing loan instead of creating duplicate
+                        existing_by_number.encompass_loan_id = los_id
+                        existing_by_number.encompass_last_synced_at = datetime.now(timezone.utc)
+                        existing_by_number.encompass_sync_status = "synced"
+                        db.flush()
+                        imported.append({
+                            "los_loan_id": los_id,
+                            "crm_loan_id": existing_by_number.id,
+                            "loan_number": existing_by_number.loan_number,
+                            "action": "linked_existing",
+                        })
+                        continue
+
+                # Create new CRM loan
+                import uuid
+                loan_number = los_data.loan_number or f"IMP-{uuid.uuid4().hex[:8].upper()}"
+
+                new_loan = Loan(
+                    loan_number=loan_number,
+                    borrower_name=los_data.borrower_name or "Unknown Borrower",
+                    borrower_email=los_data.borrower_email,
+                    amount=los_data.loan_amount or 0,
+                    loan_type=los_data.loan_type,
+                    property_address=los_data.property_address,
+                    property_city=los_data.property_city,
+                    property_state=los_data.property_state,
+                    property_zip=los_data.property_zip,
+                    rate=los_data.rate,
+                    stage=los_data.stage or "PROCESSING",
+                    encompass_loan_id=los_id,
+                    encompass_last_synced_at=datetime.now(timezone.utc),
+                    encompass_sync_status="synced",
+                )
+
+                if organization_id:
+                    new_loan.organization_id = organization_id
+                if assign_to_lo_id:
+                    new_loan.loan_officer_id = assign_to_lo_id
+
+                # Parse closing date if present
+                if los_data.closing_date:
+                    try:
+                        from dateutil.parser import parse as parse_date
+                        new_loan.closing_date = parse_date(los_data.closing_date)
+                    except Exception:
+                        pass
+
+                db.add(new_loan)
+                db.flush()
+
+                imported.append({
+                    "los_loan_id": los_id,
+                    "crm_loan_id": new_loan.id,
+                    "loan_number": new_loan.loan_number,
+                    "borrower": new_loan.borrower_name,
+                    "action": "created",
+                })
+
+                logger.info(f"Imported loan from Encompass: {los_id} -> CRM loan {new_loan.id}")
+
+            except Exception as e:
+                logger.error(f"Failed to import Encompass loan {los_id}: {e}")
+                failed.append({
+                    "los_loan_id": los_id,
+                    "error": str(e),
+                })
+
+        return {
+            "total_requested": len(los_loan_ids),
+            "imported": len(imported),
+            "skipped": len(skipped),
+            "failed": len(failed),
+            "details": {
+                "imported": imported,
+                "skipped": skipped,
+                "failed": failed,
+            },
+        }
+
 
 # =============================================================================
 # Internal Helpers
 # =============================================================================
 
 def _get_los_loan_id(loan) -> Optional[str]:
-    """Extract LOS loan ID from the CRM loan's metadata."""
+    """Extract LOS loan ID from the CRM loan.
+
+    Prefers the dedicated encompass_loan_id column. Falls back to
+    user_metadata JSON for backward compatibility with older records.
+    """
+    # Prefer dedicated column
+    if hasattr(loan, "encompass_loan_id") and loan.encompass_loan_id:
+        return loan.encompass_loan_id
+
+    # Fall back to user_metadata for backward compatibility
     if hasattr(loan, "user_metadata") and loan.user_metadata:
         meta = loan.user_metadata if isinstance(loan.user_metadata, dict) else {}
         return meta.get("los_loan_id") or meta.get("encompass_guid")
+
     return None
 
 
 def _set_los_loan_id(loan, los_loan_id: str) -> None:
-    """Store the LOS loan ID in the CRM loan's metadata."""
+    """Store the LOS loan ID on the CRM loan.
+
+    Sets both the dedicated encompass_loan_id column and the legacy
+    user_metadata JSON field for backward compatibility.
+    """
+    # Set dedicated column
+    if hasattr(loan, "encompass_loan_id"):
+        loan.encompass_loan_id = los_loan_id
+
+    # Update sync status columns
+    if hasattr(loan, "encompass_last_synced_at"):
+        loan.encompass_last_synced_at = datetime.now(timezone.utc)
+    if hasattr(loan, "encompass_sync_status"):
+        loan.encompass_sync_status = "synced"
+
+    # Also update user_metadata for backward compatibility
     if loan.user_metadata is None:
         loan.user_metadata = {}
     meta = loan.user_metadata if isinstance(loan.user_metadata, dict) else {}
@@ -752,10 +944,11 @@ def _coerce_value(loan, field_name: str, value: Any) -> Any:
                     from dateutil.parser import parse as parse_date
                     try:
                         return parse_date(value)
-                    except Exception:
+                    except Exception as e:
+                        logger.exception(f"Failed to parse date value '{value}' for field {field_name}: {e}")
                         return value
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception(f"Failed to coerce value for field {field_name}: {e}")
 
     return value
 
@@ -807,8 +1000,8 @@ def _get_last_sync(db: Session, loan_id: int) -> Optional[Dict[str, Any]]:
                 "direction": last_sync_log.sync_direction,
                 "status": last_sync_log.sync_status,
             }
-    except Exception:
-        pass  # LosSyncLog table may not exist yet
+    except Exception as e:
+        logger.exception(f"Failed to query LosSyncLog for loan {loan_id}: {e}")  # Table may not exist yet
 
     # Fall back to AuditLog
     try:

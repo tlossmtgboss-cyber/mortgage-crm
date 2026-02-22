@@ -227,8 +227,8 @@ async def slack_callback(
                 safe_redirect = redirect_url
             else:
                 logger.warning(f"Rejected Slack OAuth redirect to: {hostname}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error validating Slack OAuth redirect URL: {e}")
 
     return RedirectResponse(
         url=f"{safe_redirect}?success=slack_connected"

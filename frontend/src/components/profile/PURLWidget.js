@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeaders } from '../../utils/auth';
 import './PURLWidget.css';
+import { toast } from '../../utils/toast';
 
 /**
  * PURL Widget - Integrates into Lead/Loan profile pages
@@ -153,7 +154,7 @@ function PURLWidget({ leadId, loanId, contactData }) {
         { headers: getAuthHeaders() }
       );
       setError(null);
-      alert('Invitation email resent!');
+      toast.success('Invitation email resent!');
     } catch (error) {
       console.error('Failed to resend email:', error);
       setError('Failed to resend invitation');

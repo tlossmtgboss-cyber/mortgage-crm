@@ -368,7 +368,8 @@ class SSLCertificateService:
         # Parse response
         try:
             response_json = response.json()
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to parse ACME response as JSON: {e}")
             response_json = {}
 
         return response_json, dict(response.headers)

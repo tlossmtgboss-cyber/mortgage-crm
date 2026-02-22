@@ -33,7 +33,7 @@ async def _require_auth(
     """Require valid authentication for workspace document endpoints."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    from main import get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible
     user = await get_current_user_flexible(
         token=credentials.credentials, request=None, db=db
     )

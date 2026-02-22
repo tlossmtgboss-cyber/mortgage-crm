@@ -6,6 +6,7 @@ import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Loans.css';
+import { toast } from '../utils/toast';
 
 // Map display names to API enum values (backend uses uppercase)
 const stageDisplayToApi = {
@@ -161,8 +162,18 @@ function Loans() {
     'Inactive',
   ];
 
-  // Loan status options for the dropdown - every stage a loan can be set to
+  // Status options — all stages across Lead, Active Loan, and MUM
   const loanStatusOptions = [
+    // Lead stages
+    { label: 'Lead Stages', isHeader: true },
+    'New',
+    'Attempted Contact',
+    'Prospect',
+    'Pre-Qualified',
+    'Pre-Approved',
+    'Long-Term Nurture',
+    // Active Loan stages
+    { label: 'Active Loan Stages', isHeader: true },
     'Application',
     'Disclosed',
     'Processing',
@@ -177,13 +188,15 @@ function Loans() {
     'Closing',
     'Docs',
     'Docs Out',
-    'Funded',
     'Cancelled',
     'Denied',
     'Dead',
     'Nurture',
     'Withdrawn',
     'Does Not Qualify',
+    // MUM (Funded)
+    { label: 'MUM / Closed', isHeader: true },
+    'Funded',
   ];
 
   // Map filter display names to actual API stage values (supports both legacy title case and new uppercase)
@@ -317,14 +330,14 @@ function Loans() {
       if (response.ok) {
         const data = await response.json();
         setDuplicateTasksCreated(true);
-        alert(`Created ${data.tasks_created} tasks to review duplicate records.`);
+        toast.success(`Created ${data.tasks_created} tasks to review duplicate records.`);
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to create tasks'}`);
+        toast.error(`Error: ${error.detail || 'Failed to create tasks'}`);
       }
     } catch (err) {
       console.error('Error creating duplicate tasks:', err);
-      alert('Failed to create duplicate tasks');
+      toast.error('Failed to create duplicate tasks');
     }
   };
 
@@ -337,17 +350,17 @@ function Loans() {
     // Validate required fields
     const fullName = `${primaryBorrower.first_name || ''} ${primaryBorrower.last_name || ''}`.trim();
     if (!fullName) {
-      alert('Please enter borrower first name and last name');
+      toast.error('Please enter borrower first name and last name');
       return;
     }
 
     if (!loanData.loan_number) {
-      alert('Please enter a loan number');
+      toast.error('Please enter a loan number');
       return;
     }
 
     if (!loanData.amount) {
-      alert('Please enter a loan amount');
+      toast.error('Please enter a loan amount');
       return;
     }
 
@@ -418,7 +431,7 @@ function Loans() {
             loadLoans();
           } catch (retryErr) {
             console.error('Failed to create loan (retry):', retryErr);
-            alert(`Failed to create loan: ${retryErr.response?.data?.detail || retryErr.message}`);
+            toast.error(`Failed to create loan: ${retryErr.response?.data?.detail || retryErr.message}`);
           }
         }
         return;
@@ -444,7 +457,7 @@ function Loans() {
         errorMessage = err.message;
       }
 
-      alert(`Failed to create loan: ${errorMessage}`);
+      toast.error(`Failed to create loan: ${errorMessage}`);
     }
   };
 
@@ -453,7 +466,7 @@ function Loans() {
       await loansAPI.delete(id);
       loadLoans();
     } catch (err) {
-      alert('Failed to delete loan');
+      toast.error('Failed to delete loan');
     }
   };
 
@@ -478,7 +491,7 @@ function Loans() {
 
   const handleBulkDelete = async () => {
     if (selectedLoans.length === 0) {
-      alert('No loans selected');
+      toast.error('No loans selected');
       return;
     }
 
@@ -490,7 +503,7 @@ function Loans() {
 
     try {
       const result = await loansAPI.bulkDelete(selectedLoans);
-      alert(`Successfully deleted ${result.deleted_count} loans${result.errors?.length > 0 ? ` with ${result.errors.length} errors` : ''}`);
+      toast.success(`Successfully deleted ${result.deleted_count} loans${result.errors?.length > 0 ? ` with ${result.errors.length} errors` : ''}`);
       setSelectedLoans([]);
       loadLoans();
     } catch (err) {
@@ -499,7 +512,7 @@ function Loans() {
       const errorMessage = typeof errorDetail === 'string'
         ? errorDetail
         : (errorDetail?.message || err.message || 'Unknown error');
-      alert('Failed to delete loans: ' + errorMessage);
+      toast.error('Failed to delete loans: ' + errorMessage);
     }
   };
 
@@ -533,7 +546,7 @@ function Loans() {
     } catch (err) {
       console.error('Failed to update loan status:', err);
       const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Failed to update loan status';
-      alert(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
@@ -583,7 +596,7 @@ function Loans() {
   };
 
   const handleExport = () => {
-    alert('Export functionality coming soon');
+    toast.info('Export functionality coming soon');
   };
 
   // Borrower management functions
@@ -1306,15 +1319,30 @@ function Loans() {
             }}
           >
             <div className="status-dropdown-header">Change Loan Status</div>
-            <div className="status-dropdown-options">
-              {loanStatusOptions.map((status) => (
-                <button
-                  key={status}
-                  className={`status-dropdown-option status-${getStatusClass(status)}`}
-                  onClick={() => handleStatusChange(status)}
-                >
-                  {status}
-                </button>
+            <div className="status-dropdown-options" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {loanStatusOptions.map((status, idx) => (
+                status.isHeader ? (
+                  <div key={status.label} className="status-dropdown-section-header" style={{
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    color: '#6b7280',
+                    borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
+                    marginTop: idx > 0 ? '4px' : 0,
+                    letterSpacing: '0.05em',
+                  }}>
+                    {status.label}
+                  </div>
+                ) : (
+                  <button
+                    key={status}
+                    className={`status-dropdown-option status-${getStatusClass(status)}`}
+                    onClick={() => handleStatusChange(status)}
+                  >
+                    {status}
+                  </button>
+                )
               ))}
             </div>
           </div>
@@ -1329,6 +1357,13 @@ function Loans() {
 function getStatusClass(status) {
   if (!status) return 'default';
   const statusMap = {
+    // Lead stages
+    'New': 'new',
+    'Attempted Contact': 'attempted-contact',
+    'Prospect': 'prospect',
+    'Pre-Qualified': 'pre-qualified',
+    'Pre-Approved': 'pre-approved',
+    'Long-Term Nurture': 'nurture',
     // Application
     'Application': 'application',
     'APPLICATION': 'application',

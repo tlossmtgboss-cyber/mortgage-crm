@@ -13,6 +13,12 @@ import os
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 # Lazy import Twilio to allow app to start without credentials
 _twilio_client = None
 _telnyx_client = None

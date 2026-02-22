@@ -12,7 +12,7 @@ Usage:
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime,
+    Column, Integer, String, Float, Boolean, DateTime, Numeric,
     Text, ForeignKey, JSON, Enum as SQLEnum, Index
 )
 from sqlalchemy.orm import relationship
@@ -148,9 +148,9 @@ class BorrowerApplication(Base):
     coborrower_completed = Column(Boolean, default=False)
 
     # Pre-qualification data
-    prequalification_amount = Column(Float)
-    prequalification_rate = Column(Float)
-    prequalification_monthly_payment = Column(Float)
+    prequalification_amount = Column(Numeric(18, 2))
+    prequalification_rate = Column(Numeric(8, 4))
+    prequalification_monthly_payment = Column(Numeric(18, 2))
     prequalification_data = Column(JSON)
 
     # Credit authorization

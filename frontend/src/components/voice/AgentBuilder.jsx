@@ -1,5 +1,6 @@
 // Voice OS Agent Builder - Agent creation and editing wizard
 import React, { useState, useEffect } from 'react';
+import { toast } from '../../utils/toast';
 
 
 
@@ -155,7 +156,7 @@ Guidelines:
       onSave?.(config);
     } catch (err) {
       console.error('Error saving agent:', err);
-      alert('Failed to save agent. Please try again.');
+      toast.error('Failed to save agent. Please try again.');
     } finally {
       setSaving(false);
     }

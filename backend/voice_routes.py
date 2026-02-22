@@ -71,13 +71,13 @@ router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
 # Lazy import to avoid circular dependency with main.py
 def get_models():
     """Lazy import models from main.py to avoid circular imports"""
-    from main import User, Lead, Task, Activity, IncomingDataEvent
+    from database.models import User, Lead, Task, Activity, IncomingDataEvent
     return User, Lead, Task, Activity, IncomingDataEvent
 
 
 def get_current_user_flexible():
     """Lazy import auth dependency from main.py"""
-    from main import get_current_user_flexible as _get_current_user_flexible
+    from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
 
 
@@ -241,8 +241,9 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
         try:
             twiml = voice_client.create_greeting_response(ai_config.business_name)
             return Response(content=str(twiml), media_type="application/xml")
-        except Exception:
+        except Exception as e:
             # Last resort: voicemail
+            logger.error(f"Error in handle_incoming_call (greeting fallback): {e}")
             twiml = voice_client.create_voicemail_response()
             return Response(content=str(twiml), media_type="application/xml")
 
@@ -731,13 +732,15 @@ async def browser_voice_websocket(websocket: WebSocket):
         logger.error(f"Browser voice error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": "Internal server error"})
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in browser_voice_session (send error to client): {e}")
             pass  # Client may have disconnected
     finally:
         if openai_ws:
             try:
                 await openai_ws.close()
-            except Exception:
+            except Exception as e:
+                logger.error(f"Error in browser_voice_session (close openai_ws): {e}")
                 pass  # WebSocket may already be closed
         logger.info("🔚 Browser voice session ended")
 
@@ -1043,16 +1046,19 @@ async def voice_stream_websocket(websocket: WebSocket):
     finally:
         try:
             await websocket.close()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in voice_stream (close websocket): {e}")
             pass  # WebSocket may already be closed
         try:
             if openai_ws:
                 await openai_ws.close()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in voice_stream (close openai_ws): {e}")
             pass  # OpenAI WebSocket may already be closed
         try:
             db.close()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in voice_stream (close db session): {e}")
             pass  # Session may already be closed
         logger.info("🔚 Voice stream cleanup complete")
 
@@ -1473,7 +1479,8 @@ async def save_call_summary(call_context: dict, db: Session):
             )
             db.add(error_log)
             db.commit()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error in save_call_summary (error logging): {e}")
             pass  # Don't fail on error logging
 
 
@@ -1558,14 +1565,14 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
 
                 # Get user email for draft creation
                 if user_id:
-                    from main import User
+                    from database.models import User
                     user = db.query(User).filter(User.id == user_id).first()
                     if user:
                         user_email = user.email
 
                 # Get lead name if available
                 if lead_id:
-                    from main import Lead
+                    from database.models import Lead
                     lead = db.query(Lead).filter(Lead.id == lead_id).first()
                     if lead:
                         lead_name = lead.name
@@ -2404,7 +2411,7 @@ async def make_outbound_call(
 ):
     """Make an outbound AI call"""
     try:
-        from main import get_current_user_flexible as auth_dependency
+        from auth.dependencies import get_current_user_flexible as auth_dependency
         User, _, _, Activity, _ = get_models()
 
         # Get current user (manually call dependency)
@@ -3033,7 +3040,7 @@ async def drop_voicemail(
         import tempfile
         import shutil
         from pathlib import Path
-        from main import get_current_user_flexible as auth_dependency
+        from auth.dependencies import get_current_user_flexible as auth_dependency
 
         User, Lead, Task, Activity, IncomingDataEvent = get_models()
 
@@ -3041,7 +3048,8 @@ async def drop_voicemail(
         current_user = await auth_dependency(request, db)
 
         # Lazy import models needed for voicemail
-        from main import VoicemailDrop, ActivityType
+        from database.enums import ActivityType
+        from database.models import VoicemailDrop
 
         data = await request.json()
         to_number = data.get("to_number")
@@ -3171,7 +3179,8 @@ async def drop_voicemail(
 
                 try:
                     sly_data = sly_response.json()
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error in voicemail_drop (parse slybroadcast response): {e}")
                     raise HTTPException(status_code=500, detail=f"Invalid JSON from Slybroadcast: {sly_response.text}")
 
                 if sly_data.get("new_campaign") == "OK":

@@ -355,10 +355,11 @@ class FailoverProcedureService:
                         channel = conn.channel()
                         q = channel.queue_declare(queue_name, passive=True)
                         result["queue_depths"][queue_name] = q.message_count
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error checking queue depth for {queue_name}: {e}")
                     result["queue_depths"][queue_name] = "unknown"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error importing celery_app for queue depths: {e}")
 
         # Determine overall persistence
         passed = sum(1 for c in result["checks"] if c["passed"])
@@ -523,7 +524,8 @@ class FailoverProcedureService:
                         f"SELECT COUNT(*) FROM {table}"  # noqa: S608
                     )).scalar()
                     checks[table] = count or 0
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error checking integrity of table {table}: {e}")
                     self.db.rollback()
                     checks[table] = -1
 

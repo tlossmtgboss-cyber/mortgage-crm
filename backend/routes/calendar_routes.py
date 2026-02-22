@@ -348,8 +348,8 @@ async def get_calendar_assignments(
                 if row:
                     data["booking_link_slug"] = row[0]
                     data["booking_link_name"] = row[1]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error fetching booking link for assignment: {e}")
         result.append(data)
 
     return result
@@ -405,8 +405,8 @@ async def get_calendar_assignment_by_purpose(
                 calendly = get_calendly_integration_for_user(db, assignment.assigned_user_id)
                 if calendly and calendly.get("scheduling_url"):
                     result["assigned_user_calendly"] = calendly["scheduling_url"]
-            except Exception:
-                pass  # Calendly integration may not be available
+            except Exception as e:
+                logger.error(f"Error fetching Calendly integration for user: {e}")
 
     # Get booking link slug if booking_link_id is set
     if assignment.booking_link_id:
@@ -419,8 +419,8 @@ async def get_calendar_assignment_by_purpose(
             if row:
                 result["booking_link_slug"] = row[0]
                 result["booking_link_url"] = f"/book/{row[0]}"
-        except Exception:
-            pass  # Scheduler table may not exist
+        except Exception as e:
+            logger.error(f"Error fetching booking link slug: {e}")
 
     return result
 
@@ -582,8 +582,8 @@ async def get_users_with_calendars(
             if calendly:
                 user_data["has_calendly"] = True
                 user_data["calendly_url"] = calendly.get("scheduling_url")
-        except Exception:
-            pass  # Calendly integration may not be available
+        except Exception as e:
+            logger.error(f"Error checking Calendly integration for user {user.id}: {e}")
 
         result.append(user_data)
 

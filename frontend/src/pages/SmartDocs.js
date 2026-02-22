@@ -15,6 +15,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { isMasterAdmin } from '../config/roleConfig';
 import AdminContracts from '../components/AdminContracts';
 import './SmartDocs.css';
+import { toast } from '../utils/toast';
 
 function SmartDocs() {
   const navigate = useNavigate();
@@ -272,14 +273,14 @@ function SmartDocs() {
     try {
       const result = await smartDocsAPI.sendReminder(loanId);
       if (result.sent) {
-        alert(`Reminder sent for ${result.documents_reminded} documents`);
+        toast.success(`Reminder sent for ${result.documents_reminded} documents`);
         fetchQueue(); // Refresh queue
       } else {
-        alert(result.message || 'Could not send reminder');
+        toast.error(result.message || 'Could not send reminder');
       }
     } catch (err) {
       console.error('Error sending reminder:', err);
-      alert('Failed to send reminder');
+      toast.error('Failed to send reminder');
     }
   };
 
@@ -421,14 +422,14 @@ function SmartDocs() {
       if (response.ok) {
         const data = await response.json();
         setDuplicateTasksCreated(true);
-        alert(`Created ${data.tasks_created} tasks to review duplicate records.`);
+        toast.success(`Created ${data.tasks_created} tasks to review duplicate records.`);
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || 'Failed to create tasks'}`);
+        toast.error(`Error: ${error.detail || 'Failed to create tasks'}`);
       }
     } catch (err) {
       console.error('Error creating duplicate tasks:', err);
-      alert('Failed to create duplicate tasks');
+      toast.error('Failed to create duplicate tasks');
     }
   };
 

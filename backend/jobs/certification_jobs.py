@@ -8,11 +8,14 @@ from sqlalchemy import text, and_
 import sys
 import os
 import json
+import logging
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import SessionLocal, logger
+from database import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 def get_user_permissions_dict(user_id: int, db):
     """Get all permissions for a user as a dictionary"""

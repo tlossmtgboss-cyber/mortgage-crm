@@ -156,7 +156,8 @@ def get_email_body_text(event) -> str:
             for script in soup(["script", "style"]):
                 script.decompose()
             return soup.get_text(separator='\n', strip=True)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error parsing HTML with BeautifulSoup: {e}")
             import re
             text = re.sub(r'<[^>]+>', '', event.raw_html)
             return text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')

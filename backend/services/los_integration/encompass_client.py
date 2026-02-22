@@ -96,44 +96,133 @@ ENCOMPASS_FIELD_MAP = {
     "funded_date": "Fields/2370",             # Disbursement Date / Funding Date
 
     # Disclosures
-    "loan_estimate_sent_date": "Fields/3152", # LE Sent Date
-    "cd_sent_to_borrower_date": "Fields/CD1.X1",  # CD Sent Date
+    "loan_estimate_sent_date": "Fields/3152",          # LE Sent Date
+    "initial_disclosures_sent_date": "Fields/3152",    # Initial Disclosures Sent (same as LE)
+    "initial_disclosures_signed_date": "Fields/3153",  # Initial Disclosures Signed
+    "cd_sent_to_borrower_date": "Fields/CD1.X1",       # CD Sent Date
+    "cd_acknowledged_date": "Fields/CD1.X3",            # CD Acknowledged/Received Date
+
+    # Appraisal dates
+    "appraisal_ordered_date": "Fields/APPRAISAL.X1",    # Appraisal Ordered Date
+    "appraisal_scheduled_date": "Fields/APPRAISAL.X2",  # Appraisal Scheduled Date
+    "appraisal_completed_date": "Fields/APPRAISAL.X3",  # Appraisal Completed Date
+    "appraisal_received_date": "Fields/APPRAISAL.X4",   # Appraisal Received Date
+    "appraisal_value": "Fields/356",                    # Appraised Value
+
+    # Title dates
+    "title_ordered_date": "Fields/VEND.X39",       # Title Ordered Date
+    "title_received_date": "Fields/VEND.X40",      # Title Received Date
+
+    # Insurance dates
+    "insurance_ordered_date": "Fields/VEND.X41",   # Insurance Ordered Date
+    "insurance_received_date": "Fields/VEND.X42",  # Insurance Received Date
+
+    # Milestone dates
+    "uw_received_date": "Fields/2015",              # UW Received / Submitted to UW Date
+    "loan_approved_date": "Fields/2301",            # Loan Approved Date
+    "conditional_approval_date": "Fields/2302",     # Conditional Approval Date
+    "clear_to_close_date": "Fields/CTC.X1",         # Clear to Close Date
+    "docs_ordered_date": "Fields/DOCS.X1",           # Docs Ordered Date
+    "docs_out_date": "Fields/DOCS.X2",               # Docs Out / Sent Date
+    "scheduled_closing_date": "Fields/763",          # Scheduled Closing Date
+    "first_payment_date": "Fields/682",              # First Payment Date
 
     # Financials
     "ltv": "Fields/353",                      # LTV
     "cltv": "Fields/976",                     # CLTV
     "down_payment": "Fields/1771",            # Down Payment Amount
+    "monthly_payment": "Fields/5",            # Monthly P&I Payment
 
     # Team
     "loan_officer_name": "Fields/317",        # Loan Officer Name
     "loan_officer_email": "Fields/VEND.X263",  # Loan Officer Email
     "processor": "Fields/362",               # Processor Name
+    "processor_email": "Fields/VEND.X264",    # Processor Email
     "underwriter": "Fields/VEND.X23",         # Underwriter Name
+    "closer": "Fields/VEND.X24",              # Closer Name
+    "title_company": "Fields/VEND.X5",        # Title Company Name
 }
 
 # Reverse map: Encompass field ID -> CRM field
 ENCOMPASS_REVERSE_MAP = {v: k for k, v in ENCOMPASS_FIELD_MAP.items()}
 
-# Stage mapping: Encompass milestone -> CRM stage
+# Stage mapping: Encompass milestone -> CRM LoanStage (UPPERCASE strings)
+# Covers all standard Encompass milestones mapped to all LoanStage enum values
 ENCOMPASS_STAGE_MAP = {
-    "Started": "DISCLOSED",
+    # Application phase
+    "Started": "APPLICATION",
+    "File Started": "APPLICATION",
+    "Disclosed": "DISCLOSED",
+    "LE Sent": "DISCLOSED",
+
+    # Processing phase
     "Processed": "PROCESSING",
+    "Processing": "PROCESSING",
     "Submitted": "SUBMITTED",
-    "Conditionally Approved": "CONDITIONAL",
+    "Submitted to UW": "SUBMITTED",
+
+    # Underwriting phase
+    "In Underwriting": "UNDERWRITING",
+    "Underwriting": "UNDERWRITING",
+    "UW Review": "UW_RECEIVED",
+    "Received": "UW_RECEIVED",
+
+    # Approval phase
+    "Conditionally Approved": "CONDITIONAL_APPROVAL",
+    "Cond. Approved": "CONDITIONAL_APPROVAL",
     "Approved": "APPROVED",
+    "Approved with Conditions": "CONDITIONAL_APPROVAL",
+
+    # Suspended
+    "Suspended": "SUSPENDED",
+
+    # Clear to Close & Docs
+    "Clear to Close": "CLEAR_TO_CLOSE",
+    "CTC": "CTC",
+    "Closing": "CLOSING",
+    "Docs Drawing": "DOCS",
+    "Doc Preparation": "DOCS",
     "Docs Signing": "DOCS_OUT",
-    "Docs Signed": "DOCS_BACK",
+    "Docs Out": "DOCS_OUT",
+    "Docs Signed": "DOCS_OUT",
+
+    # Funded / Terminal
     "Funded": "FUNDED",
     "Purchased": "FUNDED",
     "Completed": "FUNDED",
+
+    # Terminal / Negative
     "Denied": "DENIED",
     "Withdrawn": "WITHDRAWN",
-    "Suspended": "SUSPENDED",
     "Cancelled": "CANCELLED",
+    "Dead": "DEAD",
+    "Inactive": "DEAD",
 }
 
-# Reverse: CRM stage -> Encompass milestone
-CRM_TO_ENCOMPASS_STAGE = {v: k for k, v in ENCOMPASS_STAGE_MAP.items()}
+# Reverse: CRM stage -> Encompass milestone (one-to-one, using preferred Encompass milestone names)
+CRM_TO_ENCOMPASS_STAGE = {
+    "APPLICATION": "Started",
+    "DISCLOSED": "Disclosed",
+    "PROCESSING": "Processing",
+    "SUBMITTED": "Submitted",
+    "UNDERWRITING": "In Underwriting",
+    "UW_RECEIVED": "Received",
+    "CONDITIONAL_APPROVAL": "Conditionally Approved",
+    "APPROVED": "Approved",
+    "SUSPENDED": "Suspended",
+    "CTC": "Clear to Close",
+    "CLEAR_TO_CLOSE": "Clear to Close",
+    "CLOSING": "Closing",
+    "DOCS": "Doc Preparation",
+    "DOCS_OUT": "Docs Out",
+    "FUNDED": "Funded",
+    "CANCELLED": "Cancelled",
+    "DENIED": "Denied",
+    "DEAD": "Dead",
+    "NURTURE": "Inactive",
+    "WITHDRAWN": "Withdrawn",
+    "DOES_NOT_QUALIFY": "Denied",
+}
 
 
 class EncompassClient(BaseLOSClient):

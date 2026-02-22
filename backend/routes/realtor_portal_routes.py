@@ -1319,8 +1319,8 @@ async def add_partner_note(
             realtor = await get_current_realtor(token, db)
             partner_name = realtor.get("name") or realtor.get("company_name") or "Partner"
             partner_id = realtor.get("realtor_id")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Error getting realtor info from token: {e}")
 
     # Get lead/client info (using owner_id which is the correct column name)
     try:

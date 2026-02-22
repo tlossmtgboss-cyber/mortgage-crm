@@ -14,6 +14,7 @@ Run with: python -m migrations.delete_sample_data
 Or via Railway: railway run python -m migrations.delete_sample_data
 """
 
+import logging
 import os
 import sys
 
@@ -22,6 +23,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
+logger = logging.getLogger(__name__)
 
 
 def get_database_url():
@@ -263,8 +266,8 @@ def delete_sample_data():
                 result = session.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 count = result.scalar()
                 print(f"  {table}: {count}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error counting rows in {table}: {e}")
 
         # Show remaining admin user
         print("\nRemaining users:")

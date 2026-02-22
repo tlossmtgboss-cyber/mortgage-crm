@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './BuyerIntake.css';
+import { toast } from '../utils/toast';
 
 export default function BuyerIntake() {
   const navigate = useNavigate();
@@ -396,7 +397,7 @@ export default function BuyerIntake() {
 
   const toggleVoiceInput = () => {
     if (!recognitionRef.current) {
-      alert('Voice recognition is not supported in this browser. Please use Chrome, Safari, or Edge.');
+      toast.error('Voice recognition is not supported in this browser. Please use Chrome, Safari, or Edge.');
       return;
     }
 
@@ -425,7 +426,7 @@ export default function BuyerIntake() {
     if (!form.priceTarget) errors.push("Price target required");
 
     if (errors.length) {
-      alert("Please fix:\n" + errors.join("\n"));
+      toast.error("Please fix:\n" + errors.join("\n"));
       return;
     }
 
@@ -509,14 +510,14 @@ export default function BuyerIntake() {
       const data = await response.json();
 
       // Show success message
-      alert('Thank you! Your information has been submitted successfully. We\'ll be in touch soon.');
+      toast.success('Thank you! Your information has been submitted successfully. We\'ll be in touch soon.');
 
       // Redirect to a thank you page or home
       window.location.href = '/';
 
     } catch (error) {
       console.error('Submission error:', error);
-      alert('There was an error submitting your application. Please try again or contact us directly.');
+      toast.error('There was an error submitting your application. Please try again or contact us directly.');
     } finally {
       setSubmitting(false);
     }

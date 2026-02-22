@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { aiAPI } from '../services/api';
 import './AIFeedbackLog.css';
+import { toast } from '../utils/toast';
 
 function AIFeedbackLog() {
   const [feedbackLogs, setFeedbackLogs] = useState([]);
@@ -46,7 +47,7 @@ function AIFeedbackLog() {
       setSelectedFeedback(null);
     } catch (error) {
       console.error('Failed to update feedback:', error);
-      alert('Failed to update feedback status');
+      toast.error('Failed to update feedback status');
     } finally {
       setUpdating(false);
     }
@@ -59,7 +60,7 @@ function AIFeedbackLog() {
       setSelectedFeedback(null);
     } catch (error) {
       console.error('Failed to delete feedback:', error);
-      alert('Failed to delete feedback');
+      toast.error('Failed to delete feedback');
     }
   };
 

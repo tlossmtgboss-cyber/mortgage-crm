@@ -5,8 +5,11 @@ Tools for the Notification Center Agent managing alerts and notifications.
 8 tools for notification management, preferences, and delivery.
 """
 
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -104,8 +107,8 @@ def send_notification(
                 "title": title,
                 "message": message,
             })
-    except Exception:
-        pass  # DB write failure shouldn't block notification
+    except Exception as e:
+        logger.warning(f"Error writing notification to DB: {e}")  # DB write failure shouldn't block notification
 
     notification = {
         "notification_id": f"NOT-{notification_id}",
@@ -737,8 +740,8 @@ def batch_send(
                     "message": message,
                 })
                 sent_count += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Error writing batch notification for recipient {rid}: {e}")
 
     batch = {
         "batch_id": f"BATCH-{batch_id}",

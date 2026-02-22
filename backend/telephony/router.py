@@ -28,6 +28,12 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# FEATURE TIER: PREMIUM
+# This module is in the premium tier -- maintained when resources allow.
+# See backend/config/feature_tiers.py for tier definitions.
+# ============================================================================
+
 # Create router
 router = APIRouter(prefix="/api/v1/dialer", tags=["dialer"])
 
@@ -113,7 +119,8 @@ async def get_call_tasks(
 
     Response includes phone numbers from related Lead/Loan entities.
     """
-    from main import Task, AITask, Lead, Loan, TaskType
+    from database.enums import TaskType
+    from database.models import Task, AITask, Lead, Loan
     from sqlalchemy import or_, and_
 
     # Call-related keywords to identify phone tasks
@@ -285,15 +292,15 @@ async def get_call_tasks(
                     lead = db.query(Lead).filter(Lead.id == entity_id).first()
                     if lead and lead.phone:
                         phone = lead.phone
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to fetch lead phone for entity_id={entity_id}: {e}")
             elif entity_type == 'loan' and entity_id:
                 try:
                     loan = db.query(Loan).filter(Loan.id == entity_id).first()
                     if loan and loan.borrower_phone:
                         phone = loan.borrower_phone
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.exception(f"Failed to fetch loan borrower phone for entity_id={entity_id}: {e}")
 
             # Only include if we have a phone number
             if phone:
@@ -346,7 +353,7 @@ async def get_callable_contacts(
 
     Returns leads and loan borrowers that have phone numbers.
     """
-    from main import Lead, Loan
+    from database.models import Lead, Loan
     from sqlalchemy import and_
 
     contacts = []
@@ -426,7 +433,7 @@ async def get_dialer_settings(
 ):
     """Get agent's telephony/dialer settings"""
     # Import models from main
-    from main import AgentTelephonySettings, VerifiedCallerId
+    from database.models import AgentTelephonySettings, VerifiedCallerId
 
     settings = db.query(AgentTelephonySettings).filter(
         AgentTelephonySettings.user_id == current_user.id
@@ -473,7 +480,7 @@ async def update_dialer_settings(
     current_user = Depends(get_current_user)
 ):
     """Update agent's telephony/dialer settings"""
-    from main import AgentTelephonySettings
+    from database.models import AgentTelephonySettings
 
     settings = db.query(AgentTelephonySettings).filter(
         AgentTelephonySettings.user_id == current_user.id
@@ -508,7 +515,7 @@ async def verify_caller_id(
     current_user = Depends(get_current_user)
 ):
     """Start caller ID verification process"""
-    from main import VerifiedCallerId
+    from database.models import VerifiedCallerId
 
     provider = get_telephony_provider()
     result = provider.verify_caller_id(request.phone_number, request.friendly_name)
@@ -534,7 +541,7 @@ async def list_verified_caller_ids(
     current_user = Depends(get_current_user)
 ):
     """List all verified caller IDs for the agent"""
-    from main import VerifiedCallerId
+    from database.models import VerifiedCallerId
 
     caller_ids = db.query(VerifiedCallerId).filter(
         VerifiedCallerId.user_id == current_user.id
@@ -552,7 +559,7 @@ async def setup_demo_caller_id(
     Set up a demo verified caller ID for testing.
     This bypasses Twilio verification for demo/testing purposes.
     """
-    from main import VerifiedCallerId, AgentTelephonySettings
+    from database.models import VerifiedCallerId, AgentTelephonySettings
 
     try:
         # Check if user already has a verified caller ID
@@ -627,7 +634,7 @@ async def check_verification_status(
     current_user = Depends(get_current_user)
 ):
     """Check and update verification status for a caller ID"""
-    from main import VerifiedCallerId
+    from database.models import VerifiedCallerId
 
     # Normalize phone number
     normalized = phone_number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
@@ -747,7 +754,8 @@ async def get_active_session(
     current_user = Depends(get_current_user)
 ):
     """Get the agent's currently active dialer session"""
-    from main import DialerSession, DialerSessionStatus
+    from database.enums import DialerSessionStatus
+    from database.models import DialerSession
 
     session = db.query(DialerSession).filter(
         DialerSession.agent_id == current_user.id,
@@ -971,7 +979,7 @@ async def get_call_logs(
     current_user = Depends(get_current_user)
 ):
     """Get call history for the agent"""
-    from main import CallLog
+    from database.models import CallLog
 
     query = db.query(CallLog).filter(CallLog.agent_id == current_user.id)
 
@@ -1258,7 +1266,7 @@ async def webhook_recording_complete(
 
         # Get lead/loan info if task_id is provided
         if task_id:
-            from main import DialerSessionTask
+            from database.models import DialerSessionTask
             task = db.query(DialerSessionTask).filter(
                 DialerSessionTask.id == task_id
             ).first()
@@ -1321,7 +1329,7 @@ async def process_call_recording_for_ci(
         loan_id = call_metadata.get("loan_id")
 
         if call_metadata.get("session_id"):
-            from main import DialerSession
+            from database.models import DialerSession
             session = db.query(DialerSession).filter(
                 DialerSession.id == call_metadata["session_id"]
             ).first()
@@ -1464,7 +1472,7 @@ async def create_qa_review_task(
     from datetime import datetime, timezone
 
     try:
-        from main import AITask, User
+        from database.models import AITask, User
 
         # Get agent's manager
         agent = db.query(User).filter(User.id == agent_id).first() if agent_id else None

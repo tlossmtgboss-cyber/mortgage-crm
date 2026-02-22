@@ -295,8 +295,8 @@ def get_user_invitation_routes(
                 try:
                     exp_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
                     is_expired = exp_dt < datetime.now(timezone.utc)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error parsing invitation expiry date: {e}")
 
             invitations.append({
                 "id": user.id,

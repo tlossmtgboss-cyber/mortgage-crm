@@ -571,7 +571,8 @@ class ChannelAdapterService:
             import pytz
             tz = pytz.timezone(prefs.get("timezone", "America/New_York"))
             now_local = datetime.now(tz)
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to determine local time for quiet hours check: {e}")
             now_local = datetime.now(timezone.utc)
 
         # Check quiet days
@@ -619,7 +620,8 @@ class ChannelAdapterService:
             import pytz
             tz = pytz.timezone(timezone_str)
             now_local = datetime.now(tz).time()
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to determine local time for TCPA window check: {e}")
             now_local = datetime.now(timezone.utc).time()
 
         return TCPA_WINDOW_START <= now_local <= TCPA_WINDOW_END
@@ -709,7 +711,8 @@ class ChannelAdapterService:
             ).scalar() or 0
 
             return count >= (max_daily * 0.8)
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to check near-fatigue limit: {e}")
             return False
 
     # -------------------------------------------------------------------------
@@ -988,7 +991,8 @@ class ChannelAdapterService:
                 from database.models.core import User
                 user = self.db.query(User).filter_by(id=recipient_id).first()
                 return user.email if user else None
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to look up recipient email for {recipient_type} {recipient_id}: {e}")
             return None
 
     def _get_recipient_phone(self, recipient_type: str, recipient_id: int) -> Optional[str]:
@@ -1002,7 +1006,8 @@ class ChannelAdapterService:
                 from database.models.core import User
                 user = self.db.query(User).filter_by(id=recipient_id).first()
                 return user.phone if user else None
-        except Exception:
+        except Exception as e:
+            logger.exception(f"Failed to look up recipient phone for {recipient_type} {recipient_id}: {e}")
             return None
 
     # -------------------------------------------------------------------------

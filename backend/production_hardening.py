@@ -139,8 +139,8 @@ def capture_exception(error: Exception, context: Dict[str, Any] = None):
                 for key, value in context.items():
                     scope.set_extra(key, value)
             sentry_sdk.capture_exception(error)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).exception(f"Failed to capture exception to Sentry: {e}")
 
 
 def capture_message(message: str, level: str = "info", context: Dict[str, Any] = None):
@@ -155,8 +155,8 @@ def capture_message(message: str, level: str = "info", context: Dict[str, Any] =
                 for key, value in context.items():
                     scope.set_extra(key, value)
             sentry_sdk.capture_message(message, level=level)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).exception(f"Failed to capture message to Sentry: {e}")
 
 
 # ============================================================================
@@ -275,8 +275,8 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             try:
                 import sentry_sdk
                 sentry_sdk.set_tag("request_id", request_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.getLogger(__name__).exception(f"Failed to set Sentry request_id tag: {e}")
 
         # Process request
         start_time = time.time()

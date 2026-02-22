@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { aiAPI, conversationsAPI } from '../services/api';
 import CallIntelligencePanel from './CallIntelligencePanel';
 import './AIAssistant.css';
+import { toast } from '../utils/toast';
 
 function AIAssistant({ isOpen, onClose, context = {} }) {
   const [messages, setMessages] = useState([
@@ -124,7 +125,7 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      toast.error('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
       return;
     }
 
@@ -154,9 +155,9 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
       console.error('Speech recognition error:', event.error);
       setIsListening(false);
       if (event.error === 'no-speech') {
-        alert('No speech detected. Please try again.');
+        toast.error('No speech detected. Please try again.');
       } else if (event.error !== 'aborted') {
-        alert(`Error occurred: ${event.error}`);
+        toast.error(`Error occurred: ${event.error}`);
       }
     };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './MergeCenter.css';
+import { toast } from '../utils/toast';
 
 function MergeCenter() {
   const [duplicatePairs, setDuplicatePairs] = useState([]);
@@ -180,11 +181,11 @@ function MergeCenter() {
         // Refresh duplicates list
         await fetchDuplicates();
       } else {
-        alert('Failed to merge contacts');
+        toast.error('Failed to merge contacts');
       }
     } catch (error) {
       console.error('Error merging:', error);
-      alert('Error merging contacts');
+      toast.error('Error merging contacts');
     } finally {
       setProcessing(false);
     }
@@ -219,7 +220,7 @@ function MergeCenter() {
 
   const submitFeedback = async () => {
     if (!feedback.trim()) {
-      alert('Please enter feedback');
+      toast.error('Please enter feedback');
       return;
     }
 
@@ -237,14 +238,14 @@ function MergeCenter() {
       });
 
       if (response.ok) {
-        alert('Feedback submitted successfully');
+        toast.success('Feedback submitted successfully');
         setFeedback('');
       } else {
-        alert('Failed to submit feedback');
+        toast.error('Failed to submit feedback');
       }
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      alert('Error submitting feedback');
+      toast.error('Error submitting feedback');
     }
   };
 

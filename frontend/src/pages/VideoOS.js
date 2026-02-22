@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import VideoRecorder from '../components/video/VideoRecorder';
 import './VideoOS.css';
+import { toast } from '../utils/toast';
 
 const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
   ? 'https://api.perenniaai.com'
@@ -256,7 +257,7 @@ const VideoOS = () => {
 
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to upload video. Please try again.');
+      toast.error('Failed to upload video. Please try again.');
     } finally {
       setUploading(false);
       setShowRecorder(false);
