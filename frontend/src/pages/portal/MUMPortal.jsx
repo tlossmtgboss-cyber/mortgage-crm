@@ -1,18 +1,12 @@
 /**
  * MUM Portal (Mortgages Under Management)
  *
- * Portal view for funded/closed loans - homeowner stage.
- * Focus on relationship maintenance, home value tracking, and refinance opportunities.
- *
- * Features:
- * - Home value intelligence (Zestimate-style with mock data)
- * - Equity tracker
- * - Refinance opportunity alerts
- * - Annual review scheduling
- * - Loan servicing information
- * - Resource center for homeowners
- * - Video messages from loan officer
- * - Document repository for important files
+ * Post-close borrower portal matching the design mockup:
+ * - Header card with borrower info + Est. Property Value + Est. Net Worth
+ * - Loan stats grid (term, balance, rate, payment, taxes, insurance)
+ * - Tab navigation: Overview, Referrals, Documents, Loan Details, Contacts
+ * - Action items checklist with due dates and status
+ * - Recent Activity sidebar
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -23,13 +17,13 @@ import './MUMPortal.css';
 import { toast } from '../../utils/toast';
 
 // Helper functions
-const formatCurrency = (amount) => {
-  if (!amount) return '$0';
+const formatCurrency = (amount, decimals = 0) => {
+  if (!amount && amount !== 0) return '$0';
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(amount);
 };
 
@@ -42,430 +36,220 @@ const formatDate = (dateStr) => {
   });
 };
 
-const formatPercent = (value, decimals = 2) => {
-  if (value === null || value === undefined) return '-';
-  return `${value.toFixed(decimals)}%`;
+const formatShortDate = (dateStr) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
 };
 
-// Generate mock home value data based on loan info
-const generateMockHomeData = (loan, workspace) => {
-  const purchasePrice = loan?.purchase_price || loan?.loan_amount / 0.8 || 400000;
-  const loanAmount = loan?.loan_amount || 320000;
-  const purchaseDate = loan?.funded_at || loan?.closing_date || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-
-  // Calculate time since purchase
-  const daysSincePurchase = Math.floor((Date.now() - new Date(purchaseDate)) / (1000 * 60 * 60 * 24));
-  const yearsSincePurchase = daysSincePurchase / 365;
-
-  // Mock appreciation (3-5% annually with some randomness)
-  const appreciationRate = 0.04 + (Math.random() * 0.02 - 0.01);
-  const currentValue = Math.round(purchasePrice * Math.pow(1 + appreciationRate, yearsSincePurchase));
-
-  // Mock remaining balance (assume 30yr, estimate based on time)
-  const monthsElapsed = Math.floor(daysSincePurchase / 30);
-  const rate = loan?.interest_rate || 6.5;
-  const monthlyRate = rate / 100 / 12;
-  const totalPayments = 360; // 30 years
-  const monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalPayments)) / (Math.pow(1 + monthlyRate, totalPayments) - 1);
-
-  // Estimate remaining balance (simplified)
-  let remainingBalance = loanAmount;
-  for (let i = 0; i < monthsElapsed; i++) {
-    const interestPayment = remainingBalance * monthlyRate;
-    const principalPayment = monthlyPayment - interestPayment;
-    remainingBalance -= principalPayment;
+const formatPhone = (phone) => {
+  if (!phone) return '';
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
   }
-  remainingBalance = Math.max(0, remainingBalance);
+  return phone;
+};
 
-  // Calculate equity
-  const equity = currentValue - remainingBalance;
-  const equityPercent = (equity / currentValue) * 100;
-  const ltv = (remainingBalance / currentValue) * 100;
-
-  // Mock value history (last 12 months)
-  const valueHistory = [];
-  for (let i = 11; i >= 0; i--) {
-    const monthsAgo = i;
-    const historicalValue = currentValue * Math.pow(1 - appreciationRate / 12, monthsAgo);
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsAgo);
-    valueHistory.push({
-      month: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-      value: Math.round(historicalValue),
-    });
-  }
-
-  // Mock comparable sales
-  const comparables = [
+// Default post-close action items
+const getDefaultActionItems = (postcloseData) => {
+  const items = [
     {
-      address: '123 Oak Street',
-      distance: '0.2 mi',
-      soldPrice: Math.round(currentValue * (0.95 + Math.random() * 0.1)),
-      soldDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-      sqft: Math.round(1800 + Math.random() * 400),
-      beds: 3,
-      baths: 2,
+      id: 'autopay',
+      icon: 'document',
+      title: 'Set up autopay for mortgage',
+      description: 'Ensure on-time payments with automatic billing',
+      dueDate: null,
+      status: 'pending',
+      priority: 'high',
     },
     {
-      address: '456 Maple Ave',
-      distance: '0.4 mi',
-      soldPrice: Math.round(currentValue * (0.9 + Math.random() * 0.15)),
-      soldDate: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-      sqft: Math.round(1700 + Math.random() * 500),
-      beds: 4,
-      baths: 2.5,
+      id: 'homestead',
+      icon: 'document',
+      title: 'File homestead exemption',
+      description: 'Reduce your property taxes — deadline varies by county',
+      dueDate: null,
+      status: 'pending',
+      priority: 'high',
     },
     {
-      address: '789 Elm Court',
-      distance: '0.5 mi',
-      soldPrice: Math.round(currentValue * (0.92 + Math.random() * 0.12)),
-      soldDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-      sqft: Math.round(1900 + Math.random() * 300),
-      beds: 3,
-      baths: 2,
+      id: 'insurance',
+      icon: 'shield',
+      title: 'Update homeowners insurance policy',
+      description: 'Confirm dwelling coverage matches property value',
+      dueDate: null,
+      status: 'pending',
+      priority: 'medium',
+    },
+    {
+      id: 'review',
+      icon: 'star',
+      title: 'Leave a review for your loan team',
+      description: 'Share your experience to help future homebuyers',
+      dueDate: null,
+      status: 'pending',
+      priority: 'low',
+    },
+    {
+      id: 'referral',
+      icon: 'gift',
+      title: 'Refer a friend — earn $500',
+      description: 'Share your unique link with anyone buying a home',
+      dueDate: null,
+      status: 'pending',
+      priority: 'low',
+    },
+    {
+      id: 'closing-docs',
+      icon: 'alert',
+      title: 'Review your closing documents',
+      description: 'Verify all final figures match your Closing Disclosure',
+      dueDate: null,
+      status: 'pending',
+      priority: 'high',
+    },
+    {
+      id: 'escrow',
+      icon: 'calendar',
+      title: 'Confirm escrow account setup',
+      description: 'Verify that taxes and insurance are escrowed correctly',
+      dueDate: null,
+      status: 'pending',
+      priority: 'medium',
+    },
+    {
+      id: 'save-docs',
+      icon: 'check',
+      title: 'Save your mortgage documents',
+      description: 'Download and store all loan documents securely',
+      dueDate: null,
+      status: 'completed',
+      priority: 'low',
     },
   ];
 
-  return {
-    currentValue,
-    purchasePrice,
-    appreciation: currentValue - purchasePrice,
-    appreciationPercent: ((currentValue - purchasePrice) / purchasePrice) * 100,
-    remainingBalance: Math.round(remainingBalance),
-    equity: Math.round(equity),
-    equityPercent,
-    ltv,
-    monthlyPayment: Math.round(monthlyPayment),
-    valueHistory,
-    comparables,
-    lastUpdated: new Date().toISOString(),
-    confidenceLevel: 'Medium-High',
-    valueRange: {
-      low: Math.round(currentValue * 0.95),
-      high: Math.round(currentValue * 1.05),
-    },
-  };
-};
-
-// Check if refinance might benefit the homeowner
-const checkRefinanceOpportunity = (loan, homeData) => {
-  const currentRate = loan?.interest_rate || 7;
-  const marketRate = 6.5; // Mock current market rate
-
-  const opportunities = [];
-
-  // Rate reduction opportunity
-  if (currentRate - marketRate >= 0.5) {
-    const monthlySavings = Math.round(homeData.monthlyPayment * (currentRate - marketRate) / 100 * 10);
-    opportunities.push({
-      type: 'rate_reduction',
-      title: 'Lower Your Rate',
-      description: `Rates have dropped! You could save ~${formatCurrency(monthlySavings)}/month by refinancing.`,
-      savings: monthlySavings * 12,
-      priority: 'high',
-    });
+  // Merge with real tasks from API if available
+  if (postcloseData?.tasks?.length > 0) {
+    return postcloseData.tasks.map(t => ({
+      id: t.id,
+      icon: t.priority === 'high' ? 'alert' : 'document',
+      title: t.title,
+      description: t.description || '',
+      dueDate: t.due_at,
+      status: t.status || 'pending',
+      priority: t.priority || 'medium',
+    }));
   }
 
-  // Cash-out opportunity
-  if (homeData.equityPercent >= 30) {
-    const availableEquity = Math.round(homeData.equity * 0.8 - homeData.remainingBalance * 0.2);
-    if (availableEquity > 50000) {
-      opportunities.push({
-        type: 'cash_out',
-        title: 'Access Your Equity',
-        description: `You have significant equity. Consider a cash-out refinance for home improvements or debt consolidation.`,
-        equity: availableEquity,
-        priority: 'medium',
-      });
-    }
-  }
-
-  // Remove PMI opportunity
-  if (homeData.ltv < 80 && loan?.has_pmi) {
-    opportunities.push({
-      type: 'remove_pmi',
-      title: 'Remove PMI',
-      description: `Your LTV is ${homeData.ltv.toFixed(1)}%. You may be eligible to remove PMI and save monthly.`,
-      priority: 'medium',
-    });
-  }
-
-  return opportunities;
+  return items;
 };
 
-// Home Value Card Component
-const HomeValueCard = ({ homeData, address }) => {
-  const valueChange = homeData.appreciationPercent;
-  const isPositive = valueChange >= 0;
-
-  return (
-    <div className="home-value-card">
-      <div className="value-header">
-        <div className="value-icon">🏠</div>
-        <div className="value-address">
-          <h3>Your Home</h3>
-          <p>{address || 'Your Property'}</p>
-        </div>
-      </div>
-
-      <div className="value-main">
-        <div className="estimated-value">
-          <span className="value-label">Estimated Value</span>
-          <span className="value-amount">{formatCurrency(homeData.currentValue)}</span>
-          <span className="value-range">
-            Range: {formatCurrency(homeData.valueRange.low)} - {formatCurrency(homeData.valueRange.high)}
-          </span>
-        </div>
-
-        <div className="value-change">
-          <span className={`change-badge ${isPositive ? 'positive' : 'negative'}`}>
-            {isPositive ? '↑' : '↓'} {formatCurrency(Math.abs(homeData.appreciation))}
-            <span className="change-percent">({formatPercent(Math.abs(valueChange))})</span>
-          </span>
-          <span className="change-label">Since Purchase</span>
-        </div>
-      </div>
-
-      <div className="value-confidence">
-        <span>Confidence: {homeData.confidenceLevel}</span>
-        <span className="last-updated">Updated: {formatDate(homeData.lastUpdated)}</span>
-      </div>
-    </div>
-  );
-};
-
-// Equity Tracker Component
-const EquityTracker = ({ homeData }) => {
-  const equityWidth = Math.min(100, homeData.equityPercent);
-  const debtWidth = 100 - equityWidth;
-
-  return (
-    <div className="equity-tracker">
-      <h3>Your Equity Position</h3>
-
-      <div className="equity-visual">
-        <div className="equity-bar">
-          <div className="equity-portion" style={{ width: `${equityWidth}%` }}>
-            <span>Equity</span>
-          </div>
-          <div className="debt-portion" style={{ width: `${debtWidth}%` }}>
-            <span>Mortgage</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="equity-details">
-        <div className="equity-stat">
-          <span className="stat-value positive">{formatCurrency(homeData.equity)}</span>
-          <span className="stat-label">Your Equity</span>
-        </div>
-        <div className="equity-stat">
-          <span className="stat-value">{formatCurrency(homeData.remainingBalance)}</span>
-          <span className="stat-label">Remaining Balance</span>
-        </div>
-        <div className="equity-stat">
-          <span className="stat-value">{formatPercent(homeData.equityPercent)}</span>
-          <span className="stat-label">Equity %</span>
-        </div>
-        <div className="equity-stat">
-          <span className="stat-value">{formatPercent(homeData.ltv)}</span>
-          <span className="stat-label">Loan-to-Value</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Opportunity Card Component
-const OpportunityCard = ({ opportunity, onSchedule }) => {
-  const priorityColors = {
-    high: 'emerald',
-    medium: 'blue',
-    low: 'gray',
+// Icon component for action items
+const ActionItemIcon = ({ type }) => {
+  const icons = {
+    document: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+    ),
+    shield: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    ),
+    star: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    ),
+    gift: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 12 20 22 4 22 4 12" />
+        <rect x="2" y="7" width="20" height="5" />
+        <line x1="12" y1="22" x2="12" y2="7" />
+        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" />
+        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" />
+      </svg>
+    ),
+    alert: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    ),
+    calendar: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    ),
+    check: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+        <polyline points="22 4 12 14.01 9 11.01" />
+      </svg>
+    ),
   };
 
   return (
-    <div className={`opportunity-card priority-${priorityColors[opportunity.priority]}`}>
-      <div className="opportunity-badge">{opportunity.priority === 'high' ? 'Recommended' : 'Available'}</div>
-      <h4>{opportunity.title}</h4>
-      <p>{opportunity.description}</p>
-      <div className="opportunity-actions">
-        <button className="learn-more-btn" onClick={onSchedule}>
-          Learn More
-        </button>
-      </div>
+    <div className={`action-icon action-icon-${type}`}>
+      {icons[type] || icons.document}
     </div>
   );
 };
 
-// Loan Details Component
-const LoanDetailsCard = ({ loan }) => (
-  <div className="loan-details-card">
-    <h3>Your Loan Details</h3>
-    <div className="loan-details-grid">
-      <div className="detail-item">
-        <span className="detail-label">Loan Type</span>
-        <span className="detail-value">{loan?.product_type || 'Conventional'}</span>
-      </div>
-      <div className="detail-item">
-        <span className="detail-label">Interest Rate</span>
-        <span className="detail-value">{loan?.interest_rate ? `${loan.interest_rate}%` : '-'}</span>
-      </div>
-      <div className="detail-item">
-        <span className="detail-label">Original Amount</span>
-        <span className="detail-value">{formatCurrency(loan?.loan_amount)}</span>
-      </div>
-      <div className="detail-item">
-        <span className="detail-label">Closing Date</span>
-        <span className="detail-value">{formatDate(loan?.funded_at || loan?.closing_date)}</span>
-      </div>
-    </div>
-
-    {loan?.servicer && (
-      <div className="servicer-info">
-        <h4>Loan Servicer</h4>
-        <p>{loan.servicer}</p>
-        {loan?.servicer_phone && <p className="servicer-contact">Contact: {loan.servicer_phone}</p>}
-      </div>
-    )}
-  </div>
-);
-
-// Comparables Component
-const ComparablesCard = ({ comparables }) => (
-  <div className="comparables-card">
-    <h3>Recent Sales Nearby</h3>
-    <p className="comparables-subtitle">These recent sales help determine your home's value.</p>
-
-    <div className="comparables-list">
-      {comparables.map((comp, index) => (
-        <div key={index} className="comparable-item">
-          <div className="comp-address">
-            <strong>{comp.address}</strong>
-            <span className="comp-distance">{comp.distance}</span>
-          </div>
-          <div className="comp-details">
-            <span>{comp.beds} bed • {comp.baths} bath • {comp.sqft.toLocaleString()} sqft</span>
-            <span className="comp-date">Sold {comp.soldDate}</span>
-          </div>
-          <div className="comp-price">{formatCurrency(comp.soldPrice)}</div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-// Resources Section
-const HomeownerResources = () => (
-  <div className="homeowner-resources">
-    <h3>Homeowner Resources</h3>
-    <div className="resources-grid">
-      <button type="button" className="resource-link" onClick={() => window.open('https://www.houselogic.com/organize-maintain/home-maintenance-tips/', '_blank')}>
-        <span className="resource-icon">🔧</span>
-        <span>Home Maintenance Tips</span>
-      </button>
-      <button type="button" className="resource-link" onClick={() => window.open('https://www.irs.gov/credits-deductions/individuals', '_blank')}>
-        <span className="resource-icon">📋</span>
-        <span>Tax Deduction Guide</span>
-      </button>
-      <button type="button" className="resource-link" onClick={() => toast.info('Insurance review coming soon!')}>
-        <span className="resource-icon">🛡️</span>
-        <span>Insurance Review</span>
-      </button>
-      <button type="button" className="resource-link" onClick={() => toast.info('Renovation calculator coming soon!')}>
-        <span className="resource-icon">🏗️</span>
-        <span>Renovation ROI Calculator</span>
-      </button>
-    </div>
-  </div>
-);
 
 /**
  * MUM Portal Component
- *
- * Props from PortalContainer:
- * - data: Workspace data including loan info
- * - slug: Workspace slug
- * - onRefresh: Callback to refresh data
  */
 export default function MUMPortal({ data, slug, onRefresh }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
 
-  // Messages, Videos, Documents state
-  const [videos, setVideos] = useState([]);
+  // Documents state
   const [documents, setDocuments] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [loadingMedia, setLoadingMedia] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(false);
 
   // Post-close real data from API
   const [postcloseData, setPostcloseData] = useState(null);
-  const [loadingPostclose, setLoadingPostclose] = useState(false);
 
   // Fetch post-close data from API
   const fetchPostcloseData = useCallback(async () => {
     if (!slug) return;
-    setLoadingPostclose(true);
     try {
       const result = await api.getPostcloseData(slug);
       setPostcloseData(result);
     } catch (err) {
-      console.warn('Could not fetch post-close data, using estimates:', err);
-    } finally {
-      setLoadingPostclose(false);
+      console.warn('Could not fetch post-close data:', err);
     }
   }, [slug]);
 
-  // Fetch videos, documents, messages, and post-close data
+  // Fetch documents and post-close data
   useEffect(() => {
-    const fetchMediaContent = async () => {
+    const fetchDocs = async () => {
       if (!slug) return;
-
-      setLoadingMedia(true);
+      setLoadingDocs(true);
       try {
-        const [videosRes, docsRes, msgsRes] = await Promise.all([
-          mumPortalAPI.getVideos(slug).catch(() => ({ videos: [] })),
-          mumPortalAPI.getDocuments(slug).catch(() => ({ documents: [] })),
-          mumPortalAPI.getMessages(slug).catch(() => ({ messages: [] })),
-        ]);
-
-        setVideos(videosRes.videos || []);
+        const docsRes = await mumPortalAPI.getDocuments(slug).catch(() => ({ documents: [] }));
         setDocuments(docsRes.documents || []);
-        setMessages(msgsRes.messages || []);
       } catch (error) {
-        console.error('Error fetching MUM portal content:', error);
+        console.error('Error fetching documents:', error);
       } finally {
-        setLoadingMedia(false);
+        setLoadingDocs(false);
       }
     };
 
-    fetchMediaContent();
+    fetchDocs();
     fetchPostcloseData();
   }, [slug, fetchPostcloseData]);
-
-  // Handle video viewed
-  const handleVideoViewed = async (videoId) => {
-    try {
-      await mumPortalAPI.markVideoViewed(slug, videoId);
-      setVideos(prev => prev.map(v =>
-        v.id === videoId ? { ...v, is_viewed: true, viewed_at: new Date().toISOString() } : v
-      ));
-    } catch (error) {
-      console.error('Error marking video viewed:', error);
-    }
-  };
-
-  // Handle message read
-  const handleMessageRead = async (messageId) => {
-    try {
-      await mumPortalAPI.markMessageRead(slug, messageId);
-      setMessages(prev => prev.map(m =>
-        m.id === messageId ? { ...m, is_read: true } : m
-      ));
-    } catch (error) {
-      console.error('Error marking message read:', error);
-    }
-  };
 
   // Extract data
   const workspace = data?.workspace;
@@ -474,540 +258,519 @@ export default function MUMPortal({ data, slug, onRefresh }) {
   const borrower = contacts.find(c => c.contact_type === 'borrower') || contacts[0];
   const loanOfficer = data?.loan_officer || workspace?.loan_officer;
 
-  // Use real post-close API data when available, fall back to mock estimates
-  const homeData = useMemo(() => {
-    if (postcloseData) {
-      const mockFallback = generateMockHomeData(loan, workspace);
-      return {
-        currentValue: postcloseData.estimated_value || mockFallback.currentValue,
-        purchasePrice: postcloseData.purchase_price || mockFallback.purchasePrice,
-        appreciation: (postcloseData.estimated_value || 0) - (postcloseData.purchase_price || 0),
-        appreciationPercent: postcloseData.appreciation_pct || 0,
-        remainingBalance: postcloseData.current_balance || mockFallback.remainingBalance,
-        equity: postcloseData.equity || mockFallback.equity,
-        equityPercent: postcloseData.equity_pct || mockFallback.equityPercent,
-        ltv: postcloseData.ltv || mockFallback.ltv,
-        monthlyPayment: postcloseData.monthly_payment || mockFallback.monthlyPayment,
-        // Keep mock data for charts/comparables (no real data source yet)
-        valueHistory: mockFallback.valueHistory,
-        comparables: mockFallback.comparables,
-        lastUpdated: new Date().toISOString(),
-        confidenceLevel: 'Medium-High',
-        valueRange: {
-          low: Math.round((postcloseData.estimated_value || mockFallback.currentValue) * 0.95),
-          high: Math.round((postcloseData.estimated_value || mockFallback.currentValue) * 1.05),
-        },
-      };
-    }
-    return generateMockHomeData(loan, workspace);
-  }, [loan, workspace, postcloseData]);
+  // Compute property value and equity
+  const propertyValue = useMemo(() => {
+    if (postcloseData?.estimated_value) return postcloseData.estimated_value;
+    const purchasePrice = loan?.purchase_price || loan?.loan_amount / 0.8 || 0;
+    const daysSince = loan?.funded_at
+      ? Math.floor((Date.now() - new Date(loan.funded_at)) / (1000 * 60 * 60 * 24))
+      : 365;
+    return Math.round(purchasePrice * Math.pow(1.035, daysSince / 365));
+  }, [loan, postcloseData]);
 
-  // Check for refinance opportunities
-  const opportunities = useMemo(() => checkRefinanceOpportunity(loan, homeData), [loan, homeData]);
+  const currentBalance = useMemo(() => {
+    if (postcloseData?.current_balance) return postcloseData.current_balance;
+    return loan?.loan_amount || 0;
+  }, [loan, postcloseData]);
 
-  // Format property address
-  const propertyAddress = useMemo(() => {
-    const addr = loan?.property_address;
-    if (!addr) return 'Your Property';
-    if (typeof addr === 'string') return addr;
-    return [addr.street, addr.city, addr.state].filter(Boolean).join(', ');
+  const netWorth = useMemo(() => {
+    return propertyValue - currentBalance;
+  }, [propertyValue, currentBalance]);
+
+  const monthlyPayment = useMemo(() => {
+    if (postcloseData?.monthly_payment) return postcloseData.monthly_payment;
+    const amount = loan?.loan_amount || 0;
+    const rate = (loan?.interest_rate || 6.5) / 100 / 12;
+    const n = (loan?.term_months || 360);
+    if (rate === 0) return amount / n;
+    return Math.round(amount * (rate * Math.pow(1 + rate, n)) / (Math.pow(1 + rate, n) - 1));
+  }, [loan, postcloseData]);
+
+  // Loan term display
+  const loanTerm = useMemo(() => {
+    const months = loan?.term_months || 360;
+    const years = months / 12;
+    const type = loan?.product_type || loan?.loan_type || 'Fixed';
+    return `${years} yr ${type}`;
   }, [loan]);
 
-  const borrowerName = borrower?.first_name || 'Homeowner';
+  // Anniversary date
+  const anniversaryDate = useMemo(() => {
+    if (postcloseData?.anniversary_date) return postcloseData.anniversary_date;
+    if (loan?.funded_at) {
+      const funded = new Date(loan.funded_at);
+      const next = new Date(funded);
+      next.setFullYear(next.getFullYear() + 1);
+      while (next < new Date()) {
+        next.setFullYear(next.getFullYear() + 1);
+      }
+      return next.toISOString();
+    }
+    return null;
+  }, [loan, postcloseData]);
+
+  // Action items
+  const actionItems = useMemo(() => getDefaultActionItems(postcloseData), [postcloseData]);
+  const pendingItems = actionItems.filter(i => i.status !== 'completed');
+
+  // Property address
+  const propertyAddress = useMemo(() => {
+    const addr = loan?.property_address;
+    if (!addr) return '';
+    if (typeof addr === 'string') return addr;
+    return [addr.street, addr.city, addr.state, addr.zip].filter(Boolean).join(', ');
+  }, [loan]);
+
+  // Recent activity (mock for now, can be fed from API)
+  const recentActivity = useMemo(() => {
+    const activities = [];
+    if (loan?.appraisal_received_date) {
+      activities.push({ label: 'Appraisal ordered', date: loan.appraisal_received_date });
+    }
+    if (postcloseData?.funded_date) {
+      activities.push({ label: 'Loan funded', date: postcloseData.funded_date });
+    }
+    // Add some defaults if we have no real data
+    if (activities.length === 0) {
+      activities.push(
+        { label: 'Appraisal ordered', date: '2026-02-10' },
+        { label: 'Documents received', date: '2026-02-06' },
+        { label: 'Application submitted', date: '2026-01-15' },
+      );
+    }
+    return activities;
+  }, [loan, postcloseData]);
+
+  // Borrower info
+  const borrowerName = borrower
+    ? `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim()
+    : 'Homeowner';
+  const borrowerEmail = borrower?.email || '';
+  const borrowerPhone = borrower?.phone || '';
+
+  // Contact list for Contacts tab
+  const allContacts = useMemo(() => {
+    const list = [];
+    if (borrower) {
+      list.push({
+        name: `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim(),
+        role: 'Borrower',
+        email: borrower.email,
+        phone: borrower.phone,
+      });
+    }
+    // Co-borrower
+    const coborrower = contacts.find(c => c.contact_type === 'coborrower');
+    if (coborrower) {
+      list.push({
+        name: `${coborrower.first_name || ''} ${coborrower.last_name || ''}`.trim(),
+        role: 'Co-Borrower',
+        email: coborrower.email,
+        phone: coborrower.phone,
+      });
+    }
+    if (loanOfficer) {
+      list.push({
+        name: loanOfficer.name || 'Loan Officer',
+        role: 'Loan Officer',
+        email: loanOfficer.email,
+        phone: loanOfficer.phone,
+        nmls: loanOfficer.nmls_id,
+      });
+    }
+    return list;
+  }, [contacts, borrower, loanOfficer]);
+
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'referrals', label: 'Referrals' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'loan-details', label: 'Loan Details' },
+    { id: 'contacts', label: 'Contacts' },
+  ];
 
   return (
     <div className="mum-portal">
-      {/* Header */}
-      <header className="mum-header">
-        <div className="header-content">
-          <div className="welcome-message">
-            <h1>Welcome back, {borrowerName}!</h1>
-            <p>Here's your home value intelligence dashboard.</p>
-          </div>
+      {/* Borrower Header Card */}
+      <div className="borrower-header-card">
+        <div className="borrower-info">
+          <h1 className="borrower-name">{borrowerName}</h1>
+          {borrowerEmail && (
+            <div className="borrower-contact-row">
+              <svg className="contact-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              <span>{borrowerEmail}</span>
+            </div>
+          )}
+          {borrowerPhone && (
+            <div className="borrower-contact-row">
+              <svg className="contact-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+              <span>{formatPhone(borrowerPhone)}</span>
+            </div>
+          )}
+        </div>
 
-          <div className="header-actions">
-            <button className="schedule-btn" onClick={() => setShowScheduleModal(true)}>
-              <span>📅</span> Annual Review
-            </button>
+        <div className="property-values">
+          <div className="value-block">
+            <span className="value-label">EST. PROPERTY VALUE</span>
+            <span className="value-amount">{formatCurrency(propertyValue)}</span>
+          </div>
+          <div className="value-block net-worth">
+            <span className="value-label">EST. NET WORTH</span>
+            <span className="value-amount positive">{formatCurrency(netWorth)}</span>
           </div>
         </div>
-      </header>
 
-      {/* Navigation */}
-      <nav className="mum-nav">
-        <button
-          className={`nav-btn ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          Overview
-        </button>
-        <button
-          className={`nav-btn ${activeTab === 'equity' ? 'active' : ''}`}
-          onClick={() => setActiveTab('equity')}
-        >
-          Equity & Value
-        </button>
-        <button
-          className={`nav-btn ${activeTab === 'opportunities' ? 'active' : ''}`}
-          onClick={() => setActiveTab('opportunities')}
-        >
-          Opportunities
-          {opportunities.length > 0 && <span className="nav-badge">{opportunities.length}</span>}
-        </button>
-        <button
-          className={`nav-btn ${activeTab === 'loan' ? 'active' : ''}`}
-          onClick={() => setActiveTab('loan')}
-        >
-          Loan Details
-        </button>
-        <button
-          className={`nav-btn ${activeTab === 'messages' ? 'active' : ''}`}
-          onClick={() => setActiveTab('messages')}
-        >
-          Messages
-          {(videos.length + messages.length) > 0 && (
-            <span className="nav-badge">{videos.length + messages.length}</span>
+        <div className="header-footer-row">
+          <span className="property-address">{propertyAddress}</span>
+          {anniversaryDate && (
+            <span className="loan-anniversary">Loan Anniversary: {formatDate(anniversaryDate)}</span>
           )}
-        </button>
-        <button
-          className={`nav-btn ${activeTab === 'documents' ? 'active' : ''}`}
-          onClick={() => setActiveTab('documents')}
-        >
-          Documents
-          {documents.length > 0 && <span className="nav-badge">{documents.length}</span>}
-        </button>
+        </div>
+      </div>
+
+      {/* Loan Stats Grid */}
+      <div className="loan-stats-grid">
+        <div className="stat-cell">
+          <span className="stat-label">TERM</span>
+          <span className="stat-value">{loanTerm}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">CURRENT BALANCE</span>
+          <span className="stat-value">{formatCurrency(currentBalance, 2)}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">INTEREST RATE</span>
+          <span className="stat-value">{loan?.interest_rate ? `${loan.interest_rate}%` : '—'}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">EST. PAYMENT</span>
+          <span className="stat-value">{formatCurrency(monthlyPayment)}/mo</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">PROPERTY TAXES</span>
+          <span className="stat-value">{loan?.property_taxes ? `${formatCurrency(loan.property_taxes)}/mo` : '—'}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">HOMEOWNERS INSURANCE</span>
+          <span className="stat-value">{loan?.homeowners_insurance ? `${formatCurrency(loan.homeowners_insurance)}/mo` : '—'}</span>
+        </div>
+        {loan?.flood_insurance && (
+          <div className="stat-cell">
+            <span className="stat-label">FLOOD INSURANCE</span>
+            <span className="stat-value">{formatCurrency(loan.flood_insurance)}/mo</span>
+          </div>
+        )}
+      </div>
+
+      {/* Tab Navigation */}
+      <nav className="mum-tab-bar">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </nav>
 
-      {/* Main Content */}
-      <main className="mum-content">
-        {/* Overview Tab */}
+      {/* Tab Content */}
+      <div className="mum-tab-content">
+
+        {/* ===== OVERVIEW TAB ===== */}
         {activeTab === 'overview' && (
-          <div className="overview-tab">
-            <div className="overview-grid">
-              {/* Main Column */}
-              <div className="main-column">
-                <HomeValueCard homeData={homeData} address={propertyAddress} />
-                <EquityTracker homeData={homeData} />
-
-                {/* Post-Close Tasks */}
-                {postcloseData?.tasks?.length > 0 && (
-                  <div className="postclose-tasks">
-                    <h3>Action Items</h3>
-                    <div className="tasks-list">
-                      {postcloseData.tasks.filter(t => t.status !== 'completed').map((task) => (
-                        <div key={task.id} className={`task-item priority-${task.priority || 'medium'}`}>
-                          <div className="task-checkbox">
-                            <input type="checkbox" disabled checked={task.status === 'completed'} />
-                          </div>
-                          <div className="task-info">
-                            <span className="task-title">{task.title}</span>
-                            {task.due_at && (
-                              <span className="task-due">Due: {formatDate(task.due_at)}</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Opportunity Highlights */}
-                {opportunities.length > 0 && (
-                  <div className="opportunity-highlight">
-                    <h3>Opportunities For You</h3>
-                    <div className="opportunities-preview">
-                      {opportunities.slice(0, 2).map((opp, index) => (
-                        <OpportunityCard
-                          key={index}
-                          opportunity={opp}
-                          onSchedule={() => setShowScheduleModal(true)}
-                        />
-                      ))}
-                    </div>
-                    {opportunities.length > 2 && (
-                      <button className="view-all-btn" onClick={() => setActiveTab('opportunities')}>
-                        View All {opportunities.length} Opportunities →
-                      </button>
-                    )}
-                  </div>
-                )}
+          <div className="overview-layout">
+            <div className="overview-main">
+              {/* Questions / CTA Section */}
+              <div className="questions-card">
+                <div className="questions-left">
+                  <h3>Questions about your loan?</h3>
+                  <p>Your loan officer is here to help guide you through the process.</p>
+                </div>
+                <div className="questions-buttons">
+                  <button
+                    className="btn-payment"
+                    onClick={() => {
+                      const url = postcloseData?.servicer_portal || loan?.servicer_portal;
+                      if (url) {
+                        window.open(url, '_blank');
+                      } else {
+                        toast.info('Contact your servicer to make a payment');
+                      }
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="1" x2="12" y2="23" />
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                    Make a Payment
+                  </button>
+                  <button className="btn-schedule" onClick={() => setShowScheduleModal(true)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                      <line x1="16" y1="2" x2="16" y2="6" />
+                      <line x1="8" y1="2" x2="8" y2="6" />
+                      <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                    Schedule a Call
+                  </button>
+                </div>
               </div>
 
-              {/* Sidebar */}
-              <div className="sidebar-column">
-                {/* Quick Stats */}
-                <div className="quick-stats-card">
-                  <h3>At a Glance</h3>
-                  <div className="stat-row">
-                    <span className="stat-label">Monthly Payment</span>
-                    <span className="stat-value">{formatCurrency(homeData.monthlyPayment)}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Current Balance</span>
-                    <span className="stat-value">{formatCurrency(homeData.remainingBalance)}</span>
-                  </div>
-                  {postcloseData?.anniversary_date && (
-                    <div className="stat-row">
-                      <span className="stat-label">Loan Anniversary</span>
-                      <span className="stat-value">{formatDate(postcloseData.anniversary_date)}</span>
-                    </div>
-                  )}
-                  {postcloseData?.interest_rate > 0 && (
-                    <div className="stat-row">
-                      <span className="stat-label">Interest Rate</span>
-                      <span className="stat-value">{postcloseData.interest_rate}%</span>
-                    </div>
+              {/* Action Items */}
+              <div className="action-items-card">
+                <div className="action-items-header">
+                  <h3>Your Action Items</h3>
+                  {pendingItems.length > 0 && (
+                    <span className="items-badge">{pendingItems.length} ITEMS TO COMPLETE</span>
                   )}
                 </div>
-
-                {/* Contact Card */}
-                {loanOfficer && (
-                  <div className="lo-card">
-                    <h4>Your Loan Officer</h4>
-                    <p className="lo-name">{loanOfficer.name}</p>
-                    {loanOfficer.email && (
-                      <a href={`mailto:${loanOfficer.email}`} className="lo-contact">
-                        {loanOfficer.email}
-                      </a>
-                    )}
-                    {loanOfficer.phone && (
-                      <a href={`tel:${loanOfficer.phone}`} className="lo-contact">
-                        {loanOfficer.phone}
-                      </a>
-                    )}
-                    <button
-                      className="contact-lo-btn"
-                      onClick={() => setShowScheduleModal(true)}
-                    >
-                      Schedule a Call
-                    </button>
-                  </div>
-                )}
-
-                <HomeownerResources />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Equity & Value Tab */}
-        {activeTab === 'equity' && (
-          <div className="equity-tab">
-            <HomeValueCard homeData={homeData} address={propertyAddress} />
-
-            {/* Value History Chart Placeholder */}
-            <div className="value-history-card">
-              <h3>Value History</h3>
-              <div className="value-chart">
-                {homeData.valueHistory.map((point, index) => (
-                  <div key={index} className="chart-bar-container">
-                    <div
-                      className="chart-bar"
-                      style={{
-                        height: `${((point.value - homeData.purchasePrice * 0.9) / (homeData.currentValue * 0.2)) * 100}%`,
-                      }}
-                    />
-                    <span className="chart-label">{point.month}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <EquityTracker homeData={homeData} />
-            <ComparablesCard comparables={homeData.comparables} />
-          </div>
-        )}
-
-        {/* Opportunities Tab */}
-        {activeTab === 'opportunities' && (
-          <div className="opportunities-tab">
-            <div className="opportunities-header">
-              <h2>Your Opportunities</h2>
-              <p>Based on your current home value and market conditions.</p>
-            </div>
-
-            {opportunities.length === 0 ? (
-              <div className="no-opportunities">
-                <div className="no-opp-icon">✓</div>
-                <h3>You're in Great Shape!</h3>
-                <p>No immediate refinance opportunities at this time. We'll notify you when market conditions change.</p>
-              </div>
-            ) : (
-              <div className="opportunities-list">
-                {opportunities.map((opp, index) => (
-                  <div key={index} className="opportunity-detail-card">
-                    <div className="opp-header">
-                      <h3>{opp.title}</h3>
-                      <span className={`opp-priority priority-${opp.priority}`}>
-                        {opp.priority === 'high' ? 'Recommended' : 'Available'}
-                      </span>
-                    </div>
-                    <p>{opp.description}</p>
-                    {opp.savings && (
-                      <div className="opp-savings">
-                        <span>Potential Annual Savings:</span>
-                        <strong>{formatCurrency(opp.savings)}</strong>
+                <div className="action-items-list">
+                  {actionItems.map((item) => (
+                    <div key={item.id} className={`action-item ${item.status === 'completed' ? 'completed' : ''}`}>
+                      <ActionItemIcon type={item.icon} />
+                      <div className="action-item-content">
+                        <span className={`action-item-title ${item.status === 'completed' ? 'done' : ''}`}>
+                          {item.title}
+                        </span>
+                        <span className="action-item-description">{item.description}</span>
                       </div>
-                    )}
-                    {opp.equity && (
-                      <div className="opp-equity">
-                        <span>Available Equity:</span>
-                        <strong>{formatCurrency(opp.equity)}</strong>
+                      <div className="action-item-meta">
+                        {item.status === 'completed' ? (
+                          <span className="done-badge">DONE</span>
+                        ) : item.dueDate ? (
+                          <span className="due-date">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            {formatShortDate(item.dueDate)}
+                          </span>
+                        ) : null}
+                        <button className="view-link" onClick={() => toast.info('Details coming soon')}>
+                          View &rsaquo;
+                        </button>
                       </div>
-                    )}
-                    <button
-                      className="opp-action-btn"
-                      onClick={() => setShowScheduleModal(true)}
-                    >
-                      Schedule Consultation
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Loan Details Tab */}
-        {activeTab === 'loan' && (
-          <div className="loan-tab">
-            <LoanDetailsCard loan={loan} />
-
-            <div className="payment-history">
-              <h3>Payment Information</h3>
-              <div className="payment-info">
-                <p>
-                  Your loan is currently serviced by{' '}
-                  <strong>{postcloseData?.servicer || loan?.servicer || 'your loan servicer'}</strong>.
-                  Contact them directly for payment questions or to make a payment.
-                </p>
-                {postcloseData?.servicer_phone && (
-                  <p className="servicer-contact">
-                    Contact: <a href={`tel:${postcloseData.servicer_phone}`}>{postcloseData.servicer_phone}</a>
-                  </p>
-                )}
-                {(postcloseData?.servicer_portal || loan?.servicer_portal) && (
-                  <a
-                    href={postcloseData?.servicer_portal || loan.servicer_portal}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="servicer-portal-btn"
-                  >
-                    Make a Payment →
-                  </a>
-                )}
-              </div>
-            </div>
-
-            <div className="documents-section">
-              <h3>Important Documents</h3>
-              <div className="document-links">
-                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
-                  <span>📄</span> Closing Disclosure
-                </button>
-                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
-                  <span>📄</span> Promissory Note
-                </button>
-                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
-                  <span>📄</span> Deed of Trust
-                </button>
-                <button type="button" className="doc-link" onClick={() => toast.info('Document access coming soon!')}>
-                  <span>📄</span> Title Insurance Policy
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Messages Tab - Videos and Text Messages from LO */}
-        {activeTab === 'messages' && (
-          <div className="messages-tab">
-            <div className="messages-header">
-              <h2>Messages From Your Loan Officer</h2>
-              <p>Stay connected with personalized video and text updates from your team.</p>
-            </div>
-
-            {loadingMedia ? (
-              <div className="messages-loading">
-                <div className="spinner"></div>
-                <p>Loading messages...</p>
-              </div>
-            ) : (
-              <>
-                {/* Video Messages Section */}
-                {videos.length > 0 && (
-                  <div className="video-messages-section">
-                    <h3>Video Messages</h3>
-                    <div className="video-grid">
-                      {videos.map((video) => (
-                        <div key={video.id} className={`video-card ${video.is_viewed ? 'viewed' : 'unviewed'}`}>
-                          <div className="video-thumbnail" onClick={() => handleVideoViewed(video.id)}>
-                            {video.thumbnail_url ? (
-                              <img src={video.thumbnail_url} alt={video.title} />
-                            ) : (
-                              <div className="video-placeholder">
-                                <span className="play-icon">▶</span>
-                              </div>
-                            )}
-                            {!video.is_viewed && <span className="new-badge">NEW</span>}
-                            {video.duration_seconds && (
-                              <span className="video-duration">
-                                {Math.floor(video.duration_seconds / 60)}:{String(video.duration_seconds % 60).padStart(2, '0')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="video-info">
-                            <h4>{video.title || 'Video Message'}</h4>
-                            {video.description && <p>{video.description}</p>}
-                            <div className="video-meta">
-                              <span className="sender">{video.sender_name || loanOfficer?.name || 'Your Loan Officer'}</span>
-                              <span className="date">{formatDate(video.created_at)}</span>
-                            </div>
-                          </div>
-                          {video.video_url && (
-                            <a
-                              href={video.video_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="watch-btn"
-                              onClick={() => handleVideoViewed(video.id)}
-                            >
-                              Watch Video
-                            </a>
-                          )}
-                        </div>
-                      ))}
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
+              </div>
+            </div>
 
-                {/* Text Messages Section */}
-                {messages.length > 0 && (
-                  <div className="text-messages-section">
-                    <h3>Updates & Announcements</h3>
-                    <div className="messages-list">
-                      {messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`message-card ${message.is_read ? 'read' : 'unread'}`}
-                          onClick={() => !message.is_read && handleMessageRead(message.id)}
-                        >
-                          <div className="message-icon">
-                            {message.message_type === 'update' ? '📢' :
-                             message.message_type === 'alert' ? '⚠️' :
-                             message.message_type === 'announcement' ? '📣' : '💬'}
-                          </div>
-                          <div className="message-content">
-                            <p>{message.content}</p>
-                            <span className="message-date">{formatDate(message.created_at)}</span>
-                          </div>
-                          {!message.is_read && <span className="unread-dot"></span>}
-                        </div>
-                      ))}
+            {/* Recent Activity Sidebar */}
+            <div className="overview-sidebar">
+              <div className="recent-activity-card">
+                <h3>Recent Activity</h3>
+                <div className="activity-list">
+                  {recentActivity.map((activity, idx) => (
+                    <div key={idx} className="activity-item">
+                      <span className="activity-label">{activity.label}</span>
+                      <span className="activity-date">— {formatShortDate(activity.date)}</span>
                     </div>
-                  </div>
-                )}
-
-                {/* Empty State */}
-                {videos.length === 0 && messages.length === 0 && (
-                  <div className="no-messages">
-                    <div className="no-messages-icon">💬</div>
-                    <h3>No Messages Yet</h3>
-                    <p>Your loan officer will share video messages and updates here.</p>
-                    <p className="hint">Check back soon for personalized content!</p>
-                  </div>
-                )}
-              </>
-            )}
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Documents Tab */}
+        {/* ===== REFERRALS TAB ===== */}
+        {activeTab === 'referrals' && (
+          <div className="referrals-tab">
+            <div className="referral-hero">
+              <h2>Refer a Friend, Earn $500</h2>
+              <p>Know someone buying or refinancing? Share your unique referral link and earn a reward when they close.</p>
+              <div className="referral-link-box">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin}/refer/${slug}`}
+                  className="referral-link-input"
+                />
+                <button
+                  className="copy-btn"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/refer/${slug}`);
+                    toast.success('Referral link copied!');
+                  }}
+                >
+                  Copy Link
+                </button>
+              </div>
+            </div>
+
+            <div className="referral-stats">
+              <div className="ref-stat">
+                <span className="ref-stat-value">0</span>
+                <span className="ref-stat-label">Referrals Sent</span>
+              </div>
+              <div className="ref-stat">
+                <span className="ref-stat-value">0</span>
+                <span className="ref-stat-label">In Progress</span>
+              </div>
+              <div className="ref-stat">
+                <span className="ref-stat-value">$0</span>
+                <span className="ref-stat-label">Earned</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== DOCUMENTS TAB ===== */}
         {activeTab === 'documents' && (
           <div className="documents-tab">
-            <div className="documents-header">
-              <h2>Your Documents</h2>
-              <p>Access your important mortgage documents anytime.</p>
-            </div>
+            <h2>Your Documents</h2>
+            <p className="tab-subtitle">Access your important mortgage documents anytime.</p>
 
-            {loadingMedia ? (
-              <div className="documents-loading">
+            {loadingDocs ? (
+              <div className="loading-state">
                 <div className="spinner"></div>
                 <p>Loading documents...</p>
               </div>
             ) : documents.length > 0 ? (
-              <div className="documents-grid">
+              <div className="documents-list">
                 {documents.map((doc) => (
-                  <div key={doc.id} className="document-card">
+                  <div key={doc.id} className="document-row">
                     <div className="doc-icon">
-                      {doc.doc_category === 'closing' ? '📋' :
-                       doc.doc_category === 'tax' ? '📊' :
-                       doc.doc_category === 'insurance' ? '🛡️' :
-                       doc.doc_category === 'legal' ? '⚖️' : '📄'}
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
                     </div>
                     <div className="doc-info">
-                      <h4>{doc.file_name || doc.doc_type}</h4>
-                      <p className="doc-type">{doc.doc_type?.replace(/_/g, ' ')}</p>
-                      <span className="doc-date">Added {formatDate(doc.created_at)}</span>
-                      {doc.size_bytes && (
-                        <span className="doc-size">
-                          {(doc.size_bytes / 1024 / 1024).toFixed(1)} MB
-                        </span>
-                      )}
+                      <span className="doc-name">{doc.file_name || doc.doc_type}</span>
+                      <span className="doc-meta">{doc.doc_type?.replace(/_/g, ' ')} · Added {formatShortDate(doc.created_at)}</span>
                     </div>
-                    <button className="download-btn" onClick={() => toast.info('Document download coming soon!')}>
+                    <button className="download-btn" onClick={() => toast.info('Document download coming soon')}>
                       Download
                     </button>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="no-documents">
-                <div className="no-docs-icon">📂</div>
+              <div className="empty-state">
                 <h3>No Documents Available</h3>
-                <p>Your important mortgage documents will appear here.</p>
-                <p className="hint">Contact your loan officer if you need specific documents.</p>
+                <p>Your important mortgage documents will appear here. Contact your loan officer if you need specific documents.</p>
               </div>
             )}
 
-            {/* Standard Documents Section */}
-            <div className="standard-documents">
+            <div className="standard-docs-section">
               <h3>Common Mortgage Documents</h3>
-              <p>Looking for specific closing documents? Contact your loan officer:</p>
-              <div className="standard-doc-list">
-                <div className="standard-doc">
-                  <span>📄</span>
-                  <div>
-                    <strong>Closing Disclosure</strong>
-                    <p>Final loan terms and closing costs</p>
+              <div className="standard-docs-grid">
+                {['Closing Disclosure', 'Promissory Note', 'Deed of Trust', 'Title Insurance Policy'].map(doc => (
+                  <div key={doc} className="standard-doc-item">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <span>{doc}</span>
                   </div>
-                </div>
-                <div className="standard-doc">
-                  <span>📄</span>
-                  <div>
-                    <strong>Promissory Note</strong>
-                    <p>Your promise to repay the loan</p>
-                  </div>
-                </div>
-                <div className="standard-doc">
-                  <span>📄</span>
-                  <div>
-                    <strong>Deed of Trust</strong>
-                    <p>Security instrument for your loan</p>
-                  </div>
-                </div>
-                <div className="standard-doc">
-                  <span>📄</span>
-                  <div>
-                    <strong>Title Insurance Policy</strong>
-                    <p>Protection against title defects</p>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
         )}
-      </main>
+
+        {/* ===== LOAN DETAILS TAB ===== */}
+        {activeTab === 'loan-details' && (
+          <div className="loan-details-tab">
+            <h2>Loan Details</h2>
+
+            <div className="details-grid">
+              <div className="detail-row">
+                <span className="detail-label">Loan Type</span>
+                <span className="detail-value">{loan?.product_type || loan?.loan_type || 'Conventional'}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Interest Rate</span>
+                <span className="detail-value">{loan?.interest_rate ? `${loan.interest_rate}%` : '—'}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Original Loan Amount</span>
+                <span className="detail-value">{formatCurrency(loan?.loan_amount)}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Current Balance</span>
+                <span className="detail-value">{formatCurrency(currentBalance, 2)}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Purchase Price</span>
+                <span className="detail-value">{formatCurrency(loan?.purchase_price)}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Closing Date</span>
+                <span className="detail-value">{formatDate(loan?.funded_at || loan?.closing_date)}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Loan Term</span>
+                <span className="detail-value">{loanTerm}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Monthly Payment</span>
+                <span className="detail-value">{formatCurrency(monthlyPayment)}/mo</span>
+              </div>
+            </div>
+
+            {/* Servicer Info */}
+            <div className="servicer-card">
+              <h3>Loan Servicer</h3>
+              <p className="servicer-name">{postcloseData?.servicer || loan?.servicer || 'Contact your loan officer for servicer information'}</p>
+              {(postcloseData?.servicer_phone || loan?.servicer_phone) && (
+                <p className="servicer-phone">
+                  <a href={`tel:${postcloseData?.servicer_phone || loan?.servicer_phone}`}>
+                    {postcloseData?.servicer_phone || loan?.servicer_phone}
+                  </a>
+                </p>
+              )}
+              {(postcloseData?.servicer_portal || loan?.servicer_portal) && (
+                <a
+                  href={postcloseData?.servicer_portal || loan?.servicer_portal}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="servicer-link"
+                >
+                  Go to Servicer Portal →
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ===== CONTACTS TAB ===== */}
+        {activeTab === 'contacts' && (
+          <div className="contacts-tab">
+            <h2>Your Contacts</h2>
+            <div className="contacts-list">
+              {allContacts.map((contact, idx) => (
+                <div key={idx} className="contact-card">
+                  <div className="contact-avatar">
+                    {contact.name?.charAt(0) || '?'}
+                  </div>
+                  <div className="contact-info">
+                    <span className="contact-name">{contact.name}</span>
+                    <span className="contact-role">{contact.role}</span>
+                    {contact.nmls && <span className="contact-nmls">NMLS# {contact.nmls}</span>}
+                  </div>
+                  <div className="contact-actions">
+                    {contact.email && (
+                      <a href={`mailto:${contact.email}`} className="contact-action-link">{contact.email}</a>
+                    )}
+                    {contact.phone && (
+                      <a href={`tel:${contact.phone}`} className="contact-action-link">{formatPhone(contact.phone)}</a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Schedule Modal */}
       <ScheduleAppointmentModal
@@ -1022,18 +785,6 @@ export default function MUMPortal({ data, slug, onRefresh }) {
           phone: borrower.phone,
         } : null}
       />
-
-      {/* Footer */}
-      <footer className="mum-footer">
-        <p>
-          Home value estimates are for informational purposes only and may not reflect actual market value.
-        </p>
-        <p className="footer-links">
-          <a href="/privacy">Privacy Policy</a>
-          <span>•</span>
-          <a href="/terms">Terms of Service</a>
-        </p>
-      </footer>
     </div>
   );
 }
