@@ -404,37 +404,73 @@
   cursor: not-allowed;
 }
 
-/* Objects Grid */
-.sf-objects-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+/* Objects List */
+.sf-objects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sf-object-card-wrapper {
+  border-bottom: 1px solid #e1e5eb;
+}
+
+.sf-object-card-wrapper:first-child .sf-object-card {
+  border-radius: 10px 10px 0 0;
+}
+
+.sf-object-card-wrapper:last-child .sf-object-card:not(.expanded),
+.sf-object-card-wrapper:last-child .sf-object-fields {
+  border-radius: 0 0 10px 10px;
+}
+
+.sf-object-card-wrapper.disabled {
+  opacity: 0.6;
 }
 
 .sf-object-card {
-  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
   background: #fff;
-  border: 2px solid #e1e5eb;
-  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .sf-object-card:hover {
-  border-color: #4f46e5;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+  background: #f8fafc;
 }
 
-.sf-object-card.selected {
-  border-color: #4f46e5;
+.sf-object-card.expanded {
   background: #eef2ff;
+  border-bottom: none;
+}
+
+.sf-object-card.disabled {
+  background: #fafafa;
+}
+
+.sf-object-card-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-width: 0;
 }
 
 .sf-object-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  min-width: 200px;
+}
+
+.sf-object-expand-icon {
+  font-size: 10px;
+  color: #64748b;
+  width: 14px;
+  text-align: center;
 }
 
 .sf-object-name {
@@ -451,8 +487,117 @@
 }
 
 .sf-object-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   font-size: 13px;
   color: #64748b;
+}
+
+.sf-mapped-count {
+  color: #0d9f6e;
+  font-weight: 500;
+}
+
+/* Object toggle checkbox */
+.sf-object-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.sf-object-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #4f46e5;
+}
+
+.sf-toggle-label {
+  white-space: nowrap;
+}
+
+/* Expanded field list */
+.sf-object-fields {
+  background: #fff;
+  border-top: 1px solid #eef2ff;
+  padding: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.sf-fields-loading,
+.sf-fields-empty {
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.sf-fields-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sf-fields-table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  padding: 8px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e1e5eb;
+}
+
+.sf-fields-table td {
+  padding: 6px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.sf-field-row:hover {
+  background: #f8fafc;
+}
+
+.sf-field-api-name {
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  color: #374151;
+}
+
+.sf-field-type {
+  display: inline-block;
+  padding: 1px 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.sf-field-mapped {
+  color: #0d9f6e;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.sf-field-unmapped {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+/* Legacy grid support */
+.sf-objects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
 }
 
 /* Mappings Layout */

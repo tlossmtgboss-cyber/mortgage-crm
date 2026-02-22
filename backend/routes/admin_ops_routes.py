@@ -2808,6 +2808,12 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             # Phase 2: Delete from specific CRM tables
             tables_to_clear = [
                 "mum_clients",
+                # Smart docs (current model table names)
+                "smart_documents",
+                "doc_policy_events",
+                "smart_document_requests",
+                "client_reminder_settings",
+                # Smart docs (legacy table names, may still exist)
                 "smart_doc_requests",
                 "smart_doc_items",
                 "needs_list_items",
@@ -2871,6 +2877,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
         tables = [
             "leads", "loans", "mum_clients", "tasks", "documents",
+            "smart_documents", "smart_document_requests", "doc_policy_events",
+            "client_reminder_settings",
             "smart_doc_requests", "smart_doc_items", "needs_list_items",
             "needs_lists", "document_requests", "activities",
             "stage_history", "workflow_task_instances", "sla_milestones",

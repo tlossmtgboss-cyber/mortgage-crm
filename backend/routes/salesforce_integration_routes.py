@@ -130,6 +130,7 @@ def fix_salesforce_schema(db: Session) -> dict:
         ("fields", "JSONB"),
         ("record_types", "JSONB"),
         ("picklist_values", "JSONB"),
+        ("enabled", "BOOLEAN DEFAULT TRUE"),
         ("discovered_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ("last_validated_at", "TIMESTAMP"),
         ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
@@ -1475,13 +1476,38 @@ async def get_schema_objects(
             return {"objects": [], "needs_discovery": True}
         raise HTTPException(status_code=500, detail="Error loading schemas")
 
+    # Get mapped field counts per object
+    mapped_counts = {}
+    try:
+        count_rows = db.execute(text("""
+            SELECT source_object, COUNT(*) as cnt
+            FROM field_mappings
+            WHERE integration_profile_id = :pid AND enabled = true
+            GROUP BY source_object
+        """), {"pid": profile.id}).fetchall()
+        mapped_counts = {row[0]: row[1] for row in count_rows}
+    except Exception as e:
+        logger.warning(f"Could not get mapped field counts: {e}")
+
+    # Get enabled status per object
+    enabled_status = {}
+    try:
+        enabled_rows = db.query(SfUserSchema.object_name, SfUserSchema.enabled).filter(
+            SfUserSchema.integration_profile_id == profile.id
+        ).all()
+        enabled_status = {row[0]: row[1] if row[1] is not None else True for row in enabled_rows}
+    except Exception as e:
+        logger.warning(f"Could not get enabled status: {e}")
+
     return {
         "objects": [
             {
                 "name": s["name"],
                 "label": s["label"],
                 "custom": s["custom"],
-                "field_count": len(s.get("fields", []))
+                "field_count": len(s.get("fields", [])),
+                "enabled": enabled_status.get(s["name"], True),
+                "mapped_field_count": mapped_counts.get(s["name"], 0),
             }
             for s in schemas
         ],
@@ -1507,7 +1533,61 @@ async def get_object_schema(
     if not schema:
         raise HTTPException(status_code=404, detail=f"Object {object_name} not found")
 
+    # Include mapped fields info
+    mapped_fields = set()
+    try:
+        mapped_rows = db.query(FieldMapping.source_field).filter(
+            FieldMapping.integration_profile_id == profile.id,
+            FieldMapping.source_object == object_name,
+            FieldMapping.enabled == True
+        ).all()
+        mapped_fields = {row[0] for row in mapped_rows}
+    except Exception as e:
+        logger.warning(f"Could not get mapped fields for {object_name}: {e}")
+
+    # Annotate each field with its mapped status
+    if schema.get("fields"):
+        for field in schema["fields"]:
+            field["mapped"] = field.get("name", "") in mapped_fields
+
     return schema
+
+
+class ToggleObjectRequest(BaseModel):
+    enabled: bool
+
+
+@router.patch("/schema/objects/{object_name}/toggle")
+async def toggle_object_enabled(
+    object_name: str,
+    body: ToggleObjectRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Enable or disable a Salesforce object (controls visibility in Field Mappings)."""
+    user_id = require_user(request, db)
+    profile = get_integration_profile(db, user_id)
+
+    if not profile:
+        raise HTTPException(status_code=400, detail="Salesforce not connected")
+
+    schema_obj = db.query(SfUserSchema).filter(
+        SfUserSchema.integration_profile_id == profile.id,
+        SfUserSchema.object_name == object_name
+    ).first()
+
+    if not schema_obj:
+        raise HTTPException(status_code=404, detail=f"Object {object_name} not found")
+
+    schema_obj.enabled = body.enabled
+    schema_obj.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "name": object_name,
+        "enabled": schema_obj.enabled,
+        "message": f"{object_name} {'enabled' if body.enabled else 'disabled'}"
+    }
 
 
 @router.get("/schema/objects/{object_name}/suggestions")

@@ -69,6 +69,9 @@ class SfUserSchema(Base):
     record_types = Column(JSON)  # Available record types
     picklist_values = Column(JSON)  # Picklist options
 
+    # Object-level enable/disable (controls visibility in Field Mappings)
+    enabled = Column(Boolean, default=True)
+
     # Metadata
     discovered_at = Column(DateTime, default=datetime.utcnow)
     last_validated_at = Column(DateTime)

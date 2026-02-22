@@ -35,6 +35,9 @@ function SalesforceIntegrationPage() {
   const [syncingToMum, setSyncingToMum] = useState(false);
   const [mumSyncResults, setMumSyncResults] = useState(null);
   const [includeAllFields, setIncludeAllFields] = useState(true);
+  const [expandedObject, setExpandedObject] = useState(null);
+  const [expandedFields, setExpandedFields] = useState([]);
+  const [loadingFields, setLoadingFields] = useState(false);
 
   const token = localStorage.getItem('token');
 
@@ -127,6 +130,55 @@ function SalesforceIntegrationPage() {
       toast.error('Schema discovery failed');
     }
     setLoading(false);
+  };
+
+  const toggleObjectExpand = async (objectName) => {
+    if (expandedObject === objectName) {
+      setExpandedObject(null);
+      setExpandedFields([]);
+      return;
+    }
+    setExpandedObject(objectName);
+    setLoadingFields(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/integrations/salesforce/schema/objects/${objectName}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setExpandedFields(data.fields || []);
+      }
+    } catch (err) {
+      console.error('Failed to load object fields:', err);
+    }
+    setLoadingFields(false);
+  };
+
+  const toggleObjectEnabled = async (objectName, enabled) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/integrations/salesforce/schema/objects/${objectName}/toggle`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ enabled })
+        }
+      );
+      if (res.ok) {
+        setSchemas(prev => prev.map(s =>
+          s.name === objectName ? { ...s, enabled } : s
+        ));
+        toast.success(`${objectName} ${enabled ? 'enabled' : 'disabled'}`);
+      } else {
+        toast.error('Failed to update object');
+      }
+    } catch (err) {
+      toast.error('Failed to update object');
+    }
   };
 
   const loadSuggestions = async (objectName) => {
@@ -669,24 +721,80 @@ function SalesforceIntegrationPage() {
           </button>
         </div>
       ) : (
-        <div className="sf-objects-grid">
+        <div className="sf-objects-list">
           {schemas.map(obj => (
-            <div
-              key={obj.name}
-              className={`sf-object-card ${selectedObject === obj.name ? 'selected' : ''}`}
-              onClick={() => {
-                setSelectedObject(obj.name);
-                loadSuggestions(obj.name);
-                setActiveSection('mappings');
-              }}
-            >
-              <div className="sf-object-header">
-                <span className="sf-object-name">{obj.label || obj.name}</span>
-                {obj.custom && <span className="sf-badge">Custom</span>}
+            <div key={obj.name} className={`sf-object-card-wrapper ${obj.enabled === false ? 'disabled' : ''}`}>
+              <div
+                className={`sf-object-card ${expandedObject === obj.name ? 'expanded' : ''} ${obj.enabled === false ? 'disabled' : ''}`}
+              >
+                <div className="sf-object-card-content" onClick={() => toggleObjectExpand(obj.name)}>
+                  <div className="sf-object-header">
+                    <span className="sf-object-expand-icon">
+                      {expandedObject === obj.name ? '\u25BC' : '\u25B6'}
+                    </span>
+                    <span className="sf-object-name">{obj.label || obj.name}</span>
+                    {obj.custom && <span className="sf-badge">Custom</span>}
+                  </div>
+                  <div className="sf-object-meta">
+                    <span>{obj.field_count || '?'} fields</span>
+                    {obj.mapped_field_count > 0 && (
+                      <span className="sf-mapped-count">
+                        {obj.mapped_field_count} of {obj.field_count || '?'} mapped
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <label
+                  className="sf-object-toggle"
+                  onClick={(e) => e.stopPropagation()}
+                  title={obj.enabled === false ? 'Enable this object in Field Mappings' : 'Disable this object from Field Mappings'}
+                >
+                  <input
+                    type="checkbox"
+                    checked={obj.enabled !== false}
+                    onChange={(e) => toggleObjectEnabled(obj.name, e.target.checked)}
+                  />
+                  <span className="sf-toggle-label">
+                    {obj.enabled === false ? 'Disabled' : 'Enabled'}
+                  </span>
+                </label>
               </div>
-              <div className="sf-object-meta">
-                {obj.field_count || '?'} fields
-              </div>
+              {expandedObject === obj.name && (
+                <div className="sf-object-fields">
+                  {loadingFields ? (
+                    <div className="sf-fields-loading">Loading fields...</div>
+                  ) : expandedFields.length === 0 ? (
+                    <div className="sf-fields-empty">No fields found</div>
+                  ) : (
+                    <table className="sf-fields-table">
+                      <thead>
+                        <tr>
+                          <th>Field Name</th>
+                          <th>Label</th>
+                          <th>Type</th>
+                          <th>Mapped</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {expandedFields.map((field, idx) => (
+                          <tr key={idx} className="sf-field-row">
+                            <td className="sf-field-api-name">{field.name}</td>
+                            <td>{field.label || field.name}</td>
+                            <td><span className="sf-field-type">{field.type || '—'}</span></td>
+                            <td>
+                              {field.mapped ? (
+                                <span className="sf-field-mapped" title="Has active mapping">Mapped</span>
+                              ) : (
+                                <span className="sf-field-unmapped" title="No mapping">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -716,7 +824,7 @@ function SalesforceIntegrationPage() {
             Include all fields
           </label>
           <div className="sf-object-list">
-            {schemas.map(obj => (
+            {schemas.filter(obj => obj.enabled !== false).map(obj => (
               <button
                 key={obj.name}
                 className={`sf-object-btn ${selectedObject === obj.name ? 'active' : ''}`}
