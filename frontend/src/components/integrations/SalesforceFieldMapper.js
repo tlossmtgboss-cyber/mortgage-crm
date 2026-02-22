@@ -239,11 +239,11 @@ const CRM_FIELDS = {
       {
         title: "Retention & Monitoring",
         fields: [
-          { key: "estimated_home_value", label: "Est. Home Value", type: "currency", required: false, suggestedSF: ["Current_Home_Value__c", "Estimated_Value__c", "jungo__Estimated_Value__c", "Home_Value__c"] },
-          { key: "estimated_equity", label: "Est. Equity", type: "currency", required: false, suggestedSF: ["Estimated_Equity__c", "jungo__Estimated_Equity__c", "Equity__c"] },
-          { key: "current_ltv", label: "Current LTV", type: "decimal", required: false, suggestedSF: ["Current_LTV__c", "S_LTV__c", "jungo__S_LTV__c", "jungo__LTV__c", "LTV__c", "Loan_To_Value__c"] },
-          { key: "current_cltv", label: "Current CLTV", type: "decimal", required: false, suggestedSF: ["Current_CLTV__c", "S_CLTV__c", "jungo__S_CLTV__c", "jungo__CLTV__c", "CLTV__c", "Combined_LTV__c"] },
-          { key: "refi_score", label: "Refi Opportunity Score", type: "integer", required: false, suggestedSF: ["Refi_Score__c", "Refinance_Score__c"] },
+          { key: "estimated_home_value", label: "Est. Home Value", type: "currency", calculated: true, calculatedDesc: "Compound appreciation from original value" },
+          { key: "estimated_equity", label: "Est. Equity", type: "currency", calculated: true, calculatedDesc: "Home value minus amortized balance" },
+          { key: "current_ltv", label: "Current LTV", type: "decimal", calculated: true, calculatedDesc: "Amortized balance / current home value" },
+          { key: "current_cltv", label: "Current CLTV", type: "decimal", calculated: true, calculatedDesc: "Combined loan balances / current home value" },
+          { key: "refi_score", label: "Refi Opportunity Score", type: "integer", calculated: true, calculatedDesc: "0-100 score based on rate, equity, loan age" },
         ],
       },
     ],
@@ -295,9 +295,8 @@ const ACTIVE_LOAN_TO_MUM = {
   loan_type: 'mum_loan_type',
   servicer: 'mum_servicer',
   servicer_loan_number: 'mum_servicer_loan_number',
-  estimated_value: 'estimated_home_value',
-  ltv: 'current_ltv',
-  cltv: 'current_cltv',
+  // estimated_home_value, current_ltv, current_cltv, estimated_equity, refi_score
+  // are calculated fields — not inherited from Active Loan Salesforce mappings
 };
 const MUM_TO_ACTIVE = Object.fromEntries(
   Object.entries(ACTIVE_LOAN_TO_MUM).map(([k, v]) => [v, k])
@@ -674,6 +673,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
     for (const [key, stage] of Object.entries(CRM_FIELDS)) {
       let total = 0, mapped = 0, req = 0, reqMapped = 0;
       for (const sec of stage.sections) for (const f of sec.fields) {
+        if (f.calculated) continue;
         total++; if (effectiveMappings[f.key]) mapped++;
         if (f.required) { req++; if (effectiveMappings[f.key]) reqMapped++; }
       }
@@ -1015,10 +1015,14 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
             {/* Sections */}
             {CRM_FIELDS[activeStage].sections.map(section => {
               let fields = section.fields;
-              if (filterUnmapped) fields = fields.filter(f => !effectiveMappings[f.key]);
+              if (filterUnmapped) fields = fields.filter(f => !f.calculated && !effectiveMappings[f.key]);
+              if (fields.length === 0 && filterUnmapped) return null;
               if (fields.length === 0) return null;
               const expanded = expandedSections[section.title] !== false;
-              const mapped = section.fields.filter(f => effectiveMappings[f.key]).length;
+              const mappableFields = section.fields.filter(f => !f.calculated);
+              const calculatedCount = section.fields.length - mappableFields.length;
+              const mapped = mappableFields.filter(f => effectiveMappings[f.key]).length;
+              const allCalculated = calculatedCount === section.fields.length;
               return (
                 <div key={section.title} style={{ marginBottom: 6, background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0" }}>
                   <button onClick={() => toggle(section.title)} style={{
@@ -1028,13 +1032,16 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ fontSize: 11, color: "#9ca3af" }}>{expanded ? "\u25BE" : "\u25B8"}</span>
                       <span style={{ fontWeight: 700, fontSize: 13, color: "#374151" }}>{section.title}</span>
+                      {calculatedCount > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: "#0369a1", background: "#e0f2fe", padding: "1px 6px", borderRadius: 3 }}>{calculatedCount} calculated</span>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: mapped === section.fields.length ? "#059669" : "#6b7280", background: mapped === section.fields.length ? "#d1fae5" : "#f3f4f6", padding: "2px 8px", borderRadius: 100 }}>
-                        {mapped}/{section.fields.length}
-                      </span>
-                      {mapped < section.fields.length && !fieldsDisabled && (
-                        <button onClick={e => { e.stopPropagation(); autoMapSection(section.fields); }}
+                      {!allCalculated && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: mapped === mappableFields.length ? "#059669" : "#6b7280", background: mapped === mappableFields.length ? "#d1fae5" : "#f3f4f6", padding: "2px 8px", borderRadius: 100 }}>
+                          {mapped}/{mappableFields.length}
+                        </span>
+                      )}
+                      {!allCalculated && mapped < mappableFields.length && !fieldsDisabled && (
+                        <button onClick={e => { e.stopPropagation(); autoMapSection(mappableFields); }}
                           style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #d1d5db", background: "#fff", fontSize: 10, fontWeight: 700, color: "#6366f1", cursor: "pointer", fontFamily: "inherit" }}>
                           Accept All
                         </button>
@@ -1042,6 +1049,31 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                     </div>
                   </button>
                   {expanded && fields.map((f) => {
+                    if (f.calculated) {
+                      return (
+                        <div key={f.key} style={{
+                          display: "flex", alignItems: "center", gap: 10, padding: "9px 14px",
+                          borderTop: "1px solid #f3f4f6",
+                          background: "#f0f9ff",
+                        }}>
+                          <div style={{
+                            width: 7, height: 7, borderRadius: 100, flexShrink: 0,
+                            background: "#0ea5e9", boxShadow: "0 0 0 3px #e0f2fe",
+                          }} />
+                          <div style={{ width: 170, flexShrink: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                              <span style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{f.label}</span>
+                              <span style={{ fontSize: 7, fontWeight: 800, color: "#0369a1", background: "#e0f2fe", padding: "1px 5px", borderRadius: 3, letterSpacing: "0.03em" }}>CALCULATED</span>
+                            </div>
+                            <TypeBadge type={f.type} />
+                          </div>
+                          <div style={{ color: "#0ea5e9", fontSize: 13, flexShrink: 0 }}>=</div>
+                          <div style={{ flex: 1, padding: "7px 10px", borderRadius: 6, background: "#e0f2fe", border: "1.5px solid #7dd3fc", fontSize: 12, color: "#0c4a6e" }}>
+                            {f.calculatedDesc}
+                          </div>
+                        </div>
+                      );
+                    }
                     const isInherited = inheritedFields.has(f.key);
                     const hasEffective = !!effectiveMappings[f.key];
                     const isMapped = hasEffective;
