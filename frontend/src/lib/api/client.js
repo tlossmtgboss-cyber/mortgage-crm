@@ -402,6 +402,14 @@ class PerenniaAPI {
   }
 
   /**
+   * Get post-close data for MUM portal
+   * @param {string} slug
+   */
+  async getPostcloseData(slug) {
+    return this.get(`/api/purl/workspace/${slug}/postclose-data`);
+  }
+
+  /**
    * Get workspace application
    * @param {string} slug
    */

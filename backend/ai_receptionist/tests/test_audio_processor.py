@@ -468,15 +468,15 @@ class TestAudioProcessor:
         # Should be cleaned up after context
 
     @pytest.mark.asyncio
-    async def test_transcribe_twilio_audio(self, sample_mulaw_audio, stt_config, tts_config):
-        """Test Twilio audio transcription."""
+    async def test_transcribe_audio(self, sample_mulaw_audio, stt_config, tts_config):
+        """Test telephony audio transcription."""
         with patch.object(DeepgramSTT, 'transcribe', new_callable=AsyncMock) as mock:
             mock.return_value = "Test transcription"
 
             processor = AudioProcessor(stt_config, tts_config)
             processor._stt = DeepgramSTT(stt_config)
 
-            result = await processor.transcribe_twilio_audio(sample_mulaw_audio)
+            result = await processor.transcribe_audio(sample_mulaw_audio)
 
             assert result == "Test transcription"
             mock.assert_called_once()

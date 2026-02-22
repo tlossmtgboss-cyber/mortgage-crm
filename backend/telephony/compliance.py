@@ -383,7 +383,7 @@ class ComplianceChecker:
         Args:
             phone_number: Phone number to lock
             agent_id: Agent acquiring the lock
-            call_sid: Twilio call SID
+            call_sid: Telnyx call SID
             lock_duration_seconds: Lock duration (default 5 minutes)
 
         Returns:

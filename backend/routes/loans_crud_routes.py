@@ -410,6 +410,13 @@ async def create_loan(
 
         logger.info(f"Loan created: {db_loan.loan_number} (ID: {db_loan.id}, Stage: {db_loan.stage})")
 
+        # Portal stage sync — if loan created at DISCLOSED or later, transition workspace
+        try:
+            from services.portal_stage_transition_service import sync_portal_stage
+            sync_portal_stage(db, db_loan.id, db_loan.stage)
+        except Exception as e:
+            logger.warning(f"Portal stage sync failed for new loan {db_loan.id}: {e}")
+
         return _loan_to_dict(db_loan)
 
     except HTTPException:
@@ -606,6 +613,13 @@ async def update_loan(
                     )
                 except Exception as e:
                     logger.warning(f"SLA tracking hook failed for loan {loan.id} stage change: {e}")
+
+                # Portal stage sync — transition PURL workspace if applicable
+                try:
+                    from services.portal_stage_transition_service import sync_portal_stage
+                    sync_portal_stage(db, loan.id, new_stage, old_stage)
+                except Exception as e:
+                    logger.warning(f"Portal stage sync failed for loan {loan.id}: {e}")
 
         result = _loan_to_dict(loan)
 

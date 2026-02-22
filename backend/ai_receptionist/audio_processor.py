@@ -13,7 +13,7 @@ Real-time audio processing with:
 
 Integrates with:
 - voice_routes.py: WebSocket streaming
-- twilio_voice_service.py: Call handling
+- telnyx_voice_service.py: Call handling
 
 ================================================================================
 """
@@ -231,7 +231,7 @@ class TTSConfig:
     azure_voice: str = "en-US-JennyNeural"
 
     # Common settings
-    output_format: str = "mulaw"  # mp3, wav, pcm, mulaw (best for Twilio)
+    output_format: str = "mulaw"  # mp3, wav, pcm, mulaw (best for telephony)
     sample_rate: int = 8000  # 8000 for telephony, 16000/24000 for high quality
 
     # Voice customization - tuned for human-like speech
@@ -273,7 +273,7 @@ class TTSConfig:
 class AudioFormat(str, Enum):
     """Supported audio formats."""
     PCM_16 = "pcm_16"  # 16-bit PCM
-    MULAW = "mulaw"  # 8-bit mu-law (Twilio)
+    MULAW = "mulaw"  # 8-bit mu-law (telephony)
     MP3 = "mp3"
     WAV = "wav"
     OGG = "ogg"
@@ -1054,12 +1054,12 @@ class AudioProcessor:
     Unified audio processor combining STT and TTS.
 
     Handles the full audio pipeline:
-    1. Receive audio from Twilio (mu-law)
+    1. Receive audio from telephony provider (mu-law)
     2. Convert to format for STT
     3. Get transcription
     4. Process through conversation engine
     5. Synthesize response
-    6. Convert back to mu-law for Twilio
+    6. Convert back to mu-law for telephony
     """
 
     def __init__(
@@ -1121,12 +1121,12 @@ class AudioProcessor:
         else:
             raise ValueError(f"Unknown TTS provider: {self.tts_config.provider}")
 
-    async def transcribe_twilio_audio(self, mulaw_audio: bytes) -> str:
+    async def transcribe_audio(self, mulaw_audio: bytes) -> str:
         """
-        Transcribe audio from Twilio (mu-law format).
+        Transcribe audio from telephony provider (mu-law format).
 
         Args:
-            mulaw_audio: Mu-law encoded audio from Twilio
+            mulaw_audio: Mu-law encoded audio from telephony provider
 
         Returns:
             Transcribed text
@@ -1134,15 +1134,15 @@ class AudioProcessor:
         pcm_audio = convert_mulaw_to_pcm(mulaw_audio)
         return await self.stt.transcribe(pcm_audio, AudioFormat.PCM_16)
 
-    async def synthesize_for_twilio(self, text: str) -> bytes:
+    async def synthesize_for_telephony(self, text: str) -> bytes:
         """
-        Synthesize speech and return in Twilio format (mu-law).
+        Synthesize speech and return in telephony format (mu-law).
 
         Args:
             text: Text to synthesize
 
         Returns:
-            Mu-law encoded audio for Twilio
+            Mu-law encoded audio for telephony
         """
         audio = await self.tts.synthesize(text)
 
@@ -1153,9 +1153,9 @@ class AudioProcessor:
         # Otherwise would need conversion (not implemented for MP3)
         return audio
 
-    async def stream_synthesize_for_twilio(self, text: str) -> AsyncIterator[bytes]:
+    async def stream_synthesize_for_telephony(self, text: str) -> AsyncIterator[bytes]:
         """
-        Stream synthesized speech in Twilio format.
+        Stream synthesized speech in telephony format.
 
         Args:
             text: Text to synthesize
@@ -1176,7 +1176,7 @@ class AudioProcessor:
         Process audio stream in real-time.
 
         Args:
-            audio_stream: Incoming audio chunks (mu-law from Twilio)
+            audio_stream: Incoming audio chunks (mu-law from telephony provider)
             on_response: Callback to send response audio
             conversation_handler: Function that takes transcript and returns response text
         """
@@ -1241,7 +1241,7 @@ async def create_audio_processor(
 
     Example:
         async with create_audio_processor() as processor:
-            text = await processor.transcribe_twilio_audio(audio_data)
+            text = await processor.transcribe_audio(audio_data)
     """
     stt_config = STTConfig(provider=stt_provider, **{
         k: v for k, v in kwargs.items()
@@ -1282,7 +1282,7 @@ async def transcribe_audio(
     """
     async with create_audio_processor(stt_provider=provider) as processor:
         if format == AudioFormat.MULAW:
-            return await processor.transcribe_twilio_audio(audio_data)
+            return await processor.transcribe_audio(audio_data)
         return await processor.stt.transcribe(audio_data, format)
 
 

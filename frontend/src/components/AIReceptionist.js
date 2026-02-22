@@ -194,13 +194,12 @@ function AIReceptionist() {
     return (
       <div className="ai-receptionist-disabled">
         <h2>AI Receptionist Not Configured</h2>
-        <p>Please configure Twilio and OpenAI API keys to enable the AI Receptionist.</p>
+        <p>Please configure Telnyx and OpenAI API keys to enable the AI Receptionist.</p>
         <div className="setup-requirements">
           <h3>Requirements:</h3>
           <ul>
-            <li>✓ Twilio Account SID</li>
-            <li>✓ Twilio Auth Token</li>
-            <li>✓ Twilio Phone Number</li>
+            <li>✓ Telnyx API Key</li>
+            <li>✓ Telnyx Phone Number</li>
             <li>✓ OpenAI API Key (for Realtime API)</li>
           </ul>
         </div>
@@ -472,7 +471,7 @@ function AIReceptionist() {
                   value={formatPhoneNumber(config.phone_number)}
                   readOnly
                 />
-                <small>Your Twilio phone number for calls</small>
+                <small>Your Telnyx phone number for calls</small>
               </div>
             </div>
 
@@ -504,7 +503,7 @@ function AIReceptionist() {
             <div className="settings-section">
               <h4>Webhook Configuration</h4>
               <div className="webhook-info">
-                <p>Configure these webhooks in your Twilio console:</p>
+                <p>Configure these webhooks in your Telnyx Mission Control Portal:</p>
                 <div className="webhook-url">
                   <label>Incoming Call Webhook:</label>
                   <code>https://api.perenniaai.com/api/v1/voice/incoming</code>

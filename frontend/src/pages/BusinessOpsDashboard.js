@@ -709,7 +709,7 @@ const getMockDashboardData = () => ({
 const getMockServices = () => [
   { name: 'Anthropic Claude', category: 'ai', provider_type: 'anthropic', current_month_cost: 350, last_month_cost: 280, monthly_budget: 500, budget_used_percent: 70, has_usage_api: true },
   { name: 'OpenAI', category: 'ai', provider_type: 'openai', current_month_cost: 280, last_month_cost: 250, monthly_budget: 400, budget_used_percent: 70, has_usage_api: true },
-  { name: 'Twilio', category: 'communications', provider_type: 'twilio', current_month_cost: 450, last_month_cost: 400, monthly_budget: 600, budget_used_percent: 75, has_usage_api: true },
+  { name: 'Telnyx', category: 'communications', provider_type: 'telnyx', current_month_cost: 450, last_month_cost: 400, monthly_budget: 600, budget_used_percent: 75, has_usage_api: true },
   { name: 'Vapi.ai', category: 'communications', provider_type: 'vapi', current_month_cost: 150, last_month_cost: 120, monthly_budget: null, budget_used_percent: null, has_usage_api: false },
   { name: 'SendGrid', category: 'email', provider_type: 'sendgrid', current_month_cost: 100, last_month_cost: 95, monthly_budget: 150, budget_used_percent: 67, has_usage_api: true },
   { name: 'AWS S3', category: 'storage', provider_type: 'aws_s3', current_month_cost: 180, last_month_cost: 160, monthly_budget: 250, budget_used_percent: 72, has_usage_api: true },

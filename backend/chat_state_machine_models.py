@@ -399,7 +399,7 @@ class CallRequest(Base):
     """
     Call request tracking for click-to-call and callbacks.
 
-    Integrates with Twilio for:
+    Integrates with Telnyx for:
     - Click-to-call: Immediate connection with whisper + bridge
     - Scheduled callbacks: LO calls borrower at requested time
     - AI handoff: Transfer from chat to live call
@@ -437,9 +437,9 @@ class CallRequest(Base):
     # Call status tracking
     status = Column(String(20), nullable=False, default='pending')
 
-    # Twilio integration
-    twilio_call_sid = Column(String(50), nullable=True)
-    twilio_conference_sid = Column(String(50), nullable=True)
+    # Telephony provider integration
+    twilio_call_sid = Column(String(50), nullable=True)  # Legacy column name, stores Telnyx call control ID
+    twilio_conference_sid = Column(String(50), nullable=True)  # Legacy column name, stores Telnyx conference ID
 
     # Call metadata
     whisper_message = Column(Text, nullable=True)  # Context spoken to LO before connecting
@@ -520,7 +520,7 @@ class CallRequest(Base):
             "scheduledAt": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "preferredTimeSlot": self.preferred_time_slot,
             "status": self.status,
-            "twilioCallSid": self.twilio_call_sid,
+            "callSid": self.twilio_call_sid,
             "callDurationSeconds": self.call_duration_seconds,
             "recordingUrl": self.recording_url,
             "intentSummary": self.intent_summary,

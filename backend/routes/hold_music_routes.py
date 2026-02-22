@@ -75,9 +75,9 @@ class HoldMusicCreate(BaseModel):
     """Create hold music entry"""
     name: str
     description: Optional[str] = None
-    source_type: str = "url"  # 'url', 'upload', 'twilio_default'
+    source_type: str = "url"  # 'url', 'upload', 'default_library'
     audio_url: Optional[str] = None
-    twilio_music_name: Optional[str] = None
+    twilio_music_name: Optional[str] = None  # legacy field name for DB compat
     duration_seconds: Optional[int] = None
     is_default: bool = False
     comfort_messages: Optional[List[str]] = None
@@ -103,7 +103,7 @@ class HoldMusicResponse(BaseModel):
     description: Optional[str]
     source_type: str
     audio_url: Optional[str]
-    twilio_music_name: Optional[str]
+    twilio_music_name: Optional[str]  # legacy field name for DB compat
     duration_seconds: Optional[int]
     is_default: bool
     is_active: bool
@@ -113,35 +113,38 @@ class HoldMusicResponse(BaseModel):
 
 
 # ============================================================================
-# TWILIO DEFAULT MUSIC OPTIONS
+# DEFAULT MUSIC LIBRARY OPTIONS
 # ============================================================================
 
-TWILIO_DEFAULT_MUSIC = {
+DEFAULT_HOLD_MUSIC = {
     "classical": {
         "name": "Classical",
-        "url": "https://api.twilio.com/cowbell/sorry.mp3"  # Twilio's default hold music
+        "url": "/static/hold-music/default.mp3"
     },
     "ambient": {
         "name": "Ambient",
-        "url": "https://api.twilio.com/cowbell/sorry.mp3"
+        "url": "/static/hold-music/default.mp3"
     },
     "electronica": {
         "name": "Electronica",
-        "url": "https://api.twilio.com/cowbell/sorry.mp3"
+        "url": "/static/hold-music/default.mp3"
     },
     "guitars": {
         "name": "Guitars",
-        "url": "https://api.twilio.com/cowbell/sorry.mp3"
+        "url": "/static/hold-music/default.mp3"
     },
     "rock": {
         "name": "Rock",
-        "url": "https://api.twilio.com/cowbell/sorry.mp3"
+        "url": "/static/hold-music/default.mp3"
     },
     "soft_rock": {
         "name": "Soft Rock",
-        "url": "https://api.twilio.com/cowbell/sorry.mp3"
+        "url": "/static/hold-music/default.mp3"
     }
 }
+
+# Backward-compatible alias
+TWILIO_DEFAULT_MUSIC = DEFAULT_HOLD_MUSIC
 
 
 # ============================================================================
@@ -165,11 +168,11 @@ async def create_hold_music(
         if audio_url and not _validate_audio_url(audio_url):
             raise HTTPException(status_code=400, detail="Invalid audio URL. Must be HTTPS and point to an external host.")
 
-        # Handle twilio default music
-        if music.source_type == "twilio_default" and music.twilio_music_name:
-            twilio_music = TWILIO_DEFAULT_MUSIC.get(music.twilio_music_name)
-            if twilio_music:
-                audio_url = twilio_music["url"]
+        # Handle default library music
+        if music.source_type in ("twilio_default", "default_library") and music.twilio_music_name:
+            default_music = DEFAULT_HOLD_MUSIC.get(music.twilio_music_name)
+            if default_music:
+                audio_url = default_music["url"]
 
         # Serialize comfort messages
         comfort_json = json.dumps(music.comfort_messages) if music.comfort_messages else None
@@ -264,7 +267,7 @@ async def list_hold_music(
         return {
             "music": music_list,
             "count": len(music_list),
-            "twilio_defaults": list(TWILIO_DEFAULT_MUSIC.keys())
+            "default_library": list(DEFAULT_HOLD_MUSIC.keys())
         }
 
     except SQLAlchemyError as e:
@@ -273,26 +276,29 @@ async def list_hold_music(
         return {
             "music": [],
             "count": 0,
-            "twilio_defaults": list(TWILIO_DEFAULT_MUSIC.keys())
+            "default_library": list(DEFAULT_HOLD_MUSIC.keys())
         }
     except Exception as e:
         logger.error(f"Error listing hold music: {e}")
         return {
             "music": [],
             "count": 0,
-            "twilio_defaults": list(TWILIO_DEFAULT_MUSIC.keys())
+            "default_library": list(DEFAULT_HOLD_MUSIC.keys())
         }
 
 
-@router.get("/twilio-defaults")
-async def get_twilio_defaults():
-    """Get list of Twilio's built-in hold music options"""
+@router.get("/defaults")
+async def get_default_hold_music_library():
+    """Get list of built-in hold music options"""
     return {
         "options": [
             {"key": key, "name": val["name"], "url": val["url"]}
-            for key, val in TWILIO_DEFAULT_MUSIC.items()
+            for key, val in DEFAULT_HOLD_MUSIC.items()
         ]
     }
+
+# Backward-compatible alias
+get_twilio_defaults = get_default_hold_music_library
 
 
 @router.get("/{music_id}")
@@ -494,12 +500,12 @@ async def stream_default_hold_music(db: Session = Depends(get_db)):
         if result and result.audio_url and _validate_audio_url(result.audio_url):
             return RedirectResponse(url=result.audio_url)
 
-        # Fallback to Twilio default
-        return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
+        # Fallback to default hold music
+        return RedirectResponse(url=DEFAULT_HOLD_MUSIC["classical"]["url"])
 
     except SQLAlchemyError as e:
         logger.error(f"Error streaming default music: {e}")
-        return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
+        return RedirectResponse(url=DEFAULT_HOLD_MUSIC["classical"]["url"])
 
 
 @router.get("/stream/{music_id}")
@@ -521,11 +527,11 @@ async def stream_hold_music(
             return RedirectResponse(url=result.audio_url)
 
         # Fallback to default
-        return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
+        return RedirectResponse(url=DEFAULT_HOLD_MUSIC["classical"]["url"])
 
     except SQLAlchemyError as e:
         logger.error(f"Error streaming music {music_id}: {e}")
-        return RedirectResponse(url=TWILIO_DEFAULT_MUSIC["classical"]["url"])
+        return RedirectResponse(url=DEFAULT_HOLD_MUSIC["classical"]["url"])
 
 
 # ============================================================================
@@ -540,11 +546,11 @@ async def get_hold_twiml(
 ):
     """
     Generate TwiML for hold music with optional comfort message.
-    Returns XML that can be used as wait_url in Twilio.
+    Returns XML that can be used as wait_url in TeXML/TwiML.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
-    response = VoiceResponse()
+    response = TeXMLResponse()
 
     # Add comfort message if provided
     if message:
@@ -565,7 +571,7 @@ async def get_hold_twiml(
             LIMIT 1
         """)).fetchone()
 
-    music_url = TWILIO_DEFAULT_MUSIC["classical"]["url"]
+    music_url = DEFAULT_HOLD_MUSIC["classical"]["url"]
     if result and result.audio_url:
         music_url = result.audio_url
 

@@ -2366,7 +2366,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     { id: 'yahoo', name: 'Yahoo Mail', icon: '📧', category: 'Email', description: 'Yahoo email integration' },
 
     // Phone & SMS
-    { id: 'twilio', name: 'Twilio', icon: '📞', category: 'Phone', description: 'AI calling, SMS, and voice' },
+    { id: 'telnyx', name: 'Telnyx', icon: '📞', category: 'Phone', description: 'AI calling, SMS, and voice' },
     { id: 'ringcentral', name: 'RingCentral', icon: '📞', category: 'Phone', description: 'Business phone system' },
     { id: 'dialpad', name: 'Dialpad', icon: '📞', category: 'Phone', description: 'Cloud-based phone system' },
 

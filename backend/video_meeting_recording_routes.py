@@ -7,7 +7,7 @@ Handles:
 - Screen recording upload/download/delete
 - Recording transcript and analysis
 - Recording reprocessing
-- Twilio conference and recording callbacks
+- Telnyx conference and recording callbacks
 - Recording consent endpoints
 - Transcription endpoints
 """
@@ -26,7 +26,7 @@ import secrets
 from video_meeting_shared import (
     get_db, get_current_user, get_models,
     verify_room_access, verify_recording_access,
-    process_recording, process_recording_ai, _validate_twilio_signature,
+    process_recording, process_recording_ai, _validate_webhook_signature,
 )
 from video_meeting_schemas import (
     StartRecordingRequest, RecordingConsentRequest,
@@ -401,20 +401,20 @@ async def reprocess_recording(
 
 
 # ============================================================================
-# TWILIO CONFERENCE & RECORDING CALLBACKS
+# TELNYX CONFERENCE & RECORDING CALLBACKS
 # ============================================================================
 
-@router.post("/twilio/connect/{room_code}")
-async def twilio_connect_to_meeting(
+@router.post("/telnyx/connect/{room_code}")
+async def telnyx_connect_to_meeting(
     room_code: str,
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """TwiML endpoint for connecting participant to meeting conference."""
+    """TeXML endpoint for connecting participant to meeting conference."""
     from fastapi.responses import Response
 
-    if not await _validate_twilio_signature(request):
-        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+    if not await _validate_webhook_signature(request):
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     try:
         from uvip.recording_service import get_recording_service
@@ -433,23 +433,23 @@ async def twilio_connect_to_meeting(
         return Response(content=twiml, media_type="application/xml")
 
     except Exception as e:
-        logger.error(f"Twilio connect error: {e}")
-        from twilio.twiml.voice_response import VoiceResponse
-        response = VoiceResponse()
+        logger.error(f"Telnyx connect error: {e}")
+        from telephony.providers.telnyx.texml import TeXMLResponse
+        response = TeXMLResponse()
         response.say("Sorry, there was an error connecting to the meeting. Please try again.")
         return Response(content=str(response), media_type="application/xml")
 
 
-@router.post("/twilio/recording-callback/{room_code}")
-async def twilio_recording_callback(
+@router.post("/telnyx/recording-callback/{room_code}")
+async def telnyx_recording_callback(
     room_code: str,
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Handle Twilio recording completion callback."""
-    if not await _validate_twilio_signature(request):
-        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+    """Handle Telnyx recording completion callback."""
+    if not await _validate_webhook_signature(request):
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     _models = get_models()
     VideoMeetingRoom = _models.get('VideoMeetingRoom')
@@ -480,7 +480,7 @@ async def twilio_recording_callback(
             meeting_id=room.id,
             recording_uuid=recording_sid,
             recording_name=f"{room.room_name} - Recording",
-            storage_provider="twilio",
+            storage_provider="telnyx",
             storage_path=recording_url,
             duration_seconds=recording_duration,
             audio_format="mp3",
@@ -513,15 +513,15 @@ async def twilio_recording_callback(
         return {"error": "Internal processing error"}
 
 
-@router.post("/twilio/call-status/{room_code}")
-async def twilio_call_status_callback(
+@router.post("/telnyx/call-status/{room_code}")
+async def telnyx_call_status_callback(
     room_code: str,
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Handle Twilio call status updates."""
-    if not await _validate_twilio_signature(request):
-        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+    """Handle Telnyx call status updates."""
+    if not await _validate_webhook_signature(request):
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     try:
         form_data = await request.form()

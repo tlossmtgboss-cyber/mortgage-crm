@@ -2,7 +2,7 @@
 ================================================================================
 PERENNIA AI RECEPTIONIST - MAIN APPLICATION
 ================================================================================
-FastAPI application entry point with Twilio webhook and WebSocket endpoints.
+FastAPI application entry point with Telnyx webhook and WebSocket endpoints.
 ================================================================================
 """
 
@@ -140,11 +140,11 @@ async def root():
 
 
 # =============================================================================
-# TWILIO VOICE WEBHOOKS
+# TELNYX VOICE WEBHOOKS
 # =============================================================================
 
-class TwilioVoiceRequest(BaseModel):
-    """Twilio voice webhook request."""
+class TelnyxVoiceRequest(BaseModel):
+    """Telnyx voice webhook request."""
     CallSid: str
     From: str
     To: str
@@ -154,7 +154,7 @@ class TwilioVoiceRequest(BaseModel):
 
 @app.post("/voice/incoming")
 async def handle_incoming_call(request: Request):
-    """Handle incoming voice call from Twilio."""
+    """Handle incoming voice call from Telnyx."""
     form_data = await request.form()
 
     call_sid = form_data.get("CallSid")
@@ -184,7 +184,7 @@ async def handle_incoming_call(request: Request):
 
 @app.post("/voice/status")
 async def handle_call_status(request: Request):
-    """Handle call status updates from Twilio."""
+    """Handle call status updates from Telnyx."""
     form_data = await request.form()
 
     call_sid = form_data.get("CallSid")
@@ -195,7 +195,7 @@ async def handle_call_status(request: Request):
     # Update call log in database
     try:
         with get_db() as db:
-            # Map Twilio status to our status
+            # Map Telnyx status to our status
             ended_statuses = ["completed", "busy", "failed", "no-answer", "canceled"]
             update_data = {"status": call_status}
 
@@ -236,7 +236,7 @@ async def handle_call_status(request: Request):
 
 @app.websocket("/voice/stream/{call_sid}")
 async def voice_stream(websocket: WebSocket, call_sid: str):
-    """Handle Twilio Media Stream WebSocket connection."""
+    """Handle Telnyx Media Stream WebSocket connection."""
     await websocket.accept()
     logger.info(f"WebSocket connected for call: {call_sid}")
 

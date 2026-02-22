@@ -28,8 +28,8 @@ class PhoneBlocklist(Base):
     id = Column(Integer, primary_key=True, index=True)
     phone_number = Column(String(20), unique=True, nullable=False)  # E.164 format
     reason = Column(String(100), nullable=False)  # spam, harassment, robocall, etc.
-    source = Column(String(50), nullable=False)  # manual, twilio_lookup, user_report, auto_detected
-    spam_score = Column(Integer)  # 0-100 from Twilio Lookup
+    source = Column(String(50), nullable=False)  # manual, telnyx_lookup, user_report, auto_detected
+    spam_score = Column(Integer)  # 0-100 from phone lookup provider
     blocked_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     blocked_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)  # NULL = permanent
@@ -86,12 +86,12 @@ class CallScreeningLog(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    call_sid = Column(String(100), nullable=False)  # Twilio CallSid
+    call_sid = Column(String(100), nullable=False)  # Telnyx call control ID
     phone_number = Column(String(20), nullable=False)  # Caller's number
     screening_decision = Column(String(20), nullable=False)  # ALLOW, BLOCK, SCREEN
     decision_reason = Column(String(255))  # whitelist_match, blocklist_match, spam_detected, unknown_screened
     lookup_performed = Column(Boolean, default=False)
-    lookup_result = Column(JSON)  # Full Twilio Lookup response
+    lookup_result = Column(JSON)  # Full phone lookup response
     lookup_cost_cents = Column(Integer)  # Cost tracking
     screening_duration_ms = Column(Integer)  # How long screening took
     caller_stated_name = Column(String(255))  # From screening flow
@@ -102,7 +102,7 @@ class CallScreeningLog(Base):
 
 class PhoneLookupCache(Base):
     """
-    Cache for Twilio Lookup API results.
+    Cache for phone Lookup API results.
 
     Stores lookup results for 30 days to avoid repeated API calls.
     Cost optimization: ~$0.05 per lookup saved on repeat callers.
@@ -118,7 +118,7 @@ class PhoneLookupCache(Base):
     country_code = Column(String(5))
     spam_score = Column(Integer)  # 0-100, calculated from indicators
     risk_level = Column(String(20))  # low, medium, high
-    lookup_provider = Column(String(50), default="twilio")
+    lookup_provider = Column(String(50), default="telnyx")
     lookup_data = Column(JSON)  # Full API response
     cached_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime(timezone=True), nullable=False)  # Typically 30 days from cached_at

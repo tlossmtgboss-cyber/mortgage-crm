@@ -398,7 +398,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
 
     setCallInProgress(true);
     try {
-      // Call the Twilio dialer API to initiate call (rings your phone, then dials the contact)
+      // Call the Telnyx dialer API to initiate call (rings your phone, then dials the contact)
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-dial`, {
         method: 'POST',
@@ -424,7 +424,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     } catch (err) {
       console.error('Call error:', err);
       // Show error - dialer not configured
-      toast.error(`Could not initiate call. Please ensure the Twilio dialer is configured, or call ${phone} directly.`);
+      toast.error(`Could not initiate call. Please ensure the Telnyx dialer is configured, or call ${phone} directly.`);
     } finally {
       setCallInProgress(false);
     }
@@ -687,7 +687,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
                 powerDialIndex={currentCallIndex}
                 powerDialTotal={selectedCallIds.size}
                 onClickToDial={(task) => {
-                  // Use Twilio dialer API instead of tel: link (which opens FaceTime on Mac)
+                  // Use Telnyx dialer API instead of tel: link (which opens FaceTime on Mac)
                   handleMakeCall({
                     phone: task.contact_phone,
                     entity_name: task.contact_name,

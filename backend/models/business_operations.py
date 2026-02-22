@@ -22,7 +22,7 @@ from database import Base
 # =============================================================================
 
 class ServiceProvider(Base):
-    """Registry of external paid services (OpenAI, Twilio, AWS, etc.)."""
+    """Registry of external paid services (OpenAI, Telnyx, AWS, etc.)."""
     __tablename__ = "service_providers"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -32,7 +32,7 @@ class ServiceProvider(Base):
     name = Column(String(100), nullable=False)
     display_name = Column(String(150))
     category = Column(String(50), nullable=False)  # ai, communications, storage, hosting, payments, crm, monitoring, other
-    provider_type = Column(String(50), nullable=False)  # anthropic, openai, twilio, stripe, aws_s3, etc.
+    provider_type = Column(String(50), nullable=False)  # anthropic, openai, telnyx, stripe, aws_s3, etc.
     description = Column(Text)
     website_url = Column(String(500))
 

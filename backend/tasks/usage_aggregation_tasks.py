@@ -81,7 +81,7 @@ def get_communication_costs_for_user(
 
         if category == "communications":
             # Need to distinguish SMS from Voice via provider_type
-            # For now, assume Twilio SMS
+            # For now, assume Telnyx SMS
             costs["sms_cost"] += total_cost
             costs["sms_segments"] += int(quantity)
         elif category == "email":

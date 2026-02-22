@@ -1,8 +1,8 @@
 """
-Migration: Add Twilio status callback tables for webhook processing.
+Migration: Add telephony status callback tables for webhook processing.
 
 Tables created:
-- processed_twilio_events: Idempotency table for webhook de-duplication
+- processed_twilio_events: Idempotency table for webhook de-duplication (legacy table name)
 - call_attempts: Tracks individual dial attempts with status and disposition
 - call_targets: Tracks who to call with retry logic
 - state_recording_rules: State-specific recording disclosure requirements
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_migration():
-    """Create Twilio status callback tables if they don't exist."""
+    """Create telephony status callback tables if they don't exist."""
     db = SessionLocal()
 
     try:
@@ -219,7 +219,7 @@ def run_migration():
             logger.info("event_outbox table already exists")
 
         db.commit()
-        logger.info("Twilio status callback migration completed successfully")
+        logger.info("Telephony status callback migration completed successfully")
 
     except Exception as e:
         logger.error(f"Migration failed: {e}")
@@ -230,11 +230,11 @@ def run_migration():
 
 
 def rollback_migration():
-    """Drop Twilio status callback tables (use with caution)."""
+    """Drop telephony status callback tables (use with caution)."""
     db = SessionLocal()
 
     try:
-        logger.warning("Rolling back Twilio status callback tables...")
+        logger.warning("Rolling back telephony status callback tables...")
         db.execute(text("DROP TABLE IF EXISTS call_attempts CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS call_targets CASCADE"))
         db.execute(text("DROP TABLE IF EXISTS processed_twilio_events CASCADE"))

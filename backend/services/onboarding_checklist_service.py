@@ -96,7 +96,7 @@ CHECKLIST_ITEMS = [
         "id": "telephony_setup",
         "category": "Integrations",
         "title": "Telephony provider configured",
-        "description": "Twilio or Telnyx credentials configured for calling",
+        "description": "Telnyx credentials configured for calling",
         "required": False,
         "check_fn": "_check_telephony",
     },
@@ -319,11 +319,10 @@ def _check_crm_integration(db, org_id: int) -> Dict:
 
 def _check_telephony(db, org_id: int) -> Dict:
     import os
-    has_twilio = bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN"))
     has_telnyx = bool(os.getenv("TELNYX_API_KEY"))
     return {
-        "passed": has_twilio or has_telnyx,
-        "detail": f"Twilio: {'yes' if has_twilio else 'no'}, Telnyx: {'yes' if has_telnyx else 'no'}",
+        "passed": has_telnyx,
+        "detail": f"Telnyx: {'yes' if has_telnyx else 'no'}",
     }
 
 

@@ -423,6 +423,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Tenant context middleware not loaded: {e}")
 
+# SOC 2 Type II Compliance — Audit trail middleware
+try:
+    from soc2_compliance.middleware.audit_middleware import AuditMiddleware
+    app.add_middleware(AuditMiddleware)
+    logger.info("✅ SOC 2 audit trail middleware enabled")
+except Exception as e:
+    logger.warning(f"⚠️ SOC 2 audit middleware not loaded: {e}")
+
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
             "IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
 
@@ -1175,6 +1183,18 @@ try:
     logger.info("Encompass LOS integration routes loaded (connect, sync, search, import)")
 except Exception as e:
     logger.error(f"Encompass integration routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
+# SOC 2 TYPE II COMPLIANCE ROUTES
+# ============================================================================
+try:
+    from soc2_compliance.api.router import soc2_router
+    app.include_router(soc2_router, prefix="/api/v1/compliance", tags=["SOC 2 Compliance"])
+    logger.info("✅ SOC 2 compliance routes loaded (audit, incidents, dashboard)")
+except Exception as e:
+    logger.error(f"SOC 2 compliance routes failed to load: {e}")
     import traceback
     traceback.print_exc()
 

@@ -681,22 +681,20 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         message: str = "Test reminder from Perennia AI - your appointment is coming up!",
         current_user: User = Depends(get_current_user)
     ):
-        """Send a test SMS to verify Twilio is working"""
+        """Send a test SMS to verify telephony provider is working"""
         import os
         try:
-            from twilio.rest import Client
+            import telnyx
 
-            account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-            auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-            from_number = os.getenv("TWILIO_PHONE_NUMBER")
+            from_number = os.getenv("TELNYX_PHONE_NUMBER")
 
-            if not all([account_sid, auth_token, from_number]):
+            if not from_number:
                 return {
                     "success": False,
-                    "error": "Twilio not configured",
+                    "error": "Telnyx phone number not configured",
                     "config": {
-                        "account_sid": bool(account_sid),
-                        "auth_token": bool(auth_token),
+                        "telnyx_phone": bool(os.getenv("TELNYX_PHONE_NUMBER")),
+                        "telnyx_api_key": bool(os.getenv("TELNYX_API_KEY")),
                         "from_number": from_number
                     }
                 }
@@ -705,19 +703,20 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             if not phone.startswith("+"):
                 phone = "+1" + phone.replace("-", "").replace(" ", "")
 
-            client = Client(account_sid, auth_token)
-            sms = client.messages.create(
-                body=message,
+            sms = telnyx.Message.create(
                 from_=from_number,
-                to=phone
+                to=phone,
+                text=message,
             )
+
+            msg_id = getattr(sms, 'id', None) or getattr(getattr(sms, 'data', None), 'id', None) or 'unknown'
 
             return {
                 "success": True,
-                "message_sid": sms.sid,
+                "message_sid": msg_id,
                 "to": phone,
                 "from": from_number,
-                "status": sms.status
+                "status": "sent"
             }
 
         except Exception as e:

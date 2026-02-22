@@ -129,7 +129,7 @@ class WorkflowDialerIntegration:
         Args:
             agent_id: Agent/user ID for the session
             workflow_task_ids: List of workflow task instance IDs
-            base_url: Base URL for Twilio callbacks
+            base_url: Base URL for telephony callbacks
 
         Returns:
             Dict with session info or error

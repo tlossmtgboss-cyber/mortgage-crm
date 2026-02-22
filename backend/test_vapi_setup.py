@@ -116,7 +116,7 @@ print(f"   - Webhook URL: {CRM_WEBHOOK_URL}")
 
 print("\n📞 Call Flow:")
 print("   1. Caller dials +18434169589")
-print("   2. Twilio → Vapi AI (assistant)")
+print("   2. Telnyx → Vapi AI (assistant)")
 print("   3. Sam answers with natural voice")
 print("   4. Vapi → CRM webhook (logs call)")
 print("   5. Call appears in AI Receptionist Dashboard")

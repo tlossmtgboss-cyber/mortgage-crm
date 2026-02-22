@@ -153,7 +153,7 @@ class SMSMessage(Base):
     message = Column(Text, nullable=False)
     direction = Column(String)  # inbound, outbound
     status = Column(String)  # queued, sent, delivered, failed, received
-    twilio_sid = Column(String)
+    provider_message_id = Column(String)
     template_used = Column(String)
     error_message = Column(Text)
     ai_generated = Column(Boolean, default=False)

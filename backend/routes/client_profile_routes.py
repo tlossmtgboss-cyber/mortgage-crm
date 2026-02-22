@@ -1774,7 +1774,7 @@ async def get_referral_partner(
 
     partner = db.query(ReferralPartner).filter(
         ReferralPartner.id == partner_id,
-        ReferralPartner.organization_id == current_user.organization_id
+        ReferralPartner.owner_id == current_user.id
     ).first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
@@ -1797,7 +1797,7 @@ async def update_referral_partner(
 
     partner = db.query(ReferralPartner).filter(
         ReferralPartner.id == partner_id,
-        ReferralPartner.organization_id == current_user.organization_id
+        ReferralPartner.owner_id == current_user.id
     ).first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
@@ -1826,7 +1826,7 @@ async def delete_referral_partner(
 
     partner = db.query(ReferralPartner).filter(
         ReferralPartner.id == partner_id,
-        ReferralPartner.organization_id == current_user.organization_id
+        ReferralPartner.owner_id == current_user.id
     ).first()
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")

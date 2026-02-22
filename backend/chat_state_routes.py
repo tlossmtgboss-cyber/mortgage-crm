@@ -657,7 +657,7 @@ async def create_call_request(
     Create a call request for click-to-call or scheduled callback.
 
     For immediate calls (is_immediate=True):
-    - Initiates Twilio click-to-call flow
+    - Initiates Telnyx click-to-call flow
     - Returns call request ID for status polling
 
     For scheduled callbacks:
@@ -679,7 +679,7 @@ async def create_call_request(
         preferred_time_slot=request.preferred_time_slot,
     )
 
-    # If immediate, trigger Twilio/Telnyx click-to-call
+    # If immediate, trigger Telnyx click-to-call
     if request.is_immediate:
         try:
             from services.click_to_call_service import ClickToCallService

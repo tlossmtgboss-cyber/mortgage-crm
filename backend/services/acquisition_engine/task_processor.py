@@ -313,9 +313,9 @@ class TaskProcessor:
     async def _retry_sms(self, task: ScheduledTask):
         """Retry failed SMS"""
         try:
-            from integrations.twilio_service import TwilioSMSClient
+            from integrations.sms_service import get_sms_client
 
-            client = TwilioSMSClient()
+            client = get_sms_client()
             result = await client.send_sms(
                 to=task.payload.get("phone"),
                 message=task.payload.get("message"),
@@ -389,7 +389,7 @@ class TaskProcessor:
 
     async def _execute_sms_step(self, task: ScheduledTask):
         """Execute SMS sequence step"""
-        from integrations.twilio_service import TwilioSMSClient
+        from integrations.sms_service import get_sms_client
 
         # Get lead info
         lead = self.db.execute(text("""
@@ -403,8 +403,8 @@ class TaskProcessor:
         template_id = task.payload.get("template_id")
         message = f"Hi {lead.first_name}, following up on your mortgage inquiry. Reply to connect!"
 
-        client = TwilioSMSClient()
-        await client.send_sms(to=lead.phone, message=message)
+        client = get_sms_client()
+        await client.send_sms(to_number=lead.phone, message=message)
 
     async def _execute_email_step(self, task: ScheduledTask):
         """Execute email sequence step"""

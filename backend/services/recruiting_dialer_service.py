@@ -2,7 +2,7 @@
 Provider-Agnostic Recruiting Dialer Service
 
 Integrates telephony calling for the recruiting platform.
-Supports both Twilio and Telnyx based on TELEPHONY_PROVIDER environment variable.
+Uses Telnyx as the telephony provider.
 
 FLOW:
 1. Recruiter clicks "Call" on candidate
@@ -24,7 +24,7 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 # Determine which provider to use
-TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "twilio").lower()
+TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "telnyx").lower()
 BASE_URL = os.getenv("BASE_URL", "https://app.perenniaai.com")
 
 
@@ -52,12 +52,8 @@ def get_telephony_client():
         except ImportError:
             return None
     else:
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        if not all([account_sid, auth_token]):
-            return None
-        from twilio.rest import Client
-        return Client(account_sid, auth_token)
+        logger.warning("TELEPHONY_PROVIDER is not 'telnyx' — only Telnyx is supported, returning None")
+        return None
 
 
 def get_from_number() -> Optional[str]:
@@ -65,7 +61,7 @@ def get_from_number() -> Optional[str]:
     if TELEPHONY_PROVIDER == "telnyx":
         return os.getenv("TELNYX_PHONE_NUMBER")
     else:
-        return os.getenv("TWILIO_PHONE_NUMBER")
+        return os.getenv("TELNYX_PHONE_NUMBER")
 
 
 class VoiceResponseBuilder:
@@ -76,32 +72,20 @@ class VoiceResponseBuilder:
         self._current_gather = None
         self._current_dial = None
 
-        if TELEPHONY_PROVIDER == "telnyx":
-            from telephony.providers.telnyx.texml import TeXMLResponse
-            self._response = TeXMLResponse()
-        else:
-            from twilio.twiml.voice_response import VoiceResponse
-            self._response = VoiceResponse()
+        from telephony.providers.telnyx.texml import TeXMLResponse
+        self._response = TeXMLResponse()
 
     def say(self, text: str, voice: str = "Polly.Matthew") -> "VoiceResponseBuilder":
         self._response.say(text, voice=voice)
         return self
 
     def gather(self, num_digits: int = 1, action: str = None, timeout: int = 10) -> "VoiceResponseBuilder":
-        if TELEPHONY_PROVIDER == "telnyx":
-            self._current_gather = self._response.gather(
-                input_type="dtmf",
-                action=action,
-                num_digits=num_digits,
-                timeout=timeout
-            )
-        else:
-            self._current_gather = self._response.gather(
-                num_digits=num_digits,
-                action=action,
-                timeout=timeout,
-                input="dtmf"
-            )
+        self._current_gather = self._response.gather(
+            input_type="dtmf",
+            action=action,
+            num_digits=num_digits,
+            timeout=timeout
+        )
         return self
 
     def gather_say(self, text: str, voice: str = "Polly.Matthew") -> "VoiceResponseBuilder":
@@ -110,7 +94,7 @@ class VoiceResponseBuilder:
         return self
 
     def end_gather(self) -> "VoiceResponseBuilder":
-        if TELEPHONY_PROVIDER == "telnyx" and hasattr(self._current_gather, 'end_gather'):
+        if hasattr(self._current_gather, 'end_gather'):
             self._current_gather.end_gather()
         self._current_gather = None
         return self
@@ -125,30 +109,15 @@ class VoiceResponseBuilder:
         recording_callback: str = None,
         status_callback: str = None,
     ) -> "VoiceResponseBuilder":
-        if TELEPHONY_PROVIDER == "telnyx":
-            dial_ctx = self._response.dial(
-                caller_id=caller_id,
-                timeout=timeout,
-                record=record,
-                action=action,
-                recording_status_callback=recording_callback
-            )
-            dial_ctx.number(number, status_callback=status_callback)
-            dial_ctx.end_dial()
-        else:
-            from twilio.twiml.voice_response import Dial
-            dial = self._response.dial(
-                caller_id=caller_id,
-                timeout=timeout,
-                record=record,
-                action=action,
-                recording_status_callback=recording_callback
-            )
-            dial.number(
-                number,
-                status_callback=status_callback,
-                status_callback_event="initiated ringing answered completed" if status_callback else None
-            )
+        dial_ctx = self._response.dial(
+            caller_id=caller_id,
+            timeout=timeout,
+            record=record,
+            action=action,
+            recording_status_callback=recording_callback
+        )
+        dial_ctx.number(number, status_callback=status_callback)
+        dial_ctx.end_dial()
         return self
 
     def redirect(self, url: str) -> "VoiceResponseBuilder":
@@ -160,10 +129,7 @@ class VoiceResponseBuilder:
         return self
 
     def to_xml(self) -> str:
-        if TELEPHONY_PROVIDER == "telnyx":
-            return self._response.to_xml()
-        else:
-            return str(self._response)
+        return self._response.to_xml()
 
 
 class RecruitingDialerService:
@@ -235,19 +201,13 @@ class RecruitingDialerService:
             )
 
         try:
-            # Call the RECRUITER first
-            if self.provider == "telnyx":
-                call_sid = self._initiate_telnyx_call(
-                    recruiter_phone_formatted, call_id
-                )
-            else:
-                call_sid = self._initiate_twilio_call(
-                    recruiter_phone_formatted, call_id
-                )
+            # Call the RECRUITER first via Telnyx
+            call_sid = self._initiate_telnyx_call(
+                recruiter_phone_formatted, call_id
+            )
 
-            # Update call record
             self._update_call_record(call_id, {
-                "twilio_call_sid": call_sid,
+                "twilio_call_sid": call_sid,  # Legacy column name — stores Telnyx call control ID
                 "status": "calling_recruiter",
                 "phone_from": self.from_number,
                 "phone_to": candidate_phone_formatted,
@@ -276,22 +236,6 @@ class RecruitingDialerService:
                 message=f"Failed to initiate call: {str(e)}"
             )
 
-    def _initiate_twilio_call(self, to_phone: str, call_id: str) -> str:
-        """Initiate call via Twilio"""
-        call = self.client.calls.create(
-            to=to_phone,
-            from_=self.from_number,
-            url=f"{BASE_URL}/api/v1/recruiting/dialer/twilio/recruiter-answered/{call_id}",
-            status_callback=f"{BASE_URL}/api/v1/recruiting/dialer/twilio/status/{call_id}",
-            status_callback_event=["initiated", "ringing", "answered", "completed"],
-            status_callback_method="POST",
-            timeout=30,
-            record=True,
-            recording_status_callback=f"{BASE_URL}/api/v1/recruiting/dialer/twilio/recording/{call_id}",
-            recording_status_callback_event=["completed"],
-        )
-        return call.sid
-
     def _initiate_telnyx_call(self, to_phone: str, call_id: str) -> str:
         """Initiate call via Telnyx"""
         connection_id = os.getenv("TELNYX_CONNECTION_ID")
@@ -308,7 +252,7 @@ class RecruitingDialerService:
         return call.data.call_control_id
 
     def generate_recruiter_twiml(self, call_id: str) -> str:
-        """Generate TwiML/TeXML for when recruiter answers."""
+        """Generate TeXML for when recruiter answers."""
         call_record = self._get_call_record(call_id)
 
         if not call_record:
@@ -323,7 +267,7 @@ class RecruitingDialerService:
         if not whisper:
             whisper = "Calling candidate. Press 1 to connect."
 
-        webhook_prefix = "telnyx" if self.provider == "telnyx" else "twilio"
+        webhook_prefix = "telnyx"
 
         response.gather(
             num_digits=1,
@@ -350,7 +294,7 @@ class RecruitingDialerService:
             return response.to_xml()
 
         response = VoiceResponseBuilder()
-        webhook_prefix = "telnyx" if self.provider == "telnyx" else "twilio"
+        webhook_prefix = "telnyx"
 
         if digits == "1":
             candidate_phone = call_record.get("phone_to")
@@ -507,3 +451,16 @@ class RecruitingDialerService:
                 self.db.rollback()
             except:
                 pass
+
+
+def get_recruiting_dialer_service(db_session) -> RecruitingDialerService:
+    """Factory function to create a RecruitingDialerService instance.
+
+    This replaces the deleted legacy recruiting telephony service.
+    The RecruitingDialerService uses Telnyx as the telephony provider.
+    """
+    return RecruitingDialerService(db_session)
+
+
+# Backward-compatible alias for code that imported get_recruiting_twilio_service
+get_recruiting_twilio_service = get_recruiting_dialer_service

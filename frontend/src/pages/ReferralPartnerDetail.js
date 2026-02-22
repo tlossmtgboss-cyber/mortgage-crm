@@ -83,35 +83,31 @@ function ReferralPartnerDetail() {
       let partnerData = null;
       let allLeadsData = [];
 
+      // Fetch partner and leads independently so one failure doesn't block the other
       try {
-        // Try to fetch from API first
-        [partnerData, allLeadsData] = await Promise.all([
-          partnersAPI.getById(id),
-          leadsAPI.getAll()
-        ]);
-      } catch (apiError) {
-        console.error('API error:', apiError);
-
-        // Check if it's a 404 (partner not found) vs network/server error
-        const is404 = apiError?.response?.status === 404 || apiError?.message?.includes('404');
-
+        partnerData = await partnersAPI.getById(id);
+      } catch (partnerError) {
+        console.error('Partner API error:', partnerError);
+        const is404 = partnerError?.response?.status === 404;
         if (is404) {
-          // Partner genuinely doesn't exist - show error and redirect
           toast.error('Referral partner not found. This partner may have been deleted or the ID is incorrect.');
           navigate('/referral-partners');
           return;
         }
-
-        // For other errors (network issues, server errors), fall back to mock data
-        console.log('API connection failed, using mock data');
+        // For server errors, try mock data fallback
         const mockPartners = generateMockPartners();
         partnerData = mockPartners.find(p => p.id === parseInt(id));
-
         if (!partnerData) {
           toast.error('Referral partner not found');
           navigate('/referral-partners');
           return;
         }
+      }
+
+      try {
+        allLeadsData = await leadsAPI.getAll();
+      } catch (leadsError) {
+        console.error('Leads API error (non-blocking):', leadsError);
         allLeadsData = [];
       }
 

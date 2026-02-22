@@ -283,7 +283,7 @@ async def voice_phone_webhook(
     db: Session = Depends(lambda: get_db_dep())
 ):
     """
-    Webhook for incoming phone calls (Twilio/Vapi integration)
+    Webhook for incoming phone calls (Telnyx/Vapi integration)
     Processes voice input and returns TwiML or Vapi response
     """
     try:
@@ -291,7 +291,7 @@ async def voice_phone_webhook(
 
         data = await request.json()
 
-        # Handle different webhook formats (Twilio, Vapi)
+        # Handle different webhook formats (Telnyx, Vapi)
         caller = data.get("From") or data.get("caller") or "Unknown"
         speech_result = data.get("SpeechResult") or data.get("transcript") or ""
         call_sid = data.get("CallSid") or data.get("call_id") or ""

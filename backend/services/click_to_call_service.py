@@ -2,7 +2,7 @@
 Provider-Agnostic Click-to-Call Service
 
 Implements whisper+bridge calling for the chat state machine.
-Supports both Twilio and Telnyx based on TELEPHONY_PROVIDER environment variable.
+Uses Telnyx as the telephony provider.
 
 PRODUCTION FLOW:
 1. User clicks "Call Now" in chat (frontend shows "Calling your phone...")
@@ -25,7 +25,7 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 # Determine which provider to use
-TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "twilio").lower()
+TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "telnyx").lower()
 
 # Configuration
 BASE_URL = os.getenv("BASE_URL", "https://app.perenniaai.com")
@@ -33,22 +33,8 @@ DEFAULT_LO_NAME = os.getenv("DEFAULT_LO_NAME", "Tim")
 
 
 def get_telephony_client():
-    """Get the appropriate telephony client based on provider"""
-    if TELEPHONY_PROVIDER == "telnyx":
-        return _get_telnyx_client()
-    else:
-        return _get_twilio_client()
-
-
-def _get_twilio_client():
-    """Get Twilio client if credentials are configured"""
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    if not all([account_sid, auth_token]):
-        logger.warning("Twilio credentials not configured")
-        return None
-    from twilio.rest import Client
-    return Client(account_sid, auth_token)
+    """Get the Telnyx telephony client"""
+    return _get_telnyx_client()
 
 
 def _get_telnyx_client():
@@ -66,37 +52,27 @@ def _get_telnyx_client():
 
 
 def get_from_number() -> Optional[str]:
-    """Get the caller ID phone number for the current provider"""
-    if TELEPHONY_PROVIDER == "telnyx":
-        return os.getenv("TELNYX_PHONE_NUMBER")
-    else:
-        return os.getenv("TWILIO_PHONE_NUMBER")
+    """Get the caller ID phone number for Telnyx"""
+    return os.getenv("TELNYX_PHONE_NUMBER")
 
 
 class VoiceResponseBuilder:
     """
     Provider-agnostic voice response builder.
 
-    Generates TwiML/TeXML responses that work with both Twilio and Telnyx.
+    Generates TeXML responses for Telnyx.
     """
 
     def __init__(self):
         self._response = None
         self._current_gather = None
 
-        if TELEPHONY_PROVIDER == "telnyx":
-            from telephony.providers.telnyx.texml import TeXMLResponse
-            self._response = TeXMLResponse()
-        else:
-            from twilio.twiml.voice_response import VoiceResponse
-            self._response = VoiceResponse()
+        from telephony.providers.telnyx.texml import TeXMLResponse
+        self._response = TeXMLResponse()
 
     def say(self, text: str, voice: str = "Polly.Joanna") -> "VoiceResponseBuilder":
         """Add speech to response"""
-        if TELEPHONY_PROVIDER == "telnyx":
-            self._response.say(text, voice=voice)
-        else:
-            self._response.say(text, voice=voice)
+        self._response.say(text, voice=voice)
         return self
 
     def gather(
@@ -107,20 +83,12 @@ class VoiceResponseBuilder:
         input_type: str = "dtmf"
     ) -> "VoiceResponseBuilder":
         """Start a gather for DTMF input"""
-        if TELEPHONY_PROVIDER == "telnyx":
-            self._current_gather = self._response.gather(
-                input_type=input_type,
-                action=action,
-                num_digits=num_digits,
-                timeout=timeout
-            )
-        else:
-            self._current_gather = self._response.gather(
-                num_digits=num_digits,
-                action=action,
-                timeout=timeout,
-                input=input_type
-            )
+        self._current_gather = self._response.gather(
+            input_type=input_type,
+            action=action,
+            num_digits=num_digits,
+            timeout=timeout
+        )
         return self
 
     def gather_say(self, text: str, voice: str = "Polly.Joanna") -> "VoiceResponseBuilder":
@@ -131,7 +99,7 @@ class VoiceResponseBuilder:
 
     def end_gather(self) -> "VoiceResponseBuilder":
         """End the current gather context"""
-        if TELEPHONY_PROVIDER == "telnyx" and hasattr(self._current_gather, 'end_gather'):
+        if hasattr(self._current_gather, 'end_gather'):
             self._current_gather.end_gather()
         self._current_gather = None
         return self
@@ -146,52 +114,29 @@ class VoiceResponseBuilder:
         status_callback: str = None
     ) -> "VoiceResponseBuilder":
         """Dial into a conference"""
-        if TELEPHONY_PROVIDER == "telnyx":
-            self._response.conference(
-                name=name,
-                start_conference_on_enter=start_on_enter,
-                end_conference_on_exit=end_on_exit,
-                wait_url=wait_url,
-                record=record,
-                status_callback=status_callback
-            )
-        else:
-            from twilio.twiml.voice_response import Dial
-            dial = Dial()
-            dial.conference(
-                name,
-                start_conference_on_enter=start_on_enter,
-                end_conference_on_exit=end_on_exit,
-                wait_url=wait_url or "http://twimlets.com/holdmusic?Bucket=com.twilio.music.classical",
-                record=record,
-                status_callback=status_callback,
-                status_callback_event="join leave" if status_callback else None
-            )
-            self._response.append(dial)
+        self._response.conference(
+            name=name,
+            start_conference_on_enter=start_on_enter,
+            end_conference_on_exit=end_on_exit,
+            wait_url=wait_url,
+            record=record,
+            status_callback=status_callback
+        )
         return self
 
     def redirect(self, url: str) -> "VoiceResponseBuilder":
         """Redirect to another URL"""
-        if TELEPHONY_PROVIDER == "telnyx":
-            self._response.redirect(url)
-        else:
-            self._response.redirect(url)
+        self._response.redirect(url)
         return self
 
     def hangup(self) -> "VoiceResponseBuilder":
         """Hang up the call"""
-        if TELEPHONY_PROVIDER == "telnyx":
-            self._response.hangup()
-        else:
-            self._response.hangup()
+        self._response.hangup()
         return self
 
     def to_xml(self) -> str:
         """Generate the XML response"""
-        if TELEPHONY_PROVIDER == "telnyx":
-            return self._response.to_xml()
-        else:
-            return str(self._response)
+        return self._response.to_xml()
 
 
 class ClickToCallService:
@@ -199,7 +144,7 @@ class ClickToCallService:
     Provider-agnostic click-to-call service.
 
     Manages click-to-call functionality with whisper+bridge.
-    Works with both Twilio and Telnyx.
+    Uses Telnyx as the telephony provider.
     """
 
     def __init__(self, db: Session):
@@ -248,20 +193,13 @@ class ClickToCallService:
         self.db.commit()
 
         try:
-            # Call the borrower first
-            if self.provider == "telnyx":
-                call_sid = self._initiate_telnyx_call(
-                    call_request.caller_phone,
-                    call_request_id
-                )
-            else:
-                call_sid = self._initiate_twilio_call(
-                    call_request.caller_phone,
-                    call_request_id
-                )
+            # Call the borrower first via Telnyx
+            call_sid = self._initiate_telnyx_call(
+                call_request.caller_phone,
+                call_request_id
+            )
 
-            # Store the call SID
-            call_request.twilio_call_sid = call_sid
+            call_request.twilio_call_sid = call_sid  # Legacy column name — stores Telnyx call control ID
             self.db.commit()
 
             logger.info(f"Initiated call to borrower: {call_sid} via {self.provider}")
@@ -285,19 +223,6 @@ class ClickToCallService:
                 "status": CallStatus.FAILED.value
             }
 
-    def _initiate_twilio_call(self, to_phone: str, call_request_id: UUID) -> str:
-        """Initiate call via Twilio"""
-        call = self.client.calls.create(
-            to=to_phone,
-            from_=self.from_number,
-            url=f"{BASE_URL}/api/v1/twilio/borrower-answered/{call_request_id}",
-            status_callback=f"{BASE_URL}/api/v1/twilio/call-status/{call_request_id}",
-            status_callback_event=["initiated", "ringing", "answered", "completed"],
-            status_callback_method="POST",
-            timeout=30,
-        )
-        return call.sid
-
     def _initiate_telnyx_call(self, to_phone: str, call_request_id: UUID) -> str:
         """Initiate call via Telnyx"""
         connection_id = os.getenv("TELNYX_CONNECTION_ID")
@@ -313,7 +238,7 @@ class ClickToCallService:
         return call.data.call_control_id
 
     def generate_borrower_twiml(self, call_request_id: UUID) -> str:
-        """Generate TwiML/TeXML for when borrower answers."""
+        """Generate TeXML for when borrower answers."""
         from chat_state_machine_models import CallRequest
 
         call_request = self.db.query(CallRequest).filter(
@@ -337,7 +262,7 @@ class ClickToCallService:
 
         response.gather(
             num_digits=1,
-            action=f"{BASE_URL}/api/v1/{'telnyx' if self.provider == 'telnyx' else 'twilio'}/borrower-response/{call_request_id}",
+            action=f"{BASE_URL}/api/v1/telnyx/borrower-response/{call_request_id}",
             timeout=10
         )
         response.gather_say(greeting)
@@ -346,7 +271,7 @@ class ClickToCallService:
 
         response.say("I didn't catch that.")
         response.redirect(
-            f"{BASE_URL}/api/v1/{'telnyx' if self.provider == 'telnyx' else 'twilio'}/borrower-answered/{call_request_id}"
+            f"{BASE_URL}/api/v1/telnyx/borrower-answered/{call_request_id}"
         )
 
         return response.to_xml()
@@ -374,7 +299,7 @@ class ClickToCallService:
                 name=conference_name,
                 start_on_enter=False,
                 end_on_exit=True,
-                status_callback=f"{BASE_URL}/api/v1/{'telnyx' if self.provider == 'telnyx' else 'twilio'}/conference-status/{call_request_id}"
+                status_callback=f"{BASE_URL}/api/v1/telnyx/conference-status/{call_request_id}"
             )
 
             # Trigger call to LO
@@ -395,7 +320,7 @@ class ClickToCallService:
         else:
             response.say("Sorry, I didn't understand that.")
             response.redirect(
-                f"{BASE_URL}/api/v1/{'telnyx' if self.provider == 'telnyx' else 'twilio'}/borrower-answered/{call_request_id}"
+                f"{BASE_URL}/api/v1/telnyx/borrower-answered/{call_request_id}"
             )
 
         return response.to_xml()
@@ -415,35 +340,23 @@ class ClickToCallService:
             return
 
         try:
-            if self.provider == "telnyx":
-                connection_id = os.getenv("TELNYX_CONNECTION_ID")
-                lo_call = self.client.calls.create(
-                    connection_id=connection_id,
-                    to=lo_phone,
-                    from_=self.from_number,
-                    webhook_url=f"{BASE_URL}/api/v1/telnyx/lo-answered/{call_request.id}",
-                    webhook_url_method="POST",
-                    timeout_secs=30,
-                )
-                logger.info(f"Calling LO via Telnyx: {lo_call.data.call_control_id}")
-            else:
-                lo_call = self.client.calls.create(
-                    to=lo_phone,
-                    from_=self.from_number,
-                    url=f"{BASE_URL}/api/v1/twilio/lo-answered/{call_request.id}",
-                    status_callback=f"{BASE_URL}/api/v1/twilio/lo-call-status/{call_request.id}",
-                    status_callback_event=["answered", "completed", "no-answer", "busy", "failed"],
-                    status_callback_method="POST",
-                    timeout=30,
-                )
-                logger.info(f"Calling LO via Twilio: {lo_call.sid}")
+            connection_id = os.getenv("TELNYX_CONNECTION_ID")
+            lo_call = self.client.calls.create(
+                connection_id=connection_id,
+                to=lo_phone,
+                from_=self.from_number,
+                webhook_url=f"{BASE_URL}/api/v1/telnyx/lo-answered/{call_request.id}",
+                webhook_url_method="POST",
+                timeout_secs=30,
+            )
+            logger.info(f"Calling LO via Telnyx: {lo_call.data.call_control_id}")
 
         except Exception as e:
             logger.error(f"Failed to call LO: {e}")
             self._notify_borrower_lo_unavailable(call_request, "call_failed")
 
     def generate_lo_twiml(self, call_request_id: UUID) -> str:
-        """Generate TwiML/TeXML for when LO answers."""
+        """Generate TeXML for when LO answers."""
         from chat_state_machine_models import CallRequest
 
         call_request = self.db.query(CallRequest).filter(
@@ -460,7 +373,7 @@ class ClickToCallService:
 
         response.gather(
             num_digits=1,
-            action=f"{BASE_URL}/api/v1/{'telnyx' if self.provider == 'telnyx' else 'twilio'}/lo-response/{call_request_id}",
+            action=f"{BASE_URL}/api/v1/telnyx/lo-response/{call_request_id}",
             timeout=15
         )
         response.gather_say(whisper, voice="Polly.Matthew")
@@ -469,7 +382,7 @@ class ClickToCallService:
 
         response.say("The caller is waiting. Press 1 to connect.", voice="Polly.Matthew")
         response.redirect(
-            f"{BASE_URL}/api/v1/{'telnyx' if self.provider == 'telnyx' else 'twilio'}/lo-answered/{call_request_id}"
+            f"{BASE_URL}/api/v1/telnyx/lo-answered/{call_request_id}"
         )
 
         return response.to_xml()
@@ -557,7 +470,7 @@ class ClickToCallService:
         call_status: str,
         call_duration: Optional[int] = None,
     ):
-        """Handle call status callback (works for both Twilio and Telnyx)"""
+        """Handle call status callback from Telnyx"""
         from chat_state_machine_models import CallRequest, CallStatus
 
         call_request = self.db.query(CallRequest).filter(
@@ -567,9 +480,8 @@ class ClickToCallService:
         if not call_request:
             return
 
-        # Map status strings (Telnyx uses different names)
+        # Map status strings from Telnyx
         status_mapping = {
-            # Twilio statuses
             "completed": CallStatus.COMPLETED.value,
             "busy": CallStatus.NO_ANSWER.value,
             "no-answer": CallStatus.NO_ANSWER.value,

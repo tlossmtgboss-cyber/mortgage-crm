@@ -192,7 +192,7 @@ class ChatRealtimeMonitoring:
                     'type': 'call_failure_rate',
                     'title': 'High Call Failure Rate',
                     'message': f'High call failure rate: {failure_rate*100:.0f}% ({failed_calls}/{last_hour_calls})',
-                    'action': 'Check Twilio status and LO phone availability',
+                    'action': 'Check Telnyx status and LO phone availability',
                     'timestamp': now.isoformat(),
                     'metric_value': failure_rate,
                 })

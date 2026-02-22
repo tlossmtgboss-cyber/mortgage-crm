@@ -263,9 +263,7 @@ const ClientPortalSettings = lazyRetry(() => import('../pages/ClientPortalSettin
 const CommunicationPreferences = lazyRetry(() => import('../pages/CommunicationPreferences'));
 const IntegrationSettings = lazyRetry(() => import('../pages/IntegrationSettings'));
 const SalesforceIntegrationPage = lazyRetry(() => import('../pages/SalesforceIntegrationPage'));
-const TwilioSetup = lazyRetry(() => import('../pages/settings/TwilioSetup'));
 const StateRecordingRules = lazyRetry(() => import('../pages/settings/StateRecordingRules'));
-const TwilioStatusCallbacks = lazyRetry(() => import('../pages/settings/TwilioStatusCallbacks'));
 const QuoteLanguagePresets = lazyRetry(() => import('../pages/settings/QuoteLanguagePresets'));
 const APIKeysSettings = lazyRetry(() => import('../pages/APIKeysSettings'));
 const CompanyBrandingSettings = lazyRetry(() => import('../pages/CompanyBrandingSettings'));
@@ -592,9 +590,7 @@ export function getRoutes(layoutProps) {
     <Route key="/settings/integrations" path="/settings/integrations" element={withMainLayout(IntegrationSettings)} />,
     <Route key="/settings/integrations/salesforce" path="/settings/integrations/salesforce" element={withMainLayout(SalesforceIntegrationPage)} />,
     <Route key="/integrations" path="/integrations" element={withMainLayout(IntegrationSettings)} />,
-    <Route key="/settings/twilio" path="/settings/twilio" element={withMainLayout(TwilioSetup)} />,
     <Route key="/settings/state-recording-rules" path="/settings/state-recording-rules" element={withMainLayout(StateRecordingRules)} />,
-    <Route key="/settings/twilio-status-callbacks" path="/settings/twilio-status-callbacks" element={withMainLayout(TwilioStatusCallbacks)} />,
     <Route key="/settings/quote-language-presets" path="/settings/quote-language-presets" element={withMainLayout(QuoteLanguagePresets)} />,
     <Route key="/settings/api-keys" path="/settings/api-keys" element={withMainLayout(APIKeysSettings)} />,
     <Route key="/settings/company-branding" path="/settings/company-branding" element={withMainLayout(CompanyBrandingSettings)} />,

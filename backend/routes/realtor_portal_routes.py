@@ -123,7 +123,7 @@ class AIAssistantRequest(BaseModel):
 
 
 class SMSWebhookPayload(BaseModel):
-    """Incoming SMS webhook payload (Twilio format)."""
+    """Incoming SMS webhook payload (Telnyx format)."""
     From: str = Field(..., alias="From")
     Body: str
     MessageSid: Optional[str] = None
@@ -1752,7 +1752,7 @@ async def handle_sms_webhook(
     db: Session = Depends(get_db)
 ):
     """
-    Handle incoming SMS webhook (from Twilio).
+    Handle incoming SMS webhook (from Telnyx).
 
     This endpoint processes SMS commands from realtors.
     """

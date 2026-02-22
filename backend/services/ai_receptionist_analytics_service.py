@@ -132,7 +132,7 @@ class ROIMetrics:
 
     # Costs
     ai_calls_cost: float = 0
-    platform_cost: float = 0  # Monthly VAPI/Twilio cost
+    platform_cost: float = 0  # Monthly VAPI/Telnyx cost
     total_cost: float = 0
 
     # Savings

@@ -319,7 +319,7 @@ class TestAIReceptionist:
     async def test_create_receptionist(self):
         """Test receptionist creation."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 receptionist = AIReceptionist.create(
                     company_name="Test Mortgage",
                     receptionist_name="TestBot",
@@ -333,7 +333,7 @@ class TestAIReceptionist:
     async def test_handle_incoming_call_new_caller(self):
         """Test handling call from new caller."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 receptionist = AIReceptionist.create()
 
                 greeting = await receptionist.handle_incoming_call(
@@ -349,7 +349,7 @@ class TestAIReceptionist:
     async def test_process_speech_appointment(self):
         """Test processing appointment request."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 receptionist = AIReceptionist.create()
 
                 await receptionist.handle_incoming_call(
@@ -368,7 +368,7 @@ class TestAIReceptionist:
     async def test_process_speech_rates(self):
         """Test processing rate inquiry."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 receptionist = AIReceptionist.create()
 
                 await receptionist.handle_incoming_call(
@@ -387,7 +387,7 @@ class TestAIReceptionist:
     async def test_end_call(self):
         """Test ending a call."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 receptionist = AIReceptionist.create()
 
                 await receptionist.handle_incoming_call(
@@ -413,7 +413,7 @@ class TestReceptionistTester:
     async def test_simulate_call(self):
         """Test call simulation."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 tester = ReceptionistTester()
 
                 greeting = await tester.simulate_call("+15551234567")
@@ -425,7 +425,7 @@ class TestReceptionistTester:
     async def test_say(self):
         """Test saying something."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 tester = ReceptionistTester()
                 await tester.simulate_call()
 
@@ -438,7 +438,7 @@ class TestReceptionistTester:
     async def test_run_scenario(self):
         """Test running a scenario."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 tester = ReceptionistTester()
 
                 summary = await tester.run_scenario([
@@ -461,7 +461,7 @@ class TestFactoryFunctions:
     def test_create_receptionist_function(self):
         """Test create_receptionist factory."""
         with patch('ai_receptionist.tool_executor.AudioProcessor'):
-            with patch('ai_receptionist.tool_executor.TwilioStreamHandler'):
+            with patch('ai_receptionist.tool_executor.TelnyxStreamHandler'):
                 receptionist = create_receptionist(
                     company_name="Test Co",
                     receptionist_name="Bot",

@@ -434,7 +434,7 @@ class LiveAgentEscalationService:
 
         # In production, this would:
         # 1. Notify the agent via their preferred channel
-        # 2. Transfer the call via Twilio
+        # 2. Transfer the call via Telnyx
         # 3. Send context to agent's interface
 
         logger.info(

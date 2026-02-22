@@ -526,7 +526,7 @@ async def verify_caller_id(
             user_id=current_user.id,
             phone_number=request.phone_number,
             friendly_name=request.friendly_name,
-            twilio_sid=result.get("call_sid"),
+            provider_sid=result.get("call_sid"),
             verification_status="pending"
         )
         db.add(caller_id)
@@ -557,7 +557,7 @@ async def setup_demo_caller_id(
 ):
     """
     Set up a demo verified caller ID for testing.
-    This bypasses Twilio verification for demo/testing purposes.
+    This bypasses telephony provider verification for demo/testing purposes.
     """
     from database.models import VerifiedCallerId, AgentTelephonySettings
 
@@ -584,12 +584,12 @@ async def setup_demo_caller_id(
             }
 
         # Create a demo verified caller ID
-        demo_phone = "+18434169589"  # Demo Twilio number
+        demo_phone = "+18434169589"  # Demo telephony number
         caller_id = VerifiedCallerId(
             user_id=current_user.id,
             phone_number=demo_phone,
             friendly_name="Demo Business Line",
-            twilio_sid="demo_sid_for_testing",
+            provider_sid="demo_sid_for_testing",
             verification_status="verified"
         )
         db.add(caller_id)
@@ -641,7 +641,7 @@ async def check_verification_status(
     if not normalized.startswith("+"):
         normalized = "+1" + normalized.lstrip("1")
 
-    # Check with Twilio
+    # Check with telephony provider
     provider = get_telephony_provider()
     result = provider.check_caller_id_verification(normalized)
 
@@ -654,7 +654,7 @@ async def check_verification_status(
 
         if caller_id:
             caller_id.verification_status = "verified"
-            caller_id.twilio_sid = result.get("sid")
+            caller_id.provider_sid = result.get("sid")
             db.commit()
             return {
                 "success": True,
@@ -668,7 +668,7 @@ async def check_verification_status(
                 user_id=current_user.id,
                 phone_number=normalized,
                 friendly_name=result.get("friendly_name", "Verified Number"),
-                twilio_sid=result.get("sid"),
+                provider_sid=result.get("sid"),
                 verification_status="verified"
             )
             db.add(new_caller_id)
@@ -684,7 +684,7 @@ async def check_verification_status(
         "success": True,
         "verified": False,
         "phone_number": normalized,
-        "message": "Verification not yet complete. Please answer the call from Twilio and enter the validation code."
+        "message": "Verification not yet complete. Please answer the verification call and enter the validation code."
     }
 
 
@@ -1037,7 +1037,7 @@ async def websocket_status():
 
 
 # =============================================================================
-# Twilio Webhook Endpoints (TwiML)
+# Telnyx Webhook Endpoints (TeXML/TwiML)
 # =============================================================================
 
 from fastapi.responses import Response
@@ -1052,19 +1052,19 @@ async def twiml_click_to_dial(
     """
     TwiML endpoint for click-to-dial calls.
 
-    When Twilio connects to the agent's phone, this tells Twilio to:
+    When Telnyx connects to the agent's phone, this tells Telnyx to:
     1. Say a brief message with contact name
     2. Dial the destination number (the contact)
 
     The flow is:
-    - Twilio calls agent's cell phone
+    - Telnyx calls agent's cell phone
     - Agent answers
-    - This TwiML plays and dials the contact
+    - This TeXML plays and dials the contact
     - Agent and contact are bridged together
     """
-    # Get form data from Twilio
+    # Get form data from Telnyx
     form_data = await request.form()
-    from_number = form_data.get("From", "")  # The Twilio number (caller ID)
+    from_number = form_data.get("From", "")  # The Telnyx number (caller ID)
 
     logger.info(f"TwiML click-to-dial: destination={destination}, contact={contact_name}, from={from_number}")
 
@@ -1128,7 +1128,7 @@ async def webhook_click_to_dial_status(
     """
     Status callback for click-to-dial calls.
 
-    Twilio calls this when the call status changes (ringing, answered, completed, etc.)
+    Telnyx calls this when the call status changes (ringing, answered, completed, etc.)
     """
     form_data = await request.form()
     call_sid = form_data.get("CallSid", "")
@@ -1231,7 +1231,7 @@ async def webhook_recording_complete(
     """
     Recording status callback - called when call recording is complete.
 
-    Receives the recording URL from Twilio and sends it to the
+    Receives the recording URL from Telnyx and sends it to the
     Conversation Intelligence pipeline for transcription, analysis,
     and QA scoring.
     """
@@ -1240,7 +1240,7 @@ async def webhook_recording_complete(
 
     form_data = await request.form()
 
-    # Extract recording details from Twilio webhook
+    # Extract recording details from Telnyx webhook
     recording_sid = form_data.get("RecordingSid", "")
     recording_url = form_data.get("RecordingUrl", "")
     recording_status = form_data.get("RecordingStatus", "")
@@ -1279,7 +1279,7 @@ async def webhook_recording_complete(
         # Send to Conversation Intelligence pipeline
         asyncio.create_task(
             process_call_recording_for_ci(
-                recording_url=f"{recording_url}.mp3",  # Twilio provides MP3 format
+                recording_url=f"{recording_url}.mp3",  # Telnyx provides MP3 format
                 recording_sid=recording_sid,
                 call_metadata=call_metadata,
                 db=db

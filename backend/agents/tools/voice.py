@@ -45,7 +45,7 @@ def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult
 
 @mortgage_tool(
     name="initiate_outbound_call",
-    description="Initiate outbound call to a contact via Twilio/VoIP",
+    description="Initiate outbound call to a contact via Telnyx/VoIP",
     agent_roles=["voice_os"],
     risk_level="HIGH",
     parameters={

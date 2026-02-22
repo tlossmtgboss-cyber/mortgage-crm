@@ -1,13 +1,10 @@
 """
-Provider-Agnostic Phone Lookup Service
+Phone Lookup Service — Telnyx Provider
 
-Supports both Twilio and Telnyx for phone number intelligence:
+Provides phone number intelligence via Telnyx Number Lookup API:
 - Line Type Intelligence (mobile, landline, voip)
 - Carrier Information
-- Caller Name (CNAM) - Twilio only
 - Spam score calculation from indicators
-
-Provider selected via TELEPHONY_PROVIDER environment variable.
 """
 
 import os
@@ -17,9 +14,6 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
-
-# Determine which provider to use
-TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "twilio").lower()
 
 
 @dataclass
@@ -35,7 +29,7 @@ class LookupResult:
     country_code: Optional[str] = None
     spam_score: int = 0  # 0-100, higher = more likely spam
     risk_level: str = "low"  # low, medium, high
-    provider: str = "unknown"
+    provider: str = "telnyx"
     raw_data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
@@ -46,7 +40,7 @@ class PhoneLookupProvider(ABC):
     # Known high-risk VOIP carriers often used for spam
     HIGH_RISK_CARRIERS = [
         "bandwidth.com", "telnyx", "plivo", "vonage api",
-        "twilio", "signalwire", "flowroute"
+        "signalwire", "flowroute"
     ]
 
     # Carriers that are generally legitimate
@@ -123,101 +117,6 @@ class PhoneLookupProvider(ABC):
             return "low"
 
 
-class TwilioLookupProvider(PhoneLookupProvider):
-    """Twilio Lookup API v2 implementation"""
-
-    def __init__(self):
-        self.account_sid = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
-        self.auth_token = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
-        self.client = None
-        self._enabled = False
-
-        try:
-            from twilio.rest import Client as TwilioClient
-            if self.account_sid and self.auth_token:
-                lookup_enabled = os.getenv("TWILIO_LOOKUP_ENABLED", "true").lower() == "true"
-                if lookup_enabled:
-                    self.client = TwilioClient(self.account_sid, self.auth_token)
-                    self._enabled = True
-                    logger.info("Twilio Lookup Service initialized")
-        except ImportError:
-            logger.warning("Twilio SDK not available")
-
-    def is_enabled(self) -> bool:
-        return self._enabled
-
-    async def lookup_phone(
-        self,
-        phone_number: str,
-        include_caller_name: bool = True,
-        include_line_type: bool = True
-    ) -> LookupResult:
-        if not self._enabled:
-            return LookupResult(
-                phone_number=phone_number,
-                valid=True,
-                spam_score=0,
-                risk_level="unknown",
-                provider="twilio",
-                error="Lookup service disabled"
-            )
-
-        try:
-            fields = ["carrier"]
-            if include_line_type:
-                fields.append("line_type_intelligence")
-            if include_caller_name:
-                fields.append("caller_name")
-
-            lookup = self.client.lookups.v2.phone_numbers(phone_number).fetch(
-                fields=",".join(fields)
-            )
-
-            carrier_info = lookup.carrier or {}
-            line_type_info = lookup.line_type_intelligence or {}
-            caller_name_info = lookup.caller_name or {}
-
-            result = LookupResult(
-                phone_number=lookup.phone_number,
-                valid=lookup.valid,
-                carrier_name=carrier_info.get("name"),
-                carrier_type=carrier_info.get("type"),
-                line_type=line_type_info.get("type"),
-                caller_name=caller_name_info.get("caller_name"),
-                caller_type=caller_name_info.get("caller_type"),
-                country_code=lookup.country_code,
-                provider="twilio",
-                raw_data={
-                    "carrier": carrier_info,
-                    "line_type_intelligence": line_type_info,
-                    "caller_name": caller_name_info,
-                    "national_format": lookup.national_format,
-                }
-            )
-
-            result.spam_score = self._calculate_spam_score(result)
-            result.risk_level = self._get_risk_level(result.spam_score)
-
-            logger.info(
-                f"Twilio lookup complete for {phone_number}: "
-                f"carrier={result.carrier_name}, type={result.line_type}, "
-                f"spam_score={result.spam_score}, risk={result.risk_level}"
-            )
-
-            return result
-
-        except Exception as e:
-            logger.error(f"Twilio Lookup failed: {type(e).__name__}")
-            return LookupResult(
-                phone_number=phone_number,
-                valid=False,
-                spam_score=50,
-                risk_level="medium",
-                provider="twilio",
-                error=str(e)
-            )
-
-
 class TelnyxLookupProvider(PhoneLookupProvider):
     """Telnyx Number Lookup API implementation"""
 
@@ -258,7 +157,6 @@ class TelnyxLookupProvider(PhoneLookupProvider):
 
         try:
             # Telnyx Number Lookup API
-            # https://developers.telnyx.com/docs/api/v2/number-lookup
             lookup_type = "carrier" if include_line_type else "carrier"
 
             response = self.client.number_lookups.create(
@@ -328,20 +226,13 @@ class TelnyxLookupProvider(PhoneLookupProvider):
 
 class PhoneLookupService:
     """
-    Provider-agnostic phone lookup service.
-
-    Automatically uses the configured telephony provider (Twilio or Telnyx).
+    Phone lookup service using Telnyx.
     """
 
     def __init__(self):
-        self.provider_name = TELEPHONY_PROVIDER
-
-        if self.provider_name == "telnyx":
-            self._provider = TelnyxLookupProvider()
-        else:
-            self._provider = TwilioLookupProvider()
-
-        logger.info(f"Phone Lookup Service initialized with {self.provider_name}")
+        self.provider_name = "telnyx"
+        self._provider = TelnyxLookupProvider()
+        logger.info("Phone Lookup Service initialized with Telnyx")
 
     async def lookup_phone(
         self,
@@ -354,8 +245,8 @@ class PhoneLookupService:
 
         Args:
             phone_number: Phone number in E.164 format (e.g., +14155551234)
-            include_caller_name: Include CNAM lookup (Twilio only, ~$0.01 extra)
-            include_line_type: Include line type intelligence (~$0.01 extra)
+            include_caller_name: Include CNAM lookup
+            include_line_type: Include line type intelligence
 
         Returns:
             LookupResult with phone intelligence data

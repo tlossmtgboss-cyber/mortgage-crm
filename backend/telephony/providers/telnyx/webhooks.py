@@ -166,8 +166,8 @@ class TelnyxAMDEvent:
         """Alias for is_machine"""
         return self.is_machine
 
-    def to_twilio_format(self) -> str:
-        """Convert to Twilio-compatible AnsweredBy format"""
+    def to_legacy_format(self) -> str:
+        """Convert to legacy (TwiML-compatible) AnsweredBy format"""
         mapping = {
             "human": "human",
             "machine": "machine_end_beep",
@@ -175,6 +175,9 @@ class TelnyxAMDEvent:
             "unknown": "unknown",
         }
         return mapping.get(self.result, "unknown")
+
+    # Backward-compatible alias
+    to_twilio_format = to_legacy_format
 
 
 @dataclass
@@ -345,17 +348,17 @@ def parse_telnyx_webhook(
         return base_event
 
 
-def map_telnyx_status_to_twilio(telnyx_event: TelnyxCallEvent) -> str:
+def map_telnyx_status_to_legacy(telnyx_event: TelnyxCallEvent) -> str:
     """
-    Map Telnyx call event to equivalent Twilio call status.
+    Map Telnyx call event to equivalent legacy (TwiML) call status.
 
-    This helps with backward compatibility when migrating from Twilio.
+    This helps with backward compatibility during provider migration.
 
     Args:
         telnyx_event: A Telnyx call event
 
     Returns:
-        Equivalent Twilio call status string
+        Equivalent legacy call status string
     """
     event_type = telnyx_event.event_type
 
@@ -382,19 +385,19 @@ def map_telnyx_status_to_twilio(telnyx_event: TelnyxCallEvent) -> str:
     return status
 
 
-def map_telnyx_amd_to_twilio(amd_event: TelnyxAMDEvent) -> Dict[str, str]:
+def map_telnyx_amd_to_legacy(amd_event: TelnyxAMDEvent) -> Dict[str, str]:
     """
-    Map Telnyx AMD result to Twilio-compatible format.
+    Map Telnyx AMD result to legacy (TwiML-compatible) format.
 
     Args:
         amd_event: A Telnyx AMD event
 
     Returns:
-        Dict with Twilio-compatible AMD fields
+        Dict with legacy-compatible AMD fields
     """
     result = amd_event.result
 
-    # Map to Twilio AnsweredBy values
+    # Map to legacy AnsweredBy values
     answered_by_map = {
         "human": "human",
         "machine": "machine_end_beep",
@@ -406,3 +409,8 @@ def map_telnyx_amd_to_twilio(amd_event: TelnyxAMDEvent) -> Dict[str, str]:
         "AnsweredBy": answered_by_map.get(result, "unknown"),
         "MachineDetectionDuration": str(amd_event.payload.get("detection_duration_millis", 0)),
     }
+
+
+# Backward-compatible aliases
+map_telnyx_status_to_twilio = map_telnyx_status_to_legacy
+map_telnyx_amd_to_twilio = map_telnyx_amd_to_legacy

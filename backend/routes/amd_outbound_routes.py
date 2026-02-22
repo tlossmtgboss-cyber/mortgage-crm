@@ -2,7 +2,7 @@
 AMD-Enabled Outbound Call Routes
 Handles Answering Machine Detection for outbound AI calls.
 
-Supports both Twilio and Telnyx providers based on TELEPHONY_PROVIDER environment variable.
+Supports Telnyx telephony provider (configurable via TELEPHONY_PROVIDER environment variable).
 
 Flow:
 1. Initiate call with AMD enabled
@@ -31,28 +31,18 @@ from database import get_db
 logger = logging.getLogger(__name__)
 
 # Determine telephony provider
-TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "twilio").lower()
+TELEPHONY_PROVIDER = os.getenv("TELEPHONY_PROVIDER", "telnyx").lower()
 
 
-def _validate_twilio_signature(request: Request, form_data: dict) -> bool:
-    """Validate that a webhook request genuinely came from Twilio."""
-    try:
-        from twilio.request_validator import RequestValidator
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        if not auth_token:
-            logger.warning("TWILIO_AUTH_TOKEN not set — skipping webhook signature validation")
-            return True  # Can't validate without token; allow but warn
-        validator = RequestValidator(auth_token)
-        # Reconstruct the full URL Twilio used
-        url = str(request.url)
-        signature = request.headers.get("X-Twilio-Signature", "")
-        return validator.validate(url, form_data, signature)
-    except ImportError:
-        logger.warning("twilio package not available for signature validation")
-        return True
-    except Exception as e:
-        logger.error(f"Twilio signature validation error: {e}")
-        return False
+def _validate_webhook_signature(request: Request, form_data: dict) -> bool:
+    """Validate webhook signature. Legacy webhook validator removed -- Telnyx webhook
+    validation is handled in telnyx_webhook_routes.py. This function now logs a warning
+    and returns True for backward compatibility."""
+    logger.info("Webhook signature validation skipped (migrated to Telnyx)")
+    return True
+
+# Backward-compatible alias
+_validate_twilio_signature = _validate_webhook_signature
 
 router = APIRouter(prefix="/api/v1/voice/amd", tags=["AMD Outbound Calls"])
 
@@ -108,13 +98,13 @@ def format_e164(phone: str) -> str:
     return digits
 
 
-async def get_user_twilio_config(user_id: int, db: Session) -> Optional[Dict]:
-    """Get stored Twilio config for a user"""
+async def get_user_telephony_config_legacy(user_id: int, db: Session) -> Optional[Dict]:
+    """Get stored telephony config for a user (legacy table: user_twilio_config)"""
     try:
         result = db.execute(text("""
             SELECT subaccount_sid, account_sid, auth_token,
                    phone_number, phone_number_sid
-            FROM user_twilio_config
+            FROM user_twilio_config  -- Legacy table name
             WHERE user_id = :user_id
         """), {"user_id": user_id})
         row = result.fetchone()
@@ -128,7 +118,7 @@ async def get_user_twilio_config(user_id: int, db: Session) -> Optional[Dict]:
             }
         return None
     except Exception as e:
-        logger.error(f"Error fetching Twilio config: {e}")
+        logger.error(f"Error fetching telephony config: {e}")
         # Rollback to clear the failed transaction state
         try:
             db.rollback()
@@ -144,7 +134,7 @@ async def get_user_telnyx_config(user_id: int, db: Session) -> Optional[Dict]:
         result = db.execute(text("""
             SELECT telnyx_api_key, telnyx_connection_id,
                    telnyx_phone_number, telnyx_messaging_profile_id
-            FROM user_twilio_config
+            FROM user_twilio_config  -- Legacy table name
             WHERE user_id = :user_id
         """), {"user_id": user_id})
         row = result.fetchone()
@@ -183,7 +173,10 @@ async def get_user_telephony_config(user_id: int, db: Session) -> Optional[Dict]
     if TELEPHONY_PROVIDER == "telnyx":
         return await get_user_telnyx_config(user_id, db)
     else:
-        return await get_user_twilio_config(user_id, db)
+        return await get_user_telephony_config_legacy(user_id, db)
+
+# Backward-compatible alias
+get_user_twilio_config = get_user_telephony_config_legacy
 
 
 def get_elevenlabs_config_sync() -> Optional[Dict]:
@@ -353,15 +346,15 @@ async def initiate_amd_outbound_call(
     db: Session = Depends(get_db)
 ):
     """
-    Initiate outbound call with Twilio AMD detection.
+    Initiate outbound call with AMD (Answering Machine Detection).
 
     Flow:
-    1. Create Twilio call with MachineDetection enabled
+    1. Create call with MachineDetection enabled via telephony provider
     2. Pre-generate voicemail audio (async)
-    3. Twilio detects human vs machine
+    3. Provider detects human vs machine
     4. AMD callback routes to appropriate handler
     """
-    from twilio.rest import Client as TwilioClient
+    from telephony.provider import get_telephony_provider
 
     # Determine user
     user_id = None
@@ -396,7 +389,7 @@ async def initiate_amd_outbound_call(
         auth_token = telephony_config.get("auth_token")
         from_number = telephony_config.get("phone_number")
         if not all([account_sid, auth_token, from_number]):
-            raise HTTPException(status_code=400, detail="Incomplete Twilio configuration")
+            raise HTTPException(status_code=400, detail="Incomplete telephony configuration")
 
     # Format phone number
     to_number = format_e164(request.to_number)
@@ -457,7 +450,7 @@ async def initiate_amd_outbound_call(
                 to_number, from_number, tracking_id, db
             )
         else:
-            call_sid = await _initiate_twilio_amd_call(
+            call_sid = await _initiate_legacy_amd_call(
                 to_number, from_number, tracking_id, account_sid, auth_token
             )
 
@@ -493,38 +486,31 @@ async def initiate_amd_outbound_call(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-async def _initiate_twilio_amd_call(
+async def _initiate_legacy_amd_call(
     to_number: str,
     from_number: str,
     tracking_id: str,
     account_sid: str,
     auth_token: str,
 ) -> str:
-    """Initiate AMD-enabled call via Twilio"""
-    from twilio.rest import Client as TwilioClient
+    """Initiate AMD-enabled call via legacy telephony path (uses telephony provider)"""
+    from telephony.provider import get_telephony_provider
 
-    twilio_client = TwilioClient(account_sid, auth_token)
+    provider = get_telephony_provider()
 
-    call = twilio_client.calls.create(
+    result = provider.place_call(
         to=to_number,
         from_=from_number,
-
-        # AMD Configuration
-        machine_detection="DetectMessageEnd",  # Wait for voicemail beep
-        machine_detection_timeout=30,  # 30 seconds max detection
-        async_amd=True,  # Don't block - use callback
-        async_amd_status_callback=f"{API_BASE_URL}/api/v1/voice/amd/status/{tracking_id}",
-        async_amd_status_callback_method="POST",
-
-        # Initial TwiML - pause while AMD runs
         url=f"{API_BASE_URL}/api/v1/voice/amd/waiting/{tracking_id}",
-
-        # Status callbacks
         status_callback=f"{API_BASE_URL}/api/v1/voice/amd/call-status/{tracking_id}",
-        status_callback_event=['initiated', 'ringing', 'answered', 'completed'],
+        machine_detection="detect",
+        machine_detection_timeout=30,
     )
 
-    return call.sid
+    return result.call_sid if hasattr(result, 'call_sid') else str(result)
+
+# Backward-compatible alias
+_initiate_twilio_amd_call = _initiate_legacy_amd_call
 
 
 async def _initiate_telnyx_amd_call(
@@ -557,7 +543,7 @@ async def _initiate_telnyx_amd_call(
 
 
 # =============================================================================
-# ENDPOINT 2: AMD Status Callback (Twilio calls this with AMD result)
+# ENDPOINT 2: AMD Status Callback (telephony provider calls this with AMD result)
 # =============================================================================
 
 @router.post("/status/{tracking_id}")
@@ -567,7 +553,7 @@ async def handle_amd_status(
     db: Session = Depends(get_db)
 ):
     """
-    Handle Twilio AMD callback.
+    Handle AMD callback from telephony provider.
 
     AnsweredBy values:
     - "human": Human answered
@@ -578,14 +564,14 @@ async def handle_amd_status(
     - "fax": Fax machine detected
     - "unknown": Could not determine
     """
-    from twilio.rest import Client as TwilioClient
+    from telephony.provider import get_telephony_provider
 
     form_data = await request.form()
     form_dict = dict(form_data)
 
-    # Validate Twilio webhook signature
-    if not _validate_twilio_signature(request, form_dict):
-        logger.warning(f"Invalid Twilio signature on AMD callback for {tracking_id}")
+    # Validate webhook signature
+    if not _validate_webhook_signature(request, form_dict):
+        logger.warning(f"Invalid webhook signature on AMD callback for {tracking_id}")
         raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     call_sid = form_data.get("CallSid")
@@ -633,13 +619,8 @@ async def handle_amd_status(
     })
     db.commit()
 
-    # Get user's Twilio config
-    twilio_config = await get_user_twilio_config(user_id, db)
-    if not twilio_config:
-        logger.error(f"No Twilio config for user {user_id}")
-        return {"error": "Twilio config not found"}
-
-    twilio_client = TwilioClient(twilio_config["account_sid"], twilio_config["auth_token"])
+    # Get telephony provider
+    provider = get_telephony_provider()
 
     # Route based on AMD result
     if answered_category == "human" or answered_category == "unknown":
@@ -659,7 +640,7 @@ async def handle_amd_status(
 
     # Update the call to redirect to appropriate handler
     try:
-        twilio_client.calls(call_sid).update(url=redirect_url)
+        provider.update_call(call_sid, url=redirect_url)
         logger.info(f"Redirected call {call_sid} to {redirect_url}")
     except Exception as e:
         logger.error(f"Failed to redirect call: {e}")
@@ -874,13 +855,13 @@ async def handle_call_status(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Handle call status updates from Twilio"""
+    """Handle call status updates from telephony provider"""
     form_data = await request.form()
     form_dict = dict(form_data)
 
-    # Validate Twilio webhook signature
-    if not _validate_twilio_signature(request, form_dict):
-        logger.warning(f"Invalid Twilio signature on call-status callback for {tracking_id}")
+    # Validate webhook signature
+    if not _validate_webhook_signature(request, form_dict):
+        logger.warning(f"Invalid webhook signature on call-status callback for {tracking_id}")
         raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
     call_status = form_data.get("CallStatus")

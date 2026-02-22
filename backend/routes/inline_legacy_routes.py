@@ -557,7 +557,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     from voice_routes import router as voice_router
     app.include_router(voice_router, tags=["Voice AI"])
 
-    # Include AMD Outbound Call routes (Twilio/Telnyx AMD for voicemail detection)
+    # Include AMD Outbound Call routes (Telnyx AMD for voicemail detection)
     try:
         from routes.amd_outbound_routes import router as amd_outbound_router
         app.include_router(amd_outbound_router, tags=["AMD Outbound Calls"])
@@ -581,13 +581,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Call Screening routes: {e}")
 
-    # Include Twilio Status Callback routes (webhook handlers for call status + recordings)
-    try:
-        from routes.twilio_status_callback_routes import router as twilio_status_callback_router
-        app.include_router(twilio_status_callback_router, tags=["Twilio Webhooks"])
-        logger.info("✅ Twilio Status Callback routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not load Twilio Status Callback routes: {e}")
+    # Legacy status callback routes removed — Telnyx handles telephony webhooks now.
 
     # Include State Recording Rules routes (state-specific recording disclosure requirements)
     try:
@@ -2360,14 +2354,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"ElevenLabs routes not loaded: {e}")
 
-    # Twilio Self-Service Setup routes
-    try:
-        from routes.twilio_setup_routes import router as twilio_setup_router, set_dependencies as set_twilio_setup_deps
-        set_twilio_setup_deps(User, get_current_user, get_db)
-        app.include_router(twilio_setup_router, tags=["Twilio Setup"])
-        logger.info("Twilio Setup routes loaded")
-    except Exception as e:
-        logger.warning(f"Twilio Setup routes not loaded: {e}")
+    # Legacy self-service setup routes removed — Telnyx setup handles telephony config now.
 
     # Telnyx Self-Service Setup routes
     try:
@@ -2378,7 +2365,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Telnyx Setup routes not loaded: {e}")
 
-    # Retell AI Voice Platform routes (replaces ElevenLabs + Twilio)
+    # Retell AI Voice Platform routes
     try:
         from routes.retell_routes import router as retell_router, set_dependencies as set_retell_deps
         set_retell_deps(User, get_current_user, get_db)
@@ -2517,13 +2504,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Chat State Machine routes not loaded: {e}")
 
-    # Twilio Click-to-Call routes (for chat widget calling)
-    try:
-        from services.twilio_click_to_call import twilio_router
-        app.include_router(twilio_router, tags=["Twilio Click-to-Call"])
-        logger.info("✅ Twilio Click-to-Call routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Twilio Click-to-Call routes not loaded: {e}")
+    # Legacy click-to-call routes removed — click-to-call handled by click_to_call_service now.
 
     # Surveying & Feedback routes (Customer satisfaction surveys, NPS, CSAT)
     try:

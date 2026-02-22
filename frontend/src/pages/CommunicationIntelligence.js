@@ -1170,7 +1170,7 @@ function CommunicationIntelligence() {
             ) : smsQueue.length === 0 ? (
               <div className="empty-state">
                 <h3>No SMS messages in queue</h3>
-                <p>Messages will appear here when received via Twilio webhook</p>
+                <p>Messages will appear here when received via Telnyx webhook</p>
               </div>
             ) : (
               <div className="queue-list">

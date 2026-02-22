@@ -28,7 +28,7 @@
  * @property {string} name - Contact's name
  * @property {string} phone - Contact's phone number
  * @property {string} [context] - Optional context
- * @property {string} [call_sid] - Twilio call SID if call is active
+ * @property {string} [call_sid] - Telnyx call SID if call is active
  */
 
 /**
@@ -98,7 +98,7 @@
  * @property {'dialer.call.started'} type - Event type
  * @property {string} session_id - Session ID
  * @property {string} task_id - Task ID
- * @property {string} call_sid - Twilio call SID
+ * @property {string} call_sid - Telnyx call SID
  * @property {ContactInfo} contact - Contact being called
  */
 
@@ -107,7 +107,7 @@
  * @property {'dialer.call.completed'} type - Event type
  * @property {string} session_id - Session ID
  * @property {string} task_id - Task ID
- * @property {string} call_sid - Twilio call SID
+ * @property {string} call_sid - Telnyx call SID
  * @property {number} duration_seconds - Call duration in seconds
  * @property {CallOutcome} outcome - Call outcome
  * @property {boolean} show_disposition_modal - Whether to show disposition modal
@@ -118,8 +118,8 @@
  * @property {'call_status_update'} type - Event type
  * @property {string} session_id - Session ID
  * @property {string} task_id - Task ID
- * @property {string} call_sid - Twilio call SID
- * @property {string} status - Twilio call status
+ * @property {string} call_sid - Telnyx call SID
+ * @property {string} status - Telnyx call status
  * @property {number} duration_seconds - Call duration
  * @property {boolean} show_disposition_modal - Whether to show disposition modal
  */
@@ -127,7 +127,7 @@
 /**
  * @typedef {Object} ClickToDialStatusEvent
  * @property {'click_to_dial_status'} type - Event type
- * @property {string} call_sid - Twilio call SID
+ * @property {string} call_sid - Telnyx call SID
  * @property {string} status - Call status
  * @property {number} duration_seconds - Call duration
  * @property {string} to_number - Called number

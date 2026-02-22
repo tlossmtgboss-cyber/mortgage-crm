@@ -51,7 +51,7 @@ def list_caller_ids(
                         "phone_number": cid.phone_number,
                         "friendly_name": cid.friendly_name,
                         "verification_status": cid.verification_status,
-                        "twilio_sid": cid.twilio_sid,
+                        "provider_sid": cid.provider_sid,
                         "verified_at": cid.verified_at.isoformat() if cid.verified_at else None,
                         "created_at": cid.created_at.isoformat() if cid.created_at else None
                     }
@@ -98,7 +98,7 @@ def verify_caller_id(
                 db.delete(existing)
                 db.commit()
 
-            # Initiate verification with Twilio
+            # Initiate verification with telephony provider
             provider = get_telephony_provider()
             result = provider.verify_caller_id(normalized_phone, friendly_name)
 
@@ -113,7 +113,7 @@ def verify_caller_id(
                 phone_number=normalized_phone,
                 friendly_name=friendly_name,
                 verification_status="pending",
-                twilio_sid=result.get("call_sid")
+                provider_sid=result.get("call_sid")
             )
 
             db.add(caller_id)
@@ -129,7 +129,7 @@ def verify_caller_id(
                     "verification_status": caller_id.verification_status
                 },
                 "validation_code": result.get("validation_code"),
-                "instructions": "You will receive a call from Twilio. Please answer and enter the validation code when prompted."
+                "instructions": "You will receive a verification call. Please answer and enter the validation code when prompted."
             }
         finally:
             db.close()
@@ -220,20 +220,20 @@ def set_default_caller_id(caller_id_id: int, current_user=Depends(get_current_us
 
 
 # =============================================================================
-# Twilio Account Status
+# Telephony Account Status
 # =============================================================================
 
 @router.get("/admin/telephony/status")
 def get_telephony_status(current_user=Depends(get_current_user)):
-    """Get Twilio account status and configuration"""
+    """Get telephony account status and configuration"""
     try:
         from telephony.provider import get_telephony_provider
 
         # Get account info
         account_info = {
-            "configured": bool(os.getenv("TWILIO_ACCOUNT_SID")),
-            "account_sid": os.getenv("TWILIO_ACCOUNT_SID", "")[:10] + "..." if os.getenv("TWILIO_ACCOUNT_SID") else None,
-            "phone_number": os.getenv("TWILIO_PHONE_NUMBER")
+            "configured": bool(os.getenv("TELNYX_API_KEY")),
+            "api_key_prefix": os.getenv("TELNYX_API_KEY", "")[:10] + "..." if os.getenv("TELNYX_API_KEY") else None,
+            "phone_number": os.getenv("TELNYX_PHONE_NUMBER")
         }
 
         # Try to count caller IDs and calls
@@ -264,7 +264,7 @@ def get_telephony_status(current_user=Depends(get_current_user)):
             logger.warning(f"Could not get caller ID counts: {e}")
 
         return {
-            "twilio": account_info,
+            "telephony": account_info,
             "caller_ids": {
                 "verified": verified_count,
                 "pending": pending_count
@@ -276,8 +276,8 @@ def get_telephony_status(current_user=Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Error getting telephony status: {e}")
         return {
-            "twilio": {
-                "configured": bool(os.getenv("TWILIO_ACCOUNT_SID")),
+            "telephony": {
+                "configured": bool(os.getenv("TELNYX_API_KEY")),
                 "error": "Internal server error"
             },
             "caller_ids": {"verified": 0, "pending": 0},

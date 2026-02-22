@@ -43,7 +43,7 @@ class VerifiedCallerId(Base):
     phone_number = Column(String, unique=True, nullable=False)
     friendly_name = Column(String)
     verification_status = Column(String, default="pending")  # pending, verified, failed
-    twilio_sid = Column(String)
+    provider_sid = Column(String)
     user_id = Column(Integer, ForeignKey("users.id"))  # Owner
     verified_at = Column(DateTime)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

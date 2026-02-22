@@ -2592,6 +2592,178 @@ async def resend_portal_invite_by_slug(
 
 
 # =============================================================================
+# POST-CLOSE DATA (MUM Portal)
+# =============================================================================
+
+@purl_router.get(
+    "/workspace/{slug}/postclose-data",
+    summary="Get post-close data for MUM portal",
+    description="Returns current balance, estimated value, equity, post-close tasks, and loan anniversary"
+)
+async def get_postclose_data(
+    slug: str = Path(..., description="Workspace slug"),
+    context: PURLAuthContext = Depends(require_purl_token),
+    db: Session = Depends(get_db),
+):
+    """
+    Provide computed data for the MUM (Mortgages Under Management) portal:
+    - Current loan balance (via amortization service)
+    - Estimated property value
+    - Estimated net worth (value - balance)
+    - Post-close tasks
+    - Loan anniversary date
+    """
+    try:
+        verify_workspace_access(context, slug)
+
+        from services.amortization_service import calculate_current_balance, calculate_monthly_payment
+
+        # Get workspace + loan
+        workspace = db.query(PURLWorkspace).filter(
+            PURLWorkspace.id == context.workspace_id
+        ).first()
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        purl_loan = db.query(PURLLoan).filter(
+            PURLLoan.workspace_id == workspace.id
+        ).first()
+
+        # Fetch main CRM loan for richer data (first_payment_date, purchase_price, etc.)
+        main_loan = None
+        if purl_loan and purl_loan.main_loan_id:
+            try:
+                from database.models import Loan
+                main_loan = db.query(Loan).filter(Loan.id == purl_loan.main_loan_id).first()
+            except Exception as e:
+                logger.debug(f"Could not fetch main loan: {e}")
+
+        # --- Compute amortization ---
+        loan_amount = float(purl_loan.loan_amount or 0) if purl_loan else 0
+        interest_rate = float(purl_loan.interest_rate or 0) if purl_loan else 0
+        term_months = 360  # default 30yr
+
+        if main_loan:
+            loan_amount = loan_amount or float(getattr(main_loan, 'amount', 0) or 0)
+            interest_rate = interest_rate or float(getattr(main_loan, 'rate', 0) or 0)
+            term_val = getattr(main_loan, 'term', None)
+            if term_val:
+                term_months = int(term_val) if int(term_val) > 12 else int(term_val) * 12
+
+        first_payment_date = None
+        if main_loan:
+            first_payment_date = getattr(main_loan, 'first_payment_date', None)
+
+        current_balance = calculate_current_balance(
+            principal=loan_amount,
+            annual_rate=interest_rate,
+            term_months=term_months,
+            first_payment_date=first_payment_date,
+        )
+        monthly_payment = calculate_monthly_payment(loan_amount, interest_rate, term_months)
+
+        # --- Property value estimate ---
+        purchase_price = 0
+        if main_loan:
+            purchase_price = float(getattr(main_loan, 'purchase_price', 0) or 0)
+        if not purchase_price and loan_amount:
+            purchase_price = loan_amount / 0.80  # estimate from LTV
+
+        # Simple appreciation estimate: 3.5% annualized from funded date
+        funded_date = None
+        if purl_loan and purl_loan.actual_close_date:
+            funded_date = purl_loan.actual_close_date
+        elif main_loan:
+            funded_date = getattr(main_loan, 'funded_date', None) or getattr(main_loan, 'closing_date', None)
+
+        estimated_value = purchase_price
+        appreciation_pct = 0.0
+        if funded_date and purchase_price:
+            from datetime import date as date_type
+            fd = funded_date
+            if hasattr(fd, 'date'):
+                fd = fd.date()
+            days_since = (date_type.today() - fd).days
+            years = days_since / 365.25
+            appreciation_rate = 0.035  # 3.5% annual
+            estimated_value = round(purchase_price * ((1 + appreciation_rate) ** years), 0)
+            appreciation_pct = round(((estimated_value - purchase_price) / purchase_price) * 100, 2) if purchase_price else 0
+
+        # --- Equity ---
+        equity = estimated_value - current_balance
+        equity_pct = round((equity / estimated_value) * 100, 2) if estimated_value > 0 else 0
+        ltv = round((current_balance / estimated_value) * 100, 2) if estimated_value > 0 else 0
+
+        # --- Post-close tasks ---
+        post_close_tasks = db.query(PURLTask).filter(
+            PURLTask.workspace_id == workspace.id,
+        ).order_by(PURLTask.due_at.asc().nullslast()).all()
+
+        tasks_list = [
+            {
+                "id": t.id,
+                "title": t.title,
+                "description": t.description,
+                "status": t.status,
+                "priority": t.priority,
+                "due_at": t.due_at.isoformat() if t.due_at else None,
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            }
+            for t in post_close_tasks
+        ]
+
+        # --- Loan anniversary ---
+        anniversary_date = None
+        if funded_date:
+            from datetime import date as date_type
+            fd = funded_date
+            if hasattr(fd, 'date'):
+                fd = fd.date()
+            today = date_type.today()
+            # Next anniversary
+            this_year_anniv = fd.replace(year=today.year)
+            if this_year_anniv < today:
+                this_year_anniv = fd.replace(year=today.year + 1)
+            anniversary_date = this_year_anniv.isoformat()
+
+        # --- Servicer info ---
+        servicer = None
+        servicer_phone = None
+        servicer_portal = None
+        if purl_loan and purl_loan.meta_data:
+            servicer = purl_loan.meta_data.get("servicer")
+            servicer_phone = purl_loan.meta_data.get("servicer_phone")
+            servicer_portal = purl_loan.meta_data.get("servicer_portal")
+
+        return {
+            "current_balance": round(current_balance, 2),
+            "monthly_payment": round(monthly_payment, 2),
+            "original_loan_amount": round(loan_amount, 2),
+            "interest_rate": interest_rate,
+            "term_months": term_months,
+            "purchase_price": round(purchase_price, 2),
+            "estimated_value": round(estimated_value, 2),
+            "appreciation_pct": appreciation_pct,
+            "equity": round(equity, 2),
+            "equity_pct": equity_pct,
+            "ltv": ltv,
+            "funded_date": funded_date.isoformat() if funded_date else None,
+            "first_payment_date": first_payment_date.isoformat() if first_payment_date else None,
+            "anniversary_date": anniversary_date,
+            "servicer": servicer,
+            "servicer_phone": servicer_phone,
+            "servicer_portal": servicer_portal,
+            "tasks": tasks_list,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"get_postclose_data failed for {slug}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get post-close data")
+
+
+# =============================================================================
 # HEALTH CHECK
 # =============================================================================
 

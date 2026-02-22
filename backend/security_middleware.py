@@ -158,7 +158,7 @@ PUBLIC_PATHS = [
     "/api/v1/auth/",  # Auth endpoints
     "/api/v1/migrations/convert-lead-stage-to-enum-names",  # Key-protected migration
     "/api/v1/migrations/fix-lead-stage-values",  # Key-protected migration
-    "/api/v1/webhook/",  # Webhooks must be accessible from external services (SendGrid, Twilio, etc.)
+    "/api/v1/webhook/",  # Webhooks must be accessible from external services (SendGrid, Telnyx, etc.)
     "/api/v1/referral-partners",  # May need public access for integrations
     "/api/v1/admin/account-management/cleanup/",  # Admin-key protected cleanup endpoints
     "/api/v1/admin/account-management/run-migration",  # Admin-key protected migration

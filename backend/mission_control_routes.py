@@ -441,10 +441,10 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                 "method": "get"
             },
             {
-                "name": "twilio_sms",
+                "name": "telnyx_sms",
                 "type": "api",
-                "url": "https://api.twilio.com/2010-04-01/Accounts",
-                "auth": (os.getenv("TWILIO_ACCOUNT_SID", ""), os.getenv("TWILIO_AUTH_TOKEN", "")),
+                "url": "https://api.telnyx.com/v2/messaging_profiles",
+                "auth": None,
                 "method": "get"
             },
             {

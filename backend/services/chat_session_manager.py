@@ -613,8 +613,8 @@ class ChatSessionManager:
         self,
         call_id: UUID,
         status: str,
-        twilio_call_sid: Optional[str] = None,
-        twilio_conference_sid: Optional[str] = None,
+        telephony_call_sid: Optional[str] = None,
+        telephony_conference_sid: Optional[str] = None,
     ) -> Optional[CallRequest]:
         """Update call request status"""
         call = self.db.query(CallRequest).filter(CallRequest.id == call_id).first()
@@ -622,10 +622,10 @@ class ChatSessionManager:
             return None
 
         call.status = status
-        if twilio_call_sid:
-            call.twilio_call_sid = twilio_call_sid
-        if twilio_conference_sid:
-            call.twilio_conference_sid = twilio_conference_sid
+        if telephony_call_sid:
+            call.twilio_call_sid = telephony_call_sid  # legacy column name
+        if telephony_conference_sid:
+            call.twilio_conference_sid = telephony_conference_sid  # legacy column name
 
         # Update timestamps based on status
         now = datetime.now(timezone.utc)

@@ -1486,7 +1486,7 @@ def register_debug_data_routes(
 
     # Extracted to routes/health_routes.py and routes/admin_ops_routes.py
     # (admin/pool-status, admin/salesforce-*, admin/pool-reset,
-    #  admin/update-twilio-config, /ping)
+    #  admin/update-telephony-config, /ping)
 
     @app.get("/admin/create-salesforce-tables")
     async def create_salesforce_tables(db: Session = Depends(get_db)):

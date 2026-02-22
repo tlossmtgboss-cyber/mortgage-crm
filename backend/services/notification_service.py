@@ -1,7 +1,7 @@
 """
 Notification Service - Email and SMS notifications for borrower applications.
 
-Uses SendGrid for email and Twilio for SMS.
+Uses SendGrid for email and Telnyx for SMS.
 """
 
 import os
@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content, Attachment, FileContent, FileName, FileType
-from twilio.rest import Client as TwilioClient
+from telephony.provider import get_telephony_provider
 import base64
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -21,11 +21,9 @@ SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
 SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME", "Sarah from Perennia AI")
 
-# Twilio configuration
-TWILIO_ACCOUNT_SID = (os.getenv("TWILIO_ACCOUNT_SID") or "").strip()
-TWILIO_AUTH_TOKEN = (os.getenv("TWILIO_AUTH_TOKEN") or "").strip()
-# Support both TWILIO_PHONE_NUMBER (primary) and TWILIO_FROM_NUMBER (fallback)
-TWILIO_FROM_NUMBER = os.getenv("TWILIO_PHONE_NUMBER") or os.getenv("TWILIO_FROM_NUMBER")
+# Telnyx configuration
+TELNYX_API_KEY = (os.getenv("TELNYX_API_KEY") or "").strip()
+TELNYX_FROM_NUMBER = os.getenv("TELNYX_PHONE_NUMBER") or os.getenv("TELNYX_FROM_NUMBER")
 
 # Application URLs
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -36,7 +34,7 @@ class NotificationService:
 
     def __init__(self):
         self.sendgrid_client = None
-        self.twilio_client = None
+        self.telephony_provider = None
 
         if SENDGRID_API_KEY:
             self.sendgrid_client = SendGridAPIClient(SENDGRID_API_KEY)
@@ -44,11 +42,12 @@ class NotificationService:
         else:
             logger.warning("SendGrid API key not configured - emails will be logged only")
 
-        if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
-            self.twilio_client = TwilioClient(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-            logger.info("Twilio client initialized")
-        else:
-            logger.warning("Twilio credentials not configured - SMS will be logged only")
+        try:
+            self.telephony_provider = get_telephony_provider()
+            logger.info("Telnyx telephony provider initialized for SMS")
+        except Exception as e:
+            self.telephony_provider = None
+            logger.warning(f"Telephony provider not configured - SMS will be logged only: {e}")
 
     # =========================================================================
     # EMAIL METHODS
@@ -720,7 +719,7 @@ class NotificationService:
         message: str,
     ) -> Dict[str, Any]:
         """
-        Send an SMS via Twilio.
+        Send an SMS via Telnyx.
 
         Args:
             to_phone: Recipient phone number (E.164 format preferred)
@@ -735,22 +734,25 @@ class NotificationService:
                 # Assume US number
                 to_phone = '+1' + to_phone.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
 
-            if not self.twilio_client:
+            if not self.telephony_provider:
                 logger.info(f"[DRY RUN] Would send SMS to {to_phone}: {message[:50]}...")
                 return {"success": True, "dry_run": True}
 
-            sms = self.twilio_client.messages.create(
-                body=message,
-                from_=TWILIO_FROM_NUMBER,
+            import telnyx
+            telnyx_from = os.getenv("TELNYX_PHONE_NUMBER") or TELNYX_FROM_NUMBER
+            sms = telnyx.Message.create(
+                from_=telnyx_from,
                 to=to_phone,
+                text=message,
             )
 
-            logger.info(f"SMS sent to {to_phone}: {sms.sid}")
+            msg_id = getattr(sms, 'id', None) or getattr(getattr(sms, 'data', None), 'id', None) or 'unknown'
+            logger.info(f"SMS sent to {to_phone}: {msg_id}")
 
             return {
                 "success": True,
-                "message_sid": sms.sid,
-                "status": sms.status,
+                "message_sid": msg_id,
+                "status": "sent",
             }
 
         except Exception as e:

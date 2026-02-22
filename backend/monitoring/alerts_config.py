@@ -214,7 +214,7 @@ def get_monitor_configs() -> List[MonitorConfig]:
             query=f"sum(last_1h):sum:mortgage_crm.ai_receptionist.calls{{service:{DD_SERVICE},env:{DD_ENV},outcome:failed}}.as_count() / sum:mortgage_crm.ai_receptionist.calls{{service:{DD_SERVICE},env:{DD_ENV}}}.as_count() * 100 > 10",
             message="AI Receptionist call failure rate is high.\n\n"
                     "Failure rate: {{value}}%\n"
-                    "Check VAPI/Twilio status and call logs.",
+                    "Check VAPI/Telnyx status and call logs.",
             thresholds={"warning": 5, "critical": 10},
             priority=1,
             tags=["team:ai", "category:voice"]
@@ -269,7 +269,7 @@ def get_monitor_configs() -> List[MonitorConfig]:
             query=f"sum(last_1h):sum:mortgage_crm.sms.delivery_failures{{service:{DD_SERVICE},env:{DD_ENV}}}.as_count() > 10",
             message="High SMS delivery failure rate.\n\n"
                     "Failed deliveries: {{value}}\n"
-                    "Check Twilio status and account balance.",
+                    "Check Telnyx status and account balance.",
             thresholds={"warning": 5, "critical": 10},
             priority=2,
             tags=["team:communications", "category:sms"]

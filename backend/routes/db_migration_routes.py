@@ -1704,7 +1704,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
     ):
         """
         Migration: Seed a demo verified caller ID for the current user
-        This allows the Power Dialer to work without actual Twilio verification
+        This allows the Power Dialer to work without actual telephony verification
         """
         try:
             # Check if user already has a verified caller ID
@@ -1721,12 +1721,12 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
                 }
 
             # Create a demo verified caller ID
-            demo_phone = "+18434169589"  # Demo Twilio number
+            demo_phone = "+18434169589"  # Demo telephony number
             caller_id = VerifiedCallerId(
                 user_id=current_user.id,
                 phone_number=demo_phone,
                 friendly_name="Demo Business Line",
-                twilio_sid="demo_sid_for_testing",
+                provider_sid="demo_sid_for_testing",
                 verification_status="verified"
             )
             db.add(caller_id)

@@ -281,13 +281,13 @@ INTEGRATIONS = {
         "features": ["leads", "stages", "notes", "webhooks"]
     },
     # Communication
-    "twilio": {
-        "id": "twilio",
-        "name": "Twilio",
+    "telnyx": {
+        "id": "telnyx",
+        "name": "Telnyx",
         "category": "communication",
         "auth_type": "api_key",
-        "description": "SMS and voice communications via Twilio",
-        "icon": "twilio",
+        "description": "SMS and voice communications via Telnyx",
+        "icon": "telnyx",
         "features": ["sms", "voice", "whatsapp"]
     },
     "ringcentral": {
@@ -1161,10 +1161,10 @@ async def get_webhook_endpoints(
             "secret_header": "Stripe-Signature"
         },
         {
-            "integration": "twilio",
-            "endpoint": f"{base_url}/twilio",
+            "integration": "telnyx",
+            "endpoint": f"{base_url}/telnyx",
             "events": ["sms.received", "call.completed"],
-            "secret_header": "X-Twilio-Signature"
+            "secret_header": "X-Telnyx-Signature"
         }
     ]
 

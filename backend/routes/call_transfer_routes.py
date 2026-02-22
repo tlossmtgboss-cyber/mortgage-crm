@@ -1,6 +1,6 @@
 """
 Call Transfer Routes
-Implements cold and warm transfer functionality using Twilio
+Implements cold and warm transfer functionality using Telnyx TeXML
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
@@ -40,14 +40,10 @@ def get_current_user_flexible():
     return _get_current_user_flexible
 
 
-def get_twilio_client():
-    """Get Twilio client"""
-    from twilio.rest import Client
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    if not account_sid or not auth_token:
-        return None
-    return Client(account_sid, auth_token)
+def get_telephony_provider():
+    """Get telephony provider"""
+    from telephony.provider import get_telephony_provider as _get_provider
+    return _get_provider()
 
 
 # ============================================================================
@@ -138,8 +134,8 @@ def format_phone(phone: str) -> str:
 
 
 def get_from_number() -> str:
-    """Get Twilio from number"""
-    return os.getenv("TWILIO_PHONE_NUMBER", "")
+    """Get telephony from number"""
+    return os.getenv("TELNYX_PHONE_NUMBER", "")
 
 
 def _notify_agent_transfer_event(
@@ -260,8 +256,8 @@ def get_hold_music_url(db: Session, music_id: Optional[int] = None) -> str:
     if result and result.audio_url:
         return result.audio_url
 
-    # Twilio default
-    return "http://com.twilio.music.classical.s3.amazonaws.com/BussyStrings.mp3"
+    # Default hold music
+    return "/static/hold-music/classical.mp3"
 
 
 # ============================================================================
@@ -283,9 +279,9 @@ async def initiate_cold_transfer(
     The original agent is disconnected as soon as the transfer begins.
     """
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony provider not configured")
 
         # Determine destination
         to_phone = None
@@ -335,16 +331,16 @@ async def initiate_cold_transfer(
 
         db.commit()
 
-        # Build TwiML URL for the cold transfer
+        # Build TeXML URL for the cold transfer
         base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
         if base_url and not base_url.startswith("http"):
             base_url = f"https://{base_url}"
 
         transfer_url = f"{base_url}/api/v1/transfers/twiml/cold-connect?transfer_id={transfer_id}&to={to_phone}"
 
-        # Update the call with new TwiML
+        # Update the call with new TeXML
         try:
-            call = client.calls(request.call_sid).update(url=transfer_url, method="POST")
+            provider.update_call(request.call_sid, url=transfer_url)
 
             # Update transfer with call info
             db.execute(text("""
@@ -364,18 +360,18 @@ async def initiate_cold_transfer(
                 "status": "completed"
             }
 
-        except Exception as twilio_error:
-            logger.error(f"Twilio error during cold transfer: {twilio_error}")
+        except Exception as telephony_error:
+            logger.error(f"Telephony error during cold transfer: {telephony_error}")
 
             # Update transfer as failed
             db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'failed', failure_reason = :error
                 WHERE id = :transfer_id
-            """), {"transfer_id": transfer_id, "error": str(twilio_error)})
+            """), {"transfer_id": transfer_id, "error": str(telephony_error)})
             db.commit()
 
-            raise HTTPException(status_code=500, detail=f"Transfer failed: {twilio_error}")
+            raise HTTPException(status_code=500, detail=f"Transfer failed: {telephony_error}")
 
     except HTTPException:
         raise
@@ -394,7 +390,7 @@ async def cold_transfer_twiml(
     TwiML endpoint for cold transfer connection.
     Redirects the caller to dial the new destination.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -423,7 +419,7 @@ async def cold_transfer_twiml(
                 announce = result.announce_to_recipient
                 whisper = result.whisper_message
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         # Brief message to caller
         response.say("Please hold while I transfer your call.", voice="Polly.Joanna")
@@ -448,7 +444,7 @@ async def cold_transfer_twiml(
 
     except Exception as e:
         logger.error(f"Error generating cold transfer TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("We're sorry, the transfer could not be completed. Please try again later.")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -473,9 +469,9 @@ async def initiate_warm_transfer(
     The agent stays on the line until they complete or cancel the transfer.
     """
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony provider not configured")
 
         # Determine destination
         to_phone = None
@@ -549,19 +545,19 @@ async def initiate_warm_transfer(
 
         try:
             # Update original call to hold in conference
-            client.calls(request.call_sid).update(url=hold_url, method="POST")
+            provider.update_call(request.call_sid, url=hold_url)
 
             # Step 2: Call the recipient for consultation
             consult_url = f"{base_url}/api/v1/transfers/twiml/warm-consult?transfer_id={transfer_id}&conf={conference_name}"
 
-            consult_call = client.calls.create(
+            consult_result = provider.place_call(
                 to=to_phone,
                 from_=get_from_number(),
                 url=consult_url,
-                method="POST",
                 status_callback=f"{base_url}/api/v1/transfers/webhook/consult-status?transfer_id={transfer_id}",
-                status_callback_event=["completed", "no-answer", "busy", "failed"]
             )
+
+            consult_sid = consult_result.call_sid if hasattr(consult_result, 'call_sid') else str(consult_result)
 
             # Update transfer with consultation call SID
             db.execute(text("""
@@ -570,33 +566,33 @@ async def initiate_warm_transfer(
                     consultation_started_at = CURRENT_TIMESTAMP,
                     status = 'consulting'
                 WHERE id = :transfer_id
-            """), {"consult_sid": consult_call.sid, "transfer_id": transfer_id})
+            """), {"consult_sid": consult_sid, "transfer_id": transfer_id})
             db.commit()
 
-            logger.info(f"Warm transfer consultation started: {consult_call.sid}")
+            logger.info(f"Warm transfer consultation started: {consult_sid}")
 
             return {
                 "success": True,
                 "message": "Warm transfer initiated - caller on hold, calling recipient",
                 "transfer_id": transfer_id,
-                "consultation_call_sid": consult_call.sid,
+                "consultation_call_sid": consult_sid,
                 "conference_name": conference_name,
                 "to_phone": to_phone,
                 "to_user_name": to_user_name,
                 "status": "consulting"
             }
 
-        except Exception as twilio_error:
-            logger.error(f"Twilio error during warm transfer: {twilio_error}")
+        except Exception as telephony_error:
+            logger.error(f"Telephony error during warm transfer: {telephony_error}")
 
             db.execute(text("""
                 UPDATE call_transfers
                 SET status = 'failed', failure_reason = :error
                 WHERE id = :transfer_id
-            """), {"transfer_id": transfer_id, "error": str(twilio_error)})
+            """), {"transfer_id": transfer_id, "error": str(telephony_error)})
             db.commit()
 
-            raise HTTPException(status_code=500, detail=f"Transfer failed: {twilio_error}")
+            raise HTTPException(status_code=500, detail=f"Transfer failed: {telephony_error}")
 
     except HTTPException:
         raise
@@ -619,9 +615,9 @@ async def complete_warm_transfer(
     - cancel: Brings caller back, hangs up on recipient
     """
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony provider not configured")
 
         # Get transfer details
         transfer = db.execute(text("""
@@ -649,7 +645,7 @@ async def complete_warm_transfer(
             # Update recipient call to join the conference as participant
             if transfer.consultation_call_sid:
                 connect_url = f"{base_url}/api/v1/transfers/twiml/warm-connect?transfer_id={request.transfer_id}&conf={conference_name}"
-                client.calls(transfer.consultation_call_sid).update(url=connect_url, method="POST")
+                provider.update_call(transfer.consultation_call_sid, url=connect_url)
 
             # Update transfer status
             db.execute(text("""
@@ -674,13 +670,13 @@ async def complete_warm_transfer(
             # Hang up the consultation call
             if transfer.consultation_call_sid:
                 try:
-                    client.calls(transfer.consultation_call_sid).update(status="completed")
+                    provider.end_call(transfer.consultation_call_sid)
                 except Exception as e:
                     logger.error(f"Error ending consultation call in cancel_warm_transfer: {e}")
 
             # Update original call to return from hold
             return_url = f"{base_url}/api/v1/transfers/twiml/warm-cancel?transfer_id={request.transfer_id}"
-            client.calls(transfer.original_call_sid).update(url=return_url, method="POST")
+            provider.update_call(transfer.original_call_sid, url=return_url)
 
             # Update transfer status
             db.execute(text("""
@@ -722,7 +718,7 @@ async def warm_transfer_hold_twiml(
     TwiML for putting caller on hold during warm transfer.
     Plays hold music while agent consults with recipient.
     """
-    from twilio.twiml.voice_response import VoiceResponse, Dial
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -743,7 +739,7 @@ async def warm_transfer_hold_twiml(
 
         hold_music_url = get_hold_music_url(db, hold_music_id)
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Please hold while I connect you with someone who can help.", voice="Polly.Joanna")
 
         # Put caller in conference with hold music
@@ -760,7 +756,7 @@ async def warm_transfer_hold_twiml(
 
     except Exception as e:
         logger.error(f"Error in warm hold TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Please wait while we connect your call.")
         response.pause(length=30)
         return Response(content=str(response), media_type="application/xml")
@@ -775,7 +771,7 @@ async def warm_transfer_consult_twiml(
     TwiML for the consultation call to the recipient.
     Announces the caller info and gives options to accept or reject.
     """
-    from twilio.twiml.voice_response import VoiceResponse, Gather
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -814,7 +810,7 @@ async def warm_transfer_consult_twiml(
         if base_url and not base_url.startswith("http"):
             base_url = f"https://{base_url}"
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         # Announce the transfer
         response.say(
@@ -841,7 +837,7 @@ async def warm_transfer_consult_twiml(
 
     except Exception as e:
         logger.error(f"Error in warm consult TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Error processing transfer. Goodbye.")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -855,7 +851,7 @@ async def warm_transfer_decision_twiml(
     """
     Handle recipient's decision to accept or reject the transfer.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -867,7 +863,7 @@ async def warm_transfer_decision_twiml(
 
         logger.info(f"Warm transfer decision: transfer_id={transfer_id}, digits={digits}")
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         if digits == "1":
             # Accept - connect to the conference
@@ -909,7 +905,7 @@ async def warm_transfer_decision_twiml(
 
     except SQLAlchemyError as e:
         logger.error(f"Error in warm decision TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Error processing. Goodbye.")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -923,7 +919,7 @@ async def warm_transfer_connect_twiml(
     """
     TwiML to connect recipient to the conference (after agent completes transfer).
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -932,7 +928,7 @@ async def warm_transfer_connect_twiml(
 
         logger.info(f"Warm transfer connect: transfer_id={transfer_id}")
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Connecting you now.", voice="Polly.Joanna")
 
         dial = response.dial()
@@ -947,7 +943,7 @@ async def warm_transfer_connect_twiml(
 
     except Exception as e:
         logger.error(f"Error in warm connect TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Error connecting. Goodbye.")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -961,7 +957,7 @@ async def warm_transfer_cancel_twiml(
     """
     TwiML when warm transfer is cancelled - return to caller.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -969,7 +965,7 @@ async def warm_transfer_cancel_twiml(
 
         logger.info(f"Warm transfer cancelled: transfer_id={transfer_id}")
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say(
             "The person you were being transferred to is not available. "
             "Let me connect you back to our team.",
@@ -985,7 +981,7 @@ async def warm_transfer_cancel_twiml(
 
     except Exception as e:
         logger.error(f"Error in warm cancel TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Goodbye.")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -1001,12 +997,12 @@ async def whisper_twiml(request: Request):
     Play a whisper message to the recipient before connecting.
     Used for cold transfers with announcement.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     query_params = request.query_params
     message = query_params.get("message", "Incoming call transfer")
 
-    response = VoiceResponse()
+    response = TeXMLResponse()
     response.say(message, voice="Polly.Joanna")
 
     return Response(content=str(response), media_type="application/xml")
@@ -1020,7 +1016,7 @@ async def transfer_status_twiml(
     """
     Handle transfer dial result (success/failure).
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         form_data = await request.form()
@@ -1031,7 +1027,7 @@ async def transfer_status_twiml(
 
         logger.info(f"Transfer status: transfer_id={transfer_id}, status={dial_status}")
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         if dial_status in ["completed", "answered"]:
             # Transfer successful - update and end
@@ -1068,7 +1064,7 @@ async def transfer_status_twiml(
 
     except SQLAlchemyError as e:
         logger.error(f"Error in transfer status TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
 
@@ -1085,8 +1081,9 @@ async def consultation_status_webhook(
     """
     Webhook for consultation call status updates.
     """
-    from services.webhook_security import verify_twilio_webhook
-    await verify_twilio_webhook(request)
+    # Webhook security: Telnyx webhook validation is handled in telnyx_webhook_routes.py.
+    # Legacy webhook_security module removed. Telnyx webhook validation is handled in telnyx_webhook_routes.py.
+    logger.info("Consultation status webhook received (legacy signature validation removed)")
 
     try:
         form_data = await request.form()

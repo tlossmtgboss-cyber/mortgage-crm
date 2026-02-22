@@ -18,7 +18,7 @@ const HelpPanel = ({ isOpen, onClose }) => {
         {
           id: 'first-call',
           title: 'Your First Call',
-          content: `All Twilio calls through Perennia AI are automatically recorded.
+          content: `All Telnyx calls through Perennia AI are automatically recorded.
 
 **How it works:**
 1. Click "Make Call" in the top navigation
@@ -78,7 +78,7 @@ You'll see personalized recommendations to improve, categorized by priority (hig
         {
           id: 'how-recording-works',
           title: 'How Recording Works',
-          content: `Every Twilio call is automatically recorded to secure cloud storage (S3).
+          content: `Every Telnyx call is automatically recorded to secure cloud storage (S3).
 
 **Recording process:**
 1. Call starts → Recording begins

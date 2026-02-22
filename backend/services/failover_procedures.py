@@ -749,7 +749,7 @@ class FailoverProcedureService:
                     "note": "Fully automatic — no manual intervention needed",
                 },
                 "telephony_outage": {
-                    "trigger": "Twilio/Telnyx API errors",
+                    "trigger": "Telnyx API errors",
                     "steps": [
                         {
                             "step": 1,
@@ -764,7 +764,6 @@ class FailoverProcedureService:
                             "step": 2,
                             "action": "Check provider status page",
                             "detail": (
-                                "Twilio: status.twilio.com, "
                                 "Telnyx: status.telnyx.com"
                             ),
                             "est_minutes": 2,

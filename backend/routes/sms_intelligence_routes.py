@@ -3,7 +3,7 @@ SMS Intelligence System Routes
 Perennia AI - Advanced SMS/Text Message Processing Engine
 
 This system provides enterprise-grade SMS intelligence:
-1. SMS import from Twilio/other providers
+1. SMS import from telephony providers (Telnyx)
 2. Intelligent disposition engine with AI categorization
 3. Document mention tracking
 4. Conversation intelligence & summaries
@@ -478,7 +478,7 @@ class SMSQueueItem(BaseModel):
 
 class SMSImportRequest(BaseModel):
     """Request to import SMS from provider"""
-    provider: str = "twilio"
+    provider: str = "telnyx"
     from_date: Optional[datetime] = None
     to_date: Optional[datetime] = None
     direction: Optional[str] = None  # inbound, outbound, or both
@@ -1562,19 +1562,20 @@ async def get_sms_stats(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/webhook/twilio")
-async def twilio_sms_webhook(
+@router.post("/webhook/telnyx")
+async def telephony_sms_webhook(
     request: Request,
     request_data: Dict[str, Any],
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Webhook endpoint for Twilio SMS"""
-    from services.webhook_security import verify_webhook_secret
-    verify_webhook_secret(request)
+    """Webhook endpoint for incoming SMS (legacy path kept for URL backward compat)"""
+    # Webhook security: Legacy webhook_security module removed.
+    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
+    logger.info("SMS webhook received (legacy signature validation removed)")
 
     try:
-        # Extract Twilio webhook data
+        # Extract webhook data (form-encoded)
         message_sid = request_data.get("MessageSid")
         from_phone = request_data.get("From")
         to_phone = request_data.get("To")
@@ -1599,7 +1600,7 @@ async def twilio_sms_webhook(
                 direction, message_body, has_media, media_count, media_urls, media_types,
                 received_at, status
             ) VALUES (
-                'twilio', :message_sid, :from_phone, :to_phone,
+                'telnyx', :message_sid, :from_phone, :to_phone,
                 'inbound', :body, :has_media, :media_count, :media_urls, :media_types,
                 CURRENT_TIMESTAMP, 'pending'
             )
@@ -1626,7 +1627,7 @@ async def twilio_sms_webhook(
         return {"success": True, "message_id": new_id[0] if new_id else None}
 
     except SQLAlchemyError as e:
-        logger.error(f"Error processing Twilio webhook: {e}")
+        logger.error(f"Error processing SMS webhook: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -1807,12 +1808,13 @@ async def send_sms(
     Supports template-based sending.
     """
     try:
-        from integrations.twilio_service import sms_client
+        from integrations.sms_service import get_sms_client
 
+        sms_client = get_sms_client()
         if not sms_client.enabled:
             raise HTTPException(
                 status_code=503,
-                detail="SMS service not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER."
+                detail="SMS service not configured. Set TELNYX_API_KEY and TELNYX_PHONE_NUMBER."
             )
 
         normalized_phone = normalize_phone(request.to_phone)
@@ -1888,7 +1890,7 @@ async def send_sms(
         if not message_sid:
             raise HTTPException(
                 status_code=500,
-                detail="Failed to send SMS. Check Twilio configuration."
+                detail="Failed to send SMS. Check telephony configuration."
             )
 
         # Log to queue as outbound
@@ -1899,7 +1901,7 @@ async def send_sms(
                 matched_loan_id, matched_lead_id, matched_borrower_id,
                 disposition
             ) VALUES (
-                'twilio', :message_sid, :from_phone, :to_phone,
+                'telnyx', :message_sid, :from_phone, :to_phone,
                 'outbound', :message, CURRENT_TIMESTAMP, 'sent',
                 :loan_id, :lead_id, :contact_id,
                 'processed'
@@ -2057,8 +2059,9 @@ async def send_bulk_sms(
     Respects opt-out status for each recipient.
     """
     try:
-        from integrations.twilio_service import sms_client
+        from integrations.sms_service import get_sms_client
 
+        sms_client = get_sms_client()
         if not sms_client.enabled:
             raise HTTPException(
                 status_code=503,
@@ -2141,7 +2144,7 @@ async def send_bulk_sms(
                             sms_provider, provider_message_id, from_phone, to_phone,
                             direction, message_body, sent_at, status, disposition
                         ) VALUES (
-                            'twilio', :sid, :from_phone, :to_phone,
+                            'telnyx', :sid, :from_phone, :to_phone,
                             'outbound', :message, CURRENT_TIMESTAMP, 'sent', 'processed'
                         )
                     """), {

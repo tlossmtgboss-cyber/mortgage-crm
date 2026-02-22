@@ -183,7 +183,7 @@ class RateLimitException(AppException):
 
 
 class ExternalServiceException(AppException):
-    """External service error exception (Twilio, SendGrid, etc.)"""
+    """External service error exception (Telnyx, SendGrid, etc.)"""
 
     def __init__(
         self,

@@ -1993,8 +1993,9 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             lead_id: Associated lead ID (optional)
             loan_id: Associated loan ID (optional)
         """
-        from integrations.twilio_service import sms_client
+        from integrations.sms_service import get_sms_client
 
+        sms_client = get_sms_client()
         phone_number = args.get("phone_number") or args.get("to_number")
         message = args.get("message")
 
@@ -2027,7 +2028,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                         message=message,
                         direction="outbound",
                         status="sent",
-                        twilio_sid=message_sid
+                        provider_message_id=message_sid
                     )
                     db.add(sms_record)
                     db.commit()
@@ -2043,7 +2044,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             else:
                 return {
                     "success": False,
-                    "error": "Failed to send SMS - check Twilio configuration",
+                    "error": "Failed to send SMS - check telephony provider configuration",
                     "phone_number": clean_phone
                 }
         except Exception as e:
@@ -2066,7 +2067,6 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         """
         from sqlalchemy import text
         from database import SessionLocal
-        from integrations.twilio_service import TwilioSMSClient
 
         lead_status = args.get("lead_status", "NEW")
         message_template = args.get("message_template", "")
@@ -2123,7 +2123,8 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     booking_link = f"\n\nBook a time here: https://perenniaai.com/book/{user_result.booking_slug}"
 
             # Initialize SMS client
-            sms_client = TwilioSMSClient()
+            from integrations.sms_service import get_sms_client
+            sms_client = get_sms_client()
 
             for lead in leads:
                 lead_id, first_name, last_name, phone, email, stage = lead

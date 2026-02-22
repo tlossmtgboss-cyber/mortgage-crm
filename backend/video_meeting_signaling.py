@@ -439,7 +439,7 @@ async def get_signaling_status(room_code: str):
 async def get_ice_servers():
     """
     Get ICE servers for WebRTC connections.
-    Priority: 1) Twilio TURN (managed, reliable)
+    Priority: 1) Telnyx TURN (if available)
               2) Self-hosted coturn (if configured)
               3) STUN-only (no relay, will fail behind symmetric NAT)
     """
@@ -451,34 +451,10 @@ async def get_ice_servers():
 
     turn_available = False
 
-    # Priority 1: Twilio TURN (managed, most reliable)
-    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-
-    if twilio_sid and twilio_token:
-        try:
-            from twilio.rest import Client
-            client = Client(twilio_sid, twilio_token)
-            token = await asyncio.wait_for(
-                asyncio.to_thread(client.tokens.create),
-                timeout=5.0
-            )
-
-            if token.ice_servers:
-                for server in token.ice_servers:
-                    ice_server = {"urls": server.urls if isinstance(server.urls, str) else server.urls}
-                    if hasattr(server, 'username') and server.username:
-                        ice_server["username"] = server.username
-                    if hasattr(server, 'credential') and server.credential:
-                        ice_server["credential"] = server.credential
-                    ice_servers.append(ice_server)
-
-                turn_available = True
-                logger.info(f"TURN: Twilio ({len(token.ice_servers)} servers)")
-        except asyncio.TimeoutError:
-            logger.error("Twilio TURN token creation timed out after 5s")
-        except Exception as e:
-            logger.error(f"Twilio TURN failed: {e}")
+    # Priority 1: Telnyx TURN
+    # Telnyx does not provide a standalone TURN token service.
+    # Skip to self-hosted coturn or configure a dedicated TURN provider.
+    logger.debug("Checking coturn / STUN-only fallback")
 
     # Priority 2: Self-hosted coturn (if configured)
     if not turn_available:
@@ -511,7 +487,7 @@ async def get_ice_servers():
     if not turn_available:
         logger.warning(
             "No TURN server configured. Video calls will fail behind symmetric NAT/firewalls. "
-            "Set TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN or COTURN_HOST/COTURN_USERNAME/COTURN_PASSWORD."
+            "Set COTURN_HOST/COTURN_USERNAME/COTURN_PASSWORD for reliable video calls."
         )
 
     return {
@@ -523,14 +499,14 @@ async def get_ice_servers():
 @router.get("/ice-servers/health")
 async def ice_servers_health():
     """Check TURN server availability for monitoring."""
-    twilio_ok = bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN"))
+    telnyx_ok = bool(os.getenv("TELNYX_API_KEY"))
     coturn_ok = bool(os.getenv("COTURN_HOST") and os.getenv("COTURN_USERNAME"))
 
-    status = "healthy" if (twilio_ok or coturn_ok) else "degraded"
+    status = "healthy" if (telnyx_ok or coturn_ok) else "degraded"
 
     return {
         "status": status,
-        "twilio_configured": twilio_ok,
+        "telnyx_configured": telnyx_ok,
         "coturn_configured": coturn_ok,
-        "recommendation": None if (twilio_ok or coturn_ok) else "Configure TWILIO or COTURN credentials for reliable video calls"
+        "recommendation": None if (telnyx_ok or coturn_ok) else "Configure TELNYX or COTURN credentials for reliable video calls"
     }

@@ -202,8 +202,8 @@ class IntegrationsAgent(SpecializedAgent):
                 "features": ["transactional_email", "marketing_email"]
             },
             {
-                "id": "twilio",
-                "name": "Twilio",
+                "id": "telnyx",
+                "name": "Telnyx",
                 "category": "sms",
                 "status": "connected",
                 "features": ["sms", "voice"]

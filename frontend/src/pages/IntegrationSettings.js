@@ -328,7 +328,6 @@ const IntegrationSettings = () => {
     const domains = {
       salesforce: 'salesforce.com',
       hubspot: 'hubspot.com',
-      twilio: 'twilio.com',
       ringcentral: 'ringcentral.com',
       slack: 'slack.com',
       google_calendar: 'calendar.google.com',
@@ -556,17 +555,6 @@ const IntegrationSettings = () => {
                       placeholder="Enter API key"
                     />
                   </div>
-                  {selectedIntegration.id === 'twilio' && (
-                    <div className="form-group">
-                      <label>API Secret / Auth Token</label>
-                      <input
-                        type="password"
-                        value={credentials.api_secret || ''}
-                        onChange={(e) => setCredentials({ ...credentials, api_secret: e.target.value })}
-                        placeholder="Enter API secret"
-                      />
-                    </div>
-                  )}
                   <button className="btn-primary" onClick={handleSaveCredentials}>
                     Save Credentials
                   </button>

@@ -168,7 +168,7 @@ function VerizonTest() {
           </div>
           <div className="status-card">
             <div className="status-icon warning">⚠️</div>
-            <h3>Twilio SMS API</h3>
+            <h3>Telnyx SMS API</h3>
             <p>Advanced features</p>
             <span className="status-badge inactive">Not Configured</span>
           </div>
@@ -245,25 +245,25 @@ function VerizonTest() {
         </div>
       </div>
 
-      {/* Twilio Setup */}
-      <div className="twilio-setup-section">
-        <h2>🚀 Advanced: Twilio Integration</h2>
+      {/* Telnyx Setup */}
+      <div className="telnyx-setup-section">
+        <h2>🚀 Advanced: Telnyx Integration</h2>
         <p>
           For advanced SMS features (bulk messaging, templates, tracking), you can integrate
-          with Twilio. Your CRM is already Twilio-ready!
+          with Telnyx. Your CRM is already Telnyx-ready!
         </p>
-        <div className="twilio-benefits">
-          <h3>Twilio Benefits:</h3>
+        <div className="telnyx-benefits">
+          <h3>Telnyx Benefits:</h3>
           <ul>
             <li>✅ Send SMS directly from CRM without using your phone</li>
             <li>✅ Bulk SMS campaigns to multiple leads</li>
             <li>✅ SMS templates and automation</li>
             <li>✅ Track delivery and responses</li>
-            <li>✅ Keep your Verizon number (port to Twilio)</li>
+            <li>✅ Keep your Verizon number (port to Telnyx)</li>
           </ul>
         </div>
-        <button className="btn-setup-twilio" onClick={() => window.open('https://www.twilio.com/try-twilio', '_blank')}>
-          Get Started with Twilio →
+        <button className="btn-setup-telnyx" onClick={() => window.open('https://telnyx.com/sign-up', '_blank')}>
+          Get Started with Telnyx →
         </button>
       </div>
     </div>

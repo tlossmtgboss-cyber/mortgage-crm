@@ -5,14 +5,14 @@ PERENNIA AI - CALL HANDLER
 Integration layer between AudioProcessor and voice_routes.py
 
 Provides:
-- TwilioStreamHandler: Process Twilio WebSocket media streams
+- TelnyxStreamHandler: Process Telnyx WebSocket media streams
 - RealtimeConversation: Manage full conversation flow
 - CallContext: Track call state and metadata
 
 Integrates with:
 - audio_processor.py: STT/TTS processing
 - voice_routes.py: WebSocket endpoints
-- twilio_voice_service.py: Twilio API calls
+- telnyx_voice_service.py: Telnyx API calls
 
 ================================================================================
 """
@@ -159,12 +159,12 @@ class CallContext:
 
 
 # =============================================================================
-# TWILIO STREAM HANDLER
+# TELNYX STREAM HANDLER
 # =============================================================================
 
-class TwilioStreamHandler:
+class TelnyxStreamHandler:
     """
-    Handle Twilio Media Stream WebSocket messages.
+    Handle Telnyx Media Stream WebSocket messages.
 
     Processes incoming audio, manages state, and sends responses.
     """
@@ -206,10 +206,10 @@ class TwilioStreamHandler:
 
     async def handle_message(self, message: str) -> Optional[Dict[str, Any]]:
         """
-        Handle incoming WebSocket message from Twilio.
+        Handle incoming WebSocket message from Telnyx.
 
         Args:
-            message: JSON message from Twilio
+            message: JSON message from Telnyx
 
         Returns:
             Optional response message to send back
@@ -227,17 +227,17 @@ class TwilioStreamHandler:
             elif event == "mark":
                 return await self._handle_mark(data)
             elif event == "connected":
-                logger.info("Twilio stream connected")
+                logger.info("Telnyx stream connected")
                 return None
             else:
-                logger.debug(f"Unknown Twilio event: {event}")
+                logger.debug(f"Unknown Telnyx event: {event}")
                 return None
 
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON from Twilio: {e}")
+            logger.error(f"Invalid JSON from Telnyx: {e}")
             return None
         except Exception as e:
-            logger.error(f"Error handling Twilio message: {e}")
+            logger.error(f"Error handling Telnyx message: {e}")
             return None
 
     async def _handle_start(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -333,7 +333,7 @@ class TwilioStreamHandler:
 
         try:
             # Transcribe the buffered audio
-            transcript = await self.processor.transcribe_twilio_audio(
+            transcript = await self.processor.transcribe_audio(
                 bytes(self.context.audio_buffer)
             )
 
@@ -369,7 +369,7 @@ class TwilioStreamHandler:
         greeting = self._get_greeting_text()
 
         try:
-            audio = await self.processor.synthesize_for_twilio(greeting)
+            audio = await self.processor.synthesize_for_telephony(greeting)
             self.context.add_message("assistant", greeting)
             self.context.is_ai_speaking = True
 
@@ -395,7 +395,7 @@ class TwilioStreamHandler:
             return None
 
         try:
-            audio = await self.processor.synthesize_for_twilio(response_text)
+            audio = await self.processor.synthesize_for_telephony(response_text)
             self.context.add_message("assistant", response_text)
             self.context.is_ai_speaking = True
 
@@ -411,7 +411,7 @@ class TwilioStreamHandler:
             return None
 
     def _create_media_response(self, audio: bytes) -> Dict[str, Any]:
-        """Create Twilio media message with audio."""
+        """Create Telnyx media message with audio."""
         return {
             "event": "media",
             "streamSid": self.context.stream_sid if self.context else None,
@@ -582,7 +582,7 @@ class RealtimeConversation:
     """
     Manage a full real-time conversation.
 
-    Coordinates between Twilio WebSocket, audio processor, and
+    Coordinates between Telnyx WebSocket, audio processor, and
     conversation engine.
     """
 
@@ -596,7 +596,7 @@ class RealtimeConversation:
         self.processor = audio_processor or AudioProcessor()
         self.conversation_engine = conversation_engine
 
-        self.handler = TwilioStreamHandler(
+        self.handler = TelnyxStreamHandler(
             self.processor,
             on_transcript=self._on_transcript,
             on_response=self._on_response,

@@ -6,7 +6,7 @@ and document inputs to enable flexible integration with various
 audio/transcription providers.
 
 Supported Audio Sources:
-- Twilio (recordings)
+- Telnyx (recordings)
 - Vonage/Nexmo
 - Amazon Connect
 - Direct file upload (wav, mp3, m4a)
@@ -27,11 +27,11 @@ Usage:
         parse_audio_source,
     )
 
-    # Create audio source from Twilio
+    # Create audio source from Telnyx
     source = AudioSource(
-        provider="twilio",
-        recording_url="https://api.twilio.com/recordings/...",
-        call_sid="CA123...",
+        provider="telnyx",
+        recording_url="https://api.telnyx.com/recordings/...",
+        call_sid="call_control_123...",
     )
 
     # Configure transcription
@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 
 class AudioProvider(str, Enum):
     """Supported audio/telephony providers."""
-    TWILIO = "twilio"
+    TELNYX = "telnyx"
     VONAGE = "vonage"
     AMAZON_CONNECT = "amazon_connect"
     RINGCENTRAL = "ringcentral"
@@ -113,7 +113,7 @@ class AudioSource:
     Represents an audio source for transcription.
 
     Attributes:
-        provider: Audio/telephony provider (twilio, vonage, etc.)
+        provider: Audio/telephony provider (telnyx, vonage, etc.)
         recording_url: URL to fetch the audio recording
         call_sid: Provider-specific call identifier
         recording_sid: Provider-specific recording identifier
@@ -151,36 +151,31 @@ class AudioSource:
         }
 
     @classmethod
-    def from_twilio(
+    def from_telnyx(
         cls,
         recording_url: str,
         call_sid: str,
         recording_sid: Optional[str] = None,
-        account_sid: Optional[str] = None,
-        auth_token: Optional[str] = None,
+        api_key: Optional[str] = None,
         **kwargs,
     ) -> "AudioSource":
-        """Create AudioSource from Twilio recording."""
+        """Create AudioSource from Telnyx recording."""
         auth_credentials = None
-        if account_sid and auth_token:
+        if api_key:
             auth_credentials = {
-                "username": account_sid,
-                "password": auth_token,
+                "api_key": api_key,
             }
 
         return cls(
-            provider=AudioProvider.TWILIO.value,
+            provider=AudioProvider.TELNYX.value,
             recording_url=recording_url,
             call_sid=call_sid,
             recording_sid=recording_sid,
             audio_format="wav",
-            sample_rate=8000,  # Twilio default
-            auth_type="basic" if auth_credentials else None,
+            sample_rate=8000,  # Telnyx default
+            auth_type="bearer" if auth_credentials else None,
             auth_credentials=auth_credentials,
-            metadata={
-                "account_sid": account_sid,
-                **kwargs,
-            },
+            metadata=kwargs,
         )
 
     @classmethod
@@ -492,23 +487,23 @@ class DocumentInput:
 # Webhook Payload Parsers
 # =============================================================================
 
-def parse_twilio_webhook(payload: Dict[str, Any]) -> AudioSource:
+def parse_telnyx_webhook(payload: Dict[str, Any]) -> AudioSource:
     """
-    Parse Twilio recording webhook payload.
+    Parse Telnyx recording webhook payload.
 
-    Twilio sends webhooks when recordings are completed:
-    https://www.twilio.com/docs/voice/api/recording#recordingstatuscallback
+    Telnyx sends webhooks when recordings are completed.
+    Supports both TeXML (TwiML-compatible) and native Telnyx payload formats.
     """
-    return AudioSource.from_twilio(
-        recording_url=payload.get("RecordingUrl"),
-        call_sid=payload.get("CallSid"),
-        recording_sid=payload.get("RecordingSid"),
-        duration_seconds=int(payload.get("RecordingDuration", 0)),
+    return AudioSource.from_telnyx(
+        recording_url=payload.get("RecordingUrl") or payload.get("recording_url"),
+        call_sid=payload.get("CallSid") or payload.get("call_control_id"),
+        recording_sid=payload.get("RecordingSid") or payload.get("recording_id"),
+        duration_seconds=int(payload.get("RecordingDuration", 0) or payload.get("duration", 0)),
         metadata={
-            "from": payload.get("From"),
-            "to": payload.get("To"),
-            "direction": payload.get("Direction"),
-            "status": payload.get("RecordingStatus"),
+            "from": payload.get("From") or payload.get("from"),
+            "to": payload.get("To") or payload.get("to"),
+            "direction": payload.get("Direction") or payload.get("direction"),
+            "status": payload.get("RecordingStatus") or payload.get("status"),
         },
     )
 
@@ -564,7 +559,7 @@ __all__ = [
     "TranscriptionResult",
     "DocumentInput",
     # Parsers
-    "parse_twilio_webhook",
+    "parse_telnyx_webhook",
     "parse_vonage_webhook",
     "parse_generic_webhook",
 ]

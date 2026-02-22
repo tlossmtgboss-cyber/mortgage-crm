@@ -93,7 +93,7 @@ def register_health_routes(app, get_db, **kwargs):
     - **Backend:** Python/FastAPI with async processing
     - **Database:** PostgreSQL with advanced analytics views
     - **AI/ML:** LangChain + Anthropic Claude for natural language processing
-    - **Integrations:** Microsoft Graph API, Twilio, various LOS systems
+    - **Integrations:** Microsoft Graph API, Telnyx, various LOS systems
     - **Mobile:** React Native/Expo (cross-platform iOS/Android)
     - **Deployment:** Railway with automatic scaling
 
@@ -537,7 +537,7 @@ def register_health_routes(app, get_db, **kwargs):
                 <li><strong>Backend:</strong> Python/FastAPI with async processing</li>
                 <li><strong>Database:</strong> PostgreSQL with advanced analytics views</li>
                 <li><strong>AI/ML:</strong> LangChain + Anthropic Claude for natural language processing</li>
-                <li><strong>Integrations:</strong> Microsoft Graph API, Twilio, various LOS systems</li>
+                <li><strong>Integrations:</strong> Microsoft Graph API, Telnyx, various LOS systems</li>
                 <li><strong>Mobile:</strong> React Native/Expo (cross-platform iOS/Android)</li>
                 <li><strong>Deployment:</strong> Railway with automatic scaling</li>
             </ul>

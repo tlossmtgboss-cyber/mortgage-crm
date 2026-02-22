@@ -2030,7 +2030,7 @@ const AdminPanel = () => {
               <div className="settings-card">
                 <h3>Integrations</h3>
                 <div className="integration-item">
-                  <span>Twilio (SMS/Video)</span>
+                  <span>Telnyx (SMS/Voice)</span>
                   <span className="status active">Connected</span>
                 </div>
                 <div className="integration-item">

@@ -548,7 +548,7 @@ async def ivr_menu_twiml(
     Generate TwiML for IVR menu.
     This is the main entry point for IVR calls.
     """
-    from twilio.twiml.voice_response import VoiceResponse, Gather
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -571,7 +571,7 @@ async def ivr_menu_twiml(
 
         if not menu:
             # No IVR configured - go to AI receptionist
-            response = VoiceResponse()
+            response = TeXMLResponse()
             response.say("Welcome. Please hold while I connect you.", voice="Polly.Joanna")
             response.redirect("/api/v1/voice/incoming")
             return Response(content=str(response), media_type="application/xml")
@@ -588,7 +588,7 @@ async def ivr_menu_twiml(
         if base_url and not base_url.startswith("http"):
             base_url = f"https://{base_url}"
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         # Create gather for DTMF input
         gather = response.gather(
@@ -623,7 +623,7 @@ async def ivr_menu_twiml(
 
     except Exception as e:
         logger.error(f"Error generating IVR TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("We're experiencing technical difficulties. Please try again later.", voice="Polly.Joanna")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -638,7 +638,7 @@ async def ivr_handle_input_twiml(
     Handle DTMF input from IVR menu.
     Routes to appropriate action based on digit pressed.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -661,7 +661,7 @@ async def ivr_handle_input_twiml(
             if base_url and not base_url.startswith("http"):
                 base_url = f"https://{base_url}"
 
-            response = VoiceResponse()
+            response = TeXMLResponse()
             response.say("Sorry, I didn't understand that selection.", voice="Polly.Joanna")
             response.redirect(f"{base_url}/api/v1/ivr/twiml/menu?menu_id={menu_id}&attempt={attempt + 1}")
             return Response(content=str(response), media_type="application/xml")
@@ -679,7 +679,7 @@ async def ivr_handle_input_twiml(
             if base_url and not base_url.startswith("http"):
                 base_url = f"https://{base_url}"
 
-            response = VoiceResponse()
+            response = TeXMLResponse()
             response.say("That is not a valid option. Please try again.", voice="Polly.Joanna")
             response.redirect(f"{base_url}/api/v1/ivr/twiml/menu?menu_id={menu_id}&attempt={attempt + 1}")
             return Response(content=str(response), media_type="application/xml")
@@ -689,7 +689,7 @@ async def ivr_handle_input_twiml(
 
     except Exception as e:
         logger.error(f"Error handling IVR input: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("An error occurred. Please try again later.", voice="Polly.Joanna")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -703,14 +703,14 @@ async def ivr_timeout_twiml(
     """
     Handle IVR timeout after max attempts.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
         menu_id = query_params.get("menu_id")
         action = query_params.get("action", "transfer_receptionist")
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         if action == "voicemail":
             response.say("Please leave a message after the beep.", voice="Polly.Joanna")
@@ -733,16 +733,16 @@ async def ivr_timeout_twiml(
 
     except Exception as e:
         logger.error(f"Error in IVR timeout: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
 
 
 async def execute_ivr_action(option, db: Session):
     """Execute the action for an IVR option"""
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
-    response = VoiceResponse()
+    response = TeXMLResponse()
     base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
     if base_url and not base_url.startswith("http"):
         base_url = f"https://{base_url}"
@@ -772,7 +772,7 @@ async def execute_ivr_action(option, db: Session):
             phone = user_phone.mobile_phone or user_phone.work_phone or user_phone.phone
             if phone:
                 response.say("Connecting you now.", voice="Polly.Joanna")
-                dial = response.dial(caller_id=os.getenv("TWILIO_PHONE_NUMBER", ""))
+                dial = response.dial(caller_id=os.getenv("TELNYX_PHONE_NUMBER", ""))
                 dial.number(phone)
             else:
                 response.say("That extension is not available. Please try again later.", voice="Polly.Joanna")
@@ -783,7 +783,7 @@ async def execute_ivr_action(option, db: Session):
 
     elif action_type == "transfer_phone":
         response.say("Connecting you now.", voice="Polly.Joanna")
-        dial = response.dial(caller_id=os.getenv("TWILIO_PHONE_NUMBER", ""))
+        dial = response.dial(caller_id=os.getenv("TELNYX_PHONE_NUMBER", ""))
         dial.number(action_target)
 
     elif action_type == "transfer_queue":

@@ -7,18 +7,18 @@ const API_BASE = '/api/v1/hold-music';
 const SOURCE_LABELS = {
   url: 'Custom URL',
   upload: 'Uploaded File',
-  twilio_default: 'Twilio Default'
+  telnyx_default: 'Telnyx Default'
 };
 
 const SOURCE_ICONS = {
   url: '🔗',
   upload: '📤',
-  twilio_default: '🎵'
+  telnyx_default: '🎵'
 };
 
 const HoldMusicDashboard = () => {
   const [musicList, setMusicList] = useState([]);
-  const [twilioDefaults, setTwilioDefaults] = useState([]);
+  const [telnyxDefaults, setTelnyxDefaults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedMusic, setSelectedMusic] = useState(null);
@@ -40,21 +40,21 @@ const HoldMusicDashboard = () => {
     }
   }, []);
 
-  const fetchTwilioDefaults = useCallback(async () => {
+  const fetchTelnyxDefaults = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/twilio-defaults`);
-      if (!response.ok) throw new Error('Failed to fetch Twilio defaults');
+      const response = await fetch(`${API_BASE}/telnyx-defaults`);
+      if (!response.ok) throw new Error('Failed to fetch Telnyx defaults');
       const data = await response.json();
-      setTwilioDefaults(data.options || []);
+      setTelnyxDefaults(data.options || []);
     } catch (err) {
-      console.error('Error fetching Twilio defaults:', err);
+      console.error('Error fetching Telnyx defaults:', err);
     }
   }, []);
 
   useEffect(() => {
     fetchMusicList();
-    fetchTwilioDefaults();
-  }, [fetchMusicList, fetchTwilioDefaults]);
+    fetchTelnyxDefaults();
+  }, [fetchMusicList, fetchTelnyxDefaults]);
 
   const handleCreate = async (musicData) => {
     try {
@@ -191,8 +191,8 @@ const HoldMusicDashboard = () => {
           <div className="hm-stat-label">Active Tracks</div>
         </div>
         <div className="hm-stat-card">
-          <div className="hm-stat-value">{musicList.filter(m => m.source_type === 'twilio_default').length}</div>
-          <div className="hm-stat-label">Twilio Defaults</div>
+          <div className="hm-stat-value">{musicList.filter(m => m.source_type === 'telnyx_default').length}</div>
+          <div className="hm-stat-label">Telnyx Defaults</div>
         </div>
         <div className="hm-stat-card">
           <div className="hm-stat-value">{musicList.filter(m => m.source_type === 'url').length}</div>
@@ -241,21 +241,21 @@ const HoldMusicDashboard = () => {
         )}
       </div>
 
-      {/* Twilio Defaults Section */}
+      {/* Telnyx Defaults Section */}
       <div className="hm-section">
-        <h2>Twilio Default Library</h2>
-        <p className="hm-section-desc">Pre-built hold music options from Twilio - no hosting required.</p>
-        <div className="hm-twilio-grid">
-          {twilioDefaults.map(track => (
-            <TwilioDefaultCard
+        <h2>Telnyx Default Library</h2>
+        <p className="hm-section-desc">Pre-built hold music options from Telnyx - no hosting required.</p>
+        <div className="hm-telnyx-grid">
+          {telnyxDefaults.map(track => (
+            <TelnyxDefaultCard
               key={track.key}
               track={track}
-              isAdded={musicList.some(m => m.twilio_music_name === track.key)}
+              isAdded={musicList.some(m => m.telnyx_music_name === track.key)}
               onAdd={() => {
                 setShowCreateModal(true);
-                // Pre-fill with Twilio default
+                // Pre-fill with Telnyx default
                 setTimeout(() => {
-                  const event = new CustomEvent('prefill-twilio', { detail: track });
+                  const event = new CustomEvent('prefill-telnyx', { detail: track });
                   window.dispatchEvent(event);
                 }, 100);
               }}
@@ -267,7 +267,7 @@ const HoldMusicDashboard = () => {
       {/* Create Modal */}
       {showCreateModal && (
         <CreateMusicModal
-          twilioDefaults={twilioDefaults}
+          telnyxDefaults={telnyxDefaults}
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreate}
         />
@@ -354,8 +354,8 @@ const MusicCard = ({ music, isPlaying, onPlay, onEdit, onDelete, onSetDefault, o
   );
 };
 
-// Twilio Default Card
-const TwilioDefaultCard = ({ track, isAdded, onAdd }) => {
+// Telnyx Default Card
+const TelnyxDefaultCard = ({ track, isAdded, onAdd }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
 
@@ -370,17 +370,17 @@ const TwilioDefaultCard = ({ track, isAdded, onAdd }) => {
   };
 
   return (
-    <div className={`hm-twilio-card ${isAdded ? 'added' : ''}`}>
+    <div className={`hm-telnyx-card ${isAdded ? 'added' : ''}`}>
       <audio
         ref={audioRef}
         src={track.url}
         onEnded={() => setIsPlaying(false)}
       />
-      <div className="hm-twilio-info">
-        <span className="hm-twilio-icon">🎵</span>
-        <span className="hm-twilio-name">{track.name}</span>
+      <div className="hm-telnyx-info">
+        <span className="hm-telnyx-icon">🎵</span>
+        <span className="hm-telnyx-name">{track.name}</span>
       </div>
-      <div className="hm-twilio-actions">
+      <div className="hm-telnyx-actions">
         <button
           className={`hm-btn-play-small ${isPlaying ? 'playing' : ''}`}
           onClick={handlePlayPreview}
@@ -388,7 +388,7 @@ const TwilioDefaultCard = ({ track, isAdded, onAdd }) => {
           {isPlaying ? '⏹️' : '▶️'}
         </button>
         {isAdded ? (
-          <span className="hm-twilio-added">✓ Added</span>
+          <span className="hm-telnyx-added">✓ Added</span>
         ) : (
           <button className="hm-btn hm-btn-small hm-btn-secondary" onClick={onAdd}>
             + Add
@@ -400,13 +400,13 @@ const TwilioDefaultCard = ({ track, isAdded, onAdd }) => {
 };
 
 // Create Music Modal
-const CreateMusicModal = ({ twilioDefaults, onClose, onCreate }) => {
+const CreateMusicModal = ({ telnyxDefaults, onClose, onCreate }) => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    source_type: 'twilio_default',
+    source_type: 'telnyx_default',
     audio_url: '',
-    twilio_music_name: 'classical',
+    telnyx_music_name: 'classical',
     duration_seconds: null,
     is_default: false,
     comfort_messages: [],
@@ -415,20 +415,20 @@ const CreateMusicModal = ({ twilioDefaults, onClose, onCreate }) => {
   const [newComfortMsg, setNewComfortMsg] = useState('');
   const [error, setError] = useState(null);
 
-  // Listen for prefill events from Twilio default cards
+  // Listen for prefill events from Telnyx default cards
   useEffect(() => {
     const handlePrefill = (e) => {
       const track = e.detail;
       setFormData(prev => ({
         ...prev,
         name: track.name,
-        source_type: 'twilio_default',
-        twilio_music_name: track.key
+        source_type: 'telnyx_default',
+        telnyx_music_name: track.key
       }));
     };
 
-    window.addEventListener('prefill-twilio', handlePrefill);
-    return () => window.removeEventListener('prefill-twilio', handlePrefill);
+    window.addEventListener('prefill-telnyx', handlePrefill);
+    return () => window.removeEventListener('prefill-telnyx', handlePrefill);
   }, []);
 
   const handleSubmit = (e) => {
@@ -495,16 +495,16 @@ const CreateMusicModal = ({ twilioDefaults, onClose, onCreate }) => {
             <div className="hm-form-group">
               <label>Source Type</label>
               <div className="hm-source-options">
-                <label className={`hm-source-option ${formData.source_type === 'twilio_default' ? 'selected' : ''}`}>
+                <label className={`hm-source-option ${formData.source_type === 'telnyx_default' ? 'selected' : ''}`}>
                   <input
                     type="radio"
                     name="source_type"
-                    value="twilio_default"
-                    checked={formData.source_type === 'twilio_default'}
+                    value="telnyx_default"
+                    checked={formData.source_type === 'telnyx_default'}
                     onChange={(e) => setFormData({ ...formData, source_type: e.target.value })}
                   />
                   <span className="hm-source-icon">🎵</span>
-                  <span>Twilio Default</span>
+                  <span>Telnyx Default</span>
                 </label>
                 <label className={`hm-source-option ${formData.source_type === 'url' ? 'selected' : ''}`}>
                   <input
@@ -520,14 +520,14 @@ const CreateMusicModal = ({ twilioDefaults, onClose, onCreate }) => {
               </div>
             </div>
 
-            {formData.source_type === 'twilio_default' && (
+            {formData.source_type === 'telnyx_default' && (
               <div className="hm-form-group">
-                <label>Twilio Music</label>
+                <label>Telnyx Music</label>
                 <select
-                  value={formData.twilio_music_name}
-                  onChange={(e) => setFormData({ ...formData, twilio_music_name: e.target.value })}
+                  value={formData.telnyx_music_name}
+                  onChange={(e) => setFormData({ ...formData, telnyx_music_name: e.target.value })}
                 >
-                  {twilioDefaults.map(track => (
+                  {telnyxDefaults.map(track => (
                     <option key={track.key} value={track.key}>{track.name}</option>
                   ))}
                 </select>

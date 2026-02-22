@@ -206,9 +206,7 @@ const ClientPortalSettings = lazyRetry(() => import('./pages/ClientPortalSetting
 const CommunicationPreferences = lazyRetry(() => import('./pages/CommunicationPreferences'));
 const IntegrationSettings = lazyRetry(() => import('./pages/IntegrationSettings'));
 const SalesforceIntegrationPage = lazyRetry(() => import('./pages/SalesforceIntegrationPage'));
-const TwilioSetup = lazyRetry(() => import('./pages/settings/TwilioSetup'));
 const StateRecordingRules = lazyRetry(() => import('./pages/settings/StateRecordingRules'));
-const TwilioStatusCallbacks = lazyRetry(() => import('./pages/settings/TwilioStatusCallbacks'));
 const QuoteLanguagePresets = lazyRetry(() => import('./pages/settings/QuoteLanguagePresets'));
 const CalculatorSettings = lazyRetry(() => import('./pages/settings/CalculatorSettings'));
 const BillingSettings = lazyRetry(() => import('./pages/settings/BillingSettings'));
@@ -2663,28 +2661,6 @@ function App() {
             }
           />
           <Route
-            path="/settings/twilio"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><TwilioSetup /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-          <Route
             path="/settings/state-recording-rules"
             element={
               <PrivateRoute>
@@ -2700,28 +2676,6 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><StateRecordingRules /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/settings/twilio-status-callbacks"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><TwilioStatusCallbacks /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

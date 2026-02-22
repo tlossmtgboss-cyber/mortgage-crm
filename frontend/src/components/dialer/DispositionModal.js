@@ -39,7 +39,7 @@ const REQUIRES_FOLLOW_UP = [
  * @param {string} [props.callLogId] - Call log ID (for click-to-dial)
  * @param {string} props.contactName - Contact name
  * @param {number} [props.callDuration] - Call duration in seconds
- * @param {string} [props.callOutcome] - Call outcome from Twilio
+ * @param {string} [props.callOutcome] - Call outcome from Telnyx
  * @param {function} props.onClose - Close modal callback
  * @param {function} [props.onSaved] - Callback when disposition is saved
  */

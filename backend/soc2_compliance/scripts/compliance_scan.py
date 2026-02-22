@@ -1,0 +1,363 @@
+"""
+Automated Compliance Scan — Run daily to verify control effectiveness.
+SOC 2 Criteria: CC3 (Risk Assessment), CC4 (Monitoring)
+
+This script runs a series of automated checks against your database and
+infrastructure to verify SOC 2 controls are operating effectively.
+
+Schedule: Daily via cron or task scheduler
+Usage: python -m soc2_compliance.scripts.compliance_scan
+"""
+import asyncio
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, List
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..constants import ComplianceCheckStatus, SeverityLevel
+
+logger = logging.getLogger("soc2.compliance_scan")
+
+
+class ComplianceScanner:
+    """Run automated SOC 2 compliance checks."""
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.results: List[Dict] = []
+
+    async def run_all_checks(self) -> List[Dict]:
+        """Run all compliance checks and store results."""
+        checks = [
+            self.check_audit_logging_active,
+            self.check_failed_login_thresholds,
+            self.check_orphaned_sessions,
+            self.check_encryption_coverage,
+            self.check_change_approval_compliance,
+            self.check_incident_response_times,
+            self.check_data_retention_compliance,
+            self.check_pii_access_patterns,
+            self.check_api_key_rotation,
+            self.check_high_severity_unresolved,
+        ]
+
+        for check_fn in checks:
+            try:
+                result = await check_fn()
+                self.results.append(result)
+                await self._store_result(result)
+            except Exception as e:
+                error_result = {
+                    "check_name": check_fn.__name__,
+                    "check_category": "system",
+                    "status": ComplianceCheckStatus.ERROR,
+                    "details": f"Check failed with error: {str(e)}",
+                    "trust_criteria": None,
+                }
+                self.results.append(error_result)
+                await self._store_result(error_result)
+
+        passed = sum(1 for r in self.results if r["status"] == ComplianceCheckStatus.PASS)
+        total = len(self.results)
+        logger.info(f"Compliance scan complete: {passed}/{total} checks passed")
+
+        return self.results
+
+    async def check_audit_logging_active(self) -> Dict:
+        """CC4: Verify audit logging is capturing events."""
+        result = await self.db.execute(
+            text("""
+                SELECT COUNT(*) FROM soc2_audit_log
+                WHERE timestamp > NOW() - INTERVAL '24 hours'
+            """)
+        )
+        count = result.fetchone()[0]
+
+        return {
+            "check_name": "Audit Logging Active",
+            "check_category": "CC4_monitoring",
+            "trust_criteria": "CC4",
+            "status": ComplianceCheckStatus.PASS if count > 0 else ComplianceCheckStatus.FAIL,
+            "details": f"{count} audit events in last 24 hours",
+            "evidence": {"event_count_24h": count},
+            "remediation_required": count == 0,
+            "remediation_notes": "No audit events detected. Verify middleware is installed." if count == 0 else None,
+        }
+
+    async def check_failed_login_thresholds(self) -> Dict:
+        """CC6: Check for excessive failed login attempts."""
+        result = await self.db.execute(
+            text("""
+                SELECT
+                    ip_address,
+                    COUNT(*) as attempts,
+                    COUNT(DISTINCT attempted_email) as unique_accounts
+                FROM soc2_access_event
+                WHERE success = FALSE
+                  AND timestamp > NOW() - INTERVAL '24 hours'
+                GROUP BY ip_address
+                HAVING COUNT(*) > 20
+                ORDER BY attempts DESC
+                LIMIT 10
+            """)
+        )
+        suspicious_ips = [dict(row._mapping) for row in result.fetchall()]
+
+        return {
+            "check_name": "Failed Login Threshold",
+            "check_category": "CC6_access_controls",
+            "trust_criteria": "CC6",
+            "status": ComplianceCheckStatus.PASS if not suspicious_ips else ComplianceCheckStatus.WARNING,
+            "details": f"{len(suspicious_ips)} IPs with >20 failed attempts in 24h",
+            "evidence": {"suspicious_ips": suspicious_ips},
+            "remediation_required": len(suspicious_ips) > 0,
+        }
+
+    async def check_orphaned_sessions(self) -> Dict:
+        """CC6: Check for sessions that should have expired."""
+        result = await self.db.execute(
+            text("""
+                SELECT COUNT(*) FROM soc2_active_session
+                WHERE is_active = TRUE AND expires_at < NOW()
+            """)
+        )
+        orphaned = result.fetchone()[0]
+
+        # Clean them up
+        if orphaned > 0:
+            await self.db.execute(
+                text("""
+                    UPDATE soc2_active_session
+                    SET is_active = FALSE, terminated_reason = 'expired'
+                    WHERE is_active = TRUE AND expires_at < NOW()
+                """)
+            )
+            await self.db.commit()
+
+        return {
+            "check_name": "Orphaned Session Cleanup",
+            "check_category": "CC6_access_controls",
+            "trust_criteria": "CC6",
+            "status": ComplianceCheckStatus.PASS,
+            "details": f"Found and cleaned {orphaned} expired sessions",
+            "evidence": {"orphaned_sessions_cleaned": orphaned},
+        }
+
+    async def check_encryption_coverage(self) -> Dict:
+        """C1: Verify PII columns are marked as encrypted."""
+        result = await self.db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as total_pii_columns,
+                    COUNT(*) FILTER (WHERE is_encrypted = TRUE) as encrypted_columns
+                FROM soc2_data_classification
+                WHERE is_pii = TRUE
+            """)
+        )
+        row = result.fetchone()
+        total = row[0]
+        encrypted = row[1]
+
+        status = ComplianceCheckStatus.PASS
+        if total == 0:
+            status = ComplianceCheckStatus.WARNING  # No classifications registered
+        elif encrypted < total:
+            status = ComplianceCheckStatus.FAIL
+
+        return {
+            "check_name": "PII Encryption Coverage",
+            "check_category": "C1_confidentiality",
+            "trust_criteria": "C1",
+            "status": status,
+            "details": f"{encrypted}/{total} PII columns encrypted",
+            "evidence": {"total_pii": total, "encrypted": encrypted},
+            "remediation_required": encrypted < total,
+            "remediation_notes": f"{total - encrypted} PII columns need encryption" if encrypted < total else None,
+        }
+
+    async def check_change_approval_compliance(self) -> Dict:
+        """CC8: Verify changes are going through approval process."""
+        result = await self.db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as total_changes,
+                    COUNT(*) FILTER (WHERE approved_by IS NOT NULL) as approved_changes,
+                    COUNT(*) FILTER (WHERE approved_by IS NULL AND status = 'completed') as unapproved_completed
+                FROM soc2_change_record
+                WHERE created_at > NOW() - INTERVAL '30 days'
+            """)
+        )
+        row = result.fetchone()
+        total = row[0]
+        approved = row[1]
+        unapproved = row[2]
+
+        status = ComplianceCheckStatus.PASS if unapproved == 0 else ComplianceCheckStatus.FAIL
+
+        return {
+            "check_name": "Change Approval Compliance",
+            "check_category": "CC8_change_management",
+            "trust_criteria": "CC8",
+            "status": status,
+            "details": f"{approved}/{total} changes approved; {unapproved} unapproved completions",
+            "evidence": {"total": total, "approved": approved, "unapproved_completed": unapproved},
+            "remediation_required": unapproved > 0,
+        }
+
+    async def check_incident_response_times(self) -> Dict:
+        """CC7: Verify incident response SLAs."""
+        result = await self.db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as open_incidents,
+                    COUNT(*) FILTER (
+                        WHERE severity IN ('high', 'critical')
+                        AND status = 'open'
+                        AND created_at < NOW() - INTERVAL '4 hours'
+                    ) as overdue_critical
+                FROM soc2_security_incident
+                WHERE status NOT IN ('resolved', 'closed')
+            """)
+        )
+        row = result.fetchone()
+        open_count = row[0]
+        overdue = row[1]
+
+        return {
+            "check_name": "Incident Response SLA",
+            "check_category": "CC7_operations",
+            "trust_criteria": "CC7",
+            "status": ComplianceCheckStatus.PASS if overdue == 0 else ComplianceCheckStatus.FAIL,
+            "details": f"{open_count} open incidents; {overdue} critical/high overdue (>4h)",
+            "evidence": {"open_incidents": open_count, "overdue_critical": overdue},
+            "remediation_required": overdue > 0,
+        }
+
+    async def check_data_retention_compliance(self) -> Dict:
+        """P4: Verify data isn't being retained beyond policy limits."""
+        result = await self.db.execute(
+            text("""
+                SELECT COUNT(*) FROM soc2_audit_log
+                WHERE timestamp < NOW() - INTERVAL '730 days'
+            """)
+        )
+        overdue = result.fetchone()[0]
+
+        return {
+            "check_name": "Data Retention Compliance",
+            "check_category": "P4_disposal",
+            "trust_criteria": "P4",
+            "status": ComplianceCheckStatus.PASS if overdue == 0 else ComplianceCheckStatus.WARNING,
+            "details": f"{overdue} audit records past retention period",
+            "evidence": {"records_past_retention": overdue},
+            "remediation_required": overdue > 0,
+            "remediation_notes": "Run retention enforcement to clean up" if overdue > 0 else None,
+        }
+
+    async def check_pii_access_patterns(self) -> Dict:
+        """P1: Check for unusual PII access patterns."""
+        result = await self.db.execute(
+            text("""
+                SELECT
+                    user_email,
+                    COUNT(*) as pii_accesses
+                FROM soc2_audit_log
+                WHERE contains_pii = TRUE
+                  AND timestamp > NOW() - INTERVAL '24 hours'
+                GROUP BY user_email
+                HAVING COUNT(*) > 100
+                ORDER BY pii_accesses DESC
+            """)
+        )
+        high_access_users = [dict(row._mapping) for row in result.fetchall()]
+
+        return {
+            "check_name": "PII Access Patterns",
+            "check_category": "P1_privacy",
+            "trust_criteria": "P1",
+            "status": ComplianceCheckStatus.PASS if not high_access_users else ComplianceCheckStatus.WARNING,
+            "details": f"{len(high_access_users)} users with >100 PII accesses in 24h",
+            "evidence": {"high_access_users": high_access_users},
+        }
+
+    async def check_api_key_rotation(self) -> Dict:
+        """CC6: Check for API keys that should be rotated."""
+        result = await self.db.execute(
+            text("""
+                SELECT COUNT(*) FROM soc2_api_key_registry
+                WHERE is_active = TRUE
+                  AND created_at < NOW() - INTERVAL '90 days'
+                  AND (expires_at IS NULL OR expires_at > NOW())
+            """)
+        )
+        stale_keys = result.fetchone()[0]
+
+        return {
+            "check_name": "API Key Rotation",
+            "check_category": "CC6_access_controls",
+            "trust_criteria": "CC6",
+            "status": ComplianceCheckStatus.PASS if stale_keys == 0 else ComplianceCheckStatus.WARNING,
+            "details": f"{stale_keys} active API keys older than 90 days",
+            "evidence": {"stale_keys": stale_keys},
+            "remediation_required": stale_keys > 0,
+        }
+
+    async def check_high_severity_unresolved(self) -> Dict:
+        """CC7: Check for unresolved high/critical incidents."""
+        result = await self.db.execute(
+            text("""
+                SELECT id, title, severity, created_at, status
+                FROM soc2_security_incident
+                WHERE severity IN ('high', 'critical')
+                  AND status NOT IN ('resolved', 'closed')
+                ORDER BY created_at ASC
+            """)
+        )
+        unresolved = [dict(row._mapping) for row in result.fetchall()]
+
+        return {
+            "check_name": "Unresolved High-Severity Incidents",
+            "check_category": "CC7_operations",
+            "trust_criteria": "CC7",
+            "status": ComplianceCheckStatus.PASS if not unresolved else ComplianceCheckStatus.FAIL,
+            "details": f"{len(unresolved)} unresolved high/critical incidents",
+            "evidence": {"incidents": unresolved},
+            "remediation_required": len(unresolved) > 0,
+        }
+
+    async def _store_result(self, result: Dict) -> None:
+        """Store a compliance check result in the database."""
+        import json
+        await self.db.execute(
+            text("""
+                INSERT INTO soc2_compliance_check (
+                    run_at, check_name, check_category, description,
+                    status, details, evidence, trust_criteria,
+                    remediation_required, remediation_notes
+                ) VALUES (
+                    NOW(), :check_name, :check_category, :description,
+                    :status, :details, :evidence::jsonb, :trust_criteria,
+                    :remediation_required, :remediation_notes
+                )
+            """),
+            {
+                "check_name": result.get("check_name"),
+                "check_category": result.get("check_category"),
+                "description": result.get("details"),
+                "status": result.get("status"),
+                "details": result.get("details"),
+                "evidence": json.dumps(result.get("evidence", {})),
+                "trust_criteria": result.get("trust_criteria"),
+                "remediation_required": result.get("remediation_required", False),
+                "remediation_notes": result.get("remediation_notes"),
+            }
+        )
+        await self.db.commit()
+
+
+async def run_compliance_scan(db: AsyncSession) -> List[Dict]:
+    """Entry point for running the compliance scan."""
+    scanner = ComplianceScanner(db)
+    return await scanner.run_all_checks()

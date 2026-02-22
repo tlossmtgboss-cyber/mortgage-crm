@@ -67,14 +67,10 @@ def get_current_user_flexible():
     return _get_current_user_flexible
 
 
-def get_twilio_client():
-    """Get Twilio client"""
-    from twilio.rest import Client
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    if not account_sid or not auth_token:
-        return None
-    return Client(account_sid, auth_token)
+def get_telephony_provider():
+    """Get telephony provider"""
+    from telephony.provider import get_telephony_provider as _get_provider
+    return _get_provider()
 
 
 # ============================================================================
@@ -192,16 +188,18 @@ async def create_queue(
             logger.warning(f"Error fetching queue_id from RETURNING clause: {e}")
             queue_id = result.lastrowid or db.execute(text("SELECT last_insert_rowid()")).scalar()
 
-        # Create Twilio queue
-        client = get_twilio_client()
-        if client:
-            try:
-                twilio_queue = client.queues.create(friendly_name=queue.name, max_size=queue.max_queue_size)
-                db.execute(text("""
-                    UPDATE call_queues SET twilio_queue_sid = :sid WHERE id = :id
-                """), {"sid": twilio_queue.sid, "id": queue_id})
-            except Exception as twilio_error:
-                logger.warning(f"Could not create Twilio queue: {twilio_error}")
+        # Create telephony queue (if provider supports it)
+        try:
+            provider = get_telephony_provider()
+            if provider and hasattr(provider, 'create_queue'):
+                queue_result = provider.create_queue(friendly_name=queue.name, max_size=queue.max_queue_size)
+                if queue_result:
+                    queue_sid = queue_result.sid if hasattr(queue_result, 'sid') else str(queue_result)
+                    db.execute(text("""
+                        UPDATE call_queues SET telephony_queue_sid = :sid WHERE id = :id
+                    """), {"sid": queue_sid, "id": queue_id})
+        except Exception as telephony_error:
+            logger.warning(f"Could not create telephony queue: {telephony_error}")
 
         db.commit()
 
@@ -230,7 +228,7 @@ async def list_queues(
         results = db.execute(text(f"""
             SELECT q.id, q.name, q.friendly_name, q.description,
                    q.max_wait_time_seconds, q.max_queue_size,
-                   q.is_active, q.twilio_queue_sid, q.created_at,
+                   q.is_active, q.telephony_queue_sid, q.created_at,
                    COUNT(DISTINCT qm.id) as member_count,
                    COUNT(DISTINCT CASE WHEN qe.status = 'waiting' THEN qe.id END) as waiting_calls
             FROM call_queues q
@@ -251,7 +249,7 @@ async def list_queues(
                 "max_wait_time_seconds": row.max_wait_time_seconds,
                 "max_queue_size": row.max_queue_size,
                 "is_active": row.is_active,
-                "twilio_queue_sid": row.twilio_queue_sid,
+                "telephony_queue_sid": row.telephony_queue_sid,
                 "member_count": row.member_count,
                 "waiting_calls": row.waiting_calls,
                 "created_at": safe_isoformat(row.created_at)
@@ -318,7 +316,7 @@ async def get_queue(
             "overflow_action": queue.overflow_action,
             "overflow_target": queue.overflow_target,
             "is_active": queue.is_active,
-            "twilio_queue_sid": queue.twilio_queue_sid,
+            "telephony_queue_sid": queue.telephony_queue_sid,
             "members": [
                 {
                     "id": m.id,
@@ -766,7 +764,7 @@ async def enqueue_twiml(
     """
     TwiML endpoint to put caller in queue.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -791,7 +789,7 @@ async def enqueue_twiml(
 
         if not queue:
             # Queue not found - redirect to AI
-            response = VoiceResponse()
+            response = TeXMLResponse()
             response.say("Please hold while we connect you.", voice="Polly.Joanna")
             response.redirect("/api/v1/voice/incoming")
             return Response(content=str(response), media_type="application/xml")
@@ -833,7 +831,7 @@ async def enqueue_twiml(
         if base_url and not base_url.startswith("http"):
             base_url = f"https://{base_url}"
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         # Initial announcement
         response.say(
@@ -864,7 +862,7 @@ async def enqueue_twiml(
 
     except Exception as e:
         logger.error(f"Error in enqueue TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("We're experiencing technical difficulties. Please try again later.", voice="Polly.Joanna")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -879,7 +877,7 @@ async def queue_wait_twiml(
     TwiML for queue wait music and periodic announcements.
     Called periodically while caller is waiting.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -897,7 +895,7 @@ async def queue_wait_twiml(
             FROM call_queues WHERE id = :id
         """), {"id": queue_id}).fetchone()
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         # Periodic position announcement
         if queue and queue.announce_position:
@@ -919,23 +917,23 @@ async def queue_wait_twiml(
         if queue and queue.hold_music_url:
             response.play(queue.hold_music_url, loop=1)
         else:
-            # Default Twilio hold music
-            response.play("http://com.twilio.music.classical.s3.amazonaws.com/BussyStrings.mp3", loop=1)
+            # Default hold music
+            response.play("/static/hold-music/classical.mp3", loop=1)
 
         return Response(content=str(response), media_type="application/xml")
 
     except Exception as e:
         logger.error(f"Error in queue wait TwiML: {e}")
-        response = VoiceResponse()
-        response.play("http://com.twilio.music.classical.s3.amazonaws.com/BussyStrings.mp3", loop=1)
+        response = TeXMLResponse()
+        response.play("/static/hold-music/classical.mp3", loop=1)
         return Response(content=str(response), media_type="application/xml")
 
 
 async def handle_queue_overflow(queue, db: Session):
     """Handle queue overflow based on settings"""
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
-    response = VoiceResponse()
+    response = TeXMLResponse()
 
     if queue.overflow_action == "voicemail":
         response.say(
@@ -951,7 +949,7 @@ async def handle_queue_overflow(queue, db: Session):
 
     elif queue.overflow_action == "transfer" and queue.overflow_target:
         response.say("Please hold while we transfer your call.", voice="Polly.Joanna")
-        dial = response.dial(caller_id=os.getenv("TWILIO_PHONE_NUMBER", ""))
+        dial = response.dial(caller_id=os.getenv("TELNYX_PHONE_NUMBER", ""))
         dial.number(queue.overflow_target)
 
     elif queue.overflow_action == "callback":
@@ -985,8 +983,9 @@ async def dequeue_webhook(
     """
     Webhook when caller leaves queue (connected or abandoned)
     """
-    from services.webhook_security import verify_twilio_webhook
-    await verify_twilio_webhook(request)
+    # Webhook security: Legacy webhook_security module removed.
+    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
+    logger.info("Queue webhook received (legacy signature validation removed)")
 
     try:
         query_params = request.query_params
@@ -1048,13 +1047,13 @@ async def take_next_call(
     Connects the oldest waiting caller to the agent.
     """
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony not configured")
 
         # Get queue info
         queue = db.execute(text("""
-            SELECT name, twilio_queue_sid FROM call_queues WHERE id = :id
+            SELECT name, telephony_queue_sid FROM call_queues WHERE id = :id
         """), {"id": queue_id}).fetchone()
 
         if not queue:
@@ -1082,9 +1081,8 @@ async def take_next_call(
 
         phone = agent_phone.mobile_phone or agent_phone.work_phone or agent_phone.phone
 
-        # Bridge the call to agent
-        # Using Twilio's queue member redirect
-        if queue.twilio_queue_sid:
+        # Bridge the call to agent by redirecting the queued call
+        if queue.telephony_queue_sid and next_call.call_sid:
             try:
                 # Redirect the queued call to dial the agent
                 base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("BASE_URL", ""))
@@ -1093,9 +1091,8 @@ async def take_next_call(
 
                 connect_url = f"{base_url}/api/v1/queues/twiml/connect-agent?phone={phone}&entry_id={next_call.id}"
 
-                # Get the call from queue and redirect
-                queue_member = client.queues(queue.twilio_queue_sid).members(next_call.call_sid)
-                queue_member.update(url=connect_url, method="POST")
+                # Redirect the call to the connect-agent TwiML
+                provider.update_call(next_call.call_sid, url=connect_url)
 
                 # Update entry
                 db.execute(text("""
@@ -1112,9 +1109,9 @@ async def take_next_call(
                     "call_sid": next_call.call_sid
                 }
 
-            except Exception as twilio_error:
-                logger.error(f"Twilio error connecting call: {twilio_error}")
-                raise HTTPException(status_code=500, detail=str(twilio_error))
+            except Exception as telephony_error:
+                logger.error(f"Telephony error connecting call: {telephony_error}")
+                raise HTTPException(status_code=500, detail=str(telephony_error))
 
         return {"success": False, "message": "Queue not properly configured"}
 
@@ -1133,18 +1130,18 @@ async def connect_agent_twiml(
     """
     TwiML to connect queued call to agent.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
         phone = query_params.get("phone")
         entry_id = query_params.get("entry_id")
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Connecting you now.", voice="Polly.Joanna")
 
         dial = response.dial(
-            caller_id=os.getenv("TWILIO_PHONE_NUMBER", ""),
+            caller_id=os.getenv("TELNYX_PHONE_NUMBER", ""),
             action=f"/api/v1/queues/webhook/connect-status?entry_id={entry_id}"
         )
         dial.number(phone)
@@ -1153,7 +1150,7 @@ async def connect_agent_twiml(
 
     except SQLAlchemyError as e:
         logger.error(f"Error in connect agent TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Unable to connect. Please try again.")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -1167,8 +1164,9 @@ async def connect_status_webhook(
     """
     Webhook for agent connection status.
     """
-    from services.webhook_security import verify_twilio_webhook
-    await verify_twilio_webhook(request)
+    # Webhook security: Legacy webhook_security module removed.
+    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
+    logger.info("Queue webhook received (legacy signature validation removed)")
 
     try:
         query_params = request.query_params

@@ -4,7 +4,7 @@ TeXML Response Generator
 TeXML is Telnyx's TwiML-compatible XML format for controlling calls.
 This module provides a builder pattern for generating TeXML responses.
 
-TeXML is nearly identical to TwiML, making migration from Twilio straightforward.
+TeXML is nearly identical to TwiML, making it straightforward to use.
 Reference: https://developers.telnyx.com/docs/voice/programmable-voice/texml
 """
 

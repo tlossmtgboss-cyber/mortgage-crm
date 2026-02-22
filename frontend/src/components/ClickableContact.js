@@ -17,7 +17,7 @@ export const ClickableEmail = ({ email, className = '' }) => {
   );
 };
 
-// Clickable phone link with Twilio click-to-dial
+// Clickable phone link with Telnyx click-to-dial
 export const ClickablePhone = ({
   phone,
   className = '',

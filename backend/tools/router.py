@@ -366,8 +366,8 @@ async def handle_send_sms(args: Dict[str, Any], request: Request) -> Dict[str, A
 
     try:
         # Defer import to avoid circular dependencies
-        from integrations.twilio_service import TwilioSMSClient
-        client = TwilioSMSClient()
+        from integrations.sms_service import get_sms_client
+        client = get_sms_client()
         sid = await client.send_sms(to_number=to_phone, message=message)
         return {
             "success": True,

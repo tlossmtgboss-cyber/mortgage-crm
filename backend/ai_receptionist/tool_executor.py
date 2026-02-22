@@ -886,7 +886,7 @@ class AIReceptionist:
 
     Integrates all components:
     - Audio Processing (STT/TTS)
-    - Call Handling (Twilio)
+    - Call Handling (Telnyx)
     - Tool Execution (CRM operations)
 
     Usage:
@@ -932,7 +932,7 @@ class AIReceptionist:
     ) -> "AIReceptionist":
         """Factory method to create a complete receptionist system."""
         from .audio_processor import AudioProcessor, STTConfig, TTSConfig
-        from .call_handler import TwilioStreamHandler
+        from .call_handler import TelnyxStreamHandler
 
         # Create tool executor
         tool_executor = ReceptionistToolExecutor(tool_registry=tool_registry)
@@ -943,7 +943,7 @@ class AIReceptionist:
         audio = AudioProcessor(stt_config=stt_config, tts_config=tts_config)
 
         # Create call handler
-        call_handler = TwilioStreamHandler(audio)
+        call_handler = TelnyxStreamHandler(audio)
 
         config = {
             "company_name": company_name,
@@ -1030,7 +1030,7 @@ class AIReceptionist:
     ) -> Optional[bytes]:
         """Process raw audio and return audio response."""
         # Transcribe
-        text = await self.audio.transcribe_twilio_audio(audio_data)
+        text = await self.audio.transcribe_audio(audio_data)
 
         if not text or not text.strip():
             return None
@@ -1039,7 +1039,7 @@ class AIReceptionist:
         response_text = await self.process_speech(call_sid, text)
 
         # Synthesize
-        return await self.audio.synthesize_for_twilio(response_text)
+        return await self.audio.synthesize_for_telephony(response_text)
 
     async def end_call(
         self,

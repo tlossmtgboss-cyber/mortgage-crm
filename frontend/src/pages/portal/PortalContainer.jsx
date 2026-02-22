@@ -155,9 +155,22 @@ const detectPortalStage = (workspaceData) => {
     return PortalStage.MUM;
   }
 
-  // IMPORTANT: Portals are created when applications are submitted
-  // So if a workspace/portal exists, it should ALWAYS show ActiveLoanPortal
-  // The LeadPortal is deprecated - all portals show ActiveLoanPortal
+  // Lead portal — workspace exists but loan not yet disclosed
+  if (status === 'lead') {
+    return PortalStage.LEAD;
+  }
+
+  // Closing sub-stage — maps to ActiveLoanPortal with closing indicator
+  if (status === 'closing') {
+    return PortalStage.ACTIVE_LOAN;
+  }
+
+  // Active loan or application — show Active Loan Portal
+  if (status === 'active_loan' || status === 'application') {
+    return PortalStage.ACTIVE_LOAN;
+  }
+
+  // Default: if workspace exists with unknown status, show Active Loan Portal
   return PortalStage.ACTIVE_LOAN;
 };
 
@@ -249,7 +262,8 @@ export default function PortalContainer() {
 
       // Detect sub-stage for active loans
       if (detectedStage === PortalStage.ACTIVE_LOAN) {
-        setSubStage(detectSubStage(data));
+        const sub = detectSubStage(data);
+        setSubStage(sub);
       }
 
       // Show celebration if just funded
@@ -274,6 +288,18 @@ export default function PortalContainer() {
   useEffect(() => {
     fetchPortalData();
   }, [fetchPortalData]);
+
+  // Auto-refresh polling — re-fetch every 60s so stage transitions appear
+  // without requiring a manual page refresh
+  useEffect(() => {
+    if (loading || error) return;
+
+    const interval = setInterval(() => {
+      fetchPortalData();
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [loading, error, fetchPortalData]);
 
   // Check if should show onboarding (after data loads)
   useEffect(() => {

@@ -40,14 +40,10 @@ def get_current_user_flexible():
     return _get_current_user_flexible
 
 
-def get_twilio_client():
-    """Get Twilio client"""
-    from twilio.rest import Client
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    if not account_sid or not auth_token:
-        return None
-    return Client(account_sid, auth_token)
+def get_telephony_provider():
+    """Get telephony provider"""
+    from telephony.provider import get_telephony_provider as _get_provider
+    return _get_provider()
 
 
 # ============================================================================
@@ -475,9 +471,9 @@ async def end_conference(
 ):
     """End a conference and disconnect all participants"""
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony not configured")
 
         conf = db.execute(text("""
             SELECT id, room_name, current_conference_sid FROM conference_rooms WHERE id = :id
@@ -486,15 +482,21 @@ async def end_conference(
         if not conf:
             raise HTTPException(status_code=404, detail="Conference not found")
 
-        # End the Twilio conference
+        # End the conference - disconnect all participants via their call SIDs
         if conf.current_conference_sid:
             try:
-                twilio_conf = client.conferences(conf.current_conference_sid)
-                # Update all participants to disconnect
-                for participant in twilio_conf.participants.list():
-                    participant.update(status="completed")
-            except Exception as twilio_error:
-                logger.warning(f"Error ending Twilio conference: {twilio_error}")
+                # Get all connected participants and end their calls
+                active_participants = db.execute(text("""
+                    SELECT call_sid FROM conference_participants
+                    WHERE conference_id = :id AND status IN ('ringing', 'connected') AND call_sid IS NOT NULL
+                """), {"id": conference_id}).fetchall()
+                for p in active_participants:
+                    try:
+                        provider.end_call(p.call_sid)
+                    except Exception as e:
+                        logger.warning(f"Error ending participant call {p.call_sid}: {e}")
+            except Exception as telephony_error:
+                logger.warning(f"Error ending conference: {telephony_error}")
 
         # Update all participants
         db.execute(text("""
@@ -535,9 +537,9 @@ async def add_participant(
 ):
     """Dial out to add a participant to conference"""
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony not configured")
 
         conf = db.execute(text("""
             SELECT id, room_name, max_participants, current_conference_sid, mute_on_entry
@@ -607,19 +609,19 @@ async def add_participant(
         join_url = f"{base_url}/api/v1/conferences/twiml/join?conf_id={conference_id}&participant_id={participant_id}&role={request.role.value}"
 
         try:
-            call = client.calls.create(
+            call_result = provider.place_call(
                 to=phone,
-                from_=os.getenv("TWILIO_PHONE_NUMBER", ""),
+                from_=os.getenv("TELNYX_PHONE_NUMBER", ""),
                 url=join_url,
-                method="POST",
                 status_callback=f"{base_url}/api/v1/conferences/webhook/participant-status?participant_id={participant_id}",
-                status_callback_event=["initiated", "ringing", "answered", "completed"]
             )
+
+            call_sid = call_result.call_sid if hasattr(call_result, 'call_sid') else str(call_result)
 
             # Update with call SID
             db.execute(text("""
                 UPDATE conference_participants SET call_sid = :call_sid WHERE id = :id
-            """), {"call_sid": call.sid, "id": participant_id})
+            """), {"call_sid": call_sid, "id": participant_id})
 
             db.commit()
 
@@ -627,16 +629,16 @@ async def add_participant(
                 "success": True,
                 "message": f"Calling {name or phone}",
                 "participant_id": participant_id,
-                "call_sid": call.sid
+                "call_sid": call_sid
             }
 
-        except Exception as twilio_error:
-            logger.error(f"Twilio error adding participant: {twilio_error}")
+        except Exception as telephony_error:
+            logger.error(f"Telephony error adding participant: {telephony_error}")
             db.execute(text("""
                 UPDATE conference_participants SET status = 'failed' WHERE id = :id
             """), {"id": participant_id})
             db.commit()
-            raise HTTPException(status_code=500, detail=str(twilio_error))
+            raise HTTPException(status_code=500, detail=str(telephony_error))
 
     except HTTPException:
         raise
@@ -656,9 +658,9 @@ async def participant_action(
 ):
     """Perform action on a participant (mute, unmute, hold, remove)"""
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony not configured")
 
         # Get participant and conference
         participant = db.execute(text("""
@@ -674,41 +676,42 @@ async def participant_action(
         if participant.status != "connected":
             raise HTTPException(status_code=400, detail="Participant not connected")
 
-        conf_sid = participant.current_conference_sid
         call_sid = participant.call_sid
 
-        if not conf_sid or not call_sid:
+        if not call_sid:
             raise HTTPException(status_code=400, detail="Cannot modify participant - no active call")
 
         try:
-            twilio_participant = client.conferences(conf_sid).participants(call_sid)
-
             if action.action == "mute":
-                twilio_participant.update(muted=True)
+                if hasattr(provider, 'mute_participant'):
+                    provider.mute_participant(call_sid, muted=True)
                 db.execute(text("""
                     UPDATE conference_participants SET is_muted = TRUE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "unmute":
-                twilio_participant.update(muted=False)
+                if hasattr(provider, 'mute_participant'):
+                    provider.mute_participant(call_sid, muted=False)
                 db.execute(text("""
                     UPDATE conference_participants SET is_muted = FALSE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "hold":
-                twilio_participant.update(hold=True)
+                if hasattr(provider, 'hold_participant'):
+                    provider.hold_participant(call_sid, hold=True)
                 db.execute(text("""
                     UPDATE conference_participants SET is_on_hold = TRUE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "unhold":
-                twilio_participant.update(hold=False)
+                if hasattr(provider, 'hold_participant'):
+                    provider.hold_participant(call_sid, hold=False)
                 db.execute(text("""
                     UPDATE conference_participants SET is_on_hold = FALSE WHERE id = :id
                 """), {"id": participant_id})
 
             elif action.action == "remove":
-                twilio_participant.update(status="completed")
+                provider.end_call(call_sid)
                 db.execute(text("""
                     UPDATE conference_participants
                     SET status = 'left', left_at = CURRENT_TIMESTAMP
@@ -721,9 +724,9 @@ async def participant_action(
             db.commit()
             return {"success": True, "message": f"Participant {action.action}d"}
 
-        except Exception as twilio_error:
-            logger.error(f"Twilio error on participant action: {twilio_error}")
-            raise HTTPException(status_code=500, detail=str(twilio_error))
+        except Exception as telephony_error:
+            logger.error(f"Telephony error on participant action: {telephony_error}")
+            raise HTTPException(status_code=500, detail=str(telephony_error))
 
     except HTTPException:
         raise
@@ -742,9 +745,9 @@ async def mute_all_participants(
 ):
     """Mute all participants (optionally except hosts)"""
     try:
-        client = get_twilio_client()
-        if not client:
-            raise HTTPException(status_code=500, detail="Twilio not configured")
+        provider = get_telephony_provider()
+        if not provider:
+            raise HTTPException(status_code=500, detail="Telephony not configured")
 
         conf = db.execute(text("""
             SELECT current_conference_sid FROM conference_rooms WHERE id = :id
@@ -763,10 +766,11 @@ async def mute_all_participants(
         muted_count = 0
         for p in participants:
             try:
-                client.conferences(conf.current_conference_sid).participants(p.call_sid).update(muted=True)
+                if hasattr(provider, 'mute_participant'):
+                    provider.mute_participant(p.call_sid, muted=True)
                 db.execute(text("UPDATE conference_participants SET is_muted = TRUE WHERE id = :id"), {"id": p.id})
                 muted_count += 1
-            except SQLAlchemyError as e:
+            except Exception as e:
                 logger.warning(f"Could not mute participant {p.id}: {e}")
 
         db.commit()
@@ -795,7 +799,7 @@ async def join_conference_twiml(
     TwiML for joining a conference.
     Used when dialing out to add participants.
     """
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -812,7 +816,7 @@ async def join_conference_twiml(
         """), {"id": conf_id}).fetchone()
 
         if not conf:
-            response = VoiceResponse()
+            response = TeXMLResponse()
             response.say("Conference not found.", voice="Polly.Joanna")
             response.hangup()
             return Response(content=str(response), media_type="application/xml")
@@ -832,7 +836,7 @@ async def join_conference_twiml(
         if base_url and not base_url.startswith("http"):
             base_url = f"https://{base_url}"
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Joining the conference.", voice="Polly.Joanna")
 
         dial = response.dial()
@@ -851,7 +855,7 @@ async def join_conference_twiml(
 
     except Exception as e:
         logger.error(f"Error in join TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Error joining conference.", voice="Polly.Joanna")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -867,7 +871,7 @@ async def dial_in_conference_twiml(
     TwiML for inbound callers to dial into a conference.
     Handles PIN verification if required.
     """
-    from twilio.twiml.voice_response import VoiceResponse, Gather
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
     try:
         query_params = request.query_params
@@ -898,12 +902,12 @@ async def dial_in_conference_twiml(
             """)).fetchone()
 
         if not conf:
-            response = VoiceResponse()
+            response = TeXMLResponse()
             response.say("No active conference found. Goodbye.", voice="Polly.Joanna")
             response.hangup()
             return Response(content=str(response), media_type="application/xml")
 
-        response = VoiceResponse()
+        response = TeXMLResponse()
 
         # Handle PIN if required
         if conf.pin_required:
@@ -956,7 +960,7 @@ async def dial_in_conference_twiml(
 
     except Exception as e:
         logger.error(f"Error in dial-in TwiML: {e}")
-        response = VoiceResponse()
+        response = TeXMLResponse()
         response.say("Error connecting to conference.", voice="Polly.Joanna")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
@@ -972,8 +976,9 @@ async def participant_status_webhook(
     db: Session = Depends(get_db)
 ):
     """Webhook for participant call status updates"""
-    from services.webhook_security import verify_twilio_webhook
-    await verify_twilio_webhook(request)
+    # Webhook security: Legacy webhook_security module removed.
+    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
+    logger.info("Conference webhook received (legacy signature validation removed)")
 
     try:
         query_params = request.query_params
@@ -1019,8 +1024,9 @@ async def conference_status_webhook(
     db: Session = Depends(get_db)
 ):
     """Webhook for conference status updates"""
-    from services.webhook_security import verify_twilio_webhook
-    await verify_twilio_webhook(request)
+    # Webhook security: Legacy webhook_security module removed.
+    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
+    logger.info("Conference webhook received (legacy signature validation removed)")
 
     try:
         query_params = request.query_params

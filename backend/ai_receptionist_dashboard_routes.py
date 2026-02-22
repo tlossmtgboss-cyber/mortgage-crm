@@ -512,7 +512,7 @@ async def get_roi_metrics(
             cost_per_interaction = sum(cost_values) / len(cost_values) if cost_values else 0.50
         else:
             # Default estimate: ~$0.003 per 1K tokens for GPT-4o-mini, avg 500 tokens per interaction
-            # Plus Twilio SMS (~$0.0075/msg) or voice (~$0.013/min * 2 min avg)
+            # Plus Telnyx SMS (~$0.004/msg) or voice (~$0.01/min * 2 min avg)
             # Rough estimate: $0.025 for SMS interactions, $0.03 for voice
             cost_per_interaction = 0.025
 

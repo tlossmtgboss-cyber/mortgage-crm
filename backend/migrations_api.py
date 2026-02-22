@@ -1133,7 +1133,7 @@ async def run_call_transcripts_migration(
     admin: Any = Depends(verify_admin_access)
 ):
     """
-    Run the Call Transcripts table migration for Twilio Voice Intelligence.
+    Run the Call Transcripts table migration for Voice Intelligence.
 
     Creates the call_transcripts table to store AI-transcribed call recordings with:
     - Speaker-labeled transcript sentences
@@ -1204,7 +1204,7 @@ async def run_call_transcripts_migration(
             "statements_skipped": skipped,
             "table_columns": len(columns),
             "features": [
-                "transcript_sid - Unique Twilio transcript identifier",
+                "transcript_sid - Unique transcript identifier",
                 "sentences - JSONB array of speaker-labeled sentences",
                 "sentiment - Overall call sentiment analysis",
                 "topics - Detected discussion topics",
@@ -1261,7 +1261,7 @@ async def run_voice_os_migration(
 
     Creates tables for the Voice OS real-time voice AI system:
     - voice_os_agents: AI voice agent configurations
-    - voice_os_phone_numbers: Twilio phone number to agent mappings
+    - voice_os_phone_numbers: Telnyx phone number to agent mappings
     - voice_os_call_sessions: Call records with transcripts and analytics
     - voice_os_agent_performance: Real-time agent metrics view
 

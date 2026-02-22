@@ -424,12 +424,8 @@ async def playback_recording(
         raise HTTPException(status_code=403, detail="Invalid or expired playback token")
 
     # In production, look up the actual recording storage URL
-    # (Twilio recording URL, S3 presigned URL, etc.)
-    twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
-    recording_url = (
-        f"https://api.twilio.com/2010-04-01/Accounts/{twilio_account_sid}"
-        f"/Recordings/{recording_id}.mp3"
-    )
+    # (Telnyx recording URL, S3 presigned URL, etc.)
+    recording_url = f"https://api.telnyx.com/v2/recordings/{recording_id}"
 
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url=recording_url, status_code=302)

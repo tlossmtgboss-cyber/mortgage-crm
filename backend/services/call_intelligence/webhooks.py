@@ -7,7 +7,7 @@ Provides webhook-based integration for:
 - Async processing with status notifications
 
 Supported Integrations:
-- Twilio (recordings + status callbacks)
+- Telnyx (recordings + status callbacks)
 - Vonage/Nexmo
 - Custom CRM systems
 - Any system that can send/receive HTTP webhooks
@@ -24,15 +24,15 @@ Usage:
 
     # Process incoming webhook
     result = await handler.handle_webhook(
-        provider="twilio",
+        provider="telnyx",
         payload=request_data,
         callback_url="https://crm.example.com/webhook/callback"
     )
 
     # Or use with FastAPI
-    @app.post("/webhooks/twilio/recording")
-    async def twilio_recording_webhook(request: Request):
-        return await handler.handle_twilio_webhook(request)
+    @app.post("/webhooks/telnyx/recording")
+    async def telnyx_recording_webhook(request: Request):
+        return await handler.handle_telnyx_webhook(request)
 """
 
 import asyncio
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 class WebhookProvider(str, Enum):
     """Supported webhook providers."""
-    TWILIO = "twilio"
+    TELNYX = "telnyx"
     VONAGE = "vonage"
     AMAZON_CONNECT = "amazon_connect"
     CUSTOM = "custom"
@@ -101,7 +101,7 @@ class WebhookConfig:
     """Configuration for webhook handling."""
     # Signature verification
     verify_signatures: bool = True
-    twilio_auth_token: Optional[str] = None
+    telnyx_api_key: Optional[str] = None
     vonage_api_secret: Optional[str] = None
     custom_secret_key: Optional[str] = None
 
@@ -119,7 +119,7 @@ class WebhookConfig:
         """Create config from environment variables."""
         return cls(
             verify_signatures=os.getenv("WEBHOOK_VERIFY_SIGNATURES", "true").lower() == "true",
-            twilio_auth_token=os.getenv("TWILIO_AUTH_TOKEN"),
+            telnyx_api_key=os.getenv("TELNYX_API_KEY"),
             vonage_api_secret=os.getenv("VONAGE_API_SECRET"),
             custom_secret_key=os.getenv("WEBHOOK_SECRET_KEY"),
             callback_timeout_seconds=int(os.getenv("WEBHOOK_CALLBACK_TIMEOUT", "30")),
@@ -203,7 +203,7 @@ class WebhookHandler:
         handler = WebhookHandler(processor, config)
 
         # Handle incoming webhook
-        result = await handler.handle_webhook("twilio", payload)
+        result = await handler.handle_webhook("telnyx", payload)
 
         # Register callback for results
         handler.register_callback(
@@ -302,7 +302,7 @@ class WebhookHandler:
         Handle an incoming webhook.
 
         Args:
-            provider: Webhook provider (twilio, vonage, custom)
+            provider: Webhook provider (telnyx, vonage, custom)
             payload: Webhook payload data
             callback_url: Optional one-time callback URL for results
             callback_headers: Optional headers for callback
@@ -317,8 +317,8 @@ class WebhookHandler:
             # Parse based on provider
             provider_enum = WebhookProvider(provider.lower())
 
-            if provider_enum == WebhookProvider.TWILIO:
-                call_data = self._parse_twilio_webhook(payload)
+            if provider_enum == WebhookProvider.TELNYX:
+                call_data = self._parse_telnyx_webhook(payload)
             elif provider_enum == WebhookProvider.VONAGE:
                 call_data = self._parse_vonage_webhook(payload)
             else:
@@ -393,21 +393,21 @@ class WebhookHandler:
                 errors=[str(e)],
             )
 
-    async def handle_twilio_recording(
+    async def handle_telnyx_recording(
         self,
         payload: Dict[str, Any],
         callback_url: Optional[str] = None,
     ) -> WebhookResult:
         """
-        Handle Twilio recording completed webhook.
+        Handle Telnyx recording completed webhook.
 
-        This is called when Twilio finishes recording a call.
+        This is called when Telnyx finishes recording a call.
         """
         # Verify signature if configured
         # (In production, this would use request.headers and request.url)
 
         return await self.handle_webhook(
-            provider="twilio",
+            provider="telnyx",
             payload=payload,
             callback_url=callback_url,
         )
@@ -432,17 +432,17 @@ class WebhookHandler:
     # Internal Methods
     # -------------------------------------------------------------------------
 
-    def _parse_twilio_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse Twilio webhook payload."""
+    def _parse_telnyx_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse Telnyx webhook payload."""
         return {
-            "call_id": payload.get("CallSid"),
-            "recording_url": payload.get("RecordingUrl"),
-            "recording_sid": payload.get("RecordingSid"),
-            "duration": int(payload.get("RecordingDuration", 0)),
-            "from_number": payload.get("From"),
-            "to_number": payload.get("To"),
-            "direction": payload.get("Direction"),
-            "provider": "twilio",
+            "call_id": payload.get("CallSid") or payload.get("call_control_id"),
+            "recording_url": payload.get("RecordingUrl") or payload.get("recording_url"),
+            "recording_sid": payload.get("RecordingSid") or payload.get("recording_id"),
+            "duration": int(payload.get("RecordingDuration", 0) or payload.get("duration", 0)),
+            "from_number": payload.get("From") or payload.get("from"),
+            "to_number": payload.get("To") or payload.get("to"),
+            "direction": payload.get("Direction") or payload.get("direction"),
+            "provider": "telnyx",
         }
 
     def _parse_vonage_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -730,24 +730,24 @@ class WebhookHandler:
         ).hexdigest()
         return f"sha256={signature}"
 
-    def verify_twilio_signature(
+    def verify_telnyx_signature(
         self,
         signature: str,
         url: str,
         params: Dict[str, str],
     ) -> bool:
-        """Verify Twilio request signature."""
-        if not self.config.twilio_auth_token:
-            return True  # Skip verification if no token
+        """Verify Telnyx request signature."""
+        if not self.config.telnyx_api_key:
+            return True  # Skip verification if no key
 
-        # Twilio signature validation logic
+        # Telnyx signature validation logic
         # Build the string to sign
         s = url
         for key in sorted(params.keys()):
             s += key + params[key]
 
         expected = hmac.new(
-            self.config.twilio_auth_token.encode(),
+            self.config.telnyx_api_key.encode(),
             s.encode(),
             hashlib.sha1
         ).digest()

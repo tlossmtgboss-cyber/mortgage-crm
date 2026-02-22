@@ -239,44 +239,43 @@ class EmailSender:
 
 
 class SMSSender:
-    """SMS sending via Twilio or SNS."""
+    """SMS sending via Telnyx or SNS."""
 
     def __init__(self):
-        self.provider = os.getenv("SMS_PROVIDER", "twilio")
-        self.from_number = os.getenv("TWILIO_PHONE_NUMBER")
+        self.provider = os.getenv("SMS_PROVIDER", "telnyx")
+        self.from_number = os.getenv("TELNYX_PHONE_NUMBER")
 
     def send(self, to_phone: str, body: str) -> NotificationResult:
         """Send an SMS."""
-        if self.provider == "twilio":
-            return self._send_twilio(to_phone, body)
+        if self.provider == "telnyx":
+            return self._send_telnyx(to_phone, body)
         else:
             return self._send_sns(to_phone, body)
 
-    def _send_twilio(self, to_phone: str, body: str) -> NotificationResult:
-        """Send via Twilio."""
+    def _send_telnyx(self, to_phone: str, body: str) -> NotificationResult:
+        """Send via Telnyx."""
         try:
-            from twilio.rest import Client
+            import telnyx
 
-            account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-            auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+            telnyx_from = os.getenv("TELNYX_PHONE_NUMBER") or self.from_number
 
-            client = Client(account_sid, auth_token)
-
-            message = client.messages.create(
-                body=body,
-                from_=self.from_number,
-                to=to_phone
+            message = telnyx.Message.create(
+                from_=telnyx_from,
+                to=to_phone,
+                text=body,
             )
+
+            msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
 
             return NotificationResult(
                 success=True,
                 channel='sms',
                 recipient=to_phone,
-                message_id=message.sid
+                message_id=msg_id
             )
 
         except Exception as e:
-            logger.error(f"Twilio send failed: {e}")
+            logger.error(f"Telnyx send failed: {e}")
             return NotificationResult(
                 success=False,
                 channel='sms',

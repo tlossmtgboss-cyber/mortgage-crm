@@ -57,10 +57,9 @@ def main():
         "MICROSOFT_REDIRECT_URI": (False, "OAuth callback URL"),
         "MICROSOFT_FROM_EMAIL": (False, "Email address for sending emails"),
 
-        # Twilio SMS
-        "TWILIO_ACCOUNT_SID": (False, "Twilio Account SID"),
-        "TWILIO_AUTH_TOKEN": (False, "Twilio Auth Token"),
-        "TWILIO_PHONE_NUMBER": (False, "Twilio phone number for SMS"),
+        # Telnyx SMS
+        "TELNYX_API_KEY": (False, "Telnyx API Key"),
+        "TELNYX_PHONE_NUMBER": (False, "Telnyx phone number for SMS"),
 
         # Stripe Payment Processing
         "STRIPE_SECRET_KEY": (False, "Stripe secret key"),

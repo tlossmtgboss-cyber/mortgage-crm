@@ -87,7 +87,7 @@ def get_user_telnyx_key(db: Session, user_id: int) -> Optional[str]:
     """Get user's Telnyx API key from database."""
     result = db.execute(
         text("""
-        SELECT telnyx_api_key FROM user_twilio_config
+        SELECT telnyx_api_key FROM user_twilio_config  -- Legacy table name
         WHERE user_id = :user_id
         """),
         {"user_id": user_id}

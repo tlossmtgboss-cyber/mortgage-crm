@@ -401,7 +401,7 @@ def create_qa_checklist_report() -> QAReportGenerator:
         ("5.1", "Google Places API works"),
         ("5.2", "Google Places rate limiting"),
         ("5.3", "SendGrid email delivery"),
-        ("5.4", "Twilio SMS delivery"),
+        ("5.4", "Telnyx SMS delivery"),
         ("5.5", "Claude document analysis"),
         ("5.6", "AI name mismatch detection"),
     ]

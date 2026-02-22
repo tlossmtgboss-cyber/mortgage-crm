@@ -29,8 +29,8 @@ from telephony.providers.telnyx.webhooks import (
     TelnyxAMDEvent,
     TelnyxSMSEvent,
     TelnyxEventType,
-    map_telnyx_status_to_twilio,
-    map_telnyx_amd_to_twilio,
+    map_telnyx_status_to_legacy,
+    map_telnyx_amd_to_legacy,
 )
 from telephony.providers.telnyx.texml import TeXMLResponse
 
@@ -186,9 +186,9 @@ async def process_amd_result(tracking_id: str, event: TelnyxAMDEvent, db: Sessio
     amd_result = event.result
     call_control_id = event.call_control_id
 
-    # Map to Twilio-compatible format for database consistency
-    twilio_format = map_telnyx_amd_to_twilio(event)
-    answered_by = twilio_format["AnsweredBy"]
+    # Map to legacy-compatible format for database consistency
+    legacy_format = map_telnyx_amd_to_legacy(event)
+    answered_by = legacy_format["AnsweredBy"]
 
     logger.info(f"AMD Result for {tracking_id}: result={amd_result}, answered_by={answered_by}")
 
@@ -357,12 +357,12 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     # ==========================================================================
     # Workflow Trigger: Feed into SMS Intelligence Queue for AI analysis,
     # entity matching, SLA tracking, and notification dispatching.
-    # This mirrors the Twilio webhook flow in sms_intelligence_routes.py.
+    # This mirrors the telephony webhook flow in sms_intelligence_routes.py.
     # ==========================================================================
 
     intelligence_queue_id = None
     try:
-        # Insert into sms_intelligence_queue (same schema as Twilio webhook path)
+        # Insert into sms_intelligence_queue (same schema as telephony webhook path)
         result = db.execute(sa_text("""
             INSERT INTO sms_intelligence_queue (
                 sms_provider, provider_message_id, from_phone, to_phone,

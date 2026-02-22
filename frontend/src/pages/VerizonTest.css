@@ -391,8 +391,8 @@
   color: #ef4444;
 }
 
-/* Twilio Setup Section */
-.twilio-setup-section {
+/* Telnyx Setup Section */
+.telnyx-setup-section {
   background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   border-radius: 12px;
   padding: 40px;
@@ -401,44 +401,44 @@
   box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
 }
 
-.twilio-setup-section h2 {
+.telnyx-setup-section h2 {
   font-size: 28px;
   margin-bottom: 15px;
   color: white;
 }
 
-.twilio-setup-section > p {
+.telnyx-setup-section > p {
   font-size: 16px;
   margin-bottom: 25px;
   opacity: 0.9;
 }
 
-.twilio-benefits {
+.telnyx-benefits {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 25px;
 }
 
-.twilio-benefits h3 {
+.telnyx-benefits h3 {
   font-size: 18px;
   margin-bottom: 15px;
   color: white;
 }
 
-.twilio-benefits ul {
+.telnyx-benefits ul {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.twilio-benefits li {
+.telnyx-benefits li {
   padding: 8px 0;
   font-size: 15px;
   opacity: 0.95;
 }
 
-.btn-setup-twilio {
+.btn-setup-telnyx {
   padding: 15px 30px;
   background: white;
   color: #218D8D;
@@ -450,7 +450,7 @@
   transition: all 0.2s;
 }
 
-.btn-setup-twilio:hover {
+.btn-setup-telnyx:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }

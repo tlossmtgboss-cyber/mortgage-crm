@@ -5,7 +5,7 @@ Phase 1: Core Meeting Infrastructure
 Thin router that imports and includes all sub-routers:
 - video_meeting_crud_routes: Room/participant CRUD, waiting room, CRM linking
 - video_meeting_realtime_routes: Breakout rooms, SFU endpoints, phone dial-out
-- video_meeting_recording_routes: Recording management, screen recordings, Twilio callbacks
+- video_meeting_recording_routes: Recording management, screen recordings, Telnyx callbacks
 - video_meeting_template_routes: Template CRUD
 - video_meeting_scheduling_routes: AI analysis, analytics, intelligence, settings, calendar
 """

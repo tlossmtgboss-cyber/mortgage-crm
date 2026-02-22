@@ -26,8 +26,8 @@ class WorkflowActionExecutor:
     def _init_services(self):
         """Initialize communication services"""
         try:
-            from integrations.twilio_service import sms_client
-            self.sms_client = sms_client
+            from integrations.sms_service import get_sms_client
+            self.sms_client = get_sms_client()
         except Exception as e:
             logger.warning(f"SMS client not available: {e}")
             self.sms_client = None

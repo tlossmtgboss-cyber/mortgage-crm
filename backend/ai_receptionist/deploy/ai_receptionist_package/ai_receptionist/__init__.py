@@ -5,7 +5,7 @@ Real-time voice AI system for mortgage CRM.
 
 Components:
 - audio_processor: STT/TTS with Deepgram, ElevenLabs, Whisper
-- call_handler: Twilio integration and call routing
+- call_handler: Telnyx integration and call routing
 - tool_executor: CRM tool integration (160+ Perennia tools)
 
 Usage:
@@ -28,8 +28,8 @@ Usage:
     from ai_receptionist import create_audio_processor
 
     async with create_audio_processor() as processor:
-        text = await processor.transcribe_twilio_audio(audio_data)
-        audio = await processor.synthesize_for_twilio("Hello!")
+        text = await processor.transcribe_telephony_audio(audio_data)
+        audio = await processor.synthesize_for_telephony("Hello!")
 """
 
 from .audio_processor import (
@@ -67,7 +67,7 @@ from .call_handler import (
     CallDirection,
     CallContext,
     # Handlers
-    TwilioStreamHandler,
+    TelnyxStreamHandler,
     RealtimeConversation,
     # Factory
     create_call_handler,
@@ -114,7 +114,7 @@ __all__ = [
     "CallState",
     "CallDirection",
     "CallContext",
-    "TwilioStreamHandler",
+    "TelnyxStreamHandler",
     "RealtimeConversation",
     "create_call_handler",
     "handle_voice_stream_websocket",

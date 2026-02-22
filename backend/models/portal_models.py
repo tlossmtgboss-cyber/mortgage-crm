@@ -792,7 +792,7 @@ class NotificationQueue(Base):
     status = Column(String(20), default="pending")  # pending, sent, failed, cancelled
     sent_at = Column(DateTime)
     delivery_error = Column(Text)
-    external_message_id = Column(String(255))  # ID from Twilio/SendGrid
+    external_message_id = Column(String(255))  # ID from Telnyx/SendGrid
 
     # Tracking
     opened_at = Column(DateTime)

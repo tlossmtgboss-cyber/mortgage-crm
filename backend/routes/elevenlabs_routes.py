@@ -501,7 +501,7 @@ class OutboundCallRequest(BaseModel):
     purpose: str = Field(..., description="Purpose of the call")
     lo_name: Optional[str] = Field(None, description="Loan officer name")
     first_message: Optional[str] = Field(None, description="Custom first message")
-    use_amd: bool = Field(False, description="Enable Twilio AMD to detect voicemail vs human")
+    use_amd: bool = Field(False, description="Enable AMD (Answering Machine Detection) to detect voicemail vs human")
     voicemail_message: Optional[str] = Field(None, description="Custom voicemail message if AMD detects machine")
 
 
@@ -616,25 +616,31 @@ async def list_phone_numbers(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-class ImportTwilioNumberRequest(BaseModel):
-    """Request body for importing a Twilio number — keeps secrets out of query params."""
+class ImportTelephonyNumberRequest(BaseModel):
+    """Request body for importing a phone number — keeps secrets out of query params.
+
+    Note: Field names 'twilio_account_sid' and 'twilio_auth_token' are required by
+    the ElevenLabs Conversational AI API — these are external API field names, not ours.
+    """
     phone_number: str = Field(..., description="Phone number to import")
-    twilio_account_sid: str = Field(..., description="Twilio Account SID")
-    twilio_auth_token: str = Field(..., description="Twilio Auth Token")
+    twilio_account_sid: str = Field(..., description="Telephony provider Account SID (required by ElevenLabs API)")
+    twilio_auth_token: str = Field(..., description="Telephony provider Auth Token (required by ElevenLabs API)")
     label: str = Field("Perennia AI", description="Label for this number")
 
 
+# Route path matches ElevenLabs API naming convention (external requirement)
 @router.post("/phone-numbers/import-twilio")
-async def import_twilio_number(
-    request_body: ImportTwilioNumberRequest,
+async def import_telephony_number(
+    request_body: ImportTelephonyNumberRequest,
     admin_key: str = None,
     user_email: str = None,
     current_user=None,
     db: Session = Depends(get_db)
 ):
-    """Import a Twilio phone number into ElevenLabs for Conversational AI."""
+    """Import a phone number into ElevenLabs for Conversational AI."""
     api_key = await _get_elevenlabs_api_key(admin_key, user_email, current_user, db)
 
+    # ElevenLabs API requires "twilio_config" key — external API field name
     payload = {
         "phone_number": request_body.phone_number,
         "label": request_body.label,
@@ -657,12 +663,12 @@ async def import_twilio_number(
             if response.status_code in [200, 201]:
                 return {"data": response.json()}
             else:
-                logger.error(f"Failed to import Twilio number: {response.text}")
+                logger.error(f"Failed to import phone number: {response.text}")
                 raise HTTPException(status_code=response.status_code, detail=response.text)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to import Twilio number: {e}")
+        logger.error(f"Failed to import phone number: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -682,10 +688,10 @@ async def make_outbound_call(
     Requires:
     - ElevenLabs API key configured
     - An agent_id (create one via /agents endpoint)
-    - A phone_number_id (import Twilio number via /phone-numbers/import-twilio)
+    - A phone_number_id (import phone number via /phone-numbers/import-twilio — ElevenLabs API path)
 
     Optional:
-    - use_amd=true: Enable Twilio AMD to detect voicemail vs human
+    - use_amd=true: Enable AMD (Answering Machine Detection) to detect voicemail vs human
       - Human answers: Connects to AI conversation
       - Voicemail detected: Plays TTS message using Sam's voice
     """
@@ -743,7 +749,7 @@ async def make_outbound_call(
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{ELEVENLABS_API_URL}/convai/twilio/outbound-call",
+                f"{ELEVENLABS_API_URL}/convai/twilio/outbound-call",  # ElevenLabs API endpoint path
                 headers={
                     "xi-api-key": api_key,
                     "Content-Type": "application/json"

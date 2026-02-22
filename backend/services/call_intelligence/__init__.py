@@ -82,7 +82,7 @@ from .input_formats import (
     TranscriptionResult,
     DocumentInput,
     DocumentType,
-    parse_twilio_webhook,
+    parse_telnyx_webhook,
     parse_vonage_webhook,
 )
 from .email_templates import (
@@ -150,7 +150,7 @@ __all__ = [
     "TranscriptionResult",
     "DocumentInput",
     "DocumentType",
-    "parse_twilio_webhook",
+    "parse_telnyx_webhook",
     "parse_vonage_webhook",
     # Email templates
     "TemplateManager",

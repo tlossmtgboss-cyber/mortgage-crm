@@ -5,7 +5,7 @@ Extracted from smart_scheduler_routes.py
 Provides:
 - ICS calendar file generation
 - Appointment confirmation emails (SendGrid)
-- Appointment confirmation SMS (Twilio)
+- Appointment confirmation SMS (Telnyx)
 - Appointment update emails with calendar invite
 - Appointment update SMS
 - Team member notification emails
@@ -249,29 +249,27 @@ def send_appointment_confirmation_sms(
     appointment_time: str,
     team_member_name: str = None
 ):
-    """Send appointment confirmation SMS via Twilio"""
+    """Send appointment confirmation SMS via Telnyx"""
     try:
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+        from_number = os.getenv("TELNYX_PHONE_NUMBER")
 
-        if not account_sid or not auth_token or not from_number:
-            logger.warning("Twilio credentials not configured - skipping SMS confirmation")
+        if not from_number:
+            logger.warning("TELNYX_PHONE_NUMBER not configured - skipping SMS confirmation")
             return False
 
-        from twilio.rest import Client
-        client = Client(account_sid, auth_token)
+        import telnyx
 
         team_member_text = f" with {team_member_name}" if team_member_name else ""
         message_body = f"Hi {attendee_name}! Your appointment{team_member_text} is confirmed for {appointment_date} at {appointment_time}. We'll send a reminder before your call. Reply HELP for assistance."
 
-        message = client.messages.create(
-            body=message_body,
+        message = telnyx.Message.create(
             from_=from_number,
-            to=attendee_phone
+            to=attendee_phone,
+            text=message_body,
         )
 
-        logger.info(f"Appointment confirmation SMS sent to {attendee_phone}, SID: {message.sid}")
+        msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
+        logger.info(f"Appointment confirmation SMS sent to {attendee_phone}, ID: {msg_id}")
         return True
 
     except Exception as e:
@@ -443,29 +441,27 @@ def send_appointment_update_sms(
     appointment_time: str,
     team_member_name: str = None
 ):
-    """Send appointment update SMS via Twilio"""
+    """Send appointment update SMS via Telnyx"""
     try:
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+        from_number = os.getenv("TELNYX_PHONE_NUMBER")
 
-        if not account_sid or not auth_token or not from_number:
-            logger.warning("Twilio credentials not configured - skipping SMS update")
+        if not from_number:
+            logger.warning("TELNYX_PHONE_NUMBER not configured - skipping SMS update")
             return False
 
-        from twilio.rest import Client
-        client = Client(account_sid, auth_token)
+        import telnyx
 
         team_member_text = f" with {team_member_name}" if team_member_name else ""
         message_body = f"Hi {attendee_name}! Your appointment{team_member_text} has been UPDATED to {appointment_date} at {appointment_time}. Please check your email for the updated calendar invite."
 
-        message = client.messages.create(
-            body=message_body,
+        message = telnyx.Message.create(
             from_=from_number,
-            to=attendee_phone
+            to=attendee_phone,
+            text=message_body,
         )
 
-        logger.info(f"Appointment update SMS sent to {attendee_phone}, SID: {message.sid}")
+        msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
+        logger.info(f"Appointment update SMS sent to {attendee_phone}, ID: {msg_id}")
         return True
 
     except Exception as e:

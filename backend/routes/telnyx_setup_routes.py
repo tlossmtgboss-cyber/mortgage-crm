@@ -142,7 +142,7 @@ async def get_user_telnyx_config(user_id: int, db: Session) -> Optional[Dict[str
         result = db.execute(text("""
             SELECT telnyx_api_key, telnyx_connection_id,
                    telnyx_messaging_profile_id, telnyx_phone_number
-            FROM user_twilio_config
+            FROM user_twilio_config  -- Legacy table name
             WHERE user_id = :user_id
         """), {"user_id": user_id}).fetchone()
 
@@ -171,7 +171,7 @@ async def save_user_telnyx_config(
     try:
         # Check if record exists
         exists = db.execute(text("""
-            SELECT 1 FROM user_twilio_config WHERE user_id = :user_id
+            SELECT 1 FROM user_twilio_config WHERE user_id = :user_id  -- Legacy table name
         """), {"user_id": user_id}).fetchone()
 
         if exists:
@@ -195,14 +195,14 @@ async def save_user_telnyx_config(
             if updates:
                 updates.append("updated_at = NOW()")
                 db.execute(text(f"""
-                    UPDATE user_twilio_config
+                    UPDATE user_twilio_config  -- Legacy table name
                     SET {', '.join(updates)}
                     WHERE user_id = :user_id
                 """), params)
         else:
             # Insert new record
             db.execute(text("""
-                INSERT INTO user_twilio_config (
+                INSERT INTO user_twilio_config (  -- Legacy table name
                     user_id, telnyx_api_key, telnyx_connection_id,
                     telnyx_messaging_profile_id, telnyx_phone_number,
                     provider, created_at, updated_at
@@ -672,7 +672,7 @@ async def remove_credentials(
     """Remove Telnyx configuration for the user"""
     try:
         db.execute(text("""
-            UPDATE user_twilio_config
+            UPDATE user_twilio_config  -- Legacy table name
             SET telnyx_api_key = NULL,
                 telnyx_connection_id = NULL,
                 telnyx_messaging_profile_id = NULL,

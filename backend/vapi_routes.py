@@ -378,8 +378,6 @@ async def create_task_function(
         from database.models import Task, Lead, User
         from sqlalchemy import or_
         from datetime import datetime, timezone, timedelta
-        from integrations.twilio_service import TwilioSMSClient
-
         data = await request.json()
         phone = data.get("phone_number")
         title = data.get("title")
@@ -442,8 +440,9 @@ async def create_task_function(
                 if owner and owner.user_metadata:
                     owner_phone = owner.user_metadata.get("phone")
                     if owner_phone:
-                        # Initialize Twilio client
-                        sms_client = TwilioSMSClient()
+                        # Initialize SMS client
+                        from integrations.sms_service import get_sms_client
+                        sms_client = get_sms_client()
 
                         # Create urgent notification message
                         caller_name = lead.name or "Unknown caller"
@@ -2294,7 +2293,7 @@ async def ai_receptionist_sms_webhook(
     AI receptionist-specific handling.
     """
     try:
-        # Parse Twilio webhook payload
+        # Parse Telnyx/Vapi webhook payload
         form_data = await request.form()
         from_number = form_data.get("From", "")
         to_number = form_data.get("To", "")
@@ -2303,7 +2302,7 @@ async def ai_receptionist_sms_webhook(
 
         logger.info(f"AI Receptionist SMS webhook: {from_number} -> {to_number}: {message_body[:50]}...")
 
-        # Process in background for fast response to Twilio
+        # Process in background for fast response to provider
         background_tasks.add_task(
             process_ai_receptionist_sms,
             db, from_number, to_number, message_body, message_sid
@@ -2457,7 +2456,7 @@ async def get_sms_config(
     import os
 
     return {
-        "enabled": bool(os.getenv("TWILIO_ACCOUNT_SID")),
+        "enabled": bool(os.getenv("TELNYX_API_KEY")),
         "post_call_sms_enabled": os.getenv("ENABLE_POST_CALL_SMS", "true").lower() == "true",
         "calendly_link": os.getenv("CALENDLY_LINK", "https://calendly.com/timloss/discovery-call"),
         "business_name": os.getenv("BUSINESS_NAME", "CMG Home Loans"),

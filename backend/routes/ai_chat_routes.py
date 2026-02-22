@@ -201,7 +201,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                         tool_result = None
 
                         if function_name == "send_sms":
-                            # Send SMS using configured provider (Telnyx/Twilio)
+                            # Send SMS using configured provider (Telnyx)
                             try:
                                 if not sms_client.enabled:
                                     tool_result = {"success": False, "error": f"SMS service not configured. Check {sms_client.provider} credentials."}
@@ -228,7 +228,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
                                                 message=sms_body,
                                                 direction="outbound",
                                                 status="sent",
-                                                twilio_sid=message_sid,
+                                                provider_message_id=message_sid,
                                                 ai_generated=True
                                             )
                                             db.add(sms_record)

@@ -61,15 +61,15 @@ KEYS_TO_ROTATE = [
         "can_generate": False,
     },
     {
-        "name": "TWILIO_AUTH_TOKEN",
-        "description": "Twilio authentication token",
-        "url": "https://console.twilio.com/",
+        "name": "TELNYX_API_KEY",
+        "description": "Telnyx API key",
+        "url": "https://portal.telnyx.com/#/app/api-keys",
         "can_generate": False,
     },
     {
-        "name": "TWILIO_API_KEY_SECRET",
-        "description": "Twilio API key secret",
-        "url": "https://console.twilio.com/us1/account/keys",
+        "name": "TELNYX_API_KEY_V2",
+        "description": "Telnyx API key (v2)",
+        "url": "https://portal.telnyx.com/#/app/api-keys",
         "can_generate": False,
     },
     {
@@ -175,7 +175,7 @@ def print_railway_instructions():
    - OPENAI_API_KEY (get from OpenAI dashboard)
    - ANTHROPIC_API_KEY (get from Anthropic console)
    - SENDGRID_API_KEY (get from SendGrid)
-   - TWILIO_AUTH_TOKEN (get from Twilio)
+   - TELNYX_API_KEY (get from Telnyx portal)
    - All other keys listed above
 
 5. Add Redis URL:
@@ -248,11 +248,10 @@ FROM_EMAIL=admin@yourdomain.com
 FROM_NAME=Your Company
 
 # =============================================================================
-# SMS (Twilio)
+# SMS (Telnyx)
 # =============================================================================
-TWILIO_ACCOUNT_SID=<GET_FROM_TWILIO>
-TWILIO_AUTH_TOKEN=<GET_FROM_TWILIO>
-TWILIO_PHONE_NUMBER=+1234567890
+TELNYX_API_KEY=<GET_FROM_TELNYX_PORTAL>
+TELNYX_PHONE_NUMBER=+1234567890
 
 # =============================================================================
 # OAUTH

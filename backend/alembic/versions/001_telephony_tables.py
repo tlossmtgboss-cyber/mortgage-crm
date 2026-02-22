@@ -41,7 +41,7 @@ def upgrade():
         sa.Column('phone_number', sa.String(20), nullable=False),
         sa.Column('friendly_name', sa.String(100), nullable=True),
         sa.Column('verification_status', sa.String(20), default='pending'),
-        sa.Column('twilio_sid', sa.String(100), nullable=True),
+        sa.Column('provider_sid', sa.String(100), nullable=True),
         sa.Column('verified_at', sa.DateTime(), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()')),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='SET NULL'),

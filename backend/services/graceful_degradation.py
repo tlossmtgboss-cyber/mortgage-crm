@@ -99,8 +99,8 @@ class GracefulDegradation:
         # Check Redis
         health['redis'] = await self._check_redis_health()
 
-        # Check Twilio (lightweight check)
-        health['twilio'] = await self._check_twilio_health()
+        # Check Telnyx (lightweight check)
+        health['telnyx'] = await self._check_telnyx_health()
 
         return health
 
@@ -118,12 +118,12 @@ class GracefulDegradation:
         if all(h.healthy for h in health.values()):
             level = ServiceLevel.FULL
 
-        # Database and Twilio healthy = DEGRADED (can do calls, cached AI)
-        elif health['database'].healthy and health['twilio'].healthy:
+        # Database and Telnyx healthy = DEGRADED (can do calls, cached AI)
+        elif health['database'].healthy and health['telnyx'].healthy:
             level = ServiceLevel.DEGRADED
 
-        # Only Twilio healthy = MINIMAL (calls only)
-        elif health['twilio'].healthy:
+        # Only Telnyx healthy = MINIMAL (calls only)
+        elif health['telnyx'].healthy:
             level = ServiceLevel.MINIMAL
 
         # Nothing working = MAINTENANCE
@@ -280,11 +280,11 @@ class GracefulDegradation:
         except redis.RedisError as e:
             return ServiceHealth(name='redis', healthy=False, error=str(e))
 
-    async def _check_twilio_health(self) -> ServiceHealth:
-        """Check Twilio API health (lightweight check)"""
-        # In production, could check Twilio status page or make test API call
+    async def _check_telnyx_health(self) -> ServiceHealth:
+        """Check Telnyx API health (lightweight check)"""
+        # In production, could check Telnyx status page or make test API call
         # For now, assume healthy unless we have evidence otherwise
-        return ServiceHealth(name='twilio', healthy=True, latency_ms=0)
+        return ServiceHealth(name='telnyx', healthy=True, latency_ms=0)
 
     def force_level(self, level: ServiceLevel):
         """Force a specific service level (for maintenance windows)"""

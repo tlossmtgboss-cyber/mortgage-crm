@@ -129,7 +129,7 @@ class DialerEngine:
 
         Args:
             task_ids: List of task IDs to include in session
-            base_url: Base URL for Twilio callbacks
+            base_url: Base URL for Telnyx callbacks
 
         Returns:
             Dict with session info or error
@@ -315,7 +315,7 @@ class DialerEngine:
         Args:
             session_id: Dialer session ID
             task_id: Session task ID (not the Task table ID)
-            base_url: Base URL for Twilio callbacks
+            base_url: Base URL for Telnyx callbacks
 
         Returns:
             Dict with call result
@@ -473,12 +473,12 @@ class DialerEngine:
         answered_by: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Handle Twilio status callback for a call
+        Handle Telnyx status callback for a call
 
         Args:
             session_id: Dialer session ID
             task_id: Session task ID
-            call_sid: Twilio call SID
+            call_sid: Telnyx call SID
             status: Call status (ringing, in-progress, completed, no-answer, busy, failed)
             duration: Call duration in seconds
             answered_by: Who/what answered (human, machine, etc.)
@@ -502,7 +502,7 @@ class DialerEngine:
             DialerSession.id == session_id
         ).first()
 
-        # Map Twilio status to our status and send WebSocket events
+        # Map call status to our status and send WebSocket events
         if status == "ringing":
             ws_manager.send_to_agent_sync(
                 str(session.agent_id),

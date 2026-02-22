@@ -90,13 +90,12 @@ async def get_ai_receptionist_config(
 ):
     """Get AI Receptionist configuration"""
     try:
-        # Check if Twilio and OpenAI are configured
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+        # Check if telephony and OpenAI are configured
+        telnyx_phone = os.getenv("TELNYX_PHONE_NUMBER")
+        telnyx_key = os.getenv("TELNYX_API_KEY")
         openai_key = os.getenv("OPENAI_API_KEY")
 
-        enabled = bool(twilio_sid and twilio_token and twilio_phone and openai_key)
+        enabled = bool(telnyx_phone and telnyx_key and openai_key)
 
         # Get business config from user metadata or defaults
         user_metadata = current_user.user_metadata or {}
@@ -105,7 +104,7 @@ async def get_ai_receptionist_config(
         return {
             "enabled": enabled,
             "business_name": business_config.get("business_name", current_user.full_name or "Your Business"),
-            "phone_number": twilio_phone,
+            "phone_number": telnyx_phone,
             "business_hours": business_config.get("business_hours", {
                 "start": "09:00",
                 "end": "17:00",
@@ -245,7 +244,7 @@ async def make_outbound_call(
 ):
     """Make an outbound AI call"""
     try:
-        from twilio.rest import Client as TwilioClient
+        from telephony.provider import get_telephony_provider
         main = get_models()
         Activity = main.Activity
         ActivityType = main.ActivityType
@@ -258,34 +257,27 @@ async def make_outbound_call(
         if not to_number:
             raise HTTPException(status_code=400, detail="Phone number is required")
 
-        # Initialize Twilio client
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        # Initialize telephony provider
+        provider = get_telephony_provider()
 
-        if not twilio_sid or not twilio_token:
-            raise HTTPException(status_code=503, detail="Twilio is not configured")
-
-        twilio_client = TwilioClient(twilio_sid, twilio_token)
-
-        # Get Twilio phone number
-        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+        # Get outbound phone number
+        from_number = os.getenv("TELNYX_PHONE_NUMBER")
         if not from_number:
-            raise HTTPException(status_code=503, detail="Twilio phone number not configured")
+            raise HTTPException(status_code=503, detail="Outbound phone number not configured")
 
         # Create TwiML for the call - use OpenAI Realtime API webhook
         api_url = os.getenv("API_URL", "https://app.perenniaai.com")
         twiml_url = f"{api_url}/api/v1/voice/incoming?script_type={script_type}"
 
         # Make the call
-        call = twilio_client.calls.create(
+        call_result = provider.place_call(
             to=to_number,
             from_=from_number,
             url=twiml_url,
-            method='POST',
             status_callback=f"{api_url}/api/v1/voice/call-status",
-            status_callback_event=['completed'],
-            status_callback_method='POST'
         )
+
+        call_sid = call_result.call_sid if hasattr(call_result, 'call_sid') else str(call_result)
 
         # Log the activity
         activity = Activity(
@@ -296,7 +288,7 @@ async def make_outbound_call(
                 "direction": "outbound",
                 "phone_number": to_number,
                 "script_type": script_type,
-                "call_sid": call.sid,
+                "call_sid": call_sid,
                 "status": "initiated",
                 "call_type": "outbound_call"
             },
@@ -307,7 +299,7 @@ async def make_outbound_call(
 
         return {
             "success": True,
-            "call_sid": call.sid,
+            "call_sid": call_sid,
             "message": "Call initiated successfully"
         }
 
@@ -657,7 +649,7 @@ async def drop_voicemail(
 
 @router.post("/amd-callback")
 async def amd_callback(request: Request):
-    """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
+    """Handle AMD (Answering Machine Detection) callback (legacy)"""
     try:
         form_data = await request.form()
         amd_status = form_data.get("AnsweredBy")
@@ -678,9 +670,9 @@ async def voicemail_twiml(
     request: Request = None
 ):
     """Generate TwiML for voicemail message - only plays if voicemail detected"""
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
-    response = VoiceResponse()
+    response = TeXMLResponse()
 
     # If AMD detected a human, hang up immediately
     if AnsweredBy == 'human':
@@ -799,21 +791,21 @@ async def vapi_voicemail_status_webhook(
         return {"status": "error", "message": "Internal server error"}
 
 
-@webhook_router.post("/twilio/sms")
-async def twilio_sms_webhook(
+@webhook_router.post("/telnyx/sms")
+async def telephony_sms_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Twilio webhook for incoming SMS messages.
+    Webhook for incoming SMS messages.
     Processes incoming texts, identifies the sender, and generates AI responses.
 
-    Configure in Twilio Console:
-    - Messaging > Services > [Your Service] > Integration
-    - Set webhook URL: https://your-domain.com/api/v1/webhooks/twilio/sms
+    Configure in Telnyx Mission Control:
+    - Messaging > Messaging Profiles > [Your Profile]
+    - Set webhook URL: https://your-domain.com/api/v1/webhooks/telnyx/sms
     """
-    logger.info("TWILIO_SMS_WEBHOOK: Request received")
+    logger.info("SMS_WEBHOOK: Request received")
     try:
         main = get_models()
         User = main.User
@@ -822,7 +814,7 @@ async def twilio_sms_webhook(
         SMSMessage = main.SMSMessage
         SMSConversation = main.SMSConversation
 
-        # Parse Twilio webhook payload FIRST (form-encoded)
+        # Parse webhook payload FIRST (form-encoded)
         form_data = await request.form()
         from_number = form_data.get("From", "")
         to_number = form_data.get("To", "")
@@ -830,7 +822,7 @@ async def twilio_sms_webhook(
         message_sid = form_data.get("MessageSid", "")
         num_media = int(form_data.get("NumMedia", 0))
 
-        logger.info(f"TWILIO_SMS_WEBHOOK: From={from_number}, Body={message_body[:50]}...")
+        logger.info(f"SMS_WEBHOOK: From={from_number}, Body={message_body[:50]}...")
 
         # Auto-create sms_conversations table if it doesn't exist
         try:
@@ -873,7 +865,7 @@ async def twilio_sms_webhook(
             db.commit()
         except Exception as e:
             db.rollback()
-            logger.warning(f"Failed to add sms_messages columns in twilio_sms_webhook: {e}")
+            logger.warning(f"Failed to add sms_messages columns in sms_webhook: {e}")
 
         # Normalize phone numbers
         def normalize_phone(phone):
@@ -975,7 +967,7 @@ async def twilio_sms_webhook(
             message=message_body,
             direction="inbound",
             status="received",
-            twilio_sid=message_sid,
+            provider_message_id=message_sid,
             meta_data={"num_media": num_media, "contact_name": contact_name}
         )
         db.add(sms_message)
@@ -1025,20 +1017,18 @@ async def twilio_sms_webhook(
                 loan_id=loan.id if loan else None
             )
 
-        # Return TwiML response (empty - we send reply via API)
-        from twilio.twiml.messaging_response import MessagingResponse
-        response = MessagingResponse()
-        return Response(content=str(response), media_type="application/xml")
+        # Return empty XML response (we send reply via API)
+        empty_response = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+        return Response(content=empty_response, media_type="application/xml")
 
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        logger.error(f"TWILIO WEBHOOK ERROR: {e}")
-        logger.error(f"TWILIO WEBHOOK TRACEBACK: {error_details}")
-        # Still return TwiML response to prevent Twilio retry
-        from twilio.twiml.messaging_response import MessagingResponse
-        response = MessagingResponse()
-        return Response(content=str(response), media_type="application/xml")
+        logger.error(f"SMS WEBHOOK ERROR: {e}")
+        logger.error(f"SMS WEBHOOK TRACEBACK: {error_details}")
+        # Still return XML response to prevent retry
+        empty_response = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+        return Response(content=empty_response, media_type="application/xml")
 
 
 async def generate_ai_sms_response(
@@ -1055,7 +1045,7 @@ async def generate_ai_sms_response(
     db = SessionLocal()
     try:
         import openai
-        from twilio.rest import Client as TwilioClient
+        from telephony.provider import get_telephony_provider
 
         main = get_models()
         User = main.User
@@ -1128,48 +1118,36 @@ Be concise - you're texting!"""
         if len(ai_response) > 300:
             ai_response = ai_response[:297] + "..."
 
-        # Send SMS via Twilio
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
-        messaging_service_sid = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
+        # Send SMS via telephony provider
+        sms_phone = os.getenv("TELNYX_PHONE_NUMBER")
+        messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID")
 
-        if not twilio_sid or not twilio_token:
-            logger.error("Twilio credentials not configured")
+        if not sms_phone and not messaging_profile_id:
+            logger.error("No phone number or messaging profile configured for SMS")
             return
 
-        if not messaging_service_sid and not twilio_phone:
-            logger.error("No Twilio phone number or messaging service configured")
-            return
+        provider = get_telephony_provider()
 
-        twilio_client = TwilioClient(twilio_sid, twilio_token)
-
-        # Use Messaging Service SID if available (better deliverability with A2P 10DLC)
-        if messaging_service_sid:
-            sent_message = twilio_client.messages.create(
-                body=ai_response,
-                messaging_service_sid=messaging_service_sid,
-                to=from_number
-            )
-        else:
-            sent_message = twilio_client.messages.create(
-                body=ai_response,
-                from_=twilio_phone,
-                to=from_number
-            )
+        sent_message = provider.send_sms(
+            to=from_number,
+            from_=sms_phone,
+            body=ai_response,
+            messaging_profile_id=messaging_profile_id,
+        )
 
         # Store outbound message
+        provider_msg_id = sent_message.sid if hasattr(sent_message, 'sid') else str(sent_message)
         outbound_sms = SMSMessage(
             user_id=user_id,
             lead_id=lead_id or conversation.lead_id,
             loan_id=loan_id or conversation.loan_id,
             conversation_id=conversation_id,
             to_number=from_number,
-            from_number=twilio_phone,
+            from_number=sms_phone,
             message=ai_response,
             direction="outbound",
             status="sent",
-            twilio_sid=sent_message.sid,
+            provider_message_id=provider_msg_id,
             ai_generated=True,
             meta_data={"model": "gpt-4o-mini", "in_response_to": inbound_message[:100]}
         )
@@ -1305,35 +1283,24 @@ async def send_sms_in_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     try:
-        from twilio.rest import Client as TwilioClient
+        from telephony.provider import get_telephony_provider
 
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
-        messaging_service_sid = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
+        sms_phone = os.getenv("TELNYX_PHONE_NUMBER")
+        messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID")
 
-        if not twilio_sid or not twilio_token:
+        if not sms_phone and not messaging_profile_id:
             raise HTTPException(status_code=500, detail="SMS service not configured")
 
-        if not messaging_service_sid and not twilio_phone:
-            raise HTTPException(status_code=500, detail="No Twilio phone number or messaging service configured")
+        provider = get_telephony_provider()
 
-        twilio_client = TwilioClient(twilio_sid, twilio_token)
+        sent_message = provider.send_sms(
+            to=conversation.phone_number,
+            from_=sms_phone,
+            body=message,
+            messaging_profile_id=messaging_profile_id,
+        )
 
-        # Use Messaging Service SID if available (better deliverability with A2P 10DLC)
-        # Otherwise fall back to phone number
-        if messaging_service_sid:
-            sent_message = twilio_client.messages.create(
-                body=message,
-                messaging_service_sid=messaging_service_sid,
-                to=conversation.phone_number
-            )
-        else:
-            sent_message = twilio_client.messages.create(
-                body=message,
-                from_=twilio_phone,
-                to=conversation.phone_number
-            )
+        provider_msg_id = sent_message.sid if hasattr(sent_message, 'sid') else str(sent_message)
 
         sms_message = SMSMessage(
             user_id=current_user.id,
@@ -1341,11 +1308,11 @@ async def send_sms_in_conversation(
             loan_id=conversation.loan_id,
             conversation_id=conversation_id,
             to_number=conversation.phone_number,
-            from_number=twilio_phone,
+            from_number=sms_phone,
             message=message,
             direction="outbound",
             status="sent",
-            twilio_sid=sent_message.sid,
+            provider_message_id=provider_msg_id,
             ai_generated=False
         )
         db.add(sms_message)
@@ -1355,7 +1322,7 @@ async def send_sms_in_conversation(
 
         db.commit()
 
-        return {"success": True, "message_id": sms_message.id, "twilio_sid": sent_message.sid}
+        return {"success": True, "message_id": sms_message.id, "provider_message_id": provider_msg_id}
 
     except Exception as e:
         logger.error(f"Error sending SMS: {e}")
@@ -1480,105 +1447,95 @@ async def debug_sms_messages(
         return {"error": "Internal server error"}
 
 
-@debug_router.get("/twilio-config")
-async def debug_twilio_config(
+@debug_router.get("/telephony-config")
+async def debug_telephony_config(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep())
 ):
-    """Debug endpoint to check Twilio configuration (admin only)"""
+    """Debug endpoint to check telephony configuration (admin only)"""
     if not getattr(current_user, 'is_platform_admin', False) and not getattr(current_user, 'is_site_admin', False):
         raise HTTPException(status_code=403, detail="Admin access required")
-    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-    twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
-    twilio_from = os.getenv("TWILIO_FROM_NUMBER")
-    twilio_messaging_service = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
+    telnyx_key = os.getenv("TELNYX_API_KEY")
+    telnyx_phone = os.getenv("TELNYX_PHONE_NUMBER")
+    telnyx_connection = os.getenv("TELNYX_CONNECTION_ID")
+    telnyx_messaging = os.getenv("TELNYX_MESSAGING_PROFILE_ID")
 
     return {
-        "account_sid": twilio_sid[:10] + "..." if twilio_sid else None,
-        "auth_token": "***configured***" if twilio_token else None,
-        "TWILIO_PHONE_NUMBER": twilio_phone,
-        "TWILIO_FROM_NUMBER": twilio_from,
-        "TWILIO_MESSAGING_SERVICE_SID": twilio_messaging_service,
-        "using_phone": twilio_phone or twilio_from,
-        "configured": bool(twilio_sid and twilio_token and (twilio_phone or twilio_from or twilio_messaging_service)),
-        "note": "Error 30034 means carrier filtering - requires A2P 10DLC registration. Set TWILIO_MESSAGING_SERVICE_SID for better deliverability."
+        "provider": "telnyx",
+        "api_key": "***configured***" if telnyx_key else None,
+        "TELNYX_PHONE_NUMBER": telnyx_phone,
+        "TELNYX_CONNECTION_ID": telnyx_connection,
+        "TELNYX_MESSAGING_PROFILE_ID": telnyx_messaging,
+        "using_phone": telnyx_phone,
+        "configured": bool(telnyx_key and telnyx_phone),
+        "note": "Telnyx is the primary telephony provider. Configure via Telnyx Mission Control."
     }
 
+# Backward-compatible alias
+debug_twilio_config = debug_telephony_config
 
-@debug_router.get("/twilio-message/{message_sid}")
-async def debug_twilio_message_status(
+
+@debug_router.get("/message/{message_sid}")
+async def debug_message_status(
     message_sid: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep())
 ):
-    """Check the delivery status of a specific Twilio message by SID (admin only)"""
+    """Check the delivery status of a specific message by SID (admin only)"""
     if not getattr(current_user, 'is_platform_admin', False) and not getattr(current_user, 'is_site_admin', False):
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        from twilio.rest import Client as TwilioClient
+        from telephony.provider import get_telephony_provider
 
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        provider = get_telephony_provider()
+        message = provider.get_message(message_sid)
 
-        if not twilio_sid or not twilio_token:
-            return {"error": "Twilio not configured"}
-
-        twilio_client = TwilioClient(twilio_sid, twilio_token)
-        message = twilio_client.messages(message_sid).fetch()
+        if not message:
+            return {"error": "Message not found or provider does not support message lookup"}
 
         return {
-            "sid": message.sid,
-            "status": message.status,
-            "error_code": message.error_code,
-            "error_message": message.error_message,
-            "from": message.from_,
-            "to": message.to,
-            "body": message.body[:100] + "..." if len(message.body) > 100 else message.body,
-            "date_sent": str(message.date_sent),
-            "date_created": str(message.date_created),
-            "direction": message.direction,
-            "num_segments": message.num_segments,
-            "price": message.price,
-            "price_unit": message.price_unit
+            "sid": getattr(message, 'sid', message_sid),
+            "status": getattr(message, 'status', 'unknown'),
+            "error_code": getattr(message, 'error_code', None),
+            "error_message": getattr(message, 'error_message', None),
+            "from": getattr(message, 'from_', None),
+            "to": getattr(message, 'to', None),
+            "body": (getattr(message, 'body', '')[:100] + "...") if len(getattr(message, 'body', '')) > 100 else getattr(message, 'body', ''),
+            "date_sent": str(getattr(message, 'date_sent', '')),
+            "date_created": str(getattr(message, 'date_created', '')),
+            "direction": getattr(message, 'direction', None),
         }
     except Exception as e:
         return {"error": "Internal server error"}
 
 
-@debug_router.get("/twilio-recent-messages")
-async def debug_twilio_recent_messages(
+@debug_router.get("/recent-messages")
+async def debug_recent_messages(
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep())
 ):
-    """Get recent messages directly from Twilio API (admin only)"""
+    """Get recent messages directly from telephony provider API (admin only)"""
     if not getattr(current_user, 'is_platform_admin', False) and not getattr(current_user, 'is_site_admin', False):
         raise HTTPException(status_code=403, detail="Admin access required")
     try:
-        from twilio.rest import Client as TwilioClient
+        from telephony.provider import get_telephony_provider
 
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-
-        if not twilio_sid or not twilio_token:
-            return {"error": "Twilio not configured"}
-
-        twilio_client = TwilioClient(twilio_sid, twilio_token)
-        messages = twilio_client.messages.list(limit=limit)
+        provider = get_telephony_provider()
+        messages = provider.list_messages(limit=limit) if hasattr(provider, 'list_messages') else []
 
         return {
             "messages": [
                 {
-                    "sid": m.sid,
-                    "status": m.status,
-                    "error_code": m.error_code,
-                    "error_message": m.error_message,
-                    "from": m.from_,
-                    "to": m.to,
-                    "body": m.body[:50] + "..." if len(m.body) > 50 else m.body,
-                    "direction": m.direction,
-                    "date_sent": str(m.date_sent)
+                    "sid": getattr(m, 'sid', ''),
+                    "status": getattr(m, 'status', ''),
+                    "error_code": getattr(m, 'error_code', None),
+                    "error_message": getattr(m, 'error_message', None),
+                    "from": getattr(m, 'from_', ''),
+                    "to": getattr(m, 'to', ''),
+                    "body": (getattr(m, 'body', '')[:50] + "...") if len(getattr(m, 'body', '')) > 50 else getattr(m, 'body', ''),
+                    "direction": getattr(m, 'direction', ''),
+                    "date_sent": str(getattr(m, 'date_sent', ''))
                 }
                 for m in messages
             ]
@@ -1593,9 +1550,9 @@ async def debug_send_test_sms(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_dep())
 ):
-    """Send a direct test SMS to verify Twilio is working"""
+    """Send a direct test SMS to verify telephony provider is working"""
     try:
-        from twilio.rest import Client as TwilioClient
+        from telephony.provider import get_telephony_provider
 
         data = await request.json()
         to_number = data.get("to_number")
@@ -1604,15 +1561,11 @@ async def debug_send_test_sms(
         if not to_number:
             return {"error": "to_number is required"}
 
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+        sms_phone = os.getenv("TELNYX_PHONE_NUMBER")
 
-        if not all([twilio_sid, twilio_token, twilio_phone]):
-            return {"error": "Twilio not configured", "config": {
-                "sid": bool(twilio_sid),
-                "token": bool(twilio_token),
-                "phone": twilio_phone
+        if not sms_phone:
+            return {"error": "Telephony not configured", "config": {
+                "phone": sms_phone
             }}
 
         # Format number
@@ -1622,25 +1575,21 @@ async def debug_send_test_sms(
         elif len(clean_number) == 11 and clean_number.startswith('1'):
             to_number = f"+{clean_number}"
 
-        twilio_client = TwilioClient(twilio_sid, twilio_token)
-        sent_msg = twilio_client.messages.create(
+        provider = get_telephony_provider()
+        sent_msg = provider.send_sms(
+            to=to_number,
+            from_=sms_phone,
             body=message,
-            from_=twilio_phone,
-            to=to_number
         )
 
-        # Immediately fetch status to see delivery progress
-        fetched_msg = twilio_client.messages(sent_msg.sid).fetch()
+        msg_sid = sent_msg.sid if hasattr(sent_msg, 'sid') else str(sent_msg)
 
         return {
             "success": True,
-            "message_sid": sent_msg.sid,
-            "from_number": twilio_phone,
+            "message_sid": msg_sid,
+            "from_number": sms_phone,
             "to_number": to_number,
-            "initial_status": sent_msg.status,
-            "fetched_status": fetched_msg.status,
-            "error_code": fetched_msg.error_code,
-            "error_message": fetched_msg.error_message
+            "status": getattr(sent_msg, 'status', 'sent'),
         }
     except Exception as e:
         logger.error(f"Debug send-test-sms error: {e}", exc_info=True)

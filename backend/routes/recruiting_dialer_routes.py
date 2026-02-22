@@ -2,10 +2,10 @@
 Recruiting Dialer API Routes
 
 Endpoints for:
-- Click-to-call for candidates (Twilio-integrated)
+- Click-to-call for candidates (Telnyx-integrated)
 - Call history management
 - Call notes and outcomes
-- Twilio webhooks for call status
+- Telephony webhooks for call status
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Form, Response
@@ -90,7 +90,7 @@ async def initiate_candidate_call(
     request: InitiateCallRequest
 ):
     """
-    Initiate a click-to-call to a candidate via Twilio.
+    Initiate a click-to-call to a candidate via the telephony provider.
 
     The system will:
     1. Look up the candidate's phone number
@@ -166,12 +166,12 @@ async def initiate_candidate_call(
         )
         conn.commit()
 
-    # Initiate call via Twilio
+    # Initiate call via telephony provider
     try:
-        from services.recruiting_twilio_service import get_recruiting_twilio_service
+        from services.recruiting_dialer_service import get_recruiting_dialer_service
 
         with get_db_connection() as conn:
-            service = get_recruiting_twilio_service(conn)
+            service = get_recruiting_dialer_service(conn)
             result = service.initiate_call(
                 call_id=call_id,
                 candidate_id=candidate_id,
@@ -206,8 +206,8 @@ async def initiate_candidate_call(
             }
 
     except Exception as e:
-        logger.error(f"Failed to initiate Twilio call: {e}")
-        # Fall back to returning call record without Twilio
+        logger.error(f"Failed to initiate telephony call: {e}")
+        # Fall back to returning call record without telephony
         return {
             "call_id": call_id,
             "candidate_id": candidate_id,
@@ -215,15 +215,15 @@ async def initiate_candidate_call(
             "phone": row.phone,
             "whisper_context": whisper_context,
             "status": "initiated",
-            "message": "Call record created. Twilio integration error",
-            "twilio_error": str(e),
+            "message": "Call record created. Telephony integration error",
+            "telephony_error": str(e),
         }
 
 
 @router.post("/calls/{call_id}/connect")
-async def connect_call_via_twilio(call_id: str):
+async def connect_call_via_telephony(call_id: str):
     """
-    Retry/reconnect a call via Twilio.
+    Retry/reconnect a call via the telephony provider.
 
     Used when an initial call attempt fails and user wants to retry.
     """
@@ -245,10 +245,10 @@ async def connect_call_via_twilio(call_id: str):
         raise HTTPException(status_code=404, detail="Call record not found")
 
     try:
-        from services.recruiting_twilio_service import get_recruiting_twilio_service
+        from services.recruiting_dialer_service import get_recruiting_dialer_service
 
         with get_db_connection() as conn:
-            service = get_recruiting_twilio_service(conn)
+            service = get_recruiting_dialer_service(conn)
             result = service.initiate_call(
                 call_id=call_id,
                 candidate_id=row.candidate_id,
@@ -279,107 +279,107 @@ async def connect_call_via_twilio(call_id: str):
 
 
 # =============================================================================
-# Twilio Webhook Endpoints
+# Telephony Webhook Endpoints
 # =============================================================================
 
-@router.post("/twilio/recruiter-answered/{call_id}")
-async def twilio_recruiter_answered(call_id: str):
+@router.post("/telnyx/recruiter-answered/{call_id}")
+async def telephony_recruiter_answered(call_id: str):
     """
-    Twilio webhook: Recruiter answered the call.
+    Telephony webhook: Recruiter answered the call.
 
     Plays whisper context and prompts for confirmation.
     """
     try:
-        from services.recruiting_twilio_service import get_recruiting_twilio_service
+        from services.recruiting_dialer_service import get_recruiting_dialer_service
 
         with get_db_connection() as conn:
-            service = get_recruiting_twilio_service(conn)
+            service = get_recruiting_dialer_service(conn)
             twiml = service.generate_recruiter_twiml(call_id)
 
         return Response(content=twiml, media_type="application/xml")
 
     except Exception as e:
         logger.error(f"Error in recruiter-answered webhook: {e}")
-        from twilio.twiml.voice_response import VoiceResponse
-        response = VoiceResponse()
+        from telephony.providers.telnyx.texml import TeXMLResponse
+        response = TeXMLResponse()
         response.say("Sorry, there was an error.", voice="Polly.Matthew")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
 
 
-@router.post("/twilio/recruiter-response/{call_id}")
-async def twilio_recruiter_response(
+@router.post("/telnyx/recruiter-response/{call_id}")
+async def telephony_recruiter_response(
     call_id: str,
     Digits: str = Form("")
 ):
     """
-    Twilio webhook: Recruiter pressed a digit.
+    Telephony webhook: Recruiter pressed a digit.
 
     1 = Connect to candidate
     Other = Cancel
     """
     try:
-        from services.recruiting_twilio_service import get_recruiting_twilio_service
+        from services.recruiting_dialer_service import get_recruiting_dialer_service
 
         with get_db_connection() as conn:
-            service = get_recruiting_twilio_service(conn)
+            service = get_recruiting_dialer_service(conn)
             twiml = service.generate_recruiter_response_twiml(call_id, Digits)
 
         return Response(content=twiml, media_type="application/xml")
 
     except Exception as e:
         logger.error(f"Error in recruiter-response webhook: {e}")
-        from twilio.twiml.voice_response import VoiceResponse
-        response = VoiceResponse()
+        from telephony.providers.telnyx.texml import TeXMLResponse
+        response = TeXMLResponse()
         response.say("Sorry, there was an error.", voice="Polly.Matthew")
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
 
 
-@router.post("/twilio/call-complete/{call_id}")
-async def twilio_call_complete(
+@router.post("/telnyx/call-complete/{call_id}")
+async def telephony_call_complete(
     call_id: str,
     DialCallStatus: str = Form("completed")
 ):
     """
-    Twilio webhook: Call to candidate completed.
+    Telephony webhook: Call to candidate completed.
 
     Records the outcome and generates final TwiML.
     """
     try:
-        from services.recruiting_twilio_service import get_recruiting_twilio_service
+        from services.recruiting_dialer_service import get_recruiting_dialer_service
 
         with get_db_connection() as conn:
-            service = get_recruiting_twilio_service(conn)
+            service = get_recruiting_dialer_service(conn)
             twiml = service.generate_call_complete_twiml(call_id, DialCallStatus)
 
         return Response(content=twiml, media_type="application/xml")
 
     except Exception as e:
         logger.error(f"Error in call-complete webhook: {e}")
-        from twilio.twiml.voice_response import VoiceResponse
-        response = VoiceResponse()
+        from telephony.providers.telnyx.texml import TeXMLResponse
+        response = TeXMLResponse()
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
 
 
-@router.post("/twilio/status/{call_id}")
-async def twilio_status_callback(
+@router.post("/telnyx/status/{call_id}")
+async def telephony_status_callback(
     call_id: str,
     CallStatus: str = Form(""),
     CallDuration: Optional[int] = Form(None),
     CallSid: str = Form("")
 ):
     """
-    Twilio webhook: Call status update.
+    Telephony webhook: Call status update.
 
     Tracks call progress (initiated, ringing, answered, completed, etc.)
     """
     try:
-        from services.recruiting_twilio_service import get_recruiting_twilio_service
+        from services.recruiting_dialer_service import get_recruiting_dialer_service
 
         with get_db_connection() as conn:
-            service = get_recruiting_twilio_service(conn)
+            service = get_recruiting_dialer_service(conn)
             service.handle_status_callback(
                 call_id=call_id,
                 call_status=CallStatus,
@@ -394,14 +394,14 @@ async def twilio_status_callback(
         return {"received": True, "error": "Internal server error"}
 
 
-@router.post("/twilio/candidate-status/{call_id}")
-async def twilio_candidate_status(
+@router.post("/telnyx/candidate-status/{call_id}")
+async def telephony_candidate_status(
     call_id: str,
     CallStatus: str = Form(""),
     CallDuration: Optional[int] = Form(None)
 ):
     """
-    Twilio webhook: Candidate leg status update.
+    Telephony webhook: Candidate leg status update.
 
     Tracks when candidate answers, hangs up, etc.
     """
@@ -419,23 +419,23 @@ async def twilio_candidate_status(
     return {"received": True, "call_id": call_id, "status": CallStatus}
 
 
-@router.post("/twilio/recording/{call_id}")
-async def twilio_recording_callback(
+@router.post("/telnyx/recording/{call_id}")
+async def telephony_recording_callback(
     call_id: str,
     RecordingUrl: str = Form(""),
     RecordingSid: str = Form(""),
     RecordingDuration: int = Form(0)
 ):
     """
-    Twilio webhook: Recording completed.
+    Telephony webhook: Recording completed.
 
     Stores the recording URL for later playback.
     """
     try:
-        from services.recruiting_twilio_service import get_recruiting_twilio_service
+        from services.recruiting_dialer_service import get_recruiting_dialer_service
 
         with get_db_connection() as conn:
-            service = get_recruiting_twilio_service(conn)
+            service = get_recruiting_dialer_service(conn)
             service.handle_recording_callback(
                 call_id=call_id,
                 recording_url=RecordingUrl,
@@ -467,7 +467,7 @@ async def get_candidate_call_history(
                        u.full_name as caller_name, ch.direction,
                        ch.duration_seconds, ch.outcome, ch.notes,
                        ch.called_at, ch.status, ch.recording_url,
-                       ch.twilio_call_sid
+                       ch.twilio_call_sid as call_sid
                 FROM recruiting_call_history ch
                 LEFT JOIN users u ON u.id = ch.caller_user_id
                 WHERE ch.candidate_id = :candidate_id
@@ -665,11 +665,11 @@ async def get_recruiting_dialer_queue(
 
 @router.post("/admin/run-migration")
 async def run_dialer_migration(admin_key: str = Query(...)):
-    """Create call history table if it doesn't exist and add Twilio columns."""
+    """Create call history table if it doesn't exist and add telephony columns."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
-    # Step 1: Create table if it doesn't exist (without Twilio columns for backwards compat)
+    # Step 1: Create table if it doesn't exist (base columns for backwards compat)
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS recruiting_call_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -691,7 +691,7 @@ async def run_dialer_migration(admin_key: str = Query(...)):
     )
     """
 
-    # Step 2: Add Twilio columns if missing
+    # Step 2: Add telephony columns if missing (twilio_call_sid is a legacy column name)
     alter_sql = [
         "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS twilio_call_sid VARCHAR(50)",
         "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS recording_sid VARCHAR(50)",
@@ -726,6 +726,6 @@ async def run_dialer_migration(admin_key: str = Query(...)):
                     logger.debug(f"Skipping index creation in run_dialer_migration: {e}")
 
             conn.commit()
-        return {"status": "success", "message": "Call history table created/updated with Twilio columns"}
+        return {"status": "success", "message": "Call history table created/updated with telephony columns"}
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail="Internal server error")

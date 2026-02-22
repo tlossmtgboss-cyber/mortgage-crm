@@ -582,7 +582,8 @@ async def lookup_phone(
     """
     try:
         from services.call_screening_service import CallScreeningService
-        from integrations.twilio_lookup_service import twilio_lookup_service
+        from integrations.phone_lookup_service import get_phone_lookup_service
+        phone_lookup_service = get_phone_lookup_service()
 
         # Normalize phone number
         import re
@@ -604,13 +605,13 @@ async def lookup_phone(
                 }
 
         # Perform lookup
-        if not twilio_lookup_service.is_enabled():
+        if not phone_lookup_service.is_enabled():
             raise HTTPException(
                 status_code=503,
-                detail="Twilio Lookup service is not enabled"
+                detail="Phone Lookup service is not enabled"
             )
 
-        result = await twilio_lookup_service.lookup_phone(phone)
+        result = await phone_lookup_service.lookup_phone(phone)
 
         # Cache the result
         if not result.error:

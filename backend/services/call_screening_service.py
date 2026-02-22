@@ -5,7 +5,7 @@ Multi-tier call screening for spam filtering:
 1. Check whitelist (free, instant) → ALLOW
 2. Check blocklist (free, instant) → BLOCK
 3. Check lookup cache (free) → decision based on cached spam score
-4. Twilio Lookup API (paid) → decision based on spam score
+4. Phone Lookup API (paid) → decision based on spam score
 5. Default for truly unknown → SCREEN (ask name/reason)
 """
 
@@ -53,7 +53,7 @@ class CallScreeningService:
     1. Check whitelist → ALLOW (free, instant)
     2. Check blocklist → BLOCK (free, instant)
     3. Check lookup cache → decision based on cached spam score
-    4. Twilio Lookup API → decision based on spam score (~$0.05)
+    4. Phone Lookup API → decision based on spam score (~$0.05)
     5. Default → SCREEN (ask name/reason)
     """
 
@@ -61,7 +61,7 @@ class CallScreeningService:
         self.db = db
         self.spam_threshold = int(os.getenv("SPAM_SCORE_THRESHOLD", "60"))
         self.cache_ttl_days = int(os.getenv("LOOKUP_CACHE_TTL_DAYS", "30"))
-        self.lookup_enabled = os.getenv("TWILIO_LOOKUP_ENABLED", "true").lower() == "true"
+        self.lookup_enabled = os.getenv("PHONE_LOOKUP_ENABLED", "true").lower() == "true"
 
     async def screen_call(self, phone_number: str, call_sid: str) -> ScreeningResult:
         """
@@ -69,7 +69,7 @@ class CallScreeningService:
 
         Args:
             phone_number: Caller's phone number
-            call_sid: Twilio CallSid for logging
+            call_sid: Call SID for logging
 
         Returns:
             ScreeningResult with decision and metadata
@@ -113,9 +113,9 @@ class CallScreeningService:
             await self._log_screening_decision(call_sid, phone, result, start_time)
             return result
 
-        # 4. Perform Twilio Lookup (if enabled)
+        # 4. Perform Phone Lookup (if enabled)
         if self.lookup_enabled:
-            lookup_result = await self._perform_twilio_lookup(phone)
+            lookup_result = await self._perform_phone_lookup(phone)
             if lookup_result and not lookup_result.get("error"):
                 # Cache the result
                 await self._cache_lookup_result(phone, lookup_result)
@@ -126,7 +126,7 @@ class CallScreeningService:
 
                 result = ScreeningResult(
                     decision=decision,
-                    reason=f"twilio_lookup_spam_score_{spam_score}",
+                    reason=f"phone_lookup_spam_score_{spam_score}",
                     caller_name=lookup_result.get("caller_name"),
                     spam_score=spam_score,
                     lookup_performed=True,
@@ -333,16 +333,17 @@ class CallScreeningService:
             logger.error(f"Cache lookup error: {e}")
             return None
 
-    async def _perform_twilio_lookup(self, phone: str) -> Optional[Dict[str, Any]]:
-        """Call Twilio Lookup API for phone intelligence."""
+    async def _perform_phone_lookup(self, phone: str) -> Optional[Dict[str, Any]]:
+        """Call Phone Lookup API for phone intelligence."""
         try:
-            from integrations.twilio_lookup_service import twilio_lookup_service
+            from integrations.phone_lookup_service import get_phone_lookup_service
 
-            if not twilio_lookup_service.is_enabled():
-                logger.info("Twilio Lookup service disabled")
+            lookup_service = get_phone_lookup_service()
+            if not lookup_service.is_enabled():
+                logger.info("Phone Lookup service disabled")
                 return None
 
-            result = await twilio_lookup_service.lookup_phone(phone)
+            result = await lookup_service.lookup_phone(phone)
 
             return {
                 "phone_number": result.phone_number,
@@ -358,7 +359,7 @@ class CallScreeningService:
                 "error": result.error
             }
         except Exception as e:
-            logger.error(f"Twilio Lookup error: {e}")
+            logger.error(f"Phone Lookup error: {e}")
             return {"error": "Internal server error"}
 
     async def _cache_lookup_result(self, phone: str, result: Dict[str, Any]):

@@ -165,10 +165,10 @@ class SpeedToLeadService:
         """Lazy load SMS client"""
         if self._sms_client is None:
             try:
-                from integrations.twilio_service import sms_client
-                self._sms_client = sms_client
+                from integrations.sms_service import get_sms_client
+                self._sms_client = get_sms_client()
             except ImportError:
-                logger.warning("Twilio SMS client not available")
+                logger.warning("SMS client not available")
                 self._sms_client = False
         return self._sms_client if self._sms_client else None
 

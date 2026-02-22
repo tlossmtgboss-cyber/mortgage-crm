@@ -2,7 +2,7 @@
  * Retell AI Settings Component
  *
  * Configuration UI for Retell AI voice platform.
- * Replaces ElevenLabs + Twilio with unified voice solution.
+ * Replaces ElevenLabs with unified voice solution via Telnyx.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';

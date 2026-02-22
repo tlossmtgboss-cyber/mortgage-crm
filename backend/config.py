@@ -61,17 +61,7 @@ class Settings(BaseSettings):
     )
     ANTHROPIC_MAX_TOKENS: int = Field(default=1024, description="Max tokens per response")
 
-    # =========================================================================
-    # TWILIO
-    # =========================================================================
-    TWILIO_ACCOUNT_SID: str = Field(default="", description="Twilio Account SID")
-    TWILIO_AUTH_TOKEN: str = Field(default="", description="Twilio Auth Token")
-    TWILIO_PHONE_NUMBER: str = Field(default="", description="Twilio phone number")
     LO_PHONE_NUMBER: str = Field(default="", description="Loan Officer phone number")
-    TWILIO_STATUS_CALLBACK_URL: Optional[str] = Field(
-        default=None,
-        description="Twilio status callback URL"
-    )
 
     # =========================================================================
     # APPLICATION URLS
@@ -276,9 +266,6 @@ def validate_config():
     if is_production():
         if not settings.ANTHROPIC_API_KEY:
             errors.append("ANTHROPIC_API_KEY is required in production")
-
-        if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
-            errors.append("Twilio credentials are required in production")
 
         if settings.DEBUG:
             errors.append("DEBUG should be False in production")

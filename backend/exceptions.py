@@ -194,7 +194,7 @@ class SalesforceError(PerenniaError):
 
 
 class TelephonyError(PerenniaError):
-    """Raised for telephony provider (Twilio/Telnyx/Vapi) failures."""
+    """Raised for telephony provider (Telnyx/Vapi) failures."""
 
     def __init__(self, message: str, provider: Optional[str] = None):
         self.provider = provider

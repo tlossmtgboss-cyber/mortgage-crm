@@ -5,7 +5,7 @@ Unified multi-channel communication adapter that routes messages through
 the correct channel based on ChannelPreference, enforces quiet hours,
 verifies consent, prevents fatigue, and handles fallback routing.
 
-This service sits above the individual channel senders (SendGrid, Twilio,
+This service sits above the individual channel senders (SendGrid, Telnyx,
 push, in-app) and provides a single send() entry point for all agents.
 
 Usage:
@@ -778,7 +778,7 @@ class ChannelAdapterService:
         """Dispatch message to channel-specific sender.
 
         This is the integration point where the adapter connects to
-        actual delivery infrastructure (SendGrid, Twilio, etc.).
+        actual delivery infrastructure (SendGrid, Telnyx, etc.).
         Each channel delegates to the appropriate existing service.
         """
         try:
@@ -880,7 +880,7 @@ class ChannelAdapterService:
         body: str,
         context: Dict[str, Any],
     ) -> ChannelDeliveryResult:
-        """Send via SMS (delegates to NotificationService/Twilio)."""
+        """Send via SMS (delegates to NotificationService/Telnyx)."""
         phone = self._get_recipient_phone(recipient_type, recipient_id)
         if not phone:
             return ChannelDeliveryResult(

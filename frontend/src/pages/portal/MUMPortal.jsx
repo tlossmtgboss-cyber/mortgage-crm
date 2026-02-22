@@ -15,8 +15,9 @@
  * - Document repository for important files
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { mumPortalAPI } from '../../services/api';
+import { api } from '../../lib/api';
 import ScheduleAppointmentModal from '../../components/ScheduleAppointmentModal';
 import './MUMPortal.css';
 import { toast } from '../../utils/toast';
@@ -397,7 +398,25 @@ export default function MUMPortal({ data, slug, onRefresh }) {
   const [messages, setMessages] = useState([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
 
-  // Fetch videos, documents, and messages
+  // Post-close real data from API
+  const [postcloseData, setPostcloseData] = useState(null);
+  const [loadingPostclose, setLoadingPostclose] = useState(false);
+
+  // Fetch post-close data from API
+  const fetchPostcloseData = useCallback(async () => {
+    if (!slug) return;
+    setLoadingPostclose(true);
+    try {
+      const result = await api.getPostcloseData(slug);
+      setPostcloseData(result);
+    } catch (err) {
+      console.warn('Could not fetch post-close data, using estimates:', err);
+    } finally {
+      setLoadingPostclose(false);
+    }
+  }, [slug]);
+
+  // Fetch videos, documents, messages, and post-close data
   useEffect(() => {
     const fetchMediaContent = async () => {
       if (!slug) return;
@@ -421,7 +440,8 @@ export default function MUMPortal({ data, slug, onRefresh }) {
     };
 
     fetchMediaContent();
-  }, [slug]);
+    fetchPostcloseData();
+  }, [slug, fetchPostcloseData]);
 
   // Handle video viewed
   const handleVideoViewed = async (videoId) => {
@@ -454,8 +474,33 @@ export default function MUMPortal({ data, slug, onRefresh }) {
   const borrower = contacts.find(c => c.contact_type === 'borrower') || contacts[0];
   const loanOfficer = data?.loan_officer || workspace?.loan_officer;
 
-  // Generate mock home value data
-  const homeData = useMemo(() => generateMockHomeData(loan, workspace), [loan, workspace]);
+  // Use real post-close API data when available, fall back to mock estimates
+  const homeData = useMemo(() => {
+    if (postcloseData) {
+      const mockFallback = generateMockHomeData(loan, workspace);
+      return {
+        currentValue: postcloseData.estimated_value || mockFallback.currentValue,
+        purchasePrice: postcloseData.purchase_price || mockFallback.purchasePrice,
+        appreciation: (postcloseData.estimated_value || 0) - (postcloseData.purchase_price || 0),
+        appreciationPercent: postcloseData.appreciation_pct || 0,
+        remainingBalance: postcloseData.current_balance || mockFallback.remainingBalance,
+        equity: postcloseData.equity || mockFallback.equity,
+        equityPercent: postcloseData.equity_pct || mockFallback.equityPercent,
+        ltv: postcloseData.ltv || mockFallback.ltv,
+        monthlyPayment: postcloseData.monthly_payment || mockFallback.monthlyPayment,
+        // Keep mock data for charts/comparables (no real data source yet)
+        valueHistory: mockFallback.valueHistory,
+        comparables: mockFallback.comparables,
+        lastUpdated: new Date().toISOString(),
+        confidenceLevel: 'Medium-High',
+        valueRange: {
+          low: Math.round((postcloseData.estimated_value || mockFallback.currentValue) * 0.95),
+          high: Math.round((postcloseData.estimated_value || mockFallback.currentValue) * 1.05),
+        },
+      };
+    }
+    return generateMockHomeData(loan, workspace);
+  }, [loan, workspace, postcloseData]);
 
   // Check for refinance opportunities
   const opportunities = useMemo(() => checkRefinanceOpportunity(loan, homeData), [loan, homeData]);
@@ -544,6 +589,28 @@ export default function MUMPortal({ data, slug, onRefresh }) {
                 <HomeValueCard homeData={homeData} address={propertyAddress} />
                 <EquityTracker homeData={homeData} />
 
+                {/* Post-Close Tasks */}
+                {postcloseData?.tasks?.length > 0 && (
+                  <div className="postclose-tasks">
+                    <h3>Action Items</h3>
+                    <div className="tasks-list">
+                      {postcloseData.tasks.filter(t => t.status !== 'completed').map((task) => (
+                        <div key={task.id} className={`task-item priority-${task.priority || 'medium'}`}>
+                          <div className="task-checkbox">
+                            <input type="checkbox" disabled checked={task.status === 'completed'} />
+                          </div>
+                          <div className="task-info">
+                            <span className="task-title">{task.title}</span>
+                            {task.due_at && (
+                              <span className="task-due">Due: {formatDate(task.due_at)}</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Opportunity Highlights */}
                 {opportunities.length > 0 && (
                   <div className="opportunity-highlight">
@@ -576,13 +643,21 @@ export default function MUMPortal({ data, slug, onRefresh }) {
                     <span className="stat-value">{formatCurrency(homeData.monthlyPayment)}</span>
                   </div>
                   <div className="stat-row">
-                    <span className="stat-label">Next Payment</span>
-                    <span className="stat-value">Jan 1, 2025</span>
+                    <span className="stat-label">Current Balance</span>
+                    <span className="stat-value">{formatCurrency(homeData.remainingBalance)}</span>
                   </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Remaining Term</span>
-                    <span className="stat-value">28 years</span>
-                  </div>
+                  {postcloseData?.anniversary_date && (
+                    <div className="stat-row">
+                      <span className="stat-label">Loan Anniversary</span>
+                      <span className="stat-value">{formatDate(postcloseData.anniversary_date)}</span>
+                    </div>
+                  )}
+                  {postcloseData?.interest_rate > 0 && (
+                    <div className="stat-row">
+                      <span className="stat-label">Interest Rate</span>
+                      <span className="stat-value">{postcloseData.interest_rate}%</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Contact Card */}
@@ -703,17 +778,22 @@ export default function MUMPortal({ data, slug, onRefresh }) {
               <div className="payment-info">
                 <p>
                   Your loan is currently serviced by{' '}
-                  <strong>{loan?.servicer || 'your loan servicer'}</strong>.
+                  <strong>{postcloseData?.servicer || loan?.servicer || 'your loan servicer'}</strong>.
                   Contact them directly for payment questions or to make a payment.
                 </p>
-                {loan?.servicer_portal && (
+                {postcloseData?.servicer_phone && (
+                  <p className="servicer-contact">
+                    Contact: <a href={`tel:${postcloseData.servicer_phone}`}>{postcloseData.servicer_phone}</a>
+                  </p>
+                )}
+                {(postcloseData?.servicer_portal || loan?.servicer_portal) && (
                   <a
-                    href={loan.servicer_portal}
+                    href={postcloseData?.servicer_portal || loan.servicer_portal}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="servicer-portal-btn"
                   >
-                    Go to Servicer Portal →
+                    Make a Payment →
                   </a>
                 )}
               </div>

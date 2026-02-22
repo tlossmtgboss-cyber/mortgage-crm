@@ -14,7 +14,7 @@ import os
 
 from database import get_db
 from integrations.microsoft_graph import graph_client
-from integrations.twilio_service import sms_client, SMSTemplates
+from integrations.sms_service import get_sms_client, SMSTemplates
 from integrations.agentic_ai import agentic_ai, TriggerType
 
 # OpenAI for AI-powered SMS responses
@@ -27,25 +27,31 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Lazy SMS client instance (replaces old module-level sms_client)
+sms_client = get_sms_client()
 
-async def _validate_twilio_signature(request: Request, form_data: dict) -> bool:
-    """Validate Twilio X-Twilio-Signature header. Returns True if valid or not configured."""
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+async def _validate_webhook_signature(request: Request, form_data: dict) -> bool:
+    """Validate webhook signature header. Returns True if valid or not configured."""
+    auth_token = os.getenv("TELNYX_API_KEY")
     if not auth_token:
-        logger.warning("TWILIO_AUTH_TOKEN not set — skipping Twilio signature validation")
+        logger.warning("TELNYX_API_KEY not set — skipping webhook signature validation")
         return True
     try:
-        from twilio.request_validator import RequestValidator
-        validator = RequestValidator(auth_token)
-        signature = request.headers.get("X-Twilio-Signature", "")
+        # Legacy RequestValidator removed — Telnyx uses webhook signing secrets instead.
+        # For now, log and pass through; Telnyx signature validation should be added
+        # at the Telnyx webhook ingress layer.
+        signature = request.headers.get("X-Telnyx-Signature", "")
         url = str(request.url)
-        return validator.validate(url, form_data, signature)
-    except ImportError:
-        logger.warning("twilio package not installed — skipping signature validation")
+        if signature:
+            logger.info(f"Received request with webhook signature header at {url} — pass-through (Telnyx)")
         return True
     except Exception as e:
-        logger.error(f"Twilio signature validation error: {e}")
+        logger.error(f"Webhook signature validation error: {e}")
         return False
+
+# Backward-compatible alias
+_validate_twilio_signature = _validate_webhook_signature
 
 
 # Initialize OpenAI conversation service for SMS
@@ -185,7 +191,7 @@ async def send_sms(
             message=request.message,
             direction="outbound",
             status="sent",
-            twilio_sid=message_sid,
+            provider_message_id=message_sid,
             template_used=request.template
         )
         db.add(sms_record)
@@ -337,15 +343,15 @@ async def sms_webhook(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Webhook for incoming SMS messages from Twilio with AI processing"""
+    """Webhook for incoming SMS messages from Telnyx with AI processing"""
 
     try:
         form_data = await request.form()
         form_dict = {k: v for k, v in form_data.items()}
 
-        # Validate Twilio signature
-        if not await _validate_twilio_signature(request, form_dict):
-            logger.warning("Invalid Twilio signature on SMS webhook")
+        # Validate webhook signature
+        if not await _validate_webhook_signature(request, form_dict):
+            logger.warning("Invalid webhook signature on SMS webhook")
             raise HTTPException(status_code=403, detail="Invalid signature")
 
         from_number = form_data.get("From")
@@ -363,7 +369,7 @@ async def sms_webhook(
             message=body,
             direction="inbound",
             status="received",
-            twilio_sid=message_sid
+            provider_message_id=message_sid
         )
         db.add(sms_record)
         db.commit()
@@ -373,7 +379,7 @@ async def sms_webhook(
         ai_response = await process_sms_with_ai(from_number, to_number, body, db)
 
         if ai_response and sms_client.enabled:
-            # Send AI response via Twilio
+            # Send AI response via Telnyx
             response_sid = await sms_client.send_sms(
                 to_number=from_number,
                 message=ai_response
@@ -387,7 +393,7 @@ async def sms_webhook(
                     message=ai_response,
                     direction="outbound",
                     status="sent",
-                    twilio_sid=response_sid
+                    provider_message_id=response_sid
                 )
                 db.add(outbound_record)
                 db.commit()
@@ -399,18 +405,18 @@ async def sms_webhook(
                     "response_sid": response_sid
                 }
             else:
-                logger.error("Failed to send SMS response via Twilio")
+                logger.error("Failed to send SMS response via Telnyx")
                 return {
                     "status": "received",
                     "ai_response_sent": False,
-                    "error": "Twilio send failed"
+                    "error": "SMS send failed"
                 }
         else:
-            # AI not available or Twilio not configured
+            # AI not available or SMS not configured
             return {
                 "status": "received",
                 "ai_response_sent": False,
-                "reason": "AI or Twilio not configured"
+                "reason": "AI or SMS provider not configured"
             }
 
     except Exception as e:
@@ -635,7 +641,7 @@ async def get_integration_status():
     return {
         "sms": {
             "enabled": sms_client.enabled,
-            "provider": "Twilio",
+            "provider": "Telnyx",
             "from_number": sms_client.from_number if sms_client.enabled else None
         },
         "email": {

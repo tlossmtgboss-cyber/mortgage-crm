@@ -163,7 +163,7 @@ def get_sms_sender_config(db, org_id: int) -> Dict:
         WHERE organization_id = :org_id
     """), {"org_id": org_id}).fetchone()
 
-    default_sender = os.getenv("TWILIO_FROM_NUMBER", os.getenv("TELNYX_FROM_NUMBER", ""))
+    default_sender = os.getenv("TELNYX_FROM_NUMBER", "")
 
     if row and row[0]:
         return {

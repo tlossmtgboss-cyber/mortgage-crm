@@ -5,7 +5,7 @@ Tables created:
 - phone_blocklist: Blocked phone numbers
 - phone_whitelist: Known good callers
 - call_screening_log: Screening decision audit log
-- phone_lookup_cache: Twilio Lookup API result cache
+- phone_lookup_cache: Phone Lookup API result cache
 
 Run with: python -m migrations.add_call_screening_tables
 """

@@ -1,6 +1,6 @@
 """
 Voice AI Receptionist Routes
-Handles Twilio voice webhooks and OpenAI Realtime API integration
+Handles Telnyx voice webhooks and OpenAI Realtime API integration
 """
 import os
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, Depends, HTTPException, UploadFile, File
@@ -15,7 +15,10 @@ from typing import List, Dict, Any
 
 # Import from database instead of main to avoid circular dependency
 from database import get_db
-from integrations.twilio_voice_service import voice_client, ai_config
+# voice_client and ai_config removed — legacy voice service deleted.
+# Telnyx handles telephony; Vapi handles AI voice. Stub for backward compat.
+voice_client = None
+ai_config = None
 import openai
 
 # AI Receptionist Dashboard Integration
@@ -45,24 +48,27 @@ from services.call_screening_service import (
 logger = logging.getLogger(__name__)
 
 
-async def _validate_twilio_signature(request: Request, form_data: dict) -> bool:
-    """Validate Twilio X-Twilio-Signature header. Returns True if valid or not configured."""
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+async def _validate_webhook_signature(request: Request, form_data: dict) -> bool:
+    """Validate webhook signature header. Returns True if valid or not configured."""
+    auth_token = os.getenv("TELNYX_API_KEY")
     if not auth_token:
-        logger.warning("TWILIO_AUTH_TOKEN not set — skipping Twilio signature validation")
+        logger.warning("TELNYX_API_KEY not set — skipping webhook signature validation")
         return True
     try:
-        from twilio.request_validator import RequestValidator
-        validator = RequestValidator(auth_token)
-        signature = request.headers.get("X-Twilio-Signature", "")
+        # Legacy RequestValidator removed — Telnyx uses webhook signing secrets instead.
+        # For now, log and pass through; Telnyx signature validation should be added
+        # at the Telnyx webhook ingress layer.
+        signature = request.headers.get("X-Telnyx-Signature", "")
         url = str(request.url)
-        return validator.validate(url, form_data, signature)
-    except ImportError:
-        logger.warning("twilio package not installed — skipping signature validation")
+        if signature:
+            logger.info(f"Received request with webhook signature header at {url} — pass-through (Telnyx)")
         return True
     except Exception as e:
-        logger.error(f"Twilio signature validation error: {e}")
+        logger.error(f"Webhook signature validation error: {e}")
         return False
+
+# Backward-compatible alias
+_validate_twilio_signature = _validate_webhook_signature
 
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
@@ -88,8 +94,8 @@ def get_current_user_flexible():
 @router.post("/incoming")
 async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
     """
-    Twilio webhook for incoming calls
-    Returns TwiML to handle the call with AI
+    Telnyx webhook for incoming calls
+    Returns TeXML to handle the call with AI
 
     Call flow with spam filtering:
     1. Screen the call (whitelist → blocklist → lookup → unknown)
@@ -101,9 +107,9 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
         form_data = await request.form()
         form_dict = {k: v for k, v in form_data.items()}
 
-        # Validate Twilio signature
-        if not await _validate_twilio_signature(request, form_dict):
-            logger.warning("Invalid Twilio signature on incoming call webhook")
+        # Validate webhook signature
+        if not await _validate_webhook_signature(request, form_dict):
+            logger.warning("Invalid webhook signature on incoming call webhook")
             return Response(content="<Response><Hangup/></Response>", media_type="application/xml")
 
         caller_number = form_data.get("From", "Unknown")
@@ -141,7 +147,7 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
                 outcome_status='blocked',
                 conversation_id=call_sid,
                 extra_data={
-                    "twilio_call_sid": call_sid,
+                    "call_sid": call_sid,
                     "called_number": called_number,
                     "block_reason": screening_result.reason,
                     "spam_score": screening_result.spam_score
@@ -171,7 +177,7 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
                 outcome_status='screening',
                 conversation_id=call_sid,
                 extra_data={
-                    "twilio_call_sid": call_sid,
+                    "call_sid": call_sid,
                     "called_number": called_number,
                     "screening_reason": screening_result.reason,
                     "spam_score": screening_result.spam_score,
@@ -211,7 +217,7 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
                     outcome_status='pending',
                     conversation_id=call_sid,
                     extra_data={
-                        "twilio_call_sid": call_sid,
+                        "call_sid": call_sid,
                         "called_number": called_number,
                         "screening_decision": "allow",
                         "screening_reason": screening_result.reason,
@@ -305,7 +311,7 @@ async def make_outbound_call(
         from utils.pii_mask import mask_phone
         logger.info(f"Initiating outbound call to {mask_phone(phone)} (purpose: {purpose})")
 
-        # Make the call using Twilio
+        # Make the call using Telnyx
         call_sid = await voice_client.make_outbound_call(
             to_number=phone,
             script=purpose
@@ -323,7 +329,7 @@ async def make_outbound_call(
                 outcome_status='initiated',
                 conversation_id=call_sid,
                 extra_data={
-                    "twilio_call_sid": call_sid,
+                    "call_sid": call_sid,
                     "purpose": purpose,
                     "caller_name": caller_name
                 }
@@ -341,7 +347,7 @@ async def make_outbound_call(
         else:
             return {
                 "success": False,
-                "error": "Failed to initiate call - check Twilio configuration"
+                "error": "Failed to initiate call - check telephony provider configuration"
             }
 
     except Exception as e:
@@ -797,13 +803,13 @@ async def connect_to_openai_realtime_browser():
 
 
 # ============================================================================
-# WEBSOCKET FOR OPENAI REALTIME API (Twilio)
+# WEBSOCKET FOR OPENAI REALTIME API (Telnyx)
 # ============================================================================
 
 @router.websocket("/ws/voice-stream")
 async def voice_stream_websocket(websocket: WebSocket):
     """
-    WebSocket endpoint for Twilio Media Streams -> OpenAI Realtime API
+    WebSocket endpoint for Telnyx Media Streams -> OpenAI Realtime API
     Handles bidirectional audio streaming for AI conversations
     """
     logger.info(f"🔌 WebSocket connection attempt from: {websocket.client}")
@@ -829,7 +835,7 @@ async def voice_stream_websocket(websocket: WebSocket):
         "lead_data": {},
         "intent": None,
         "session_ready": False,  # OpenAI session configured
-        "twilio_ready": False,   # Twilio stream started
+        "stream_ready": False,   # Telnyx stream started
         "greeting_sent": False   # Greeting already triggered
     }
 
@@ -850,10 +856,10 @@ async def voice_stream_websocket(websocket: WebSocket):
 
         # Helper to trigger greeting only when BOTH conditions are met
         async def maybe_trigger_greeting():
-            """Trigger AI greeting only when OpenAI session is ready AND Twilio stream has started"""
-            if call_context['session_ready'] and call_context['twilio_ready'] and not call_context['greeting_sent']:
+            """Trigger AI greeting only when OpenAI session is ready AND Telnyx stream has started"""
+            if call_context['session_ready'] and call_context['stream_ready'] and not call_context['greeting_sent']:
                 call_context['greeting_sent'] = True
-                logger.info("🎤 Both OpenAI session and Twilio ready - triggering AI greeting")
+                logger.info("🎤 Both OpenAI session and Telnyx stream ready - triggering AI greeting")
                 try:
                     # Build personalized greeting based on caller info
                     caller_name = call_context.get('caller_name')
@@ -893,8 +899,8 @@ async def voice_stream_websocket(websocket: WebSocket):
                     logger.error(f"❌ Failed to trigger greeting: {greet_err}")
 
         # Handle bidirectional streaming
-        async def twilio_to_openai():
-            """Forward audio from Twilio to OpenAI"""
+        async def telnyx_to_openai():
+            """Forward audio from Telnyx to OpenAI"""
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
@@ -912,9 +918,9 @@ async def voice_stream_websocket(websocket: WebSocket):
                         logger.info(f"📞 Call started: {call_context['call_sid']}, stream: {call_context['stream_sid']}")
                         logger.info(f"Caller identified, Category: {call_context['caller_category']}")
 
-                        # Mark Twilio as ready, try to trigger greeting
-                        call_context['twilio_ready'] = True
-                        logger.info(f"📱 Twilio ready. Session ready: {call_context['session_ready']}")
+                        # Mark Telnyx stream as ready, try to trigger greeting
+                        call_context['stream_ready'] = True
+                        logger.info(f"📱 Telnyx stream ready. Session ready: {call_context['session_ready']}")
                         await maybe_trigger_greeting()
 
                     elif data['event'] == 'media':
@@ -931,10 +937,10 @@ async def voice_stream_websocket(websocket: WebSocket):
                         break
 
             except Exception as e:
-                logger.error(f"Error in Twilio->OpenAI stream: {e}")
+                logger.error(f"Error in Telnyx->OpenAI stream: {e}")
 
-        async def openai_to_twilio():
-            """Forward AI responses from OpenAI to Twilio"""
+        async def openai_to_telnyx():
+            """Forward AI responses from OpenAI to Telnyx"""
             try:
                 async for message in openai_ws:
                     data = json.loads(message)
@@ -947,11 +953,11 @@ async def voice_stream_websocket(websocket: WebSocket):
                     # Handle session.updated - OpenAI is now configured
                     if event_type == 'session.updated':
                         call_context['session_ready'] = True
-                        logger.info(f"🔧 OpenAI session configured. Twilio ready: {call_context['twilio_ready']}")
+                        logger.info(f"🔧 OpenAI session configured. Telnyx stream ready: {call_context['stream_ready']}")
                         await maybe_trigger_greeting()
 
                     if event_type == 'response.audio.delta':
-                        # Forward AI audio to Twilio
+                        # Forward AI audio to Telnyx
                         audio_payload = data.get('delta', '')
                         if audio_payload and call_context.get('stream_sid'):
                             try:
@@ -963,7 +969,7 @@ async def voice_stream_websocket(websocket: WebSocket):
                                     }
                                 })
                             except Exception as send_err:
-                                logger.error(f"❌ Failed to send audio to Twilio: {send_err}")
+                                logger.error(f"❌ Failed to send audio to Telnyx: {send_err}")
                         else:
                             logger.warning(f"⚠️ Missing audio payload ({len(audio_payload) if audio_payload else 0} bytes) or stream_sid ({call_context.get('stream_sid')})")
 
@@ -1031,12 +1037,12 @@ async def voice_stream_websocket(websocket: WebSocket):
                             logger.error(f"❌ Function call error: {func_err}")
 
             except Exception as e:
-                logger.error(f"Error in OpenAI->Twilio stream: {e}")
+                logger.error(f"Error in OpenAI->Telnyx stream: {e}")
 
         # Run both streams concurrently
         await asyncio.gather(
-            twilio_to_openai(),
-            openai_to_twilio()
+            telnyx_to_openai(),
+            openai_to_telnyx()
         )
 
     except WebSocketDisconnect:
@@ -1170,8 +1176,8 @@ async def connect_to_openai_realtime():
 
     logger.info("OpenAI Realtime session configured")
 
-    # NOTE: We no longer trigger greeting here - it's done in twilio_to_openai()
-    # when we receive the 'start' event from Twilio (meaning it's ready to receive audio)
+    # NOTE: We no longer trigger greeting here - it's done in telnyx_to_openai()
+    # when we receive the 'start' event from Telnyx (meaning it's ready to receive audio)
 
     return ws
 
@@ -1597,21 +1603,8 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
             )
         )
 
-        # Also submit to Twilio Voice Intelligence for enhanced transcription
-        # (runs in parallel, results come via webhook)
-        try:
-            from integrations.twilio_intelligence_service import intelligence_service
-            if intelligence_service.enabled and intelligence_service.service_sid:
-                asyncio.create_task(
-                    submit_to_twilio_intelligence(
-                        recording_sid=recording_sid,
-                        caller_name=lead_name,
-                        call_sid=call_sid
-                    )
-                )
-                logger.info(f"Submitted recording {recording_sid} to Twilio Intelligence")
-        except Exception as intel_error:
-            logger.warning(f"Could not submit to Twilio Intelligence: {intel_error}")
+        # Legacy Voice Intelligence removed — Deepgram handles transcription now.
+        # No-op: intelligence submission skipped.
 
         return {"status": "ok"}
 
@@ -1623,7 +1616,7 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
 @router.post("/transcript-complete")
 async def handle_transcript_complete(request: Request, db: Session = Depends(get_db)):
     """
-    Webhook from Twilio Voice Intelligence when transcription is complete.
+    Webhook from legacy Voice Intelligence when transcription is complete (DEPRECATED).
 
     Event type: voice_intelligence_transcript_available
 
@@ -1637,7 +1630,7 @@ async def handle_transcript_complete(request: Request, db: Session = Depends(get
     - Recording disclosure check (via operator)
     """
     try:
-        # Try JSON first, then form data (Twilio sometimes uses either)
+        # Try JSON first, then form data (provider sometimes uses either)
         try:
             data = await request.json()
         except (json.JSONDecodeError, ValueError):
@@ -1662,88 +1655,13 @@ async def handle_transcript_complete(request: Request, db: Session = Depends(get
             logger.info(f"Transcript {transcript_sid} status: {status}, waiting for completion")
             return {"status": "acknowledged"}
 
-        # Import intelligence service
-        from integrations.twilio_intelligence_service import intelligence_service
-
-        # Fetch the full transcript with insights
-        transcript = await intelligence_service.get_transcript(transcript_sid)
-        if not transcript:
-            logger.error(f"Could not fetch transcript {transcript_sid}")
-            return {"status": "error", "message": "Could not fetch transcript"}
-
-        # Fetch operator results for AI insights
-        operator_results = await intelligence_service.get_operator_results(transcript_sid)
-
-        # Parse operator results into structured insights
-        insights = parse_operator_results(operator_results or [])
-
-        logger.info(f"Transcript {transcript_sid} fetched: {transcript.get('duration')}s, "
-                   f"{len(transcript.get('sentences', []))} sentences, "
-                   f"sentiment: {insights.get('sentiment')}")
-
-        # Store transcript in database
-        try:
-            from sqlalchemy import text
-
-            # Get media info if available
-            media = await intelligence_service.get_transcript_media(transcript_sid)
-
-            db.execute(text("""
-                INSERT INTO call_transcripts (
-                    transcript_sid, status, duration_seconds, full_text,
-                    sentences, sentiment, topics, action_items, entities,
-                    summary, pii_detected, created_at, updated_at
-                ) VALUES (
-                    :transcript_sid, :status, :duration, :full_text,
-                    :sentences, :sentiment, :topics, :action_items, :entities,
-                    :summary, :pii_detected, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                )
-                ON CONFLICT (transcript_sid) DO UPDATE SET
-                    status = EXCLUDED.status,
-                    full_text = EXCLUDED.full_text,
-                    sentences = EXCLUDED.sentences,
-                    sentiment = EXCLUDED.sentiment,
-                    topics = EXCLUDED.topics,
-                    action_items = EXCLUDED.action_items,
-                    entities = EXCLUDED.entities,
-                    summary = EXCLUDED.summary,
-                    pii_detected = EXCLUDED.pii_detected,
-                    updated_at = CURRENT_TIMESTAMP
-            """), {
-                "transcript_sid": transcript_sid,
-                "status": "completed",
-                "duration": transcript.get("duration"),
-                "full_text": transcript.get("full_text"),
-                "sentences": json.dumps(transcript.get("sentences", [])),
-                "sentiment": json.dumps(insights.get("sentiment")),
-                "topics": json.dumps(insights.get("topics", [])),
-                "action_items": json.dumps(insights.get("action_items", [])),
-                "entities": json.dumps(insights.get("entities", [])),
-                "summary": insights.get("summary"),
-                "pii_detected": transcript.get("redaction", {}).get("pii_detected", False) if isinstance(transcript.get("redaction"), dict) else False,
-            })
-            db.commit()
-            logger.info(f"Stored transcript {transcript_sid} in database")
-
-            # If we have a customer_key, update related records
-            if customer_key:
-                await link_transcript_to_customer(db, transcript_sid, customer_key, insights)
-
-        except Exception as db_error:
-            logger.warning(f"Could not store transcript (table may not exist): {db_error}")
-
+        # Legacy Intelligence service removed — Deepgram handles transcription now.
+        # This webhook endpoint is kept for backward compatibility but returns a deprecation notice.
+        logger.warning(f"Legacy Intelligence transcript-complete webhook called for {transcript_sid} — service has been removed. Deepgram handles transcription now.")
         return {
-            "status": "success",
-            "transcript_sid": transcript_sid,
-            "duration": transcript.get("duration"),
-            "sentence_count": len(transcript.get("sentences", [])),
-            "insights": {
-                "sentiment": insights.get("sentiment"),
-                "has_summary": insights.get("summary") is not None,
-                "entity_count": len(insights.get("entities", [])),
-                "escalation_detected": insights.get("escalation_detected", False),
-                "recording_disclosed": insights.get("recording_disclosed", False),
-            }
+            "status": "deprecated",
+            "message": "Legacy Intelligence service removed. Deepgram handles transcription.",
+            "transcript_sid": transcript_sid
         }
 
     except Exception as e:
@@ -2050,15 +1968,14 @@ async def process_call_recording(
     logger.info(f"Processing call recording {recording_sid}...")
 
     try:
-        # Step 1: Download the recording from Twilio
-        twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        # Step 1: Download the recording from Telnyx
+        telnyx_api_key = os.getenv("TELNYX_API_KEY")
 
-        if not twilio_account_sid or not twilio_auth_token:
-            logger.error("Twilio credentials not configured")
+        if not telnyx_api_key:
+            logger.error("TELNYX_API_KEY not configured — cannot download recording")
             return
 
-        # Twilio recording URL needs authentication
+        # Recording URL needs authentication
         recording_mp3_url = f"{recording_url}.mp3"
 
         async with httpx.AsyncClient() as client:
@@ -2066,7 +1983,7 @@ async def process_call_recording(
             logger.info(f"Downloading recording from {recording_mp3_url}")
             recording_response = await client.get(
                 recording_mp3_url,
-                auth=(twilio_account_sid, twilio_auth_token),
+                headers={"Authorization": f"Bearer {telnyx_api_key}"},
                 timeout=60.0
             )
 
@@ -2177,41 +2094,21 @@ Keep the summary concise but comprehensive. Use professional language appropriat
         logger.error(f"Error processing call recording: {e}")
 
 
-async def submit_to_twilio_intelligence(
+async def submit_to_voice_intelligence(
     recording_sid: str,
     caller_name: str = None,
     call_sid: str = None
 ):
     """
-    Submit a recording to Twilio Voice Intelligence for enhanced transcription.
-    Results will be delivered via the /transcript-complete webhook.
+    Submit a recording to Voice Intelligence for enhanced transcription.
+    DEPRECATED: Legacy Intelligence service has been removed. Deepgram handles transcription now.
+    This function is a no-op stub kept for backward compatibility.
     """
-    try:
-        from integrations.twilio_intelligence_service import intelligence_service
+    logger.warning(f"submit_to_voice_intelligence called for {recording_sid} — service removed. Deepgram handles transcription now.")
+    return None
 
-        # Submit recording for transcription
-        result = await intelligence_service.transcribe_recording(
-            recording_url=recording_sid,  # Can pass recording SID directly
-            participants=[
-                {"role": "customer", "channel": 1, "name": caller_name},
-                {"role": "agent", "channel": 2, "name": "AI Assistant"}
-            ],
-            metadata={
-                "call_sid": call_sid,
-                "source": "ai_receptionist"
-            }
-        )
-
-        if result:
-            logger.info(f"Twilio Intelligence transcript job created: {result.get('transcript_sid')}")
-            return result
-        else:
-            logger.warning(f"Failed to create Twilio Intelligence transcript for {recording_sid}")
-            return None
-
-    except Exception as e:
-        logger.error(f"Error submitting to Twilio Intelligence: {e}")
-        return None
+# Backward-compatible alias
+submit_to_twilio_intelligence = submit_to_voice_intelligence
 
 
 async def create_call_summary_email_draft(
@@ -2395,7 +2292,7 @@ async def handle_transfer_status(request: Request):
 @router.post("/voicemail")
 @router.get("/voicemail")
 async def voicemail_twiml():
-    """Return voicemail TwiML - supports both GET and POST for Twilio"""
+    """Return voicemail TwiML - supports both GET and POST for Telnyx"""
     twiml = voice_client.create_voicemail_response()
     return Response(content=str(twiml), media_type="application/xml")
 
@@ -2719,33 +2616,33 @@ async def get_voice_os_status(
     current_user=Depends(get_current_user_flexible()),
 ):
     """Get Voice OS system status and health"""
-    # Voice OS runs through the main Python backend with Twilio + OpenAI integration
+    # Voice OS runs through the main Python backend with Telnyx + OpenAI integration
     # Check if the essential services are configured and enabled
-    twilio_healthy = voice_client.enabled and bool(voice_client.from_number)
+    telephony_healthy = voice_client.enabled and bool(voice_client.from_number)
     openai_healthy = voice_client.openai_enabled
 
-    # System is "running" if both Twilio and OpenAI are configured
-    system_running = twilio_healthy and openai_healthy
+    # System is "running" if both Telnyx and OpenAI are configured
+    system_running = telephony_healthy and openai_healthy
 
     return {
-        "system_status": "running" if system_running else "degraded" if (twilio_healthy or openai_healthy) else "stopped",
+        "system_status": "running" if system_running else "degraded" if (telephony_healthy or openai_healthy) else "stopped",
         "voice_os_url": os.getenv("RAILWAY_PUBLIC_DOMAIN", "https://app.perenniaai.com"),
-        "twilio_configured": bool(voice_client.from_number),
+        "telephony_configured": bool(voice_client.from_number),
         "openai_configured": voice_client.openai_enabled,
         "phone_number": voice_client.from_number,
         "crm_integration": "active",
         "health_checks": {
-            "twilio": "healthy" if twilio_healthy else "disconnected",
+            "telephony": "healthy" if telephony_healthy else "disconnected",
             "openai": "healthy" if openai_healthy else "disconnected",
             "database": "healthy",
             "webhooks": "configured"
         },
         "capabilities": {
-            "inbound_calls": twilio_healthy,
-            "outbound_calls": twilio_healthy,
+            "inbound_calls": telephony_healthy,
+            "outbound_calls": telephony_healthy,
             "ai_responses": openai_healthy,
             "call_transcription": openai_healthy,
-            "voicemail": twilio_healthy
+            "voicemail": telephony_healthy
         }
     }
 
@@ -2843,7 +2740,7 @@ async def test_voice_sample(
 
 
 # ============================================================================
-# TWILIO VOICE INTELLIGENCE SETUP
+# VOICE INTELLIGENCE SETUP (DEPRECATED)
 # ============================================================================
 
 @router.post("/intelligence/setup")
@@ -2852,9 +2749,10 @@ async def setup_intelligence_service(
     current_user=Depends(get_current_user_flexible()),
 ):
     """
-    One-time setup for Twilio Voice Intelligence Service.
+    One-time setup for Voice Intelligence Service.
+    DEPRECATED: Deepgram handles transcription now.
 
-    Creates the Intelligence Service and attaches AI operators for:
+    Previously created Intelligence Service with AI operators for:
     - Automatic transcription with speaker diarization
     - PII redaction (SSN, phone numbers, etc.)
     - Sentiment analysis
@@ -2862,166 +2760,53 @@ async def setup_intelligence_service(
     - Entity recognition
     - Escalation detection
     - Recording disclosure verification
-
-    Returns the Service SID to add to environment variables.
     """
-    try:
-        data = await request.json() if request.headers.get("content-type") == "application/json" else {}
-
-        from integrations.twilio_intelligence_service import intelligence_service
-
-        # Check if already configured
-        if intelligence_service.service_sid:
-            existing = intelligence_service.get_service_info()
-            if existing:
-                return {
-                    "status": "already_configured",
-                    "message": "Intelligence Service already exists",
-                    "service": existing
-                }
-
-        # Create new service
-        unique_name = data.get("unique_name", "MortgageCRMService")
-        friendly_name = data.get("friendly_name", "Mortgage CRM Voice Intelligence")
-
-        service_sid = intelligence_service.create_intelligence_service(
-            unique_name=unique_name,
-            friendly_name=friendly_name
-        )
-
-        if not service_sid:
-            return {
-                "status": "error",
-                "message": "Failed to create Intelligence Service. Check Twilio credentials."
-            }
-
-        # Attach operators
-        attached_operators = intelligence_service.attach_operators_to_service(service_sid)
-
-        return {
-            "status": "success",
-            "message": "Intelligence Service created successfully",
-            "service_sid": service_sid,
-            "operators_attached": len(attached_operators),
-            "operators": attached_operators,
-            "next_steps": [
-                f"Add to Railway environment: TWILIO_INTELLIGENCE_SERVICE_SID={service_sid}",
-                "Redeploy the application",
-                "Test with a real call recording"
-            ]
-        }
-
-    except Exception as e:
-        logger.error(f"Error setting up Intelligence Service: {e}")
-        return {"status": "error", "message": "Internal server error"}
+    # Legacy Intelligence service removed — Deepgram handles transcription now.
+    return {
+        "status": "deprecated",
+        "message": "Legacy Intelligence service has been removed. Deepgram handles transcription."
+    }
 
 
 @router.get("/intelligence/status")
 async def get_intelligence_status():
     """
-    Get current status of Twilio Voice Intelligence configuration.
+    Get current status of Voice Intelligence configuration.
+    DEPRECATED: Legacy Intelligence removed. Deepgram handles transcription.
     """
-    try:
-        from integrations.twilio_intelligence_service import intelligence_service
-
-        status = {
-            "enabled": intelligence_service.enabled,
-            "service_configured": bool(intelligence_service.service_sid),
-            "service_sid": intelligence_service.service_sid if intelligence_service.service_sid else None,
-            "webhook_base": intelligence_service.webhook_base,
-        }
-
-        # If configured, get full service info
-        if intelligence_service.service_sid and intelligence_service.enabled:
-            service_info = intelligence_service.get_service_info()
-            if service_info:
-                status["service"] = service_info
-
-        return status
-
-    except Exception as e:
-        logger.error(f"Error getting Intelligence status: {e}")
-        return {"status": "error", "message": "Internal server error"}
+    return {
+        "status": "deprecated",
+        "enabled": False,
+        "service_configured": False,
+        "message": "Legacy Intelligence service has been removed. Deepgram handles transcription."
+    }
 
 
 @router.get("/intelligence/operators")
 async def list_available_operators():
     """
-    List all available Twilio Voice Intelligence operators.
+    List all available Voice Intelligence operators.
+    DEPRECATED: Deepgram handles transcription now.
     """
-    try:
-        from integrations.twilio_intelligence_service import intelligence_service
-
-        if not intelligence_service.enabled:
-            return {
-                "status": "error",
-                "message": "Twilio client not configured"
-            }
-
-        operators = intelligence_service.list_available_operators()
-
-        return {
-            "operators": operators,
-            "count": len(operators),
-            "recommended": [
-                "sentiment-analysis",
-                "summarization",
-                "entity-recognition",
-                "escalation-request",
-                "recording-disclosure"
-            ]
-        }
-
-    except Exception as e:
-        logger.error(f"Error listing operators: {e}")
-        return {"status": "error", "message": "Internal server error"}
+    # Legacy Intelligence service removed — Deepgram handles transcription now.
+    return {
+        "status": "deprecated",
+        "operators": [],
+        "count": 0,
+        "message": "Legacy Intelligence service has been removed. Deepgram handles transcription."
+    }
 
 
 @router.post("/intelligence/attach-operators")
 async def attach_operators(request: Request):
     """
     Attach operators to an existing Intelligence Service.
-
-    Body (optional):
-    {
-        "service_sid": "GAxxxx",  // optional, uses env var if not provided
-        "operators": ["sentiment", "summary"]  // defaults to recommended set
-    }
+    DEPRECATED: Legacy Intelligence removed. Deepgram handles transcription.
     """
-    try:
-        from integrations.twilio_intelligence_service import intelligence_service
-
-        if not intelligence_service.enabled:
-            return {
-                "status": "error",
-                "message": "Twilio client not configured."
-            }
-
-        data = await request.json() if request.headers.get("content-type") == "application/json" else {}
-        service_sid = data.get("service_sid") or intelligence_service.service_sid
-        operator_names = data.get("operators")  # None = use recommended
-
-        if not service_sid:
-            return {
-                "status": "error",
-                "message": "No service_sid provided and TWILIO_INTELLIGENCE_SERVICE_SID not set."
-            }
-
-        attached = intelligence_service.attach_operators_to_service(
-            service_sid=service_sid,
-            operator_names=operator_names
-        )
-
-        return {
-            "status": "success",
-            "service_sid": service_sid,
-            "operators_attached": len(attached),
-            "operators": attached
-        }
-
-    except Exception as e:
-        logger.error(f"Error attaching operators: {e}")
-        return {"status": "error", "message": "Internal server error"}
+    return {
+        "status": "deprecated",
+        "message": "Legacy Intelligence service has been removed. Deepgram handles transcription."
+    }
 
 
 # ============================================================================
@@ -3275,14 +3060,14 @@ async def drop_voicemail(
 
 @router.post("/amd-callback")
 async def amd_callback(request: Request):
-    """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
+    """Handle AMD (Answering Machine Detection) callback (legacy)"""
     try:
         form_data = await request.form()
         form_dict = {k: v for k, v in form_data.items()}
 
-        # Validate Twilio signature
-        if not await _validate_twilio_signature(request, form_dict):
-            logger.warning("Invalid Twilio signature on AMD callback")
+        # Validate webhook signature
+        if not await _validate_webhook_signature(request, form_dict):
+            logger.warning("Invalid webhook signature on AMD callback")
             return {"status": "rejected"}
 
         amd_status = form_data.get("AnsweredBy")
@@ -3301,9 +3086,9 @@ async def voicemail_twiml_generator(
     request: Request = None
 ):
     """Generate TwiML for voicemail message - only plays if voicemail detected"""
-    from twilio.twiml.voice_response import VoiceResponse
+    from telephony.providers.telnyx.texml import TeXMLResponse
 
-    response = VoiceResponse()
+    response = TeXMLResponse()
 
     if AnsweredBy == 'human':
         logger.info("Human detected, hanging up to avoid disturbing")

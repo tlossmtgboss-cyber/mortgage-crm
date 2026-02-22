@@ -2,7 +2,7 @@
 Retell AI Service
 
 Comprehensive integration with Retell AI for voice agents.
-Replaces ElevenLabs + Twilio stack with unified voice platform.
+Replaces ElevenLabs + legacy telephony stack with unified voice platform.
 
 Features:
 - Agent management (create, update, delete)
@@ -234,7 +234,7 @@ class RetellClient:
         termination_uri: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Import an existing phone number (from Twilio, etc).
+        Import an existing phone number (from Telnyx, etc).
 
         Args:
             phone_number: E.164 formatted phone number

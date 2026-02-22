@@ -8,7 +8,7 @@ Supported integrations:
 - Stripe (payment processing fees)
 - OpenAI (token usage)
 - Anthropic (token usage)
-- Twilio (SMS/voice usage)
+- Telnyx (SMS/voice usage)
 - SendGrid (email stats)
 - AWS (S3 storage costs)
 """
@@ -17,7 +17,6 @@ from .base_fetcher import BaseCostFetcher, FetchResult
 from .stripe_cost_fetcher import StripeCostFetcher
 from .openai_cost_fetcher import OpenAICostFetcher
 from .anthropic_cost_fetcher import AnthropicCostFetcher
-from .twilio_cost_fetcher import TwilioCostFetcher
 from .sendgrid_cost_fetcher import SendGridCostFetcher
 from .aws_cost_fetcher import AWSCostFetcher
 
@@ -27,7 +26,6 @@ __all__ = [
     "StripeCostFetcher",
     "OpenAICostFetcher",
     "AnthropicCostFetcher",
-    "TwilioCostFetcher",
     "SendGridCostFetcher",
     "AWSCostFetcher",
 ]
@@ -37,7 +35,6 @@ FETCHER_REGISTRY = {
     "stripe": StripeCostFetcher,
     "openai": OpenAICostFetcher,
     "anthropic": AnthropicCostFetcher,
-    "twilio": TwilioCostFetcher,
     "sendgrid": SendGridCostFetcher,
     "aws_s3": AWSCostFetcher,
 }

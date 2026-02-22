@@ -316,14 +316,16 @@ async def handle_score_lead_quality(input_data: Dict[str, Any], context: ToolCon
 # ============================================================================
 
 async def handle_send_sms(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
-    """Send SMS message via Twilio"""
-    # Import Twilio service
+    """Send SMS message via Telnyx"""
+    # Import SMS service
     try:
-        from integrations.twilio_service import sms_client
+        from integrations.sms_service import get_sms_client
 
         to_number = input_data["to_number"]
         message = input_data["message"]
         lead_id = input_data.get("lead_id")
+
+        sms_client = get_sms_client()
 
         # Check if SMS is enabled
         if not sms_client.enabled:
@@ -333,7 +335,7 @@ async def handle_send_sms(input_data: Dict[str, Any], context: ToolContext) -> D
             }
 
         # Send SMS
-        twilio_sid = await sms_client.send_sms(to_number=to_number, message=message)
+        provider_message_id = await sms_client.send_sms(to_number=to_number, message=message)
 
         # Log communication
         if lead_id:
@@ -359,7 +361,7 @@ async def handle_send_sms(input_data: Dict[str, Any], context: ToolContext) -> D
 
         return {
             "success": True,
-            "twilio_sid": twilio_sid,
+            "provider_message_id": provider_message_id,
             "message": "SMS sent successfully"
         }
 

@@ -331,15 +331,15 @@ class TestSMSDeliveryFormatting:
 
         service = NotificationService()
 
-        # Mock the twilio_client on the service instance
-        mock_message = MagicMock(sid="SM123", status="sent")
-        service.twilio_client = MagicMock()
-        service.twilio_client.messages.create.return_value = mock_message
-
-        result = service.send_sms(
-            to_phone="+15551234567",
-            message="Your application has been submitted."
-        )
+        # Mock the Telnyx SMS module used by send_sms
+        mock_sms_data = MagicMock(id="MSG123")
+        mock_sms = MagicMock(data=mock_sms_data, id="MSG123")
+        service.telephony_provider = "telnyx"
+        with patch('telnyx.Message.create', return_value=mock_sms):
+            result = service.send_sms(
+                to_phone="+15551234567",
+                message="Your application has been submitted."
+            )
 
         assert result.get("success", True) or result.get("message_sid")
 
@@ -363,20 +363,20 @@ class TestSMSDeliveryFormatting:
 
     def test_sms_includes_sender_id(self):
         """Test SMS includes proper sender ID"""
-        with patch('twilio.rest.Client') as mock_twilio:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = MagicMock(sid="SM123", status="sent")
-            mock_twilio.return_value = mock_client
+        with patch('telnyx.Message.create') as mock_telnyx_create:
+            mock_sms = MagicMock(data=MagicMock(id="MSG123"), id="MSG123")
+            mock_telnyx_create.return_value = mock_sms
 
             from services.notification_service import NotificationService
             service = NotificationService()
+            service.telephony_provider = "telnyx"
             service.send_sms(
                 to_phone="+15551234567",
                 message="Test message"
             )
 
-            # Verify from number was passed
-            call_args = mock_client.messages.create.call_args
+            # Verify from_ number was passed to Telnyx
+            call_args = mock_telnyx_create.call_args
             assert call_args is not None or True
 
     def test_sms_phone_number_formatting(self):
@@ -413,13 +413,10 @@ class TestSMSDeliveryFormatting:
 
     def test_sms_error_handling(self):
         """Test SMS handles delivery errors gracefully"""
-        with patch('twilio.rest.Client') as mock_twilio:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("Twilio error")
-            mock_twilio.return_value = mock_client
-
+        with patch('telnyx.Message.create', side_effect=Exception("SMS provider error")):
             from services.notification_service import NotificationService
             service = NotificationService()
+            service.telephony_provider = "telnyx"
 
             result = service.send_sms(
                 to_phone="+15551234567",

@@ -45,21 +45,24 @@ class AIReceptionistSMSService:
 
     def __init__(self, db: Session):
         self.db = db
-        self._twilio_client = None
+        self._sms_client = None
         self._calendly_link = os.getenv("CALENDLY_LINK", "https://calendly.com/timloss/discovery-call")
         self._business_name = os.getenv("BUSINESS_NAME", "CMG Home Loans")
         self._lo_name = os.getenv("LO_NAME", "Tim")
 
-    def _get_twilio_client(self):
-        """Lazy load Twilio client."""
-        if self._twilio_client is None:
+    def _get_sms_client(self):
+        """Lazy load SMS client (Telnyx)."""
+        if self._sms_client is None:
             try:
-                from integrations.twilio_service import TwilioSMSClient
-                self._twilio_client = TwilioSMSClient()
+                from integrations.sms_service import get_sms_client
+                self._sms_client = get_sms_client()
             except Exception as e:
-                logger.error(f"Failed to initialize Twilio client: {e}")
+                logger.error(f"Failed to initialize SMS client: {e}")
                 return None
-        return self._twilio_client
+        return self._sms_client
+
+    # Backward-compatible alias
+    _get_twilio_client = _get_sms_client
 
     async def send_post_call_followup(
         self,
@@ -84,7 +87,7 @@ class AIReceptionistSMSService:
         Returns:
             Result dict with success status and message SID
         """
-        client = self._get_twilio_client()
+        client = self._get_sms_client()
         if not client:
             return {"success": False, "error": "SMS service unavailable"}
 
@@ -163,7 +166,7 @@ Or just reply to this text with any questions!
         Returns:
             Result dict with success status
         """
-        client = self._get_twilio_client()
+        client = self._get_sms_client()
         if not client:
             return {"success": False, "error": "SMS service unavailable"}
 
@@ -231,7 +234,7 @@ Pick a time that works best for you!
         Returns:
             Result dict with success status
         """
-        client = self._get_twilio_client()
+        client = self._get_sms_client()
         if not client:
             return {"success": False, "error": "SMS service unavailable"}
 
@@ -321,7 +324,7 @@ We'll call you at this number at the scheduled time.
 
             # Send response if we have one
             if response and response.get("should_respond"):
-                client = self._get_twilio_client()
+                client = self._get_sms_client()
                 if client:
                     message_sid = await client.send_sms(
                         to_number=from_number,

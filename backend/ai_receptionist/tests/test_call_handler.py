@@ -2,7 +2,7 @@
 ================================================================================
 PERENNIA AI - CALL HANDLER TESTS
 ================================================================================
-Tests for Twilio stream handling and conversation management.
+Tests for Telnyx stream handling and conversation management.
 
 Run with: pytest backend/ai_receptionist/tests/test_call_handler.py -v
 ================================================================================
@@ -23,7 +23,7 @@ from ai_receptionist.call_handler import (
     CallState,
     CallDirection,
     CallContext,
-    TwilioStreamHandler,
+    TelnyxStreamHandler,
     RealtimeConversation,
     create_call_handler,
     handle_voice_stream_websocket,
@@ -57,8 +57,8 @@ def call_context() -> CallContext:
 def mock_audio_processor():
     """Create a mock audio processor."""
     processor = Mock(spec=AudioProcessor)
-    processor.transcribe_twilio_audio = AsyncMock(return_value="Hello")
-    processor.synthesize_for_twilio = AsyncMock(return_value=b"audio-data")
+    processor.transcribe_audio = AsyncMock(return_value="Hello")
+    processor.synthesize_for_telephony = AsyncMock(return_value=b"audio-data")
     processor.vad = Mock()
     return processor
 
@@ -73,8 +73,8 @@ def mock_websocket():
 
 
 @pytest.fixture
-def twilio_start_message() -> str:
-    """Create a Twilio start message."""
+def telnyx_start_message() -> str:
+    """Create a Telnyx start message."""
     return json.dumps({
         "event": "start",
         "start": {
@@ -89,8 +89,8 @@ def twilio_start_message() -> str:
 
 
 @pytest.fixture
-def twilio_media_message() -> str:
-    """Create a Twilio media message."""
+def telnyx_media_message() -> str:
+    """Create a Telnyx media message."""
     # Small chunk of silence as mu-law
     audio_data = bytes([0x7F] * 100)  # mu-law silence
     payload = audio_to_base64(audio_data)
@@ -104,8 +104,8 @@ def twilio_media_message() -> str:
 
 
 @pytest.fixture
-def twilio_stop_message() -> str:
-    """Create a Twilio stop message."""
+def telnyx_stop_message() -> str:
+    """Create a Telnyx stop message."""
     return json.dumps({
         "event": "stop",
     })
@@ -186,22 +186,22 @@ class TestCallState:
 
 
 # =============================================================================
-# TWILIO STREAM HANDLER TESTS
+# TELNYX STREAM HANDLER TESTS
 # =============================================================================
 
-class TestTwilioStreamHandler:
-    """Tests for TwilioStreamHandler class."""
+class TestTelnyxStreamHandler:
+    """Tests for TelnyxStreamHandler class."""
 
     @pytest.mark.asyncio
     async def test_handle_start_message(
         self,
         mock_audio_processor,
-        twilio_start_message,
+        telnyx_start_message,
     ):
-        """Test handling Twilio start event."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        """Test handling Telnyx start event."""
+        handler = TelnyxStreamHandler(mock_audio_processor)
 
-        response = await handler.handle_message(twilio_start_message)
+        response = await handler.handle_message(telnyx_start_message)
 
         assert handler.context is not None
         assert handler.context.call_sid == "CA123456"
@@ -212,17 +212,17 @@ class TestTwilioStreamHandler:
     async def test_handle_stop_message(
         self,
         mock_audio_processor,
-        twilio_start_message,
-        twilio_stop_message,
+        telnyx_start_message,
+        telnyx_stop_message,
     ):
-        """Test handling Twilio stop event."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        """Test handling Telnyx stop event."""
+        handler = TelnyxStreamHandler(mock_audio_processor)
 
         # First start the call
-        await handler.handle_message(twilio_start_message)
+        await handler.handle_message(telnyx_start_message)
 
         # Then stop it
-        await handler.handle_message(twilio_stop_message)
+        await handler.handle_message(telnyx_stop_message)
 
         assert handler.context.state == CallState.ENDED
         assert handler.context.end_time is not None
@@ -231,14 +231,14 @@ class TestTwilioStreamHandler:
     async def test_handle_media_message(
         self,
         mock_audio_processor,
-        twilio_start_message,
-        twilio_media_message,
+        telnyx_start_message,
+        telnyx_media_message,
     ):
-        """Test handling Twilio media event."""
+        """Test handling Telnyx media event."""
         # Setup VAD mock
         mock_audio_processor.vad = Mock()
 
-        handler = TwilioStreamHandler(mock_audio_processor)
+        handler = TelnyxStreamHandler(mock_audio_processor)
         handler.vad = Mock()
         handler.vad.process_chunk = Mock(return_value={
             "is_speaking": False,
@@ -248,10 +248,10 @@ class TestTwilioStreamHandler:
         })
 
         # Start call first
-        await handler.handle_message(twilio_start_message)
+        await handler.handle_message(telnyx_start_message)
 
         # Process media
-        response = await handler.handle_message(twilio_media_message)
+        response = await handler.handle_message(telnyx_media_message)
 
         # Should have processed audio
         handler.vad.process_chunk.assert_called()
@@ -259,7 +259,7 @@ class TestTwilioStreamHandler:
     @pytest.mark.asyncio
     async def test_handle_invalid_json(self, mock_audio_processor):
         """Test handling invalid JSON."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        handler = TelnyxStreamHandler(mock_audio_processor)
 
         response = await handler.handle_message("not valid json")
 
@@ -268,7 +268,7 @@ class TestTwilioStreamHandler:
     @pytest.mark.asyncio
     async def test_handle_unknown_event(self, mock_audio_processor):
         """Test handling unknown event type."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        handler = TelnyxStreamHandler(mock_audio_processor)
 
         response = await handler.handle_message(json.dumps({
             "event": "unknown_event",
@@ -280,17 +280,17 @@ class TestTwilioStreamHandler:
     async def test_callbacks_triggered(
         self,
         mock_audio_processor,
-        twilio_start_message,
+        telnyx_start_message,
     ):
         """Test that callbacks are triggered."""
         state_callback = AsyncMock()
 
-        handler = TwilioStreamHandler(
+        handler = TelnyxStreamHandler(
             mock_audio_processor,
             on_state_change=state_callback,
         )
 
-        await handler.handle_message(twilio_start_message)
+        await handler.handle_message(telnyx_start_message)
 
         # Should have called state change for GREETING
         state_callback.assert_called()
@@ -299,11 +299,11 @@ class TestTwilioStreamHandler:
     async def test_create_media_response(
         self,
         mock_audio_processor,
-        twilio_start_message,
+        telnyx_start_message,
     ):
         """Test media response creation."""
-        handler = TwilioStreamHandler(mock_audio_processor)
-        await handler.handle_message(twilio_start_message)
+        handler = TelnyxStreamHandler(mock_audio_processor)
+        await handler.handle_message(telnyx_start_message)
 
         audio = b"test-audio"
         response = handler._create_media_response(audio)
@@ -316,7 +316,7 @@ class TestTwilioStreamHandler:
     @pytest.mark.asyncio
     async def test_get_response_text(self, mock_audio_processor):
         """Test response text generation."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        handler = TelnyxStreamHandler(mock_audio_processor)
 
         # Test rate question
         response = await handler._get_response_text("What are your rates?")
@@ -421,12 +421,12 @@ class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
     @pytest.mark.asyncio
-    async def test_media_before_start(self, mock_audio_processor, twilio_media_message):
+    async def test_media_before_start(self, mock_audio_processor, telnyx_media_message):
         """Test media received before start event."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        handler = TelnyxStreamHandler(mock_audio_processor)
 
         # Media before start should not crash
-        response = await handler.handle_message(twilio_media_message)
+        response = await handler.handle_message(telnyx_media_message)
 
         assert response is None
         assert handler.context is None
@@ -435,17 +435,17 @@ class TestEdgeCases:
     async def test_multiple_start_events(
         self,
         mock_audio_processor,
-        twilio_start_message,
+        telnyx_start_message,
     ):
         """Test handling multiple start events."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        handler = TelnyxStreamHandler(mock_audio_processor)
 
         # First start
-        await handler.handle_message(twilio_start_message)
+        await handler.handle_message(telnyx_start_message)
         first_context = handler.context
 
         # Second start (should create new context)
-        await handler.handle_message(twilio_start_message)
+        await handler.handle_message(telnyx_start_message)
         second_context = handler.context
 
         # Should be different contexts
@@ -455,11 +455,11 @@ class TestEdgeCases:
     async def test_echo_prevention(
         self,
         mock_audio_processor,
-        twilio_start_message,
-        twilio_media_message,
+        telnyx_start_message,
+        telnyx_media_message,
     ):
         """Test that audio is not processed while AI is speaking."""
-        handler = TwilioStreamHandler(mock_audio_processor)
+        handler = TelnyxStreamHandler(mock_audio_processor)
         handler.vad = Mock()
         handler.vad.process_chunk = Mock(return_value={
             "is_speaking": True,
@@ -469,13 +469,13 @@ class TestEdgeCases:
         })
 
         # Start call
-        await handler.handle_message(twilio_start_message)
+        await handler.handle_message(telnyx_start_message)
 
         # Mark AI as speaking
         handler.context.is_ai_speaking = True
 
         # Process media - should be ignored
-        response = await handler.handle_message(twilio_media_message)
+        response = await handler.handle_message(telnyx_media_message)
 
         # Should not process (echo prevention)
         assert response is None
@@ -489,20 +489,20 @@ class TestStateTransitions:
     """Tests for call state transitions."""
 
     @pytest.mark.asyncio
-    async def test_state_flow(self, mock_audio_processor, twilio_start_message):
+    async def test_state_flow(self, mock_audio_processor, telnyx_start_message):
         """Test normal state flow."""
         states_seen = []
 
         async def track_state(state, context):
             states_seen.append(state)
 
-        handler = TwilioStreamHandler(
+        handler = TelnyxStreamHandler(
             mock_audio_processor,
             on_state_change=track_state,
         )
 
         # Start call
-        await handler.handle_message(twilio_start_message)
+        await handler.handle_message(telnyx_start_message)
 
         # Should have transitioned to GREETING
         assert CallState.GREETING in states_seen
@@ -511,8 +511,8 @@ class TestStateTransitions:
     async def test_state_on_stop(
         self,
         mock_audio_processor,
-        twilio_start_message,
-        twilio_stop_message,
+        telnyx_start_message,
+        telnyx_stop_message,
     ):
         """Test state on call stop."""
         states_seen = []
@@ -520,13 +520,13 @@ class TestStateTransitions:
         async def track_state(state, context):
             states_seen.append(state)
 
-        handler = TwilioStreamHandler(
+        handler = TelnyxStreamHandler(
             mock_audio_processor,
             on_state_change=track_state,
         )
 
-        await handler.handle_message(twilio_start_message)
-        await handler.handle_message(twilio_stop_message)
+        await handler.handle_message(telnyx_start_message)
+        await handler.handle_message(telnyx_stop_message)
 
         assert CallState.ENDED in states_seen
 

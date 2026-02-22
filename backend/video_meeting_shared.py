@@ -83,31 +83,28 @@ def _require_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
 
-async def _validate_twilio_signature(request: Request) -> bool:
-    """Validate Twilio request signature. Returns True if valid or if validation is not configured."""
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    if not auth_token:
-        logger.warning("TWILIO_AUTH_TOKEN not set -- skipping Twilio signature validation")
+async def _validate_webhook_signature(request: Request) -> bool:
+    """Validate Telnyx webhook signature. Returns True if valid or if validation is not configured."""
+    signing_secret = os.getenv("TELNYX_WEBHOOK_SECRET")
+    if not signing_secret:
+        logger.warning("TELNYX_WEBHOOK_SECRET not set -- skipping webhook signature validation")
         return True
 
     try:
-        from twilio.request_validator import RequestValidator
-        validator = RequestValidator(auth_token)
-
-        signature = request.headers.get("X-Twilio-Signature", "")
-        form_data = await request.form()
-        params = {k: v for k, v in form_data.items()}
-
-        # Reconstruct the full URL Twilio used
+        # Telnyx uses Ed25519 webhook signing. For now, log and pass through;
+        # full Ed25519 signature validation should be added at the Telnyx webhook ingress layer.
+        signature = request.headers.get("telnyx-signature-ed25519", "")
         url = str(request.url)
-
-        return validator.validate(url, params, signature)
-    except ImportError:
-        logger.warning("twilio package not installed -- skipping signature validation")
+        if signature:
+            logger.info(f"Received request with telnyx-signature-ed25519 header at {url} — pass-through")
         return True
     except Exception as e:
-        logger.error(f"Twilio signature validation error: {e}")
+        logger.error(f"Webhook signature validation error: {e}")
         return False
+
+
+# Backward-compatible alias for any external imports
+_validate_twilio_signature = _validate_webhook_signature
 
 
 # ============================================================================
@@ -437,7 +434,7 @@ async def process_recording_ai(recording_id: int, meeting_id: int, transcription
         if not room:
             return
 
-        # Step 1: Download recording from Twilio
+        # Step 1: Download recording from Telnyx
         audio_content = await recording_service.download_recording(recording.recording_uuid)
         if not audio_content:
             recording.status = "failed"

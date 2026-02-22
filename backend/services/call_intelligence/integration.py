@@ -1,7 +1,7 @@
 """
 Call Intelligence Integration
 
-Integrates Call Intelligence with existing call infrastructure (Retell, Vapi, Twilio).
+Integrates Call Intelligence with existing call infrastructure (Retell, Vapi, Telnyx).
 Automatically processes call transcripts when calls end.
 """
 

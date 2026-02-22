@@ -371,7 +371,7 @@ const VoiceOSDashboard = () => {
                   <span className="status-value success">✅ Connected</span>
                 </div>
                 <div className="status-item">
-                  <span className="status-label">Twilio Integration:</span>
+                  <span className="status-label">Telnyx Integration:</span>
                   <span className="status-value success">✅ Connected</span>
                 </div>
               </div>
@@ -676,7 +676,7 @@ const VoiceOSDashboard = () => {
                 </div>
                 <div className="health-item success">
                   <span className="health-icon">✅</span>
-                  <span className="health-label">Twilio Integration</span>
+                  <span className="health-label">Telnyx Integration</span>
                   <span className="health-value">Active</span>
                 </div>
               </div>

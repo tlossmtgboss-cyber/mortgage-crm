@@ -320,7 +320,7 @@ async def execute_ai_function(
             }
 
         elif function_name == "send_sms":
-            # Send SMS using Twilio
+            # Send SMS using telephony provider
             recipient_phone = function_args.get("recipient_phone")
             recipient_name = function_args.get("recipient_name")
             message_text = function_args.get("message", "")
@@ -357,21 +357,19 @@ async def execute_ai_function(
             elif len(phone_digits) == 11 and phone_digits.startswith('1'):
                 recipient_phone = f"+{phone_digits}"
 
-            # Send the SMS via Twilio
-            twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-            twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
-            twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+            # Send the SMS via Telnyx
+            telnyx_key = os.getenv("TELNYX_API_KEY")
+            telnyx_phone = os.getenv("TELNYX_PHONE_NUMBER")
 
-            if not all([twilio_sid, twilio_token, twilio_phone]):
-                return {"success": False, "error": "Twilio not configured"}
+            if not all([telnyx_key, telnyx_phone]):
+                return {"success": False, "error": "Telnyx not configured"}
 
             try:
-                from twilio.rest import Client as TwilioClient
-                sms_client = TwilioClient(twilio_sid, twilio_token)
-                twilio_message = sms_client.messages.create(
-                    body=message_text,
-                    from_=twilio_phone,
-                    to=recipient_phone
+                import telnyx
+                telnyx_message = telnyx.Message.create(
+                    from_=telnyx_phone,
+                    to=recipient_phone,
+                    text=message_text,
                 )
 
                 # Log activity
@@ -385,9 +383,10 @@ async def execute_ai_function(
                     db.add(activity)
                     db.commit()
 
+                msg_id = getattr(telnyx_message, 'id', None) or getattr(getattr(telnyx_message, 'data', None), 'id', None) or 'unknown'
                 return {
                     "success": True,
-                    "message_sid": twilio_message.sid,
+                    "message_sid": msg_id,
                     "recipient": recipient_name or recipient_phone,
                     "result": f"SMS sent successfully to {recipient_name or recipient_phone}"
                 }

@@ -198,14 +198,14 @@ class VerificationStatus(str, enum.Enum):
 #
 #
 # class VerifiedCallerId(Base):
-#     """Twilio-verified outbound caller IDs"""
+#     """Telnyx-verified outbound caller IDs"""
 #     __tablename__ = "verified_caller_ids"
 #
 #     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 #     phone_number = Column(String(20), unique=True, nullable=False)
 #     friendly_name = Column(String(100), nullable=False)
 #     verification_status = Column(Enum(VerificationStatus), default=VerificationStatus.PENDING)
-#     twilio_sid = Column(String(100), nullable=True)
+#     provider_sid = Column(String(100), nullable=True)
 #     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
 #     verified_at = Column(DateTime, nullable=True)
 #     created_at = Column(DateTime, default=datetime.utcnow)

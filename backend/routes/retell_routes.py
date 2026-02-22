@@ -2,7 +2,7 @@
 Retell AI Routes
 
 API endpoints for managing Retell AI voice agents, calls, and webhooks.
-Replaces ElevenLabs and Twilio routes for voice functionality.
+Replaces ElevenLabs and legacy telephony routes for voice functionality.
 """
 
 import os
@@ -504,7 +504,7 @@ async def import_phone_number(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Import an existing phone number from Twilio."""
+    """Import an existing phone number from the telephony provider."""
     client = get_client_for_user(db, current_user["id"])
 
     try:

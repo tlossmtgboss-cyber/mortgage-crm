@@ -74,7 +74,7 @@ export const MeetingsEmptyState = ({ onMakeCall, onLearnMore }) => (
   <EmptyState
     icon="📞"
     title="No recorded calls yet"
-    description="All your Twilio calls are automatically recorded and transcribed. Make your first call to see AI-powered insights and coaching."
+    description="All your Telnyx calls are automatically recorded and transcribed. Make your first call to see AI-powered insights and coaching."
     primaryAction={{
       text: "Make Your First Call",
       icon: "☎️",

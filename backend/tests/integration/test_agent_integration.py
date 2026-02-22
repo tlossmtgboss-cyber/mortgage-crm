@@ -168,19 +168,18 @@ class TestExternalServiceIntegration:
     """Test external service integrations"""
 
     @pytest.mark.asyncio
-    async def test_twilio_client_init(self):
-        """Test Twilio client can be initialized"""
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+    async def test_telnyx_provider_init(self):
+        """Test Telnyx telephony provider can be initialized"""
+        telnyx_key = os.getenv("TELNYX_API_KEY")
 
-        if not twilio_sid or not twilio_token:
-            pytest.skip("Twilio credentials not configured")
+        if not telnyx_key:
+            pytest.skip("Telnyx credentials not configured")
 
-        from twilio.rest import Client
+        from telephony.provider import get_telephony_provider
 
-        client = Client(twilio_sid, twilio_token)
-        # Just verify client initializes
-        assert client is not None
+        provider = get_telephony_provider()
+        # Just verify provider initializes
+        assert provider is not None
 
     @pytest.mark.asyncio
     async def test_sendgrid_client_init(self):

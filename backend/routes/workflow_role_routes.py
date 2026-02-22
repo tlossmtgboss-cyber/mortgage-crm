@@ -472,13 +472,6 @@ async def set_default_role_assignment(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # First, remove any existing role assignments for this user
-        # (a user can only have one workflow role at a time)
-        db.execute(text("""
-            DELETE FROM default_role_assignments
-            WHERE organization_id = :org_id AND user_id = :user_id
-        """), {"org_id": org_id, "user_id": user_id})
-
         # Upsert the default assignment for this role
         # First try to update (in case someone else was assigned to this role)
         result = db.execute(text("""
@@ -506,10 +499,6 @@ async def set_default_role_assignment(
                 "user_id": user_id,
                 "assigned_by_id": current_user.id
             })
-
-        # Also update the user's role field to match the workflow role
-        user.role = role[1]
-        db.add(user)
 
         db.commit()
 
