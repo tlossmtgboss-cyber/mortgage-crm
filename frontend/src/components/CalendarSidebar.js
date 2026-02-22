@@ -21,6 +21,9 @@ const normalizeUTCDate = (dateString) => {
 function CalendarSidebar({ leadId, loanId, children }) {
   console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
   const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('calendarSidebarCollapsed') === 'true'; } catch { return false; }
+  });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
@@ -29,6 +32,14 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [emailData, setEmailData] = useState(null);
+
+  const toggleCollapsed = () => {
+    setCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('calendarSidebarCollapsed', String(next)); } catch {}
+      return next;
+    });
+  };
 
   // Edit appointment state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -624,6 +635,17 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const selectedDateAppointments = getAppointmentsForSelectedDate();
   const upcomingAppointments = getUpcomingAppointments();
 
+  if (collapsed) {
+    return (
+      <div className="calendar-sidebar calendar-sidebar--collapsed" onClick={toggleCollapsed} title="Show calendar">
+        <div className="calendar-sidebar__expand-tab">
+          <span className="calendar-sidebar__expand-icon">&lsaquo;</span>
+          <span className="calendar-sidebar__expand-label">Calendar</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`calendar-sidebar ${isDragOver ? 'drag-over' : ''}`}
@@ -632,6 +654,11 @@ function CalendarSidebar({ leadId, loanId, children }) {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Collapse toggle */}
+      <button className="calendar-sidebar__collapse-btn" onClick={toggleCollapsed} title="Hide calendar">
+        Hide calendar &rsaquo;
+      </button>
+
       {/* Quick Actions (passed as children) */}
       {children}
 
