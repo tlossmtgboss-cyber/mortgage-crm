@@ -1326,19 +1326,77 @@ def _run_critical_schema_migrations():
 
     db = SessionLocal()
     try:
-        # Fix 1: Add missing encompass_loan_id column to loans table
-        # (Encompass LOS integration model column - migration was never applied to production)
-        for col_name, col_type in [
+        # Fix 1: Add ALL missing columns to loans table
+        # Model defines columns that may not exist in production DB
+        # (init_db.py handles some, but not all — especially Salesforce sync columns)
+        loan_columns = [
+            # Encompass LOS integration
             ("encompass_loan_id", "VARCHAR"),
             ("encompass_last_synced_at", "TIMESTAMP"),
             ("encompass_sync_status", "VARCHAR(50)"),
-        ]:
+            # Salesforce Sync - Property
+            ("property_type", "VARCHAR"),
+            ("occupancy_type", "VARCHAR"),
+            ("property_county", "VARCHAR"),
+            ("property_ownership_type", "VARCHAR"),
+            ("property_units", "INTEGER"),
+            ("file_state", "VARCHAR"),
+            ("loan_purpose", "VARCHAR"),
+            ("rate_type", "VARCHAR"),
+            # Salesforce Sync - Financials
+            ("monthly_payment", "NUMERIC(18,2)"),
+            ("property_tax", "NUMERIC(18,2)"),
+            ("hazard_insurance", "NUMERIC(18,2)"),
+            ("mortgage_insurance", "NUMERIC(18,2)"),
+            ("hoa_amount", "NUMERIC(18,2)"),
+            ("origination_fee", "NUMERIC(18,2)"),
+            ("estimated_prepaid_interest", "NUMERIC(18,2)"),
+            ("points", "NUMERIC(8,4)"),
+            ("index_rate", "NUMERIC(8,4)"),
+            ("margin", "NUMERIC(8,4)"),
+            ("ltv", "NUMERIC(8,4)"),
+            ("cltv", "NUMERIC(8,4)"),
+            # Salesforce Sync - 2nd Loan
+            ("second_loan_amount", "NUMERIC(18,2)"),
+            ("second_loan_rate", "NUMERIC(8,4)"),
+            ("second_loan_payment", "NUMERIC(18,2)"),
+            # Salesforce Sync - Housing Expenses
+            ("present_housing_expense", "NUMERIC(18,2)"),
+            ("proposed_housing_expense", "NUMERIC(18,2)"),
+            ("present_monthly_payment", "NUMERIC(18,2)"),
+            ("proposed_monthly_payment", "NUMERIC(18,2)"),
+            # Missing date columns
+            ("appraisal_received_date", "TIMESTAMP"),
+            ("appraisal_docs_expire_date", "TIMESTAMP"),
+            ("credit_docs_expire_date", "TIMESTAMP"),
+            ("cd_sent_to_borrower_date", "TIMESTAMP"),
+            ("cd_acknowledged_date", "TIMESTAMP"),
+            # Borrower info
+            ("coborrower_name", "VARCHAR"),
+            ("co_borrower_email", "VARCHAR"),
+            ("preferred_communication", "VARCHAR"),
+            # SLA tracking
+            ("days_in_stage", "INTEGER DEFAULT 0"),
+            ("sla_status", "VARCHAR DEFAULT 'on-track'"),
+            ("milestones", "JSONB"),
+            ("ai_insights", "TEXT"),
+            ("predicted_close_date", "TIMESTAMP"),
+            ("risk_score", "INTEGER DEFAULT 0"),
+            ("user_metadata", "JSONB"),
+            # Stage tracking
+            ("stage_changed_at", "TIMESTAMP"),
+        ]
+        added = 0
+        for col_name, col_type in loan_columns:
             try:
                 db.execute(sa_text(f"ALTER TABLE loans ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
                 db.commit()
+                added += 1
             except Exception as e:
                 db.rollback()
                 logger.debug(f"loans.{col_name} migration: {e}")
+        if added:
+            logger.info(f"✅ Ensured {added} loan columns exist")
 
         # Create index on encompass_loan_id if it doesn't exist
         try:
@@ -1351,7 +1409,125 @@ def _run_critical_schema_migrations():
             db.rollback()
             logger.debug(f"encompass_loan_id index: {e}")
 
-        # Fix 2: Convert leads.stage from PostgreSQL ENUM to VARCHAR if needed
+        # Fix 2: Add missing columns to leads table
+        lead_columns = [
+            # Co-applicant
+            ("co_applicant_name", "VARCHAR"),
+            ("co_applicant_email", "VARCHAR"),
+            ("co_applicant_phone", "VARCHAR"),
+            ("preferred_communication", "VARCHAR"),
+            ("organization_code", "VARCHAR"),
+            # Financial
+            ("debt_to_income", "NUMERIC(8,4)"),
+            ("property_value", "NUMERIC(18,2)"),
+            ("down_payment", "NUMERIC(18,2)"),
+            ("employment_status", "VARCHAR"),
+            ("annual_income", "NUMERIC(18,2)"),
+            ("monthly_debts", "NUMERIC(18,2)"),
+            ("first_time_buyer", "BOOLEAN DEFAULT FALSE"),
+            # Loan Details
+            ("loan_amount", "NUMERIC(18,2)"),
+            ("interest_rate", "NUMERIC(8,4)"),
+            ("loan_term", "INTEGER"),
+            ("apr", "NUMERIC(8,4)"),
+            ("points", "NUMERIC(8,4)"),
+            ("lock_date", "TIMESTAMP"),
+            ("lock_expiration", "TIMESTAMP"),
+            ("closing_date", "TIMESTAMP"),
+            ("lender", "VARCHAR"),
+            ("loan_officer", "VARCHAR"),
+            ("processor", "VARCHAR"),
+            ("underwriter", "VARCHAR"),
+            ("appraisal_value", "NUMERIC(18,2)"),
+            ("ltv", "NUMERIC(8,4)"),
+            ("cltv", "NUMERIC(8,4)"),
+            ("dti", "NUMERIC(8,4)"),
+            ("dti_front", "NUMERIC(8,4)"),
+            ("dti_back", "NUMERIC(8,4)"),
+            ("program", "VARCHAR"),
+            ("status_date", "TIMESTAMP"),
+            # SLA Milestone Dates
+            ("lead_received_date", "TIMESTAMP"),
+            ("first_contact_attempt_date", "TIMESTAMP"),
+            ("first_contact_successful_date", "TIMESTAMP"),
+            ("lead_qualification_date", "TIMESTAMP"),
+            ("application_link_sent_date", "TIMESTAMP"),
+            ("application_started_date", "TIMESTAMP"),
+            ("application_completed_date", "TIMESTAMP"),
+            ("credit_pulled_date", "TIMESTAMP"),
+            ("preapproval_submission_date", "TIMESTAMP"),
+            ("preapproval_issued_date", "TIMESTAMP"),
+            ("preapproval_expiration_date", "TIMESTAMP"),
+            ("realtor_referral_date", "TIMESTAMP"),
+            ("rate_watch_enrollment_date", "TIMESTAMP"),
+            ("initial_consultation_date", "TIMESTAMP"),
+            ("property_address", "VARCHAR"),
+            ("expected_purchase_date", "TIMESTAMP"),
+            ("target_payment", "NUMERIC(18,2)"),
+            # Referral fields
+            ("referral_score", "INTEGER DEFAULT 0"),
+            ("referral_source_score", "INTEGER DEFAULT 0"),
+            ("employment_referral_flag", "BOOLEAN DEFAULT FALSE"),
+            ("manager_flag", "BOOLEAN DEFAULT FALSE"),
+            ("employees_managed", "INTEGER DEFAULT 0"),
+            ("leadership_level", "VARCHAR"),
+            ("company_size", "INTEGER"),
+            ("employer_name", "VARCHAR"),
+            ("industry", "VARCHAR"),
+            ("circle_of_cash_flow_map", "JSONB"),
+            # Workflow tracking
+            ("current_workflow_id", "VARCHAR"),
+            ("workflow_day", "INTEGER DEFAULT 0"),
+            ("last_workflow_action", "TIMESTAMP"),
+            ("nurture_month", "INTEGER DEFAULT 0"),
+            ("stage_changed_at", "TIMESTAMP"),
+            ("current_milestone_status", "VARCHAR(50)"),
+            ("current_milestone_entered_at", "TIMESTAMP"),
+            # Salesforce Sync - Property
+            ("occupancy_type", "VARCHAR"),
+            ("property_county", "VARCHAR"),
+            ("property_ownership_type", "VARCHAR"),
+            ("property_units", "INTEGER"),
+            # Salesforce Sync - Financial
+            ("rate_type", "VARCHAR"),
+            ("monthly_payment", "NUMERIC(18,2)"),
+            ("property_tax", "NUMERIC(18,2)"),
+            ("hazard_insurance", "NUMERIC(18,2)"),
+            ("mortgage_insurance", "NUMERIC(18,2)"),
+            ("hoa_amount", "NUMERIC(18,2)"),
+            ("origination_fee", "NUMERIC(18,2)"),
+            ("estimated_prepaid_interest", "NUMERIC(18,2)"),
+            ("index_rate", "NUMERIC(8,4)"),
+            ("margin", "NUMERIC(8,4)"),
+            ("loan_purpose", "VARCHAR"),
+            ("file_state", "VARCHAR"),
+            # Salesforce Sync - 2nd Loan
+            ("second_loan_amount", "NUMERIC(18,2)"),
+            ("second_loan_rate", "NUMERIC(8,4)"),
+            ("second_loan_payment", "NUMERIC(18,2)"),
+            # Salesforce Sync - Housing Expenses
+            ("present_housing_expense", "NUMERIC(18,2)"),
+            ("proposed_housing_expense", "NUMERIC(18,2)"),
+            ("present_monthly_payment", "NUMERIC(18,2)"),
+            ("proposed_monthly_payment", "NUMERIC(18,2)"),
+            # Metadata
+            ("salesforce_id", "VARCHAR"),
+            ("meta_data", "JSONB"),
+            ("user_metadata", "JSONB"),
+        ]
+        leads_added = 0
+        for col_name, col_type in lead_columns:
+            try:
+                db.execute(sa_text(f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                db.commit()
+                leads_added += 1
+            except Exception as e:
+                db.rollback()
+                logger.debug(f"leads.{col_name} migration: {e}")
+        if leads_added:
+            logger.info(f"✅ Ensured {leads_added} lead columns exist")
+
+        # Fix 3a: Convert leads.stage from PostgreSQL ENUM to VARCHAR if needed
         # The model defines Column(String) but the DB may have a leadstage enum type
         try:
             result = db.execute(sa_text("""
@@ -1367,7 +1543,7 @@ def _run_critical_schema_migrations():
             db.rollback()
             logger.warning(f"leads.stage type migration: {e}")
 
-        # Fix 3: Convert loans.stage from PostgreSQL ENUM to VARCHAR if needed
+        # Fix 3b: Convert loans.stage from PostgreSQL ENUM to VARCHAR if needed
         try:
             result = db.execute(sa_text("""
                 SELECT data_type, udt_name FROM information_schema.columns

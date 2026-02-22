@@ -123,22 +123,8 @@ def maybe_promote_loan_to_mum(
         # Get loan amount
         loan_amount = loan['amount'] or 0.0
 
-        # Get interest rate
+        # Get interest rate (column is 'rate' on loans table)
         loan_rate = loan['rate'] or 0.0
-        if not loan_rate:
-            try:
-                row = fresh_db.execute(
-                    text("SELECT interest_rate FROM loans WHERE id = :lid"),
-                    {"lid": loan_id}
-                ).fetchone()
-                if row and row[0]:
-                    loan_rate = float(row[0])
-            except Exception as e:
-                logger.exception(f"Failed to fetch interest_rate for loan {loan_id}: {e}")
-                try:
-                    fresh_db.rollback()
-                except Exception as e2:
-                    logger.exception(f"Failed to rollback after interest_rate fetch failure for loan {loan_id}: {e2}")
 
         # Estimate property value (80% LTV assumption)
         estimated_property_value = loan['appraisal_value'] or (loan_amount * 1.25 if loan_amount else 0.0)
