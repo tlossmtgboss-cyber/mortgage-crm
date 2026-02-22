@@ -380,7 +380,7 @@ RATE_LIMIT_TIERS = {
 # Endpoint categories with specific rate limits (multipliers applied to base limits)
 ENDPOINT_RATE_LIMITS = {
     # Auth endpoints - strict limits to prevent brute force (anonymous: 100/min base)
-    "/token": {"multiplier": 0.1, "burst_allowed": 5},               # 10/min, 5 per 10s (accounts for CORS preflight)
+    "/token": {"multiplier": 0.3, "burst_allowed": 10},              # 30/min, 10 per 10s (accounts for CORS preflight + retries)
     "/api/v1/auth/forgot-password": {"multiplier": 0.03, "burst_allowed": 2},  # 3/min
     "/api/v1/auth/reset-password": {"multiplier": 0.05, "burst_allowed": 3},
     "/api/v1/auth/register": {"multiplier": 0.05, "burst_allowed": 2},
