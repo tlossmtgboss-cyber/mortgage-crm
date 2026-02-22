@@ -8,7 +8,7 @@ Generates self-contained HTML pages for public viewing.
 import json
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
 from typing import Any, Dict, List, Optional
 
@@ -33,7 +33,7 @@ class AuditReportShareService:
     ) -> Dict[str, Any]:
         """Create a shareable link for an audit report."""
         share_token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
         environment = report_data.get("environment", "unknown")
         report_title = title or report_data.get("title", "CRM Workflow Audit Report")
@@ -54,7 +54,7 @@ class AuditReportShareService:
                 "report_title": report_title,
                 "environment": environment,
                 "created_by": user_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "expires_at": expires_at,
             },
         )
@@ -68,7 +68,7 @@ class AuditReportShareService:
             "report_title": report_title,
             "expires_at": expires_at.isoformat(),
             "expires_in_days": expires_in_days,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_shared_report(
@@ -94,7 +94,7 @@ class AuditReportShareService:
         if not share.is_active:
             return None
 
-        if share.expires_at and share.expires_at < datetime.utcnow():
+        if share.expires_at and share.expires_at < datetime.now(timezone.utc):
             return None
 
         # Increment view count
@@ -109,7 +109,7 @@ class AuditReportShareService:
             """),
             {
                 "share_token": share_token,
-                "now": datetime.utcnow(),
+                "now": datetime.now(timezone.utc),
                 "viewer_ip": viewer_ip,
                 "viewer_ua": viewer_ua[:500] if viewer_ua else None,
             },
@@ -165,7 +165,7 @@ class AuditReportShareService:
 
         params = {
             "user_id": user_id,
-            "now": datetime.utcnow(),
+            "now": datetime.now(timezone.utc),
             "limit": limit,
         }
 
@@ -207,7 +207,7 @@ def generate_audit_html(report_data: Dict[str, Any], expires_at: Optional[str] =
     generated_at = escape(
         report_data.get("generated_at")
         or meta.get("timestamp")
-        or datetime.utcnow().isoformat()
+        or datetime.now(timezone.utc).isoformat()
     )
     summary = report_data.get("summary", {})
     findings = report_data.get("findings", [])
