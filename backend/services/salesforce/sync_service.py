@@ -383,6 +383,15 @@ class SalesforceSyncService:
         )
         return all_records
 
+    # Salesforce fields that carry pipeline status — checked in priority order.
+    # The first non-empty value found is used for bucket classification and stage mapping.
+    SF_STATUS_FIELDS = [
+        'MtgPlanner_CRM__Status__c',   # Custom Jungo/MtgPlanner status field
+        'StageName',                     # Standard Opportunity stage
+        'Status',                        # Standard Lead status
+        'LeadSource',                    # Sometimes carries status info
+    ]
+
     async def _process_record(
         self,
         db: Session,
@@ -395,12 +404,27 @@ class SalesforceSyncService:
         # Group mappings by target entity
         entity_mappings = self._group_mappings_by_entity(mappings)
 
+        # Extract the raw Salesforce status value from the source record.
+        # This is needed for bucket classification and stage mapping even when
+        # the status field isn't explicitly included in the field mappings.
+        raw_sf_status = None
+        for sf_field in self.SF_STATUS_FIELDS:
+            val = record.get(sf_field)
+            if val:
+                raw_sf_status = val
+                break
+
         # Transform and upsert each entity
         for target_entity, entity_maps in entity_mappings.items():
             transformed_data = self._transform_record(record, entity_maps)
 
             # Always include the Salesforce ID
             transformed_data['salesforce_id'] = record.get('Id')
+
+            # Inject the raw SF status so _classify_record_bucket() and
+            # stage mapping can use it (unless field mappings already set 'stage')
+            if raw_sf_status and not transformed_data.get('stage'):
+                transformed_data['_sf_status'] = raw_sf_status
 
             # Upsert into CRM
             await self._upsert_record(
@@ -621,7 +645,7 @@ class SalesforceSyncService:
                 else:
                     lead_data = data
                 # Map the SF status to a valid LeadStage value
-                sf_status = data.get('stage') or data.get('StageName') or data.get('Status')
+                sf_status = data.get('stage') or data.get('StageName') or data.get('Status') or data.get('_sf_status')
                 if sf_status:
                     lead_data['stage'] = self._map_sf_status_to_lead_stage(sf_status)
                 return await self._upsert_lead(db, user_id, salesforce_id, lead_data)
@@ -642,7 +666,7 @@ class SalesforceSyncService:
             else:
                 lead_data = data
             # Map SF status to valid LeadStage
-            sf_status = data.get('stage') or data.get('StageName') or data.get('Status')
+            sf_status = data.get('stage') or data.get('StageName') or data.get('Status') or data.get('_sf_status')
             if sf_status:
                 lead_data['stage'] = self._map_sf_status_to_lead_stage(sf_status)
             return await self._upsert_lead(db, user_id, salesforce_id, lead_data)
@@ -1616,13 +1640,18 @@ class SalesforceSyncService:
         return True
 
     def _map_sf_lead_status_to_crm(self, sf_status: str) -> str:
-        """Map Salesforce Lead status to CRM stage (matches LeadStage enum values).
+        """Map Salesforce Lead/Contact status to CRM stage (matches LeadStage enum values).
 
-        For statuses that indicate an active loan (Started, Processing, etc.),
-        maps to 'Application' so the record is recognized as loan-stage.
+        Handles both standard SF Lead Status values and MtgPlanner_CRM__Status__c values
+        (Jungo/Encompass pipeline stages). For statuses that indicate an active loan
+        (Started, Processing, etc.), maps to 'Application' or 'Disclosed' so the record
+        is recognized as loan-stage.
         """
+        if not sf_status:
+            return 'New'
+
         status_mapping = {
-            # Lead statuses
+            # Standard SF Lead statuses
             'Open - Not Contacted': 'New',
             'Working - Contacted': 'Attempted Contact',
             'Prospecting': 'Prospect',
@@ -1635,15 +1664,34 @@ class SalesforceSyncService:
             'Long-Term Nurture': 'Long-Term Nurture',
             'Closed - Converted': 'Disclosed',
             'Closed - Not Converted': 'Withdrawn',
-            # Encompass/loan statuses that may appear on SF Lead records
+            # Encompass/Jungo/MtgPlanner pipeline statuses (MtgPlanner_CRM__Status__c)
             'Started': 'Application',
             'File Started': 'Application',
             'Application': 'Application',
             'Disclosed': 'Disclosed',
+            'Processing': 'Disclosed',
+            'In Processing': 'Disclosed',
+            'Submitted': 'Disclosed',
+            'Underwriting': 'Disclosed',
+            'Conditional Approval': 'Disclosed',
+            'Approved': 'Disclosed',
+            'Suspended': 'Disclosed',
+            'CTC': 'Disclosed',
+            'Clear to Close': 'Disclosed',
+            'Closing': 'Disclosed',
+            'Docs': 'Disclosed',
+            'Docs Out': 'Disclosed',
             'Funded': 'Closed',
+            'Shipped': 'Closed',
+            'File Complete': 'Closed',
+            'Complete': 'Closed',
             'Closed Won': 'Closed',
             'Closed': 'Closed',
             'Closed Lost': 'Withdrawn',
+            'Cancelled': 'Withdrawn',
+            'Denied': 'Does Not Qualify',
+            'Dead': 'Withdrawn',
+            'Withdrawn': 'Withdrawn',
         }
         return status_mapping.get(sf_status, 'New')
 
@@ -1673,12 +1721,13 @@ class SalesforceSyncService:
             'loan' - active loan (application through CTC), goes to loans table
             'loan_funded' - funded/closed, goes to loans table + MUM promotion
         """
-        # Check the stage/status field — could be in 'stage' (from field mapping)
-        # or raw SF field names
+        # Check the stage/status field — could be in 'stage' (from field mapping),
+        # raw SF field names, or '_sf_status' (injected from raw record)
         sf_status = (
             data.get('stage')
             or data.get('StageName')
             or data.get('Status')
+            or data.get('_sf_status')
             or ''
         )
 
@@ -2202,10 +2251,14 @@ class SalesforceSyncService:
         limit: int = 200
     ) -> List[Dict[str, Any]]:
         """Query Salesforce for recently created/modified Leads."""
+        # Query standard Lead fields + MtgPlanner_CRM__Status__c (Jungo custom status)
+        # The custom field may not exist in all orgs — query will still succeed with
+        # standard fields; we catch any SOQL errors and retry without the custom field.
         soql = f"""
             SELECT Id, FirstName, LastName, Email, Phone, Company,
                    Title, Industry, Street, City, State, PostalCode, Country,
                    LeadSource, Status, Description,
+                   MtgPlanner_CRM__Status__c,
                    CreatedDate, LastModifiedDate
             FROM Lead
             WHERE LastModifiedDate >= LAST_N_DAYS:{days_back}
@@ -2230,6 +2283,33 @@ class SalesforceSyncService:
             elif response.status_code == 401:
                 logger.warning(f"SF Lead query: token expired (401). Will attempt refresh.")
                 raise SalesforceTokenExpiredError("Lead query: 401 INVALID_SESSION_ID")
+            elif response.status_code == 400 and 'MtgPlanner_CRM__Status__c' in response.text:
+                # Custom field doesn't exist on Lead object — retry without it
+                logger.info("MtgPlanner_CRM__Status__c not available on Lead object, retrying without it")
+                soql_fallback = f"""
+                    SELECT Id, FirstName, LastName, Email, Phone, Company,
+                           Title, Industry, Street, City, State, PostalCode, Country,
+                           LeadSource, Status, Description,
+                           CreatedDate, LastModifiedDate
+                    FROM Lead
+                    WHERE LastModifiedDate >= LAST_N_DAYS:{days_back}
+                      AND Email != null
+                    ORDER BY LastModifiedDate DESC
+                    LIMIT {limit}
+                """
+                response2 = await client.get(
+                    f"{instance_url}/services/data/v59.0/query",
+                    params={"q": soql_fallback},
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    timeout=30.0
+                )
+                if response2.status_code == 200:
+                    data = response2.json()
+                    records = data.get('records', [])
+                    logger.info(f"Found {len(records)} recent SF Leads (fallback query)")
+                    return records
+                logger.error(f"SF Lead fallback query failed: {response2.status_code}")
+                return []
             else:
                 logger.error(f"SF Lead query failed: {response.status_code} {response.text[:200]}")
                 return []
@@ -2376,7 +2456,13 @@ class SalesforceSyncService:
         zip_code = sf_record.get('PostalCode') or sf_record.get('MailingPostalCode')
 
         source = sf_record.get('LeadSource') or 'Salesforce'
-        stage = self._map_sf_lead_status_to_crm(sf_record.get('Status', ''))
+        # Check MtgPlanner_CRM__Status__c first (Jungo custom), then standard Status
+        sf_status = (
+            sf_record.get('MtgPlanner_CRM__Status__c')
+            or sf_record.get('Status')
+            or ''
+        )
+        stage = self._map_sf_lead_status_to_crm(sf_status)
         phone = sf_record.get('Phone') or sf_record.get('MobilePhone')
         employer_name = sf_record.get('Company') or ''
         industry = sf_record.get('Industry') or ''
