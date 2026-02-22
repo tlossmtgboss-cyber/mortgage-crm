@@ -1852,7 +1852,7 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
               <select
                 value={formData.milestone_type}
                 onChange={e => setFormData({ ...formData, milestone_type: e.target.value })}
-                disabled={!!measure}
+                disabled={false}
               >
                 {milestoneTypes.map(type => (
                   <option key={type} value={type}>
