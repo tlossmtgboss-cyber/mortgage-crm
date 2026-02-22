@@ -1033,16 +1033,50 @@ class SalesforceSyncService:
             'Closed Lost': 'CANCELLED',
             # Mortgage-specific stages
             'Application': 'APPLICATION',
+            'Started': 'APPLICATION',
+            'File Started': 'APPLICATION',
+            'Disclosed': 'DISCLOSED',
+            'LE Sent': 'DISCLOSED',
             'Processing': 'PROCESSING',
+            'Processed': 'PROCESSING',
+            'In Processing': 'PROCESSING',
+            'Loan in Process': 'PROCESSING',
             'Submitted': 'SUBMITTED',
+            'Submitted to UW': 'SUBMITTED',
+            'Submitted to Underwriting': 'SUBMITTED',
             'Underwriting': 'UNDERWRITING',
+            'In Underwriting': 'UNDERWRITING',
+            'UW Review': 'UW_RECEIVED',
+            'UW Received': 'UW_RECEIVED',
             'Conditional Approval': 'CONDITIONAL_APPROVAL',
+            'Conditionally Approved': 'CONDITIONAL_APPROVAL',
+            'Cond. Approved': 'CONDITIONAL_APPROVAL',
+            'Approved with Conditions': 'CONDITIONAL_APPROVAL',
             'Approved': 'APPROVED',
-            'Clear to Close': 'CTC',
+            'Conditions Cleared': 'APPROVED',
+            'Clear to Close': 'CLEAR_TO_CLOSE',
             'CTC': 'CTC',
-            'Docs Out': 'DOCS_OUT',
             'Closing': 'CLOSING',
+            'Closing Scheduled': 'CLOSING',
+            'Docs Drawing': 'DOCS',
+            'Doc Preparation': 'DOCS',
+            'Docs Out': 'DOCS_OUT',
+            'Docs Signing': 'DOCS_OUT',
+            'Docs Signed': 'DOCS_OUT',
             'Funded': 'FUNDED',
+            'Loan Funded': 'FUNDED',
+            'Closed': 'FUNDED',
+            'Completed': 'FUNDED',
+            'Purchased': 'FUNDED',
+            'File Complete': 'FUNDED',
+            'Post-Closing': 'FUNDED',
+            # Terminal
+            'Cancelled': 'CANCELLED',
+            'Withdrawn': 'WITHDRAWN',
+            'Denied': 'DENIED',
+            'Dead': 'DEAD',
+            'Inactive': 'DEAD',
+            'Suspended': 'SUSPENDED',
         }
         return stage_mapping.get(sf_stage, 'APPLICATION')
 
@@ -1582,14 +1616,34 @@ class SalesforceSyncService:
         return True
 
     def _map_sf_lead_status_to_crm(self, sf_status: str) -> str:
-        """Map Salesforce Lead status to CRM stage (matches LeadStage enum values)"""
+        """Map Salesforce Lead status to CRM stage (matches LeadStage enum values).
+
+        For statuses that indicate an active loan (Started, Processing, etc.),
+        maps to 'Application' so the record is recognized as loan-stage.
+        """
         status_mapping = {
+            # Lead statuses
             'Open - Not Contacted': 'New',
             'Working - Contacted': 'Attempted Contact',
-            'Closed - Converted': 'Closed',
-            'Closed - Not Converted': 'Withdrawn',
-            'Nurture': 'Long-Term Nurture',
+            'Prospecting': 'Prospect',
+            'Qualification': 'Prospect',
+            'Needs Analysis': 'Prospect',
             'Qualified': 'Pre-Qualified',
+            'Pre-Qualified': 'Pre-Qualified',
+            'Pre-Approved': 'Pre-Approved',
+            'Nurture': 'Long-Term Nurture',
+            'Long-Term Nurture': 'Long-Term Nurture',
+            'Closed - Converted': 'Disclosed',
+            'Closed - Not Converted': 'Withdrawn',
+            # Encompass/loan statuses that may appear on SF Lead records
+            'Started': 'Application',
+            'File Started': 'Application',
+            'Application': 'Application',
+            'Disclosed': 'Disclosed',
+            'Funded': 'Closed',
+            'Closed Won': 'Closed',
+            'Closed': 'Closed',
+            'Closed Lost': 'Withdrawn',
         }
         return status_mapping.get(sf_status, 'New')
 
@@ -1742,12 +1796,22 @@ class SalesforceSyncService:
             'Long-Term Nurture': 'Long-Term Nurture',
             'Closed - Not Converted': 'Withdrawn',
             'Closed - Converted': 'Disclosed',
-            # SF Opportunity stages that might land here
+            # Encompass/loan statuses that may appear on SF records
+            'Started': 'Application',
+            'File Started': 'Application',
             'Application': 'Application',
+            'Disclosed': 'Disclosed',
+            'Processing': 'Disclosed',
+            'In Processing': 'Disclosed',
+            'Loan in Process': 'Disclosed',
+            # Terminal / Funded
             'Funded': 'Closed',
             'Closed Won': 'Closed',
             'Closed': 'Closed',
+            'Completed': 'Closed',
             'Closed Lost': 'Withdrawn',
+            'Cancelled': 'Withdrawn',
+            'Denied': 'Does Not Qualify',
         }
         return mapping.get(sf_status, 'New')
 

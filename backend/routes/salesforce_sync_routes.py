@@ -963,24 +963,45 @@ async def sync_all_loans_from_salesforce(
         logger.info(f"Found {len(sf_records)} loans in Salesforce")
 
         # Stage mapping from Salesforce to CRM
+        # Must stay in sync with STAGE_MAPPING in salesforce_sync_service.py
         stage_mapping = {
             "New": "APPLICATION",
             "Application": "APPLICATION",
+            "Started": "APPLICATION",
+            "File Started": "APPLICATION",
+            "Disclosed": "DISCLOSED",
+            "LE Sent": "DISCLOSED",
             "Submitted": "PROCESSING",
             "Processing": "PROCESSING",
+            "Processed": "PROCESSING",
             "In Processing": "PROCESSING",
             "Loan in Process": "PROCESSING",
+            "Submitted to UW": "SUBMITTED",
+            "Submitted to Underwriting": "SUBMITTED",
             "Underwriting": "UNDERWRITING",
             "In Underwriting": "UNDERWRITING",
-            "Conditionally Approved": "APPROVED",
+            "UW Review": "UW_RECEIVED",
+            "UW Received": "UW_RECEIVED",
+            "Conditionally Approved": "CONDITIONAL_APPROVAL",
+            "Conditional Approval": "CONDITIONAL_APPROVAL",
             "Approved": "APPROVED",
+            "Conditions Cleared": "APPROVED",
             "Clear to Close": "CLEAR_TO_CLOSE",
             "CTC": "CLEAR_TO_CLOSE",
+            "Closing": "CLOSING",
             "Docs": "DOCS",
-            "Docs Out": "DOCS",
+            "Docs Out": "DOCS_OUT",
+            "Docs Signed": "DOCS_OUT",
             "File Complete": "FUNDED",
             "Funded": "FUNDED",
             "Closed": "FUNDED",
+            "Closed Won": "FUNDED",
+            "Completed": "FUNDED",
+            "Cancelled": "CANCELLED",
+            "Withdrawn": "WITHDRAWN",
+            "Denied": "DENIED",
+            "Dead": "DEAD",
+            "Suspended": "SUSPENDED",
         }
 
         # Process each Salesforce record

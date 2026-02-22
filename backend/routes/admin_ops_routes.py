@@ -658,17 +658,17 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             )
 
 
-    @app.post("/api/v1/admin/update-twilio-config")
-    async def update_user_twilio_config(
+    @app.post("/api/v1/admin/update-telephony-config")
+    async def update_user_telephony_config(
         admin_key: str = Query(...),
         email: str = Query(..., description="User email"),
-        phone_number: str = Query(None, description="Twilio phone number in E.164 format"),
-        account_sid: str = Query(None, description="Twilio Account SID"),
-        auth_token: str = Query(None, description="Twilio Auth Token"),
+        phone_number: str = Query(None, description="Telnyx phone number in E.164 format"),
+        account_sid: str = Query(None, description="Telnyx Account SID"),
+        auth_token: str = Query(None, description="Telnyx Auth Token"),
         db: Session = Depends(get_db)
     ):
         """
-        Update Twilio configuration for a user by email.
+        Update telephony configuration for a user by email.
         Requires admin key for safety.
         """
         if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -684,8 +684,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             user_email = user[1]
             user_name = user[2]
 
-            # Check if user_twilio_config exists for this user
-            existing = db.execute(text("SELECT id FROM user_twilio_config WHERE user_id = :user_id"), {"user_id": user_id}).fetchone()
+            # Check if telephony config exists for this user
+            existing = db.execute(text("SELECT id FROM user_twilio_config WHERE user_id = :user_id"), {"user_id": user_id}).fetchone()  # Legacy table name
 
             updates = []
             params = {"user_id": user_id}
@@ -707,7 +707,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
             if existing:
                 # Update existing config
-                update_sql = f"UPDATE user_twilio_config SET {', '.join(updates)} WHERE user_id = :user_id"
+                update_sql = f"UPDATE user_twilio_config SET {', '.join(updates)} WHERE user_id = :user_id"  # Legacy table name
                 db.execute(text(update_sql), params)
                 action = "updated"
             else:
@@ -726,7 +726,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 insert_fields.extend(["created_at", "updated_at"])
                 insert_values.extend(["NOW()", "NOW()"])
 
-                insert_sql = f"INSERT INTO user_twilio_config ({', '.join(insert_fields)}) VALUES ({', '.join(insert_values)})"
+                insert_sql = f"INSERT INTO user_twilio_config ({', '.join(insert_fields)}) VALUES ({', '.join(insert_values)})"  # Legacy table name
                 db.execute(text(insert_sql), params)
                 action = "created"
 
@@ -736,7 +736,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             config = db.execute(text("""
                 SELECT phone_number, account_sid,
                        CASE WHEN auth_token IS NOT NULL THEN '***masked***' ELSE NULL END as auth_token
-                FROM user_twilio_config WHERE user_id = :user_id
+                FROM user_twilio_config WHERE user_id = :user_id  -- Legacy table name
             """), {"user_id": user_id}).fetchone()
 
             return {
@@ -753,7 +753,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             raise
         except Exception as e:
             db.rollback()
-            logger.error(f"Failed to update Twilio config: {e}")
+            logger.error(f"Failed to update telephony config: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
     # ========================================================================
@@ -2582,4 +2582,162 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             }
         except Exception as e:
             logger.error(f"Admin import loans failed: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
+    # ========================================================================
+    # CLEAR SALESFORCE-IMPORTED DATA
+    # ========================================================================
+
+    @app.post("/api/v1/admin/clear-salesforce-data")
+    async def clear_salesforce_imported_data(
+        dry_run: bool = True,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Delete all leads and loans that were imported from Salesforce
+        (records with a non-null salesforce_id). Nullifies FK references
+        in child tables before deleting to avoid constraint violations.
+
+        Pass dry_run=false to actually delete. Default is dry_run=true (preview only).
+        """
+        if not getattr(current_user, 'is_admin', False):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        try:
+            # --- Count what will be deleted ---
+            sf_lead_ids = db.execute(text(
+                "SELECT id FROM leads WHERE salesforce_id IS NOT NULL"
+            )).fetchall()
+            sf_loan_ids = db.execute(text(
+                "SELECT id FROM loans WHERE salesforce_id IS NOT NULL"
+            )).fetchall()
+
+            lead_ids = [row[0] for row in sf_lead_ids]
+            loan_ids = [row[0] for row in sf_loan_ids]
+
+            result = {
+                "dry_run": dry_run,
+                "sf_leads_found": len(lead_ids),
+                "sf_loans_found": len(loan_ids),
+                "deleted_leads": 0,
+                "deleted_loans": 0,
+                "child_records_cleaned": {},
+            }
+
+            if not lead_ids and not loan_ids:
+                result["message"] = "No Salesforce-imported records found"
+                return result
+
+            if dry_run:
+                result["message"] = (
+                    f"DRY RUN: Would delete {len(lead_ids)} leads and "
+                    f"{len(loan_ids)} loans imported from Salesforce. "
+                    f"Set dry_run=false to execute."
+                )
+                return result
+
+            # --- Nullify FK references in child tables ---
+            # Tables with lead_id FK
+            lead_child_tables = [
+                "activities", "tasks", "ai_tasks", "sla_milestones",
+                "communications", "call_logs", "emails", "sms_messages",
+                "rate_lock_alerts", "documents", "email_classifications",
+                "email_documents", "compliance_alerts", "workflow_tasks",
+                "dialer_contacts", "dialer_call_results",
+                "refinance_opportunities", "los_sync_records",
+            ]
+            # Tables with loan_id FK
+            loan_child_tables = [
+                "activities", "tasks", "ai_tasks", "sla_milestones",
+                "communications", "call_logs", "emails", "sms_messages",
+                "rate_lock_alerts", "documents", "email_classifications",
+                "email_documents", "compliance_alerts", "workflow_tasks",
+                "loan_fees", "disclosure_events", "borrower_applications",
+                "dialer_contacts", "dialer_call_results",
+                "refinance_opportunities", "los_sync_records",
+                "referral_commissions",
+            ]
+
+            cleaned = {}
+
+            # Clean lead_id references
+            if lead_ids:
+                for table in lead_child_tables:
+                    try:
+                        r = db.execute(text(f"""
+                            UPDATE "{table}" SET lead_id = NULL
+                            WHERE lead_id = ANY(:ids)
+                        """), {"ids": lead_ids})
+                        if r.rowcount > 0:
+                            cleaned[f"{table}.lead_id"] = r.rowcount
+                    except Exception as e:
+                        logger.debug(f"Skipping {table}.lead_id cleanup: {e}")
+                        db.rollback()
+
+                # Also clean data_reconciliation records
+                try:
+                    db.execute(text("""
+                        DELETE FROM data_reconciliation_pairs
+                        WHERE lead_id_1 = ANY(:ids) OR lead_id_2 = ANY(:ids)
+                    """), {"ids": lead_ids})
+                except Exception:
+                    db.rollback()
+
+            # Clean loan_id references
+            if loan_ids:
+                for table in loan_child_tables:
+                    try:
+                        r = db.execute(text(f"""
+                            UPDATE "{table}" SET loan_id = NULL
+                            WHERE loan_id = ANY(:ids)
+                        """), {"ids": loan_ids})
+                        if r.rowcount > 0:
+                            cleaned[f"{table}.loan_id"] = r.rowcount
+                    except Exception as e:
+                        logger.debug(f"Skipping {table}.loan_id cleanup: {e}")
+                        db.rollback()
+
+            # --- Delete MUM clients linked to SF loans ---
+            try:
+                r = db.execute(text("""
+                    DELETE FROM mum_clients WHERE salesforce_id IS NOT NULL
+                """))
+                if r.rowcount > 0:
+                    cleaned["mum_clients"] = r.rowcount
+            except Exception as e:
+                logger.debug(f"Skipping mum_clients cleanup: {e}")
+                db.rollback()
+
+            # --- Delete the SF-imported records ---
+            deleted_loans = db.execute(text(
+                "DELETE FROM loans WHERE salesforce_id IS NOT NULL"
+            )).rowcount
+
+            deleted_leads = db.execute(text(
+                "DELETE FROM leads WHERE salesforce_id IS NOT NULL"
+            )).rowcount
+
+            db.commit()
+
+            result["deleted_leads"] = deleted_leads
+            result["deleted_loans"] = deleted_loans
+            result["child_records_cleaned"] = cleaned
+            result["message"] = (
+                f"Deleted {deleted_leads} SF-imported leads and "
+                f"{deleted_loans} SF-imported loans. Ready for re-import."
+            )
+
+            logger.info(
+                f"Admin {current_user.id} cleared SF data: "
+                f"{deleted_leads} leads, {deleted_loans} loans"
+            )
+
+            return result
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error clearing SF data: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Internal server error")
