@@ -2638,71 +2638,78 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 )
                 return result
 
-            # --- Nullify FK references in child tables using subqueries ---
-            # Use subqueries to avoid param binding issues with arrays
-            lead_subquery = "SELECT id FROM leads WHERE salesforce_id IS NOT NULL"
-            loan_subquery = "SELECT id FROM loans WHERE salesforce_id IS NOT NULL"
+            # --- Dynamically find ALL FK constraints referencing leads/loans ---
+            fk_refs = db.execute(text("""
+                SELECT
+                    tc.table_name AS child_table,
+                    kcu.column_name AS child_column,
+                    ccu.table_name AS parent_table
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON tc.constraint_name = ccu.constraint_name
+                    AND tc.table_schema = ccu.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name IN ('leads', 'loans')
+                ORDER BY ccu.table_name, tc.table_name
+            """)).fetchall()
 
-            # Tables with lead_id FK
-            lead_child_tables = [
-                "activities", "tasks", "ai_tasks", "sla_milestones",
-                "communications", "call_logs", "emails", "sms_messages",
-                "rate_lock_alerts", "documents", "email_classifications",
-                "email_documents", "compliance_alerts", "workflow_tasks",
-                "dialer_contacts", "dialer_call_results",
-                "refinance_opportunities", "los_sync_records",
-            ]
-            # Tables with loan_id FK
-            loan_child_tables = [
-                "activities", "tasks", "ai_tasks", "sla_milestones",
-                "communications", "call_logs", "emails", "sms_messages",
-                "rate_lock_alerts", "documents", "email_classifications",
-                "email_documents", "compliance_alerts", "workflow_tasks",
-                "loan_fees", "disclosure_events", "borrower_applications",
-                "dialer_contacts", "dialer_call_results",
-                "refinance_opportunities", "los_sync_records",
-                "referral_commissions",
-            ]
+            lead_refs = [(r[0], r[1]) for r in fk_refs if r[2] == 'leads']
+            loan_refs = [(r[0], r[1]) for r in fk_refs if r[2] == 'loans']
+
+            lead_subq = "SELECT id FROM leads WHERE salesforce_id IS NOT NULL"
+            loan_subq = "SELECT id FROM loans WHERE salesforce_id IS NOT NULL"
 
             cleaned = {}
 
-            # Clean lead_id references
+            # Clean all lead FK references
             if lead_ids:
-                for tbl in lead_child_tables:
+                for child_tbl, child_col in lead_refs:
                     try:
                         r = db.execute(text(
-                            f'UPDATE "{tbl}" SET lead_id = NULL '
-                            f'WHERE lead_id IN ({lead_subquery})'
+                            f'UPDATE "{child_tbl}" SET "{child_col}" = NULL '
+                            f'WHERE "{child_col}" IN ({lead_subq})'
                         ))
                         if r.rowcount > 0:
-                            cleaned[f"{tbl}.lead_id"] = r.rowcount
-                    except Exception as e:
-                        logger.debug(f"Skipping {tbl}.lead_id cleanup: {e}")
+                            cleaned[f"{child_tbl}.{child_col}"] = r.rowcount
+                    except Exception:
                         db.rollback()
+                        # Column might be NOT NULL — delete child rows instead
+                        try:
+                            r = db.execute(text(
+                                f'DELETE FROM "{child_tbl}" '
+                                f'WHERE "{child_col}" IN ({lead_subq})'
+                            ))
+                            if r.rowcount > 0:
+                                cleaned[f"{child_tbl}.{child_col} (deleted)"] = r.rowcount
+                        except Exception as e2:
+                            logger.debug(f"Skipping {child_tbl}.{child_col}: {e2}")
+                            db.rollback()
 
-                # Also clean data_reconciliation records
-                try:
-                    db.execute(text(
-                        f"DELETE FROM data_reconciliation_pairs "
-                        f"WHERE lead_id_1 IN ({lead_subquery}) "
-                        f"OR lead_id_2 IN ({lead_subquery})"
-                    ))
-                except Exception:
-                    db.rollback()
-
-            # Clean loan_id references
+            # Clean all loan FK references
             if loan_ids:
-                for tbl in loan_child_tables:
+                for child_tbl, child_col in loan_refs:
                     try:
                         r = db.execute(text(
-                            f'UPDATE "{tbl}" SET loan_id = NULL '
-                            f'WHERE loan_id IN ({loan_subquery})'
+                            f'UPDATE "{child_tbl}" SET "{child_col}" = NULL '
+                            f'WHERE "{child_col}" IN ({loan_subq})'
                         ))
                         if r.rowcount > 0:
-                            cleaned[f"{tbl}.loan_id"] = r.rowcount
-                    except Exception as e:
-                        logger.debug(f"Skipping {tbl}.loan_id cleanup: {e}")
+                            cleaned[f"{child_tbl}.{child_col}"] = r.rowcount
+                    except Exception:
                         db.rollback()
+                        try:
+                            r = db.execute(text(
+                                f'DELETE FROM "{child_tbl}" '
+                                f'WHERE "{child_col}" IN ({loan_subq})'
+                            ))
+                            if r.rowcount > 0:
+                                cleaned[f"{child_tbl}.{child_col} (deleted)"] = r.rowcount
+                        except Exception as e2:
+                            logger.debug(f"Skipping {child_tbl}.{child_col}: {e2}")
+                            db.rollback()
 
             # --- Delete MUM clients linked to SF ---
             try:
