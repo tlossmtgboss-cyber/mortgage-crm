@@ -33,7 +33,7 @@ export const NAVIGATION_ITEMS = {
   },
   portfolio: {
     path: '/portfolio',
-    label: 'MUM Clients',  // Mortgages Under Management - for Loan Officers only
+    label: 'Portfolio',  // Mortgages Under Management - for Loan Officers only
     module: 'base'
   },
   rateMonitor: {
@@ -896,7 +896,7 @@ export const MASTER_ADMIN_NAVIGATION = [
     children: [
       { path: '/leads', label: 'Leads', icon: 'fa-user-plus', badgeKey: 'leads' },
       { path: '/loans', label: 'Active Loans', icon: 'fa-file-contract', badgeKey: 'loans' },
-      { path: '/portfolio', label: 'MUM Clients', icon: 'fa-users' },
+      { path: '/portfolio', label: 'Portfolio', icon: 'fa-users' },
       { path: '/rate-monitor', label: 'Rate Monitor', icon: 'fa-chart-line' },
       { path: '/referral-partners', label: 'Partners', icon: 'fa-handshake' },
       { path: '/partner-recruiting', label: 'Partner Recruiting', icon: 'fa-user-tie' },
