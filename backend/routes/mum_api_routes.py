@@ -123,6 +123,44 @@ async def get_mum_clients_portfolio(
 
         mum_clients = query.order_by(MUMClient.created_at.desc()).all()
 
+        # Batch lookup loan details (loan_type, occupancy_type) and lead details (first_time_buyer)
+        loan_details_map = {}
+        loan_numbers = [c.loan_number for c in mum_clients if c.loan_number]
+        if loan_numbers:
+            try:
+                loan_rows = db.execute(text("""
+                    SELECT loan_number, loan_type, occupancy_type, program
+                    FROM loans WHERE loan_number = ANY(:lns)
+                """), {"lns": loan_numbers}).fetchall()
+                for row in loan_rows:
+                    loan_details_map[row[0]] = {
+                        "loan_type": row[1], "occupancy_type": row[2], "program": row[3]
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to batch lookup loan details for MUM: {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
+        lead_details_map = {}
+        if loan_numbers:
+            try:
+                lead_rows = db.execute(text("""
+                    SELECT loan_number, first_time_buyer, loan_type, occupancy_type
+                    FROM leads WHERE loan_number = ANY(:lns) AND loan_number IS NOT NULL
+                """), {"lns": loan_numbers}).fetchall()
+                for row in lead_rows:
+                    lead_details_map[row[0]] = {
+                        "first_time_buyer": row[1], "loan_type": row[2], "occupancy_type": row[3]
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to batch lookup lead details for MUM: {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
         for client in mum_clients:
             # Track this loan number
             if client.loan_number:
@@ -219,6 +257,12 @@ async def get_mum_clients_portfolio(
                 "notes": client.notes,
                 "loan_officer": client.loan_officer,
                 "processor": client.processor,
+                "loan_type": (loan_details_map.get(client.loan_number, {}).get("loan_type")
+                              or lead_details_map.get(client.loan_number, {}).get("loan_type")),
+                "program": loan_details_map.get(client.loan_number, {}).get("program"),
+                "occupancy_type": (loan_details_map.get(client.loan_number, {}).get("occupancy_type")
+                                   or lead_details_map.get(client.loan_number, {}).get("occupancy_type")),
+                "first_time_buyer": lead_details_map.get(client.loan_number, {}).get("first_time_buyer", False),
             }
 
             client_list.append(client_data)
@@ -298,11 +342,13 @@ async def get_mum_clients_portfolio(
                 "status": "Active",
                 "last_contact": None,
                 "notes": None,
-                "loan_officer": None,  # Would need to look up
+                "loan_officer": loan.loan_officer_name,
                 "processor": loan.processor,
                 "property_address": loan.property_address,
                 "loan_type": loan.loan_type,
+                "occupancy_type": getattr(loan, 'occupancy_type', None),
                 "program": loan.program,
+                "first_time_buyer": False,  # Not stored on loan; lead-level data
             }
 
             client_list.append(client_data)

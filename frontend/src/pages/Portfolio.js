@@ -45,6 +45,8 @@ function Portfolio() {
   const [filterView, setFilterView] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusDropdown, setStatusDropdown] = useState({ show: false, clientId: null, position: { top: 0, left: 0 } });
+  const [sortColumn, setSortColumn] = useState('closing_date');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   useEffect(() => {
     loadData();
@@ -185,8 +187,8 @@ function Portfolio() {
         counts.first_time_buyer++;
       }
 
-      // Loan type segmentation
-      const loanType = (client.loan_type || '').toLowerCase();
+      // Loan type segmentation — check loan_type first, then program as fallback
+      const loanType = (client.loan_type || client.program || '').toLowerCase();
       const hasMI = client.has_mi || client.has_pmi || client.mi_amount > 0 || client.pmi_amount > 0;
 
       if (loanType.includes('fha')) {
@@ -272,6 +274,52 @@ function Portfolio() {
       (client.servicing_loan_number || client.loan_number)?.toLowerCase().includes(query)
     );
   }
+
+  // Sort by selected column
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('desc');
+    }
+  };
+
+  filteredMumClients = [...filteredMumClients].sort((a, b) => {
+    let aVal, bVal;
+    switch (sortColumn) {
+      case 'client_name':
+        aVal = (a.client_name || a.name || '').toLowerCase();
+        bVal = (b.client_name || b.name || '').toLowerCase();
+        break;
+      case 'loan_number':
+        aVal = (a.servicing_loan_number || a.loan_number || '').toLowerCase();
+        bVal = (b.servicing_loan_number || b.loan_number || '').toLowerCase();
+        break;
+      case 'closing_date':
+        aVal = a.closing_date || a.original_close_date || '';
+        bVal = b.closing_date || b.original_close_date || '';
+        break;
+      case 'days_since_funding':
+        aVal = a.days_since_funding || 0;
+        bVal = b.days_since_funding || 0;
+        break;
+      case 'current_rate':
+        aVal = a.current_rate || a.interest_rate || 0;
+        bVal = b.current_rate || b.interest_rate || 0;
+        break;
+      case 'loan_balance':
+        aVal = a.current_loan_amount || a.loan_balance || 0;
+        bVal = b.current_loan_amount || b.loan_balance || 0;
+        break;
+      default:
+        aVal = a.closing_date || '';
+        bVal = b.closing_date || '';
+    }
+    if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+    if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
 
   // Status options — all stages across Lead, Active Loan, and MUM
   const statusOptions = [
@@ -798,14 +846,24 @@ function Portfolio() {
             <table>
               <thead>
                 <tr>
-                  <th>Client Name</th>
-                  <th>Stage</th>
-                  <th>Loan Number</th>
-                  <th>Closed Date</th>
-                  <th>Days Since Funding</th>
-                  <th>Original Rate</th>
-                  <th>Current Rate</th>
-                  <th>Loan Balance</th>
+                  <th onClick={() => handleSort('client_name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    Client Name {sortColumn === 'client_name' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => handleSort('loan_number')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    Loan Number {sortColumn === 'loan_number' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => handleSort('closing_date')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    Closed Date {sortColumn === 'closing_date' ? (sortDirection === 'asc' ? '▲' : '▼') : '▼'}
+                  </th>
+                  <th onClick={() => handleSort('days_since_funding')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    Days Since Funding {sortColumn === 'days_since_funding' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => handleSort('current_rate')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    Current Rate {sortColumn === 'current_rate' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                  </th>
+                  <th onClick={() => handleSort('loan_balance')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    Loan Balance {sortColumn === 'loan_balance' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
+                  </th>
                   <th>Opportunity</th>
                   <th>Est. Savings</th>
                   <th>Actions</th>
@@ -821,24 +879,6 @@ function Portfolio() {
                     <td>
                       <strong>{client.client_name || client.name}</strong>
                     </td>
-                    <td>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          color: 'white',
-                          backgroundColor: getStatusColor(client.stage || 'Funded'),
-                          cursor: 'pointer',
-                        }}
-                        onClick={(e) => handleStatusClick(e, client.id)}
-                        title="Click to change status"
-                      >
-                        {client.stage || 'Funded'}
-                      </span>
-                    </td>
                     <td>{client.servicing_loan_number || client.loan_number}</td>
                     <td>
                       {client.closing_date || client.original_close_date ? new Date(client.closing_date || client.original_close_date).toLocaleDateString() : 'N/A'}
@@ -848,9 +888,8 @@ function Portfolio() {
                         {client.days_since_funding} days
                       </span>
                     </td>
-                    <td>{(client.interest_rate || client.current_rate) ? `${client.interest_rate || client.current_rate}%` : 'N/A'}</td>
-                    <td>{(client.interest_rate || client.current_rate) ? `${client.interest_rate || client.current_rate}%` : 'N/A'}</td>
-                    <td>${(client.current_loan_amount || client.loan_balance)?.toLocaleString() || 0}</td>
+                    <td>{(client.current_rate || client.interest_rate) ? `${client.current_rate || client.interest_rate}%` : 'N/A'}</td>
+                    <td>${(client.current_loan_amount || client.loan_balance || 0).toLocaleString()}</td>
                     <td>
                       {client.refinance_opportunity ? (
                         <span className="opportunity-yes">Yes</span>

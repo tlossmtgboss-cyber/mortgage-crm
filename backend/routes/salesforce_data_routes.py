@@ -591,6 +591,8 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                         COALESCE(
                             NULLIF(l.borrower_name, ''),
                             NULLIF(TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')), ''),
+                            NULLIF(TRIM(COALESCE(le2.first_name, '') || ' ' || COALESCE(le2.last_name, '')), ''),
+                            NULLIF(TRIM(COALESCE(le3.first_name, '') || ' ' || COALESCE(le3.last_name, '')), ''),
                             'Client - ' || l.loan_number
                         ),
                         l.loan_number,
@@ -610,6 +612,8 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                         :user_id
                     FROM loans l
                     LEFT JOIN leads le ON le.email = l.borrower_email AND le.email IS NOT NULL
+                    LEFT JOIN leads le2 ON le2.loan_number = l.loan_number AND le2.loan_number IS NOT NULL
+                    LEFT JOIN leads le3 ON le3.salesforce_id = l.salesforce_id AND le3.salesforce_id IS NOT NULL
                     WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                            OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
                            OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'

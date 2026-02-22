@@ -1558,6 +1558,27 @@ def _run_critical_schema_migrations():
             db.rollback()
             logger.warning(f"loans.stage type migration: {e}")
 
+        # Fix 4: Backfill MUM client names from leads (replace "Client - XXX" with real names)
+        try:
+            result = db.execute(sa_text("""
+                UPDATE mum_clients m
+                SET client_name = TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')),
+                    updated_at = CURRENT_TIMESTAMP
+                FROM leads le
+                WHERE m.client_name LIKE 'Client - %'
+                  AND (
+                      (le.loan_number = m.loan_number AND le.loan_number IS NOT NULL)
+                      OR (le.email = m.email AND le.email IS NOT NULL)
+                  )
+                  AND TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')) != ''
+            """))
+            db.commit()
+            if result.rowcount > 0:
+                logger.info(f"✅ Backfilled {result.rowcount} MUM client names from leads")
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"MUM name backfill: {e}")
+
         logger.info("✅ Critical schema migrations complete")
     finally:
         db.close()
