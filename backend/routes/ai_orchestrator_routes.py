@@ -43,6 +43,7 @@ def get_current_user_dep():
     return main.get_current_user_flexible
 
 
+@router.post("/langgraph-chat")
 @router.post("/orchestrator-chat")
 async def orchestrator_chat(
     request: Request,
@@ -51,7 +52,8 @@ async def orchestrator_chat(
 ):
     """
     AI Chat powered by the AgentOrchestrator brain with Tool Execution
-    Routes messages to specialized agents and executes real actions
+    Routes messages to specialized agents and executes real actions.
+    Accessible via both /langgraph-chat (used by AILandingPage) and /orchestrator-chat.
     """
     try:
         from openai import OpenAI
@@ -88,8 +90,8 @@ async def orchestrator_chat(
             logger.warning(f"Failed to load user context: {ctx_err}")
             try:
                 db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to rollback after user context error: {e}")
             user_context = {}
             user_context_summary = ''
             user_preferences = {}
@@ -171,7 +173,8 @@ async def orchestrator_chat_stream(
                     organization_id=getattr(current_user, 'organization_id', None),
                 )
                 user_context_summary = user_context.get('summary', '')
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to load user context in orchestrator_chat_stream: {e}")
                 user_context_summary = ''
 
             system_prompt = f"""You are an AI assistant for a mortgage CRM system.
@@ -207,8 +210,8 @@ Be concise and helpful."""
                 from conversation_memory_service import ConversationMemory as ConvMemory
                 ConvMemory.save_message(db, session_id, current_user.id, "user", message)
                 ConvMemory.save_message(db, session_id, current_user.id, "assistant", full_response)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to save conversation in orchestrator_chat_stream: {e}")
 
         except Exception as e:
             logger.error(f"Stream error: {e}")
