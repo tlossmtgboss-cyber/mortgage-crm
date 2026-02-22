@@ -23,9 +23,14 @@ class SMSClient:
 
         if self._telnyx_api_key and self.from_number:
             self.enabled = True
-            logger.info("Telnyx SMS initialized successfully (HTTP mode)")
+            logger.info(f"Telnyx SMS initialized. From: {self.from_number}, API key: {self._telnyx_api_key[:8]}...")
         else:
-            logger.warning("Telnyx SMS credentials not configured")
+            missing = []
+            if not self._telnyx_api_key:
+                missing.append("TELNYX_API_KEY")
+            if not self.from_number:
+                missing.append("TELNYX_PHONE_NUMBER")
+            logger.warning(f"Telnyx SMS not configured — missing: {', '.join(missing)}")
 
     async def send_sms(
         self,
@@ -73,17 +78,19 @@ class SMSClient:
                 timeout=10,
             )
 
-            if response.status_code == 200:
+            if response.status_code in (200, 201, 202):
                 data = response.json()
                 message_id = data.get("data", {}).get("id", "")
-                logger.info(f"Telnyx SMS sent. ID: {message_id}")
+                logger.info(f"Telnyx SMS sent to {to_number}. ID: {message_id}")
                 return message_id
             else:
-                logger.error(f"Telnyx SMS failed: {response.status_code} {response.text[:200]}")
+                error_body = response.text[:500]
+                logger.error(f"Telnyx SMS failed: HTTP {response.status_code} — {error_body}")
+                logger.error(f"  Request: from={from_num}, to={to_number}, profile={self.messaging_profile_id}")
                 return None
 
         except Exception as e:
-            logger.error(f"Telnyx error sending SMS: {e}")
+            logger.error(f"Telnyx error sending SMS to {to_number}: {e}", exc_info=True)
             return None
 
     async def send_bulk_sms(

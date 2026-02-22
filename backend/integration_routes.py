@@ -162,42 +162,53 @@ class SMSWebhookPayload(BaseModel):
 @router.post("/sms/send")
 async def send_sms(
     request: SMSSendRequest,
-    db: Session = Depends(get_db),  # This needs to be imported from main
-    current_user = Depends(get_current_user)  # This needs to be imported from main
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Send SMS message to client"""
 
     if not sms_client.enabled:
-        raise HTTPException(status_code=503, detail="SMS service not configured")
+        logger.error(f"SMS not enabled. API key set: {bool(sms_client._telnyx_api_key)}, from_number: {sms_client.from_number}")
+        raise HTTPException(status_code=503, detail="SMS service not configured. Check TELNYX_API_KEY and TELNYX_PHONE_NUMBER env vars.")
 
     try:
         # Send SMS
-        message_sid = await sms_client.send_sms(
+        result = await sms_client.send_sms(
             to_number=request.to_number,
             message=request.message
         )
 
-        if not message_sid:
-            raise HTTPException(status_code=500, detail="Failed to send SMS")
+        # send_sms returns message_id string on success, None on failure
+        if not result:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Telnyx API failed to send SMS. Check TELNYX_API_KEY and TELNYX_PHONE_NUMBER. From: {sms_client.from_number}"
+            )
+
+        message_sid = result
 
         # Log SMS in database
-        from database.models import SMSMessage
-        sms_record = SMSMessage(
-            user_id=current_user.id,
-            lead_id=request.lead_id,
-            loan_id=request.loan_id,
-            to_number=request.to_number,
-            from_number=sms_client.from_number,
-            message=request.message,
-            direction="outbound",
-            status="sent",
-            provider_message_id=message_sid,
-            template_used=request.template
-        )
-        db.add(sms_record)
-        db.commit()
+        try:
+            from database.models import SMSMessage
+            sms_record = SMSMessage(
+                user_id=current_user.id,
+                lead_id=request.lead_id,
+                loan_id=request.loan_id,
+                to_number=request.to_number,
+                from_number=sms_client.from_number,
+                message=request.message,
+                direction="outbound",
+                status="sent",
+                provider_message_id=message_sid,
+                template_used=request.template
+            )
+            db.add(sms_record)
+            db.commit()
+        except Exception as db_err:
+            logger.warning(f"SMS sent but failed to log in DB: {db_err}")
+            db.rollback()
 
-        logger.info(f"SMS sent to {request.to_number}")
+        logger.info(f"SMS sent to {request.to_number}, sid={message_sid}")
 
         return {
             "status": "sent",
@@ -205,9 +216,11 @@ async def send_sms(
             "to": request.to_number
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error sending SMS: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error sending SMS: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"SMS send failed: {str(e)[:200]}")
 
 
 @router.get("/sms/history")
