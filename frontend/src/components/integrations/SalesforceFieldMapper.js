@@ -251,6 +251,39 @@ const CRM_FIELDS = {
 };
 
 // ---------------------------------------------------------------
+// INHERITANCE: Lead mappings carry over to Active Loan
+// ---------------------------------------------------------------
+const LEAD_TO_ACTIVE_LOAN = {
+  lead_first_name: 'borrower_first_name',
+  lead_last_name: 'borrower_last_name',
+  lead_email: 'borrower_email',
+  lead_phone: 'borrower_phone',
+  lead_loan_amount: 'loan_amount',
+  lead_loan_purpose: 'loan_purpose',
+  lead_loan_type: 'loan_type',
+  lead_interest_rate: 'interest_rate',
+  lead_loan_term: 'loan_term',
+  lead_ltv: 'ltv',
+  lead_cltv: 'cltv',
+  lead_dti: 'dti',
+  lead_loan_stage: 'loan_stage',
+  lead_assigned_lo: 'assigned_lo',
+  lead_processor: 'assigned_processor',
+  lead_loan_number: 'loan_number',
+  lead_property_address: 'property_address',
+  lead_property_city: 'property_city',
+  lead_property_state: 'property_state',
+  lead_property_zip: 'property_zip',
+  lead_property_type: 'property_type',
+  lead_occupancy: 'occupancy_type',
+  lead_property_value: 'estimated_value',
+  lead_appraisal_value: 'appraisal_value',
+};
+const ACTIVE_TO_LEAD = Object.fromEntries(
+  Object.entries(LEAD_TO_ACTIVE_LOAN).map(([k, v]) => [v, k])
+);
+
+// ---------------------------------------------------------------
 // UI Sub-components
 // ---------------------------------------------------------------
 
@@ -534,6 +567,28 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
     setMappings(prev => { const n = { ...prev }; if (val === null) delete n[key]; else n[key] = val; return n; });
   }, []);
 
+  // Effective mappings: Active Loan fields inherit from Lead if not explicitly mapped
+  const effectiveMappings = useMemo(() => {
+    const eff = { ...mappings };
+    for (const [leadKey, activeKey] of Object.entries(LEAD_TO_ACTIVE_LOAN)) {
+      if (!eff[activeKey] && eff[leadKey]) {
+        eff[activeKey] = eff[leadKey];
+      }
+    }
+    return eff;
+  }, [mappings]);
+
+  // Track which active loan fields are inherited (not directly mapped)
+  const inheritedFields = useMemo(() => {
+    const inherited = new Set();
+    for (const [leadKey, activeKey] of Object.entries(LEAD_TO_ACTIVE_LOAN)) {
+      if (!mappings[activeKey] && mappings[leadKey]) {
+        inherited.add(activeKey);
+      }
+    }
+    return inherited;
+  }, [mappings]);
+
   const toggle = (k) => setExpandedSections(p => ({ ...p, [k]: !p[k] }));
 
   // Save all mappings to backend
@@ -547,7 +602,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ mappings })
+        body: JSON.stringify({ mappings: effectiveMappings })
       });
       if (res.ok) {
         const data = await res.json();
@@ -562,7 +617,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
     } finally {
       setSaving(false);
     }
-  }, [mappings, onMappingSaved]);
+  }, [effectiveMappings, onMappingSaved]);
 
   // SLA Stats
   const slaByPhase = useMemo(() => {
@@ -580,30 +635,35 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
     return s;
   }, [mappings]);
 
-  // Field Stats per stage
+  // Field Stats per stage (uses effectiveMappings so Active Loan counts include inherited)
   const fieldStats = useMemo(() => {
     const stats = {};
     for (const [key, stage] of Object.entries(CRM_FIELDS)) {
       let total = 0, mapped = 0, req = 0, reqMapped = 0;
       for (const sec of stage.sections) for (const f of sec.fields) {
-        total++; if (mappings[f.key]) mapped++;
-        if (f.required) { req++; if (mappings[f.key]) reqMapped++; }
+        total++; if (effectiveMappings[f.key]) mapped++;
+        if (f.required) { req++; if (effectiveMappings[f.key]) reqMapped++; }
       }
       stats[key] = { total, mapped, req, reqMapped };
     }
     return stats;
-  }, [mappings]);
+  }, [effectiveMappings]);
 
   const totalMapped = slaStats.mapped + Object.values(fieldStats).reduce((s, v) => s + v.mapped, 0);
   const totalFields = slaStats.total + Object.values(fieldStats).reduce((s, v) => s + v.total, 0);
 
-  // Auto-map helpers
+  // Auto-map helpers (includes Lead→Active Loan inheritance)
   const autoMap = useCallback((fields, prefix = "") => {
     setMappings(prev => {
       const n = { ...prev };
       for (const f of fields) {
         const k = prefix ? `${prefix}${f.key}` : f.key;
         if (n[k]) continue;
+        // For CRM fields (not SLA), try inheriting from Lead first
+        if (!prefix) {
+          const leadKey = ACTIVE_TO_LEAD[f.key];
+          if (leadKey && n[leadKey]) { n[k] = n[leadKey]; continue; }
+        }
         const sug = f.suggestedSF || [];
         for (const s of sug) {
           const match = sfFields.find(x => x.apiName.toLowerCase() === s.toLowerCase());
@@ -916,10 +976,10 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
             {/* Sections */}
             {CRM_FIELDS[activeStage].sections.map(section => {
               let fields = section.fields;
-              if (filterUnmapped) fields = fields.filter(f => !mappings[f.key]);
+              if (filterUnmapped) fields = fields.filter(f => !effectiveMappings[f.key]);
               if (fields.length === 0) return null;
               const expanded = expandedSections[section.title] !== false;
-              const mapped = section.fields.filter(f => mappings[f.key]).length;
+              const mapped = section.fields.filter(f => effectiveMappings[f.key]).length;
               return (
                 <div key={section.title} style={{ marginBottom: 6, background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0" }}>
                   <button onClick={() => toggle(section.title)} style={{
@@ -943,26 +1003,30 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                     </div>
                   </button>
                   {expanded && fields.map((f) => {
-                    const isMapped = !!mappings[f.key];
+                    const isInherited = inheritedFields.has(f.key);
+                    const hasEffective = !!effectiveMappings[f.key];
+                    const isMapped = hasEffective;
                     return (
                       <div key={f.key} style={{
                         display: "flex", alignItems: "center", gap: 10, padding: "9px 14px",
-                        borderTop: "1px solid #f3f4f6", background: isMapped ? "#fafffe" : f.required && !isMapped ? "#fffbeb" : "transparent",
+                        borderTop: "1px solid #f3f4f6",
+                        background: isInherited ? "#f5f3ff" : isMapped ? "#fafffe" : f.required && !isMapped ? "#fffbeb" : "transparent",
                       }}>
                         <div style={{
                           width: 7, height: 7, borderRadius: 100, flexShrink: 0,
-                          background: isMapped ? "#059669" : f.required ? "#f59e0b" : "#d1d5db",
-                          boxShadow: isMapped ? "0 0 0 3px #d1fae5" : f.required && !isMapped ? "0 0 0 3px #fef3c7" : "none",
+                          background: isMapped ? (isInherited ? "#6366f1" : "#059669") : f.required ? "#f59e0b" : "#d1d5db",
+                          boxShadow: isMapped ? (isInherited ? "0 0 0 3px #e0e7ff" : "0 0 0 3px #d1fae5") : f.required && !isMapped ? "0 0 0 3px #fef3c7" : "none",
                         }} />
                         <div style={{ width: 170, flexShrink: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                             <span style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{f.label}</span>
                             {f.required && <span style={{ fontSize: 8, fontWeight: 800, color: "#dc2626" }}>REQ</span>}
+                            {isInherited && <span style={{ fontSize: 7, fontWeight: 700, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 3 }}>FROM LEAD</span>}
                           </div>
                           <TypeBadge type={f.type} />
                         </div>
-                        <div style={{ color: isMapped ? "#059669" : "#d1d5db", fontSize: 13, flexShrink: 0 }}>{"\u2192"}</div>
-                        <SearchableSelect value={mappings[f.key] || null} onChange={val => setMapping(f.key, val)} suggestedSF={f.suggestedSF} sfFields={sfFields} disabled={fieldsDisabled} placeholderText={fieldsPlaceholder} />
+                        <div style={{ color: isMapped ? (isInherited ? "#6366f1" : "#059669") : "#d1d5db", fontSize: 13, flexShrink: 0 }}>{"\u2192"}</div>
+                        <SearchableSelect value={effectiveMappings[f.key] || null} onChange={val => setMapping(f.key, val)} suggestedSF={f.suggestedSF} sfFields={sfFields} disabled={fieldsDisabled} placeholderText={fieldsPlaceholder} />
                       </div>
                     );
                   })}
