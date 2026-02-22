@@ -394,6 +394,7 @@ class WorkflowSLAService:
             task_instance.completed_by_id = completed_by_id
 
             # Update linked task if exists
+            loan_field_updated = None
             if task_instance.linked_task_id:
                 linked_task = self.db.query(self.Task).filter(
                     self.Task.id == task_instance.linked_task_id
@@ -401,6 +402,22 @@ class WorkflowSLAService:
                 if linked_task:
                     linked_task.status = 'completed'
                     linked_task.completed_at = datetime.now(timezone.utc)
+
+                    # Auto-stamp the loan's SLA date field if this task has one mapped
+                    if linked_task.sla_date_field and linked_task.loan_id:
+                        try:
+                            from database.models import Loan
+                            loan = self.db.query(Loan).filter(Loan.id == linked_task.loan_id).first()
+                            if loan and hasattr(loan, linked_task.sla_date_field):
+                                now = datetime.now(timezone.utc)
+                                if not getattr(loan, linked_task.sla_date_field):
+                                    setattr(loan, linked_task.sla_date_field, now)
+                                    linked_task.milestone_date = now
+                                    loan.updated_at = now
+                                    loan_field_updated = linked_task.sla_date_field
+                                    logger.info(f"Auto-stamped loan {loan.id} field {linked_task.sla_date_field} on workflow task completion")
+                        except Exception as e:
+                            logger.warning(f"Failed to auto-stamp loan date field: {e}")
 
             # Cancel sibling tasks if contact was made
             siblings_cancelled = 0
@@ -431,12 +448,15 @@ class WorkflowSLAService:
 
             logger.info(f"Task instance {task_instance_id} completed ({completion_source}), {siblings_cancelled} siblings cancelled")
 
-            return {
+            result = {
                 "success": True,
                 "message": "Task completed",
                 "siblings_cancelled": siblings_cancelled,
                 "sla_tasks_cancelled": sla_cancelled
             }
+            if loan_field_updated:
+                result["loan_field_updated"] = loan_field_updated
+            return result
 
         except SQLAlchemyError as e:
             self.db.rollback()
