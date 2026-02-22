@@ -202,6 +202,26 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 # Update the stage
                 lead.stage = new_status
                 lead.updated_at = datetime.utcnow()
+
+                # Auto-stamp the SLA milestone date for the new stage
+                LEAD_STAGE_TO_DATE_FIELD = {
+                    "New": "lead_received_date",
+                    "Attempted Contact": "first_contact_attempt_date",
+                    "Prospect": "first_contact_successful_date",
+                    "Pre-Qualified": "lead_qualification_date",
+                    "Initial Consultation": "initial_consultation_date",
+                    "Application": "application_started_date",
+                    "APPLICATION_STARTED": "application_started_date",
+                    "Application Complete": "application_completed_date",
+                    "Document Fulfillment": "application_completed_date",
+                    "Pre-Approved": "preapproval_issued_date",
+                    "Under Contract": "preapproval_issued_date",
+                    "Credit Repair": "credit_pulled_date",
+                }
+                date_field = LEAD_STAGE_TO_DATE_FIELD.get(new_status)
+                if date_field and hasattr(lead, date_field) and not getattr(lead, date_field):
+                    setattr(lead, date_field, datetime.now(timezone.utc))
+
                 updated_count += 1
 
                 # Cascade to loans and MUM clients
@@ -461,8 +481,31 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 duration_days = (datetime.now(timezone.utc) - lead.stage_changed_at.replace(tzinfo=timezone.utc)).days
 
             # Track when stage changed for workflow day calculations
-            lead.stage_changed_at = datetime.now(timezone.utc)
+            now = datetime.now(timezone.utc)
+            lead.stage_changed_at = now
             lead.workflow_day = 0  # Reset workflow day counter
+
+            # Auto-stamp the SLA milestone date for the new stage
+            LEAD_STAGE_TO_DATE_FIELD = {
+                "New": "lead_received_date",
+                "Attempted Contact": "first_contact_attempt_date",
+                "Prospect": "first_contact_successful_date",
+                "Pre-Qualified": "lead_qualification_date",
+                "Initial Consultation": "initial_consultation_date",
+                "Application": "application_started_date",
+                "APPLICATION_STARTED": "application_started_date",
+                "Application Complete": "application_completed_date",
+                "Document Fulfillment": "application_completed_date",
+                "Pre-Approved": "preapproval_issued_date",
+                "Under Contract": "preapproval_issued_date",
+                "Credit Repair": "credit_pulled_date",
+            }
+            date_field = LEAD_STAGE_TO_DATE_FIELD.get(new_status)
+            if date_field and hasattr(lead, date_field):
+                # Only stamp if not already set (don't overwrite manual entries)
+                if not getattr(lead, date_field):
+                    setattr(lead, date_field, now)
+                    logger.info(f"Auto-stamped {date_field} for lead {lead.id} on stage change to {new_status}")
 
             # Record stage change in history
             stage_history = StageHistory(
