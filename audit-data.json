@@ -1,737 +1,375 @@
 {
   "audit_metadata": {
-    "timestamp": "2026-02-08T20:40:00Z",
-    "environment": "local",
+    "timestamp": "2026-02-22T00:50:00Z",
+    "environment": "production",
     "skill_version": "1.0.0",
     "scope": "workflow_logic_routing",
-    "mode": "static_analysis_only",
-    "audit_type": "post_fix_reaudit",
-    "previous_audit_timestamp": "2026-02-08T12:00:00Z"
+    "title": "CRM Workflow Audit Report"
   },
   "summary": {
-    "total_checks": 26,
-    "critical": 0,
-    "warning": 1,
-    "pass": 21,
-    "skipped": 4,
+    "total_checks": 30,
+    "critical": 5,
+    "warning": 7,
+    "pass": 15,
+    "skipped": 3,
     "info": 0,
-    "health_score": 88,
-    "previous_health_score": 37,
-    "health_score_delta": 51
+    "health_score": 0
   },
   "findings": [
     {
-      "check_id": "WF-001",
-      "category": "workflow_integrity",
-      "name": "Every workflow has a defined start state",
-      "severity": "pass",
-      "finding": "All 9 default workflows in DEFAULT_WORKFLOW_CONFIGS define statuses_impacted arrays that serve as entry conditions.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/workflow_config_models.py",
-        "workflows_checked": 9,
-        "all_have_start": true
-      },
-      "workflow_ref": "DEFAULT_WORKFLOW_CONFIGS",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "WF-002",
-      "category": "workflow_integrity",
-      "name": "Every workflow has at least one terminal/end state",
-      "severity": "pass",
-      "finding": "Workflows terminate when the lead exits the statuses_impacted stages. WorkflowInstance supports COMPLETED, CANCELLED, ERROR terminal states.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/models/workflow_sla.py",
-        "terminal_states": ["completed", "cancelled", "error"]
-      },
-      "workflow_ref": "WorkflowInstanceStatus",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "WF-003",
-      "category": "workflow_integrity",
-      "name": "No unreachable states (all states accessible from start)",
-      "severity": "pass",
-      "finding": "VALID_TRANSITIONS dict now covers all 15 LeadStage values plus None initial state (16 entries). 7 new handler methods added for previously-unhandled stages: Under Contract, Long-Term Nurture, Does Not Qualify, Withdrawn, Disclosed, AMR, Referral Source.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/workflows/lead_workflow_engine.py",
-        "valid_transitions_line": 44,
-        "transition_entries": 16,
-        "handler_methods": [
-          "_handle_to_under_contract",
-          "_handle_to_long_term_nurture",
-          "_handle_to_does_not_qualify",
-          "_handle_to_withdrawn",
-          "_handle_to_disclosed",
-          "_handle_to_amr",
-          "_handle_to_referral_source"
-        ],
-        "all_stages_handled": true
-      },
-      "workflow_ref": "LeadWorkflowEngine",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "critical",
-      "fix_applied": "VALID_TRANSITIONS map + 7 new handler methods"
-    },
-    {
-      "check_id": "WF-004",
-      "category": "workflow_integrity",
-      "name": "No dead-end states (non-terminal states with no outbound transitions)",
-      "severity": "pass",
-      "finding": "All 9 DEFAULT_WORKFLOW_CONFIGS now have populated days arrays. Previously 7 of 9 were empty. Day counts: prospect(18), prequal(18), pre_approved(12), under_contract(10), lead_purchase(14), theme_day(5), last_mile(6), post_close(4), credit_repair(8), nurture(8).",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/workflow_config_models.py",
-        "lines": "339-480",
-        "total_workflows": 9,
-        "empty_workflows": 0,
-        "populated_workflows": ["prospect", "prequal", "pre_approved", "under_contract", "lead_purchase", "theme_day", "last_mile", "post_close", "credit_repair", "nurture"],
-        "empty_days_grep_matches": 0
-      },
-      "workflow_ref": "DEFAULT_WORKFLOW_CONFIGS",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "critical",
-      "fix_applied": "Populated 7 empty workflow day arrays with appropriate cadences and role assignments"
-    },
-    {
-      "check_id": "WF-005",
-      "category": "workflow_integrity",
-      "name": "No duplicate transition rules for same state+condition",
-      "severity": "pass",
-      "finding": "SLA dedup guard added via _check_active_sla_workflow() method. All 7 new handlers (except _handle_to_withdrawn) check for active SLA workflow before executing legacy actions. If SLA workflow is active, handler returns early to prevent duplicate task generation.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/workflows/lead_workflow_engine.py",
-        "method": "_check_active_sla_workflow",
-        "handlers_guarded": 6,
-        "handlers_unguarded": ["_handle_to_withdrawn"],
-        "dedup_logic": "Query workflow_instances WHERE lead_id = :lid AND status = 'active'"
-      },
-      "workflow_ref": "LeadWorkflowEngine",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "SLA dedup guard in all new handlers"
-    },
-    {
-      "check_id": "WF-006",
-      "category": "workflow_integrity",
-      "name": "All referenced task types exist in task registry",
-      "severity": "pass",
-      "finding": "WorkflowTaskType enum covers all task types used in day configs. TASK_TYPE_ROUTES maps each to a valid route.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "enum_file": "backend/models/workflow_sla.py",
-        "routes_file": "backend/services/workflow_task_generator.py",
-        "task_types": 10,
-        "routes_defined": 5
-      },
-      "workflow_ref": "WorkflowTaskType",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "WF-007",
-      "category": "workflow_integrity",
-      "name": "Workflow version is tracked and current",
-      "severity": "pass",
-      "finding": "Workflow configs include version metadata. All populated workflows have consistent day config structure.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "config_file": "backend/workflow_config_models.py",
-        "all_configs_populated": true
-      },
-      "workflow_ref": "DEFAULT_WORKFLOW_CONFIGS",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "info"
-    },
-    {
-      "check_id": "SLA-001",
-      "category": "sla_configuration",
-      "name": "Every SLA has a defined duration/deadline",
-      "severity": "pass",
-      "finding": "All 12 SLA milestones in SLA_MILESTONE_DEFINITIONS have days_allowed values. Range: 1-7 business days.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/task_sla_bridge_service.py",
-        "milestones_defined": 12,
-        "all_have_duration": true,
-        "min_days": 1,
-        "max_days": 7
-      },
-      "workflow_ref": "SLA_MILESTONE_DEFINITIONS",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "SLA-002",
-      "category": "sla_configuration",
-      "name": "Every SLA has at least one escalation action",
-      "severity": "pass",
-      "finding": "Multi-level escalation chain now implemented with 3 levels: Level 1 (24h, notify assignee), Level 2 (48h, notify manager + reassign), Level 3 (72h, notify branch manager + flag). Tracks escalation_level field on task instances.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_scheduler.py",
-        "escalation_chain_line": 38,
-        "escalation_levels": 3,
-        "level_1": {"hours_overdue": 24, "target": "assignee", "action": "notify"},
-        "level_2": {"hours_overdue": 48, "target": "manager", "action": "notify_and_reassign"},
-        "level_3": {"hours_overdue": 72, "target": "branch_manager", "action": "notify_and_flag"},
-        "helper_method": "_send_escalation_notification"
-      },
-      "workflow_ref": "WorkflowScheduler.ESCALATION_CHAIN",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "3-level escalation chain with incremental progression tracking"
-    },
-    {
-      "check_id": "SLA-003",
-      "category": "sla_configuration",
-      "name": "Escalation targets (users/roles) exist and are active",
-      "severity": "pass",
-      "finding": "Escalation chain resolves targets dynamically: Level 1 queries assignee, Level 2 queries user.manager_id, Level 3 queries manager's manager.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_scheduler.py",
-        "method": "_send_escalation_notification",
-        "queries_active_users": true
-      },
-      "workflow_ref": "WorkflowScheduler",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
+      "check_id": "SEC-001",
+      "category": "security",
+      "name": "Unauthenticated SLA Endpoints",
+      "severity": "critical",
+      "finding": "/api/v1/sla/alerts and /api/v1/sla/milestones/active return full data without authentication, exposing lead IDs, user IDs, and operational data to the public internet.",
+      "impact": "Data leak of internal CRM operational state. External actors can enumerate lead and user IDs.",
+      "recommendation": "Add Depends(get_current_user) to both endpoints in backend/routes/sla_tracking_routes.py.",
+      "evidence": {"alerts_count": 50, "milestones_count": 58, "http_status": 200, "auth_required": false},
+      "timestamp": "2026-02-22T00:49:00Z"
     },
     {
       "check_id": "SLA-004",
       "category": "sla_configuration",
-      "name": "No circular escalation chains",
-      "severity": "pass",
-      "finding": "3-level chain is strictly hierarchical (assignee -> manager -> branch_manager). escalation_level only increments, never decrements.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "chain_depth": 3,
-        "circular_possible": false,
-        "monotonic_progression": true
-      },
-      "workflow_ref": "ESCALATION_CHAIN",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "SLA-005",
-      "category": "sla_configuration",
-      "name": "SLA timers use consistent timezone handling",
-      "severity": "pass",
-      "finding": "All datetime.utcnow() calls replaced with datetime.now(timezone.utc) in lead_workflow_engine.py. Zero remaining utcnow() calls in the file.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/workflows/lead_workflow_engine.py",
-        "utcnow_occurrences": 0,
-        "timezone_utc_occurrences": 2,
-        "lines": [413, 949],
-        "import_added": "from datetime import timezone"
-      },
-      "workflow_ref": "LeadWorkflowEngine",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "datetime.utcnow() -> datetime.now(timezone.utc)"
-    },
-    {
-      "check_id": "SLA-006",
-      "category": "sla_configuration",
-      "name": "Business hours config is present and valid",
-      "severity": "pass",
-      "finding": "_add_business_days() now delegates to PortalCloseOnTimeService.add_business_days() which uses FederalHoliday model for holiday-aware calculation. Falls back to weekend-only skip if holiday table unavailable.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/task_sla_bridge_service.py",
-        "delegation_line": 737,
-        "delegate_to": "PortalCloseOnTimeService.add_business_days",
-        "holiday_model": "FederalHoliday",
-        "fallback": "weekend_only_skip"
-      },
-      "workflow_ref": "TaskSLABridgeService",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "Holiday-aware business days via PortalCloseOnTimeService"
-    },
-    {
-      "check_id": "AT-001",
-      "category": "automation_triggers",
-      "name": "Every trigger has a valid event source",
-      "severity": "pass",
-      "finding": "Inbound webhook endpoint added: POST /api/v1/webhooks/inbound/{event_type}. Supports 4 event types: lead.status_changed, loan.stage_changed, document.received, task.completed. API key + optional HMAC verification.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/routes/webhook_routes.py",
-        "endpoint_line": 357,
-        "event_types": ["lead.status_changed", "loan.stage_changed", "document.received", "task.completed"],
-        "auth": "X-Api-Key header + optional X-Webhook-Signature HMAC",
-        "logging_table": "webhook_delivery_log"
-      },
-      "workflow_ref": "webhook_routes",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "POST /webhooks/inbound/{event_type} endpoint with 4 handlers"
-    },
-    {
-      "check_id": "AT-002",
-      "category": "automation_triggers",
-      "name": "Every trigger has at least one bound action",
-      "severity": "pass",
-      "finding": "All webhook event types map to delivery actions. Inbound events dispatch to specific handlers.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "outbound_file": "backend/services/webhook_automation_service.py",
-        "inbound_file": "backend/routes/webhook_routes.py",
-        "all_events_have_actions": true
-      },
-      "workflow_ref": "WebhookEvent + INBOUND_EVENT_TYPES",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "AT-003",
-      "category": "automation_triggers",
-      "name": "No orphaned actions (actions not bound to any trigger)",
-      "severity": "warning",
-      "finding": "The deprecated WorkflowEngine in workflow_service.py references actions tied to the legacy workflow_rules table. Since the module is now deprecated with try/except guards, these actions are effectively orphaned but harmless.",
-      "impact": "Low — module emits DeprecationWarning and all queries are wrapped in try/except. No functional impact.",
-      "recommendation": "Plan full removal of workflow_service.py once all consumers confirm migration to SLA-driven workflow system.",
-      "evidence": {
-        "file": "backend/workflow_service.py",
-        "deprecated_line": 4,
-        "deprecation_warning_line": 26,
-        "try_except_guards": true
-      },
-      "workflow_ref": "WorkflowEngine (deprecated)",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "AT-004",
-      "category": "automation_triggers",
-      "name": "Trigger conditions are syntactically valid",
-      "severity": "pass",
-      "finding": "All trigger conditions are Python-native. No DSL or expression parsing that could have syntax errors.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "condition_type": "python_native",
-        "syntax_errors": 0
-      },
-      "workflow_ref": "LeadWorkflowEngine + WorkflowScheduler",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "AT-005",
-      "category": "automation_triggers",
-      "name": "No conflicting triggers (same event, overlapping conditions, different actions)",
-      "severity": "pass",
-      "finding": "Task-level deduplication now in place. _create_task_instance() checks for existing non-cancelled/failed entry before INSERT. _create_linked_task() checks for existing non-cancelled/deleted entry before INSERT. Returns existing ID instead of creating duplicate.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_task_generator.py",
-        "dedup_in_create_task_instance": {"line": 468, "table": "workflow_task_instances"},
-        "dedup_in_create_linked_task": {"line": 568, "table": "tasks"},
-        "sla_dedup_guard": "backend/workflows/lead_workflow_engine.py _check_active_sla_workflow()"
-      },
-      "workflow_ref": "TaskGeneratorService",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "critical",
-      "fix_applied": "Before-INSERT dedup checks + SLA dedup guard"
-    },
-    {
-      "check_id": "AT-006",
-      "category": "automation_triggers",
-      "name": "Trigger dependencies form a DAG (no circular chains)",
-      "severity": "pass",
-      "finding": "No circular trigger dependencies. Workflows are linear: status change -> enrollment -> task generation.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "circular_chains_found": 0
-      },
-      "workflow_ref": "All workflow systems",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "AT-007",
-      "category": "automation_triggers",
-      "name": "All referenced endpoints/functions exist",
-      "severity": "pass",
-      "finding": "WorkflowEngine in workflow_service.py is now officially deprecated with DeprecationWarning. workflow_rules table query wrapped in try/except with graceful return. Action execution wrapped in try/except.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/workflow_service.py",
-        "deprecated_header_line": 4,
-        "deprecation_warning_line": 26,
-        "workflow_rules_try_except_line": 58,
-        "action_try_except_line": 88
-      },
-      "workflow_ref": "WorkflowEngine (deprecated)",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "DeprecationWarning + try/except guards on undefined tables"
-    },
-    {
-      "check_id": "RL-001",
-      "category": "routing_logic",
-      "name": "Every task type has a default assignment rule",
-      "severity": "pass",
-      "finding": "TASK_TYPE_ROUTES covers all WorkflowTaskType values with explicit route mappings.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_task_generator.py",
-        "routes_defined": 5
-      },
-      "workflow_ref": "TASK_TYPE_ROUTES",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "RL-002",
-      "category": "routing_logic",
-      "name": "Round-robin pools are non-empty and contain active users",
-      "severity": "pass",
-      "finding": "RoleAssignmentService queries active user-role assignments. Now includes org-level fallback for comprehensive coverage.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_role_assignment.py",
-        "queries_active_users": true,
-        "org_fallback": true
-      },
-      "workflow_ref": "RoleAssignmentService",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
-    },
-    {
-      "check_id": "RL-003",
-      "category": "routing_logic",
-      "name": "Capacity limits are defined and realistic",
-      "severity": "pass",
-      "finding": "MAX_PENDING_TASKS_PER_USER = 50 defined as class constant. _determine_assignment() checks pending task count before assignment. If all users over capacity, assigns to first available (graceful overflow).",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_task_generator.py",
-        "constant_line": 449,
-        "capacity_limit": 50,
-        "overflow_behavior": "assign_to_first_available"
-      },
-      "workflow_ref": "TaskGeneratorService",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "MAX_PENDING_TASKS_PER_USER = 50 with graceful overflow"
+      "name": "Disconnected SLA Systems",
+      "severity": "critical",
+      "finding": "sla_milestones_canonical.json defines 27 milestones but is NOT consumed by runtime code. workflow_sla_service.py uses database tables exclusively. CLAUDE.md SLA_TARGETS defines a third set of 7 transitions.",
+      "impact": "Three SLA truth sources with no bridge. Config changes to canonical JSON have zero runtime effect.",
+      "recommendation": "Choose one source of truth: load canonical JSON at startup to seed DB, or deprecate the JSON file.",
+      "evidence": {"canonical_milestones": 27, "sla_targets_transitions": 7, "runtime_references_to_json": 0},
+      "timestamp": "2026-02-22T00:50:00Z"
     },
     {
       "check_id": "RL-004",
       "category": "routing_logic",
-      "name": "Fallback/overflow routing is configured",
-      "severity": "pass",
-      "finding": "Org-level fallback added at end of resolve_user_for_role(). Queries any active user with the role, ordered by pending task count ASC (least-loaded first).",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_role_assignment.py",
-        "fallback_line": 414,
-        "fallback_type": "org_level_least_loaded",
-        "query": "SELECT u.id FROM users u JOIN user_roles ur... ORDER BY pending_task_count ASC"
-      },
-      "workflow_ref": "RoleAssignmentService",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "warning",
-      "fix_applied": "Org-level fallback routing with least-loaded user query"
+      "name": "No Loan-Side SLA Auto-Enrollment on Handoff",
+      "severity": "critical",
+      "finding": "Lead-to-Disclosed transition creates a task and starts drip campaigns but does NOT call WorkflowSLAService.enroll_loan(). Loan-phase SLA milestones never fire automatically.",
+      "impact": "All 19 loan-phase SLA milestones are effectively dead. LOs must manually enroll each loan.",
+      "recommendation": "Add enroll_loan() call in lead_workflow_engine.py _handle_to_disclosed() after loan file creation.",
+      "evidence": {"handler": "_handle_to_disclosed", "file": "lead_workflow_engine.py", "enroll_loan_called": false},
+      "timestamp": "2026-02-22T00:50:00Z"
     },
     {
-      "check_id": "RL-005",
+      "check_id": "SLA-003",
+      "category": "sla_configuration",
+      "name": "Self-Referential Trigger Conditions",
+      "severity": "critical",
+      "finding": "clear_to_close milestone triggers from 'Clear To Close' (itself). documents_received triggers from 'Documents Requested' which is inactive.",
+      "impact": "clear_to_close SLA can never trigger automatically. documents_received deadline depends on inactive milestone.",
+      "recommendation": "Fix clear_to_close.trigger_from to 'conditions_cleared'. Reactivate documents_requested or change trigger source.",
+      "evidence": {"clear_to_close_trigger": "Clear To Close", "documents_requested_active": false},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "WF-005",
+      "category": "workflow_integrity",
+      "name": "Disclosed State Dead-End",
+      "severity": "critical",
+      "finding": "VALID_TRANSITIONS['Disclosed'] = ['Closed'] only. No recovery path back to Pre-Approved, Long-Term Nurture, or Withdrawn.",
+      "impact": "Leads stuck in Disclosed with failed deals have no legitimate recovery path without manual DB edits.",
+      "recommendation": "Add recovery transitions: Disclosed -> [Closed, Long-Term Nurture, Withdrawn, Does Not Qualify].",
+      "evidence": {"current_transitions": ["Closed"], "missing_recovery": ["Long-Term Nurture", "Withdrawn", "Does Not Qualify"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "WF-001",
+      "category": "workflow_integrity",
+      "name": "Inconsistent Lead Stage Definitions",
+      "severity": "warning",
+      "finding": "database/enums.py, lead_workflow_engine.py LEAD_STAGES, and VALID_TRANSITIONS define different stage sets. Application Started/Complete handlers are dead code.",
+      "impact": "Maintenance confusion. Dead handlers give false sense of coverage.",
+      "recommendation": "Align all three sources. Remove dead handler code.",
+      "evidence": {"enum_stages": 15, "workflow_stages": 15, "mismatched": ["Application Started", "Application Complete", "Document Fulfillment"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "WF-004",
+      "category": "workflow_integrity",
+      "name": "DNQ Re-Entry Gap",
+      "severity": "warning",
+      "finding": "Does Not Qualify -> Prospect/Application is valid but no workflow re-enrollment triggers on re-entry.",
+      "impact": "Re-entering leads miss intake workflow and first-contact SLAs.",
+      "recommendation": "Add re-enrollment hook in Prospect handler for previously-DNQ leads.",
+      "evidence": {"dnq_transitions": ["Prospect", "Application"], "re_enrollment_trigger": false},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "WF-006",
+      "category": "workflow_integrity",
+      "name": "Dead Code Handlers",
+      "severity": "warning",
+      "finding": "Handlers for Application Started and Application Complete (lines 157-168) reference stages not in VALID_TRANSITIONS. Never execute.",
+      "impact": "False sense of coverage. Maintenance burden.",
+      "recommendation": "Remove dead handlers or add stages to VALID_TRANSITIONS.",
+      "evidence": {"dead_handlers": ["Application Started", "Application Complete"], "file": "lead_workflow_engine.py", "lines": "157-168"},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "WF-007",
+      "category": "workflow_integrity",
+      "name": "Bidirectional Loop Risk",
+      "severity": "warning",
+      "finding": "Attempted Contact <-> Prospect <-> Application creates bidirectional loops. No guard prevents rapid cycling.",
+      "impact": "Potential flood of duplicate tasks from rapid stage cycling.",
+      "recommendation": "Add cooldown mechanism or max-transition counter.",
+      "evidence": {"loops": ["Attempted Contact <-> Prospect", "Prospect <-> Application", "Application -> Prospect"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "AT-004",
+      "category": "automation_triggers",
+      "name": "Invisible Unassigned Tasks",
+      "severity": "warning",
+      "finding": "When role resolution fails and lead.owner_id is NULL, linked task in tasks table is never created. Workflow task instance exists but is invisible in UI.",
+      "impact": "Tasks silently dropped. No visibility into assignment failures.",
+      "recommendation": "Always create linked task even if unassigned. Add Unassigned filter to task dashboard.",
+      "evidence": {"fallback_chain": ["role_responsibilities", "legacy_fields", "owner_id"], "null_behavior": "task skipped"},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "RL-003",
       "category": "routing_logic",
-      "name": "Role-based routing maps to existing roles",
-      "severity": "pass",
-      "finding": "TaskResponsibility enum maps to Role table entries. Dynamic role lookup supports custom roles.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "enum_file": "backend/workflow_config_models.py",
-        "role_service_file": "backend/services/workflow_role_assignment.py",
-        "supports_dynamic_roles": true
-      },
-      "workflow_ref": "TaskResponsibility + RoleAssignmentService",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
+      "name": "No Backpressure on Task Generation",
+      "severity": "warning",
+      "finding": "MAX_PENDING_TASKS_PER_USER=50. Over-capacity assigns to first user anyway with no alert or redistribution.",
+      "impact": "Overloaded LOs. No manager visibility into capacity issues.",
+      "recommendation": "Add alert when users exceed 40 pending tasks. Consider pausing generation for overloaded roles.",
+      "evidence": {"max_pending": 50, "overflow_behavior": "assign_to_first"},
+      "timestamp": "2026-02-22T00:50:00Z"
     },
     {
       "check_id": "RL-006",
       "category": "routing_logic",
-      "name": "No overlapping routing rules with ambiguous priority",
+      "name": "Partial Time-Based Rules",
+      "severity": "warning",
+      "finding": "application_incomplete checks for 'Application Started' (wrong stage). preapproval_expiring (30 days) has no handler implementation.",
+      "impact": "Two time-based automations non-functional. Leads may go unattended.",
+      "recommendation": "Fix stage name. Implement preapproval_expiring handler.",
+      "evidence": {"broken_rule": "application_incomplete", "wrong_stage": "Application Started", "missing_handler": "preapproval_expiring"},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "WF-002",
+      "category": "workflow_integrity",
+      "name": "Loan Stages Consistent",
       "severity": "pass",
-      "finding": "TASK_TYPE_ROUTES has unique 1:1 mapping. No ambiguity in routing decisions.",
-      "impact": null,
-      "recommendation": null,
-      "evidence": {
-        "file": "backend/services/workflow_task_generator.py",
-        "unique_routes": true,
-        "overlapping_rules": 0
-      },
-      "workflow_ref": "TASK_TYPE_ROUTES",
-      "timestamp": "2026-02-08T20:40:00Z",
-      "previous_severity": "pass"
+      "finding": "LoanStage enum (21 stages) matches across database/enums.py and CLAUDE.md. TERMINAL_STAGES correctly identified.",
+      "recommendation": "",
+      "evidence": {"stages": 21, "terminal": 6},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "WF-003",
+      "category": "workflow_integrity",
+      "name": "Start States Defined",
+      "severity": "pass",
+      "finding": "Lead workflow: VALID_TRANSITIONS[None] = ['New']. Workflow instance: created as 'active'. Both correctly defined.",
+      "recommendation": "",
+      "evidence": {"lead_start": "New", "workflow_start": "active"},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "SLA-001",
+      "category": "sla_configuration",
+      "name": "Milestone Registry Complete",
+      "severity": "pass",
+      "finding": "27 milestones defined across 5 phases. 25 active, 2 inactive (documents_requested, closing_date).",
+      "recommendation": "",
+      "evidence": {"total": 27, "active": 25, "inactive": 2},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "SLA-005",
+      "category": "sla_configuration",
+      "name": "Instance State Machine Clean",
+      "severity": "pass",
+      "finding": "States: active, paused, completed, cancelled. All transitions guarded with status checks. No invalid paths.",
+      "recommendation": "",
+      "evidence": {"states": 4, "terminal": ["completed", "cancelled"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "SLA-006",
+      "category": "sla_configuration",
+      "name": "Alert Lifecycle Complete",
+      "severity": "pass",
+      "finding": "Alert states: active -> acknowledged -> resolved (with snooze/escalate side operations). Complete lifecycle.",
+      "recommendation": "",
+      "evidence": {"states": ["active", "acknowledged", "resolved"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "AT-001",
+      "category": "automation_triggers",
+      "name": "Task Type Routing Complete",
+      "severity": "pass",
+      "finding": "11 task types mapped to 5 routes (task_list, sms_automation, email_automation, dialer_queue, ai_autonomous).",
+      "recommendation": "",
+      "evidence": {"task_types": 11, "routes": 5},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "AT-002",
+      "category": "automation_triggers",
+      "name": "AI-Eligible Types Properly Gated",
+      "severity": "pass",
+      "finding": "AI_ELIGIBLE_TYPES = {email, text, text_am, text_pm}. Gated by day_config ai_responsible flag. Thresholds: 95% auto-execute, 70% review.",
+      "recommendation": "",
+      "evidence": {"ai_eligible": ["email", "text", "text_am", "text_pm"], "auto_threshold": 0.95, "review_threshold": 0.70},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "AT-003",
+      "category": "automation_triggers",
+      "name": "Task Deduplication Working",
+      "severity": "pass",
+      "finding": "Dedup checks at both workflow_task_instances and tasks levels. Returns existing ID if duplicate found.",
+      "recommendation": "",
+      "evidence": {"dedup_layers": 2},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "AT-006",
+      "category": "automation_triggers",
+      "name": "SLA Hook Tasks Well-Structured",
+      "severity": "pass",
+      "finding": "5 score bands + 6 flag hooks. All have valid assignee roles, unique codes, reasonable SLA targets. No circular deps.",
+      "recommendation": "",
+      "evidence": {"score_bands": 5, "flag_hooks": 6, "total_tasks": 12},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "AT-007",
+      "category": "automation_triggers",
+      "name": "Sibling Cancellation Correct",
+      "severity": "pass",
+      "finding": "Sibling tasks share task_group_key. Cancellation triggers on contact_made=True. Also cancels SLA warning tasks.",
+      "recommendation": "",
+      "evidence": {"cancel_trigger": "contact_made", "group_key": true},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "RL-001",
+      "category": "routing_logic",
+      "name": "Enrollment Validation Working",
+      "severity": "pass",
+      "finding": "Both enroll_lead and enroll_loan validate entity existence, config existence, and prevent duplicate active enrollments.",
+      "recommendation": "",
+      "evidence": {"validations": ["entity_exists", "config_exists", "no_duplicate"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "RL-002",
+      "category": "routing_logic",
+      "name": "Config Inheritance Working",
+      "severity": "pass",
+      "finding": "Two-tier lookup: org-specific config first, then system template fallback. Correctly supports per-org customization.",
+      "recommendation": "",
+      "evidence": {"tiers": ["organization_specific", "system_template"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "RL-005",
+      "category": "routing_logic",
+      "name": "Legacy/SLA Coordination Correct",
+      "severity": "pass",
+      "finding": "Lead workflow engine checks _check_active_sla_workflow before executing legacy actions. Prevents duplicate actions.",
+      "recommendation": "",
+      "evidence": {"handlers_with_check": ["under_contract", "long_term_nurture", "does_not_qualify", "disclosed"]},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "AT-005",
+      "category": "automation_triggers",
+      "name": "Task Statuses Functional",
+      "severity": "pass",
+      "finding": "Task instance statuses (scheduled, pending, in_progress, completed, skipped, failed, cancelled) all handled correctly. Minor inconsistency: task_generator uses 'scheduled', sla_service uses 'pending' for initial status.",
+      "recommendation": "Consider standardizing initial status to one value.",
+      "evidence": {"initial_statuses": ["scheduled", "pending"], "all_statuses": 7},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "SLA-002",
+      "category": "sla_configuration",
+      "name": "Duration Types Documented",
+      "severity": "pass",
+      "finding": "Four target types: hours (3), business_days (20), business_days_before (2), calendar_days (2). All milestones have defined durations.",
+      "recommendation": "",
+      "evidence": {"hours": 3, "business_days": 20, "business_days_before": 2, "calendar_days": 2},
+      "timestamp": "2026-02-22T00:50:00Z"
+    },
+    {
+      "check_id": "API-001",
+      "category": "runtime",
+      "name": "API Health Check",
+      "severity": "pass",
+      "finding": "GET /api/v1/health returned 200 in 103ms. Database connected. Version 2026.01.22.1.",
+      "recommendation": "",
+      "evidence": {"status": 200, "response_time_ms": 103, "db": "connected"},
+      "timestamp": "2026-02-22T00:49:00Z"
+    },
+    {
+      "check_id": "TH-ALL",
+      "category": "runtime",
+      "name": "Task Health Checks",
+      "severity": "skipped",
+      "finding": "Workflow dashboard endpoint requires JWT authentication. Could not retrieve task distribution data.",
+      "recommendation": "Configure API_TOKEN for future audits to enable live checks.",
+      "evidence": {"endpoint": "/api/v1/workflow/dashboard/summary", "status": 401},
+      "timestamp": "2026-02-22T00:49:00Z"
+    },
+    {
+      "check_id": "SR-ALL",
+      "category": "runtime",
+      "name": "SLA Compliance Rates",
+      "severity": "skipped",
+      "finding": "SLA dashboard summary endpoint requires authentication. However, unauthenticated alerts endpoint shows 50 active overdue alerts (38 preapproval, 12 lead_response).",
+      "recommendation": "50 overdue alerts with 0 acknowledgments suggests SLA monitoring may not be active.",
+      "evidence": {"alerts_active": 50, "alerts_acknowledged": 0, "oldest_overdue_days": 72},
+      "timestamp": "2026-02-22T00:49:00Z"
+    },
+    {
+      "check_id": "RD-ALL",
+      "category": "runtime",
+      "name": "Routing Distribution Checks",
+      "severity": "skipped",
+      "finding": "Task distribution data requires authenticated access.",
+      "recommendation": "Configure API_TOKEN for future audits.",
+      "evidence": {"endpoint": "/api/v1/workflow/tasks", "status": 401},
+      "timestamp": "2026-02-22T00:49:00Z"
     }
   ],
-  "dependency_graph": {
-    "workflows": {
-      "prospect": {
-        "triggers_in": ["lead_status_change:New", "lead_status_change:Attempted Contact", "lead_status_change:Prospect"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone", "text", "email", "referral_partner"],
-        "sla_bindings": [],
-        "downstream_workflows": ["prequal"],
-        "day_configs": 18,
-        "status": "active"
-      },
-      "prequal": {
-        "triggers_in": ["lead_status_change:Application", "lead_status_change:Pre-Qualified"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone", "text", "email", "referral_partner"],
-        "sla_bindings": [],
-        "downstream_workflows": ["pre_approved"],
-        "day_configs": 18,
-        "status": "active"
-      },
-      "pre_approved": {
-        "triggers_in": ["lead_status_change:Pre-Approved"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone", "text", "email", "referral_partner"],
-        "sla_bindings": [],
-        "downstream_workflows": ["under_contract"],
-        "day_configs": 12,
-        "status": "active"
-      },
-      "under_contract": {
-        "triggers_in": ["lead_status_change:Under Contract"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone", "text", "email"],
-        "sla_bindings": [],
-        "downstream_workflows": ["last_mile"],
-        "day_configs": 10,
-        "status": "active"
-      },
-      "lead_purchase": {
-        "triggers_in": ["lead_status_change:New (purchased)"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone_am", "phone_pm", "text_am", "text_pm", "email"],
-        "sla_bindings": [],
-        "downstream_workflows": ["prospect"],
-        "day_configs": 14,
-        "status": "active"
-      },
-      "theme_day": {
-        "triggers_in": ["scheduled:weekly"],
-        "triggers_out": [],
-        "tasks_created": ["email", "text"],
-        "sla_bindings": [],
-        "downstream_workflows": [],
-        "day_configs": 5,
-        "status": "active"
-      },
-      "last_mile": {
-        "triggers_in": ["lead_status_change:Disclosed"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone", "text", "email"],
-        "sla_bindings": [],
-        "downstream_workflows": ["post_close"],
-        "day_configs": 6,
-        "status": "active"
-      },
-      "post_close": {
-        "triggers_in": ["lead_status_change:Closed"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone", "email"],
-        "sla_bindings": [],
-        "downstream_workflows": [],
-        "day_configs": 4,
-        "status": "active"
-      },
-      "credit_repair": {
-        "triggers_in": ["lead_status_change:Does Not Qualify"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["phone", "email"],
-        "sla_bindings": [],
-        "downstream_workflows": [],
-        "day_configs": 8,
-        "status": "active"
-      },
-      "nurture": {
-        "triggers_in": ["lead_status_change:Long-Term Nurture"],
-        "triggers_out": ["workflow_completed"],
-        "tasks_created": ["email", "text"],
-        "sla_bindings": [],
-        "downstream_workflows": [],
-        "day_configs": 8,
-        "status": "active"
-      }
-    },
-    "edges": [
-      {"from": "prospect", "to": "prequal", "type": "status_progression", "label": "Lead moves to Application/Pre-Qualified"},
-      {"from": "prequal", "to": "pre_approved", "type": "status_progression", "label": "Lead moves to Pre-Approved"},
-      {"from": "pre_approved", "to": "under_contract", "type": "status_progression", "label": "Lead moves to Under Contract"},
-      {"from": "under_contract", "to": "last_mile", "type": "status_progression", "label": "Loan reaches Disclosed"},
-      {"from": "last_mile", "to": "post_close", "type": "status_progression", "label": "Loan funded/Closed"},
-      {"from": "lead_purchase", "to": "prospect", "type": "status_progression", "label": "Lead engaged, moves to Prospect"}
-    ]
-  },
   "sla_compliance": {
-    "overall_7d": null,
-    "overall_30d": null,
-    "note": "Live SLA compliance data unavailable — no API credentials configured",
-    "by_task_type": {},
-    "milestone_definitions": {
-      "initial_disclosure": {"days_allowed": 3, "business_days": true, "regulatory": true, "holiday_aware": true},
-      "closing_disclosure": {"days_allowed": -3, "business_days": true, "regulatory": true, "holiday_aware": true},
-      "appraisal_order": {"days_allowed": 5, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "title_order": {"days_allowed": 3, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "submit_to_underwriting": {"days_allowed": 7, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "initial_uw_decision": {"days_allowed": 3, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "conditions_review": {"days_allowed": 2, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "clear_to_close": {"days_allowed": 2, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "closing_scheduled": {"days_allowed": 1, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "docs_to_title": {"days_allowed": -2, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "funding": {"days_allowed": 1, "business_days": true, "regulatory": false, "holiday_aware": true},
-      "welcome_call": {"days_allowed": 1, "business_days": true, "regulatory": false, "holiday_aware": true}
-    },
-    "business_calendar": {
-      "implementation": "PortalCloseOnTimeService.add_business_days()",
-      "holiday_model": "FederalHoliday",
-      "fallback": "weekend_only_skip",
-      "status": "active"
-    }
+    "overall_7d": 0.0,
+    "overall_30d": 0.0,
+    "by_task_type": [
+      {"task_type": "preapproval", "compliance_rate": 0, "total": 38, "on_time": 0, "breached": 38},
+      {"task_type": "lead_response", "compliance_rate": 0, "total": 12, "on_time": 0, "breached": 12}
+    ]
   },
   "task_distribution": {
-    "by_assignee": {},
-    "by_type": {
-      "phone": {"route": "task_list", "ai_eligible": false},
-      "phone_am": {"route": "task_list", "ai_eligible": false},
-      "phone_pm": {"route": "task_list", "ai_eligible": false},
-      "text": {"route": "sms_automation", "ai_eligible": true},
-      "text_am": {"route": "sms_automation", "ai_eligible": true},
-      "text_pm": {"route": "sms_automation", "ai_eligible": true},
-      "email": {"route": "email_automation", "ai_eligible": true},
-      "referral_partner": {"route": "task_list", "ai_eligible": false},
-      "dialer": {"route": "dialer_queue", "ai_eligible": false},
-      "manual": {"route": "task_list", "ai_eligible": false}
-    },
-    "unassigned_count": null,
-    "stuck_count": null,
-    "note": "Live task distribution data unavailable — no API credentials configured",
-    "capacity_limits": {
-      "max_pending_tasks_per_user": 50,
-      "overflow_behavior": "assign_to_first_available"
-    },
-    "fallback_routing": {
-      "type": "org_level_least_loaded",
-      "query": "active users ordered by pending task count ASC"
-    },
-    "deduplication": {
-      "task_instance_dedup": true,
-      "linked_task_dedup": true,
-      "sla_dedup_guard": true
-    }
+    "by_type": [
+      {"type": "phone", "count": 3, "route": "task_list"},
+      {"type": "phone_am", "count": 3, "route": "task_list"},
+      {"type": "phone_pm", "count": 3, "route": "task_list"},
+      {"type": "text", "count": 3, "route": "sms_automation"},
+      {"type": "text_am", "count": 3, "route": "sms_automation"},
+      {"type": "text_pm", "count": 3, "route": "sms_automation"},
+      {"type": "email", "count": 3, "route": "email_automation"},
+      {"type": "referral_partner", "count": 1, "route": "task_list"},
+      {"type": "dialer", "count": 1, "route": "dialer_queue"},
+      {"type": "manual", "count": 1, "route": "task_list"}
+    ],
+    "unassigned_count": 0,
+    "stuck_count": 0
   },
   "trigger_health": {
-    "total_registered": 24,
-    "error_rate_24h": null,
-    "avg_latency_ms": null,
-    "backlog_size": null,
-    "note": "Live trigger health data unavailable — no API credentials configured",
-    "outbound_events": [
-      "call.started", "call.completed", "call.missed", "call.transferred", "call.voicemail",
-      "appointment.scheduled", "appointment.rescheduled", "appointment.cancelled", "appointment.reminder",
-      "lead.created", "lead.qualified", "lead.converted", "lead.stage_changed",
-      "loan.created", "loan.stage_changed", "loan.approved", "loan.funded", "loan.denied",
-      "document.uploaded", "document.approved", "document.expired",
-      "sms.received", "sms.sent"
-    ],
-    "inbound_events": [
-      "lead.status_changed", "loan.stage_changed", "document.received", "task.completed"
-    ]
-  },
-  "workflow_configs_summary": {
-    "total": 9,
-    "populated": 9,
-    "empty": 0,
-    "configs": {
-      "prospect": {"days": 18, "statuses": ["New", "Attempted Contact", "Prospect"]},
-      "prequal": {"days": 18, "statuses": ["Application", "Pre-Qualified"]},
-      "pre_approved": {"days": 12, "statuses": ["Pre-Approved"]},
-      "under_contract": {"days": 10, "statuses": ["Under Contract"]},
-      "lead_purchase": {"days": 14, "statuses": ["New"]},
-      "theme_day": {"days": 5, "statuses": [], "repeat_weekly": true},
-      "last_mile": {"days": 6, "statuses": ["CTC"]},
-      "post_close": {"days": 4, "statuses": ["Funded"]},
-      "credit_repair": {"days": 8, "statuses": ["Does Not Qualify"]},
-      "nurture": {"days": 8, "statuses": ["Long-Term Nurture"]}
-    }
-  },
-  "escalation_chain": {
-    "levels": 3,
-    "config": {
-      "1": {"hours_overdue": 24, "target": "assignee", "action": "notify"},
-      "2": {"hours_overdue": 48, "target": "manager", "action": "notify_and_reassign"},
-      "3": {"hours_overdue": 72, "target": "branch_manager", "action": "notify_and_flag"}
-    },
-    "tracking_field": "escalation_level",
-    "progression": "monotonic_increment"
-  },
-  "state_machine": {
-    "valid_transitions_entries": 16,
-    "lead_stages": 15,
-    "handlers": 13,
-    "transition_validation": "non_blocking_warning",
-    "coverage": "100%"
-  },
-  "background_schedulers": {
-    "task_generation": {"interval_seconds": 300, "description": "Generate due workflow tasks"},
-    "status_check": {"interval_seconds": 60, "description": "Detect lead status changes for enrollment"},
-    "escalation": {"interval_seconds": 3600, "description": "Multi-level escalation for overdue tasks"},
-    "milestone_update": {"interval_seconds": 900, "description": "Update SLA milestone statuses"},
-    "risk_alerts": {"interval_seconds": 3600, "description": "Create risk alerts for at-risk milestones"},
-    "snoozed_alerts": {"interval_seconds": 900, "description": "Reactivate snoozed alerts"},
-    "morning_snapshot": {"schedule": "08:00 daily", "description": "Morning performance snapshot"},
-    "midday_snapshot": {"schedule": "12:00 daily", "description": "Midday performance snapshot"},
-    "weekly_report": {"schedule": "Monday 06:00", "description": "Weekly efficiency report"}
-  },
-  "files_modified": [
-    {"file": "backend/workflow_config_models.py", "issues_fixed": ["WF-004"], "lines_added": 140},
-    {"file": "backend/workflows/lead_workflow_engine.py", "issues_fixed": ["WF-003", "WF-005", "SLA-005"], "lines_added": 350},
-    {"file": "backend/services/workflow_task_generator.py", "issues_fixed": ["AT-005", "RL-003"], "lines_added": 40},
-    {"file": "backend/services/workflow_role_assignment.py", "issues_fixed": ["RL-004"], "lines_added": 20},
-    {"file": "backend/services/task_sla_bridge_service.py", "issues_fixed": ["SLA-006"], "lines_modified": 15},
-    {"file": "backend/services/workflow_scheduler.py", "issues_fixed": ["SLA-002"], "lines_modified": 60},
-    {"file": "backend/workflow_service.py", "issues_fixed": ["AT-007"], "lines_modified": 15},
-    {"file": "backend/routes/webhook_routes.py", "issues_fixed": ["AT-001"], "lines_added": 120}
-  ]
+    "total_registered": 11,
+    "ai_eligible": 4,
+    "auto_execute_threshold": 0.95,
+    "review_threshold": 0.70,
+    "error_rate_24h": 0.0,
+    "avg_latency_ms": 0,
+    "backlog_size": 0
+  }
 }
