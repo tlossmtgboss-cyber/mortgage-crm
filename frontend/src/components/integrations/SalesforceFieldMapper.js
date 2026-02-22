@@ -251,7 +251,7 @@ const CRM_FIELDS = {
 };
 
 // ---------------------------------------------------------------
-// INHERITANCE: Lead mappings carry over to Active Loan
+// INHERITANCE: Lead → Active Loan → MUM Clients
 // ---------------------------------------------------------------
 const LEAD_TO_ACTIVE_LOAN = {
   lead_first_name: 'borrower_first_name',
@@ -281,6 +281,26 @@ const LEAD_TO_ACTIVE_LOAN = {
 };
 const ACTIVE_TO_LEAD = Object.fromEntries(
   Object.entries(LEAD_TO_ACTIVE_LOAN).map(([k, v]) => [v, k])
+);
+
+// Active Loan → MUM Clients inheritance
+const ACTIVE_LOAN_TO_MUM = {
+  borrower_first_name: 'mum_first_name',
+  borrower_last_name: 'mum_last_name',
+  borrower_email: 'mum_email',
+  borrower_phone: 'mum_phone',
+  property_address: 'mum_property_address',
+  loan_amount: 'original_loan_amount',
+  interest_rate: 'current_rate',
+  loan_type: 'mum_loan_type',
+  servicer: 'mum_servicer',
+  servicer_loan_number: 'mum_servicer_loan_number',
+  estimated_value: 'estimated_home_value',
+  ltv: 'current_ltv',
+  cltv: 'current_cltv',
+};
+const MUM_TO_ACTIVE = Object.fromEntries(
+  Object.entries(ACTIVE_LOAN_TO_MUM).map(([k, v]) => [v, k])
 );
 
 // ---------------------------------------------------------------
@@ -567,23 +587,36 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
     setMappings(prev => { const n = { ...prev }; if (val === null) delete n[key]; else n[key] = val; return n; });
   }, []);
 
-  // Effective mappings: Active Loan fields inherit from Lead if not explicitly mapped
+  // Effective mappings: Lead → Active Loan → MUM inheritance chain
   const effectiveMappings = useMemo(() => {
     const eff = { ...mappings };
+    // Step 1: Active Loan inherits from Lead
     for (const [leadKey, activeKey] of Object.entries(LEAD_TO_ACTIVE_LOAN)) {
       if (!eff[activeKey] && eff[leadKey]) {
         eff[activeKey] = eff[leadKey];
       }
     }
+    // Step 2: MUM inherits from Active Loan (which may itself be inherited from Lead)
+    for (const [activeKey, mumKey] of Object.entries(ACTIVE_LOAN_TO_MUM)) {
+      if (!eff[mumKey] && eff[activeKey]) {
+        eff[mumKey] = eff[activeKey];
+      }
+    }
     return eff;
   }, [mappings]);
 
-  // Track which active loan fields are inherited (not directly mapped)
+  // Track which fields are inherited (not directly mapped)
   const inheritedFields = useMemo(() => {
     const inherited = new Set();
     for (const [leadKey, activeKey] of Object.entries(LEAD_TO_ACTIVE_LOAN)) {
       if (!mappings[activeKey] && mappings[leadKey]) {
         inherited.add(activeKey);
+      }
+    }
+    // MUM fields: inherited if not directly mapped but Active Loan equivalent has a value (direct or inherited)
+    for (const [activeKey, mumKey] of Object.entries(ACTIVE_LOAN_TO_MUM)) {
+      if (!mappings[mumKey] && (mappings[activeKey] || inherited.has(activeKey) && mappings[ACTIVE_TO_LEAD[activeKey]])) {
+        inherited.add(mumKey);
       }
     }
     return inherited;
@@ -652,17 +685,23 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
   const totalMapped = slaStats.mapped + Object.values(fieldStats).reduce((s, v) => s + v.mapped, 0);
   const totalFields = slaStats.total + Object.values(fieldStats).reduce((s, v) => s + v.total, 0);
 
-  // Auto-map helpers (includes Lead→Active Loan inheritance)
+  // Auto-map helpers (includes Lead→Active Loan→MUM inheritance chain)
   const autoMap = useCallback((fields, prefix = "") => {
     setMappings(prev => {
       const n = { ...prev };
       for (const f of fields) {
         const k = prefix ? `${prefix}${f.key}` : f.key;
         if (n[k]) continue;
-        // For CRM fields (not SLA), try inheriting from Lead first
+        // For CRM fields (not SLA), try inheriting from parent stage first
         if (!prefix) {
+          // Active Loan inherits from Lead
           const leadKey = ACTIVE_TO_LEAD[f.key];
           if (leadKey && n[leadKey]) { n[k] = n[leadKey]; continue; }
+          // MUM inherits from Active Loan
+          const activeKey = MUM_TO_ACTIVE[f.key];
+          if (activeKey && n[activeKey]) { n[k] = n[activeKey]; continue; }
+          // MUM also chains through: if Active Loan inherited from Lead
+          if (activeKey && ACTIVE_TO_LEAD[activeKey] && n[ACTIVE_TO_LEAD[activeKey]]) { n[k] = n[ACTIVE_TO_LEAD[activeKey]]; continue; }
         }
         const sug = f.suggestedSF || [];
         for (const s of sug) {
@@ -1021,7 +1060,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
                           <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                             <span style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{f.label}</span>
                             {f.required && <span style={{ fontSize: 8, fontWeight: 800, color: "#dc2626" }}>REQ</span>}
-                            {isInherited && <span style={{ fontSize: 7, fontWeight: 700, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 3 }}>FROM LEAD</span>}
+                            {isInherited && <span style={{ fontSize: 7, fontWeight: 700, color: "#6366f1", background: "#eef2ff", padding: "1px 5px", borderRadius: 3 }}>{MUM_TO_ACTIVE[f.key] ? "FROM ACTIVE" : "FROM LEAD"}</span>}
                           </div>
                           <TypeBadge type={f.type} />
                         </div>
