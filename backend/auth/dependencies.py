@@ -16,6 +16,10 @@ The functions themselves are resolved at request time (FastAPI dependency inject
 """
 import logging
 
+from fastapi import Depends, Request
+from sqlalchemy.orm import Session
+from db import get_db
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,28 +33,33 @@ def _get_main_auth():
     return get_current_user, get_current_user_flexible, oauth2_scheme
 
 
-def get_current_user():
-    """FastAPI dependency — returns the canonical get_current_user from main.py.
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
+    """Async FastAPI dependency — resolves to the authenticated User object.
 
-    Usage in routes:
-        @router.get("/endpoint")
-        async def handler(user = Depends(get_current_user())):
-            ...
+    Extracts the Bearer token from the Authorization header and delegates
+    to main.py's get_current_user for RS256 token verification.
 
-    Or use the Depends-compatible reference directly:
-        from auth.dependencies import current_user_dep
+    Usage:
         @router.get("/endpoint")
-        async def handler(user = Depends(current_user_dep)):
+        async def handler(user = Depends(get_current_user)):
             ...
     """
     gcu, _, _ = _get_main_auth()
-    return gcu
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    return await gcu(token, request, db)
 
 
-def get_current_user_flexible():
-    """FastAPI dependency — returns the canonical get_current_user_flexible from main.py."""
+async def get_current_user_flexible(request: Request, db: Session = Depends(get_db)):
+    """Async FastAPI dependency — resolves to User via Bearer, API key, or cookie.
+
+    Usage:
+        @router.get("/endpoint")
+        async def handler(user = Depends(get_current_user_flexible)):
+            ...
+    """
     _, gcuf, _ = _get_main_auth()
-    return gcuf
+    return await gcuf(request, db)
 
 
 def get_oauth2_scheme():

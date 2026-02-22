@@ -30,15 +30,14 @@ _security = HTTPBearer(auto_error=False)
 
 async def require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     """Router-level auth dependency. Rejects unauthenticated requests."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     from auth.dependencies import get_current_user_flexible
-    user = await get_current_user_flexible(
-        token=credentials.credentials, request=None, db=db
-    )
+    user = await get_current_user_flexible(request, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
@@ -47,9 +46,7 @@ async def require_auth(
 async def current_user_dep(request: Request, db: Session = Depends(get_db)):
     """Strict Bearer token auth — resolves to User object."""
     from auth.dependencies import get_current_user
-    auth = request.headers.get("Authorization", "")
-    token = auth[7:] if auth.startswith("Bearer ") else ""
-    return await get_current_user(token, request, db)
+    return await get_current_user(request, db)
 
 
 async def current_user_flexible_dep(request: Request, db: Session = Depends(get_db)):
