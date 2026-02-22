@@ -988,39 +988,57 @@ class TestMappingRequest(BaseModel):
 # ============ Helper Functions ============
 
 def get_current_user_id(request: Request, db: Session) -> Optional[int]:
-    """Extract user ID from JWT token in request."""
+    """Extract user ID from JWT token in request.
+
+    Supports both HS256 (legacy) and RS256 (main auth) tokens.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header[7:]
+
+    # Try RS256 first (main auth system)
     try:
-        import jwt
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            secret_key = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(
-                token,
-                secret_key,
-                algorithms=["HS256"],
-                options={"verify_aud": False, "verify_iss": False}
-            )
-            email = payload.get("sub")
+        from auth.tokens import verify_token, TokenType
+        token_data = verify_token(token, expected_type=TokenType.ACCESS)
+        if token_data:
+            email = token_data.sub
+            user_id = getattr(token_data, 'user_id', None)
+            if user_id:
+                return int(user_id)
             if email:
-                try:
-                    # Ensure clean transaction state before query
-                    db.rollback()
-                except Exception as e:
-                    logger.error(f"Error in get_current_user_id (rollback): {e}")
                 result = db.execute(
                     text("SELECT id FROM users WHERE email = :email"),
                     {"email": email}
                 ).fetchone()
                 if result:
                     return result[0]
-            return payload.get("user_id")
-    except SQLAlchemyError as e:
-        logger.warning(f"Failed to extract user ID: {e}")
-        try:
-            db.rollback()
-        except Exception as e:
-            logger.error(f"Error in get_current_user_id (rollback after SQLAlchemyError): {e}")
+    except Exception as e:
+        logger.debug(f"RS256 token decode failed, trying HS256: {e}")
+
+    # Fall back to HS256 (legacy Salesforce auth)
+    try:
+        import jwt
+        secret_key = os.getenv("SECRET_KEY", "")
+        payload = jwt.decode(
+            token,
+            secret_key,
+            algorithms=["HS256"],
+            options={"verify_aud": False, "verify_iss": False}
+        )
+        email = payload.get("sub")
+        if email:
+            result = db.execute(
+                text("SELECT id FROM users WHERE email = :email"),
+                {"email": email}
+            ).fetchone()
+            if result:
+                return result[0]
+        return payload.get("user_id")
+    except Exception as e:
+        logger.debug(f"HS256 token decode also failed: {e}")
+
     return None
 
 
