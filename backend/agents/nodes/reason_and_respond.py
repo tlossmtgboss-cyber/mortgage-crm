@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Models for different complexity levels
-MODEL_HAIKU = "claude-3-5-haiku-20241022"   # Fast for simple queries (~1-2s)
+MODEL_HAIKU = "claude-haiku-4-5-20251001"   # Fast for simple queries (~1-2s)
 MODEL_SONNET = "claude-sonnet-4-20250514"   # Full power for complex analysis (~7-8s)
 
 

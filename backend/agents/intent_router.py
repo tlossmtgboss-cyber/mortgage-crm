@@ -419,7 +419,7 @@ async def classify_intent_llm(
         # Use prompt caching: static classification instructions as cached system prompt,
         # only the user query varies per call
         response = anthropic_client.messages.create(
-            model="claude-3-5-haiku-20241022",  # Fastest model for classification
+            model="claude-haiku-4-5-20251001",  # Fastest model for classification
             max_tokens=20,
             system=[
                 {
