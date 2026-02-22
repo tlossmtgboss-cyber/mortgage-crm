@@ -400,12 +400,30 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
     setLoadingSfFields(true);
     try {
       const token = localStorage.getItem('token');
-      const objectsRes = await fetch(`${API_URL}/api/integrations/salesforce/schema/objects`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!objectsRes.ok) throw new Error('Failed to load SF objects');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      let objectsRes;
+      try {
+        objectsRes = await fetch(`${API_URL}/api/integrations/salesforce/schema/objects`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!objectsRes.ok) {
+        const errData = await objectsRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to load SF objects (${objectsRes.status})`);
+      }
       const objectsData = await objectsRes.json();
       const relevantObjects = objectsData.objects || objectsData.relevant_objects || [];
+
+      if (relevantObjects.length === 0) {
+        console.log('No SF objects discovered yet — schema discovery may be needed');
+        setSfFields([]);
+        return;
+      }
 
       // Fetch fields for each relevant object in parallel
       const allFields = [];
@@ -433,8 +451,13 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
       await Promise.all(fieldPromises);
       setSfFields(allFields);
     } catch (err) {
-      console.error('Failed to load Salesforce schema:', err);
-      toast.error('Failed to load Salesforce fields');
+      if (err.name === 'AbortError') {
+        console.error('SF schema fetch timed out after 15s');
+        toast.error('Salesforce field loading timed out — try Refresh Schema');
+      } else {
+        console.error('Failed to load Salesforce schema:', err);
+        toast.error(err.message || 'Failed to load Salesforce fields');
+      }
     } finally {
       setLoadingSfFields(false);
     }

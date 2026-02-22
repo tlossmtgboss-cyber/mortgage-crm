@@ -1427,17 +1427,22 @@ async def discover_schema(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+_schema_fix_done = False
+
 @router.get("/schema/objects")
 async def get_schema_objects(
     request: Request,
     db: Session = Depends(get_db)
 ):
     """Get all discovered Salesforce objects."""
-    # Ensure schema tables exist
-    try:
-        fix_salesforce_schema(db)
-    except Exception as e:
-        logger.warning(f"Could not run schema fix: {e}")
+    # Run schema fix once per process, not on every request
+    global _schema_fix_done
+    if not _schema_fix_done:
+        try:
+            fix_salesforce_schema(db)
+            _schema_fix_done = True
+        except Exception as e:
+            logger.warning(f"Could not run schema fix: {e}")
 
     try:
         user_id = require_user(request, db)
