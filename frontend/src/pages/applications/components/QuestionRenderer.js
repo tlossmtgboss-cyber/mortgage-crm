@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QuestionTypes } from '../config/purchaseQuestions';
-import {
 import { toast } from '../../../utils/toast';
+import {
   ChoiceInput,
   TextInput,
   EmailInput,

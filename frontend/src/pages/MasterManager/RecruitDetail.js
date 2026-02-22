@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
 import { toast } from '../../utils/toast';
+import {
   getCandidateFullProfile,
   updateCandidateStatus,
   updateCandidateProduction,
@@ -372,7 +372,7 @@ const RecruitDetail = () => {
       const data = await response.json();
       if (data.call_id) {
         setActiveCallId(data.call_id);
-        // In a real implementation, this would trigger the actual Twilio call
+        // In a real implementation, this would trigger the actual Telnyx call
         // For now, we'll show a modal to add call notes
         setTimeout(() => {
           setIsCallInProgress(false);
