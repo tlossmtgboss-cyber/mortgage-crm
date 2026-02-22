@@ -1510,6 +1510,10 @@ async def get_schema_objects(
         mapped_counts = {row[0]: row[1] for row in count_rows}
     except Exception as e:
         logger.warning(f"Could not get mapped field counts: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # Get enabled status per object
     enabled_status = {}
@@ -1520,6 +1524,10 @@ async def get_schema_objects(
         enabled_status = {row[0]: row[1] if row[1] is not None else True for row in enabled_rows}
     except Exception as e:
         logger.warning(f"Could not get enabled status: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     return {
         "objects": [
@@ -1566,6 +1574,10 @@ async def get_object_schema(
         mapped_fields = {row[0] for row in mapped_rows}
     except Exception as e:
         logger.warning(f"Could not get mapped fields for {object_name}: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # Annotate each field with its mapped status
     if schema.get("fields"):
