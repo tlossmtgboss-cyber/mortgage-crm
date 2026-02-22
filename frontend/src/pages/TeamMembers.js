@@ -41,9 +41,10 @@ function TeamMembers() {
 
   // Workflow roles state
   const [workflowRoles, setWorkflowRoles] = useState([]);
-  const [roleAssignments, setRoleAssignments] = useState({}); // { memberId: roleId }
+  const [roleAssignments, setRoleAssignments] = useState({}); // { memberId: [roleId1, roleId2, ...] }
   const [savingWorkflowRole, setSavingWorkflowRole] = useState({}); // { memberId: true/false }
   const [seedingRoles, setSeedingRoles] = useState(false);
+  const [addingRoleForMember, setAddingRoleForMember] = useState(null); // memberId currently showing add-role dropdown
 
   const getAuthHeaders = useCallback(() => ({
     'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -100,11 +101,12 @@ function TeamMembers() {
         console.log('[DEBUG] Workflow roles data:', data);
         setWorkflowRoles(data.assignments || []);
 
-        // Build reverse mapping: userId -> roleId
+        // Build reverse mapping: userId -> [roleId1, roleId2, ...]
         const assignments = {};
         (data.assignments || []).forEach(role => {
           if (role.user_id) {
-            assignments[role.user_id] = role.role_id;
+            if (!assignments[role.user_id]) assignments[role.user_id] = [];
+            assignments[role.user_id].push(role.role_id);
           }
         });
         setRoleAssignments(assignments);
@@ -170,80 +172,66 @@ function TeamMembers() {
     }
   };
 
-  // Handle workflow role assignment change
-  const handleWorkflowRoleChange = async (memberId, roleId) => {
+  // Add a role to a member (multi-role: doesn't remove existing roles)
+  const handleAddRole = async (memberId, roleId) => {
+    if (!roleId) return;
+    roleId = parseInt(roleId);
+
     // Check if this role is already assigned to someone else
-    if (roleId) {
-      const existingRole = workflowRoles.find(r => r.role_id === parseInt(roleId));
-      if (existingRole && existingRole.user_id && existingRole.user_id !== memberId) {
-        const confirmMessage = `"${existingRole.role_name}" is currently assigned to ${existingRole.user_name}.\n\nDo you want to reassign this role?`;
-        if (!window.confirm(confirmMessage)) {
-          return; // User cancelled
-        }
+    const existingRole = workflowRoles.find(r => r.role_id === roleId);
+    if (existingRole && existingRole.user_id && existingRole.user_id !== memberId) {
+      const confirmMessage = `"${existingRole.role_name}" is currently assigned to ${existingRole.user_name}.\n\nDo you want to reassign this role?`;
+      if (!window.confirm(confirmMessage)) {
+        return;
       }
     }
 
     setSavingWorkflowRole(prev => ({ ...prev, [memberId]: true }));
 
     try {
-      // First, remove any existing assignment for this user (if they had a different role)
-      const previousRoleId = roleAssignments[memberId];
+      const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ user_id: memberId }),
+      });
 
-      if (roleId) {
-        // Assign new role
-        const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({ user_id: memberId }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          toast.success(data.message || 'Workflow role assigned');
-
-          // Update local state
-          setRoleAssignments(prev => {
-            const newAssignments = { ...prev };
-            // Remove old assignment if user was assigned to a different role
-            Object.keys(newAssignments).forEach(uid => {
-              if (parseInt(uid) === memberId) {
-                delete newAssignments[uid];
-              }
-            });
-            newAssignments[memberId] = parseInt(roleId);
-            return newAssignments;
-          });
-
-          // Reload to get fresh data
-          loadWorkflowRoles();
-        } else {
-          const error = await response.json();
-          toast.error(error.detail || 'Failed to assign role');
-        }
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(data.message || 'Role assigned');
+        loadWorkflowRoles();
       } else {
-        // Remove assignment - need to clear the role that this user was assigned to
-        if (previousRoleId) {
-          const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${previousRoleId}`, {
-            method: 'DELETE',
-            headers: getAuthHeaders(),
-          });
-
-          if (response.ok) {
-            toast.success('Workflow role removed');
-            setRoleAssignments(prev => {
-              const newAssignments = { ...prev };
-              delete newAssignments[memberId];
-              return newAssignments;
-            });
-          } else {
-            const error = await response.json();
-            toast.error(error.detail || 'Failed to remove role');
-          }
-        }
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to assign role');
       }
     } catch (error) {
-      console.error('Error updating workflow role:', error);
-      toast.error('Failed to update workflow role');
+      console.error('Error adding role:', error);
+      toast.error('Failed to assign role');
+    } finally {
+      setSavingWorkflowRole(prev => ({ ...prev, [memberId]: false }));
+      setAddingRoleForMember(null);
+    }
+  };
+
+  // Remove a single role from a member
+  const handleRemoveRole = async (memberId, roleId) => {
+    setSavingWorkflowRole(prev => ({ ...prev, [memberId]: true }));
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        toast.success('Role removed');
+        loadWorkflowRoles();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to remove role');
+      }
+    } catch (error) {
+      console.error('Error removing role:', error);
+      toast.error('Failed to remove role');
     } finally {
       setSavingWorkflowRole(prev => ({ ...prev, [memberId]: false }));
     }
@@ -417,12 +405,19 @@ function TeamMembers() {
     setFormData({ ...formData, [field]: value });
   };
 
-  // Get the workflow role name for a member
-  const getMemberWorkflowRole = (memberId) => {
-    const roleId = roleAssignments[memberId];
-    if (!roleId) return null;
-    const role = workflowRoles.find(r => r.role_id === roleId);
-    return role ? role.role_name : null;
+  // Get workflow role names for a member (returns array)
+  const getMemberWorkflowRoles = (memberId) => {
+    const roleIds = roleAssignments[memberId] || [];
+    return roleIds.map(rid => {
+      const role = workflowRoles.find(r => r.role_id === rid);
+      return role ? { role_id: rid, role_name: role.role_name } : null;
+    }).filter(Boolean);
+  };
+
+  // Get roles NOT yet assigned to this member (for "Add Role" dropdown)
+  const getAvailableRolesForMember = (memberId) => {
+    const assignedIds = roleAssignments[memberId] || [];
+    return workflowRoles.filter(r => !assignedIds.includes(r.role_id));
   };
 
   if (loading) {
@@ -461,8 +456,8 @@ function TeamMembers() {
     );
   }
 
-  // Count how many team members have a workflow role assigned
-  const membersWithRoles = safeMembers.filter(member => roleAssignments[member.id]).length;
+  // Count how many team members have at least one workflow role assigned
+  const membersWithRoles = safeMembers.filter(member => (roleAssignments[member.id] || []).length > 0).length;
 
   return (
     <div className="leads-page">
@@ -540,7 +535,7 @@ function TeamMembers() {
                 <th>EMAIL</th>
                 <th>PHONE</th>
                 <th>TITLE</th>
-                <th style={{ minWidth: '180px' }}>WORKFLOW ROLE</th>
+                <th style={{ minWidth: '220px' }}>WORKFLOW ROLES</th>
                 <th>ACTIONS</th>
               </tr>
             </thead>
@@ -548,8 +543,10 @@ function TeamMembers() {
               {filteredMembers.map((member) => {
                 if (!member || !member.id) return null;
                 const isSelected = selectedMembers.includes(member.id);
-                const assignedRoleId = roleAssignments[member.id];
+                const memberRoles = getMemberWorkflowRoles(member.id);
+                const availableRoles = getAvailableRolesForMember(member.id);
                 const isSavingRole = savingWorkflowRole[member.id];
+                const isAddingRole = addingRoleForMember === member.id;
 
                 return (
                   <tr
@@ -579,41 +576,96 @@ function TeamMembers() {
                     <td>{String(member.phone || 'N/A')}</td>
                     <td>{String(member.title || 'N/A')}</td>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <select
-                          value={assignedRoleId || ''}
-                          onChange={(e) => handleWorkflowRoleChange(member.id, e.target.value)}
-                          disabled={isSavingRole}
-                          style={{
-                            padding: '6px 28px 6px 10px',
-                            borderRadius: '6px',
-                            border: assignedRoleId ? '2px solid #218D8D' : '1px solid #d1d5db',
-                            background: assignedRoleId ? '#f0fdf4' : 'white',
-                            fontSize: '13px',
-                            cursor: isSavingRole ? 'wait' : 'pointer',
-                            minWidth: '150px',
-                            appearance: 'none',
-                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-                            backgroundRepeat: 'no-repeat',
-                            backgroundPosition: 'right 8px center',
-                            opacity: isSavingRole ? 0.7 : 1
-                          }}
-                        >
-                          <option value="">-- None --</option>
-                          {workflowRoles.map(role => {
-                            const isAssignedToOther = role.user_id && role.user_id !== member.id;
-                            const assignedToName = isAssignedToOther ? role.user_name : null;
-                            return (
-                              <option
-                                key={role.role_id}
-                                value={role.role_id}
-                              >
-                                {role.role_name}
-                                {assignedToName ? ` (${assignedToName})` : ''}
-                              </option>
-                            );
-                          })}
-                        </select>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                        {/* Role chips */}
+                        {memberRoles.map(r => (
+                          <span
+                            key={r.role_id}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '3px 8px',
+                              borderRadius: '12px',
+                              background: '#e0f2f1',
+                              border: '1px solid #218D8D',
+                              fontSize: '12px',
+                              color: '#0d5c5c',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {r.role_name}
+                            <button
+                              onClick={() => handleRemoveRole(member.id, r.role_id)}
+                              disabled={isSavingRole}
+                              title={`Remove ${r.role_name}`}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: isSavingRole ? 'wait' : 'pointer',
+                                padding: '0 2px',
+                                fontSize: '14px',
+                                lineHeight: 1,
+                                color: '#991b1b',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              x
+                            </button>
+                          </span>
+                        ))}
+                        {/* Add Role button / dropdown */}
+                        {isAddingRole ? (
+                          <select
+                            autoFocus
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) handleAddRole(member.id, e.target.value);
+                            }}
+                            onBlur={() => setAddingRoleForMember(null)}
+                            disabled={isSavingRole}
+                            style={{
+                              padding: '3px 6px',
+                              borderRadius: '6px',
+                              border: '1px solid #d1d5db',
+                              fontSize: '12px',
+                              cursor: isSavingRole ? 'wait' : 'pointer',
+                              minWidth: '130px',
+                            }}
+                          >
+                            <option value="">Select role...</option>
+                            {availableRoles.map(role => {
+                              const isAssignedToOther = role.user_id && role.user_id !== member.id;
+                              const assignedToName = isAssignedToOther ? role.user_name : null;
+                              return (
+                                <option key={role.role_id} value={role.role_id}>
+                                  {role.role_name}
+                                  {assignedToName ? ` (${assignedToName})` : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        ) : (
+                          availableRoles.length > 0 && (
+                            <button
+                              onClick={() => setAddingRoleForMember(member.id)}
+                              disabled={isSavingRole}
+                              style={{
+                                background: 'none',
+                                border: '1px dashed #9ca3af',
+                                borderRadius: '12px',
+                                padding: '3px 8px',
+                                fontSize: '12px',
+                                color: '#6b7280',
+                                cursor: isSavingRole ? 'wait' : 'pointer',
+                                whiteSpace: 'nowrap',
+                              }}
+                              title="Add another role"
+                            >
+                              + Add Role
+                            </button>
+                          )
+                        )}
                         {isSavingRole && (
                           <span style={{
                             width: '16px',
@@ -621,7 +673,8 @@ function TeamMembers() {
                             border: '2px solid #e5e7eb',
                             borderTopColor: '#218D8D',
                             borderRadius: '50%',
-                            animation: 'spin 0.8s linear infinite'
+                            animation: 'spin 0.8s linear infinite',
+                            flexShrink: 0,
                           }} />
                         )}
                       </div>
@@ -669,7 +722,7 @@ function TeamMembers() {
           {workflowRoles.length === 0 ? (
             'No workflow roles configured. Click the button to set up workflow roles for your team.'
           ) : (
-            `${membersWithRoles} of ${safeMembers.length} team members have a workflow role assigned.`
+            `${membersWithRoles} of ${safeMembers.length} team members have workflow roles assigned. Users can hold multiple roles.`
           )}
         </span>
         {workflowRoles.length === 0 && canEditTeam && (
@@ -775,26 +828,87 @@ function TeamMembers() {
                     />
                   </div>
                   <div className="form-group">
-                    <label>Workflow Role</label>
-                    <select
-                      value={formData.workflow_role_id || ''}
-                      onChange={(e) => handleChange('workflow_role_id', e.target.value)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid #d1d5db',
-                        fontSize: '14px',
-                        width: '100%'
-                      }}
-                    >
-                      <option value="">-- Select Role --</option>
-                      {workflowRoles.map(role => (
-                        <option key={role.role_id} value={role.role_id}>
-                          {role.role_name}
-                          {role.user_id ? ` (${role.user_name})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <label>Workflow Role{editingMember ? 's' : ''}</label>
+                    {editingMember ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', minHeight: '36px' }}>
+                        {getMemberWorkflowRoles(editingMember.id).map(r => (
+                          <span
+                            key={r.role_id}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 10px',
+                              borderRadius: '14px',
+                              background: '#e0f2f1',
+                              border: '1px solid #218D8D',
+                              fontSize: '13px',
+                              color: '#0d5c5c',
+                            }}
+                          >
+                            {r.role_name}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRole(editingMember.id, r.role_id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '0 2px',
+                                fontSize: '14px',
+                                lineHeight: 1,
+                                color: '#991b1b',
+                                fontWeight: 'bold',
+                              }}
+                            >
+                              x
+                            </button>
+                          </span>
+                        ))}
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value) handleAddRole(editingMember.id, e.target.value);
+                          }}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            border: '1px dashed #9ca3af',
+                            fontSize: '13px',
+                            color: '#6b7280',
+                            background: 'white',
+                          }}
+                        >
+                          <option value="">+ Add Role</option>
+                          {getAvailableRolesForMember(editingMember.id).map(role => (
+                            <option key={role.role_id} value={role.role_id}>
+                              {role.role_name}
+                              {role.user_id && role.user_id !== editingMember.id ? ` (${role.user_name})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.workflow_role_id || ''}
+                        onChange={(e) => handleChange('workflow_role_id', e.target.value)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #d1d5db',
+                          fontSize: '14px',
+                          width: '100%'
+                        }}
+                      >
+                        <option value="">-- Select Role --</option>
+                        {workflowRoles.map(role => (
+                          <option key={role.role_id} value={role.role_id}>
+                            {role.role_name}
+                            {role.user_id ? ` (${role.user_name})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
               </div>

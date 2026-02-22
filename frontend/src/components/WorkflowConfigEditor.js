@@ -99,23 +99,22 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      // Fetch available roles from admin Role table FIRST
+      // Fetch roles AND assignments from shared team-roles API (single source of truth)
       try {
-        const rolesResponse = await fetch(`${API_BASE}/api/v1/workflow-config/available-roles`, { headers });
+        const rolesResponse = await fetch(`${API_BASE}/api/v1/settings/team-roles`, { headers });
         if (rolesResponse.ok) {
           const rolesData = await rolesResponse.json();
-          const fetchedRoles = rolesData.roles || [];
-          setDynamicRoles(fetchedRoles);
+          const fetchedAssignments = rolesData.assignments || [];
+          setDynamicRoles(fetchedAssignments);
 
-          // Convert dynamic roles to responsibility roles format
-          // Keep legacy AI role at the end, but use dynamic roles for everything else
-          const dynamicRoleEntries = fetchedRoles.map(role => ({
-            id: role.id,
-            key: `dynamic_${role.id}`,
-            label: getAbbreviation(role.name),
-            fullName: role.name,
-            roleValue: role.name.toLowerCase().replace(/\s+/g, '_'),
-            canDelete: false, // Admin-created roles can't be deleted from workflow UI
+          // Convert to responsibility roles format
+          const dynamicRoleEntries = fetchedAssignments.map(role => ({
+            id: role.role_id,
+            key: `dynamic_${role.role_id}`,
+            label: getAbbreviation(role.role_name),
+            fullName: role.role_name,
+            roleValue: role.role_name.toLowerCase().replace(/\s+/g, '_'),
+            canDelete: false,
             isLegacy: false,
             isDynamic: true
           }));
@@ -123,9 +122,20 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
           // Keep AI role at the end
           const aiRole = DEFAULT_RESPONSIBILITY_ROLES.find(r => r.key === 'ai');
           setResponsibilityRoles([...dynamicRoleEntries, aiRole]);
+
+          // Build role assignments from the shared data
+          const sharedAssignments = fetchedAssignments
+            .filter(a => a.user_id)
+            .map(a => ({
+              id: a.role_id,
+              role_id: a.role_id,
+              user_id: a.user_id,
+              role: a.role_name.toLowerCase().replace(/\s+/g, '_'),
+            }));
+          setRoleAssignments(sharedAssignments);
         }
       } catch (roleErr) {
-        console.warn('Could not fetch dynamic roles, using defaults:', roleErr);
+        console.warn('Could not fetch roles from team-roles API, using defaults:', roleErr);
       }
 
       // Fetch workflow configuration
@@ -156,16 +166,6 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         setWorkflowConfig(data);
         setDays(data.days || []);
         setRoleAssignments(data.role_assignments || []);
-      }
-
-      // Sync workflow roles with admin roles (creates role assignments for new roles)
-      try {
-        await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/sync-roles`, {
-          method: 'POST',
-          headers
-        });
-      } catch (syncErr) {
-        console.warn('Could not sync workflow roles:', syncErr);
       }
 
       // Fetch users for role assignment
@@ -472,59 +472,46 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     }
   };
 
-  // Assign user to role - supports both legacy roles and dynamic roles
+  // Assign user to role via shared team-roles API
   const handleAssignUser = async (roleKey, userId, roleData = null) => {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
+      const authHeaders = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
 
-      // Check if this is a dynamic role
-      const isDynamic = roleData?.isDynamic || roleKey.startsWith('dynamic_');
-
-      let existingAssignment;
-      let requestBody;
-
-      if (isDynamic && roleData?.id) {
-        // For dynamic roles, find by role_id
-        existingAssignment = roleAssignments.find(ra => ra.role_id === roleData.id);
-        requestBody = { role_id: roleData.id, user_id: userId || null };
-      } else {
-        // Legacy roles use 'role' string
-        existingAssignment = roleAssignments.find(ra => ra.role === roleKey);
-        requestBody = { role: roleKey, user_id: userId || null };
+      const roleId = roleData?.id;
+      if (!roleId) {
+        console.warn('No role ID for assignment:', roleKey);
+        return;
       }
 
       let response;
-      if (existingAssignment) {
-        response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/roles/${existingAssignment.id}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ user_id: userId || null })
+      if (userId) {
+        // Assign: POST /api/v1/settings/team-roles/{roleId}
+        response = await fetch(`${API_BASE}/api/v1/settings/team-roles/${roleId}`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({ user_id: parseInt(userId) })
         });
       } else {
-        response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/roles`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(requestBody)
+        // Unassign: DELETE /api/v1/settings/team-roles/{roleId}
+        response = await fetch(`${API_BASE}/api/v1/settings/team-roles/${roleId}`, {
+          method: 'DELETE',
+          headers: authHeaders
         });
       }
 
       if (response.ok) {
-        const updatedAssignment = await response.json();
+        // Update local state
         setRoleAssignments(prev => {
-          // Filter out existing assignment by id or by role/role_id match
-          const filtered = prev.filter(ra => {
-            if (existingAssignment) return ra.id !== existingAssignment.id;
-            if (isDynamic && roleData?.id) return ra.role_id !== roleData.id;
-            return ra.role !== roleKey;
-          });
-          return [...filtered, updatedAssignment];
+          const filtered = prev.filter(ra => ra.role_id !== roleId);
+          if (userId) {
+            filtered.push({ id: roleId, role_id: roleId, user_id: parseInt(userId) });
+          }
+          return filtered;
         });
       }
 
@@ -543,26 +530,13 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     return user ? user.name || user.email : 'Unassigned';
   };
 
-  // Get assigned user for a role - supports both legacy and dynamic roles
+  // Get assigned user for a role by role_id
   const getAssignedUser = (roleKey, roleData = null) => {
-    const isDynamic = roleData?.isDynamic || roleKey.startsWith('dynamic_');
-
-    if (isDynamic && roleData?.id) {
-      // For dynamic roles, look up by role_id
+    if (roleData?.id) {
       const assignment = roleAssignments.find(ra => ra.role_id === roleData.id);
       return assignment?.user_id;
-    } else {
-      // Legacy roles use the role enum value
-      const roleMap = {
-        lo: 'loan_officer',
-        jr_lo: 'junior_loan_officer',
-        production_asst: 'production_assistant',
-        concierge: 'concierge',
-        ai: 'ai'
-      };
-      const assignment = roleAssignments.find(ra => ra.role === roleMap[roleKey]);
-      return assignment?.user_id;
     }
+    return null;
   };
 
   // Check day health
