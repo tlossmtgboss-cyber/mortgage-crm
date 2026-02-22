@@ -19,7 +19,17 @@ export const PermissionProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(() => {
     try {
       const savedRole = localStorage.getItem('userRole');
-      return savedRole || 'sales';
+      if (savedRole) return savedRole;
+
+      // Fallback: infer from user object when userRole key hasn't been set yet
+      // (e.g., permissions API has been 500ing since login)
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user.permission_role) return user.permission_role;
+        if (user.is_admin === true || user.role === 'admin') return 'admin';
+      }
+      return 'sales';
     } catch {
       return 'sales';
     }
@@ -252,8 +262,23 @@ export const PermissionProvider = ({ children }) => {
 
     } catch (error) {
       console.error('PermissionContext: Error fetching permissions:', error);
-      // FIXED: Keep existing permissions and role on error - don't demote admins
-      // Ignore localStorage errors
+      // When API fails, infer role from localStorage user object if userRole is still default
+      // This prevents admin users from losing access when the permissions API is down
+      if (userRole === 'sales') {
+        try {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            if (user.permission_role) {
+              setUserRole(user.permission_role);
+            } else if (user.is_admin === true || user.role === 'admin') {
+              setUserRole('admin');
+            }
+          }
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -461,6 +486,10 @@ export const PermissionProvider = ({ children }) => {
       return true;
     }
     if (userRole === 'admin' || userRole === 'site_admin' || userRole === 'management') {
+      return true;
+    }
+    // Direct legacyRole check - getUserEffectiveRole doesn't map 'admin' as a legacy role
+    if (legacyRole === 'admin' || legacyRole === 'site_admin' || legacyRole === 'Admin') {
       return true;
     }
 
