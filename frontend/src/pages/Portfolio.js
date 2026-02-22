@@ -47,6 +47,8 @@ function Portfolio() {
   const [statusDropdown, setStatusDropdown] = useState({ show: false, clientId: null, position: { top: 0, left: 0 } });
   const [sortColumn, setSortColumn] = useState('closing_date');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const CLIENTS_PER_PAGE = 20;
 
   useEffect(() => {
     loadData();
@@ -283,6 +285,7 @@ function Portfolio() {
       setSortColumn(column);
       setSortDirection('desc');
     }
+    setCurrentPage(1);
   };
 
   filteredMumClients = [...filteredMumClients].sort((a, b) => {
@@ -320,6 +323,14 @@ function Portfolio() {
     if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
     return 0;
   });
+
+  // Pagination
+  const totalClients = filteredMumClients.length;
+  const totalPages = Math.ceil(totalClients / CLIENTS_PER_PAGE);
+  const paginatedClients = filteredMumClients.slice(
+    (currentPage - 1) * CLIENTS_PER_PAGE,
+    currentPage * CLIENTS_PER_PAGE
+  );
 
   // Status options — all stages across Lead, Active Loan, and MUM
   const statusOptions = [
@@ -814,13 +825,13 @@ function Portfolio() {
             <div className="filter-bar">
               <button
                 className={filterView === 'all' ? 'active' : ''}
-                onClick={() => setFilterView('all')}
+                onClick={() => { setFilterView('all'); setCurrentPage(1); }}
               >
                 All Clients ({mumClients.length})
               </button>
               <button
                 className={filterView === 'opportunities' ? 'active' : ''}
-                onClick={() => setFilterView('opportunities')}
+                onClick={() => { setFilterView('opportunities'); setCurrentPage(1); }}
               >
                 Refinance Opportunities ({mumClients.filter(c => c.refinance_opportunity).length})
               </button>
@@ -833,7 +844,7 @@ function Portfolio() {
               className="search-bar"
               placeholder="Search clients by name, email, phone, or loan amount..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
             />
             {searchQuery && (
               <button className="clear-search" onClick={() => setSearchQuery('')}>
@@ -870,7 +881,7 @@ function Portfolio() {
                 </tr>
               </thead>
               <tbody>
-                {filteredMumClients.map((client) => (
+                {paginatedClients.map((client) => (
                   <tr
                     key={client.id}
                     onClick={() => navigate(`/portfolio/${client.id}`)}
@@ -923,9 +934,45 @@ function Portfolio() {
               </tbody>
             </table>
 
-            {filteredMumClients.length === 0 && (
+            {paginatedClients.length === 0 && (
               <div className="empty-state">
                 No clients found. Add your first MUM client to track post-closing opportunities.
+              </div>
+            )}
+
+            {totalPages > 1 && (
+              <div className="mum-pagination">
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  &laquo;
+                </button>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  &lsaquo; Prev
+                </button>
+                <span className="pagination-info">
+                  Page {currentPage} of {totalPages} ({totalClients} clients)
+                </span>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next &rsaquo;
+                </button>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  &raquo;
+                </button>
               </div>
             )}
           </div>
