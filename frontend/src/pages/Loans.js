@@ -156,9 +156,7 @@ function Loans() {
     'In Underwriting',
     'Approved',
     'Clear to Close',
-    'Closing',
     'Suspended',
-    'Funded',
     'Inactive',
   ];
 
@@ -207,9 +205,7 @@ function Loans() {
     'In Underwriting': ['UW Received', 'Underwriting', 'UW_RECEIVED', 'UNDERWRITING'],
     'Approved': ['Approved', 'APPROVED', 'Conditional Approval', 'CONDITIONAL_APPROVAL'],
     'Clear to Close': ['CTC', 'Clear to Close', 'CLEAR_TO_CLOSE', 'CTC'],
-    'Closing': ['Closing', 'CLOSING', 'Docs', 'DOCS', 'Docs Out', 'DOCS_OUT'],
     'Suspended': ['Suspended', 'SUSPENDED'],
-    'Funded': ['Funded', 'FUNDED'],
     'Inactive': ['Cancelled', 'CANCELLED', 'Denied', 'DENIED', 'Dead', 'DEAD', 'Nurture', 'NURTURE', 'Withdrawn', 'WITHDRAWN', 'Does Not Qualify', 'DOES_NOT_QUALIFY'],
   };
 
@@ -649,10 +645,6 @@ function Loans() {
   if (activeFilter === 'All') {
     // Show only active (non-funded/inactive) loans
     filteredLoans = safeLoans.filter(loan => !isInactiveLoan(loan));
-  } else if (activeFilter === 'Funded') {
-    // Show funded loans
-    const fundedValues = filterToStage['Funded'] || ['Funded', 'FUNDED'];
-    filteredLoans = safeLoans.filter(loan => fundedValues.includes(loan.stage) || (loan.stage || '').toLowerCase().includes('funded'));
   } else {
     // Use the mapping to match filter name to actual API stage values
     const stageValues = filterToStage[activeFilter] || [activeFilter];
