@@ -1,7 +1,8 @@
 {
   "_description": "Canonical SLA milestone registry for Perennia AI CRM ↔ Salesforce mapping. Source of truth extracted from CRM SLA Measures Configuration.",
-  "_version": "2.0.0",
-  "_updated": "2026-02-11",
+  "_reference_note": "This file is reference documentation only. The runtime source of truth for SLA milestones is the workflow_configurations + workflow_day_configs DB tables, populated via the SLA Measures admin UI. Bridging this JSON into the DB as a seed/sync mechanism is a future sprint item.",
+  "_version": "2.0.1",
+  "_updated": "2026-02-21",
   "_total_milestones": 27,
 
   "sla_milestones": {
@@ -166,7 +167,7 @@
           "trigger_from": "Previous Milestone",
           "expected_sf_field": "Documents_Requested_Date__c",
           "alt_sf_fields": ["Doc_Request_Date__c", "Stips_Requested_Date__c"],
-          "status": "inactive",
+          "status": "active",
           "byte_config": { "byte_order": "big", "epoch_type": "seconds", "null_sentinel": "0x00000000" },
           "workflow_trigger": "Send document request to borrower"
         },
@@ -339,7 +340,7 @@
           "target": "3 business days",
           "target_type": "business_days",
           "target_value": 3,
-          "trigger_from": "Clear To Close",
+          "trigger_from": "Conditions Cleared",
           "expected_sf_field": "Clear_To_Close_Date__c",
           "alt_sf_fields": ["CTC_Date__c", "CTC__c"],
           "status": "active",
@@ -399,8 +400,8 @@
       "closing": 4
     },
     "by_status": {
-      "active": 25,
-      "inactive": 2
+      "active": 26,
+      "inactive": 1
     },
     "by_target_type": {
       "hours": 3,
@@ -408,6 +409,6 @@
       "business_days_before": 2,
       "calendar_days": 2
     },
-    "inactive_milestones": ["documents_requested", "closing_date"]
+    "inactive_milestones": ["closing_date"]
   }
 }

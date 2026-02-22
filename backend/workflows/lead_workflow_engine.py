@@ -51,7 +51,7 @@ VALID_TRANSITIONS = {
     "Pre-Qualified": ["Pre-Approved", "Application", "Does Not Qualify", "Withdrawn"],
     "Pre-Approved": ["Under Contract", "Disclosed", "Long-Term Nurture", "Withdrawn"],
     "Under Contract": ["Disclosed", "Pre-Approved", "Withdrawn"],
-    "Disclosed": ["Closed"],
+    "Disclosed": ["Closed", "Long-Term Nurture", "Withdrawn", "Does Not Qualify"],
     "Long-Term Nurture": ["Prospect", "Application", "Withdrawn"],
     "Does Not Qualify": ["Prospect", "Application"],
     "Closed": ["AMR"],
@@ -113,7 +113,8 @@ class LeadWorkflowEngine:
                 LIMIT 1
             """), {"lid": lead_id}).fetchone()
             return existing is not None
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error checking active SLA workflow for lead {lead_id}: {e}")
             return False
 
     async def process_status_change(self, status_change: LeadStatusChange) -> Dict[str, Any]:
@@ -839,6 +840,35 @@ class LeadWorkflowEngine:
                 "stop_all_campaigns": True
             }
         })
+
+        # 4. Auto-enroll the linked loan in the SLA workflow
+        try:
+            loan_row = self.db.execute(text("""
+                SELECT lo.id AS loan_id
+                FROM leads ld
+                JOIN loans lo ON lo.loan_number = ld.loan_number
+                WHERE ld.id = :lead_id
+                  AND ld.loan_number IS NOT NULL
+                LIMIT 1
+            """), {"lead_id": sc.lead_id}).fetchone()
+
+            if loan_row:
+                from services.workflow_sla_service import WorkflowSLAService
+                sla_service = WorkflowSLAService(self.db)
+                result = sla_service.enroll_loan(
+                    loan_id=loan_row.loan_id,
+                    workflow_key="under_contract",
+                    trigger_status="Disclosed",
+                    user_id=sc.loan_officer_id,
+                )
+                if result.get("success"):
+                    logger.info(f"Auto-enrolled loan {loan_row.loan_id} in under_contract SLA workflow")
+                else:
+                    logger.warning(f"Loan SLA enrollment skipped for lead {sc.lead_id}: {result.get('error')}")
+            else:
+                logger.info(f"No linked loan found for lead {sc.lead_id} — skipping loan SLA enrollment")
+        except Exception as e:
+            logger.warning(f"Loan SLA enrollment failed for lead {sc.lead_id}: {e}")
 
         logger.info(f"📋 DISCLOSED workflow triggered for {sc.lead_name}")
         return actions

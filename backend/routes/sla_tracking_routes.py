@@ -400,9 +400,9 @@ async def list_sla_measures(
             db.execute(text("""
                 SELECT workflow_configuration_id FROM sla_measures LIMIT 1
             """))
-        except Exception:
+        except Exception as e:
             db.rollback()  # Clear error state from failed SELECT
-            logger.info("Adding workflow_configuration_id column to sla_measures...")
+            logger.info(f"Adding workflow_configuration_id column to sla_measures (check failed: {e})...")
             try:
                 db.execute(text("""
                     ALTER TABLE sla_measures
@@ -657,7 +657,8 @@ async def get_lead_milestone_history(
 @router.get("/milestones/active")
 async def get_active_milestone_list(
     status: Optional[str] = Query(None, description="Filter by status: at_risk, overdue"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Get all active milestones, optionally filtered by status."""
     if status == "at_risk":
@@ -837,7 +838,8 @@ async def get_milestone_drilldown(
 @router.get("/alerts", response_model=List[SLAAlertResponse])
 async def get_alert_list(
     limit: int = Query(50, le=200),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Get active SLA alerts."""
     return get_active_alerts(db, limit=limit)
@@ -924,7 +926,8 @@ async def get_sla_dashboard_summary(
     try:
         from middleware.report_access import get_report_scope, get_scope_description
         scope = get_report_scope(current_user)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in get_sla_dashboard_summary getting scope: {e}")
         scope = None
 
     summary = get_dashboard_summary(db)
@@ -1244,7 +1247,8 @@ async def export_sla_report(
         from middleware.report_access import get_report_scope, get_scope_description
         scope = get_report_scope(current_user)
         scope_desc = get_scope_description(scope)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in export_sla_report getting scope: {e}")
         scope = {"scope": "user", "user_id": getattr(current_user, "id", None)}
         scope_desc = "Personal data"
 
@@ -1257,7 +1261,8 @@ async def export_sla_report(
     # Get bottleneck analysis
     try:
         bottlenecks = get_bottleneck_analysis(db, start_date, end_date)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error in export_sla_report getting bottlenecks: {e}")
         bottlenecks = []
 
     # Build CSV
