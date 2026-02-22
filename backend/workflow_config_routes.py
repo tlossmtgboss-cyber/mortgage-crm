@@ -1701,16 +1701,19 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
         days = sorted([d for d in (workflow.days or []) if d.is_active], key=lambda x: (x.day_order or 0, x.day_value))
 
         for day in days:
-            # Only include tasks that are due within the next N days
             days_until_due = day.day_value - days_in_stage
-            if days_until_due < 0 or days_until_due > days_ahead:
+            # Include overdue tasks (negative days_until_due) and upcoming tasks
+            if days_until_due > days_ahead:
                 continue
 
             # Calculate due date
             due_date = datetime.utcnow() + timedelta(days=days_until_due)
 
             # Determine status
-            if days_until_due == 0:
+            if days_until_due < 0:
+                status = "overdue"
+                urgency = "critical"
+            elif days_until_due == 0:
                 status = "due_today"
                 urgency = "high"
             elif days_until_due == 1:
@@ -1751,24 +1754,33 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
             })
 
     # Get all active loans
+    # Loan stages are stored UPPERCASE in the DB — map both forms
     loan_stage_to_workflow = {
-        "Application": "prequal",
-        "Processing": "under_contract",
-        "Underwriting": "under_contract",
-        "Conditional Approval": "under_contract",
+        "APPLICATION": "prequal",
+        "DISCLOSED": "under_contract",
+        "PROCESSING": "under_contract",
+        "SUBMITTED": "under_contract",
+        "UNDERWRITING": "under_contract",
+        "UW_RECEIVED": "under_contract",
+        "CONDITIONAL_APPROVAL": "under_contract",
+        "APPROVED": "under_contract",
         "CTC": "last_mile",
-        "Clear to Close": "last_mile",
-        "Closing": "last_mile",
-        "Funded": "post_close",
+        "CLEAR_TO_CLOSE": "last_mile",
+        "CLOSING": "last_mile",
+        "DOCS": "last_mile",
+        "DOCS_OUT": "last_mile",
+        "FUNDED": "post_close",
     }
 
     loans = db.query(Loan).all()
     for loan in loans:
-        loan_stage = loan.stage if loan.stage else "Application"
+        loan_stage = loan.stage if loan.stage else "APPLICATION"
         if hasattr(loan_stage, 'value'):
             loan_stage = loan_stage.value
+        # Normalize to uppercase for matching
+        loan_stage_upper = loan_stage.upper().replace(" ", "_") if loan_stage else "APPLICATION"
 
-        workflow_key = loan_stage_to_workflow.get(loan_stage)
+        workflow_key = loan_stage_to_workflow.get(loan_stage_upper)
         if not workflow_key:
             continue
 
@@ -1791,12 +1803,16 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
 
         for day in days:
             days_until_due = day.day_value - days_in_stage
-            if days_until_due < 0 or days_until_due > days_ahead:
+            # Include overdue tasks (negative days_until_due) and upcoming tasks
+            if days_until_due > days_ahead:
                 continue
 
             due_date = datetime.utcnow() + timedelta(days=days_until_due)
 
-            if days_until_due == 0:
+            if days_until_due < 0:
+                status = "overdue"
+                urgency = "critical"
+            elif days_until_due == 0:
                 status = "due_today"
                 urgency = "high"
             elif days_until_due == 1:
