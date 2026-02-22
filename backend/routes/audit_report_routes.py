@@ -113,34 +113,43 @@ def register_audit_report_routes(app, get_db, get_current_user, **kwargs):
             generate_not_found_html,
         )
 
-        viewer_ip = request.client.host if request.client else None
-        viewer_ua = request.headers.get("user-agent")
+        try:
+            viewer_ip = request.client.host if request.client else None
+            viewer_ua = request.headers.get("user-agent")
 
-        service = AuditReportShareService(db)
-        result = service.get_shared_report(
-            share_token=share_token,
-            viewer_ip=viewer_ip,
-            viewer_ua=viewer_ua,
-        )
+            service = AuditReportShareService(db)
+            result = service.get_shared_report(
+                share_token=share_token,
+                viewer_ip=viewer_ip,
+                viewer_ua=viewer_ua,
+            )
 
-        if not result:
-            # Check whether it exists but is expired/deactivated
-            row = db.execute(
-                text("SELECT is_active, expires_at FROM audit_report_shares WHERE share_token = :t"),
-                {"t": share_token},
-            ).fetchone()
+            if not result:
+                # Check whether it exists but is expired/deactivated
+                row = db.execute(
+                    text("SELECT is_active, expires_at FROM audit_report_shares WHERE share_token = :t"),
+                    {"t": share_token},
+                ).fetchone()
 
-            if row and not row.is_active:
-                return HTMLResponse(generate_not_found_html("been deactivated"), status_code=410)
-            elif row:
-                return HTMLResponse(generate_not_found_html("expired"), status_code=410)
-            return HTMLResponse(generate_not_found_html("not been found"), status_code=404)
+                if row and not row.is_active:
+                    return HTMLResponse(generate_not_found_html("been deactivated"), status_code=410)
+                elif row:
+                    return HTMLResponse(generate_not_found_html("expired"), status_code=410)
+                return HTMLResponse(generate_not_found_html("not been found"), status_code=404)
 
-        html = generate_audit_html(
-            report_data=result["report_data"],
-            expires_at=result.get("expires_at"),
-        )
-        return HTMLResponse(html)
+            html = generate_audit_html(
+                report_data=result["report_data"],
+                expires_at=result.get("expires_at"),
+            )
+            return HTMLResponse(html)
+        except Exception as e:
+            import traceback
+            logger.error(f"Audit report render failed: {e}\n{traceback.format_exc()}")
+            # Return error in response body (production error handler intercepts HTTPException)
+            return HTMLResponse(
+                f"<pre>Error rendering report: {type(e).__name__}: {e}\n\n{traceback.format_exc()}</pre>",
+                status_code=200,
+            )
 
     # -------------------------------------------------------------------------
     # GET /api/v1/audit-reports/shared/{token}/json — Public JSON
