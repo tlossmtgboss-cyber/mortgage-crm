@@ -8,6 +8,7 @@ import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
 import EscalationModal from '../components/EscalationModal';
 import VoicemailDrop from '../components/VoicemailDrop';
+import SendApplicationModal from '../components/SendApplicationModal';
 import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
@@ -479,12 +480,22 @@ function LeadDetail() {
           localStorage.removeItem('loans_data');
           localStorage.removeItem('loans_data_time');
 
-          // Navigate to the new loan (Active Loans for Disclosed, Portfolio/MUM for Funded)
+          // Show success toast with link to the new record
+          const clientName = borrowerName || 'Client';
           if (newStatus === 'Funded') {
-            navigate(`/mum/${newLoan.id}`);  // Funded goes to MUM/Portfolio
+            toast.success(
+              `${clientName} has been moved to Funded. <a href="/portfolio" style="color: white; font-weight: bold; text-decoration: underline;">View in Portfolio &rarr;</a>`,
+              { duration: 8000 }
+            );
           } else {
-            navigate(`/loans/${newLoan.id}`);  // Disclosed goes to Active Loans
+            toast.success(
+              `${clientName} has been moved to ${newStatus}. <a href="/loans/${newLoan.id}" style="color: white; font-weight: bold; text-decoration: underline;">View Loan &rarr;</a>`,
+              { duration: 8000 }
+            );
           }
+
+          // Reload lead data to reflect the new stage
+          fetchLead();
           return;
         } catch (loanError) {
           console.error('Error creating loan:', loanError);
@@ -4563,59 +4574,14 @@ function LeadDetail() {
 
       {/* Send Application Modal */}
       {showApplicationModal && applicationLink && (
-        <div className="modal-overlay" onClick={() => setShowApplicationModal(false)}>
-          <div className="modal-content application-link-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Application Link Created</h2>
-              <button className="close-btn" onClick={() => setShowApplicationModal(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              <p>A unique application link has been created for <strong>{lead?.name}</strong>.</p>
-
-              <div className="application-link-container">
-                <input
-                  type="text"
-                  value={applicationLink.url}
-                  readOnly
-                  className="application-link-input"
-                />
-                <button
-                  className="copy-link-btn"
-                  onClick={copyApplicationLink}
-                >
-                  Copy Link
-                </button>
-              </div>
-
-              <div className="application-actions">
-                <p className="action-hint">Share this link with the borrower via:</p>
-                <div className="share-buttons">
-                  <button
-                    className="share-btn email-share"
-                    onClick={() => {
-                      const subject = encodeURIComponent('Complete Your Mortgage Application');
-                      const body = encodeURIComponent(`Hi ${lead?.name?.split(' ')[0] || 'there'},\n\nPlease complete your mortgage application using this secure link:\n\n${applicationLink.url}\n\nThis link is unique to you and will save your progress automatically.\n\nBest regards`);
-                      window.open(`mailto:${lead?.email}?subject=${subject}&body=${body}`, '_blank');
-                    }}
-                    disabled={!lead?.email}
-                  >
-                    📧 Email
-                  </button>
-                  <button
-                    className="share-btn sms-share"
-                    onClick={() => {
-                      const body = encodeURIComponent(`Hi ${lead?.name?.split(' ')[0] || 'there'}! Please complete your mortgage application here: ${applicationLink.url}`);
-                      window.open(`sms:${lead?.phone}?body=${body}`, '_blank');
-                    }}
-                    disabled={!lead?.phone}
-                  >
-                    💬 SMS
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SendApplicationModal
+          lead={lead}
+          applicationLink={applicationLink}
+          onClose={() => setShowApplicationModal(false)}
+          onSent={() => {
+            setShowApplicationModal(false);
+          }}
+        />
       )}
 
       {/* SMS Modal */}

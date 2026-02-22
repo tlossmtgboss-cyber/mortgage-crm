@@ -234,7 +234,11 @@ function createToast(message, type = 'info', options = {}) {
     dismiss();
   });
 
-  toastEl.addEventListener('click', dismiss);
+  toastEl.addEventListener('click', (e) => {
+    // Don't dismiss if clicking a link — let the link navigate
+    if (e.target.tagName === 'A') return;
+    dismiss();
+  });
 
   // Add to container
   container.appendChild(toastEl);
