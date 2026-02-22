@@ -965,6 +965,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             "— tenant isolation degraded for AI tool queries"
         )
 
+    # Determine data scope: admins/managers see org-wide, others see own data only
+    _user_role = (getattr(current_user, 'permission_role', '') or '').lower()
+    _has_org_wide_access = _user_role in ('admin', 'site_admin', 'leadership', 'management')
+    if _has_org_wide_access:
+        logger.info(f"[TOOLS] User {getattr(current_user, 'id', '?')} has org-wide AI tool access (role={_user_role})")
+
     # ============ Pipeline Tools ============
 
     async def execute_get_pipeline(args):
@@ -972,21 +978,40 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         include_details = args.get("include_details", True)
 
         try:
-            # Get leads using raw SQL to avoid import issues
+            # Scope: org-wide for admins/managers, user-only for others
+            if _has_org_wide_access and org_id:
+                lead_filter = "organization_id = :org_id"
+                loan_filter = "organization_id = :org_id"
+                params = {"org_id": org_id}
+            elif _has_org_wide_access and not org_id:
+                # Platform admin with no org — show all
+                lead_filter = "1=1"
+                loan_filter = "1=1"
+                params = {}
+            else:
+                lead_filter = "owner_id = :user_id AND (:org_id IS NULL OR organization_id = :org_id)"
+                loan_filter = "loan_officer_id = :user_id AND (:org_id IS NULL OR organization_id = :org_id)"
+                params = {"user_id": current_user.id, "org_id": org_id}
+
+            # Get leads using raw SQL to avoid import issues (include owner for org-wide views)
             lead_rows = db.execute(
-                text("""SELECT id, name, email, phone, stage
-                       FROM leads WHERE owner_id = :user_id
-                       AND (:org_id IS NULL OR organization_id = :org_id)"""),
-                {"user_id": current_user.id, "org_id": org_id}
+                text(f"""SELECT ld.id, ld.name, ld.email, ld.phone, ld.stage,
+                       CONCAT(u.first_name, ' ', u.last_name) as owner_name
+                       FROM leads ld
+                       LEFT JOIN users u ON u.id = ld.owner_id
+                       WHERE {lead_filter.replace('organization_id', 'ld.organization_id').replace('owner_id', 'ld.owner_id')}"""),
+                params
             ).fetchall()
 
-            # Get loans using raw SQL
+            # Get loans using raw SQL (include LO name for org-wide views)
             loan_rows = db.execute(
-                text("""SELECT id, loan_number, borrower_name, stage, amount,
-                       processor, underwriter, days_in_stage, closing_date
-                       FROM loans WHERE loan_officer_id = :user_id
-                       AND (:org_id IS NULL OR organization_id = :org_id)"""),
-                {"user_id": current_user.id, "org_id": org_id}
+                text(f"""SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.amount,
+                       l.processor, l.underwriter, l.days_in_stage, l.closing_date,
+                       CONCAT(u.first_name, ' ', u.last_name) as lo_name
+                       FROM loans l
+                       LEFT JOIN users u ON u.id = l.loan_officer_id
+                       WHERE {loan_filter.replace('organization_id', 'l.organization_id').replace('loan_officer_id', 'l.loan_officer_id')}"""),
+                params
             ).fetchall()
 
             # Organize leads by stage
@@ -1011,7 +1036,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     loan_stages[stage] = {"count": 0, "items": []}
                 loan_stages[stage]["count"] += 1
                 if include_details:
-                    loan_stages[stage]["items"].append({
+                    item = {
                         "id": loan.id,
                         "name": loan.borrower_name or f"Loan #{loan.id}",
                         "amount": float(loan.amount) if loan.amount else 0,
@@ -1020,14 +1045,20 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                         "days_in_stage": loan.days_in_stage,
                         "closing_date": loan.closing_date.isoformat() if loan.closing_date else None,
                         "type": "loan"
-                    })
+                    }
+                    lo_name = getattr(loan, 'lo_name', None)
+                    if lo_name and _has_org_wide_access:
+                        item["loan_officer"] = lo_name
+                    loan_stages[stage]["items"].append(item)
 
+            scope_label = "organization-wide" if _has_org_wide_access else "your"
             return {
                 "total_leads": len(lead_rows),
                 "total_loans": len(loan_rows),
                 "lead_stages": lead_stages,
                 "loan_stages": loan_stages,
-                "summary": f"{len(lead_rows)} leads, {len(loan_rows)} active loans"
+                "scope": "organization" if _has_org_wide_access else "user",
+                "summary": f"{len(lead_rows)} leads, {len(loan_rows)} active loans ({scope_label})"
             }
         except Exception as e:
             logger.error(f"Error in get_pipeline: {e}")
@@ -1108,24 +1139,34 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         limit = args.get("limit", 10)
 
         try:
+            # Scope: org-wide for admins/managers, user-only for others
+            if _has_org_wide_access and org_id:
+                base_filter = "organization_id = :org_id"
+                base_params = {"org_id": org_id, "limit": limit}
+            elif _has_org_wide_access and not org_id:
+                base_filter = "1=1"
+                base_params = {"limit": limit}
+            else:
+                base_filter = "owner_id = :user_id AND (:org_id IS NULL OR organization_id = :org_id)"
+                base_params = {"user_id": current_user.id, "org_id": org_id, "limit": limit}
+
             if query_str:
                 search = f"%{query_str}%"
+                base_params["search"] = search
                 lead_rows = db.execute(
-                    text("""SELECT id, name, email, phone, stage
+                    text(f"""SELECT id, name, email, phone, stage
                            FROM leads
-                           WHERE owner_id = :user_id
-                           AND (:org_id IS NULL OR organization_id = :org_id)
+                           WHERE {base_filter}
                            AND (name ILIKE :search OR email ILIKE :search OR phone ILIKE :search)
                            LIMIT :limit"""),
-                    {"user_id": current_user.id, "org_id": org_id, "search": search, "limit": limit}
+                    base_params
                 ).fetchall()
             else:
                 lead_rows = db.execute(
-                    text("""SELECT id, name, email, phone, stage
-                           FROM leads WHERE owner_id = :user_id
-                           AND (:org_id IS NULL OR organization_id = :org_id)
+                    text(f"""SELECT id, name, email, phone, stage
+                           FROM leads WHERE {base_filter}
                            LIMIT :limit"""),
-                    {"user_id": current_user.id, "org_id": org_id, "limit": limit}
+                    base_params
                 ).fetchall()
 
             return {
@@ -1153,27 +1194,37 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         limit = args.get("limit", 10)
 
         try:
+            # Scope: org-wide for admins/managers, user-only for others
+            if _has_org_wide_access and org_id:
+                base_filter = "organization_id = :org_id"
+                base_params = {"org_id": org_id, "limit": limit}
+            elif _has_org_wide_access and not org_id:
+                base_filter = "1=1"
+                base_params = {"limit": limit}
+            else:
+                base_filter = "loan_officer_id = :user_id AND (:org_id IS NULL OR organization_id = :org_id)"
+                base_params = {"user_id": current_user.id, "org_id": org_id, "limit": limit}
+
             if query_str:
                 search = f"%{query_str}%"
+                base_params["search"] = search
                 loan_rows = db.execute(
-                    text("""SELECT id, loan_number, borrower_name, stage, amount,
+                    text(f"""SELECT id, loan_number, borrower_name, stage, amount,
                            processor, underwriter, property_address, closing_date
                            FROM loans
-                           WHERE loan_officer_id = :user_id
-                           AND (:org_id IS NULL OR organization_id = :org_id)
+                           WHERE {base_filter}
                            AND (borrower_name ILIKE :search OR loan_number ILIKE :search
                                 OR property_address ILIKE :search)
                            LIMIT :limit"""),
-                    {"user_id": current_user.id, "org_id": org_id, "search": search, "limit": limit}
+                    base_params
                 ).fetchall()
             else:
                 loan_rows = db.execute(
-                    text("""SELECT id, loan_number, borrower_name, stage, amount,
+                    text(f"""SELECT id, loan_number, borrower_name, stage, amount,
                            processor, underwriter, property_address, closing_date
-                           FROM loans WHERE loan_officer_id = :user_id
-                           AND (:org_id IS NULL OR organization_id = :org_id)
+                           FROM loans WHERE {base_filter}
                            LIMIT :limit"""),
-                    {"user_id": current_user.id, "org_id": org_id, "limit": limit}
+                    base_params
                 ).fetchall()
 
             return {
