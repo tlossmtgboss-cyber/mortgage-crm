@@ -9,7 +9,7 @@ Defines three tiers of feature modules:
 Usage:
     from feature_tiers import FeatureTier, get_tier, get_modules_by_tier, FEATURE_TIERS
 
-    tier = get_tier("accounting")  # -> FeatureTier.EXPERIMENTAL
+    tier = get_tier("accounting")  # -> FeatureTier.CORE
     core_modules = get_modules_by_tier(FeatureTier.CORE)
 """
 
@@ -25,46 +25,53 @@ class FeatureTier(str, Enum):
 
 # Module -> tier mapping
 FEATURE_TIERS: Dict[str, FeatureTier] = {
-    # CORE - always maintained
+    # CORE - always maintained, SLA'd
+    # CRM foundation
     "leads": FeatureTier.CORE,
     "loans": FeatureTier.CORE,
     "pipeline": FeatureTier.CORE,
     "dashboard": FeatureTier.CORE,
-    "ai_agents": FeatureTier.CORE,
-    "ai_chat": FeatureTier.CORE,
-    "auth": FeatureTier.CORE,
-    "salesforce_sync": FeatureTier.CORE,
-    "encompass_sync": FeatureTier.CORE,
-    "smart_docs": FeatureTier.CORE,
-    "workflow_sla": FeatureTier.CORE,
-    "portals": FeatureTier.CORE,
     "tasks": FeatureTier.CORE,
     "calendar": FeatureTier.CORE,
+    "smart_docs": FeatureTier.CORE,
     "compliance": FeatureTier.CORE,
+    "workflow_sla": FeatureTier.CORE,
+    # AI platform
+    "ai_agents": FeatureTier.CORE,
+    "ai_chat": FeatureTier.CORE,
+    # Auth & infrastructure
+    "auth": FeatureTier.CORE,
     "permissions": FeatureTier.CORE,
     "onboarding": FeatureTier.CORE,
     "notifications": FeatureTier.CORE,
+    "portals": FeatureTier.CORE,
+    # Subscription & billing (how users pay for the platform)
+    "accounting": FeatureTier.CORE,
+    # LO marketing tools (the product LOs pay for)
+    "telephony": FeatureTier.CORE,
+    "dialer": FeatureTier.CORE,
+    "content_marketing": FeatureTier.CORE,
+    "email_intelligence": FeatureTier.CORE,
+    "video_clips": FeatureTier.CORE,
+    "voicemail_drops": FeatureTier.CORE,
+    "sms_intelligence": FeatureTier.CORE,
+    "call_intelligence": FeatureTier.CORE,
+    "referral_partners": FeatureTier.CORE,
+    "rate_monitor": FeatureTier.CORE,
+    "recruiting": FeatureTier.CORE,
 
     # PREMIUM - maintained when resources allow
-    "telephony": FeatureTier.PREMIUM,
-    "dialer": FeatureTier.PREMIUM,
-    "content_marketing": FeatureTier.PREMIUM,
-    "email_intelligence": FeatureTier.PREMIUM,
-    "video_clips": FeatureTier.PREMIUM,
-    "referral_partners": FeatureTier.PREMIUM,
-    "sms_intelligence": FeatureTier.PREMIUM,
-    "voicemail_drops": FeatureTier.PREMIUM,
-    "call_intelligence": FeatureTier.PREMIUM,
-    "recruiting": FeatureTier.PREMIUM,
-    "rate_monitor": FeatureTier.PREMIUM,
+    "microsite_builder": FeatureTier.PREMIUM,
+    "video_meetings": FeatureTier.PREMIUM,
+    "avatar_studio": FeatureTier.PREMIUM,
+    "hr_management": FeatureTier.PREMIUM,
+
+    # DEFERRED - parked until platform is stable
+    "salesforce_sync": FeatureTier.PREMIUM,
+    "encompass_sync": FeatureTier.PREMIUM,
 
     # EXPERIMENTAL - frozen, no SLA
-    "accounting": FeatureTier.EXPERIMENTAL,
-    "video_meetings": FeatureTier.EXPERIMENTAL,
-    "avatar_studio": FeatureTier.EXPERIMENTAL,
-    "microsite_builder": FeatureTier.EXPERIMENTAL,
     "decision_lab": FeatureTier.EXPERIMENTAL,
-    "hr_management": FeatureTier.EXPERIMENTAL,
     "circle_of_cashflow": FeatureTier.EXPERIMENTAL,
 }
 

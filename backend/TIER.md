@@ -25,20 +25,30 @@ Core modules are the critical path of the product. They receive:
 | `loans` | Loan pipeline, detail views, stage management |
 | `pipeline` | Pipeline analytics, velocity, bottleneck analysis |
 | `dashboard` | Main dashboard, KPIs, summary views |
+| `tasks` | Task management, assignments, due dates |
+| `calendar` | Calendar sync, appointment scheduling |
+| `smart_docs` | Document management, needs lists, e-sign |
+| `compliance` | Compliance alerts, TRID/RESPA checks, audit |
+| `workflow_sla` | SLA tracking, workflow automation, task generation |
 | `ai_agents` | AI agent framework, tool registry, orchestration |
 | `ai_chat` | AI chat interface, prompt construction, sessions |
 | `auth` | Authentication, JWT tokens, RBAC |
-| `salesforce_sync` | Salesforce bidirectional sync |
-| `encompass_sync` | Encompass LOS integration |
-| `smart_docs` | Document management, needs lists, e-sign |
-| `workflow_sla` | SLA tracking, workflow automation, task generation |
-| `portals` | Borrower portal, realtor portal, partner portal |
-| `tasks` | Task management, assignments, due dates |
-| `calendar` | Calendar sync, appointment scheduling |
-| `compliance` | Compliance alerts, TRID/RESPA checks, audit |
 | `permissions` | Role-based permissions, page access control |
 | `onboarding` | User onboarding, wizard, setup flows |
 | `notifications` | Push notifications, email notifications, alerts |
+| `portals` | Borrower portal, realtor portal, partner portal |
+| `accounting` | Subscription & license management, billing, AP/AR |
+| `telephony` | Click-to-call, Telnyx/Twilio integration |
+| `dialer` | Power dialer sessions, call queues |
+| `content_marketing` | Brand voice, content calendar, publishing |
+| `email_intelligence` | Email import, AI categorization, reconciliation |
+| `video_clips` | Video clip library, recording management |
+| `voicemail_drops` | Ringless voicemail via Slybroadcast |
+| `sms_intelligence` | SMS import, conversation intelligence |
+| `call_intelligence` | Call recording analysis, coaching insights |
+| `referral_partners` | Referral partner management, tracking |
+| `rate_monitor` | Rate monitoring, lock advisory |
+| `recruiting` | Recruiting engine, candidate management |
 
 ### PREMIUM -- Maintained When Resources Allow
 
@@ -51,17 +61,17 @@ They receive:
 
 | Module | Description |
 |---|---|
-| `telephony` | Click-to-call, Telnyx/Twilio integration |
-| `dialer` | Power dialer sessions, call queues |
-| `content_marketing` | Brand voice, content calendar, publishing |
-| `email_intelligence` | Email import, AI categorization, reconciliation |
-| `video_clips` | Video clip library, recording management |
-| `referral_partners` | Referral partner management, tracking |
-| `sms_intelligence` | SMS import, conversation intelligence |
-| `voicemail_drops` | Ringless voicemail via Slybroadcast |
-| `call_intelligence` | Call recording analysis, coaching insights |
-| `recruiting` | Recruiting engine, candidate management |
-| `rate_monitor` | Rate monitoring, lock advisory |
+| `microsite_builder` | LO microsite pages, theme marketplace |
+| `video_meetings` | UVIP video meeting rooms and recording |
+| `avatar_studio` | AI avatar generation |
+| `hr_management` | HR/people management, skills, goals, OKRs |
+
+#### Deferred (parked until platform is stable)
+
+| Module | Description |
+|---|---|
+| `salesforce_sync` | Salesforce bidirectional sync |
+| `encompass_sync` | Encompass LOS integration |
 
 ### EXPERIMENTAL -- Frozen, No SLA
 
@@ -74,12 +84,7 @@ evaluation. They receive:
 
 | Module | Description |
 |---|---|
-| `accounting` | Full accounting system (AP, AR, GL, budgets, banking) |
-| `video_meetings` | UVIP video meeting rooms and recording |
-| `avatar_studio` | AI avatar generation |
-| `microsite_builder` | LO microsite pages, theme marketplace |
 | `decision_lab` | Borrower confidence assessment tool |
-| `hr_management` | HR/people management, skills, goals, OKRs |
 | `circle_of_cashflow` | Referral ecosystem questionnaires |
 
 ---
