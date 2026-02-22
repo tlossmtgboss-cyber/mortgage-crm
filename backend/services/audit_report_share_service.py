@@ -27,7 +27,7 @@ class AuditReportShareService:
     def create_share_link(
         self,
         report_data: Dict[str, Any],
-        user_id: int,
+        user_id: Optional[int],
         expires_in_days: int = 30,
         title: Optional[str] = None,
     ) -> Dict[str, Any]:

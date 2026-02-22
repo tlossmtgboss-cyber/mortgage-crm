@@ -52,22 +52,34 @@ def register_audit_report_routes(app, get_db, get_current_user, **kwargs):
         logger.warning(f"audit_report_shares table check/create skipped: {e}")
 
     # -------------------------------------------------------------------------
-    # POST /api/v1/audit-reports — Create share link (auth required)
+    # POST /api/v1/audit-reports — Create share link
+    # Accepts JWT auth OR X-Audit-Publish-Key header for CLI publishing
     # -------------------------------------------------------------------------
     @app.post("/api/v1/audit-reports")
     async def create_audit_report_share(
         body: CreateAuditReportRequest,
         request: Request,
         db: Session = Depends(get_db),
-        current_user=Depends(get_current_user),
     ):
         from services.audit_report_share_service import AuditReportShareService
+
+        # Auth: try JWT first, fall back to publish key
+        user_id = None
+        try:
+            current_user = await get_current_user(request=request, db=db)
+            user_id = current_user.id
+        except Exception:
+            # Check for publish key header
+            publish_key = request.headers.get("X-Audit-Publish-Key", "")
+            expected_key = os.getenv("AUDIT_PUBLISH_KEY", "")
+            if not expected_key or not publish_key or publish_key != expected_key:
+                raise HTTPException(status_code=401, detail="Authentication required. Use JWT or X-Audit-Publish-Key header.")
 
         service = AuditReportShareService(db)
 
         result = service.create_share_link(
             report_data=body.report_data,
-            user_id=current_user.id,
+            user_id=user_id,
             expires_in_days=body.expires_in_days,
             title=body.title,
         )
