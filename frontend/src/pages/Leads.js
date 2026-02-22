@@ -1450,26 +1450,16 @@ function Leads() {
               )}
             </div>
             <div className="status-dropdown-options" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {(() => {
-                const validSet = new Set(VALID_TRANSITIONS[statusDropdown.currentStage] || []);
-                const hasTransitions = validSet.size > 0;
-                // Filter options to only show valid transitions
-                const filtered = hasTransitions
-                  ? statusOptions.filter(status => {
-                      if (status.isHeader) return false; // Headers handled separately
-                      return validSet.has(status);
-                    })
-                  : []; // Terminal stage — no transitions
-
-                if (filtered.length === 0) {
+              {statusOptions.map((status, index) => {
+                if (status.isHeader) {
                   return (
-                    <div style={{ padding: '12px', color: '#6b7280', fontSize: '13px', textAlign: 'center' }}>
-                      No status changes available from {statusDropdown.currentStage || 'this stage'}
+                    <div key={`header-${index}`} style={{ padding: '8px 12px 4px', fontSize: '10px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px', borderTop: index > 0 ? '1px solid #e5e7eb' : 'none', marginTop: index > 0 ? '4px' : 0 }}>
+                      {status.label}
                     </div>
                   );
                 }
-
-                return filtered.map((status) => (
+                if (status === statusDropdown.currentStage) return null; // Skip current stage
+                return (
                   <button
                     key={status}
                     className={`status-dropdown-option status-${getStatusColor(status)}`}
@@ -1477,8 +1467,8 @@ function Leads() {
                   >
                     {status}
                   </button>
-                ));
-              })()}
+                );
+              })}
             </div>
           </div>
         </>
