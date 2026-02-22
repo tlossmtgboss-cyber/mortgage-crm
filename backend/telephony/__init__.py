@@ -8,7 +8,6 @@
 
 from .provider import (
     TelephonyProvider,
-    TwilioProvider,
     TelnyxProvider,
     get_telephony_provider,
     reset_provider,
@@ -44,7 +43,6 @@ from .schemas import (
 __all__ = [
     # Providers
     'TelephonyProvider',
-    'TwilioProvider',
     'TelnyxProvider',
     'get_telephony_provider',
     'reset_provider',
