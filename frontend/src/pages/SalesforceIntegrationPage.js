@@ -120,14 +120,16 @@ function SalesforceIntegrationPage() {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.status !== 'error') {
         toast.success('Schema discovery complete!');
         await loadSchemas();
       } else {
-        toast.error('Schema discovery failed');
+        const errMsg = data?.detail || 'Schema discovery failed';
+        toast.error(errMsg);
       }
     } catch (err) {
-      toast.error('Schema discovery failed');
+      toast.error('Schema discovery failed: ' + (err.message || 'Network error'));
     }
     setLoading(false);
   };

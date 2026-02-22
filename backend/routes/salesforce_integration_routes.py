@@ -87,6 +87,27 @@ def fix_salesforce_schema(db: Session) -> dict:
         'enabled', 'validation_status', 'validation_message', 'created_at', 'updated_at'
     }
 
+    # Define field_mappings_columns here so it can be used in the NOT NULL fix below
+    field_mappings_columns = [
+        ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
+        ("source_object", "VARCHAR(100)"),
+        ("source_field", "VARCHAR(255)"),
+        ("target_entity", "VARCHAR(100)"),
+        ("target_field", "VARCHAR(255)"),
+        ("transform_type", "VARCHAR(50)"),
+        ("transform_config", "JSONB"),
+        ("data_type", "VARCHAR(50)"),
+        ("required", "BOOLEAN DEFAULT FALSE"),
+        ("default_value", "TEXT"),
+        ("sync_direction", "VARCHAR(20) DEFAULT 'bidirectional'"),
+        ("enabled", "BOOLEAN DEFAULT TRUE"),
+        ("validation_status", "VARCHAR(50) DEFAULT 'pending'"),
+        ("validation_message", "TEXT"),
+        ("mapping_category", "VARCHAR(50)"),
+        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ]
+
     try:
         # Get all NOT NULL columns in field_mappings table
         result = db.execute(text("""
@@ -101,7 +122,7 @@ def fix_salesforce_schema(db: Session) -> dict:
         # Fix columns that are NOT NULL but not in our model
         # SEC-006: Validate col_name against known columns before using in DDL
         valid_fm_columns = {c.lower() for c in model_columns} | {
-            c[0].lower() for c in field_mappings_columns  # defined below
+            c[0].lower() for c in field_mappings_columns
         }
         for col_name in not_null_columns:
             if col_name.lower() not in {c.lower() for c in model_columns}:
@@ -154,26 +175,7 @@ def fix_salesforce_schema(db: Session) -> dict:
             db.rollback()
             logger.debug(f"sf_user_schemas.{col_name} fix: {e}")
 
-    # Fix field_mappings table
-    field_mappings_columns = [
-        ("integration_profile_id", "INTEGER REFERENCES integration_profiles(id) ON DELETE CASCADE"),
-        ("source_object", "VARCHAR(100)"),
-        ("source_field", "VARCHAR(255)"),
-        ("target_entity", "VARCHAR(100)"),
-        ("target_field", "VARCHAR(255)"),
-        ("transform_type", "VARCHAR(50)"),
-        ("transform_config", "JSONB"),
-        ("data_type", "VARCHAR(50)"),
-        ("required", "BOOLEAN DEFAULT FALSE"),
-        ("default_value", "TEXT"),
-        ("sync_direction", "VARCHAR(20) DEFAULT 'bidirectional'"),
-        ("enabled", "BOOLEAN DEFAULT TRUE"),
-        ("validation_status", "VARCHAR(50) DEFAULT 'pending'"),
-        ("validation_message", "TEXT"),
-        ("mapping_category", "VARCHAR(50)"),
-        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-        ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-    ]
+    # Fix field_mappings table (field_mappings_columns defined at top of function)
     _allowed_fm_cols = {c[0] for c in field_mappings_columns}
     for col_name, col_type in field_mappings_columns:
         if col_name not in _allowed_fm_cols or not col_name.isidentifier():
@@ -1425,7 +1427,9 @@ async def discover_schema(
         logger.error(f"Schema discovery failed: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Internal server error")
+        # Return error detail in response body (not as HTTPException) to avoid
+        # production error sanitizer hiding the real error from the user
+        return {"status": "error", "detail": f"Schema discovery failed: {str(e)[:200]}"}
 
 
 _schema_fix_done = False
