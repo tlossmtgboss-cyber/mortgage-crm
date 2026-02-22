@@ -2591,8 +2591,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
     @app.post("/api/v1/admin/clear-salesforce-data")
     async def clear_salesforce_imported_data(
         dry_run: bool = True,
+        admin_key: str = Query(None),
         db: Session = Depends(get_db),
-        current_user=Depends(get_current_user),
     ):
         """
         Delete all leads and loans that were imported from Salesforce
@@ -2600,9 +2600,10 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         in child tables before deleting to avoid constraint violations.
 
         Pass dry_run=false to actually delete. Default is dry_run=true (preview only).
+        Requires ADMIN_API_KEY.
         """
-        if not getattr(current_user, 'is_admin', False):
-            raise HTTPException(status_code=403, detail="Admin access required")
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
+            raise HTTPException(status_code=403, detail="Invalid admin key")
 
         try:
             # --- Count what will be deleted ---
@@ -2729,7 +2730,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             )
 
             logger.info(
-                f"Admin {current_user.id} cleared SF data: "
+                f"Admin cleared SF data: "
                 f"{deleted_leads} leads, {deleted_loans} loans"
             )
 
