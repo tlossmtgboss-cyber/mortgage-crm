@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api, { aiAPI } from '../services/api';
 import './SMSModal.css';
+
+const APP_BASE = process.env.REACT_APP_BASE_URL || 'https://app.perenniaai.com';
 
 function SMSModal({ isOpen, onClose, lead }) {
   const [mode, setMode] = useState('manual'); // 'manual' or 'ai'
@@ -14,6 +16,48 @@ function SMSModal({ isOpen, onClose, lead }) {
   const [aiRunning, setAiRunning] = useState(false);
   const [aiActivity, setAiActivity] = useState([]);
   const [aiComplete, setAiComplete] = useState(false);
+
+  // Calendar/booking link state
+  const [bookingLinks, setBookingLinks] = useState([]);
+  const [showCalendarPicker, setShowCalendarPicker] = useState(false);
+  const [calendarAdded, setCalendarAdded] = useState(false);
+
+  // Fetch booking links when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const fetchBookingLinks = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await api.get('/api/v1/scheduler/booking-links');
+          setBookingLinks(response.data?.booking_links || []);
+        } catch (err) {
+          console.warn('Failed to fetch booking links:', err);
+        }
+      };
+      fetchBookingLinks();
+      setCalendarAdded(false);
+    }
+  }, [isOpen]);
+
+  const insertCalendarLink = (link) => {
+    const bookingUrl = `${APP_BASE}/book/${link.slug}`;
+    const calendarText = `\nSchedule a time to talk: ${bookingUrl}`;
+    setMessage(prev => prev + calendarText);
+    setCalendarAdded(true);
+    setShowCalendarPicker(false);
+  };
+
+  const handleCalendarClick = () => {
+    if (bookingLinks.length === 0) {
+      setResult({ status: 'error', message: 'No booking links found. Create one in Smart Scheduler first.' });
+      return;
+    }
+    if (bookingLinks.length === 1) {
+      insertCalendarLink(bookingLinks[0]);
+    } else {
+      setShowCalendarPicker(prev => !prev);
+    }
+  };
 
   const templates = [
     {
@@ -211,6 +255,30 @@ function SMSModal({ isOpen, onClose, lead }) {
                   rows="6"
                   disabled={sending}
                 />
+                <div className="sms-toolbar">
+                  <button
+                    type="button"
+                    className={`btn-calendar-link ${calendarAdded ? 'added' : ''}`}
+                    onClick={handleCalendarClick}
+                    disabled={sending || calendarAdded}
+                    title="Insert calendar booking link"
+                  >
+                    {calendarAdded ? '📅 Calendar link added' : '📅 Add Calendar Link'}
+                  </button>
+                  {showCalendarPicker && bookingLinks.length > 1 && (
+                    <div className="calendar-picker-dropdown">
+                      {bookingLinks.map(link => (
+                        <button
+                          key={link.id}
+                          className="calendar-picker-item"
+                          onClick={() => insertCalendarLink(link)}
+                        >
+                          {link.name || link.slug}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="message-meta">
                   <span className="char-count">
                     {characterCount} characters • {smsCount} SMS
