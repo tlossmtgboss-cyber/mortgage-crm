@@ -97,6 +97,7 @@ function Leads() {
     'Pre-Qualified',
     'Pre-Approved',
     'Nurture',
+    'Credit Repair',
     'Withdrawn',
     'Does Not Qualify',
   ];
@@ -105,7 +106,7 @@ function Leads() {
   const LEAD_PIPELINE_STAGES = new Set([
     'New', 'Attempted Contact', 'Prospect', 'Application', 'Application Started',
     'Document Fulfillment', 'Pre-Qualified', 'Pre-Approved', 'Under Contract',
-    'Long-Term Nurture', 'Nurture', 'Withdrawn', 'Does Not Qualify',
+    'Long-Term Nurture', 'Nurture', 'Credit Repair', 'Withdrawn', 'Does Not Qualify',
   ]);
 
   const statusOptions = [
@@ -118,6 +119,7 @@ function Leads() {
     'Pre-Qualified',
     'Pre-Approved',
     'Long-Term Nurture',
+    'Credit Repair',
     'Withdrawn',
     'Does Not Qualify',
     // Active Loan stages

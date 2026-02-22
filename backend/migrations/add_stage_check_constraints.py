@@ -22,7 +22,7 @@ VALID_LEAD_STAGES = [
     "APPLICATION_STARTED", "Document Fulfillment",
     "Pre-Qualified", "Pre-Approved", "Under Contract",
     "Long-Term Nurture", "Closed", "AMR", "Referral Source",
-    "Withdrawn", "Does Not Qualify", "Disclosed",
+    "Withdrawn", "Does Not Qualify", "Credit Repair", "Disclosed",
 ]
 
 # Valid loan stages (from database.enums.LoanStage)
