@@ -2638,7 +2638,11 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 )
                 return result
 
-            # --- Nullify FK references in child tables ---
+            # --- Nullify FK references in child tables using subqueries ---
+            # Use subqueries to avoid param binding issues with arrays
+            lead_subquery = "SELECT id FROM leads WHERE salesforce_id IS NOT NULL"
+            loan_subquery = "SELECT id FROM loans WHERE salesforce_id IS NOT NULL"
+
             # Tables with lead_id FK
             lead_child_tables = [
                 "activities", "tasks", "ai_tasks", "sla_milestones",
@@ -2664,46 +2668,47 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
             # Clean lead_id references
             if lead_ids:
-                for table in lead_child_tables:
+                for tbl in lead_child_tables:
                     try:
-                        r = db.execute(text(f"""
-                            UPDATE "{table}" SET lead_id = NULL
-                            WHERE lead_id = ANY(:ids)
-                        """), {"ids": lead_ids})
+                        r = db.execute(text(
+                            f'UPDATE "{tbl}" SET lead_id = NULL '
+                            f'WHERE lead_id IN ({lead_subquery})'
+                        ))
                         if r.rowcount > 0:
-                            cleaned[f"{table}.lead_id"] = r.rowcount
+                            cleaned[f"{tbl}.lead_id"] = r.rowcount
                     except Exception as e:
-                        logger.debug(f"Skipping {table}.lead_id cleanup: {e}")
+                        logger.debug(f"Skipping {tbl}.lead_id cleanup: {e}")
                         db.rollback()
 
                 # Also clean data_reconciliation records
                 try:
-                    db.execute(text("""
-                        DELETE FROM data_reconciliation_pairs
-                        WHERE lead_id_1 = ANY(:ids) OR lead_id_2 = ANY(:ids)
-                    """), {"ids": lead_ids})
+                    db.execute(text(
+                        f"DELETE FROM data_reconciliation_pairs "
+                        f"WHERE lead_id_1 IN ({lead_subquery}) "
+                        f"OR lead_id_2 IN ({lead_subquery})"
+                    ))
                 except Exception:
                     db.rollback()
 
             # Clean loan_id references
             if loan_ids:
-                for table in loan_child_tables:
+                for tbl in loan_child_tables:
                     try:
-                        r = db.execute(text(f"""
-                            UPDATE "{table}" SET loan_id = NULL
-                            WHERE loan_id = ANY(:ids)
-                        """), {"ids": loan_ids})
+                        r = db.execute(text(
+                            f'UPDATE "{tbl}" SET loan_id = NULL '
+                            f'WHERE loan_id IN ({loan_subquery})'
+                        ))
                         if r.rowcount > 0:
-                            cleaned[f"{table}.loan_id"] = r.rowcount
+                            cleaned[f"{tbl}.loan_id"] = r.rowcount
                     except Exception as e:
-                        logger.debug(f"Skipping {table}.loan_id cleanup: {e}")
+                        logger.debug(f"Skipping {tbl}.loan_id cleanup: {e}")
                         db.rollback()
 
-            # --- Delete MUM clients linked to SF loans ---
+            # --- Delete MUM clients linked to SF ---
             try:
-                r = db.execute(text("""
-                    DELETE FROM mum_clients WHERE salesforce_id IS NOT NULL
-                """))
+                r = db.execute(text(
+                    "DELETE FROM mum_clients WHERE salesforce_id IS NOT NULL"
+                ))
                 if r.rowcount > 0:
                     cleaned["mum_clients"] = r.rowcount
             except Exception as e:
