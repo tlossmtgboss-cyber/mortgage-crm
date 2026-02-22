@@ -11,7 +11,7 @@ Endpoints:
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import Optional, List
 from datetime import datetime, timezone
 import logging
@@ -157,15 +157,37 @@ async def create_lead(
         raise HTTPException(status_code=500, detail="Failed to create lead")
 
 
+
+# Stages that belong on the Leads page (not Active Loans or MUM)
+LEAD_PIPELINE_STAGES = [
+    'New', 'Attempted Contact', 'Prospect', 'Application', 'APPLICATION_STARTED',
+    'Document Fulfillment', 'Pre-Qualified', 'Pre-Approved', 'Under Contract',
+    'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify',
+]
+
+# Stages that belong on the MUM/Closed page
+MUM_STAGES = ['Closed', 'AMR', 'Referral Source', 'Funded']
+
+# Stages that indicate transition to Active Loans
+ACTIVE_LOAN_ENTRY_STAGES = ['Disclosed']
+
+
 @router.get("/")
 async def get_leads(
     skip: int = 0,
     limit: int = 5000,
     stage: Optional[str] = None,
+    pipeline: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user_dep())
 ):
-    """Get all leads with optional stage filtering and permission-based access."""
+    """Get all leads with optional stage filtering and permission-based access.
+
+    Args:
+        pipeline: Filter by pipeline category. 'leads' = lead stages only (default),
+                  'all' = all stages. If not specified, defaults to 'leads' to exclude
+                  Active Loan and MUM stages.
+    """
     Lead, User, LeadStage = get_models()
     _, filter_leads_by_permissions = get_permission_functions()
 
@@ -176,6 +198,10 @@ async def get_leads(
 
         if stage:
             query = query.filter(Lead.stage == stage)
+        elif pipeline != 'all':
+            # Default: exclude Active Loan and MUM stages from the leads list
+            excluded = MUM_STAGES + ACTIVE_LOAN_ENTRY_STAGES
+            query = query.filter(or_(Lead.stage.notin_(excluded), Lead.stage == None))
 
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 

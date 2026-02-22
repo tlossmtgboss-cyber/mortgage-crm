@@ -101,6 +101,13 @@ function Leads() {
     'Does Not Qualify',
   ];
 
+  // Stages that belong on the Leads page — anything else belongs on Active Loans or MUM
+  const LEAD_PIPELINE_STAGES = new Set([
+    'New', 'Attempted Contact', 'Prospect', 'Application', 'Application Started',
+    'Document Fulfillment', 'Pre-Qualified', 'Pre-Approved', 'Under Contract',
+    'Long-Term Nurture', 'Nurture', 'Withdrawn', 'Does Not Qualify',
+  ]);
+
   const statusOptions = [
     // Lead stages
     { label: 'Lead Stages', isHeader: true },
@@ -280,7 +287,11 @@ function Leads() {
   };
 
   // Ensure leads is always an array before filtering
-  const safeLeads = Array.isArray(leads) ? leads : [];
+  // Exclude leads that belong on Active Loans or MUM pages (Funded, Closed, Disclosed, etc.)
+  const safeLeads = (Array.isArray(leads) ? leads : []).filter(lead => {
+    if (!lead.stage) return true; // Show leads with no stage
+    return LEAD_PIPELINE_STAGES.has(lead.stage);
+  });
 
   // Filter by stage
   let filteredLeads;
