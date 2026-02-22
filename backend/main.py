@@ -1298,7 +1298,13 @@ except ImportError:
 # ============================================================================
 @app.on_event("startup")
 async def startup_event():
-    """Initialize the scheduler on app startup for workflow task generation, SLA tracking, etc."""
+    """Initialize the scheduler on app startup and run critical schema migrations."""
+    # Run critical schema migrations (missing columns that break page loads)
+    try:
+        _run_critical_schema_migrations()
+    except Exception as e:
+        logger.error(f"❌ Critical schema migrations failed: {e}")
+
     try:
         from services.scheduler_service import init_scheduler
         init_scheduler()
@@ -1307,6 +1313,78 @@ async def startup_event():
         logger.error(f"❌ Scheduler failed to start: {e}")
         import traceback
         traceback.print_exc()
+
+
+def _run_critical_schema_migrations():
+    """Run critical schema migrations at startup.
+
+    These fix missing columns or type mismatches that cause 500 errors on page loads.
+    All operations use IF NOT EXISTS / IF EXISTS to be idempotent.
+    """
+    from sqlalchemy import text as sa_text
+    from db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        # Fix 1: Add missing encompass_loan_id column to loans table
+        # (Encompass LOS integration model column - migration was never applied to production)
+        for col_name, col_type in [
+            ("encompass_loan_id", "VARCHAR"),
+            ("encompass_last_synced_at", "TIMESTAMP"),
+            ("encompass_sync_status", "VARCHAR(50)"),
+        ]:
+            try:
+                db.execute(sa_text(f"ALTER TABLE loans ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.debug(f"loans.{col_name} migration: {e}")
+
+        # Create index on encompass_loan_id if it doesn't exist
+        try:
+            db.execute(sa_text("""
+                CREATE INDEX IF NOT EXISTS ix_loans_encompass_loan_id
+                ON loans (encompass_loan_id)
+            """))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"encompass_loan_id index: {e}")
+
+        # Fix 2: Convert leads.stage from PostgreSQL ENUM to VARCHAR if needed
+        # The model defines Column(String) but the DB may have a leadstage enum type
+        try:
+            result = db.execute(sa_text("""
+                SELECT data_type, udt_name FROM information_schema.columns
+                WHERE table_name = 'leads' AND column_name = 'stage'
+            """)).fetchone()
+            if result and result[1] == 'leadstage':
+                logger.info("Converting leads.stage from enum to varchar...")
+                db.execute(sa_text("ALTER TABLE leads ALTER COLUMN stage TYPE VARCHAR USING stage::text"))
+                db.commit()
+                logger.info("✅ leads.stage converted from enum to varchar")
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"leads.stage type migration: {e}")
+
+        # Fix 3: Convert loans.stage from PostgreSQL ENUM to VARCHAR if needed
+        try:
+            result = db.execute(sa_text("""
+                SELECT data_type, udt_name FROM information_schema.columns
+                WHERE table_name = 'loans' AND column_name = 'stage'
+            """)).fetchone()
+            if result and result[1] == 'loanstage':
+                logger.info("Converting loans.stage from enum to varchar...")
+                db.execute(sa_text("ALTER TABLE loans ALTER COLUMN stage TYPE VARCHAR USING stage::text"))
+                db.commit()
+                logger.info("✅ loans.stage converted from enum to varchar")
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"loans.stage type migration: {e}")
+
+        logger.info("✅ Critical schema migrations complete")
+    finally:
+        db.close()
 
 # MAIN
 # ============================================================================

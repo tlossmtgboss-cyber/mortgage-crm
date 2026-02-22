@@ -11,7 +11,7 @@ Endpoints:
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, cast, String, text
 from typing import Optional, List
 from datetime import datetime, timezone
 import logging
@@ -197,11 +197,13 @@ async def get_leads(
         query = filter_leads_by_permissions(query, current_user, db)
 
         if stage:
-            query = query.filter(Lead.stage == stage)
+            # Cast to text to avoid PostgreSQL enum type mismatch
+            query = query.filter(cast(Lead.stage, String) == stage)
         elif pipeline != 'all':
             # Default: exclude Active Loan and MUM stages from the leads list
+            # Cast to text to avoid PostgreSQL enum type mismatch (DB may have leadstage enum)
             excluded = MUM_STAGES + ACTIVE_LOAN_ENTRY_STAGES
-            query = query.filter(or_(Lead.stage.notin_(excluded), Lead.stage == None))
+            query = query.filter(or_(cast(Lead.stage, String).notin_(excluded), Lead.stage == None))
 
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 
