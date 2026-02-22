@@ -928,24 +928,10 @@ function Leads() {
                 </th>
               )}
               <th className="col-sticky-name">Name</th>
-              <th>Email</th>
               <th>Phone</th>
+              <th>Email</th>
               <th>Status</th>
-              <th>Loan Amount</th>
-              <th>Loan Purpose</th>
-              <th>Loan Type</th>
-              <th>Interest Rate</th>
-              <th>Loan Term</th>
-              <th>LTV</th>
-              <th>DTI</th>
-              <th>Property Address</th>
-              <th>Property Type</th>
-              <th>Occupancy</th>
-              <th>Property Value</th>
-              <th>Appraisal Value</th>
-              <th>Assigned LO</th>
-              <th>Processor</th>
-              <th>Last Contact</th>
+              <th>Referral Partner</th>
               <th>Source</th>
               <th>Actions</th>
             </tr>
@@ -981,7 +967,6 @@ function Leads() {
                     )}
                   </div>
                 </td>
-                <td><ClickableEmail email={lead.email} /></td>
                 <td>
                   <ClickablePhone
                     phone={lead.phone}
@@ -994,6 +979,7 @@ function Leads() {
                     }}
                   />
                 </td>
+                <td><ClickableEmail email={lead.email} /></td>
                 <td>
                   <span
                     className={`status-badge status-${getStatusColor(lead.stage)} status-clickable`}
@@ -1003,22 +989,8 @@ function Leads() {
                     {lead.stage}
                   </span>
                 </td>
-                <td className="col-currency">{lead.loan_amount ? `$${Number(lead.loan_amount).toLocaleString()}` : '—'}</td>
-                <td>{lead.loan_purpose || '—'}</td>
-                <td>{lead.loan_type || '—'}</td>
-                <td>{lead.interest_rate ? `${lead.interest_rate}%` : '—'}</td>
-                <td>{lead.loan_term ? `${lead.loan_term} yr` : '—'}</td>
-                <td>{lead.ltv ? `${lead.ltv}%` : '—'}</td>
-                <td>{lead.dti ? `${lead.dti}%` : '—'}</td>
-                <td className="col-address">{lead.address ? `${lead.address}${lead.city ? `, ${lead.city}` : ''}${lead.state ? ` ${lead.state}` : ''}${lead.zip_code ? ` ${lead.zip_code}` : ''}` : '—'}</td>
-                <td>{lead.property_type || '—'}</td>
-                <td>{lead.occupancy_type || '—'}</td>
-                <td className="col-currency">{lead.property_value ? `$${Number(lead.property_value).toLocaleString()}` : '—'}</td>
-                <td className="col-currency">{lead.appraisal_value ? `$${Number(lead.appraisal_value).toLocaleString()}` : '—'}</td>
-                <td>{lead.loan_officer || '—'}</td>
-                <td>{lead.processor || '—'}</td>
-                <td>{lead.updated_at ? new Date(lead.updated_at).toLocaleDateString() : 'N/A'}</td>
-                <td>{lead.source || 'N/A'}</td>
+                <td>{lead.referral_partner_name || '—'}</td>
+                <td>{lead.source || '—'}</td>
                 <td>
                   <div className="table-actions">
                     <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }} title="Delete">

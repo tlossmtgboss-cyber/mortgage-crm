@@ -10,7 +10,7 @@ Endpoints:
 - GET    /api/v1/leads/search  - Search leads by name
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -193,7 +193,7 @@ async def get_leads(
 
     try:
         # Apply org + role-based permission filtering (multi-tenant isolation)
-        query = db.query(Lead)
+        query = db.query(Lead).options(joinedload(Lead.referral_partner))
         query = filter_leads_by_permissions(query, current_user, db)
 
         if stage:
@@ -232,6 +232,7 @@ async def get_leads(
                 "loan_type": lead.loan_type,
                 "notes": lead.notes,
                 "referral_partner_id": lead.referral_partner_id,
+                "referral_partner_name": lead.referral_partner.name if lead.referral_partner_id and hasattr(lead, 'referral_partner') and lead.referral_partner else None,
                 "loan_amount": _num(getattr(lead, 'loan_amount', None)),
                 "loan_purpose": getattr(lead, 'loan_purpose', None),
                 "interest_rate": _num(getattr(lead, 'interest_rate', None)),
