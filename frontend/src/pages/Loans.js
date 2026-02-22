@@ -698,22 +698,6 @@ function Loans() {
               </button>
             </PermissionGate>
           )}
-          <button
-            className="btn-salesforce"
-            onClick={handleSalesforceSync}
-            disabled={syncingFromSalesforce}
-            title="Pull all loan data from Salesforce/Jungo"
-          >
-            {syncingFromSalesforce ? '⟳ Syncing...' : '☁ Sync from Salesforce'}
-          </button>
-          <button className="btn-secondary" onClick={handleExport}>
-            Export
-          </button>
-          <PermissionGate permission="loans.create" isWriteOperation showDisabled>
-            <button className="btn-primary" onClick={() => setShowModal(true)}>
-              + New Loan
-            </button>
-          </PermissionGate>
         </div>
         {syncResult && (
           <div className={`sync-result ${syncResult.success ? 'success' : 'error'}`}>

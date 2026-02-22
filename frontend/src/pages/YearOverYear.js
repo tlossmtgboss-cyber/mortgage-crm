@@ -26,12 +26,11 @@ function YearOverYear() {
         const data = await response.json();
         setYearlyData(Array.isArray(data) ? data : []);
       } else {
-        // Use mock data if API fails
-        setYearlyData(generateMockYearlyData());
+        setYearlyData([]);
       }
     } catch (error) {
       console.error('Failed to load yearly data:', error);
-      setYearlyData(generateMockYearlyData());
+      setYearlyData([]);
     } finally {
       setLoading(false);
     }
