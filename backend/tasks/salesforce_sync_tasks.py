@@ -556,13 +556,12 @@ def register_salesforce_sync_jobs(scheduler):
     """
     from apscheduler.triggers.cron import CronTrigger
 
-    # INBOUND sync every 10 minutes at :08, :18, :28, :38, :48, :58
-    # Staggered to avoid collision with other jobs
+    # INBOUND sync every 3 minutes
     scheduler.add_job(
         sync_all_users_salesforce_sync,
-        CronTrigger(minute="8,18,28,38,48,58"),
+        CronTrigger(minute="*/3"),
         id='salesforce_sync_all_users',
-        name='Inbound Salesforce sync: pull from Salesforce to CRM every 10 minutes',
+        name='Inbound Salesforce sync: pull from Salesforce to CRM every 3 minutes',
         replace_existing=True,
         kwargs={
             'sync_emails': True,
@@ -587,7 +586,7 @@ def register_salesforce_sync_jobs(scheduler):
         replace_existing=True
     )
 
-    logger.warning("🔄 Salesforce sync jobs registered (STAGGERED): Salesforce → CRM at :08/:18/:28/:38/:48/:58")
+    logger.warning("🔄 Salesforce sync jobs registered: Salesforce → CRM every 3 minutes")
 
 
 # ============================================================================
