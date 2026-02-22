@@ -35,7 +35,7 @@ function Leads() {
   });
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [selectedLeadForSMS, setSelectedLeadForSMS] = useState(null);
-  const [statusDropdown, setStatusDropdown] = useState({ show: false, leadId: null, position: { top: 0, left: 0 } });
+  const [statusDropdown, setStatusDropdown] = useState({ show: false, leadId: null, currentStage: null, position: { top: 0, left: 0 } });
   const [duplicateMap, setDuplicateMap] = useState({});  // Map of lead_id -> duplicate info
   const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState(new Set());
@@ -135,6 +135,39 @@ function Leads() {
     { label: 'MUM / Closed', isHeader: true },
     'Funded',
   ];
+
+  // Valid stage transitions — only show stages a lead can move to from its current stage
+  const VALID_TRANSITIONS = {
+    // Lead stages
+    'New': ['Attempted Contact', 'Prospect', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Attempted Contact': ['Prospect', 'Application', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Prospect': ['Application', 'Pre-Qualified', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Application': ['Pre-Qualified', 'Pre-Approved', 'Disclosed', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Pre-Qualified': ['Pre-Approved', 'Disclosed', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Pre-Approved': ['Disclosed', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Long-Term Nurture': ['New', 'Attempted Contact', 'Prospect', 'Withdrawn', 'Does Not Qualify'],
+    // Active Loan stages
+    'Disclosed': ['Processing', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Processing': ['Submitted', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Submitted': ['Underwriting', 'UW Received', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Underwriting': ['UW Received', 'Conditional Approval', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'UW Received': ['Conditional Approval', 'Approved', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Conditional Approval': ['Approved', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Approved': ['CTC', 'Clear to Close', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Suspended': ['Processing', 'Submitted', 'Underwriting', 'Cancelled', 'Denied', 'Dead'],
+    'CTC': ['Closing', 'Docs', 'Docs Out', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Clear to Close': ['Closing', 'Docs', 'Docs Out', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Closing': ['Docs', 'Docs Out', 'Funded', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Docs': ['Docs Out', 'Funded', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    'Docs Out': ['Funded', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
+    // Terminal / reactivation
+    'Funded': [],
+    'Cancelled': ['New'],
+    'Denied': ['New'],
+    'Dead': ['New'],
+    'Withdrawn': ['New'],
+    'Does Not Qualify': ['New'],
+  };
 
   // Check if master user on mount
   useEffect(() => {
@@ -674,12 +707,13 @@ function Leads() {
     navigate(`/leads/${leadId}`);
   };
 
-  const handleStatusClick = (e, leadId) => {
+  const handleStatusClick = (e, leadId, currentStage) => {
     e.stopPropagation(); // Prevent row click
     const rect = e.target.getBoundingClientRect();
     setStatusDropdown({
       show: true,
       leadId,
+      currentStage: currentStage || null,
       position: {
         top: rect.bottom + window.scrollY + 5,
         left: rect.left + window.scrollX,
@@ -689,7 +723,7 @@ function Leads() {
 
   const handleStatusChange = async (newStatus) => {
     const leadId = statusDropdown.leadId;
-    setStatusDropdown({ show: false, leadId: null, position: { top: 0, left: 0 } });
+    setStatusDropdown({ show: false, leadId: null, currentStage: null, position: { top: 0, left: 0 } });
 
     try {
       const result = await leadsAPI.update(leadId, { stage: newStatus });
@@ -716,7 +750,7 @@ function Leads() {
   };
 
   const closeStatusDropdown = () => {
-    setStatusDropdown({ show: false, leadId: null, position: { top: 0, left: 0 } });
+    setStatusDropdown({ show: false, leadId: null, currentStage: null, position: { top: 0, left: 0 } });
   };
 
   // Access denied if user doesn't have leads permissions
@@ -950,7 +984,7 @@ function Leads() {
                 <td>
                   <span
                     className={`status-badge status-${getStatusColor(lead.stage)} status-clickable`}
-                    onClick={(e) => handleStatusClick(e, lead.id)}
+                    onClick={(e) => handleStatusClick(e, lead.id, lead.stage)}
                     title="Click to change status"
                   >
                     {lead.stage}
@@ -1422,23 +1456,35 @@ function Leads() {
               left: statusDropdown.position.left,
             }}
           >
-            <div className="status-dropdown-header">Change Status</div>
+            <div className="status-dropdown-header">
+              Change Status
+              {statusDropdown.currentStage && (
+                <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 400, marginLeft: '6px' }}>
+                  from {statusDropdown.currentStage}
+                </span>
+              )}
+            </div>
             <div className="status-dropdown-options" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {statusOptions.map((status, idx) => (
-                status.isHeader ? (
-                  <div key={status.label} className="status-dropdown-section-header" style={{
-                    padding: '6px 12px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    color: '#6b7280',
-                    borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
-                    marginTop: idx > 0 ? '4px' : 0,
-                    letterSpacing: '0.05em',
-                  }}>
-                    {status.label}
-                  </div>
-                ) : (
+              {(() => {
+                const validSet = new Set(VALID_TRANSITIONS[statusDropdown.currentStage] || []);
+                const hasTransitions = validSet.size > 0;
+                // Filter options to only show valid transitions
+                const filtered = hasTransitions
+                  ? statusOptions.filter(status => {
+                      if (status.isHeader) return false; // Headers handled separately
+                      return validSet.has(status);
+                    })
+                  : []; // Terminal stage — no transitions
+
+                if (filtered.length === 0) {
+                  return (
+                    <div style={{ padding: '12px', color: '#6b7280', fontSize: '13px', textAlign: 'center' }}>
+                      No status changes available from {statusDropdown.currentStage || 'this stage'}
+                    </div>
+                  );
+                }
+
+                return filtered.map((status) => (
                   <button
                     key={status}
                     className={`status-dropdown-option status-${getStatusColor(status)}`}
@@ -1446,8 +1492,8 @@ function Leads() {
                   >
                     {status}
                   </button>
-                )
-              ))}
+                ));
+              })()}
             </div>
           </div>
         </>
