@@ -5,7 +5,6 @@ Uses Deepgram for streaming STT and ElevenLabs for streaming TTS
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Request
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import logging
@@ -23,9 +22,6 @@ if TYPE_CHECKING:
 # Database and auth imports
 from database import get_db
 from utils.websocket_auth import authenticate_websocket, get_user_id_from_websocket
-
-# OAuth2 scheme for token extraction (matches main.py)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 logger = logging.getLogger(__name__)
 
@@ -868,13 +864,12 @@ async def list_available_voices():
 # =============================================================================
 
 async def get_current_user_lazy(
-    token: str = Depends(oauth2_scheme),
-    request: Request = None,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get current user with lazy import to avoid circular import issues"""
     from auth.dependencies import get_current_user
-    return await get_current_user(token, request, db)
+    return await get_current_user(request, db)
 
 
 @router.get("/user-voice-preference")

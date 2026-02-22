@@ -60,9 +60,7 @@ def _get_current_user():
 async def _current_user_dep(request: Request, db: Session = Depends(get_db)):
     """Proper FastAPI dependency that resolves to the actual user object."""
     from auth.dependencies import get_current_user
-    auth = request.headers.get("Authorization", "")
-    token = auth[7:] if auth.startswith("Bearer ") else ""
-    return await get_current_user(token, request, db)
+    return await get_current_user(request, db)
 
 
 # =============================================================================

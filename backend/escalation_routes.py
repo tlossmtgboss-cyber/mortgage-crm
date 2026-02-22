@@ -4,7 +4,6 @@ API endpoints for escalating issues to team members
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional, TYPE_CHECKING, Any
@@ -22,18 +21,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["escalations"])
 
-# OAuth2 scheme for token extraction (matches main.py)
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
-
-
 async def get_current_user_lazy(
-    token: str = Depends(oauth2_scheme),
-    request: Request = None,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Lazy import wrapper to avoid circular imports"""
     from auth.dependencies import get_current_user
-    return await get_current_user(token, request, db)
+    return await get_current_user(request, db)
 
 
 def get_models():
