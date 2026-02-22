@@ -44,6 +44,7 @@ function Portfolio() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [filterView, setFilterView] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusDropdown, setStatusDropdown] = useState({ show: false, clientId: null, position: { top: 0, left: 0 } });
 
   useEffect(() => {
     loadData();
@@ -271,6 +272,107 @@ function Portfolio() {
       (client.servicing_loan_number || client.loan_number)?.toLowerCase().includes(query)
     );
   }
+
+  // Status options — all stages across Lead, Active Loan, and MUM
+  const statusOptions = [
+    // Lead stages
+    { label: 'Lead Stages', isHeader: true },
+    'New',
+    'Attempted Contact',
+    'Prospect',
+    'Application',
+    'Pre-Qualified',
+    'Pre-Approved',
+    'Long-Term Nurture',
+    'Withdrawn',
+    'Does Not Qualify',
+    // Active Loan stages
+    { label: 'Active Loan Stages', isHeader: true },
+    'Disclosed',
+    'Processing',
+    'Submitted',
+    'Underwriting',
+    'UW Received',
+    'Conditional Approval',
+    'Approved',
+    'Suspended',
+    'CTC',
+    'Clear to Close',
+    'Closing',
+    'Docs',
+    'Docs Out',
+    'Cancelled',
+    'Denied',
+    'Dead',
+    // MUM (Funded)
+    { label: 'MUM / Closed', isHeader: true },
+    'Funded',
+  ];
+
+  const getStatusColor = (status) => {
+    const colors = {
+      // Lead stages
+      'New': '#2196F3',
+      'Attempted Contact': '#FF9800',
+      'Prospect': '#9C27B0',
+      'Application': '#00BCD4',
+      'Pre-Qualified': '#4CAF50',
+      'Pre-Approved': '#8BC34A',
+      'Long-Term Nurture': '#607D8B',
+      'Withdrawn': '#F44336',
+      'Does Not Qualify': '#795548',
+      // Active Loan stages
+      'Disclosed': '#00C853',
+      'Processing': '#FF9800',
+      'Submitted': '#FF9800',
+      'Underwriting': '#FFC107',
+      'UW Received': '#FFC107',
+      'Conditional Approval': '#00BCD4',
+      'Approved': '#4CAF50',
+      'Suspended': '#F44336',
+      'CTC': '#4CAF50',
+      'Clear to Close': '#4CAF50',
+      'Closing': '#4CAF50',
+      'Docs': '#4CAF50',
+      'Docs Out': '#4CAF50',
+      'Cancelled': '#F44336',
+      'Denied': '#F44336',
+      'Dead': '#9E9E9E',
+      // MUM
+      'Funded': '#FFD700',
+    };
+    return colors[status] || '#999';
+  };
+
+  const handleStatusClick = (e, clientId) => {
+    e.stopPropagation();
+    const rect = e.target.getBoundingClientRect();
+    setStatusDropdown({
+      show: true,
+      clientId,
+      position: {
+        top: rect.bottom + window.scrollY + 5,
+        left: rect.left + window.scrollX,
+      },
+    });
+  };
+
+  const closeStatusDropdown = () => {
+    setStatusDropdown({ show: false, clientId: null, position: { top: 0, left: 0 } });
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    const clientId = statusDropdown.clientId;
+    closeStatusDropdown();
+    try {
+      await mumAPI.update(clientId, { stage: newStatus });
+      loadData();
+      toast.success(`Status updated to ${newStatus}`);
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      toast.error('Failed to update status');
+    }
+  };
 
   const getDaysSinceFundingColor = (days) => {
     if (days < 180) return 'recent';
@@ -697,6 +799,7 @@ function Portfolio() {
               <thead>
                 <tr>
                   <th>Client Name</th>
+                  <th>Stage</th>
                   <th>Loan Number</th>
                   <th>Closed Date</th>
                   <th>Days Since Funding</th>
@@ -717,6 +820,24 @@ function Portfolio() {
                   >
                     <td>
                       <strong>{client.client_name || client.name}</strong>
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          color: 'white',
+                          backgroundColor: getStatusColor(client.stage || 'Funded'),
+                          cursor: 'pointer',
+                        }}
+                        onClick={(e) => handleStatusClick(e, client.id)}
+                        title="Click to change status"
+                      >
+                        {client.stage || 'Funded'}
+                      </span>
                     </td>
                     <td>{client.servicing_loan_number || client.loan_number}</td>
                     <td>
@@ -777,6 +898,75 @@ function Portfolio() {
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddClient}
         />
+      )}
+
+      {/* Status Dropdown Popup */}
+      {statusDropdown.show && (
+        <>
+          <div
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+            onClick={closeStatusDropdown}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: statusDropdown.position.top,
+              left: statusDropdown.position.left,
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              zIndex: 1000,
+              minWidth: '200px',
+              maxHeight: '400px',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ padding: '10px 14px', fontWeight: 600, fontSize: '13px', borderBottom: '1px solid #e5e7eb' }}>
+              Change Status
+            </div>
+            {statusOptions.map((status, idx) => (
+              status.isHeader ? (
+                <div
+                  key={status.label}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    color: '#6b7280',
+                    borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
+                    marginTop: idx > 0 ? '4px' : 0,
+                    letterSpacing: '0.05em',
+                    background: '#fafafa',
+                  }}
+                >
+                  {status.label}
+                </div>
+              ) : (
+                <button
+                  key={status}
+                  onClick={() => handleStatusChange(status)}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: 'none',
+                    background: 'white',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '13px',
+                    borderLeft: `4px solid ${getStatusColor(status)}`,
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+                  onMouseLeave={(e) => e.target.style.background = 'white'}
+                >
+                  {status}
+                </button>
+              )
+            ))}
+          </div>
+        </>
       )}
       </div>
       <CalendarSidebar />

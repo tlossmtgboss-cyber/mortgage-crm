@@ -82,11 +82,59 @@ function ClientProfile() {
   const [customFields, setCustomFields] = useState([]);
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
   const [circleContacts, setCircleContacts] = useState([]);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [milestones, setMilestones] = useState([]);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
+
+  // Status options — all stages across Lead, Active Loan, and MUM
+  const statusOptions = [
+    { label: 'Lead Stages', isHeader: true },
+    'New', 'Attempted Contact', 'Prospect', 'Application',
+    'Pre-Qualified', 'Pre-Approved', 'Long-Term Nurture',
+    'Withdrawn', 'Does Not Qualify',
+    { label: 'Active Loan Stages', isHeader: true },
+    'Disclosed', 'Processing', 'Submitted', 'Underwriting',
+    'UW Received', 'Conditional Approval', 'Approved', 'Suspended',
+    'CTC', 'Clear to Close', 'Closing', 'Docs', 'Docs Out',
+    'Cancelled', 'Denied', 'Dead',
+    { label: 'MUM / Closed', isHeader: true },
+    'Funded',
+  ];
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'New': '#2196F3', 'Attempted Contact': '#FF9800', 'Prospect': '#9C27B0',
+      'Application': '#00BCD4', 'Pre-Qualified': '#4CAF50', 'Pre-Approved': '#8BC34A',
+      'Long-Term Nurture': '#607D8B', 'Withdrawn': '#F44336', 'Does Not Qualify': '#795548',
+      'Disclosed': '#00C853', 'Processing': '#FF9800', 'Submitted': '#FF9800',
+      'Underwriting': '#FFC107', 'UW Received': '#FFC107', 'Conditional Approval': '#00BCD4',
+      'Approved': '#4CAF50', 'Suspended': '#F44336', 'CTC': '#4CAF50',
+      'Clear to Close': '#4CAF50', 'Closing': '#4CAF50', 'Docs': '#4CAF50',
+      'Docs Out': '#4CAF50', 'Cancelled': '#F44336', 'Denied': '#F44336',
+      'Dead': '#9E9E9E', 'Funded': '#FFD700',
+    };
+    return colors[status] || '#999';
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    setShowStatusDropdown(false);
+    setStatusSaving(true);
+    try {
+      await loansAPI.update(id, { stage: newStatus });
+      setFormData(prev => ({ ...prev, stage: newStatus }));
+      setClient(prev => prev ? { ...prev, stage: newStatus } : prev);
+      toast.success(`Status updated to ${newStatus}`);
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      toast.error('Failed to update status');
+    } finally {
+      setStatusSaving(false);
+    }
+  };
 
   const handleAddCustomField = () => {
     if (!newFieldName.trim()) return;
@@ -760,6 +808,108 @@ function ClientProfile() {
             <button className="btn-edit-header" onClick={() => setEditing(true)}>
               ✏️ Edit
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Client Name + Status Banner */}
+      <div style={{
+        padding: '12px 24px',
+        backgroundColor: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px',
+      }}>
+        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: '600', color: '#1a1a2e' }}>
+          {formData.borrower_name || client?.borrower_name || client?.name || 'Client'}
+        </h2>
+
+        {/* Status Dropdown */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+            disabled={statusSaving}
+            style={{
+              backgroundColor: getStatusColor(formData.stage || client?.stage || 'Application'),
+              color: 'white',
+              border: 'none',
+              padding: '6px 16px',
+              borderRadius: '16px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            {statusSaving ? 'Saving...' : (formData.stage || client?.stage || 'Application')}
+            <span style={{ fontSize: '10px' }}>▼</span>
+          </button>
+
+          {showStatusDropdown && (
+            <>
+              <div
+                onClick={() => setShowStatusDropdown(false)}
+                style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+              />
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                zIndex: 1000,
+                minWidth: '200px',
+                marginTop: '4px',
+                maxHeight: '400px',
+                overflowY: 'auto',
+              }}>
+                {statusOptions.map((status, idx) => (
+                  status.isHeader ? (
+                    <div
+                      key={status.label}
+                      style={{
+                        padding: '8px 16px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        color: '#6b7280',
+                        borderTop: idx > 0 ? '1px solid #e5e7eb' : 'none',
+                        marginTop: idx > 0 ? '4px' : 0,
+                        letterSpacing: '0.05em',
+                        background: '#fafafa',
+                      }}
+                    >
+                      {status.label}
+                    </div>
+                  ) : (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusChange(status)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '10px 16px',
+                        border: 'none',
+                        background: (formData.stage || client?.stage) === status ? '#f0f0f0' : 'white',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontSize: '13px',
+                        borderLeft: `4px solid ${getStatusColor(status)}`,
+                        transition: 'background 0.2s',
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+                      onMouseLeave={(e) => e.target.style.background = (formData.stage || client?.stage) === status ? '#f0f0f0' : 'white'}
+                    >
+                      {status}
+                    </button>
+                  )
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
