@@ -2754,3 +2754,108 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             db.rollback()
             logger.error(f"Error clearing SF data: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Internal server error")
+
+    @app.post("/api/v1/admin/clear-all-crm-data")
+    async def clear_all_crm_data(
+        admin_key: str = Query(None),
+        db: Session = Depends(get_db),
+    ):
+        """
+        Delete ALL CRM data: leads, loans, MUM clients, tasks, documents,
+        smart docs, activities, etc. Keeps user accounts and settings.
+        """
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+
+        try:
+            cleaned = {}
+
+            # Order matters: delete child tables first, then parent tables.
+            # Use information_schema to find all tables with FK refs to leads/loans,
+            # then delete everything in the right order.
+
+            # Phase 1: Delete from tables that reference leads or loans
+            fk_refs = db.execute(text("""
+                SELECT DISTINCT tc.table_name, kcu.column_name, ccu.table_name AS parent
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu
+                    ON tc.constraint_name = ccu.constraint_name
+                    AND tc.table_schema = ccu.table_schema
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                    AND ccu.table_name IN ('leads', 'loans')
+            """)).fetchall()
+
+            # Null out or delete child references
+            for child_tbl, child_col, parent_tbl in fk_refs:
+                try:
+                    r = db.execute(text(
+                        f'UPDATE "{child_tbl}" SET "{child_col}" = NULL'
+                    ))
+                    if r.rowcount > 0:
+                        cleaned[f"{child_tbl}.{child_col} nulled"] = r.rowcount
+                except Exception:
+                    db.rollback()
+                    try:
+                        r = db.execute(text(f'DELETE FROM "{child_tbl}"'))
+                        if r.rowcount > 0:
+                            cleaned[f"{child_tbl} deleted"] = r.rowcount
+                    except Exception:
+                        db.rollback()
+
+            # Phase 2: Delete from specific CRM tables
+            tables_to_clear = [
+                "mum_clients",
+                "smart_doc_requests",
+                "smart_doc_items",
+                "needs_list_items",
+                "needs_lists",
+                "document_requests",
+                "documents",
+                "tasks",
+                "ai_tasks",
+                "activities",
+                "sla_milestones",
+                "workflow_task_instances",
+                "workflow_executions",
+                "stage_history",
+                "compliance_alerts",
+                "loan_fees",
+                "disclosure_events",
+                "data_reconciliation_pairs",
+                "referral_commissions",
+            ]
+
+            for tbl in tables_to_clear:
+                try:
+                    r = db.execute(text(f'DELETE FROM "{tbl}"'))
+                    if r.rowcount > 0:
+                        cleaned[tbl] = r.rowcount
+                except Exception:
+                    db.rollback()
+
+            # Phase 3: Delete loans then leads (parents)
+            deleted_loans = db.execute(text("DELETE FROM loans")).rowcount
+            cleaned["loans"] = deleted_loans
+
+            deleted_leads = db.execute(text("DELETE FROM leads")).rowcount
+            cleaned["leads"] = deleted_leads
+
+            db.commit()
+
+            logger.info(f"Admin cleared ALL CRM data: {cleaned}")
+
+            return {
+                "status": "success",
+                "message": f"Cleared all CRM data: {deleted_leads} leads, {deleted_loans} loans, plus related records.",
+                "details": cleaned,
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error clearing all CRM data: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Internal server error")
