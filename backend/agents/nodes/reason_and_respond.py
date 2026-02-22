@@ -75,18 +75,25 @@ RULES:
 
 
 INTENT_GUIDANCE = {
-    QueryIntent.PIPELINE_STATUS: """FOCUS ON:
+    QueryIntent.PIPELINE_STATUS: """OVERRIDE: Ignore the sentence limit when listing loans/borrowers — show all relevant names.
+
+FOCUS ON:
 - Overall pipeline health (count, volume, velocity)
 - Stage distribution and bottlenecks
-- Deals at risk or stalled (with specific names)
-- Upcoming closings and their readiness""",
+- Deals at risk or stalled — list each borrower by name with loan amount, stage, and days in stage
+- Upcoming closings — list each borrower by name with closing date and readiness status
 
-    QueryIntent.LEAD_MANAGEMENT: """FOCUS ON:
+Never give generic summaries. Always name the specific borrowers.""",
+
+    QueryIntent.LEAD_MANAGEMENT: """OVERRIDE: Ignore the sentence limit when listing leads — show all relevant names.
+
+FOCUS ON:
 - Lead pipeline health and conversion rates
 - Where leads are getting stuck (bottlenecks)
-- Speed-to-lead metrics
-- Specific leads needing immediate attention
-- Actionable next steps for lead nurturing""",
+- Specific leads needing immediate attention — list each lead by name with score, stage, and days since last contact
+- Actionable next steps per lead (not generic advice)
+
+Never say "follow up with your leads." Name the specific people.""",
 
     QueryIntent.TEAM_PERFORMANCE: """FOCUS ON:
 - Individual and team productivity metrics
@@ -94,11 +101,22 @@ INTENT_GUIDANCE = {
 - SLA compliance
 - Specific team members who need support""",
 
-    QueryIntent.TASK_MANAGEMENT: """FOCUS ON:
+    QueryIntent.TASK_MANAGEMENT: """OVERRIDE: For priorities/daily briefing, ignore the sentence limit — list all relevant data.
+
+FOCUS ON:
 - Prioritized task list (urgent first)
 - Overdue items needing immediate attention
-- Context for each task (borrower, loan details)
-- Suggested task groupings for efficiency""",
+- ALWAYS list specific borrower/client names from the data under each priority
+- For each person listed, include relevant details (loan amount, stage, days overdue, expiration date)
+- Group by priority area (e.g., follow-ups, missing docs, rate lock expirations)
+
+FORMAT:
+1. **Priority Area**: brief description
+   - Borrower Name — key detail (e.g., $425K conventional, 3 days overdue)
+   - Borrower Name — key detail
+2. **Next Priority Area**: ...
+
+Never give generic advice like "follow up with your leads." Always name the specific people.""",
 
     QueryIntent.MARKET_INTELLIGENCE: """FOCUS ON:
 - Clear lock/float recommendation with rationale
@@ -324,10 +342,21 @@ DO NOT use a canned/scripted response. Be natural and human."""
             f"USER QUESTION: {user_message}",
             f"QUERY INTENT: {query_intent.value}",
             f"DATA QUALITY: {data_quality}",
+        ]
+
+        # Inject uploaded document text if present (one-shot, not in memory)
+        doc_context = state.get("document_context")
+        if doc_context:
+            context_parts.append("")
+            context_parts.append("=== UPLOADED DOCUMENT ===")
+            context_parts.append(doc_context[:50_000])
+            context_parts.append("=== END DOCUMENT ===")
+
+        context_parts.extend([
             "",
             "=== GATHERED DATA ===",
             formatted_data
-        ]
+        ])
 
         # Add action context if any
         if actions_executed:
@@ -362,7 +391,19 @@ DO NOT use a canned/scripted response. Be natural and human."""
         # Use Haiku if: explicit flag set, intent in HAIKU_INTENTS, data not needed (greeting), or data insufficient
         use_haiku = use_haiku_flag or intent_str in HAIKU_INTENTS or intent_str_override in HAIKU_INTENTS or data_quality in ("insufficient", "not_needed")
         model = MODEL_HAIKU if use_haiku else MODEL_SONNET
-        max_tokens = 200 if use_haiku else 400  # Force short, mobile-friendly responses
+
+        # Token budget: data-heavy intents (priorities, pipeline, leads) need room to list names
+        DATA_HEAVY_INTENTS = {"task_management", "pipeline_status", "lead_management", "predictive_analytics"}
+        if use_haiku:
+            max_tokens = 200
+        elif intent_str in DATA_HEAVY_INTENTS or intent_str_override in ("priorities", "pipeline", "leads"):
+            max_tokens = 1200
+        else:
+            max_tokens = 400
+
+        # When document context is attached, ensure enough tokens for thorough analysis
+        if doc_context:
+            max_tokens = max(max_tokens, 2000)
 
         # Use lean prompt for simple tool-formatting intents (saves ~600 tokens per call)
         if use_haiku and intent_str not in ("greeting", "simple") and intent_str_override not in ("greeting", "simple"):

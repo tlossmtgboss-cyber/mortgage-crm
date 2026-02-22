@@ -236,6 +236,7 @@ async def run_orchestrator(
     return_structured: bool = False,
     db_session = None,
     current_user = None,
+    document_context: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Run the full orchestrator pipeline on a user message.
@@ -262,6 +263,7 @@ async def run_orchestrator(
         return_structured: Whether to return structured response
         db_session: Database session for dynamic tool loading
         current_user: Current user for dynamic tool loading
+        document_context: Optional text from a user-uploaded document
 
     Returns:
         Response dictionary with text, metadata, and optional structured data
@@ -355,12 +357,16 @@ async def run_orchestrator(
         )
         # Pre-populate intent info so analyze node can skip re-classification
         # when confidence is high enough (>0.90)
-        state = update_state(state, {
+        state_updates = {
             "intent_agents": intent_agents,
             "intent_confidence": intent_confidence,
             "pre_classified_intent": intent,
             "pre_classified_method": intent_method,
-        })
+        }
+        # Inject document context if provided (one-shot, not saved to memory)
+        if document_context:
+            state_updates["document_context"] = document_context
+        state = update_state(state, state_updates)
         timing["init_state"] = (time.perf_counter() - step_start) * 1000
 
         # ================================================================

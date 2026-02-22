@@ -124,7 +124,8 @@ class AIAgentService:
         self,
         message: str,
         conversation_history: Optional[list] = None,
-        return_structured: bool = False
+        return_structured: bool = False,
+        document_context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Process a user message through the LangGraph orchestrator.
@@ -133,6 +134,7 @@ class AIAgentService:
             message: User's input message
             conversation_history: Previous messages in the conversation
             return_structured: Whether to return structured response data
+            document_context: Optional text extracted from a user-uploaded document
 
         Returns:
             Response dictionary with text and metadata
@@ -154,6 +156,7 @@ class AIAgentService:
                 return_structured=return_structured,
                 db_session=self.db,  # Enable dynamic tool loading
                 current_user=self.current_user,  # Enable dynamic tool loading
+                document_context=document_context,
             )
 
             # Log the interaction
@@ -1211,7 +1214,8 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             if due_date:
                 try:
                     due_datetime = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
-                except Exception:
+                except Exception as e:
+                    logger.error(f"Error parsing due_date: {e}")
                     due_datetime = datetime.now() + timedelta(days=1)
 
             # Insert into ai_tasks table (the active task table)
@@ -1962,7 +1966,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             if message_sid:
                 # Log to database
                 try:
-                    from main import SMSMessage
+                    from database.models import SMSMessage
                     sms_record = SMSMessage(
                         user_id=current_user.id,
                         lead_id=args.get("lead_id"),
@@ -2654,8 +2658,14 @@ async def create_ai_agent_service(
     """
     service = AIAgentService(db, current_user, autonomous_mode)
 
-    # Register tools
-    tool_functions = create_tool_functions_from_main(db, current_user)
+    # Register tools — merge registry tools with inline tools
+    # Inline tools (with db/user context) take precedence over registry tools
+    try:
+        from .dynamic_tool_loader import create_all_tools
+        tool_functions = create_all_tools(db, current_user)
+    except ImportError:
+        # Fallback to inline-only if dynamic loader not available
+        tool_functions = create_tool_functions_from_main(db, current_user)
     service.register_tools(tool_functions)
 
     return service

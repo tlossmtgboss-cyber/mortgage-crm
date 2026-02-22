@@ -633,6 +633,72 @@
   }
 }
 
+/* Attached Document Chip */
+.ai-attached-document {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 auto 4px auto;
+  max-width: 900px;
+  background: #eef7f8;
+  border: 1px solid #c5e4e8;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1a6b75;
+}
+
+.ai-attached-filename {
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-attached-size {
+  color: #5a9ba3;
+  font-size: 12px;
+}
+
+.ai-attached-remove {
+  background: none;
+  border: none;
+  color: #5a9ba3;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.ai-attached-remove:hover {
+  background: #d5eff2;
+  color: #1a6b75;
+}
+
+/* Extracting Document Indicator */
+.ai-extracting-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 auto 4px auto;
+  max-width: 900px;
+  font-size: 13px;
+  color: #888;
+}
+
+.ai-extracting-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Input Area - Claude.ai style bottom bar */
 .ai-input-area {
   padding: 16px 24px 24px 24px;

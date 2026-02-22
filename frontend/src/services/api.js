@@ -579,12 +579,17 @@ export const aiAPI = {
   },
   // Streaming version of processCommand for real-time responses
   // Uses LangGraph endpoint and simulates streaming for smooth UI delivery
-  processCommandStream: async (message, onContent, onStatus, onDone, onError) => {
+  processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null) => {
     const token = localStorage.getItem('token');
 
     try {
       // Show initial status
       if (onStatus) onStatus('Analyzing your request...');
+
+      const body = { message };
+      if (documentContext) {
+        body.document_context = documentContext;
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/v1/ai/langgraph-chat`, {
         method: 'POST',
@@ -592,7 +597,7 @@ export const aiAPI = {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ message })
+        body: JSON.stringify(body)
       });
 
       if (!response.ok) {
@@ -654,6 +659,16 @@ export const aiAPI = {
     const formData = new FormData();
     formData.append('image', imageFile);
     const response = await api.post('/api/v1/ai/parse-screenshot', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  extractDocument: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/api/v1/ai/extract-document', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

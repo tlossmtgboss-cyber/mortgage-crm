@@ -1,17 +1,17 @@
 """
 AI Orchestrator Chat Routes
-AI Chat powered by AgentOrchestrator with tool execution and streaming
+AI Chat powered by LangGraph AgentOrchestrator with 215 tools and streaming
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
-from datetime import datetime, timezone, timedelta
 import logging
-import os
 import json
 import uuid
 import time
+import os
+import tempfile
 from routes.auth_deps import current_user_flexible_dep
 
 logger = logging.getLogger(__name__)
@@ -19,52 +19,133 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/ai")
 
 
-def get_models():
-    """Get models at runtime to avoid circular imports"""
-    import main
+def get_db_dep(request: Request = None):
+    """Lazy database session dependency - yields a session then cleans up."""
+    from db import get_db
+    yield from get_db(request)
+
+
+MAX_DOCUMENT_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_DOCUMENT_CHARS = 50_000
+SUPPORTED_DOC_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md", ".html"}
+SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+@router.post("/extract-document")
+async def extract_document(
+    file: UploadFile = File(...),
+    current_user=Depends(current_user_flexible_dep)
+):
+    """
+    Extract text from an uploaded document (PDF, DOCX, TXT, MD, HTML) or image.
+    Returns extracted text for the frontend to attach as document context.
+    """
+    filename = file.filename or "unknown"
+    file_ext = os.path.splitext(filename)[1].lower()
+
+    if file_ext not in SUPPORTED_DOC_EXTENSIONS and file_ext not in SUPPORTED_IMAGE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {file_ext}. Supported: {', '.join(sorted(SUPPORTED_DOC_EXTENSIONS | SUPPORTED_IMAGE_EXTENSIONS))}"
+        )
+
+    # Read file content and check size
+    content = await file.read()
+    if len(content) > MAX_DOCUMENT_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large ({len(content) / 1024 / 1024:.1f} MB). Maximum is 10 MB."
+        )
+
+    extracted_text = None
+    tmp_path = None
+
+    try:
+        if file_ext in SUPPORTED_IMAGE_EXTENSIONS:
+            # Use Claude vision API to extract text from image
+            extracted_text = await _extract_text_from_image(content, file_ext)
+        else:
+            # Save to temp file for text extraction
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+
+            from services.call_monitoring.guidelines_service import extract_text_from_document
+            extracted_text = await extract_text_from_document(tmp_path, file_ext)
+    except Exception as e:
+        logger.error(f"Document extraction failed for {filename}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to extract text from document")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    if not extracted_text or not extracted_text.strip():
+        raise HTTPException(
+            status_code=422,
+            detail="Could not extract any text from this document. The file may be empty, scanned, or corrupted."
+        )
+
+    truncated = len(extracted_text) > MAX_DOCUMENT_CHARS
+    if truncated:
+        extracted_text = extracted_text[:MAX_DOCUMENT_CHARS]
+
     return {
-        'User': main.User,
-        'Lead': main.Lead,
-        'Loan': main.Loan,
-        'Task': main.Task,
-        'LeadStage': main.LeadStage,
+        "success": True,
+        "filename": filename,
+        "file_type": file_ext,
+        "extracted_text": extracted_text,
+        "char_count": len(extracted_text),
+        "truncated": truncated,
     }
 
 
-def get_db_dep():
-    """Get database dependency at runtime"""
-    from db import get_db
-    return get_db
+async def _extract_text_from_image(image_bytes: bytes, file_ext: str) -> str:
+    """Use Claude vision API to extract text from an image."""
+    import base64
+    from anthropic import Anthropic
 
+    media_type_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+    media_type = media_type_map.get(file_ext, "image/png")
+    b64_data = base64.b64encode(image_bytes).decode("utf-8")
 
-def get_current_user_dep():
-    """Get current user dependency at runtime"""
-    import main
-    return main.get_current_user_flexible
+    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    response = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=4096,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": b64_data}},
+                {"type": "text", "text": "Extract ALL text from this image. Return only the extracted text, preserving the original formatting and structure as closely as possible. If this is a document, include all content. If there is no readable text, respond with 'No text found in image.'"}
+            ]
+        }]
+    )
+    return response.content[0].text
 
 
 @router.post("/langgraph-chat")
 @router.post("/orchestrator-chat")
 async def orchestrator_chat(
     request: Request,
-    db: Session = Depends(lambda: get_db_dep()),
+    db: Session = Depends(get_db_dep),
     current_user = Depends(current_user_flexible_dep)
 ):
     """
-    AI Chat powered by the AgentOrchestrator brain with Tool Execution
-    Routes messages to specialized agents and executes real actions.
+    AI Chat powered by the LangGraph AgentOrchestrator with full tool execution.
+    Routes messages to specialized agents (pipeline, compliance, leads, docs, etc.)
+    and executes real CRM actions against the database.
     Accessible via both /langgraph-chat (used by AILandingPage) and /orchestrator-chat.
     """
     try:
-        from openai import OpenAI
         from conversation_memory_service import ConversationMemory as ConvMemory
+        from agents.service import create_ai_agent_service
 
         request_start_time = time.time()
 
         data = await request.json()
         message = data.get("message", "")
-        context = data.get("context", {})
         session_id = data.get("session_id")
+        document_context = data.get("document_context")
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
@@ -72,58 +153,23 @@ async def orchestrator_chat(
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
         # Load conversation history
-        conversation_history = ConvMemory.get_session_messages(db, session_id)
-
-        # Load user context
         try:
-            from agents.memory.user_context import UserContextManager
-            user_context = await UserContextManager.get_context(
-                db, current_user.id,
-                organization_id=getattr(current_user, 'organization_id', None),
-            )
-            user_context_summary = user_context.get('summary', '')
-            user_preferences = user_context.get('preferences', {})
-        except Exception as ctx_err:
-            logger.warning(f"Failed to load user context: {ctx_err}")
-            try:
-                db.rollback()
-            except Exception as e:
-                logger.warning(f"Failed to rollback after user context error: {e}")
-            user_context = {}
-            user_context_summary = ''
-            user_preferences = {}
+            conversation_history = ConvMemory.get_session_messages(db, session_id)
+        except Exception as e:
+            logger.warning(f"Failed to load conversation history: {e}")
+            conversation_history = []
 
-        # Build system prompt with user context
-        system_prompt = f"""You are an AI assistant for a mortgage CRM system.
+        # Create the full agent service with all 215 tools
+        service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
 
-User Context: {user_context_summary}
+        # Process through LangGraph orchestrator (document_context injected for this turn only)
+        result = await service.process_message(message, conversation_history, document_context=document_context)
 
-You help loan officers manage their pipeline, follow up with leads, and track tasks.
-Be concise and helpful. When asked about data, provide specific numbers when available."""
-
-        # Prepare messages
-        messages = [{"role": "system", "content": system_prompt}]
-        for hist in conversation_history[-10:]:
-            messages.append({"role": hist.get("role", "user"), "content": hist.get("content", "")})
-        messages.append({"role": "user", "content": message})
-
-        # Get AI response
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1000
-        )
-
-        ai_response = response.choices[0].message.content
-
-        # Save to conversation memory
+        # Save to conversation memory (non-fatal on failure)
         try:
             ConvMemory.save_message(db, session_id, current_user.id, "user", message)
-            ConvMemory.save_message(db, session_id, current_user.id, "assistant", ai_response)
+            ConvMemory.save_message(db, session_id, current_user.id, "assistant", result.get("response", ""))
         except Exception as save_err:
             logger.warning(f"Failed to save conversation: {save_err}")
 
@@ -131,11 +177,20 @@ Be concise and helpful. When asked about data, provide specific numbers when ava
 
         return {
             "success": True,
-            "response": ai_response,
+            "response": result.get("response", ""),
             "session_id": session_id,
-            "response_time_ms": int(response_time * 1000)
+            "intent": result.get("intent"),
+            "confidence": result.get("confidence"),
+            "follow_up_suggestions": result.get("follow_up_suggestions", []),
+            "processing_time_seconds": result.get("processing_time_seconds", round(response_time, 2)),
+            "data_quality": result.get("data_quality"),
+            "actions_executed": result.get("actions_executed", []),
+            "actions_pending": result.get("actions_pending", []),
+            "engine": "langgraph",
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Orchestrator chat error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -144,16 +199,13 @@ Be concise and helpful. When asked about data, provide specific numbers when ava
 @router.post("/orchestrator-chat-stream")
 async def orchestrator_chat_stream(
     request: Request,
-    db: Session = Depends(lambda: get_db_dep()),
+    db: Session = Depends(get_db_dep),
     current_user = Depends(current_user_flexible_dep)
 ):
     """
-    Streaming AI Chat - sends response tokens as they're generated
-    Uses Server-Sent Events (SSE) for real-time streaming
+    Streaming AI Chat - sends response tokens as they're generated.
+    Uses Server-Sent Events (SSE) for real-time streaming via the LangGraph agent.
     """
-    from openai import OpenAI
-    import asyncio
-
     data = await request.json()
     message = data.get("message", "")
     session_id = data.get("session_id") or str(uuid.uuid4())
@@ -163,59 +215,54 @@ async def orchestrator_chat_stream(
 
     async def generate():
         try:
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            from agents.service import create_ai_agent_service
+            from conversation_memory_service import ConversationMemory as ConvMemory
 
-            # Load user context
+            # Load conversation history
             try:
-                from agents.memory.user_context import UserContextManager
-                user_context = await UserContextManager.get_context(
-                    db, current_user.id,
-                    organization_id=getattr(current_user, 'organization_id', None),
-                )
-                user_context_summary = user_context.get('summary', '')
+                conversation_history = ConvMemory.get_session_messages(db, session_id)
             except Exception as e:
-                logger.warning(f"Failed to load user context in orchestrator_chat_stream: {e}")
-                user_context_summary = ''
+                logger.warning(f"Failed to load conversation history in stream: {e}")
+                conversation_history = []
 
-            system_prompt = f"""You are an AI assistant for a mortgage CRM system.
-User Context: {user_context_summary}
-Be concise and helpful."""
+            # Create the full agent service with all 215 tools
+            service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
 
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ]
-
-            # Stream response
-            stream = client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
-                temperature=0.7,
-                max_tokens=1000,
-                stream=True
-            )
-
+            # Stream response through the agent
             full_response = ""
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
+            async for chunk in service.process_message_stream(message, conversation_history):
+                chunk_type = chunk.get("type")
+
+                if chunk_type == "content":
+                    content = chunk.get("content", "")
                     full_response += content
                     yield f"data: {json.dumps({'content': content})}\n\n"
 
-            # Send completion
-            yield f"data: {json.dumps({'done': True, 'session_id': session_id})}\n\n"
+                elif chunk_type == "tool_use":
+                    yield f"data: {json.dumps({'tool_use': chunk.get('tool'), 'input': chunk.get('input', {})})}\n\n"
 
-            # Save conversation
+                elif chunk_type == "tool_result":
+                    yield f"data: {json.dumps({'tool_result': chunk.get('tool'), 'result': chunk.get('result', {})})}\n\n"
+
+                elif chunk_type == "done":
+                    full_response = chunk.get("full_response", full_response)
+
+                elif chunk_type == "error":
+                    yield f"data: {json.dumps({'error': chunk.get('error', 'Unknown error')})}\n\n"
+
+            # Send completion
+            yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'engine': 'langgraph'})}\n\n"
+
+            # Save conversation (non-fatal on failure)
             try:
-                from conversation_memory_service import ConversationMemory as ConvMemory
                 ConvMemory.save_message(db, session_id, current_user.id, "user", message)
                 ConvMemory.save_message(db, session_id, current_user.id, "assistant", full_response)
             except Exception as e:
-                logger.warning(f"Failed to save conversation in orchestrator_chat_stream: {e}")
+                logger.warning(f"Failed to save conversation in stream: {e}")
 
         except Exception as e:
-            logger.error(f"Stream error: {e}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            logger.error(f"Stream error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'error': 'An error occurred processing your request.'})}\n\n"
 
     return StreamingResponse(
         generate(),

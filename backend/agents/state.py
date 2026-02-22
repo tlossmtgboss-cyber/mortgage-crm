@@ -111,6 +111,7 @@ class AgentState(TypedDict, total=False):
     conversation_history: list[dict]     # Previous turns in conversation
     user_context: dict                   # User preferences and context
     cached_data: dict                    # Data cached for reuse
+    document_context: Optional[str]      # Text from user-uploaded document
 
 
 def create_initial_state(

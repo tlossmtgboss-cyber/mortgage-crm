@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI, outreachAPI } from '../services/api';
 import ActionSidebar from '../components/ActionSidebar';
 import './AILandingPage.css';
+import { toast } from '../utils/toast';
 // Note: EmailDropZone wrapper removed - App.js already wraps with EmailDropZone globally
 
 function AILandingPage() {
@@ -86,6 +87,10 @@ function AILandingPage() {
   const [streamingStatus, setStreamingStatus] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
+
+  // Document attachment state
+  const [attachedDocument, setAttachedDocument] = useState(null); // { filename, text, charCount, truncated }
+  const [isExtractingDocument, setIsExtractingDocument] = useState(false);
 
   // AI Feedback state
   const [feedbackModal, setFeedbackModal] = useState({ visible: false, messageId: null, userQuestion: '', aiResponse: '' });
@@ -254,7 +259,7 @@ function AILandingPage() {
 
     try {
       await navigator.clipboard.writeText(content);
-      alert('Content copied to clipboard!');
+      toast.success('Content copied to clipboard!');
     } catch (err) {
       console.error('Failed to copy:', err);
     }
@@ -304,7 +309,7 @@ function AILandingPage() {
 
   const handleSubmitFeedback = async () => {
     if (!feedbackType) {
-      alert('Please select a feedback type');
+      toast.error('Please select a feedback type');
       return;
     }
 
@@ -327,7 +332,7 @@ function AILandingPage() {
       addMessage('Thank you for your feedback! We\'ll use it to improve the AI.', 'assistant');
     } catch (error) {
       console.error('Failed to submit feedback:', error);
-      alert('Failed to submit feedback. Please try again.');
+      toast.error('Failed to submit feedback. Please try again.');
     } finally {
       setFeedbackSubmitting(false);
     }
@@ -452,7 +457,7 @@ function AILandingPage() {
   // Handle sending the email
   const handleSendEmail = async () => {
     if (!emailRecipient || !emailSubject || !emailBody) {
-      alert('Please fill in all fields');
+      toast.error('Please fill in all fields');
       return;
     }
 
@@ -480,10 +485,10 @@ function AILandingPage() {
       setEmailSubject('');
       setEmailBody('');
 
-      alert('Email sent successfully!');
+      toast.success('Email sent successfully!');
     } catch (error) {
       console.error('Error sending email:', error);
-      alert('Failed to send email');
+      toast.error('Failed to send email');
     } finally {
       setEmailSending(false);
     }
@@ -544,7 +549,7 @@ function AILandingPage() {
 
   const toggleSpeechRecognition = () => {
     if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
+      toast.error('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
       return;
     }
 
@@ -611,7 +616,7 @@ function AILandingPage() {
       }
     } catch (error) {
       console.error('Error approving reconciliation:', error);
-      alert('Failed to approve: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to approve: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -628,7 +633,7 @@ function AILandingPage() {
       }
     } catch (error) {
       console.error('Error rejecting reconciliation:', error);
-      alert('Failed to reject: ' + (error.response?.data?.detail || error.message));
+      toast.error('Failed to reject: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -964,45 +969,66 @@ function AILandingPage() {
     const files = e.target.files;
     if (files.length > 0) {
       const file = files[0];
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
       const isImage = file.type.startsWith('image/');
+      const isDocument = ['pdf', 'docx', 'doc', 'txt', 'md', 'html'].includes(ext);
 
-      if (isImage) {
-        // Process image for lead extraction
-        setIsParsingImage(true);
-        addMessage(`Analyzing screenshot: ${file.name}...`, 'user');
-
+      if (isImage && !isDocument) {
+        // Images: extract text via document endpoint (for review) OR parse as screenshot
+        // If image is likely a screenshot of a lead, use parseScreenshot
+        // If user wants to read/review, use extractDocument
+        // Default: attach as document context so AI can read the image
+        setIsExtractingDocument(true);
         try {
-          const result = await aiAPI.parseScreenshot(file);
-
-          if (result.success && result.lead_data) {
-            setParsedLeadData(result.lead_data);
-            addMessage(
-              `I found the following lead information in the screenshot. Would you like me to create this lead?`,
-              'assistant',
-              {
-                isSpecialContent: true,
-                contentType: 'lead_preview',
-                leadData: result.lead_data
-              }
-            );
+          const result = await aiAPI.extractDocument(file);
+          if (result.success && result.extracted_text) {
+            setAttachedDocument({
+              filename: file.name,
+              text: result.extracted_text,
+              charCount: result.char_count,
+              truncated: result.truncated,
+            });
+            toast.success(`Document attached: ${file.name}`);
           } else {
-            addMessage(
-              result.message || "I couldn't extract lead information from this image. Please try a clearer screenshot.",
-              'assistant'
-            );
+            toast.error('Could not extract text from this image.');
           }
         } catch (error) {
-          console.error('Screenshot parsing error:', error);
-          addMessage(
-            "Failed to process the screenshot. Please try again or enter the lead information manually.",
-            'assistant'
-          );
+          console.error('Image extraction error:', error);
+          const detail = error.response?.data?.detail || 'Failed to process image.';
+          toast.error(detail);
         } finally {
-          setIsParsingImage(false);
+          setIsExtractingDocument(false);
+        }
+      } else if (isDocument) {
+        // Documents: extract text and attach as context
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error('File too large. Maximum size is 10 MB.');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          return;
+        }
+        setIsExtractingDocument(true);
+        try {
+          const result = await aiAPI.extractDocument(file);
+          if (result.success && result.extracted_text) {
+            setAttachedDocument({
+              filename: file.name,
+              text: result.extracted_text,
+              charCount: result.char_count,
+              truncated: result.truncated,
+            });
+            toast.success(`Document attached: ${file.name}`);
+          } else {
+            toast.error('Could not extract text from this document.');
+          }
+        } catch (error) {
+          console.error('Document extraction error:', error);
+          const detail = error.response?.data?.detail || 'Failed to extract document text.';
+          toast.error(detail);
+        } finally {
+          setIsExtractingDocument(false);
         }
       } else {
-        const fileNames = Array.from(files).map(f => f.name).join(', ');
-        addMessage(`Uploaded: ${fileNames}`, 'system');
+        toast.error(`Unsupported file type: .${ext}. Supported: PDF, DOCX, DOC, TXT, MD, HTML, and images.`);
       }
     }
     // Reset file input
@@ -1065,8 +1091,12 @@ function AILandingPage() {
     const message = overrideMessage || inputValue.trim();
     if (!message || loading || isStreaming) return;
 
+    // Capture document context before clearing
+    const docContext = attachedDocument ? attachedDocument.text : null;
+
     addMessage(message, 'user');
     setInputValue('');
+    setAttachedDocument(null);
     setIsStreaming(true);
     setStreamingContent('');
     setStreamingStatus('');
@@ -1236,7 +1266,9 @@ function AILandingPage() {
               ? { ...msg, content: 'Sorry, there was an error processing your request.', isStreaming: false, isError: true }
               : msg
           ));
-        }
+        },
+        // documentContext - text from uploaded document (6th param)
+        docContext
       );
     } catch (error) {
       console.error('AI processing error:', error);
@@ -2396,6 +2428,31 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
             </div>
           )}
 
+          {/* Attached Document Chip */}
+          {isExtractingDocument && (
+            <div className="ai-extracting-indicator">
+              <svg className="ai-extracting-spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              </svg>
+              Extracting document text...
+            </div>
+          )}
+          {attachedDocument && !isExtractingDocument && (
+            <div className="ai-attached-document">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span className="ai-attached-filename">{attachedDocument.filename}</span>
+              <span className="ai-attached-size">{attachedDocument.charCount.toLocaleString()} chars{attachedDocument.truncated ? ' (truncated)' : ''}</span>
+              <button className="ai-attached-remove" onClick={() => setAttachedDocument(null)} title="Remove document">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          )}
+
           {/* Input Area */}
           <div className="ai-input-area">
             <div className="ai-input-container-new">
@@ -2412,7 +2469,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileUpload}
-                multiple
+                accept=".pdf,.docx,.doc,.txt,.md,.html,image/*"
                 style={{ display: 'none' }}
               />
 
