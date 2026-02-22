@@ -1234,6 +1234,18 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# BORROWER APPLICATION ROUTES
+# ============================================================================
+try:
+    from routes.borrower_application_routes import router as borrower_application_router
+    app.include_router(borrower_application_router, tags=["Borrower Applications"])
+    logger.info("Borrower Application routes loaded")
+except Exception as e:
+    logger.error(f"Borrower Application routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================
 try:

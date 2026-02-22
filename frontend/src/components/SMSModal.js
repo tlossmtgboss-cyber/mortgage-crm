@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import api, { aiAPI } from '../services/api';
+import api, { aiAPI, borrowerApplicationAPI } from '../services/api';
 import './SMSModal.css';
 
 const APP_BASE = process.env.REACT_APP_BASE_URL || 'https://app.perenniaai.com';
@@ -22,6 +22,10 @@ function SMSModal({ isOpen, onClose, lead }) {
   const [showCalendarPicker, setShowCalendarPicker] = useState(false);
   const [calendarAdded, setCalendarAdded] = useState(false);
 
+  // Application link state
+  const [appLinkAdded, setAppLinkAdded] = useState(false);
+  const [appLinkLoading, setAppLinkLoading] = useState(false);
+
   // Fetch booking links when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -36,6 +40,7 @@ function SMSModal({ isOpen, onClose, lead }) {
       };
       fetchBookingLinks();
       setCalendarAdded(false);
+      setAppLinkAdded(false);
     }
   }, [isOpen]);
 
@@ -56,6 +61,25 @@ function SMSModal({ isOpen, onClose, lead }) {
       insertCalendarLink(bookingLinks[0]);
     } else {
       setShowCalendarPicker(prev => !prev);
+    }
+  };
+
+  const handleAppLinkClick = async () => {
+    if (!lead?.id) return;
+    setAppLinkLoading(true);
+    try {
+      const response = await borrowerApplicationAPI.createForLead(lead.id, {
+        send_email: false,
+        send_sms: false,
+      });
+      const appUrl = `${window.location.origin}/apply/${response.public_token}`;
+      const appText = `\nComplete your mortgage application here: ${appUrl}`;
+      setMessage(prev => prev + appText);
+      setAppLinkAdded(true);
+    } catch (err) {
+      setResult({ status: 'error', message: 'Failed to create application link. Please try again.' });
+    } finally {
+      setAppLinkLoading(false);
     }
   };
 
@@ -278,6 +302,15 @@ function SMSModal({ isOpen, onClose, lead }) {
                       ))}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    className={`btn-calendar-link ${appLinkAdded ? 'added' : ''}`}
+                    onClick={handleAppLinkClick}
+                    disabled={sending || appLinkAdded || appLinkLoading}
+                    title="Generate and insert application link"
+                  >
+                    {appLinkLoading ? 'Creating...' : appLinkAdded ? '📋 App link added' : '📋 Add Application Link'}
+                  </button>
                 </div>
                 <div className="message-meta">
                   <span className="char-count">
