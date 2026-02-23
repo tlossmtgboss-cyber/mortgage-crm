@@ -9,6 +9,7 @@ import RecordingModal from '../components/RecordingModal';
 import EscalationModal from '../components/EscalationModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SendApplicationModal from '../components/SendApplicationModal';
+import DispositionNoteModal from '../components/DispositionNoteModal';
 import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import ScheduleAppointmentModal from '../components/ScheduleAppointmentModal';
@@ -90,6 +91,7 @@ function LeadDetail() {
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [applicationLink, setApplicationLink] = useState(null);
+  const [dispositionModal, setDispositionModal] = useState({ show: false, status: null });
   const [applicationLoading, setApplicationLoading] = useState(false);
 
   // Client Portal (PURL) state
@@ -430,6 +432,18 @@ function LeadDetail() {
 
   // Handle status change with auto-save
   const handleStatusChange = async (newStatus) => {
+    // Statuses that require a disposition note
+    if (DispositionNoteModal.REQUIRES_NOTE.includes(newStatus)) {
+      setShowStatusDropdown(false);
+      setDispositionModal({ show: true, status: newStatus });
+      return;
+    }
+
+    await executeStatusChange(newStatus);
+  };
+
+  // Actual status change execution (called directly or after disposition note)
+  const executeStatusChange = async (newStatus) => {
     setStatusSaving(true);
     setShowStatusDropdown(false);
 
@@ -4575,6 +4589,17 @@ function LeadDetail() {
           </div>
         </div>
       )}
+
+      {/* Disposition Note Modal */}
+      <DispositionNoteModal
+        isOpen={dispositionModal.show}
+        onClose={() => setDispositionModal({ show: false, status: null })}
+        onConfirm={async (status) => {
+          await executeStatusChange(status);
+        }}
+        lead={lead}
+        newStatus={dispositionModal.status}
+      />
 
       {/* Send Application Modal */}
       {showApplicationModal && applicationLink && (

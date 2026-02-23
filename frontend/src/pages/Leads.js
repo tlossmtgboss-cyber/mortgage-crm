@@ -4,6 +4,7 @@ import { leadsAPI, loansAPI } from '../services/api';
 import { useLeads } from '../hooks/useQueries';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
+import DispositionNoteModal from '../components/DispositionNoteModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
@@ -36,6 +37,7 @@ function Leads() {
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [selectedLeadForSMS, setSelectedLeadForSMS] = useState(null);
   const [statusDropdown, setStatusDropdown] = useState({ show: false, leadId: null, currentStage: null, position: { top: 0, left: 0 } });
+  const [dispositionModal, setDispositionModal] = useState({ show: false, status: null, lead: null });
   const [duplicateMap, setDuplicateMap] = useState({});  // Map of lead_id -> duplicate info
   const [duplicateTasksCreated, setDuplicateTasksCreated] = useState(false);
   const [selectedLeads, setSelectedLeads] = useState(new Set());
@@ -752,6 +754,18 @@ function Leads() {
     const leadId = statusDropdown.leadId;
     const lead = leads.find(l => l.id === leadId);
     setStatusDropdown({ show: false, leadId: null, currentStage: null, position: { top: 0, left: 0 } });
+
+    // Statuses that require a disposition note
+    if (DispositionNoteModal.REQUIRES_NOTE.includes(newStatus)) {
+      setDispositionModal({ show: true, status: newStatus, lead });
+      return;
+    }
+
+    await executeStatusChange(newStatus, leadId, lead);
+  };
+
+  const executeStatusChange = async (newStatus, leadId, lead) => {
+    if (!leadId) return;
 
     try {
       // Special handling for Disclosed/Funded — convert lead to loan
@@ -1484,6 +1498,18 @@ function Leads() {
           lead={selectedLeadForSMS}
         />
       )}
+
+      {/* Disposition Note Modal */}
+      <DispositionNoteModal
+        isOpen={dispositionModal.show}
+        onClose={() => setDispositionModal({ show: false, status: null, lead: null })}
+        onConfirm={async (status) => {
+          const lead = dispositionModal.lead;
+          await executeStatusChange(status, lead?.id, lead);
+        }}
+        lead={dispositionModal.lead}
+        newStatus={dispositionModal.status}
+      />
 
       {/* Status Dropdown Popup */}
       {statusDropdown.show && (
