@@ -202,6 +202,19 @@ def get_postgres_migrations():
             CREATE INDEX IF NOT EXISTS ix_leads_fub_person_id
             ON leads(fub_person_id) WHERE fub_person_id IS NOT NULL
         """),
+
+        ("Add unique constraint on fub_lead_mappings (connection_id, fub_person_id)", """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint WHERE conname = 'uq_fub_mappings_connection_person'
+                ) THEN
+                    ALTER TABLE fub_lead_mappings
+                    ADD CONSTRAINT uq_fub_mappings_connection_person
+                    UNIQUE (connection_id, fub_person_id);
+                END IF;
+            END $$;
+        """),
     ]
 
 

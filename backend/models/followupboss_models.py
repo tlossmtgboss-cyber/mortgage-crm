@@ -138,6 +138,10 @@ class FUBLeadMapping(Base):
     connection = relationship("FUBUserConnection", back_populates="lead_mappings")
 
     __table_args__ = (
+        Index("uq_fub_mappings_connection_person", "connection_id", "fub_person_id", unique=True),
+    )
+
+    __table_args__ = (
         Index("ix_fub_mappings_connection_person", "connection_id", "fub_person_id"),
         Index("ix_fub_mappings_lead", "lead_id"),
     )

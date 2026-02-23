@@ -214,6 +214,10 @@ class Lead(Base):
     salesforce_id = Column(String)
     meta_data = Column(JSON)
 
+    # Follow Up Boss Integration
+    fub_person_id = Column(Integer)
+    fub_last_synced_at = Column(DateTime)
+
     # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

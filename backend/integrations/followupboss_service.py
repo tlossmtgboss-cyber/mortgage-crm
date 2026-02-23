@@ -69,19 +69,23 @@ class FollowUpBossClient:
     """
     Client for Follow Up Boss API.
 
-    API Documentation: https://api.followupboss.com/docs
+    API Documentation: https://docs.followupboss.com/reference/getting-started
     Auth: Basic Auth with API key as username, empty password
-    Rate Limit: 120 requests/minute
+    Required Headers: X-System, X-System-Key (identifies the integration)
+    Rate Limit: 250 requests per 10-second sliding window (global),
+                25 PUT /people per 10-second window
     """
 
     BASE_URL = "https://api.followupboss.com/v1"
+    SYSTEM_NAME = "PerenniaAI"
+    SYSTEM_KEY = os.getenv("FUB_SYSTEM_KEY", "")
 
     def __init__(self, api_key: str):
         """
         Initialize FUB client.
 
         Args:
-            api_key: Follow Up Boss API key
+            api_key: Follow Up Boss API key (fka_XXXX format)
         """
         self.api_key = api_key
         self.session = requests.Session()
@@ -89,7 +93,9 @@ class FollowUpBossClient:
         self.session.headers.update({
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "PerenniaCRM/1.0"
+            "User-Agent": "PerenniaCRM/1.0",
+            "X-System": self.SYSTEM_NAME,
+            "X-System-Key": self.SYSTEM_KEY,
         })
 
     # =========================================================================
@@ -101,10 +107,11 @@ class FollowUpBossClient:
         method: str,
         endpoint: str,
         params: Optional[Dict] = None,
-        json_data: Optional[Dict] = None
+        json_data: Optional[Dict] = None,
+        _retry_count: int = 0
     ) -> Dict[str, Any]:
         """
-        Make HTTP request to FUB API.
+        Make HTTP request to FUB API with rate limit handling.
 
         Args:
             method: HTTP method (GET, POST, PUT, DELETE)
@@ -116,9 +123,12 @@ class FollowUpBossClient:
             Response JSON data
 
         Raises:
-            requests.HTTPError: On API errors
+            requests.HTTPError: On API errors (after retries exhausted)
         """
+        import time
+
         url = f"{self.BASE_URL}/{endpoint.lstrip('/')}"
+        max_retries = 3
 
         try:
             response = self.session.request(
@@ -131,6 +141,17 @@ class FollowUpBossClient:
 
             # Log request for debugging
             logger.debug(f"FUB API {method} {endpoint}: {response.status_code}")
+
+            # Handle rate limiting (429)
+            if response.status_code == 429:
+                if _retry_count >= max_retries:
+                    logger.error(f"FUB API rate limit exceeded after {max_retries} retries: {endpoint}")
+                    response.raise_for_status()
+
+                retry_after = int(response.headers.get("Retry-After", 10))
+                logger.warning(f"FUB API rate limited on {method} {endpoint}, waiting {retry_after}s (attempt {_retry_count + 1}/{max_retries})")
+                time.sleep(retry_after)
+                return self._request(method, endpoint, params, json_data, _retry_count + 1)
 
             response.raise_for_status()
 
