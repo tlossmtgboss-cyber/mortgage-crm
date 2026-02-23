@@ -36,7 +36,7 @@ const formatCurrency = (amount) => {
 };
 
 // Production Predictor Dashboard
-export function ProductionPredictorDashboard({ entityId, entityType = 'lo', embedded = false }) {
+export function ProductionPredictorDashboard({ entityId: entityIdProp, entityType = 'lo', embedded = false }) {
   const [summary, setSummary] = useState(null);
   const [goalAttainment, setGoalAttainment] = useState(null);
   const [conversions, setConversions] = useState(null);
@@ -44,8 +44,19 @@ export function ProductionPredictorDashboard({ entityId, entityType = 'lo', embe
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('forecast');
 
+  // Default to current user's ID if no entityId prop is provided
+  const entityId = useMemo(() => {
+    if (entityIdProp) return entityIdProp;
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      return user.id ? String(user.id) : null;
+    } catch {
+      return null;
+    }
+  }, [entityIdProp]);
+
   useEffect(() => {
-    fetchData();
+    if (entityId) fetchData();
   }, [entityId, entityType]);
 
   const fetchData = async () => {
