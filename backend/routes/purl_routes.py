@@ -2204,81 +2204,6 @@ async def get_purl_metrics(
     }
 
 
-@purl_admin_router.post(
-    "/workspaces/{workspace_id}/resend-invite",
-    summary="Resend portal invitation",
-    description="Resend invitation email to borrower"
-)
-async def resend_invite(
-    workspace_id: int = Path(..., description="Workspace ID"),
-    background_tasks: BackgroundTasks = None,
-    current_user: User = Depends(get_authenticated_user()),
-    db: Session = Depends(get_db)
-):
-    """Resend portal invitation email to borrower."""
-    org_id = get_user_org_id(current_user)
-
-    # Verify workspace ownership
-    workspace = db.query(PURLWorkspace).filter(
-        PURLWorkspace.id == workspace_id,
-        PURLWorkspace.organization_id == org_id
-    ).first()
-
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    # Get primary contact (borrower)
-    contact = db.query(PURLContact).filter(
-        PURLContact.workspace_id == workspace_id,
-        PURLContact.contact_type == "borrower"
-    ).first()
-
-    if not contact or not contact.email:
-        raise HTTPException(status_code=400, detail="No email address found for this workspace")
-
-    # Get active token
-    token = db.query(PURLAccessToken).filter(
-        PURLAccessToken.workspace_id == workspace_id,
-        PURLAccessToken.revoked_at.is_(None),
-        PURLAccessToken.expires_at > datetime.now(timezone.utc)
-    ).first()
-
-    if not token:
-        raise HTTPException(status_code=400, detail="No active token. Please generate a new token first.")
-
-    # Queue email send (if email service available)
-    try:
-        from services.purl_email_service import PURLEmailService
-        email_service = PURLEmailService(db)
-        if background_tasks:
-            background_tasks.add_task(
-                email_service.send_portal_invitation,
-                workspace_id=workspace_id,
-                token_id=token.id,
-                recipient_email=contact.email,
-                recipient_name=contact.first_name
-            )
-    except ImportError:
-        logger.warning("Email service not available for resend invite")
-
-    # Log action
-    audit_log = PURLAuditLog(
-        organization_id=org_id,
-        workspace_id=workspace_id,
-        action="invite_resent",
-        actor_type="user",
-        actor_id=current_user.id,
-        metadata={"email": contact.email}
-    )
-    db.add(audit_log)
-    db.commit()
-
-    return {
-        "success": True,
-        "message": f"Invitation resent to {contact.email}"
-    }
-
-
 class BulkResendRequest(BaseModel):
     """Request model for bulk resend invites."""
     workspace_ids: List[int]
@@ -2302,7 +2227,7 @@ async def bulk_resend_invites(
 
     for workspace_id in workspace_ids:
         try:
-            await resend_invite(workspace_id, background_tasks, current_user, db)
+            await resend_portal_invite(workspace_id, background_tasks, current_user, db)
             sent_count += 1
         except HTTPException:
             failed_count += 1
