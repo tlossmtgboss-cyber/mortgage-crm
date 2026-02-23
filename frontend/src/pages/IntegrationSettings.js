@@ -313,10 +313,12 @@ const IntegrationSettings = () => {
     }
   };
 
-  // Handle integration card click - navigate to dedicated page for Salesforce
+  // Handle integration card click - navigate to dedicated page for Salesforce and FUB
   const handleIntegrationClick = (integrationId) => {
     if (integrationId === 'salesforce') {
       navigate('/settings/integrations/salesforce');
+    } else if (integrationId === 'followupboss') {
+      navigate('/settings/integrations/followupboss');
     } else {
       loadIntegrationDetails(integrationId);
     }

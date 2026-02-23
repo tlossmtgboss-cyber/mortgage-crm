@@ -206,6 +206,7 @@ const ClientPortalSettings = lazyRetry(() => import('./pages/ClientPortalSetting
 const CommunicationPreferences = lazyRetry(() => import('./pages/CommunicationPreferences'));
 const IntegrationSettings = lazyRetry(() => import('./pages/IntegrationSettings'));
 const SalesforceIntegrationPage = lazyRetry(() => import('./pages/SalesforceIntegrationPage'));
+const FollowUpBossIntegrationPage = lazyRetry(() => import('./pages/FollowUpBossIntegrationPage'));
 const StateRecordingRules = lazyRetry(() => import('./pages/settings/StateRecordingRules'));
 const QuoteLanguagePresets = lazyRetry(() => import('./pages/settings/QuoteLanguagePresets'));
 const CalculatorSettings = lazyRetry(() => import('./pages/settings/CalculatorSettings'));
@@ -2632,6 +2633,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><SalesforceIntegrationPage /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings/integrations/followupboss"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><FollowUpBossIntegrationPage /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
