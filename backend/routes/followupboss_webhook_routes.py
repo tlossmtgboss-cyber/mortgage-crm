@@ -23,7 +23,6 @@ from models.followupboss_models import (
 )
 from integrations.followupboss_service import validate_webhook_signature
 from services.followupboss_sync_service import FollowUpBossSyncService
-from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -185,7 +184,7 @@ def process_webhook_event(
                 db.commit()
                 return
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.exception(f"Error processing FUB webhook: {e}")
             error_message = str(e)
 
@@ -212,7 +211,7 @@ def process_webhook_event(
 
         logger.info(f"FUB webhook processed: {event_type} -> {sync_event.status}")
 
-    except SQLAlchemyError as e:
+    except Exception as e:
         logger.exception(f"Fatal error processing FUB webhook: {e}")
     finally:
         db.close()

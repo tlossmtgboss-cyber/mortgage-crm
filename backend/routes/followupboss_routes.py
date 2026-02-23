@@ -28,7 +28,6 @@ from integrations.followupboss_service import (
     FollowUpBossClient, encrypt_api_key, decrypt_api_key, generate_webhook_secret
 )
 from services.followupboss_sync_service import FollowUpBossSyncService
-from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +160,7 @@ async def connect_fub_account(
         fub_stages = client.get_stages()
         sync_service = FollowUpBossSyncService(db)
         sync_service.auto_map_stages(connection, fub_stages)
-    except SQLAlchemyError as e:
+    except Exception as e:
         logger.warning(f"Failed to auto-map FUB stages: {e}")
 
     logger.info(f"FUB account connected for user {get_user_id(current_user)}")
@@ -408,7 +407,7 @@ async def refresh_stage_mappings(
         api_key = decrypt_api_key(connection.api_key_encrypted)
         client = FollowUpBossClient(api_key)
         fub_stages = client.get_stages()
-    except SQLAlchemyError as e:
+    except Exception as e:
         logger.error(f"Failed to fetch FUB stages: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch stages from Follow Up Boss")
 
@@ -469,7 +468,7 @@ async def trigger_manual_sync(
 
     try:
         results = sync_service.full_sync_from_fub(connection, limit=limit)
-    except SQLAlchemyError as e:
+    except Exception as e:
         logger.exception(f"Manual FUB sync failed: {e}")
         raise HTTPException(status_code=500, detail="Sync failed")
 
@@ -673,9 +672,9 @@ async def verify_connection(
                 "status": "invalid",
                 "message": "API key is no longer valid",
             }
-    except SQLAlchemyError as e:
+    except Exception as e:
         logger.error(f"FUB verification failed: {e}")
         return {
             "status": "error",
-            "message": "Internal server error",
+            "message": "Failed to verify connection",
         }

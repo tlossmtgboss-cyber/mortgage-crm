@@ -159,10 +159,10 @@ function FollowUpBossIntegrationPage() {
   const handleVerify = async () => {
     try {
       const data = await connectionApi.verify();
-      if (data.valid) {
+      if (data.status === 'valid') {
         toast.success('Connection verified successfully');
       } else {
-        toast.error('Connection is no longer valid');
+        toast.error(data.message || 'Connection is no longer valid');
       }
     } catch (err) {
       toast.error(err.message || 'Verification failed');

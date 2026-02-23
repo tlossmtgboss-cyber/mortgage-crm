@@ -25,7 +25,6 @@ from integrations.followupboss_service import (
     format_phones_for_fub,
     compute_sync_hash
 )
-from sqlalchemy.exc import SQLAlchemyError
 from models.followupboss_models import (
     FUBUserConnection,
     FUBLeadMapping,
@@ -318,12 +317,15 @@ class FollowUpBossSyncService:
             logger.info(f"Synced FUB person {fub_person_id} to lead {lead.id} (new={is_new})")
             return lead.id, is_new
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.exception(f"Error syncing FUB person {fub_person_id}: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
             sync_event.completed_at = datetime.now(timezone.utc)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
             return None, False
 
     def sync_note_to_activity(
@@ -403,11 +405,14 @@ class FollowUpBossSyncService:
             logger.info(f"Synced FUB note {fub_note_id} to activity {activity.id}")
             return activity.id
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.exception(f"Error syncing FUB note: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
             return None
 
     # =========================================================================
@@ -523,12 +528,15 @@ class FollowUpBossSyncService:
             logger.info(f"Synced lead {lead_id} to FUB person {mapping.fub_person_id}")
             return True
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.exception(f"Error syncing lead {lead_id} to FUB: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
             sync_event.completed_at = datetime.now(timezone.utc)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
             return False
 
     def sync_activity_to_fub(self, activity_id: int) -> bool:
@@ -615,11 +623,14 @@ class FollowUpBossSyncService:
             logger.info(f"Synced activity {activity_id} to FUB note {response.get('id')}")
             return True
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.exception(f"Error syncing activity {activity_id} to FUB: {e}")
             sync_event.status = FUBSyncStatus.FAILED.value
             sync_event.error_message = str(e)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
             return False
 
     # =========================================================================
@@ -629,14 +640,14 @@ class FollowUpBossSyncService:
     def full_sync_from_fub(
         self,
         connection: FUBUserConnection,
-        limit: int = 100
+        limit: int = 500
     ) -> Dict[str, int]:
         """
-        Pull all assigned leads from FUB.
+        Pull all assigned leads from FUB with pagination.
 
         Args:
             connection: FUB connection
-            limit: Max leads to sync
+            limit: Max leads to sync total
 
         Returns:
             Stats dict with counts
@@ -651,38 +662,54 @@ class FollowUpBossSyncService:
         }
 
         try:
-            # Get all people from FUB (admin mode - syncs all leads, not just assigned)
-            result = client.get_people(
-                limit=limit
-            )
+            offset = 0
+            page_size = min(limit, 100)  # FUB API max per page
 
-            people = result.get("people", [])
-            stats["total"] = len(people)
-
-            for person in people:
-                lead_id, is_new = self.sync_person_to_lead(
-                    connection,
-                    person,
-                    event_type=FUBEventType.MANUAL_SYNC.value
+            while stats["total"] < limit:
+                result = client.get_people(
+                    limit=page_size,
+                    offset=offset,
+                    assigned_to=connection.fub_user_id,
                 )
 
-                if lead_id:
-                    if is_new:
-                        stats["created"] += 1
+                people = result.get("people", [])
+                if not people:
+                    break  # No more results
+
+                for person in people:
+                    lead_id, is_new = self.sync_person_to_lead(
+                        connection,
+                        person,
+                        event_type=FUBEventType.MANUAL_SYNC.value
+                    )
+
+                    if lead_id:
+                        if is_new:
+                            stats["created"] += 1
+                        else:
+                            stats["updated"] += 1
                     else:
-                        stats["updated"] += 1
-                else:
-                    stats["errors"] += 1
+                        stats["errors"] += 1
+
+                stats["total"] += len(people)
+                offset += len(people)
+
+                # Stop if we got fewer results than requested (last page)
+                if len(people) < page_size:
+                    break
 
             # Update connection last sync
             connection.last_sync_at = datetime.now(timezone.utc)
             connection.last_sync_status = "completed"
             self.db.commit()
 
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.exception(f"Error in full sync: {e}")
             connection.last_sync_status = "failed"
             connection.last_error = str(e)
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
 
         return stats

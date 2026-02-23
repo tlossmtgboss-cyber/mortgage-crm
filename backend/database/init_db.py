@@ -414,6 +414,19 @@ def init_db():
                     END $$;
                     """))
 
+                    # Add FUB integration columns to leads table
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='fub_person_id') THEN
+                                ALTER TABLE leads ADD COLUMN fub_person_id INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='fub_last_synced_at') THEN
+                                ALTER TABLE leads ADD COLUMN fub_last_synced_at TIMESTAMP WITH TIME ZONE;
+                            END IF;
+                        END $$;
+                    """))
+
                     # Add email_intake_id to tasks table for document intake
                     conn.execute(text("""
                         DO $$
