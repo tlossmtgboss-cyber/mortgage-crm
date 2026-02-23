@@ -200,8 +200,12 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     continue
 
                 # Update the stage
+                old_lead_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
                 lead.stage = new_status
-                lead.updated_at = datetime.utcnow()
+                now = datetime.now(timezone.utc)
+                lead.updated_at = now
+                lead.stage_changed_at = now
+                lead.workflow_day = 0
 
                 # Auto-stamp the SLA milestone date for the new stage
                 LEAD_STAGE_TO_DATE_FIELD = {
@@ -217,10 +221,29 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     "Pre-Approved": "preapproval_issued_date",
                     "Under Contract": "preapproval_issued_date",
                     "Credit Repair": "credit_pulled_date",
+                    "Disclosed": "application_completed_date",
+                    "Closed": "application_completed_date",
+                    "Funded": "application_completed_date",
                 }
                 date_field = LEAD_STAGE_TO_DATE_FIELD.get(new_status)
                 if date_field and hasattr(lead, date_field) and not getattr(lead, date_field):
-                    setattr(lead, date_field, datetime.now(timezone.utc))
+                    setattr(lead, date_field, now)
+                    logger.info(f"Auto-stamped {date_field} for lead {lead.id} on bulk stage change to {new_status}")
+
+                # Record stage change in history
+                try:
+                    stage_history = StageHistory(
+                        entity_type='lead',
+                        entity_id=lead.id,
+                        lead_id=lead.id,
+                        from_stage=old_lead_status,
+                        to_stage=new_status,
+                        changed_at=now,
+                        changed_by_id=current_user.id,
+                    )
+                    db.add(stage_history)
+                except Exception as hist_err:
+                    logger.error(f"Failed to record stage history for lead {lead_id}: {hist_err}")
 
                 updated_count += 1
 
@@ -467,21 +490,23 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         lead.ai_score = calculate_lead_score(lead)
         lead.updated_at = datetime.now(timezone.utc)
 
-        db.commit()
-        db.refresh(lead)
-        logger.info(f"Lead updated: {lead.name}")
-
-        # Trigger workflow if status changed
+        # Detect stage change BEFORE commit so SLA dates are committed atomically
         new_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
         cascade_result = None
-        if old_status != new_status and new_status:
+        duration_days = None
+        stage_changed = old_status != new_status and new_status
+
+        if stage_changed:
+            now = datetime.now(timezone.utc)
+
             # Calculate duration in previous stage
-            duration_days = None
             if lead.stage_changed_at:
-                duration_days = (datetime.now(timezone.utc) - lead.stage_changed_at.replace(tzinfo=timezone.utc)).days
+                try:
+                    duration_days = (now - lead.stage_changed_at.replace(tzinfo=timezone.utc)).days
+                except Exception:
+                    duration_days = None
 
             # Track when stage changed for workflow day calculations
-            now = datetime.now(timezone.utc)
             lead.stage_changed_at = now
             lead.workflow_day = 0  # Reset workflow day counter
 
@@ -499,6 +524,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 "Pre-Approved": "preapproval_issued_date",
                 "Under Contract": "preapproval_issued_date",
                 "Credit Repair": "credit_pulled_date",
+                "Disclosed": "application_completed_date",
+                "Closed": "application_completed_date",
+                "Funded": "application_completed_date",
             }
             date_field = LEAD_STAGE_TO_DATE_FIELD.get(new_status)
             if date_field and hasattr(lead, date_field):
@@ -514,16 +542,20 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 lead_id=lead.id,
                 from_stage=old_status,
                 to_stage=new_status,
-                changed_at=datetime.now(timezone.utc),
+                changed_at=now,
                 changed_by_id=current_user.id,
                 duration_in_previous_stage=duration_days
             )
             db.add(stage_history)
 
-            db.commit()
-            db.refresh(lead)
-            logger.info(f"Stage changed for lead {lead.id}: {old_status} -> {new_status}, stage_changed_at updated, history recorded")
+        db.commit()
+        db.refresh(lead)
+        if stage_changed:
+            logger.info(f"Stage changed for lead {lead.id}: {old_status} -> {new_status}, stage_changed_at + SLA dates committed")
+        else:
+            logger.info(f"Lead updated: {lead.name}")
 
+        if stage_changed:
             # Cascade status to associated loans and MUM clients
             cascade_result = {"loans_updated": [], "mum_clients_updated": []}
             try:
@@ -620,6 +652,17 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             "owner_id": lead.owner_id,
             "created_at": lead.created_at.isoformat() if lead.created_at else None,
             "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+            # SLA milestone dates
+            "lead_received_date": lead.lead_received_date.isoformat() if lead.lead_received_date else None,
+            "first_contact_attempt_date": lead.first_contact_attempt_date.isoformat() if lead.first_contact_attempt_date else None,
+            "first_contact_successful_date": lead.first_contact_successful_date.isoformat() if lead.first_contact_successful_date else None,
+            "lead_qualification_date": lead.lead_qualification_date.isoformat() if lead.lead_qualification_date else None,
+            "initial_consultation_date": lead.initial_consultation_date.isoformat() if lead.initial_consultation_date else None,
+            "application_started_date": lead.application_started_date.isoformat() if lead.application_started_date else None,
+            "application_completed_date": lead.application_completed_date.isoformat() if lead.application_completed_date else None,
+            "credit_pulled_date": lead.credit_pulled_date.isoformat() if lead.credit_pulled_date else None,
+            "preapproval_issued_date": lead.preapproval_issued_date.isoformat() if lead.preapproval_issued_date else None,
+            "stage_changed_at": lead.stage_changed_at.isoformat() if lead.stage_changed_at else None,
         }
 
         # Include cascade info if a status change triggered it

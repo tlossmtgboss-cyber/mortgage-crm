@@ -549,8 +549,26 @@ function LeadDetail() {
       setFormData(prev => ({ ...prev, stage: newStatus }));
       setLead(prev => ({ ...prev, stage: newStatus }));
 
-      // Save to backend
-      await leadsAPI.update(id, { stage: newStatus });
+      // Save to backend — response includes updated SLA dates
+      const updatedLead = await leadsAPI.update(id, { stage: newStatus });
+
+      // Update local state with SLA dates from response
+      if (updatedLead) {
+        const slaFields = [
+          'lead_received_date', 'first_contact_attempt_date', 'first_contact_successful_date',
+          'lead_qualification_date', 'initial_consultation_date', 'application_started_date',
+          'application_completed_date', 'credit_pulled_date', 'preapproval_issued_date',
+          'stage_changed_at',
+        ];
+        const slaUpdates = {};
+        slaFields.forEach(f => {
+          if (updatedLead[f] !== undefined) slaUpdates[f] = updatedLead[f];
+        });
+        if (Object.keys(slaUpdates).length > 0) {
+          setFormData(prev => ({ ...prev, ...slaUpdates }));
+          setLead(prev => ({ ...prev, ...slaUpdates }));
+        }
+      }
 
       // Clear leads cache so list view reflects the change
       localStorage.removeItem('leads_data');
