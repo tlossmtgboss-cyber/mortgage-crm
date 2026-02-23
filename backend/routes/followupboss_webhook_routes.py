@@ -473,24 +473,14 @@ def handle_person_assigned(
 @router.post("/{user_id}/test")
 async def test_webhook_endpoint(
     user_id: int,
-    db: Session = Depends(get_db),
 ):
     """
-    Test endpoint for verifying webhook configuration.
+    Test endpoint for verifying webhook URL is reachable.
 
-    Can be called manually to verify the webhook URL is accessible.
+    Returns a minimal response without leaking internal state.
+    Called by FUB or admin to confirm the URL is accessible.
     """
-    connection = db.query(FUBUserConnection).filter(
-        FUBUserConnection.user_id == user_id,
-    ).first()
-
-    if not connection:
-        raise HTTPException(status_code=404, detail="No FUB connection for user")
-
     return {
         "status": "ok",
-        "user_id": user_id,
-        "connection_id": connection.id,
-        "sync_enabled": connection.sync_enabled,
         "message": "Webhook endpoint is accessible",
     }

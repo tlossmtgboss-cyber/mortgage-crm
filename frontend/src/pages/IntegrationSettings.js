@@ -4,7 +4,6 @@ import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandli
 import { toast } from '../utils/toast';
 import SalesforceFieldMapper from '../components/integrations/SalesforceFieldMapper';
 import SalesforceSetupWizard from '../components/integrations/SalesforceSetupWizard';
-import FollowUpBossSettings from '../components/integrations/FollowUpBossSettings';
 import ElevenLabsSettings from '../components/integrations/ElevenLabsSettings';
 import RetellSettings from '../components/integrations/RetellSettings';
 import { API_BASE_URL } from '../services/api';
@@ -671,12 +670,6 @@ const IntegrationSettings = () => {
               </div>
             )}
 
-            {/* Follow Up Boss Integration - Full settings panel */}
-            {selectedIntegration.id === 'followupboss' && (
-              <div className="detail-section followupboss-integration">
-                <FollowUpBossSettings />
-              </div>
-            )}
 
             {/* ElevenLabs Integration - Voice AI settings panel */}
             {selectedIntegration.id === 'elevenlabs' && (
