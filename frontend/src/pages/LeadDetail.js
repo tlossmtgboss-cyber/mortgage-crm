@@ -494,8 +494,12 @@ function LeadDetail() {
             );
           }
 
-          // Reload lead data to reflect the new stage
-          fetchLead();
+          // Funded leads move to portfolio — redirect to leads list
+          if (newStatus === 'Funded') {
+            navigate('/leads');
+          } else {
+            loadLeadData();
+          }
           return;
         } catch (loanError) {
           console.error('Error creating loan:', loanError);

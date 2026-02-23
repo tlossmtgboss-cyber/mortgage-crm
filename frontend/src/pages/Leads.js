@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { leadsAPI } from '../services/api';
+import { leadsAPI, loansAPI } from '../services/api';
 import { useLeads } from '../hooks/useQueries';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
@@ -736,9 +736,50 @@ function Leads() {
 
   const handleStatusChange = async (newStatus) => {
     const leadId = statusDropdown.leadId;
+    const lead = leads.find(l => l.id === leadId);
     setStatusDropdown({ show: false, leadId: null, currentStage: null, position: { top: 0, left: 0 } });
 
     try {
+      // Special handling for Disclosed/Funded — convert lead to loan
+      if (newStatus === 'Disclosed' || newStatus === 'Funded') {
+        const timestamp = Date.now().toString(36).toUpperCase();
+        const loanNumber = `LEAD-${leadId}-${timestamp}`;
+        const borrowerName = lead ? `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || lead.name || 'Unknown Borrower' : 'Unknown Borrower';
+        const loanAmount = parseFloat(lead?.loan_amount || lead?.amount) || 1;
+
+        try {
+          await loansAPI.create({
+            loan_number: loanNumber,
+            borrower_name: borrowerName,
+            borrower_email: lead?.email,
+            borrower_phone: lead?.phone,
+            amount: loanAmount,
+            stage: newStatus,
+            property_address: lead?.property_address,
+          }, true);
+
+          // Update lead stage too
+          try { await leadsAPI.update(leadId, { stage: newStatus }); } catch (e) { /* loan created, lead update optional */ }
+
+          localStorage.removeItem('leads_data');
+          localStorage.removeItem('leads_data_time');
+          localStorage.removeItem('loans_data');
+          localStorage.removeItem('loans_data_time');
+          refetchLeads();
+
+          if (newStatus === 'Funded') {
+            toast.success(`${borrowerName} has been moved to Funded.`);
+          } else {
+            toast.success(`${borrowerName} has been moved to ${newStatus}.`);
+          }
+          return;
+        } catch (loanError) {
+          const errorMessage = loanError.response?.data?.detail || loanError.message || 'Failed to create loan';
+          toast.error(`Could not convert lead to ${newStatus}: ${errorMessage}`);
+          return;
+        }
+      }
+
       const result = await leadsAPI.update(leadId, { stage: newStatus });
       // Refresh data via React Query
       refetchLeads();
