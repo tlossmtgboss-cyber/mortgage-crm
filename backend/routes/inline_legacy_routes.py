@@ -1339,6 +1339,15 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         # Create video meeting models using our Base
         video_meeting_models = create_video_meeting_models(Base)
 
+        # Ensure video meeting tables exist in production
+        try:
+            for _vm_name, _vm_model in video_meeting_models.items():
+                if hasattr(_vm_model, '__table__'):
+                    _vm_model.__table__.create(engine, checkfirst=True)
+            logger.info("Video meeting tables ensured")
+        except Exception as _vm_tbl_err:
+            logger.warning(f"Video meeting table creation: {_vm_tbl_err}")
+
         # Set dependencies for the routes (including pwd_context for password hashing)
         set_video_meeting_deps(get_db, get_current_user, video_meeting_models, pwd_context=pwd_context)
 
