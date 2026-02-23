@@ -4,7 +4,7 @@ Health & System Status Routes
 Root, health check, and system status endpoints.
 Extracted from inline_legacy_routes.py.
 """
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -1008,4 +1008,39 @@ def register_health_routes(app, get_db, **kwargs):
             return {"status": "disabled", "message": "Cache module not available"}
         except Exception as e:
             return {"status": "error", "error": "Internal server error"}
+
+    # ========================================================================
+    # Recent Errors (diagnostic ring buffer)
+    # ========================================================================
+
+    @app.get("/health/recent-errors")
+    async def recent_errors(request: Request):
+        """
+        Show recent 500 errors captured by the error ring buffer.
+
+        Protected by admin API key header (X-API-Key) to prevent
+        information leakage. Returns the last N errors with stack traces
+        so production 500s can be diagnosed without needing Railway log access.
+        """
+        import os
+        # Require admin API key in production
+        is_prod = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production")
+        if is_prod:
+            api_key = request.headers.get("X-API-Key", "")
+            admin_key = os.getenv("ADMIN_API_KEY", "")
+            if not admin_key or api_key != admin_key:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Admin API key required"}
+                )
+
+        try:
+            from utils.error_handling import get_recent_errors
+            errors = get_recent_errors(limit=30)
+            return {
+                "total_captured": len(errors),
+                "errors": errors,
+            }
+        except ImportError:
+            return {"error": "Error handling module not available"}
 

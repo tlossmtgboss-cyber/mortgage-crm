@@ -314,70 +314,80 @@ def _setup_mutation_audit():
 
     @sa_event.listens_for(SASession, "after_flush")
     def after_flush(session, flush_context):
-        """Capture new/modified/deleted objects and write audit entries."""
+        """Capture new/modified/deleted objects and write audit entries.
+
+        CRITICAL: This entire handler is wrapped in try/except because exceptions
+        in after_flush propagate through SQLAlchemy's event system back to the
+        db.commit() caller. An unhandled error here would turn routine commits
+        (e.g., updating api_key.last_used_at in auth) into 500 Internal Server Errors.
+        """
         if not DATABASE_URL.startswith("postgresql"):
             return  # Only audit on PostgreSQL
 
-        # Collect changes from the flush
-        audit_entries = []
+        try:
+            # Collect changes from the flush
+            audit_entries = []
 
-        for obj in session.new:
-            table = getattr(obj, '__tablename__', None)
-            if not table or table in _AUDIT_SKIP_TABLES:
-                continue
-            org_id = getattr(obj, 'organization_id', None)
-            entity_id = getattr(obj, 'id', None)
-            audit_entries.append({
-                "change_type": "insert",
-                "entity_type": table,
-                "entity_id": entity_id,
-                "organization_id": org_id,
-                "after_state": _safe_state(obj),
-            })
+            for obj in session.new:
+                table = getattr(obj, '__tablename__', None)
+                if not table or table in _AUDIT_SKIP_TABLES:
+                    continue
+                org_id = getattr(obj, 'organization_id', None)
+                entity_id = getattr(obj, 'id', None)
+                audit_entries.append({
+                    "change_type": "insert",
+                    "entity_type": table,
+                    "entity_id": entity_id,
+                    "organization_id": org_id,
+                    "after_state": _safe_state(obj),
+                })
 
-        for obj in session.dirty:
-            table = getattr(obj, '__tablename__', None)
-            if not table or table in _AUDIT_SKIP_TABLES:
-                continue
-            insp = inspect(obj)
-            changes = {}
-            for attr in insp.attrs:
-                hist = attr.history
-                if hist.has_changes():
-                    changes[attr.key] = {
-                        "old": _serialize(hist.deleted[0]) if hist.deleted else None,
-                        "new": _serialize(hist.added[0]) if hist.added else None,
-                    }
-            if not changes:
-                continue
-            org_id = getattr(obj, 'organization_id', None)
-            entity_id = getattr(obj, 'id', None)
-            audit_entries.append({
-                "change_type": "update",
-                "entity_type": table,
-                "entity_id": entity_id,
-                "organization_id": org_id,
-                "before_state": {k: v["old"] for k, v in changes.items()},
-                "after_state": {k: v["new"] for k, v in changes.items()},
-            })
+            for obj in session.dirty:
+                table = getattr(obj, '__tablename__', None)
+                if not table or table in _AUDIT_SKIP_TABLES:
+                    continue
+                insp = inspect(obj)
+                changes = {}
+                for attr in insp.attrs:
+                    hist = attr.history
+                    if hist.has_changes():
+                        changes[attr.key] = {
+                            "old": _serialize(hist.deleted[0]) if hist.deleted else None,
+                            "new": _serialize(hist.added[0]) if hist.added else None,
+                        }
+                if not changes:
+                    continue
+                org_id = getattr(obj, 'organization_id', None)
+                entity_id = getattr(obj, 'id', None)
+                audit_entries.append({
+                    "change_type": "update",
+                    "entity_type": table,
+                    "entity_id": entity_id,
+                    "organization_id": org_id,
+                    "before_state": {k: v["old"] for k, v in changes.items()},
+                    "after_state": {k: v["new"] for k, v in changes.items()},
+                })
 
-        for obj in session.deleted:
-            table = getattr(obj, '__tablename__', None)
-            if not table or table in _AUDIT_SKIP_TABLES:
-                continue
-            org_id = getattr(obj, 'organization_id', None)
-            entity_id = getattr(obj, 'id', None)
-            audit_entries.append({
-                "change_type": "delete",
-                "entity_type": table,
-                "entity_id": entity_id,
-                "organization_id": org_id,
-                "before_state": _safe_state(obj),
-            })
+            for obj in session.deleted:
+                table = getattr(obj, '__tablename__', None)
+                if not table or table in _AUDIT_SKIP_TABLES:
+                    continue
+                org_id = getattr(obj, 'organization_id', None)
+                entity_id = getattr(obj, 'id', None)
+                audit_entries.append({
+                    "change_type": "delete",
+                    "entity_type": table,
+                    "entity_id": entity_id,
+                    "organization_id": org_id,
+                    "before_state": _safe_state(obj),
+                })
 
-        # Write audit entries (use a separate connection to avoid flush recursion)
-        if audit_entries:
-            _write_audit_batch(audit_entries)
+            # Write audit entries (use a separate connection to avoid flush recursion)
+            if audit_entries:
+                _write_audit_batch(audit_entries)
+
+        except Exception as e:
+            logger.warning(f"Mutation audit after_flush failed (non-fatal): {e}")
 
 
 def _safe_state(obj) -> dict:

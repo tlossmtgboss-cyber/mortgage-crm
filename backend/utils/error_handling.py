@@ -31,6 +31,43 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# ERROR RING BUFFER — Captures recent errors for diagnostic access
+# =============================================================================
+# Stores the last N errors with full stack traces in memory.
+# Accessible via /health/recent-errors (no auth required, admin API key recommended).
+# This solves the production debugging problem where error_handling.py sanitizes
+# 500 responses and Railway logs scroll away quickly.
+
+from collections import deque
+import threading
+
+_MAX_RECENT_ERRORS = 50
+_recent_errors: deque = deque(maxlen=_MAX_RECENT_ERRORS)
+_error_lock = threading.Lock()
+
+
+def _record_error(method: str, path: str, error_type: str, error_msg: str, tb: str = ""):
+    """Record an error to the ring buffer (thread-safe)."""
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "method": method,
+        "path": path,
+        "error_type": error_type,
+        "error_message": str(error_msg)[:500],
+        "traceback": tb[:2000] if tb else "",
+    }
+    with _error_lock:
+        _recent_errors.append(entry)
+
+
+def get_recent_errors(limit: int = 20) -> list:
+    """Get the most recent errors (newest first)."""
+    with _error_lock:
+        errors = list(_recent_errors)
+    return list(reversed(errors))[:limit]
+
+
+# =============================================================================
 # ERROR CODES
 # =============================================================================
 
@@ -376,6 +413,15 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         exc_info=True,
     )
 
+    # Record to ring buffer for diagnostic access
+    _record_error(
+        method=request.method,
+        path=request.url.path,
+        error_type=type(exc).__name__,
+        error_msg=str(exc),
+        tb=traceback.format_exc(),
+    )
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -405,6 +451,13 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
         logger.error(
             f"HTTP {exc.status_code} on {request.method} {request.url.path}: {exc.detail}",
             extra={"path": request.url.path, "method": request.method},
+        )
+        # Record to ring buffer for diagnostic access
+        _record_error(
+            method=request.method,
+            path=request.url.path,
+            error_type=f"HTTPException({exc.status_code})",
+            error_msg=str(exc.detail),
         )
         return JSONResponse(
             status_code=exc.status_code,
