@@ -22,7 +22,11 @@ function CalendarSidebar({ leadId, loanId, children }) {
   console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem('calendarSidebarCollapsed') === 'true'; } catch { return false; }
+    try {
+      const stored = localStorage.getItem('calendarSidebarCollapsed');
+      // Default to collapsed (true) if no preference saved
+      return stored === null ? true : stored === 'true';
+    } catch { return true; }
   });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
