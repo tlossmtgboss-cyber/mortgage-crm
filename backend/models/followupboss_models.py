@@ -172,7 +172,7 @@ class FUBSyncEvent(Base):
     response_payload = Column(JSON, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, server_default=func.now())
     completed_at = Column(DateTime, nullable=True)
 
     # Relationships
@@ -204,8 +204,8 @@ class FUBStageMapping(Base):
     confidence_score = Column(Integer, default=100)  # Auto-mapping confidence 0-100
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     connection = relationship("FUBUserConnection", back_populates="stage_mappings")
