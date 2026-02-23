@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { aiAPI } from '../services/api';
+import { aiAPI, API_BASE_URL } from '../services/api';
 import GuidelineUpdatesSidebar from '../components/GuidelineUpdatesSidebar';
 import GuidelineNotificationBadge from '../components/GuidelineNotificationBadge';
 import EscalationPanel from '../components/EscalationPanel';
@@ -85,7 +85,7 @@ function AIUnderwriter() {
     if (!loanSearchQuery.trim()) return;
     setIsSearching(true);
     try {
-      const response = await fetch(`/api/v1/loans/search?q=${encodeURIComponent(loanSearchQuery)}&limit=10`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/loans/search?q=${encodeURIComponent(loanSearchQuery)}&limit=10`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -105,7 +105,7 @@ function AIUnderwriter() {
     setIsAnalyzing(true);
     setFileAnalysis(null);
     try {
-      const response = await fetch(`/api/v1/ai-file-analysis/analyze/${loanId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai-file-analysis/analyze/${loanId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -125,7 +125,7 @@ function AIUnderwriter() {
   const loadPipelineReadiness = useCallback(async () => {
     setIsLoadingPipeline(true);
     try {
-      const response = await fetch('/api/v1/ai-file-analysis/pipeline-readiness?limit=15', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai-file-analysis/pipeline-readiness?limit=15`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -145,7 +145,7 @@ function AIUnderwriter() {
   const loadApplicants = useCallback(async () => {
     setIsLoadingApplicants(true);
     try {
-      const response = await fetch('/api/v1/loans?limit=50&include_borrower=true', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/loans?limit=50&include_borrower=true`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -166,7 +166,7 @@ function AIUnderwriter() {
     setApplicantDetails(null);
     try {
       // Fetch loan details with all related data
-      const response = await fetch(`/api/v1/loans/${loanId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/loans/${loanId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -348,7 +348,7 @@ function AIUnderwriter() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/v1/ai-underwriter/ask', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai-underwriter/ask`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

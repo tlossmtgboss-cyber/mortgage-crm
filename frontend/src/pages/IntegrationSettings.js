@@ -103,21 +103,16 @@ const IntegrationSettings = () => {
   };
 
   const handleConnect = async (integrationId) => {
-    console.log('handleConnect called for:', integrationId);
     try {
       const token = localStorage.getItem('token');
-      console.log('Token present:', !!token);
 
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${integrationId}/connect`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      console.log('Response status:', res.status);
-
       if (res.ok) {
         const data = await res.json();
-        console.log('Response data:', data);
 
         if (data.data?.auth_type === 'oauth2' && data.data?.oauth_url) {
           // Redirect to OAuth - use same window to avoid popup blockers

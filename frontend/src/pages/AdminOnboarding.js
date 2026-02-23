@@ -19,6 +19,7 @@ import {
   createAdminSubscription,
   completeAdminOnboarding
 } from '../services/onboardingApi';
+import { API_BASE_URL } from '../services/api';
 import './AdminOnboarding.css';
 
 // Initialize Stripe only if key is available (prevents IntegrationError on empty key)
@@ -113,7 +114,7 @@ function AdminOnboarding() {
   const fetchTeamRoles = useCallback(async () => {
     setRolesLoading(true);
     try {
-      const response = await fetch('/api/v1/admin-onboarding/available-roles');
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin-onboarding/available-roles`);
       if (response.ok) {
         const data = await response.json();
         if (data.data?.roles && data.data.roles.length > 0) {
@@ -136,7 +137,7 @@ function AdminOnboarding() {
   const fetchModules = useCallback(async () => {
     setModulesLoading(true);
     try {
-      const response = await fetch('/api/v1/modules/public/list');
+      const response = await fetch(`${API_BASE_URL}/api/v1/modules/public/list`);
       if (response.ok) {
         const modules = await response.json();
         setAvailableModules(modules);
@@ -1222,7 +1223,7 @@ function PaymentStep({
                   onClick={async () => {
                     try {
                       const token = localStorage.getItem('token');
-                      const resp = await fetch('/api/v1/admin-onboarding/validate-promo', {
+                      const resp = await fetch(`${API_BASE_URL}/api/v1/admin-onboarding/validate-promo`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ promo_code: promoCode })

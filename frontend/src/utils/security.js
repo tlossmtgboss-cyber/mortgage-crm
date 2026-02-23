@@ -10,6 +10,7 @@
  */
 
 import { getAuthHeaders as getBaseAuthHeaders } from './auth';
+import { API_BASE_URL } from '../services/api';
 
 // CSRF token handling
 let csrfToken = null;
@@ -42,7 +43,7 @@ export const getCSRFToken = async () => {
   // If no cookie, fetch from server
   if (!csrfToken) {
     try {
-      const response = await fetch('/api/v1/csrf-token', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/csrf-token`, {
         credentials: 'include',
       });
       if (response.ok) {

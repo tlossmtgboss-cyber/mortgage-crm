@@ -5,6 +5,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { API_BASE_URL } from '../../services/api';
 import './AutoDataImport.css';
 
 function AutoDataImport({ onImportComplete }) {
@@ -33,7 +34,7 @@ function AutoDataImport({ onImportComplete }) {
       formData.append('use_ai', 'false');
       formData.append('table_name', destination);
 
-      const response = await fetch('/api/v1/auto-import', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auto-import`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

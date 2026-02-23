@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 import './DataUpload.css';
 import AutoDataImport from '../components/data-management/AutoDataImport';
 
@@ -70,8 +71,7 @@ function DataUpload() {
       const formData = new FormData();
       formData.append('file', file);
 
-      // Use relative URL which will be proxied to the backend API
-      const response = await fetch('/api/v1/data-import/analyze', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/data-import/analyze`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -133,8 +133,7 @@ function DataUpload() {
       formData.append('answers', JSON.stringify(answers));
       formData.append('mappings', JSON.stringify(columnMappings));
 
-      // Use relative URL which will be proxied to the backend API
-      const response = await fetch('/api/v1/data-import/execute', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/data-import/execute`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

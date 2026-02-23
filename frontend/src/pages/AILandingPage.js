@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI, outreachAPI } from '../services/api';
+import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI, outreachAPI, API_BASE_URL } from '../services/api';
 import ActionSidebar from '../components/ActionSidebar';
 import './AILandingPage.css';
 import { toast } from '../utils/toast';
@@ -1466,7 +1466,7 @@ function AILandingPage() {
 
       // Fetch workflow tasks (same as Tasks page) - these are the primary tasks
       try {
-        const workflowResponse = await fetch('/api/v1/workflow-config/all-workflow-tasks?days_ahead=14', {
+        const workflowResponse = await fetch(`${API_BASE_URL}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (workflowResponse.ok) {

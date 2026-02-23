@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../services/api';
 import './TeamAssignment.css';
 
 function TeamAssignment({ leadId, onUpdate }) {
@@ -15,7 +16,7 @@ function TeamAssignment({ leadId, onUpdate }) {
 
   const loadTeamMembers = async () => {
     try {
-      const response = await fetch('/api/v1/team/members', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -34,7 +35,7 @@ function TeamAssignment({ leadId, onUpdate }) {
 
   const loadAssignedMembers = async () => {
     try {
-      const response = await fetch(`/api/v1/leads/${leadId}/team-assignments`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -67,7 +68,7 @@ function TeamAssignment({ leadId, onUpdate }) {
 
   const deleteAssignment = async (assignmentId) => {
     try {
-      await fetch(`/api/v1/leads/${leadId}/team-assignments/${assignmentId}`, {
+      await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments/${assignmentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -94,7 +95,7 @@ function TeamAssignment({ leadId, onUpdate }) {
     // Save to backend
     if (memberId && leadId) {
       try {
-        const response = await fetch(`/api/v1/leads/${leadId}/team-assignments`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,

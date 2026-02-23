@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './AppointmentModal.css';
 import { toast } from '../utils/toast';
+import { API_BASE_URL } from '../services/api';
 
 function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
   const [title, setTitle] = useState('');
@@ -32,7 +33,7 @@ function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
       const startDateTime = new Date(`${date}T${time}`);
       const endDateTime = new Date(startDateTime.getTime() + parseInt(duration) * 60000);
 
-      const response = await fetch('/api/v1/calendar/events', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendar/events`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

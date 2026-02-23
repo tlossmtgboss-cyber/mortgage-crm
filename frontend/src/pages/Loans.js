@@ -397,9 +397,6 @@ function Loans() {
     };
 
     try {
-      console.log('Submitting loan data:', submitData);
-      console.log('Auth token exists:', !!localStorage.getItem('token'));
-
       await loansAPI.create(submitData);
       setShowModal(false);
       resetForm();

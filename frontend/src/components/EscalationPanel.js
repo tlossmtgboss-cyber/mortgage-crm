@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../services/api';
 import './EscalationPanel.css';
 
 function EscalationPanel() {
@@ -46,7 +47,7 @@ function EscalationPanel() {
       }
 
       try {
-        const response = await fetch(`/api/v1/leads/search?q=${encodeURIComponent(borrowerSearch)}&limit=10`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/leads/search?q=${encodeURIComponent(borrowerSearch)}&limit=10`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
           },
@@ -68,7 +69,7 @@ function EscalationPanel() {
 
   const loadTeamMembers = async () => {
     try {
-      const response = await fetch('/api/v1/team/members', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -133,7 +134,7 @@ function EscalationPanel() {
         formData.append('attachments', file);
       });
 
-      const response = await fetch('/api/v1/escalations', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/escalations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

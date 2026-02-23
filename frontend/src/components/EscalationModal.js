@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../services/api';
 import './EscalationModal.css';
 
 function EscalationModal({ isOpen, onClose, lead }) {
@@ -20,7 +21,7 @@ function EscalationModal({ isOpen, onClose, lead }) {
 
   const loadTeamMembers = async () => {
     try {
-      const response = await fetch('/api/v1/team/members', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -79,7 +80,7 @@ function EscalationModal({ isOpen, onClose, lead }) {
         formData.append('attachments', file);
       });
 
-      const response = await fetch('/api/v1/escalations', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/escalations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

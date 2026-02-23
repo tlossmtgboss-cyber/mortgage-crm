@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '../utils/toast';
+import { API_BASE_URL } from '../services/api';
 import './WorkflowRoleAssignment.css';
 
 /**
@@ -30,7 +31,7 @@ function WorkflowRoleAssignment({
   // Load available roles
   const loadRoles = useCallback(async () => {
     try {
-      const response = await fetch('/api/v1/roles', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/roles`, {
         headers: getAuthHeaders(),
       });
 
@@ -53,7 +54,7 @@ function WorkflowRoleAssignment({
       const entityType = loanId ? 'loans' : 'leads';
       const entityId = loanId || leadId;
 
-      const response = await fetch(`/api/v1/${entityType}/${entityId}/roles`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/${entityType}/${entityId}/roles`, {
         headers: getAuthHeaders(),
       });
 
@@ -73,7 +74,7 @@ function WorkflowRoleAssignment({
   // Load team members
   const loadTeamMembers = useCallback(async () => {
     try {
-      const response = await fetch('/api/v1/team/members', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
         headers: getAuthHeaders(),
       });
 
@@ -120,7 +121,7 @@ function WorkflowRoleAssignment({
     try {
       if (userId) {
         // Assign user to role
-        const response = await fetch(`/api/v1/${entityType}/${entityId}/roles/${roleId}/assign`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/${entityType}/${entityId}/roles/${roleId}/assign`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({ user_id: parseInt(userId) }),
@@ -151,7 +152,7 @@ function WorkflowRoleAssignment({
         }
       } else {
         // Remove assignment
-        const response = await fetch(`/api/v1/${entityType}/${entityId}/roles/${roleId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/${entityType}/${entityId}/roles/${roleId}`, {
           method: 'DELETE',
           headers: getAuthHeaders(),
         });
