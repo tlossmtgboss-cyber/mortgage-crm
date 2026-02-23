@@ -226,7 +226,13 @@ function Loans() {
       // Use API data if available
       if (Array.isArray(data)) {
         setLoans(data);
-        detectDuplicates(data);
+        // Only detect duplicates among active pipeline loans (exclude funded/closed/etc.)
+        const inactiveStages = ['FUNDED', 'Funded', 'CANCELLED', 'Cancelled', 'DENIED', 'Denied', 'DEAD', 'Dead', 'NURTURE', 'Nurture', 'WITHDRAWN', 'Withdrawn', 'DOES_NOT_QUALIFY', 'Does Not Qualify'];
+        const activeLoans = data.filter(loan => {
+          const stage = loan.stage || '';
+          return !inactiveStages.includes(stage) && !stage.toLowerCase().includes('funded');
+        });
+        detectDuplicates(activeLoans);
       } else {
         setLoans([]);
       }

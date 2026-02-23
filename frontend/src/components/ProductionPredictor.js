@@ -53,12 +53,20 @@ export function ProductionPredictorDashboard({ entityId, entityType = 'lo', embe
     setError(null);
 
     try {
+      const token = localStorage.getItem('token');
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      };
+
       // Fetch all data in parallel
       const [summaryRes, goalRes, conversionRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/production-predictor/summary/${entityId}?entity_type=${entityType}`),
+        fetch(`${API_BASE}/api/v1/production-predictor/summary/${entityId}?entity_type=${entityType}`, {
+          headers: authHeaders,
+        }),
         fetch(`${API_BASE}/api/v1/production-predictor/goal-attainment`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             entity_id: entityId,
             goal_units: 10,
@@ -67,7 +75,9 @@ export function ProductionPredictorDashboard({ entityId, entityType = 'lo', embe
             goal_period_end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
           }),
         }),
-        fetch(`${API_BASE}/api/v1/production-predictor/conversions/${entityId}?days=90`),
+        fetch(`${API_BASE}/api/v1/production-predictor/conversions/${entityId}?days=90`, {
+          headers: authHeaders,
+        }),
       ]);
 
       if (summaryRes.ok) {
@@ -761,8 +771,12 @@ export function ProductionPredictorWidget({ entityId, compact = false }) {
 
   const fetchSummary = async () => {
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(
-        `${API_BASE}/api/v1/production-predictor/summary/${entityId}?entity_type=lo`
+        `${API_BASE}/api/v1/production-predictor/summary/${entityId}?entity_type=lo`,
+        {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        }
       );
       if (res.ok) {
         const data = await res.json();
