@@ -3,7 +3,7 @@
  * Provides progress bar, stage navigation, and layout structure
  */
 
-import React, { useMemo, useState, lazy, Suspense } from 'react';
+import React, { useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { useApplication } from '../contexts/ApplicationContext';
 import { getStages, getVisibleStages, getStageById } from '../config/stageConfig';
 import './ApplicationShell.css';
@@ -29,6 +29,8 @@ const ApplicationShell = ({
 
   // Document sidebar toggle state
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
+  // Exit confirmation state (replaces window.confirm)
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   // Get stages based on application type
   const allStages = useMemo(() => getStages(applicationType), [applicationType]);
@@ -64,15 +66,22 @@ const ApplicationShell = ({
   };
 
   // Handle exit
-  const handleExit = () => {
+  const handleExit = useCallback(() => {
     if (isDirty) {
-      const confirmed = window.confirm(
-        'You have unsaved changes. Are you sure you want to leave?'
-      );
-      if (!confirmed) return;
+      setShowExitConfirm(true);
+      return;
     }
     onExit?.();
-  };
+  }, [isDirty, onExit]);
+
+  const confirmExit = useCallback(() => {
+    setShowExitConfirm(false);
+    onExit?.();
+  }, [onExit]);
+
+  const cancelExit = useCallback(() => {
+    setShowExitConfirm(false);
+  }, []);
 
   // Get icon for stage
   const getStageIcon = (icon) => {
@@ -161,6 +170,21 @@ const ApplicationShell = ({
           })}
         </div>
       </nav>
+
+      {/* Exit confirmation banner */}
+      {showExitConfirm && (
+        <div className="exit-confirm-banner" role="alertdialog" aria-label="Confirm exit">
+          <p>You have unsaved changes. Are you sure you want to leave?</p>
+          <div className="exit-confirm-actions">
+            <button type="button" className="btn-confirm-exit" onClick={confirmExit}>
+              Leave
+            </button>
+            <button type="button" className="btn-cancel-exit" onClick={cancelExit}>
+              Stay
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main content area */}
       <main className="application-main">

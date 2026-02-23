@@ -15,7 +15,7 @@ from enum import Enum
 
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime,
-    ForeignKey, JSON, Enum as SQLEnum, Index
+    ForeignKey, JSON, Enum as SQLEnum, Index, func
 )
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, Field
@@ -93,8 +93,8 @@ class FUBUserConnection(Base):
     last_error = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     lead_mappings = relationship("FUBLeadMapping", back_populates="connection", cascade="all, delete-orphan")
@@ -131,8 +131,8 @@ class FUBLeadMapping(Base):
     fub_updated_at = Column(DateTime, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     connection = relationship("FUBUserConnection", back_populates="lead_mappings")

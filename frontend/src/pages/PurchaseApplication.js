@@ -1727,13 +1727,19 @@ export default function PurchaseApplication() {
     // Don't save on initial mount or if on account stage
     if (currentStage === 'account') return;
 
+    // Strip SSN fields before saving to localStorage
+    const sanitizedProfileData = { ...profileData };
+    delete sanitizedProfileData.ssn;
+    const sanitizedCoBorrowerData = { ...coBorrowerData };
+    delete sanitizedCoBorrowerData.ssn;
+
     const dataToSave = {
       declarations,
-      profileData,
+      profileData: sanitizedProfileData,
       incomeData,
       assetData,
       propertyData,
-      coBorrowerData,
+      coBorrowerData: sanitizedCoBorrowerData,
       coBorrowerIncomeData,
       currentStage,
       userAccount,
@@ -1886,7 +1892,7 @@ export default function PurchaseApplication() {
 
         // Signal to parent iframe that submission is complete (if embedded)
         if (window.parent !== window) {
-          window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: redirectUrl }, '*');
+          window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: redirectUrl }, window.location.origin);
         }
 
         // Redirect to the client portal
@@ -2202,6 +2208,10 @@ export default function PurchaseApplication() {
           console.warn('[PurchaseApplication] Failed to sync documents to Smart Docs (non-critical):', syncError);
         }
       }
+
+      // Clear saved PII from localStorage after successful submission
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('borrower_email');
 
       // Success - show the submission success lightbox
       if (result.data?.portal_url) {

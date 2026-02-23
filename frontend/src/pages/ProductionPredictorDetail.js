@@ -25,11 +25,30 @@ const formatDate = (dateStr) => {
   });
 };
 
+// Stage display name mapping
+const STAGE_DISPLAY = {
+  APPLICATION: 'Application',
+  DISCLOSED: 'Disclosed',
+  PROCESSING: 'Processing',
+  SUBMITTED: 'Submitted',
+  UNDERWRITING: 'Underwriting',
+  UW_RECEIVED: 'UW Received',
+  CONDITIONAL_APPROVAL: 'Conditional',
+  APPROVED: 'Approved',
+  SUSPENDED: 'Suspended',
+  CTC: 'Clear to Close',
+  CLEAR_TO_CLOSE: 'Clear to Close',
+  CLOSING: 'Closing',
+  DOCS: 'Docs',
+  DOCS_OUT: 'Docs Out',
+  FUNDED: 'Funded',
+};
+
 // View configurations
 const VIEW_CONFIG = {
   mtd_units: {
     title: 'Month-to-Date Units',
-    subtitle: 'Loans closed this month',
+    subtitle: 'Loans funded this month',
     filter: { status: 'funded', period: 'mtd' },
   },
   mtd_volume: {
@@ -49,17 +68,17 @@ const VIEW_CONFIG = {
   },
   forecast_30: {
     title: '30-Day Forecast',
-    subtitle: 'Loans expected to close in next 30 days',
+    subtitle: 'Loans expected to close in the next 30 days',
     filter: { status: 'in_pipeline', period: '30_day' },
   },
   forecast_60: {
     title: '60-Day Forecast',
-    subtitle: 'Loans expected to close in next 60 days',
+    subtitle: 'Loans expected to close in the next 60 days',
     filter: { status: 'in_pipeline', period: '60_day' },
   },
   forecast_90: {
     title: '90-Day Forecast',
-    subtitle: 'Loans expected to close in next 90 days',
+    subtitle: 'Loans expected to close in the next 90 days',
     filter: { status: 'in_pipeline', period: '90_day' },
   },
   trend: {
@@ -69,9 +88,48 @@ const VIEW_CONFIG = {
   },
   historical: {
     title: 'Historical Performance',
-    subtitle: 'Past production data',
+    subtitle: 'Past production data and patterns',
     filter: { view: 'historical' },
   },
+  goal_units: {
+    title: 'Goal Progress — Units',
+    subtitle: 'Pipeline loans contributing to your unit goal',
+    filter: { status: 'in_pipeline', period: 'goal' },
+  },
+  goal_volume: {
+    title: 'Goal Progress — Volume',
+    subtitle: 'Pipeline loans contributing to your volume goal',
+    filter: { status: 'in_pipeline', period: 'goal' },
+  },
+  pace_units: {
+    title: 'Required Pace — Units',
+    subtitle: 'Active pipeline loans needed to hit your pace target',
+    filter: { status: 'in_pipeline', period: 'goal' },
+  },
+  pace_volume: {
+    title: 'Required Pace — Volume',
+    subtitle: 'Active pipeline loans by volume toward your pace target',
+    filter: { status: 'in_pipeline', period: 'goal' },
+  },
+  conversion_overall: {
+    title: 'Overall Pipeline Conversion',
+    subtitle: 'All active pipeline loans across conversion stages',
+    filter: { status: 'in_pipeline', period: 'all' },
+  },
+};
+
+// Generate a view config for dynamic conversion stages
+const getViewConfig = (view) => {
+  if (VIEW_CONFIG[view]) return VIEW_CONFIG[view];
+  if (view?.startsWith('conversion_')) {
+    const stage = view.replace('conversion_', '').replace(/_/g, ' ');
+    return {
+      title: `Conversion — ${stage.replace(/\b\w/g, c => c.toUpperCase())}`,
+      subtitle: `Loans in the ${stage} conversion stage`,
+      filter: { status: 'in_pipeline', period: 'conversion' },
+    };
+  }
+  return VIEW_CONFIG.mtd_units;
 };
 
 export default function ProductionPredictorDetail() {
@@ -85,7 +143,7 @@ export default function ProductionPredictorDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const viewConfig = VIEW_CONFIG[view] || VIEW_CONFIG.mtd_units;
+  const viewConfig = getViewConfig(view);
 
   useEffect(() => {
     fetchData();
@@ -99,12 +157,11 @@ export default function ProductionPredictorDetail() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Determine the API call based on view type
       let loansData = [];
       let summaryData = null;
 
       if (view === 'trend' || view === 'historical') {
-        // Fetch trend/historical data
+        // Fetch trend/historical data from summary endpoint
         const res = await fetch(
           `${API_BASE}/api/v1/production-predictor/summary/current-user?entity_type=lo`,
           { headers }
@@ -112,29 +169,51 @@ export default function ProductionPredictorDetail() {
         if (res.ok) {
           summaryData = await res.json();
         }
+
+        // Also fetch recent funded loans for the table
+        const loansRes = await fetch(
+          `${API_BASE}/api/v1/loans/?limit=50`,
+          { headers }
+        );
+        if (loansRes.ok) {
+          const data = await loansRes.json();
+          loansData = Array.isArray(data) ? data : (data.items || data.loans || []);
+        }
       } else {
         // Build query params for loan list
         const params = new URLSearchParams();
+        params.append('limit', '100');
 
-        // Set status filter
         if (view.includes('mtd')) {
-          params.append('status', 'funded');
-          // Get current month date range
+          // Funded this month
           const now = new Date();
           const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          params.append('status', 'funded');
           params.append('funded_after', startOfMonth.toISOString().split('T')[0]);
         } else if (view.includes('forecast') || view.includes('projected')) {
-          // Pipeline loans
-          params.append('status__in', 'processing,submitted,underwriting,approved,clear_to_close');
+          // Pipeline loans with expected close
+          params.append('status__in', 'processing,submitted,underwriting,uw_received,conditional_approval,approved,clear_to_close,closing,docs,docs_out');
 
-          // Set expected close date range
           const now = new Date();
           let daysAhead = 30;
           if (view === 'forecast_60' || period === '60_day') daysAhead = 60;
           if (view === 'forecast_90' || period === '90_day') daysAhead = 90;
+          if (view.includes('projected')) {
+            // End of current month
+            daysAhead = Math.ceil((new Date(now.getFullYear(), now.getMonth() + 1, 0) - now) / (24 * 60 * 60 * 1000));
+          }
 
           const endDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
           params.append('expected_close_before', endDate.toISOString().split('T')[0]);
+        } else if (view.startsWith('goal_') || view.startsWith('pace_')) {
+          // Active pipeline toward monthly goal — all non-terminal stages
+          params.append('status__in', 'application,disclosed,processing,submitted,underwriting,uw_received,conditional_approval,approved,clear_to_close,closing,docs,docs_out');
+        } else if (view.startsWith('conversion_')) {
+          // Pipeline loans for conversion analysis
+          params.append('status__in', 'application,disclosed,processing,submitted,underwriting,uw_received,conditional_approval,approved,clear_to_close,closing,docs,docs_out,funded');
+        } else {
+          // Default: all active pipeline
+          params.append('status__in', 'processing,submitted,underwriting,approved,clear_to_close');
         }
 
         // Fetch loans
@@ -148,13 +227,12 @@ export default function ProductionPredictorDetail() {
           loansData = Array.isArray(data) ? data : (data.items || data.loans || []);
         }
 
-        // Calculate summary
+        // Calculate summary stats
+        const totalVolume = loansData.reduce((sum, loan) => sum + (loan.loan_amount || loan.amount || 0), 0);
         summaryData = {
           total_count: loansData.length,
-          total_volume: loansData.reduce((sum, loan) => sum + (loan.loan_amount || 0), 0),
-          avg_loan_amount: loansData.length > 0
-            ? loansData.reduce((sum, loan) => sum + (loan.loan_amount || 0), 0) / loansData.length
-            : 0,
+          total_volume: totalVolume,
+          avg_loan_amount: loansData.length > 0 ? totalVolume / loansData.length : 0,
         };
       }
 
@@ -169,7 +247,7 @@ export default function ProductionPredictorDetail() {
   };
 
   const handleLoanClick = (loanId) => {
-    navigate(`/loans/${loanId}`);
+    navigate(`/active-loans/${loanId}`);
   };
 
   const handleBack = () => {
@@ -181,7 +259,7 @@ export default function ProductionPredictorDetail() {
       <div className="pp-detail-page">
         <div className="pp-detail-loading">
           <div className="loading-spinner"></div>
-          <p>Loading data...</p>
+          <p>Loading loan data...</p>
         </div>
       </div>
     );
@@ -213,9 +291,9 @@ export default function ProductionPredictorDetail() {
       </div>
 
       {/* Summary Cards */}
-      {summary && (
+      {summary && !view.includes('trend') && !view.includes('historical') && (
         <div className="pp-detail-summary">
-          <div className="summary-card">
+          <div className="summary-card highlight">
             <span className="summary-value">{summary.total_count || loans.length}</span>
             <span className="summary-label">Total Loans</span>
           </div>
@@ -260,8 +338,8 @@ export default function ProductionPredictorDetail() {
           {summary.trend && (
             <div className="trend-section">
               <h3>Current Trend</h3>
-              <div className="trend-indicator">
-                <span className={`trend-badge ${summary.trend.direction}`}>
+              <div className="trend-indicator-row">
+                <span className={`trend-badge-lg ${summary.trend.direction}`}>
                   {summary.trend.direction === 'up' ? '📈' : summary.trend.direction === 'down' ? '📉' : '➡️'}
                   {summary.trend.change_pct > 0 ? '+' : ''}{summary.trend.change_pct}%
                 </span>
@@ -278,47 +356,59 @@ export default function ProductionPredictorDetail() {
       {/* Loans Table */}
       {loans.length > 0 && (
         <div className="pp-detail-table-container">
-          <h3>Loan Details ({loans.length} loans)</h3>
-          <table className="pp-detail-table">
-            <thead>
-              <tr>
-                <th>Loan #</th>
-                <th>Borrower</th>
-                <th>Property Address</th>
-                <th>Loan Amount</th>
-                <th>Status</th>
-                <th>Expected Close</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loans.map((loan) => (
-                <tr key={loan.id} onClick={() => handleLoanClick(loan.id)}>
-                  <td className="loan-number">{loan.loan_number || loan.id?.slice(0, 8)}</td>
-                  <td>{loan.borrower_name || loan.borrower_first_name || '-'}</td>
-                  <td className="address">{loan.property_address || loan.property_street || '-'}</td>
-                  <td className="amount">{formatCurrency(loan.loan_amount)}</td>
-                  <td>
-                    <span className={`status-badge ${loan.status?.toLowerCase()}`}>
-                      {loan.status?.replace(/_/g, ' ') || '-'}
-                    </span>
-                  </td>
-                  <td>{formatDate(loan.expected_close_date || loan.estimated_closing_date)}</td>
-                  <td>
-                    <button
-                      className="view-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleLoanClick(loan.id);
-                      }}
-                    >
-                      View
-                    </button>
-                  </td>
+          <div className="table-header-row">
+            <h3>Loan Details</h3>
+            <span className="loan-count">{loans.length} loans</span>
+          </div>
+          <div className="table-scroll">
+            <table className="pp-detail-table">
+              <thead>
+                <tr>
+                  <th>Loan #</th>
+                  <th>Borrower</th>
+                  <th>Property Address</th>
+                  <th>Loan Amount</th>
+                  <th>Stage</th>
+                  <th>Expected Close</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loans.map((loan) => {
+                  const stage = (loan.status || loan.stage || '').toUpperCase();
+                  const stageDisplay = STAGE_DISPLAY[stage] || (loan.status || loan.stage || '-').replace(/_/g, ' ');
+
+                  return (
+                    <tr key={loan.id} onClick={() => handleLoanClick(loan.id)}>
+                      <td className="loan-number">{loan.loan_number || loan.id?.toString().slice(0, 8)}</td>
+                      <td className="borrower-name">
+                        {loan.borrower_name || loan.borrower_first_name || '-'}
+                      </td>
+                      <td className="address">{loan.property_address || loan.property_street || '-'}</td>
+                      <td className="amount">{formatCurrency(loan.loan_amount || loan.amount)}</td>
+                      <td>
+                        <span className={`status-badge ${stage.toLowerCase()}`}>
+                          {stageDisplay}
+                        </span>
+                      </td>
+                      <td className="date-col">{formatDate(loan.expected_close_date || loan.estimated_closing_date || loan.closing_date)}</td>
+                      <td>
+                        <button
+                          className="view-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLoanClick(loan.id);
+                          }}
+                        >
+                          View →
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -328,6 +418,9 @@ export default function ProductionPredictorDetail() {
           <div className="empty-icon">📊</div>
           <h3>No Loans Found</h3>
           <p>There are no loans matching the selected criteria.</p>
+          <button className="back-link" onClick={handleBack}>
+            ← Back to Production Predictor
+          </button>
         </div>
       )}
     </div>

@@ -152,7 +152,7 @@ export const REFINANCE_STAGES = [
     shortLabel: 'Assets',
     icon: 'bank',
     description: 'Bank accounts and investments',
-    progress: 60,
+    progress: 55,
     order: 6,
   },
   {

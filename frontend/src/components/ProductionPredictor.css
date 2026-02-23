@@ -1,9 +1,9 @@
 /* =============================================================================
-   Production Predictor Styles
+   Production Predictor Styles — Polished Modern UI
    ============================================================================= */
 
 .production-predictor {
-  padding: 24px;
+  padding: 24px 32px;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -14,6 +14,8 @@
   align-items: center;
   justify-content: center;
   min-height: 400px;
+  gap: 16px;
+  color: #6b7280;
 }
 
 .loading-spinner {
@@ -39,30 +41,55 @@
   margin-bottom: 32px;
 }
 
-.predictor-header h1 {
-  margin: 0 0 8px;
-  font-size: 28px;
-  font-weight: 700;
-  color: #1f2937;
+.predictor-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
 }
 
-.predictor-header p {
-  margin: 0 0 20px;
+.predictor-header h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.5px;
+}
+
+.predictor-subtitle {
+  margin: 0;
   color: #6b7280;
-  font-size: 14px;
+  font-size: 15px;
+}
+
+.refresh-btn {
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.refresh-btn:hover {
+  background: #f9fafb;
+  border-color: #3b82f6;
+  color: #3b82f6;
 }
 
 .tab-switcher {
-  display: flex;
-  gap: 8px;
+  display: inline-flex;
+  gap: 4px;
   background: #f3f4f6;
   padding: 4px;
   border-radius: 10px;
-  width: fit-content;
 }
 
 .tab-switcher button {
-  padding: 10px 20px;
+  padding: 10px 24px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -70,39 +97,41 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .tab-switcher button:hover {
   color: #374151;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .tab-switcher button.active {
   background: white;
   color: #3b82f6;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-weight: 600;
 }
 
-/* Sections */
+/* =============================================================================
+   Sections — Shared Card Style
+   ============================================================================= */
+
 .section {
   background: white;
   border-radius: 16px;
   padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
   border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
-}
-
-.section:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .section h2 {
   margin: 0 0 20px;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
+  letter-spacing: -0.2px;
 }
 
 /* Current Month Section */
@@ -112,33 +141,29 @@
 
 /* Forecasts Section */
 .forecasts-section {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
 
-/* Historical Section */
-.historical-section {
-  background: white;
-}
+/* =============================================================================
+   Stats Grid — Current Month
+   ============================================================================= */
 
-/* Seasonality Section */
-.seasonality-section {
-  background: white;
-}
-
-/* Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
 
 .stat-card {
-  background: #f9fafb;
+  background: white;
   border-radius: 12px;
-  padding: 20px;
+  padding: 18px 20px;
   border: 1px solid #e5e7eb;
   transition: all 0.2s ease;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .stat-card.clickable {
@@ -147,30 +172,32 @@
 
 .stat-card.clickable:hover {
   border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
   transform: translateY(-2px);
-  background: white;
 }
 
-.stat-card.clickable:focus {
+.stat-card.clickable:focus-visible {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+  font-weight: 600;
   margin-bottom: 8px;
 }
 
 .stat-value {
   font-size: 28px;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
   margin-bottom: 4px;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
 }
 
 .stat-subtext {
@@ -179,33 +206,38 @@
 }
 
 .stat-action {
-  display: none;
   font-size: 12px;
   color: #3b82f6;
-  font-weight: 500;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  font-weight: 600;
+  margin-top: auto;
+  padding-top: 14px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
 
 .stat-card.clickable:hover .stat-action {
-  display: block;
+  opacity: 1;
 }
 
-/* Forecasts Grid */
+/* =============================================================================
+   Forecast Cards — Blue Gradient
+   ============================================================================= */
+
 .forecasts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .forecast-card {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  border-radius: 16px;
-  padding: 24px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
+  border-radius: 14px;
+  padding: 22px;
   color: white;
   transition: all 0.2s ease;
   border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 .forecast-card.clickable {
@@ -214,11 +246,11 @@
 
 .forecast-card.clickable:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
-  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
-.forecast-card.clickable:focus {
+.forecast-card.clickable:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
 }
@@ -233,14 +265,16 @@
 .period-label {
   font-size: 20px;
   font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .confidence-badge {
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .forecast-content {
@@ -254,35 +288,43 @@
 }
 
 .metric-label {
-  font-size: 12px;
-  opacity: 0.8;
+  font-size: 11px;
+  opacity: 0.75;
   margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
 }
 
 .metric-value {
   font-size: 24px;
   font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 .forecast-action {
-  display: none;
   font-size: 12px;
-  opacity: 0.9;
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  opacity: 0.7;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   text-align: center;
+  font-weight: 500;
+  transition: opacity 0.15s;
 }
 
 .forecast-card.clickable:hover .forecast-action {
-  display: block;
+  opacity: 1;
 }
 
-/* Historical Stats */
+/* =============================================================================
+   Historical Stats
+   ============================================================================= */
+
 .historical-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
 
 .historical-stat {
@@ -291,20 +333,23 @@
   padding: 16px;
   background: #f9fafb;
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #f3f4f6;
   text-align: center;
 }
 
 .historical-stat .label {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
   margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 500;
 }
 
 .historical-stat .value {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
 /* Clickable Section */
@@ -315,13 +360,13 @@
 
 .clickable-section:hover {
   border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
 }
 
-.clickable-section:focus {
+.clickable-section:focus-visible {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .section-header-row {
@@ -338,16 +383,19 @@
 .section-action {
   font-size: 13px;
   color: #3b82f6;
-  font-weight: 500;
-  opacity: 0;
-  transition: opacity 0.2s ease;
+  font-weight: 600;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
 }
 
 .clickable-section:hover .section-action {
   opacity: 1;
 }
 
-/* Seasonality Chart */
+/* =============================================================================
+   Seasonality Chart
+   ============================================================================= */
+
 .seasonality-chart {
   display: flex;
   align-items: flex-end;
@@ -373,46 +421,52 @@
   font-size: 11px;
   color: #6b7280;
   margin-top: 8px;
+  font-weight: 500;
 }
 
-/* Goal View */
+/* =============================================================================
+   Goal View
+   ============================================================================= */
+
 .risk-banner {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 14px 20px;
   border-radius: 12px;
-  color: white;
   margin-bottom: 24px;
+  font-weight: 500;
 }
 
 .risk-icon {
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .risk-label {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   flex: 1;
 }
 
 .days-remaining {
   font-size: 14px;
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .progress-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  gap: 20px;
 }
 
 .progress-card {
-  background: #f9fafb;
+  background: white;
   border-radius: 12px;
   padding: 20px;
   border: 1px solid #e5e7eb;
   transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .progress-card.clickable {
@@ -421,58 +475,59 @@
 
 .progress-card.clickable:hover {
   border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
   transform: translateY(-2px);
-  background: white;
 }
 
-.progress-card.clickable:focus {
+.progress-card.clickable:focus-visible {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .progress-card h3 {
   margin: 0 0 16px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #374151;
 }
 
 .card-action {
-  display: none;
   font-size: 12px;
   color: #3b82f6;
-  font-weight: 500;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
+  font-weight: 600;
+  margin-top: auto;
+  padding-top: 14px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
 
 .progress-card.clickable:hover .card-action {
-  display: block;
+  opacity: 1;
 }
 
 .progress-bar-container {
-  height: 12px;
+  height: 10px;
   background: #e5e7eb;
-  border-radius: 6px;
+  border-radius: 5px;
   position: relative;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  overflow: hidden;
 }
 
-.progress-bar {
+.progress-bar-container .progress-bar {
   height: 100%;
-  border-radius: 6px;
-  transition: width 0.5s ease;
+  border-radius: 5px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .goal-marker {
   position: absolute;
   top: -4px;
   width: 2px;
-  height: 20px;
+  height: 18px;
   background: #374151;
+  border-radius: 1px;
 }
 
 .progress-stats {
@@ -484,7 +539,7 @@
 }
 
 .on-track {
-  font-weight: 500;
+  font-weight: 600;
   color: #3b82f6;
 }
 
@@ -494,20 +549,24 @@
   color: #374151;
 }
 
+/* Pace Cards */
 .pace-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .pace-card {
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-  border-radius: 12px;
-  padding: 24px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%);
+  border-radius: 14px;
+  padding: 28px 24px;
   color: white;
   text-align: center;
   transition: all 0.2s ease;
   border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .pace-card.clickable {
@@ -516,43 +575,51 @@
 
 .pace-card.clickable:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(139, 92, 246, 0.35);
-  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
-.pace-card.clickable:focus {
+.pace-card.clickable:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.3);
 }
 
 .pace-value {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  letter-spacing: -0.5px;
 }
 
 .pace-label {
   font-size: 14px;
-  opacity: 0.9;
+  opacity: 0.85;
+  font-weight: 500;
 }
 
 .pace-action {
-  display: none;
   font-size: 12px;
-  opacity: 0.9;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  opacity: 0.7;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  width: 100%;
+  font-weight: 500;
+  transition: opacity 0.15s;
 }
 
 .pace-card.clickable:hover .pace-action {
-  display: block;
+  opacity: 1;
 }
 
-/* Conversion View */
+/* =============================================================================
+   Conversion View
+   ============================================================================= */
+
 .overall-stats {
   display: flex;
   justify-content: center;
+  padding: 12px 0;
 }
 
 .overall-stat {
@@ -560,19 +627,22 @@
 }
 
 .overall-stat .stat-value {
-  font-size: 48px;
+  font-size: 52px;
   color: #3b82f6;
+  letter-spacing: -1px;
+  line-height: 1;
 }
 
 .overall-stat .stat-label {
-  font-size: 16px;
+  font-size: 15px;
   color: #374151;
-  margin: 8px 0;
+  margin: 10px 0 6px;
+  font-weight: 500;
 }
 
 .benchmark-indicator {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* Funnel */
@@ -580,12 +650,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .funnel-stage {
-  background: #f9fafb;
-  border-radius: 8px;
+  background: white;
+  border-radius: 10px;
   padding: 16px 20px;
   transition: all 0.2s;
   border: 1px solid #e5e7eb;
@@ -597,14 +667,14 @@
 
 .funnel-stage.clickable:hover {
   border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-  background: white;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
+  background: #fafbff;
 }
 
-.funnel-stage.clickable:focus {
+.funnel-stage.clickable:focus-visible {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .funnel-stage.weak {
@@ -614,20 +684,21 @@
 
 .funnel-stage.weak.clickable:hover {
   border-color: #ef4444;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.12);
 }
 
 .stage-action {
-  display: none;
   font-size: 12px;
   color: #3b82f6;
-  font-weight: 500;
-  margin-top: 8px;
+  font-weight: 600;
+  margin-top: 10px;
   text-align: right;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
 
 .funnel-stage.clickable:hover .stage-action {
-  display: block;
+  opacity: 1;
 }
 
 .funnel-stage.weak .stage-action {
@@ -637,33 +708,46 @@
 .stage-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  align-items: baseline;
+  margin-bottom: 10px;
 }
 
 .stage-name {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: #374151;
   text-transform: capitalize;
 }
 
 .stage-rate {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
 }
 
 .stage-bar {
   height: 8px;
   background: #e5e7eb;
   border-radius: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  position: relative;
+  overflow: visible;
 }
 
 .stage-fill {
   height: 100%;
   border-radius: 4px;
-  transition: width 0.5s;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stage-benchmark-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  background: #9ca3af;
+  border-radius: 1px;
+  opacity: 0.6;
 }
 
 .stage-details {
@@ -674,20 +758,21 @@
 }
 
 .benchmark {
-  font-style: italic;
+  font-weight: 500;
+  color: #9ca3af;
 }
 
 /* Weak Spots */
 .weak-spots-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .weak-spot-card {
   background: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: 10px;
-  padding: 16px;
+  padding: 16px 20px;
   transition: all 0.2s ease;
 }
 
@@ -697,20 +782,21 @@
 
 .weak-spot-card.clickable:hover {
   border-color: #ef4444;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.12);
+  transform: translateY(-1px);
 }
 
-.weak-spot-card.clickable:focus {
+.weak-spot-card.clickable:focus-visible {
   outline: none;
   border-color: #ef4444;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }
 
 .weak-spot-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 .weak-spot-header .stage {
@@ -721,7 +807,8 @@
 
 .weak-spot-header .gap {
   color: #dc2626;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .potential {
@@ -730,34 +817,45 @@
 }
 
 .weak-spot-action {
-  display: none;
   font-size: 12px;
   color: #dc2626;
-  font-weight: 500;
-  margin-top: 8px;
-  padding-top: 8px;
+  font-weight: 600;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid #fecaca;
+  opacity: 0.7;
+  transition: opacity 0.15s;
 }
 
 .weak-spot-card.clickable:hover .weak-spot-action {
-  display: block;
+  opacity: 1;
 }
 
 /* Recommendations */
+.recommendations-section {
+  background: #fafbfc;
+}
+
 .recommendations-list {
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
+  list-style: none;
 }
 
 .recommendations-list li {
-  padding: 8px 0;
+  padding: 12px 16px;
   color: #374151;
   font-size: 14px;
   border-bottom: 1px solid #f3f4f6;
+  border-left: 3px solid #3b82f6;
+  background: white;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 8px;
+  line-height: 1.5;
 }
 
 .recommendations-list li:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
 /* =============================================================================
@@ -795,19 +893,19 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
 .widget-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
 .trend-badge,
 .trend-indicator {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .widget-stats {
@@ -823,7 +921,7 @@
 .widget-stat .value {
   font-size: 20px;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
 }
 
 .widget-stat .label {
@@ -853,7 +951,7 @@
 .production-stat .value {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
 .forecasts-row {
@@ -872,12 +970,13 @@
   font-size: 11px;
   color: #6b7280;
   margin-bottom: 4px;
+  font-weight: 500;
 }
 
 .mini-forecast .units {
   font-size: 18px;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
 }
 
 .mini-forecast .volume {
@@ -890,7 +989,7 @@
   text-align: center;
   color: #3b82f6;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -921,7 +1020,7 @@
 
 .production-predictor-embedded:hover {
   border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
   transform: translateY(-1px);
 }
 
@@ -957,7 +1056,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
 .embedded-trend {
@@ -983,41 +1082,42 @@
 .embedded-current {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  padding: 16px;
+  gap: 12px;
+  padding: 14px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-radius: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .current-stat {
   text-align: center;
-  padding: 12px;
+  padding: 12px 8px;
   background: white;
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #f3f4f6;
 }
 
 .current-stat.projected {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.2);
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.15);
 }
 
 .current-value {
   display: block;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
   line-height: 1.2;
 }
 
 .current-label {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-top: 4px;
+  font-weight: 600;
 }
 
 .current-divider {
@@ -1027,26 +1127,27 @@
 .embedded-forecasts {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 10px;
 }
 
 .forecast-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
+  padding: 10px 12px;
   background: #f9fafb;
   border-radius: 10px;
+  border: 1px solid #f3f4f6;
 }
 
 .forecast-period {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: white;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  padding: 6px 8px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  padding: 5px 8px;
   border-radius: 6px;
-  min-width: 36px;
+  min-width: 32px;
   text-align: center;
 }
 
@@ -1056,13 +1157,13 @@
 }
 
 .forecast-units {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
 .forecast-volume {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
 }
 
@@ -1074,7 +1175,7 @@
   border-top: 1px solid #f3f4f6;
   font-size: 13px;
   color: #3b82f6;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .embedded-footer .arrow {
@@ -1086,7 +1187,10 @@
   transform: translateX(4px);
 }
 
-/* Responsive */
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+
 @media (max-width: 1200px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1104,6 +1208,11 @@
 @media (max-width: 768px) {
   .production-predictor {
     padding: 16px;
+  }
+
+  .predictor-header-top {
+    flex-direction: column;
+    gap: 12px;
   }
 
   .stats-grid {
@@ -1135,17 +1244,12 @@
 
   /* Embedded responsive */
   .embedded-current {
-    flex-wrap: wrap;
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
   }
 
   .current-divider {
     display: none;
-  }
-
-  .current-stat {
-    flex: 1 1 calc(50% - 12px);
-    min-width: 100px;
   }
 
   .embedded-forecasts {
@@ -1161,11 +1265,28 @@
     align-items: center;
     gap: 8px;
   }
+
+  .stat-action,
+  .card-action,
+  .forecast-action,
+  .pace-action,
+  .stage-action,
+  .weak-spot-action {
+    opacity: 1;
+  }
+
+  .section-action {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 480px) {
   .stats-grid,
   .historical-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .embedded-current {
     grid-template-columns: 1fr;
   }
 
@@ -1177,9 +1298,5 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
-  }
-
-  .section-action {
-    opacity: 1;
   }
 }

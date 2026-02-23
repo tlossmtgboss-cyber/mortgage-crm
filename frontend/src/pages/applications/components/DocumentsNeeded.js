@@ -1,21 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './DocumentsNeeded.css';
 
 /**
  * DocumentsNeeded - Dynamic document tracking component
  * Displays required documents that populate as application questions are answered
  * Integrates with backend lead_conditions table
+ *
+ * Field names must match the snake_case IDs from purchaseQuestions.js / refinanceQuestions.js
  */
+
+const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+
 const DocumentsNeeded = ({ applicationData, workspaceId }) => {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const prevDocsRef = useRef(null);
 
-  // Document rules based on application answers
-  const evaluateDocumentRequirements = (data) => {
+  // Document rules based on application answers (snake_case field names)
+  const evaluateDocumentRequirements = useCallback((data) => {
+    if (!data || typeof data !== 'object') return [];
+
     const requiredDocs = [];
 
-    // Income documents
-    if (data.employmentStatus === 'employed' || data.employmentType === 'W2') {
+    // --- Income documents ---
+    // employment_status: 'employed', 'self_employed', '1099_contractor', 'retired', 'not_employed'
+    const empStatus = data.employment_status;
+
+    if (empStatus === 'employed') {
       requiredDocs.push({
         name: 'Recent Pay Stubs',
         description: 'Most recent 30 days of pay stubs',
@@ -30,7 +41,7 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    if (data.employmentStatus === 'self-employed' || data.employmentType === 'self-employed') {
+    if (empStatus === 'self_employed' || empStatus === '1099_contractor') {
       requiredDocs.push({
         name: 'Tax Returns',
         description: 'Personal and business tax returns for last 2 years',
@@ -51,8 +62,14 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    // Asset documents
-    if (data.downPaymentSource === 'savings' || data.assetsAmount > 0) {
+    // --- Asset documents ---
+    // down_payment_source: 'checking_savings', 'sale_of_home', 'gift', 'retirement', 'investment', 'other'
+    const dpSource = data.down_payment_source;
+    const hasAssets = parseFloat(data.checking_balance) > 0
+      || parseFloat(data.savings_balance) > 0
+      || parseFloat(data.investment_balance) > 0;
+
+    if (dpSource === 'checking_savings' || dpSource === 'investment' || hasAssets) {
       requiredDocs.push({
         name: 'Bank Statements',
         description: 'Last 2 months of all bank account statements',
@@ -61,7 +78,7 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    if (data.downPaymentSource === 'gift') {
+    if (dpSource === 'gift') {
       requiredDocs.push({
         name: 'Gift Letter',
         description: 'Signed gift letter from donor',
@@ -76,7 +93,8 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    if (data.hasRetirementAccounts === 'yes' || data.retirementAccountsAmount > 0) {
+    // retirement_balance is a currency field
+    if (parseFloat(data.retirement_balance) > 0) {
       requiredDocs.push({
         name: 'Retirement Account Statements',
         description: 'Most recent 401k, IRA, or other retirement account statements',
@@ -85,8 +103,9 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    // Property documents
-    if (data.propertyAddress || data.hasContract === 'yes') {
+    // --- Property documents ---
+    // found_property is a boolean, property_address is a string
+    if (data.property_address || data.found_property === true) {
       requiredDocs.push({
         name: 'Purchase Agreement',
         description: 'Fully executed purchase contract',
@@ -95,7 +114,8 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    if (data.propertyType === 'condo') {
+    // property_type: 'single_family', 'condo', 'townhouse', 'multi_family', 'manufactured'
+    if (data.property_type === 'condo') {
       requiredDocs.push({
         name: 'HOA Documents',
         description: 'Homeowners association documents and budget',
@@ -104,8 +124,9 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    // Additional income sources
-    if (data.hasAdditionalIncome === 'yes' || data.rentalIncome > 0) {
+    // --- Additional income ---
+    // has_additional_income is a boolean
+    if (data.has_additional_income === true) {
       requiredDocs.push({
         name: 'Additional Income Documentation',
         description: 'Documentation for rental, alimony, or other income',
@@ -114,7 +135,8 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    if (data.hasRentalProperty === 'yes') {
+    // owns_other_property is a boolean
+    if (data.owns_other_property === true) {
       requiredDocs.push({
         name: 'Rental Property Documentation',
         description: 'Lease agreements and rental income verification',
@@ -123,17 +145,19 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    // Credit and debt documents
-    if (data.hasStudentLoans === 'yes' || data.studentLoanBalance > 0) {
+    // --- Credit and debt documents ---
+    // has_delinquent_debt is a boolean (covers student loans, tax liens, etc.)
+    if (data.has_delinquent_debt === true) {
       requiredDocs.push({
-        name: 'Student Loan Statement',
-        description: 'Current student loan statement showing balance and payment',
+        name: 'Delinquent Debt Statement',
+        description: 'Current statements for student loans, tax liens, or other delinquent debts',
         category: 'liabilities',
         priority: 'required'
       });
     }
 
-    if (data.hasBankruptcy === 'yes' || data.hasForeclosure === 'yes') {
+    // has_bankruptcy and has_foreclosure are booleans
+    if (data.has_bankruptcy === true || data.has_foreclosure === true) {
       requiredDocs.push({
         name: 'Bankruptcy/Foreclosure Documentation',
         description: 'Discharge papers and explanation letter',
@@ -142,7 +166,7 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
       });
     }
 
-    // Identity documents (always required)
+    // --- Identity documents (always required once user has started) ---
     if (Object.keys(data).length > 0) {
       requiredDocs.push({
         name: 'Government-Issued ID',
@@ -153,33 +177,44 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
     }
 
     return requiredDocs;
-  };
+  }, []);
 
   // Update documents when application data changes
   useEffect(() => {
     if (applicationData && Object.keys(applicationData).length > 0) {
       const newDocs = evaluateDocumentRequirements(applicationData);
-      setDocuments(newDocs);
-    }
-  }, [applicationData]);
 
-  // Sync with backend when documents change
-  useEffect(() => {
-    if (documents.length > 0 && workspaceId) {
-      syncDocumentsWithBackend();
+      // Only update state if documents actually changed (prevent infinite loop)
+      const newDocsKey = JSON.stringify(newDocs);
+      if (newDocsKey !== prevDocsRef.current) {
+        prevDocsRef.current = newDocsKey;
+        setDocuments(newDocs);
+      }
     }
+  }, [applicationData, evaluateDocumentRequirements]);
+
+  // Sync with backend when documents change (debounced, with auth)
+  useEffect(() => {
+    if (documents.length === 0 || !workspaceId) return;
+
+    const timer = setTimeout(() => {
+      syncDocumentsWithBackend();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documents, workspaceId]);
 
   const syncDocumentsWithBackend = async () => {
     try {
       setLoading(true);
-      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      
-      // Send documents to backend to create lead_conditions
+      const token = localStorage.getItem('token');
+
       await fetch(`${API_URL}/api/workspaces/${workspaceId}/documents`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: JSON.stringify({ documents }),
       });
@@ -217,7 +252,7 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
   if (documents.length === 0) {
     return (
       <div className="documents-needed-empty">
-        <p>📋 Answer questions to see required documents</p>
+        <p>Answer questions to see required documents</p>
       </div>
     );
   }
@@ -234,10 +269,10 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
   return (
     <div className="documents-needed">
       <div className="documents-needed-header">
-        <h3>📋 Documents Needed</h3>
+        <h3>Documents Needed</h3>
         <span className="document-count">{documents.length} {documents.length === 1 ? 'item' : 'items'}</span>
       </div>
-      
+
       {loading && <div className="loading-indicator">Syncing...</div>}
 
       <div className="documents-list">
@@ -248,7 +283,7 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
               <span className="category-name">{getCategoryLabel(category)}</span>
               <span className="category-count">({docs.length})</span>
             </div>
-            
+
             <div className="category-documents">
               {docs.map((doc, index) => (
                 <div key={`${category}-${index}`} className="document-item">

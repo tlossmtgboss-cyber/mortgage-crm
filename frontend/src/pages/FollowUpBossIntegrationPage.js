@@ -736,9 +736,9 @@ function FollowUpBossIntegrationPage() {
                 {leadMappings.map(mapping => (
                   <tr key={mapping.id}>
                     <td style={{ fontWeight: 500 }}>
-                      {mapping.fub_person_name || `FUB #${mapping.fub_person_id}`}
+                      {mapping.lead_name || `FUB #${mapping.fub_person_id}`}
                     </td>
-                    <td style={{ color: '#64748b' }}>{mapping.fub_person_email || 'N/A'}</td>
+                    <td style={{ color: '#64748b' }}>{mapping.lead_email || 'N/A'}</td>
                     <td>
                       <span className="fub-badge auto">{mapping.fub_stage || 'N/A'}</span>
                     </td>

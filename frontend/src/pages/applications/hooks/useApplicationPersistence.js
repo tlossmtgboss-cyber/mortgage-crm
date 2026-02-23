@@ -37,11 +37,42 @@ export function useApplicationPersistence(options = {}) {
 
   const [isSaving, setIsSaving] = useState(false);
   const [lastError, setLastError] = useState(null);
+  const [showRestorePrompt, setShowRestorePrompt] = useState(false);
+  const [pendingRestoreData, setPendingRestoreData] = useState(null);
   const debounceTimerRef = useRef(null);
   const isMountedRef = useRef(true);
 
   // Storage key
   const storageKey = getStorageKey(applicationType, workspaceSlug);
+
+  /**
+   * Strip SSN from form data (used for both localStorage and API draft saves)
+   */
+  const sanitizeFormData = useCallback((data) => {
+    if (!data) return data;
+
+    let sanitized = data;
+
+    // Strip SSN from borrowers array
+    if (data.borrowers && Array.isArray(data.borrowers)) {
+      sanitized = {
+        ...data,
+        borrowers: data.borrowers.map(borrower => {
+          if (!borrower) return borrower;
+          const { ssn, ...rest } = borrower;
+          return rest;
+        }),
+      };
+    }
+
+    // Strip top-level SSN if present
+    if (sanitized.ssn !== undefined) {
+      const { ssn, ...rest } = sanitized;
+      sanitized = rest;
+    }
+
+    return sanitized;
+  }, []);
 
   /**
    * Save to localStorage
@@ -50,8 +81,10 @@ export function useApplicationPersistence(options = {}) {
     if (!enableLocalStorage) return;
 
     try {
+      const sanitizedFormData = sanitizeFormData(formData);
+
       const dataToSave = {
-        formData,
+        formData: sanitizedFormData,
         currentStage,
         currentQuestionIndex,
         applicationType,
@@ -65,16 +98,18 @@ export function useApplicationPersistence(options = {}) {
       console.warn('Failed to save to localStorage:', error);
       return false;
     }
-  }, [formData, currentStage, currentQuestionIndex, applicationType, storageKey, enableLocalStorage]);
+  }, [formData, currentStage, currentQuestionIndex, applicationType, storageKey, enableLocalStorage, sanitizeFormData]);
 
   /**
-   * Save to API
+   * Save to API (SSN stripped — only sent on final submission, not draft saves)
    */
   const saveToApi = useCallback(async () => {
     if (!enableApiSave || !apiEndpoint) return true;
 
     try {
       const token = localStorage.getItem('token');
+      const sanitizedFormData = sanitizeFormData(formData);
+
       const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
@@ -82,7 +117,7 @@ export function useApplicationPersistence(options = {}) {
           ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: JSON.stringify({
-          data: formData,
+          data: sanitizedFormData,
           currentStage,
           applicationType,
         }),
@@ -97,7 +132,7 @@ export function useApplicationPersistence(options = {}) {
       console.error('Failed to save to API:', error);
       throw error;
     }
-  }, [formData, currentStage, applicationType, apiEndpoint, enableApiSave]);
+  }, [formData, currentStage, applicationType, apiEndpoint, enableApiSave, sanitizeFormData]);
 
   /**
    * Perform save operation
@@ -198,28 +233,37 @@ export function useApplicationPersistence(options = {}) {
   }, [storageKey]);
 
   /**
+   * Handle restore confirmation
+   */
+  const confirmRestore = useCallback(() => {
+    if (pendingRestoreData) {
+      actions.restoreState({
+        formData: pendingRestoreData.formData,
+        currentStage: pendingRestoreData.currentStage,
+        currentQuestionIndex: pendingRestoreData.currentQuestionIndex || 0,
+      });
+      onRestoreSuccess(pendingRestoreData);
+    }
+    setShowRestorePrompt(false);
+    setPendingRestoreData(null);
+  }, [pendingRestoreData, actions, onRestoreSuccess]);
+
+  const declineRestore = useCallback(() => {
+    clearSavedData();
+    setShowRestorePrompt(false);
+    setPendingRestoreData(null);
+  }, [clearSavedData]);
+
+  /**
    * Auto-restore on mount
    */
   useEffect(() => {
     const savedData = restoreFromLocalStorage();
 
     if (savedData) {
-      // Check if user wants to restore
-      const shouldRestore = window.confirm(
-        'You have a saved application. Would you like to continue where you left off?'
-      );
-
-      if (shouldRestore) {
-        actions.restoreState({
-          formData: savedData.formData,
-          currentStage: savedData.currentStage,
-          currentQuestionIndex: savedData.currentQuestionIndex || 0,
-        });
-        onRestoreSuccess(savedData);
-      } else {
-        // User chose to start fresh
-        clearSavedData();
-      }
+      // Show inline restore prompt instead of window.confirm
+      setPendingRestoreData(savedData);
+      setShowRestorePrompt(true);
     }
     // Only run on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -277,11 +321,14 @@ export function useApplicationPersistence(options = {}) {
     lastError,
     lastSavedAt: state.lastSavedAt,
     isDirty,
+    showRestorePrompt,
 
     // Actions
     forceSave,
     clearSavedData,
     restoreFromLocalStorage,
+    confirmRestore,
+    declineRestore,
 
     // Utility
     storageKey,

@@ -392,7 +392,12 @@ class ApplicationNotification(Base):
 
 
 class ApplicationSession(Base):
-    """Tracks active sessions for save/resume functionality."""
+    """Tracks active sessions for save/resume functionality.
+
+    Note: This model is reserved for future use. The table may exist in
+    production; do not drop it. Session-based save/resume is not yet
+    wired into the borrower application flow.
+    """
     __tablename__ = "application_sessions"
     __table_args__ = (
         Index('ix_app_session_token', 'session_token'),

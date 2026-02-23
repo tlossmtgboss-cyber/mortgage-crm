@@ -1,11 +1,13 @@
 /* =============================================================================
-   Production Predictor Detail Page Styles
+   Production Predictor Detail Page — Polished Modern UI
    ============================================================================= */
 
 .pp-detail-page {
   min-height: 100vh;
   background: #f9fafb;
-  padding: 24px;
+  padding: 24px 32px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* Loading & Error States */
@@ -17,16 +19,17 @@
   justify-content: center;
   min-height: 400px;
   text-align: center;
+  gap: 12px;
+  color: #6b7280;
 }
 
 .pp-detail-loading .loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid #e5e7eb;
+  width: 44px;
+  height: 44px;
+  border: 3px solid #e5e7eb;
   border-top-color: #3b82f6;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 16px;
 }
 
 @keyframes spin {
@@ -35,7 +38,13 @@
 
 .pp-detail-error h2 {
   color: #dc2626;
-  margin-bottom: 8px;
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.pp-detail-error p {
+  color: #6b7280;
+  margin: 0;
 }
 
 .pp-detail-error button {
@@ -46,45 +55,53 @@
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.pp-detail-error button:hover {
+  background: #2563eb;
 }
 
 /* Header */
 .pp-detail-header {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .back-button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 8px 16px;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   color: #374151;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   margin-bottom: 16px;
 }
 
 .back-button:hover {
-  background: #f3f4f6;
+  background: #f9fafb;
   border-color: #3b82f6;
   color: #3b82f6;
 }
 
 .header-content h1 {
-  margin: 0 0 8px;
-  font-size: 28px;
+  margin: 0 0 6px;
+  font-size: 26px;
   font-weight: 700;
-  color: #1f2937;
+  color: #111827;
+  letter-spacing: -0.5px;
 }
 
 .header-content p {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   color: #6b7280;
 }
 
@@ -92,13 +109,13 @@
 .pp-detail-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 16px;
   margin-bottom: 24px;
 }
 
 .pp-detail-summary .summary-card {
   background: white;
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 24px;
   text-align: center;
   border: 1px solid #e5e7eb;
@@ -106,80 +123,95 @@
 }
 
 .pp-detail-summary .summary-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.pp-detail-summary .summary-card.highlight {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #bfdbfe;
 }
 
 .pp-detail-summary .summary-value {
   display: block;
-  font-size: 36px;
+  font-size: 34px;
   font-weight: 700;
-  color: #1f2937;
-  margin-bottom: 8px;
+  color: #111827;
+  margin-bottom: 6px;
+  letter-spacing: -0.5px;
+}
+
+.pp-detail-summary .summary-card.highlight .summary-value {
+  color: #1d4ed8;
 }
 
 .pp-detail-summary .summary-label {
-  font-size: 14px;
+  font-size: 12px;
   color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+  font-weight: 600;
 }
 
 /* Trend Sections */
 .pp-detail-trends {
   display: grid;
-  gap: 24px;
+  gap: 20px;
   margin-bottom: 24px;
 }
 
 .trend-section {
   background: white;
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 24px;
   border: 1px solid #e5e7eb;
 }
 
 .trend-section h3 {
   margin: 0 0 20px;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
 .trend-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
 
 .trend-stat {
   background: #f9fafb;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 16px;
   text-align: center;
+  border: 1px solid #f3f4f6;
 }
 
 .trend-stat .label {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
   margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-weight: 500;
 }
 
 .trend-stat .value {
   display: block;
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
 }
 
-.trend-indicator {
+.trend-indicator-row {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.trend-badge {
+.trend-badge-lg {
   font-size: 24px;
   font-weight: 700;
   padding: 12px 20px;
@@ -187,17 +219,17 @@
   background: #f3f4f6;
 }
 
-.trend-badge.up {
+.trend-badge-lg.up {
   background: #ecfdf5;
   color: #10b981;
 }
 
-.trend-badge.down {
+.trend-badge-lg.down {
   background: #fef2f2;
   color: #ef4444;
 }
 
-.trend-badge.stable {
+.trend-badge-lg.stable {
   background: #f3f4f6;
   color: #6b7280;
 }
@@ -211,38 +243,71 @@
 /* Table Container */
 .pp-detail-table-container {
   background: white;
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 24px;
   border: 1px solid #e5e7eb;
 }
 
-.pp-detail-table-container h3 {
-  margin: 0 0 20px;
-  font-size: 18px;
+.table-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.table-header-row h3 {
+  margin: 0;
+  font-size: 17px;
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
+}
+
+.loan-count {
+  font-size: 13px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Loans Table */
 .pp-detail-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 700px;
 }
 
 .pp-detail-table th {
   text-align: left;
-  padding: 12px 16px;
+  padding: 10px 16px;
   background: #f9fafb;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+}
+
+.pp-detail-table th:first-child {
+  border-radius: 8px 0 0 0;
+}
+
+.pp-detail-table th:last-child {
+  border-radius: 0 8px 0 0;
 }
 
 .pp-detail-table td {
-  padding: 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid #f3f4f6;
   font-size: 14px;
   color: #374151;
@@ -250,64 +315,92 @@
 
 .pp-detail-table tr {
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.12s;
 }
 
 .pp-detail-table tbody tr:hover {
-  background: #f9fafb;
+  background: #f8faff;
+}
+
+.pp-detail-table tbody tr:active {
+  background: #eff6ff;
 }
 
 .pp-detail-table .loan-number {
   font-weight: 600;
   color: #3b82f6;
+  white-space: nowrap;
+}
+
+.pp-detail-table .borrower-name {
+  font-weight: 500;
+  color: #111827;
 }
 
 .pp-detail-table .address {
-  max-width: 250px;
+  max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #6b7280;
 }
 
 .pp-detail-table .amount {
   font-weight: 600;
-  color: #1f2937;
+  color: #111827;
+  white-space: nowrap;
+}
+
+.pp-detail-table .date-col {
+  white-space: nowrap;
+  color: #6b7280;
 }
 
 /* Status Badge */
 .status-badge {
   display: inline-block;
   padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .status-badge.funded {
   background: #ecfdf5;
-  color: #10b981;
+  color: #059669;
 }
 
 .status-badge.processing,
-.status-badge.submitted {
+.status-badge.submitted,
+.status-badge.application,
+.status-badge.disclosed {
   background: #eff6ff;
-  color: #3b82f6;
+  color: #2563eb;
 }
 
-.status-badge.underwriting {
-  background: #fef3c7;
+.status-badge.underwriting,
+.status-badge.uw_received,
+.status-badge.conditional_approval {
+  background: #fffbeb;
   color: #d97706;
 }
 
 .status-badge.approved,
-.status-badge.clear_to_close {
+.status-badge.clear_to_close,
+.status-badge.ctc,
+.status-badge.closing,
+.status-badge.docs,
+.status-badge.docs_out {
   background: #d1fae5;
   color: #059669;
 }
 
 .status-badge.denied,
-.status-badge.cancelled {
+.status-badge.cancelled,
+.status-badge.dead,
+.status-badge.withdrawn {
   background: #fef2f2;
   color: #dc2626;
 }
@@ -315,32 +408,33 @@
 /* View Button */
 .view-btn {
   padding: 6px 14px;
-  background: #3b82f6;
-  color: white;
-  border: none;
+  background: white;
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
   border-radius: 6px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .view-btn:hover {
-  background: #2563eb;
-  transform: scale(1.02);
+  background: #3b82f6;
+  color: white;
 }
 
 /* Empty State */
 .pp-detail-empty {
   background: white;
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 60px 24px;
   text-align: center;
   border: 1px solid #e5e7eb;
 }
 
 .pp-detail-empty .empty-icon {
-  font-size: 64px;
+  font-size: 56px;
   margin-bottom: 16px;
 }
 
@@ -352,17 +446,30 @@
 }
 
 .pp-detail-empty p {
-  margin: 0;
+  margin: 0 0 20px;
   font-size: 14px;
   color: #6b7280;
 }
 
+.back-link {
+  padding: 10px 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.back-link:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
-  .pp-detail-summary {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
   .trend-stats {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -385,11 +492,7 @@
     grid-template-columns: 1fr;
   }
 
-  .pp-detail-table-container {
-    overflow-x: auto;
-  }
-
-  .pp-detail-table {
-    min-width: 700px;
+  .header-content h1 {
+    font-size: 22px;
   }
 }

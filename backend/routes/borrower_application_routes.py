@@ -71,7 +71,7 @@ from typing import Any, Dict, List, Optional
 import enum
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, UploadFile, File, Form, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from utils.pii_mask import mask_email, mask_phone
@@ -198,17 +198,25 @@ class BorrowerApplicationUpdate(BaseModel):
     time_spent_seconds: Optional[int] = None
 
 
+VALID_STEPS = {
+    "personal_info", "coborrower", "property", "income", "assets",
+    "liabilities", "declarations", "documents", "credit_auth", "review",
+    "about_you", "new_home", "current_mortgage", "second_mortgage",
+    "credit", "background", "government_monitoring", "schedule",
+    "authorizations", "real_estate_owned",
+}
+
+
 class StepDataUpdate(BaseModel):
     """Schema for updating a specific step's data"""
-    step: str
+    step: str = Field(..., max_length=50)
     data: Dict[str, Any]
     mark_completed: bool = False
 
 
 class CreditAuthCapture(BaseModel):
     """Schema for capturing credit authorization"""
-    ssn_last4: str
-    full_ssn: Optional[str] = None
+    ssn_last4: str = Field(..., min_length=4, max_length=4, pattern=r'^\d{4}$')
     consent_text: str
     consent_agreed: bool
     signature_data: Optional[str] = None
@@ -216,15 +224,15 @@ class CreditAuthCapture(BaseModel):
 
 class PrequalificationRequest(BaseModel):
     """Schema for pre-qualification calculation"""
-    annual_income: float
-    monthly_debts: float
-    credit_score_range: str
-    down_payment: float
-    down_payment_type: str = "percentage"
-    property_value: Optional[float] = None
-    loan_type: str = "conventional"
-    property_type: str = "single_family"
-    occupancy: str = "primary"
+    annual_income: float = Field(..., ge=0)
+    monthly_debts: float = Field(..., ge=0)
+    credit_score_range: str = Field(..., max_length=50)
+    down_payment: float = Field(..., ge=0)
+    down_payment_type: str = Field(default="percentage", max_length=20)
+    property_value: Optional[float] = Field(default=None, ge=0)
+    loan_type: str = Field(default="conventional", max_length=30)
+    property_type: str = Field(default="single_family", max_length=30)
+    occupancy: str = Field(default="primary", max_length=20)
 
 
 class PrequalificationResponse(BaseModel):
@@ -604,7 +612,7 @@ async def create_borrower_application(
     except Exception as e:
         logger.error(f"Failed to create borrower application: {e}", exc_info=True)
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create application: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="Failed to create application")
 
 
 @router.get("/api/v1/applications/", response_model=List[BorrowerApplicationResponse])
@@ -631,27 +639,6 @@ async def list_applications(
     applications = query.offset(offset).limit(limit).all()
 
     return applications
-
-
-@router.get("/api/v1/applications/{application_id}", response_model=BorrowerApplicationResponse)
-async def get_application(
-    application_id: int,
-    db: Session = Depends(get_db_session()),
-    current_user = Depends(get_current_user_dep())
-):
-    """Get a specific application by ID"""
-    models = get_models()
-    BorrowerApplication = models['BorrowerApplication']
-
-    application = db.query(BorrowerApplication).filter(
-        BorrowerApplication.id == application_id,
-        BorrowerApplication.owner_id == current_user.id
-    ).first()
-
-    if not application:
-        raise HTTPException(status_code=404, detail="Application not found")
-
-    return application
 
 
 @router.get("/api/v1/applications/analytics", response_model=ApplicationAnalytics)
@@ -722,6 +709,27 @@ async def get_application_analytics(
     )
 
 
+@router.get("/api/v1/applications/{application_id}", response_model=BorrowerApplicationResponse)
+async def get_application(
+    application_id: int,
+    db: Session = Depends(get_db_session()),
+    current_user = Depends(get_current_user_dep())
+):
+    """Get a specific application by ID"""
+    models = get_models()
+    BorrowerApplication = models['BorrowerApplication']
+
+    application = db.query(BorrowerApplication).filter(
+        BorrowerApplication.id == application_id,
+        BorrowerApplication.owner_id == current_user.id
+    ).first()
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    return application
+
+
 # ============================================================================
 # Public borrower-facing endpoints (token-based auth)
 # ============================================================================
@@ -748,7 +756,7 @@ async def get_application_by_token(
         raise HTTPException(status_code=404, detail="Application not found")
 
     # Check expiration
-    if application.expires_at and application.expires_at < datetime.now(timezone.utc):
+    if application.expires_at and application.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         application.status = ApplicationStatus.EXPIRED
         db.commit()
         raise HTTPException(status_code=410, detail="Application link has expired")
@@ -806,7 +814,7 @@ async def update_application_by_token(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    if application.expires_at and application.expires_at < datetime.now(timezone.utc):
+    if application.expires_at and application.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=410, detail="Application link has expired")
 
     # Update fields — whitelist to prevent mass assignment of sensitive attrs
@@ -851,6 +859,10 @@ async def save_step_data(
     ApplicationStatus = enums['ApplicationStatus']
     ApplicationStep = enums['ApplicationStep']
 
+    # Validate step name
+    if data.step not in VALID_STEPS:
+        raise HTTPException(status_code=400, detail=f"Invalid step name: {data.step}")
+
     application = db.query(BorrowerApplication).filter(
         BorrowerApplication.public_token == token
     ).first()
@@ -858,7 +870,7 @@ async def save_step_data(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    if application.expires_at and application.expires_at < datetime.now(timezone.utc):
+    if application.expires_at and application.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=410, detail="Application link has expired")
 
     # Update step data
@@ -1630,6 +1642,15 @@ async def export_mismo_xml(
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    # Only allow export for submitted or later applications
+    if application.expires_at and application.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+        raise HTTPException(status_code=410, detail="Application link has expired")
+
+    submitted_statuses = {"submitted", "under_review", "approved"}
+    app_status = application.status.value if hasattr(application.status, 'value') else str(application.status)
+    if app_status not in submitted_statuses:
+        raise HTTPException(status_code=403, detail="MISMO export is only available for submitted applications")
 
     try:
         from services.mismo_generator import MISMOGenerator
@@ -2416,7 +2437,7 @@ async def get_coborrower_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
-    if invitation.expires_at and invitation.expires_at < datetime.now(timezone.utc):
+    if invitation.expires_at and invitation.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         invitation.status = "expired"
         db.commit()
         raise HTTPException(status_code=410, detail="Invitation has expired")
@@ -2462,7 +2483,7 @@ async def save_coborrower_data(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
-    if invitation.expires_at and invitation.expires_at < datetime.now(timezone.utc):
+    if invitation.expires_at and invitation.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=410, detail="Invitation has expired")
 
     # Update invitation data

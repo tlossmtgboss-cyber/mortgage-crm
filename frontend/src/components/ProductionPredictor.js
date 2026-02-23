@@ -12,16 +12,16 @@ const TREND_CONFIG = {
 };
 
 const RISK_CONFIG = {
-  ahead: { color: '#10b981', label: 'Ahead of Goal', icon: '🎯' },
-  on_track: { color: '#3b82f6', label: 'On Track', icon: '✓' },
-  at_risk: { color: '#f59e0b', label: 'At Risk', icon: '⚠️' },
-  behind: { color: '#ef4444', label: 'Behind', icon: '🚨' },
+  ahead: { color: '#10b981', bg: '#ecfdf5', label: 'Ahead of Goal', icon: '🎯' },
+  on_track: { color: '#3b82f6', bg: '#eff6ff', label: 'On Track', icon: '✓' },
+  at_risk: { color: '#f59e0b', bg: '#fffbeb', label: 'At Risk', icon: '⚠️' },
+  behind: { color: '#ef4444', bg: '#fef2f2', label: 'Behind', icon: '🚨' },
 };
 
 const CONFIDENCE_CONFIG = {
-  high: { color: '#10b981', label: 'High Confidence' },
-  medium: { color: '#f59e0b', label: 'Medium Confidence' },
-  low: { color: '#ef4444', label: 'Low Confidence' },
+  high: { color: '#10b981', bg: '#ecfdf5', label: 'High Confidence' },
+  medium: { color: '#f59e0b', bg: '#fffbeb', label: 'Medium Confidence' },
+  low: { color: '#ef4444', bg: '#fef2f2', label: 'Low Confidence' },
 };
 
 // Format currency
@@ -251,8 +251,13 @@ export function ProductionPredictorDashboard({ entityId: entityIdProp, entityTyp
   return (
     <div className="production-predictor">
       <div className="predictor-header">
-        <h1>Production Predictor</h1>
-        <p>AI-powered forecasting and performance analysis</p>
+        <div className="predictor-header-top">
+          <div>
+            <h1>Production Predictor</h1>
+            <p className="predictor-subtitle">AI-powered forecasting and performance analysis</p>
+          </div>
+          <button className="refresh-btn" onClick={fetchData} title="Refresh data">↻ Refresh</button>
+        </div>
         <div className="tab-switcher">
           <button
             className={activeTab === 'forecast' ? 'active' : ''}
@@ -297,41 +302,8 @@ function ForecastView({ summary }) {
   const forecasts = summary.forecasts || {};
   const trendConfig = TREND_CONFIG[trend.direction] || TREND_CONFIG.stable;
 
-  const handleStatClick = (type) => {
-    switch (type) {
-      case 'mtd_units':
-        navigate('/production-predictor/detail?view=mtd_units');
-        break;
-      case 'mtd_volume':
-        navigate('/production-predictor/detail?view=mtd_volume');
-        break;
-      case 'projected_units':
-        navigate('/production-predictor/detail?view=projected_units');
-        break;
-      case 'projected_volume':
-        navigate('/production-predictor/detail?view=projected_volume');
-        break;
-      case 'trend':
-        navigate('/production-predictor/detail?view=trend');
-        break;
-      case 'volatility':
-        navigate('/production-predictor/detail?view=trend');
-        break;
-      case 'historical':
-        navigate('/production-predictor/detail?view=historical');
-        break;
-      default:
-        break;
-    }
-  };
-
-  const handleForecastClick = (period) => {
-    const periodMap = {
-      '30_day': 'forecast_30',
-      '60_day': 'forecast_60',
-      '90_day': 'forecast_90',
-    };
-    navigate(`/production-predictor/detail?view=${periodMap[period] || 'forecast_30'}`);
+  const navigateDetail = (view) => {
+    navigate(`/production-predictor/detail?view=${view}`);
   };
 
   return (
@@ -342,22 +314,24 @@ function ForecastView({ summary }) {
         <div className="stats-grid">
           <div
             className="stat-card clickable"
-            onClick={() => handleStatClick('mtd_units')}
+            onClick={() => navigateDetail('mtd_units')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('mtd_units')}
           >
             <div className="stat-label">MTD Units</div>
             <div className="stat-value">{summary.current_month?.mtd_units || 0}</div>
             <div className="stat-subtext">
               Projected: {summary.current_month?.projected_units || 0}
             </div>
-            <div className="stat-action">View Details →</div>
+            <div className="stat-action">View Loans →</div>
           </div>
           <div
             className="stat-card clickable"
-            onClick={() => handleStatClick('mtd_volume')}
+            onClick={() => navigateDetail('mtd_volume')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('mtd_volume')}
           >
             <div className="stat-label">MTD Volume</div>
             <div className="stat-value">
@@ -366,26 +340,28 @@ function ForecastView({ summary }) {
             <div className="stat-subtext">
               Projected: {formatCurrency(summary.current_month?.projected_volume || 0)}
             </div>
-            <div className="stat-action">View Details →</div>
+            <div className="stat-action">View Loans →</div>
           </div>
           <div
             className="stat-card trend-card clickable"
-            onClick={() => handleStatClick('trend')}
+            onClick={() => navigateDetail('trend')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('trend')}
           >
             <div className="stat-label">Trend</div>
             <div className="stat-value" style={{ color: trendConfig.color }}>
               {trendConfig.icon} {trend.change_pct > 0 ? '+' : ''}{trend.change_pct}%
             </div>
             <div className="stat-subtext">{trendConfig.label}</div>
-            <div className="stat-action">View Details →</div>
+            <div className="stat-action">View Analysis →</div>
           </div>
           <div
             className="stat-card clickable"
-            onClick={() => handleStatClick('volatility')}
+            onClick={() => navigateDetail('trend')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('trend')}
           >
             <div className="stat-label">Volatility</div>
             <div className="stat-value">
@@ -394,7 +370,7 @@ function ForecastView({ summary }) {
             <div className="stat-subtext">
               {trend.volatility < 20 ? 'Low' : trend.volatility < 40 ? 'Medium' : 'High'}
             </div>
-            <div className="stat-action">View Details →</div>
+            <div className="stat-action">View Analysis →</div>
           </div>
         </div>
       </div>
@@ -409,20 +385,22 @@ function ForecastView({ summary }) {
 
             const confidenceConfig = CONFIDENCE_CONFIG[forecast.confidence] || CONFIDENCE_CONFIG.medium;
             const days = period.split('_')[0];
+            const view = `forecast_${days}`;
 
             return (
               <div
                 key={period}
                 className="forecast-card clickable"
-                onClick={() => handleForecastClick(period)}
+                onClick={() => navigateDetail(view)}
                 role="button"
                 tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && navigateDetail(view)}
               >
                 <div className="forecast-header">
                   <span className="period-label">{days} Days</span>
                   <span
                     className="confidence-badge"
-                    style={{ backgroundColor: confidenceConfig.color }}
+                    style={{ backgroundColor: confidenceConfig.bg, color: confidenceConfig.color }}
                   >
                     {confidenceConfig.label}
                   </span>
@@ -437,7 +415,7 @@ function ForecastView({ summary }) {
                     <span className="metric-value">{formatCurrency(forecast.volume)}</span>
                   </div>
                 </div>
-                <div className="forecast-action">Click for breakdown →</div>
+                <div className="forecast-action">View Loan Breakdown →</div>
               </div>
             );
           })}
@@ -447,9 +425,10 @@ function ForecastView({ summary }) {
       {/* Historical Performance */}
       <div
         className="section historical-section clickable-section"
-        onClick={() => handleStatClick('historical')}
+        onClick={() => navigateDetail('historical')}
         role="button"
         tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && navigateDetail('historical')}
       >
         <div className="section-header-row">
           <h2>Historical Performance</h2>
@@ -504,16 +483,8 @@ function GoalView({ attainment }) {
   const navigate = useNavigate();
   const riskConfig = RISK_CONFIG[attainment.risk_level] || RISK_CONFIG.on_track;
 
-  const handleProgressClick = (type) => {
-    if (type === 'units') {
-      navigate('/active-loans?view=units');
-    } else {
-      navigate('/reporting?view=volume');
-    }
-  };
-
-  const handlePaceClick = () => {
-    navigate('/reporting?view=pace');
+  const navigateDetail = (view) => {
+    navigate(`/production-predictor/detail?view=${view}`);
   };
 
   return (
@@ -521,18 +492,19 @@ function GoalView({ attainment }) {
       {/* Goal Progress */}
       <div className="section goal-progress-section">
         <h2>Goal Attainment</h2>
-        <div className="risk-banner" style={{ backgroundColor: riskConfig.color }}>
+        <div className="risk-banner" style={{ backgroundColor: riskConfig.bg || riskConfig.color, color: riskConfig.color, border: `1px solid ${riskConfig.color}20` }}>
           <span className="risk-icon">{riskConfig.icon}</span>
-          <span className="risk-label">{riskConfig.label}</span>
-          <span className="days-remaining">{attainment.days_remaining} days remaining</span>
+          <span className="risk-label" style={{ color: riskConfig.color }}>{riskConfig.label}</span>
+          <span className="days-remaining" style={{ color: riskConfig.color }}>{attainment.days_remaining} days remaining</span>
         </div>
 
         <div className="progress-grid">
           <div
             className="progress-card clickable"
-            onClick={() => handleProgressClick('units')}
+            onClick={() => navigateDetail('goal_units')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('goal_units')}
           >
             <h3>Units Progress</h3>
             <div className="progress-bar-container">
@@ -559,14 +531,15 @@ function GoalView({ attainment }) {
             <div className="predicted-final">
               Predicted: {attainment.predicted_final_units} units
             </div>
-            <div className="card-action">View Active Loans →</div>
+            <div className="card-action">View Pipeline Loans →</div>
           </div>
 
           <div
             className="progress-card clickable"
-            onClick={() => handleProgressClick('volume')}
+            onClick={() => navigateDetail('goal_volume')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('goal_volume')}
           >
             <h3>Volume Progress</h3>
             <div className="progress-bar-container">
@@ -589,7 +562,7 @@ function GoalView({ attainment }) {
             <div className="predicted-final">
               Predicted: {formatCurrency(attainment.predicted_final_volume)}
             </div>
-            <div className="card-action">View Volume Report →</div>
+            <div className="card-action">View Pipeline Loans →</div>
           </div>
         </div>
       </div>
@@ -600,23 +573,25 @@ function GoalView({ attainment }) {
         <div className="pace-grid">
           <div
             className="pace-card clickable"
-            onClick={handlePaceClick}
+            onClick={() => navigateDetail('pace_units')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('pace_units')}
           >
             <div className="pace-value">{attainment.units_per_day_needed.toFixed(2)}</div>
             <div className="pace-label">units per day needed</div>
-            <div className="pace-action">View Breakdown →</div>
+            <div className="pace-action">View Loan Pipeline →</div>
           </div>
           <div
             className="pace-card clickable"
-            onClick={handlePaceClick}
+            onClick={() => navigateDetail('pace_volume')}
             role="button"
             tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && navigateDetail('pace_volume')}
           >
             <div className="pace-value">{formatCurrency(attainment.volume_per_day_needed)}</div>
             <div className="pace-label">volume per day needed</div>
-            <div className="pace-action">View Breakdown →</div>
+            <div className="pace-action">View Loan Pipeline →</div>
           </div>
         </div>
       </div>
@@ -642,16 +617,8 @@ function ConversionView({ conversions }) {
   const stages = conversions.stage_conversions || {};
   const weakSpots = conversions.weak_spots || [];
 
-  const handleOverallClick = () => {
-    navigate('/reporting?view=conversions');
-  };
-
-  const handleStageClick = (stage) => {
-    navigate(`/active-loans?status=${stage}`);
-  };
-
-  const handleWeakSpotClick = (stage) => {
-    navigate(`/reporting?view=conversions&focus=${stage}`);
+  const navigateDetail = (view) => {
+    navigate(`/production-predictor/detail?view=${view}`);
   };
 
   return (
@@ -659,13 +626,14 @@ function ConversionView({ conversions }) {
       {/* Overall Conversion */}
       <div
         className="section overall-section clickable-section"
-        onClick={handleOverallClick}
+        onClick={() => navigateDetail('conversion_overall')}
         role="button"
         tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && navigateDetail('conversion_overall')}
       >
         <div className="section-header-row">
           <h2>Pipeline Conversion</h2>
-          <span className="section-action">View Full Report →</span>
+          <span className="section-action">View All Loans →</span>
         </div>
         <div className="overall-stats">
           <div className="overall-stat">
@@ -699,9 +667,10 @@ function ConversionView({ conversions }) {
                 key={stage}
                 className={`funnel-stage clickable ${isWeakSpot ? 'weak' : ''}`}
                 style={{ width: `${widthPct}%` }}
-                onClick={() => handleStageClick(stage)}
+                onClick={() => navigateDetail(`conversion_${stage}`)}
                 role="button"
                 tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && navigateDetail(`conversion_${stage}`)}
               >
                 <div className="stage-header">
                   <span className="stage-name">{stageLabel}</span>
@@ -717,12 +686,16 @@ function ConversionView({ conversions }) {
                       backgroundColor: isWeakSpot ? '#ef4444' : '#3b82f6',
                     }}
                   ></div>
+                  <div
+                    className="stage-benchmark-marker"
+                    style={{ left: `${data.benchmark * 100}%` }}
+                  ></div>
                 </div>
                 <div className="stage-details">
                   <span>{data.converted || 0} / {data.total || data.total_leads || 0}</span>
                   <span className="benchmark">Target: {(data.benchmark * 100).toFixed(0)}%</span>
                 </div>
-                <div className="stage-action">View Loans →</div>
+                <div className="stage-action">View Loans in Stage →</div>
               </div>
             );
           })}
@@ -738,9 +711,10 @@ function ConversionView({ conversions }) {
               <div
                 key={idx}
                 className="weak-spot-card clickable"
-                onClick={() => handleWeakSpotClick(spot.stage)}
+                onClick={() => navigateDetail(`conversion_${spot.stage}`)}
                 role="button"
                 tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && navigateDetail(`conversion_${spot.stage}`)}
               >
                 <div className="weak-spot-header">
                   <span className="stage">{spot.stage.replace(/_/g, ' → ')}</span>
@@ -749,7 +723,7 @@ function ConversionView({ conversions }) {
                 <div className="potential">
                   Fixing this could yield +{spot.potential_units} units
                 </div>
-                <div className="weak-spot-action">Analyze Issue →</div>
+                <div className="weak-spot-action">View Stuck Loans →</div>
               </div>
             ))}
           </div>

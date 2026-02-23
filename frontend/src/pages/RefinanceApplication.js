@@ -1429,7 +1429,7 @@ export default function RefinanceApplication() {
 
         // Signal to parent iframe that submission is complete (if embedded)
         if (window.parent !== window) {
-          window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: redirectUrl }, '*');
+          window.parent.postMessage({ type: 'APPLICATION_SUBMITTED', portalUrl: redirectUrl }, window.location.origin);
         }
 
         // Redirect to the client portal
@@ -1463,14 +1463,20 @@ export default function RefinanceApplication() {
   useEffect(() => {
     if (currentStage === 'account') return; // Don't save until account is set up
 
+    // Strip SSN fields before saving to localStorage
+    const sanitizedProfileData = { ...profileData };
+    delete sanitizedProfileData.ssn;
+    const sanitizedCoBorrowerData = { ...coBorrowerData };
+    delete sanitizedCoBorrowerData.ssn;
+
     const dataToSave = {
       declarations,
-      profileData,
+      profileData: sanitizedProfileData,
       incomeData,
       propertyData,
       goalsData,
       planningData,
-      coBorrowerData,
+      coBorrowerData: sanitizedCoBorrowerData,
       coBorrowerIncomeData,
       currentStage,
       userAccount,
@@ -1626,10 +1632,9 @@ export default function RefinanceApplication() {
       console.log('[RefinanceApplication] Submit response:', result);
       console.log('[RefinanceApplication] Portal URL from response:', result.data?.portal_url);
 
-      // Store borrower email for fallback magic link
-      if (profileData?.email) {
-        localStorage.setItem('borrower_email', profileData.email);
-      }
+      // Clear saved PII from localStorage after successful submission
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('borrower_email');
 
       // Success - show the submission success lightbox
       if (result.data?.portal_url) {

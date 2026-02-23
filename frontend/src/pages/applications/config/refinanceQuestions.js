@@ -1313,7 +1313,7 @@ export const authorizationsQuestions = [
     question: 'Electronic Consent',
     type: QuestionTypes.ECONSENT,
     required: true,
-    defaultValue: true, // Pre-select "I agree" option
+    defaultValue: false, // Consent must require affirmative action
     allowChoice: true, // Allow user to choose between agree/disagree
     // Full eConsent verbiage
     eConsentContent: {
@@ -1369,7 +1369,7 @@ We will not assume liability for non-receipt of notification of the availability
     question: 'Credit Authorization',
     type: QuestionTypes.CREDIT_AUTH,
     required: true,
-    defaultValue: true, // Pre-select "I agree" option
+    defaultValue: false, // Consent must require affirmative action
     allowChoice: true, // Allow user to choose between agree/disagree
     // Full Credit Authorization verbiage
     creditAuthContent: {
