@@ -207,6 +207,9 @@ class Lead(Base):
     present_monthly_payment = Column(Numeric(18, 2))
     proposed_monthly_payment = Column(Numeric(18, 2))
 
+    # Marketing
+    receive_marketing = Column(Boolean, default=False)
+
     # Salesforce Integration
     salesforce_id = Column(String)
     meta_data = Column(JSON)

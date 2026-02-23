@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { activitiesAPI, tasksAPI } from '../services/api';
+import { activitiesAPI, tasksAPI, leadsAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import './DispositionNoteModal.css';
 
@@ -14,6 +14,7 @@ function DispositionNoteModal({ isOpen, onClose, onConfirm, lead, newStatus }) {
   const [note, setNote] = useState('');
   const [createFollowUp, setCreateFollowUp] = useState(false);
   const [followUpDate, setFollowUpDate] = useState('');
+  const [addToMarketing, setAddToMarketing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
@@ -35,7 +36,12 @@ function DispositionNoteModal({ isOpen, onClose, onConfirm, lead, newStatus }) {
         content: `[Disposition to ${label}] ${note.trim()}`,
       });
 
-      // 2. Optionally create a follow-up task
+      // 2. Optionally add to marketing list
+      if (addToMarketing && lead?.id) {
+        await leadsAPI.update(lead.id, { receive_marketing: true });
+      }
+
+      // 3. Optionally create a follow-up task
       if (createFollowUp && followUpDate) {
         await tasksAPI.create({
           title: `Follow up: ${leadName} (${label})`,
@@ -46,7 +52,7 @@ function DispositionNoteModal({ isOpen, onClose, onConfirm, lead, newStatus }) {
         });
       }
 
-      // 3. Proceed with the status change
+      // 4. Proceed with the status change
       if (onConfirm) {
         await onConfirm(newStatus);
       }
@@ -55,6 +61,7 @@ function DispositionNoteModal({ isOpen, onClose, onConfirm, lead, newStatus }) {
       setNote('');
       setCreateFollowUp(false);
       setFollowUpDate('');
+      setAddToMarketing(false);
       onClose();
     } catch (err) {
       console.error('Disposition note error:', err);
@@ -99,6 +106,18 @@ function DispositionNoteModal({ isOpen, onClose, onConfirm, lead, newStatus }) {
               rows={4}
               autoFocus
             />
+          </div>
+
+          {/* Marketing opt-in */}
+          <div className="disposition-followup-toggle">
+            <label className="disposition-checkbox-label">
+              <input
+                type="checkbox"
+                checked={addToMarketing}
+                onChange={(e) => setAddToMarketing(e.target.checked)}
+              />
+              <span>Add to marketing list</span>
+            </label>
           </div>
 
           {/* Follow-up task toggle */}
