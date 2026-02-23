@@ -5,10 +5,9 @@ FastAPI routes for the Profitability Intelligence System.
 from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from database import get_db
-from fastapi import Request
 
 from models.profitability import (
     Expense, ExpenseCategory, EmployeeCost, ProfitabilityRole,
@@ -31,39 +30,34 @@ from services.profitability_service import ProfitabilityService
 router = APIRouter(prefix="/api/v1/profitability", tags=["profitability"])
 
 
-# Helper to get current user's organization
-def get_organization_id(db: Session, request: Request = None) -> int:
-    """Get organization ID from authenticated user's context"""
-    if request:
-        from jose import jwt, JWTError
-        import os
-        SECRET_KEY = os.getenv("SECRET_KEY")
-        if not SECRET_KEY:
-            raise ValueError("SECRET_KEY environment variable is not set")
+# Use the standard auth dependency
+def _get_auth_dependency():
+    """Lazy import to avoid circular imports."""
+    from main import get_current_user_flexible
+    return get_current_user_flexible
 
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], options={"verify_aud": False})
-                if "org_id" in payload:
-                    return payload["org_id"]
-                if "company_id" in payload:
-                    return payload["company_id"]
-            except JWTError:
-                raise HTTPException(status_code=401, detail="Invalid authentication token")
-    raise HTTPException(status_code=401, detail="Authentication required")
+
+def _get_org_id(current_user) -> int:
+    """Extract organization_id from authenticated user."""
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id is None:
+        org_id = getattr(current_user, 'company_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="No organization associated with user")
+    return org_id
 
 
 # ============ Dashboard Endpoints ============
 
 @router.get("/dashboard")
 async def get_dashboard(
+    request: Request,
     month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
     """Get complete profitability dashboard data."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     # Parse month or use current
@@ -112,11 +106,13 @@ async def get_dashboard(
 
 @router.get("/metrics")
 async def get_metrics(
+    request: Request,
     month: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Get just the key metrics for a month."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     if month:
@@ -132,11 +128,13 @@ async def get_metrics(
 
 @router.get("/trends")
 async def get_trends(
+    request: Request,
     months: int = Query(12, ge=1, le=36),
     db: Session = Depends(get_db)
 ):
     """Get historical trend data."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
     return service.get_trends(months)
 
@@ -164,13 +162,15 @@ async def create_expense_category(
 
 @router.get("/expenses", response_model=List[ExpenseResponse])
 async def list_expenses(
+    request: Request,
     category_id: Optional[UUID] = None,
     expense_type: Optional[str] = None,
     is_active: bool = True,
     db: Session = Depends(get_db)
 ):
     """List expenses with optional filters."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     query = db.query(Expense).filter(
         Expense.organization_id == org_id,
         Expense.is_active == is_active
@@ -186,11 +186,13 @@ async def list_expenses(
 
 @router.post("/expenses", response_model=ExpenseResponse)
 async def create_expense(
+    request: Request,
     data: ExpenseCreate,
     db: Session = Depends(get_db)
 ):
     """Create a new expense."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     expense = Expense(
         organization_id=org_id,
         **data.model_dump()
@@ -203,12 +205,14 @@ async def create_expense(
 
 @router.put("/expenses/{expense_id}", response_model=ExpenseResponse)
 async def update_expense(
+    request: Request,
     expense_id: UUID,
     data: ExpenseUpdate,
     db: Session = Depends(get_db)
 ):
     """Update an expense."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     expense = db.query(Expense).filter(
         Expense.id == expense_id,
         Expense.organization_id == org_id
@@ -228,9 +232,10 @@ async def update_expense(
 
 
 @router.delete("/expenses/{expense_id}")
-async def delete_expense(expense_id: UUID, db: Session = Depends(get_db)):
+async def delete_expense(request: Request, expense_id: UUID, db: Session = Depends(get_db)):
     """Soft delete an expense."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     expense = db.query(Expense).filter(
         Expense.id == expense_id,
         Expense.organization_id == org_id
@@ -247,9 +252,10 @@ async def delete_expense(expense_id: UUID, db: Session = Depends(get_db)):
 # ============ Role Endpoints ============
 
 @router.get("/roles", response_model=List[RoleResponse])
-async def list_roles(db: Session = Depends(get_db)):
+async def list_roles(request: Request, db: Session = Depends(get_db)):
     """List all roles."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     return db.query(ProfitabilityRole).filter(
         ProfitabilityRole.organization_id == org_id,
         ProfitabilityRole.is_active == True
@@ -257,9 +263,10 @@ async def list_roles(db: Session = Depends(get_db)):
 
 
 @router.post("/roles", response_model=RoleResponse)
-async def create_role(data: RoleCreate, db: Session = Depends(get_db)):
+async def create_role(request: Request, data: RoleCreate, db: Session = Depends(get_db)):
     """Create a new role."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     role = ProfitabilityRole(
         organization_id=org_id,
         **data.model_dump()
@@ -272,12 +279,14 @@ async def create_role(data: RoleCreate, db: Session = Depends(get_db)):
 
 @router.get("/roles/{role_id}/profitability")
 async def get_role_profitability(
+    request: Request,
     role_id: UUID,
     month: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Get profitability analysis for a specific role."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     if month:
@@ -298,12 +307,14 @@ async def get_role_profitability(
 
 @router.get("/employees", response_model=List[EmployeeCostResponse])
 async def list_employee_costs(
+    request: Request,
     role_id: Optional[UUID] = None,
     is_active: bool = True,
     db: Session = Depends(get_db)
 ):
     """List employee costs."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     query = db.query(EmployeeCost).filter(
         EmployeeCost.organization_id == org_id,
         EmployeeCost.is_active == is_active
@@ -344,11 +355,13 @@ async def list_employee_costs(
 
 @router.post("/employees", response_model=EmployeeCostResponse)
 async def create_employee_cost(
+    request: Request,
     data: EmployeeCostCreate,
     db: Session = Depends(get_db)
 ):
     """Create employee cost record."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     employee = EmployeeCost(
         organization_id=org_id,
         **data.model_dump()
@@ -366,12 +379,14 @@ async def create_employee_cost(
 
 @router.put("/employees/{employee_id}", response_model=EmployeeCostResponse)
 async def update_employee_cost(
+    request: Request,
     employee_id: UUID,
     data: EmployeeCostUpdate,
     db: Session = Depends(get_db)
 ):
     """Update employee cost record."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     employee = db.query(EmployeeCost).filter(
         EmployeeCost.id == employee_id,
         EmployeeCost.organization_id == org_id
@@ -397,12 +412,14 @@ async def update_employee_cost(
 
 @router.get("/employees/{employee_id}/performance")
 async def get_employee_performance(
+    request: Request,
     employee_id: UUID,
     month: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Get performance metrics for a specific employee."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     if month:
@@ -426,13 +443,15 @@ async def get_employee_performance(
 
 @router.get("/loans", response_model=List[LoanResponse])
 async def list_loans(
+    request: Request,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db)
 ):
     """List closed loans."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     query = db.query(ProfitabilityLoan).filter(
         ProfitabilityLoan.organization_id == org_id
     )
@@ -446,9 +465,10 @@ async def list_loans(
 
 
 @router.post("/loans", response_model=LoanResponse)
-async def create_loan(data: LoanCreate, db: Session = Depends(get_db)):
+async def create_loan(request: Request, data: LoanCreate, db: Session = Depends(get_db)):
     """Create a closed loan record with attributions."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
 
     # Create loan
     loan_data = data.model_dump(exclude={"attributions"})
@@ -485,12 +505,14 @@ async def create_loan(data: LoanCreate, db: Session = Depends(get_db)):
 
 @router.post("/loans/{loan_id}/attributions")
 async def add_loan_attribution(
+    request: Request,
     loan_id: UUID,
     data: LoanAttributionCreate,
     db: Session = Depends(get_db)
 ):
     """Add attribution to a loan."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     loan = db.query(ProfitabilityLoan).filter(
         ProfitabilityLoan.id == loan_id,
         ProfitabilityLoan.organization_id == org_id
@@ -513,13 +535,15 @@ async def add_loan_attribution(
 
 @router.get("/revenue", response_model=List[RevenueRecordResponse])
 async def list_revenue(
+    request: Request,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     revenue_type: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """List revenue records."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     query = db.query(RevenueRecord).filter(
         RevenueRecord.organization_id == org_id
     )
@@ -536,11 +560,13 @@ async def list_revenue(
 
 @router.post("/revenue", response_model=RevenueRecordResponse)
 async def create_revenue(
+    request: Request,
     data: RevenueRecordCreate,
     db: Session = Depends(get_db)
 ):
     """Create a revenue record."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     revenue = RevenueRecord(
         organization_id=org_id,
         **data.model_dump()
@@ -555,11 +581,13 @@ async def create_revenue(
 
 @router.get("/scenarios", response_model=List[ScenarioResponse])
 async def list_scenarios(
+    request: Request,
     saved_only: bool = False,
     db: Session = Depends(get_db)
 ):
     """List saved scenarios."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     query = db.query(ProfitabilityScenario).filter(
         ProfitabilityScenario.organization_id == org_id
     )
@@ -572,11 +600,13 @@ async def list_scenarios(
 
 @router.post("/scenarios")
 async def create_scenario(
+    request: Request,
     data: ScenarioCreate,
     db: Session = Depends(get_db)
 ):
     """Create and run a what-if scenario."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     # Run scenario
@@ -606,12 +636,14 @@ async def create_scenario(
 
 @router.post("/scenarios/run")
 async def run_scenario(
+    request: Request,
     parameters: dict,
     base_month: str = Query(..., description="Base month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
     """Run a scenario without saving."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     try:
@@ -623,9 +655,10 @@ async def run_scenario(
 
 
 @router.put("/scenarios/{scenario_id}/save")
-async def save_scenario(scenario_id: UUID, db: Session = Depends(get_db)):
+async def save_scenario(request: Request, scenario_id: UUID, db: Session = Depends(get_db)):
     """Mark a scenario as saved."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     scenario = db.query(ProfitabilityScenario).filter(
         ProfitabilityScenario.id == scenario_id,
         ProfitabilityScenario.organization_id == org_id
@@ -643,11 +676,13 @@ async def save_scenario(scenario_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/snapshots", response_model=List[SnapshotResponse])
 async def list_snapshots(
+    request: Request,
     limit: int = Query(12, ge=1, le=60),
     db: Session = Depends(get_db)
 ):
     """List historical snapshots."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     return db.query(ProfitabilitySnapshot).filter(
         ProfitabilitySnapshot.organization_id == org_id
     ).order_by(ProfitabilitySnapshot.snapshot_month.desc()).limit(limit).all()
@@ -655,11 +690,13 @@ async def list_snapshots(
 
 @router.post("/snapshots")
 async def create_snapshot(
+    request: Request,
     month: str = Query(..., description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
     """Create or update a monthly snapshot."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     try:
@@ -679,13 +716,15 @@ async def create_snapshot(
 
 @router.get("/insights", response_model=List[InsightResponse])
 async def list_insights(
+    request: Request,
     acknowledged: Optional[bool] = None,
     insight_type: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     """List profitability insights."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     query = db.query(ProfitabilityInsight).filter(
         ProfitabilityInsight.organization_id == org_id
     )
@@ -700,11 +739,13 @@ async def list_insights(
 
 @router.post("/insights/generate")
 async def generate_insights(
+    request: Request,
     month: str = Query(..., description="Month in YYYY-MM format"),
     db: Session = Depends(get_db)
 ):
     """Generate AI insights for a month."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     try:
@@ -730,11 +771,13 @@ async def generate_insights(
 
 @router.put("/insights/{insight_id}/acknowledge")
 async def acknowledge_insight(
+    request: Request,
     insight_id: UUID,
     db: Session = Depends(get_db)
 ):
     """Acknowledge an insight."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     insight = db.query(ProfitabilityInsight).filter(
         ProfitabilityInsight.id == insight_id,
         ProfitabilityInsight.organization_id == org_id
@@ -753,11 +796,13 @@ async def acknowledge_insight(
 
 @router.get("/analysis/gaps-gains")
 async def get_gaps_and_gains(
+    request: Request,
     month: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Get gap and gain analysis."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     if month:
@@ -770,11 +815,13 @@ async def get_gaps_and_gains(
 
 @router.get("/analysis/break-even")
 async def get_break_even_analysis(
+    request: Request,
     month: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Get break-even analysis."""
-    org_id = get_organization_id(db)
+    current_user = await _get_auth_dependency()(request, db)
+    org_id = _get_org_id(current_user)
     service = ProfitabilityService(db, org_id)
 
     if month:
