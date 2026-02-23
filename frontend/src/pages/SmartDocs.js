@@ -217,7 +217,7 @@ function SmartDocs() {
   // Fetch completed clients (loans that are funded/closed)
   const fetchCompletedClients = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/loans?status=funded&limit=${pagination.limit}&page=${pagination.page}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/loans?status=funded&limit=${pagination.limit}&page=${pagination.page}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },

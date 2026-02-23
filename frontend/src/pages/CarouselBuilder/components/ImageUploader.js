@@ -7,6 +7,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { useCarouselBuilder } from '../CarouselBuilderContext';
+import { API_BASE_URL } from '../../../services/api';
 
 export default function ImageUploader({ onUpload, currentImage }) {
   const { currentProject } = useCarouselBuilder();
@@ -44,7 +45,7 @@ export default function ImageUploader({ onUpload, currentImage }) {
 
       // Step 1: Get presigned upload URL
       setProgress(10);
-      const urlResponse = await fetch(`/api/v1/carousels/${currentProject.id}/images/upload-url`, {
+      const urlResponse = await fetch(`${API_BASE_URL}/api/v1/carousels/${currentProject.id}/images/upload-url`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

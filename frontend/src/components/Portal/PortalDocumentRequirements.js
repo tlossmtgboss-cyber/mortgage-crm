@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../services/api';
 import './PortalDocumentRequirements.css';
 
 /**
@@ -25,7 +26,7 @@ function PortalDocumentRequirements({ workspaceSlug, onProgressUpdate }) {
   const fetchRequirements = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/portal/smart-docs/${workspaceSlug}/requirements`);
+      const response = await fetch(`${API_BASE_URL}/api/portal/smart-docs/${workspaceSlug}/requirements`);
       if (response.ok) {
         const data = await response.json();
         setRequirements(data.requirements || []);
@@ -47,7 +48,7 @@ function PortalDocumentRequirements({ workspaceSlug, onProgressUpdate }) {
 
   const fetchSummary = async () => {
     try {
-      const response = await fetch(`/api/portal/smart-docs/${workspaceSlug}/summary`);
+      const response = await fetch(`${API_BASE_URL}/api/portal/smart-docs/${workspaceSlug}/summary`);
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
@@ -68,7 +69,7 @@ function PortalDocumentRequirements({ workspaceSlug, onProgressUpdate }) {
       formData.append('file', file);
       formData.append('request_id', requestId);
 
-      const response = await fetch(`/api/portal/smart-docs/${workspaceSlug}/upload`, {
+      const response = await fetch(`${API_BASE_URL}/api/portal/smart-docs/${workspaceSlug}/upload`, {
         method: 'POST',
         body: formData
       });

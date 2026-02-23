@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi';
+import { API_BASE_URL } from '../services/api';
 import './SmartDocsDashboard.css';
 
 const SmartDocsDashboard = () => {
@@ -64,7 +65,7 @@ const SmartDocsDashboard = () => {
   const fetchCompletedClients = useCallback(async () => {
     try {
       // Fetch funded/closed loans
-      const response = await fetch(`/api/v1/loans?status=funded&limit=${pagination.limit}&page=${pagination.page}`);
+      const response = await fetch(`${API_BASE_URL}/api/v1/loans?status=funded&limit=${pagination.limit}&page=${pagination.page}`);
       if (response.ok) {
         const data = await response.json();
         const loans = data.loans || data || [];

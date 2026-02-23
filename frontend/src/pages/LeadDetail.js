@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI, purlAPI, partnersAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, dialerAPI, borrowerApplicationAPI, purlAPI, partnersAPI, API_BASE_URL } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -1069,7 +1069,7 @@ function LeadDetail() {
     setWorkflowTasksLoading(true);
     try {
       // Use the new endpoint that handles stage-to-workflow mapping and day calculations
-      const response = await fetch(`/api/v1/workflow-config/leads/${lead.id}/workflow-tasks`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-config/leads/${lead.id}/workflow-tasks`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

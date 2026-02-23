@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../services/api';
 import './GuidelineNotificationBadge.css';
 
 const GuidelineNotificationBadge = ({ userId }) => {
@@ -14,7 +15,7 @@ const GuidelineNotificationBadge = ({ userId }) => {
   const checkForNewUpdates = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/v1/guideline-updates/check-new?user_id=${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/guideline-updates/check-new?user_id=${userId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

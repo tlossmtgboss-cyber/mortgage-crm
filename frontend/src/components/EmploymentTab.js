@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { leadsAPI } from '../services/api';
+import { leadsAPI, API_BASE_URL } from '../services/api';
 import './EmploymentTab.css';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const VERIFICATION_STATUSES = {
   'PENDING': { label: 'Pending Verification', color: '#6b7280', bgColor: '#f3f4f6' },
@@ -30,7 +28,7 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
     try {
       // Fetch income sources for this borrower to find linked employment income
       const response = await fetch(
-        `${API_BASE}/api/v1/income/borrowers/${leadId}/sources?income_type=W2_EMPLOYMENT`,
+        `${API_BASE_URL}/api/v1/income/borrowers/${leadId}/sources?income_type=W2_EMPLOYMENT`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -72,7 +70,7 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
 
       setCalculating(true);
       try {
-        const response = await fetch(`/api/v1/${entityType}/${leadId}/calculate-referral-scores`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/${entityType}/${leadId}/calculate-referral-scores`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

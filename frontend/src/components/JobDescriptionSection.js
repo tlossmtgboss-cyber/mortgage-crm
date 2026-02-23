@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import { API_BASE_URL } from '../services/api';
 import './JobDescriptionSection.css';
 
 /**
@@ -52,7 +53,7 @@ function JobDescriptionSection({ userId }) {
   const loadJobDescription = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/v1/users/${userId}/job-description`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/${userId}/job-description`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -109,7 +110,7 @@ function JobDescriptionSection({ userId }) {
       setSaving(true);
       setSaveStatus('saving');
 
-      const response = await fetch(`/api/v1/users/${userId}/job-description`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/${userId}/job-description`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

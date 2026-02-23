@@ -1,5 +1,18 @@
 /* QuestionRenderer Styles - CRM Color Scheme */
 
+/* Screen-reader-only utility for aria-live announcements */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .question-renderer {
   max-width: 560px;
   margin: 0 auto;

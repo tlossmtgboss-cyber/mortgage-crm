@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { teamAPI } from '../services/api';
+import { teamAPI, API_BASE_URL } from '../services/api';
 import ImpersonationModal from '../components/ImpersonationModal';
 import PermissionsTab from '../components/PermissionsTab';
 import AccessAuditTab from '../components/AccessAuditTab';
@@ -78,7 +78,7 @@ function TeamMemberProfile() {
       photoFormData.append('photo', file);
 
       // Upload to backend
-      const response = await fetch(`/api/v1/users/${id}/photo`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users/${id}/photo`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

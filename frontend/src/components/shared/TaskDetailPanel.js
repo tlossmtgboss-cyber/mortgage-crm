@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { aiAPI } from '../../services/api';
+import { aiAPI, API_BASE_URL } from '../../services/api';
 import { sanitizeHTML } from '../../utils/sanitize';
 import './TaskDetailPanel.css';
 import { toast } from '../../utils/toast';
@@ -572,7 +572,7 @@ const TaskDetailPanel = ({
         taskId = taskId.split('-').pop();
       }
 
-      const response = await fetch(`/api/v1/tasks/${taskId}/complete-sla`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/tasks/${taskId}/complete-sla`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

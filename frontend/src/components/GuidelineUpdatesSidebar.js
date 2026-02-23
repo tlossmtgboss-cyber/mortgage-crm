@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../services/api';
 import './GuidelineUpdatesSidebar.css';
 
 const GuidelineUpdatesSidebar = ({ userId }) => {
@@ -15,7 +16,7 @@ const GuidelineUpdatesSidebar = ({ userId }) => {
   const fetchSidebarData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/v1/guideline-updates/sidebar?user_id=${userId}&limit_per_source=5`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/guideline-updates/sidebar?user_id=${userId}&limit_per_source=5`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -37,7 +38,7 @@ const GuidelineUpdatesSidebar = ({ userId }) => {
   const handleUpdateClick = async (updateId, url) => {
     try {
       const token = localStorage.getItem('token');
-      await fetch(`/api/v1/guideline-updates/mark-viewed/${updateId}?user_id=${userId}`, {
+      await fetch(`${API_BASE_URL}/api/v1/guideline-updates/mark-viewed/${updateId}?user_id=${userId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
