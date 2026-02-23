@@ -62,7 +62,7 @@
 
 /* ---- Loan Info + Progress Stepper Card ---- */
 
-.loan-info-card {
+.lead-portal .loan-info-card {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -73,14 +73,14 @@
   align-items: flex-start;
 }
 
-.loan-info-grid {
+.lead-portal .loan-info-grid {
   flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 18px 32px;
 }
 
-.info-cell .info-label {
+.lead-portal .info-cell .info-label {
   display: block;
   font-size: 11px;
   font-weight: 600;
@@ -90,7 +90,7 @@
   margin-bottom: 4px;
 }
 
-.info-cell .info-value {
+.lead-portal .info-cell .info-value {
   display: block;
   font-size: 16px;
   font-weight: 600;
@@ -98,7 +98,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.stepper-container {
+.lead-portal .stepper-container {
   flex-shrink: 0;
   width: 280px;
   display: flex;
@@ -109,17 +109,17 @@
 
 /* ---- Progress Stepper ---- */
 
-.progress-stepper {
+.lead-portal .progress-stepper {
   width: 100%;
 }
 
-.stepper-track {
+.lead-portal .stepper-track {
   display: flex;
   align-items: flex-start;
   justify-content: center;
 }
 
-.stepper-step {
+.lead-portal .stepper-step {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -127,7 +127,7 @@
   position: relative;
 }
 
-.step-circle {
+.lead-portal .step-circle {
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -144,25 +144,25 @@
   z-index: 1;
 }
 
-.stepper-step.complete .step-circle {
+.lead-portal .stepper-step.complete .step-circle {
   background: #218D8D;
   border-color: #218D8D;
   color: #fff;
 }
 
-.stepper-step.complete .step-circle svg {
+.lead-portal .stepper-step.complete .step-circle svg {
   width: 18px;
   height: 18px;
 }
 
-.stepper-step.current .step-circle {
+.lead-portal .stepper-step.current .step-circle {
   border-color: #218D8D;
   color: #218D8D;
   background: #fff;
   box-shadow: 0 0 0 4px rgba(33, 141, 141, 0.15);
 }
 
-.stepper-step .step-label {
+.lead-portal .stepper-step .step-label {
   font-size: 10px;
   font-weight: 600;
   color: #64748b;
@@ -174,7 +174,7 @@
   white-space: pre-line;
 }
 
-.stepper-line {
+.lead-portal .stepper-line {
   width: 32px;
   height: 3px;
   background: #e2e8f0;
@@ -182,21 +182,21 @@
   flex-shrink: 0;
 }
 
-.stepper-line.complete {
+.lead-portal .stepper-line.complete {
   background: #218D8D;
 }
 
 
 /* ---- Tab Bar ---- */
 
-.portal-tab-bar {
+.lead-portal .portal-tab-bar {
   display: flex;
   background: linear-gradient(135deg, #1e3a5f 0%, #1e3a5f 50%, #1a4a6e 100%);
   margin-top: 16px;
   overflow: hidden;
 }
 
-.portal-tab-bar .tab-btn {
+.lead-portal .portal-tab-bar .tab-btn {
   flex: 1;
   padding: 14px 12px;
   background: none;
@@ -211,18 +211,18 @@
   white-space: nowrap;
 }
 
-.portal-tab-bar .tab-btn:hover {
+.lead-portal .portal-tab-bar .tab-btn:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.08);
 }
 
-.portal-tab-bar .tab-btn.active {
+.lead-portal .portal-tab-bar .tab-btn.active {
   color: #fff;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.1);
 }
 
-.portal-tab-bar .tab-btn.active::after {
+.lead-portal .portal-tab-bar .tab-btn.active::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -236,7 +236,7 @@
 
 /* ---- Tab Content ---- */
 
-.portal-tab-content {
+.lead-portal .portal-tab-content {
   padding-top: 24px;
 }
 
@@ -306,7 +306,7 @@
   height: 16px;
 }
 
-.btn-schedule-sm {
+.lead-portal .btn-schedule-sm {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -321,7 +321,7 @@
   margin-top: 12px;
 }
 
-.btn-schedule-sm:hover {
+.lead-portal .btn-schedule-sm:hover {
   background: #1a7070;
 }
 
@@ -600,29 +600,29 @@
     padding: 20px 16px 16px;
   }
 
-  .loan-info-card {
+  .lead-portal .loan-info-card {
     flex-direction: column;
     padding: 20px 16px;
   }
 
-  .loan-info-grid {
+  .lead-portal .loan-info-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 14px 20px;
   }
 
-  .stepper-container {
+  .lead-portal .stepper-container {
     width: 100%;
     margin-top: 16px;
     padding-top: 16px;
     border-top: 1px solid #f1f5f9;
   }
 
-  .portal-tab-bar {
+  .lead-portal .portal-tab-bar {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
-  .portal-tab-bar .tab-btn {
+  .lead-portal .portal-tab-bar .tab-btn {
     padding: 12px 10px;
     font-size: 13px;
   }
@@ -638,11 +638,11 @@
 }
 
 @media (max-width: 480px) {
-  .loan-info-grid {
+  .lead-portal .loan-info-grid {
     grid-template-columns: 1fr;
   }
 
-  .stepper-track {
+  .lead-portal .stepper-track {
     transform: scale(0.85);
     transform-origin: center;
   }
