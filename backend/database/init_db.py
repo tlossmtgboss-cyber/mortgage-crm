@@ -364,6 +364,53 @@ def init_db():
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='initial_consultation_date') THEN
                             ALTER TABLE leads ADD COLUMN initial_consultation_date TIMESTAMP;
                         END IF;
+                        -- Salesforce Sync - Financial
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='origination_fee') THEN
+                            ALTER TABLE leads ADD COLUMN origination_fee NUMERIC(18,2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='estimated_prepaid_interest') THEN
+                            ALTER TABLE leads ADD COLUMN estimated_prepaid_interest NUMERIC(18,2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='index_rate') THEN
+                            ALTER TABLE leads ADD COLUMN index_rate NUMERIC(8,4);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='margin') THEN
+                            ALTER TABLE leads ADD COLUMN margin NUMERIC(8,4);
+                        END IF;
+                        -- Salesforce Sync - LTV/Purpose
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_purpose') THEN
+                            ALTER TABLE leads ADD COLUMN loan_purpose VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='file_state') THEN
+                            ALTER TABLE leads ADD COLUMN file_state VARCHAR;
+                        END IF;
+                        -- Salesforce Sync - 2nd Loan
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='second_loan_amount') THEN
+                            ALTER TABLE leads ADD COLUMN second_loan_amount NUMERIC(18,2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='second_loan_rate') THEN
+                            ALTER TABLE leads ADD COLUMN second_loan_rate NUMERIC(8,4);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='second_loan_payment') THEN
+                            ALTER TABLE leads ADD COLUMN second_loan_payment NUMERIC(18,2);
+                        END IF;
+                        -- Salesforce Sync - Housing Expenses
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='present_housing_expense') THEN
+                            ALTER TABLE leads ADD COLUMN present_housing_expense NUMERIC(18,2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='proposed_housing_expense') THEN
+                            ALTER TABLE leads ADD COLUMN proposed_housing_expense NUMERIC(18,2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='present_monthly_payment') THEN
+                            ALTER TABLE leads ADD COLUMN present_monthly_payment NUMERIC(18,2);
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='proposed_monthly_payment') THEN
+                            ALTER TABLE leads ADD COLUMN proposed_monthly_payment NUMERIC(18,2);
+                        END IF;
+                        -- Marketing
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='receive_marketing') THEN
+                            ALTER TABLE leads ADD COLUMN receive_marketing BOOLEAN DEFAULT FALSE;
+                        END IF;
                     END $$;
                     """))
 
