@@ -200,6 +200,13 @@ class BorrowerApplication(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    @property
+    def ssn_display(self) -> str:
+        """Masked SSN display: ***-**-1234 (derived from credit_auth_ssn_last4)"""
+        if self.credit_auth_ssn_last4:
+            return f"***-**-{self.credit_auth_ssn_last4}"
+        return None
+
     # Relationships
     borrower_profile = relationship("BorrowerProfile", back_populates="applications")
     lead = relationship("Lead", backref="borrower_applications")

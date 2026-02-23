@@ -392,6 +392,27 @@ class SocialContentRequest(BaseModel):
 # Helper Functions
 # ============================================================================
 
+_tables_ensured = False
+
+def _ensure_application_tables(db: Session):
+    """Ensure borrower_applications and application_events tables exist."""
+    global _tables_ensured
+    if _tables_ensured:
+        return
+    try:
+        from database import Base, engine
+        models = get_models()
+        BorrowerApplication = models['BorrowerApplication']
+        ApplicationEvent = models['ApplicationEvent']
+        BorrowerApplication.__table__.create(engine, checkfirst=True)
+        ApplicationEvent.__table__.create(engine, checkfirst=True)
+        _tables_ensured = True
+        logger.info("Borrower application tables verified/created")
+    except Exception as e:
+        logger.warning(f"Table creation check: {e}")
+        _tables_ensured = True  # Don't retry on every request
+
+
 def generate_token(length: int = 32) -> str:
     """Generate a secure random token"""
     import secrets
@@ -527,50 +548,63 @@ async def create_borrower_application(
     current_user = Depends(get_current_user_dep())
 ):
     """Create a new borrower application and generate a public token"""
-    models = get_models()
-    enums = get_enums()
-    BorrowerApplication = models['BorrowerApplication']
-    ApplicationEvent = models['ApplicationEvent']
-    User = models['User']
+    try:
+        models = get_models()
+        BorrowerApplication = models['BorrowerApplication']
+        ApplicationEvent = models['ApplicationEvent']
 
-    # Generate public token
-    public_token = generate_token(32)
+        # Ensure tables exist
+        _ensure_application_tables(db)
 
-    # Calculate expiration date
-    expires_at = datetime.now(timezone.utc) + timedelta(days=data.expires_in_days)
+        # Generate public token
+        public_token = generate_token(32)
 
-    # Create application
-    application = BorrowerApplication(
-        public_token=public_token,
-        lead_id=data.lead_id,
-        owner_id=current_user.id,
-        organization_id=current_user.organization_id,
-        borrower_first_name=data.borrower_first_name,
-        borrower_last_name=data.borrower_last_name,
-        borrower_email=data.borrower_email,
-        borrower_phone=data.borrower_phone,
-        has_coborrower=data.has_coborrower,
-        coborrower_email=data.coborrower_email,
-        expires_at=expires_at,
-        completed_steps=[],
-        step_data={},
-    )
+        # Calculate expiration date
+        expires_at = datetime.now(timezone.utc) + timedelta(days=data.expires_in_days)
 
-    db.add(application)
-    db.commit()
-    db.refresh(application)
+        # Create application
+        application = BorrowerApplication(
+            public_token=public_token,
+            lead_id=data.lead_id,
+            owner_id=current_user.id,
+            organization_id=current_user.organization_id,
+            borrower_first_name=data.borrower_first_name,
+            borrower_last_name=data.borrower_last_name,
+            borrower_email=data.borrower_email,
+            borrower_phone=data.borrower_phone,
+            has_coborrower=data.has_coborrower,
+            coborrower_email=data.coborrower_email,
+            expires_at=expires_at,
+            completed_steps=[],
+            step_data={},
+        )
 
-    # Log event
-    event = ApplicationEvent(
-        application_id=application.id,
-        event_type="created",
-        actor_type="lo",
-        actor_email=current_user.email,
-    )
-    db.add(event)
-    db.commit()
+        db.add(application)
+        db.commit()
+        db.refresh(application)
 
-    return application
+        # Log event (non-blocking — don't fail if event logging fails)
+        try:
+            event = ApplicationEvent(
+                application_id=application.id,
+                event_type="created",
+                actor_type="lo",
+                actor_email=current_user.email,
+            )
+            db.add(event)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to log application creation event: {e}")
+            db.rollback()
+
+        return application
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create borrower application: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create application: {str(e)[:200]}")
 
 
 @router.get("/api/v1/applications/", response_model=List[BorrowerApplicationResponse])
