@@ -396,8 +396,8 @@ function AILandingPage() {
     if (emailRecipientSearch.length > 0) {
       const searchLower = emailRecipientSearch.toLowerCase();
       const filtered = allContacts.filter(contact =>
-        contact.name.toLowerCase().includes(searchLower) ||
-        contact.email.toLowerCase().includes(searchLower)
+        (contact.name || '').toLowerCase().includes(searchLower) ||
+        (contact.email || '').toLowerCase().includes(searchLower)
       ).slice(0, 8);
       setRecipientSuggestions(filtered);
       setShowRecipientDropdown(filtered.length > 0);
@@ -1083,7 +1083,7 @@ function AILandingPage() {
   };
 
   const filteredChats = chatHistory.filter(chat =>
-    chat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (chat.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     chat.messages?.some(m => m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 

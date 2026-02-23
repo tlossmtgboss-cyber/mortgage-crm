@@ -196,9 +196,9 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
                         <div className="task-mini-client">{task.clientName}</div>
                         <div className="task-mini-assignee">
                           <span className="assignee-avatar">
-                            {task.assignedTo.name.split(' ').map(n => n[0]).join('')}
+                            {(task.assignedTo?.name || '?').split(' ').map(n => n[0]).join('')}
                           </span>
-                          <span className="assignee-name">{task.assignedTo.name.split(' ')[0]}</span>
+                          <span className="assignee-name">{(task.assignedTo?.name || '').split(' ')[0]}</span>
                         </div>
                       </div>
                     ))}
@@ -267,7 +267,7 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
                     <td>
                       <div className="user-cell">
                         <span className="user-avatar">
-                          {user.name.split(' ').map(n => n[0]).join('')}
+                          {(user.name || '?').split(' ').map(n => n[0]).join('')}
                         </span>
                         <span className="user-name">{user.name}</span>
                       </div>
