@@ -3,7 +3,7 @@
  * Catches common email typos like .ocm instead of .com
  */
 
-import React, { forwardRef, useState, useCallback } from 'react';
+import React, { forwardRef, useState, useCallback, useEffect } from 'react';
 import './EmailInput.css';
 
 // Common email domain typos and their corrections
@@ -14,7 +14,7 @@ const DOMAIN_TYPOS = {
   '.cpm': '.com',
   '.vom': '.com',
   '.coM': '.com',
-  '.co': '.com',
+  // Note: '.co' removed — it's a valid TLD (Colombia, also used by tech companies)
   '.om': '.com',
   '.cm': '.com',
   '.comn': '.com',
@@ -127,21 +127,36 @@ const EmailInput = forwardRef(({
 }, ref) => {
   const [typoSuggestion, setTypoSuggestion] = useState(null);
   const [localValue, setLocalValue] = useState(value);
+  const [validationError, setValidationError] = useState(null);
+
+  // Sync localValue when external value changes (e.g., from state restore)
+  useEffect(() => {
+    setLocalValue(value || '');
+  }, [value]);
 
   const handleChange = useCallback((e) => {
     const newValue = e.target.value;
     setLocalValue(newValue);
     setTypoSuggestion(null); // Clear suggestion while typing
+    if (validationError) setValidationError(null); // Clear error while typing
     onChange(newValue);
-  }, [onChange]);
+  }, [onChange, validationError]);
 
   const handleBlur = useCallback((e) => {
     const email = e.target.value.trim();
 
     if (email) {
-      // Check for typos
-      const suggestion = checkEmailTypo(email);
-      setTypoSuggestion(suggestion);
+      // Validate email format
+      if (!isValidEmailFormat(email)) {
+        setValidationError('Please enter a valid email address');
+      } else {
+        setValidationError(null);
+        // Check for typos only if format is valid
+        const suggestion = checkEmailTypo(email);
+        setTypoSuggestion(suggestion);
+      }
+    } else {
+      setValidationError(null);
     }
 
     if (onBlur) {
@@ -161,8 +176,10 @@ const EmailInput = forwardRef(({
     setTypoSuggestion(null);
   }, []);
 
+  const displayError = error || validationError;
+
   return (
-    <div className={`email-input-wrapper ${className} ${error ? 'has-error' : ''} ${typoSuggestion ? 'has-suggestion' : ''}`}>
+    <div className={`email-input-wrapper ${className} ${displayError ? 'has-error' : ''} ${typoSuggestion ? 'has-suggestion' : ''}`}>
       {label && (
         <label className="email-input-label">
           {label}
@@ -220,11 +237,11 @@ const EmailInput = forwardRef(({
         </div>
       )}
 
-      {helpText && !error && !typoSuggestion && (
+      {helpText && !displayError && !typoSuggestion && (
         <div className="email-input-help">{helpText}</div>
       )}
 
-      {error && <div className="email-input-error">{error}</div>}
+      {displayError && <div className="email-input-error" role="alert">{displayError}</div>}
     </div>
   );
 });

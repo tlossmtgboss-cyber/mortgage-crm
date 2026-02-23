@@ -58,8 +58,8 @@ const QuestionRenderer = ({
   const handleChange = useCallback((newValue) => {
     onChange(newValue);
 
-    // Auto-advance for single-choice and boolean types
-    if (autoAdvance && !isLast) {
+    // Auto-advance for single-choice and boolean types (guard against double-advance)
+    if (autoAdvance && !isLast && !isAnimating) {
       const shouldAdvance =
         (question.type === QuestionTypes.SINGLE_CHOICE && newValue) ||
         (question.type === QuestionTypes.BOOLEAN && newValue !== null && newValue !== undefined);
@@ -73,7 +73,7 @@ const QuestionRenderer = ({
         }, 300);
       }
     }
-  }, [onChange, onNext, isLast, question?.type, autoAdvance]);
+  }, [onChange, onNext, isLast, isAnimating, question?.type, autoAdvance]);
 
   // Handle next button click
   const handleNext = () => {
@@ -415,11 +415,23 @@ const QuestionRenderer = ({
     }
   };
 
-  // Check if can proceed (has value for required fields)
+  // Check if can proceed (has valid value for required fields)
   const canProceed = () => {
     if (!question?.required) return true;
     if (value === null || value === undefined || value === '') return false;
     if (Array.isArray(value) && value.length === 0) return false;
+
+    // SSN must be exactly 9 digits
+    if (question.type === QuestionTypes.SSN) {
+      const digits = String(value).replace(/\D/g, '');
+      if (digits.length !== 9) return false;
+    }
+
+    // Email must have valid format
+    if (question.type === QuestionTypes.EMAIL) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim())) return false;
+    }
+
     return true;
   };
 

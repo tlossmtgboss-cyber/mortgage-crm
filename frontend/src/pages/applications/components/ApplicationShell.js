@@ -47,11 +47,12 @@ const ApplicationShell = ({
   const currentStageIndex = visibleStages.findIndex(s => s.id === currentStage);
   const totalStages = visibleStages.length;
 
-  // Stage progress percentage (0-100)
+  // Stage progress percentage (0-100) — uses explicit progress values from stageConfig
+  // so dynamic stage visibility changes (e.g., second_mortgage appearing) don't cause regression
   const stageProgress = useMemo(() => {
-    if (currentStageIndex < 0) return 0;
-    return Math.round((currentStageIndex / totalStages) * 100);
-  }, [currentStageIndex, totalStages]);
+    if (currentStageIndex < 0 || !currentStageData) return 0;
+    return currentStageData.progress || Math.round(((currentStageIndex + 1) / totalStages) * 100);
+  }, [currentStageIndex, totalStages, currentStageData]);
 
   // Handle stage click (for navigation)
   const handleStageClick = (stageId) => {

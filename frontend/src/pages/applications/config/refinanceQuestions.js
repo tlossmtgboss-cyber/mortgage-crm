@@ -375,7 +375,7 @@ export const currentMortgageQuestions = [
     order: 7,
   },
   {
-    id: 'current_monthly_payment',
+    id: 'current_mortgage_payment',
     stage: 'current_mortgage',
     question: "What's your current monthly mortgage payment?",
     type: QuestionTypes.CURRENCY,

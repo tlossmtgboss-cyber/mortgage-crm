@@ -3,6 +3,10 @@
  * Handles all state changes for the mortgage application flow
  */
 
+// Bump this when formData shape changes (new fields, renames, etc.)
+// Saved states with a different version will have formData merged with current defaults.
+export const SCHEMA_VERSION = 2;
+
 // Action Types
 export const ActionTypes = {
   // Form Data
@@ -45,6 +49,9 @@ export const ActionTypes = {
 
 // Initial State Factory
 export const createInitialState = (applicationType = 'purchase') => ({
+  // Schema version for restore compatibility
+  schemaVersion: SCHEMA_VERSION,
+
   // Application metadata
   applicationType, // 'purchase' or 'refinance'
   applicationId: null,
@@ -178,7 +185,7 @@ export const createInitialState = (applicationType = 'purchase') => ({
     current_lender: '',
     current_loan_balance: '',
     current_interest_rate: '',
-    current_monthly_payment: '',
+    current_mortgage_payment: '',
     current_loan_type: null,
     refinance_purpose: null,
     cash_out_amount: '',
@@ -239,9 +246,33 @@ export function applicationReducer(state, action) {
       const borrowers = [...state.formData.borrowers];
       const borrowerIndex = action.borrowerIndex ?? state.currentBorrowerIndex;
 
-      // Ensure borrower exists
-      if (!borrowers[borrowerIndex]) {
-        borrowers[borrowerIndex] = {};
+      // Fill any gaps with default borrower objects to prevent sparse arrays
+      while (borrowers.length <= borrowerIndex) {
+        borrowers.push({
+          first_name: '',
+          middle_name: '',
+          last_name: '',
+          suffix: '',
+          email: '',
+          phone: '',
+          date_of_birth: '',
+          ssn: '',
+          citizenship: null,
+          marital_status: null,
+          dependents_count: null,
+          dependents_ages: '',
+          current_address: null,
+          current_address_street: '',
+          current_address_unit: '',
+          current_address_city: '',
+          current_address_state: '',
+          current_address_zip: '',
+          current_residence_type: null,
+          current_monthly_payment: '',
+          time_at_current_address_years: '',
+          time_at_current_address_months: '',
+          previous_addresses: [],
+        });
       }
 
       borrowers[borrowerIndex] = {
@@ -406,12 +437,42 @@ export function applicationReducer(state, action) {
       };
 
     // Persistence Actions
-    case ActionTypes.RESTORE_STATE:
+    case ActionTypes.RESTORE_STATE: {
+      const saved = action.savedState || {};
+      const defaults = createInitialState(state.applicationType);
+
+      // Merge saved formData with current defaults so new fields always exist
+      const mergedFormData = {
+        ...defaults.formData,
+        ...(saved.formData || {}),
+      };
+
+      // Merge each borrower with default borrower shape
+      if (mergedFormData.borrowers && Array.isArray(mergedFormData.borrowers)) {
+        const defaultBorrower = defaults.formData.borrowers[0];
+        mergedFormData.borrowers = mergedFormData.borrowers.map(b =>
+          b ? { ...defaultBorrower, ...b } : { ...defaultBorrower }
+        );
+      }
+
+      // Migrate renamed fields from older schema versions
+      if (!saved.schemaVersion || saved.schemaVersion < 2) {
+        // v1→v2: current_monthly_payment renamed to current_mortgage_payment (refinance)
+        if (mergedFormData.current_monthly_payment !== undefined
+            && mergedFormData.current_mortgage_payment === '') {
+          mergedFormData.current_mortgage_payment = mergedFormData.current_monthly_payment;
+        }
+        delete mergedFormData.current_monthly_payment;
+      }
+
       return {
         ...state,
-        ...action.savedState,
+        ...saved,
+        schemaVersion: SCHEMA_VERSION,
+        formData: mergedFormData,
         isDirty: false,
       };
+    }
 
     case ActionTypes.SET_LAST_SAVED:
       return {

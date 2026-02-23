@@ -93,16 +93,22 @@ export function useQuestionNavigation(questions, stageId = null) {
     );
   }, [questions, stageId, formData, currentBorrower]);
 
-  // Get current question
+  // Clamp question index to valid range (handles index 999 from backward stage navigation)
+  const clampedIndex = useMemo(() => {
+    if (visibleQuestions.length === 0) return 0;
+    return Math.min(currentQuestionIndex, visibleQuestions.length - 1);
+  }, [currentQuestionIndex, visibleQuestions.length]);
+
+  // Get current question using clamped index
   const currentQuestion = useMemo(() => {
-    return visibleQuestions[currentQuestionIndex] || null;
-  }, [visibleQuestions, currentQuestionIndex]);
+    return visibleQuestions[clampedIndex] || null;
+  }, [visibleQuestions, clampedIndex]);
 
   // Check if we're at the first question
-  const isFirstQuestion = currentQuestionIndex === 0;
+  const isFirstQuestion = clampedIndex === 0;
 
   // Check if we're at the last question
-  const isLastQuestion = currentQuestionIndex >= visibleQuestions.length - 1;
+  const isLastQuestion = clampedIndex >= visibleQuestions.length - 1;
 
   // Check if current question has a value
   const hasCurrentValue = useMemo(() => {
@@ -207,8 +213,8 @@ export function useQuestionNavigation(questions, stageId = null) {
   // Calculate progress within this stage
   const stageProgress = useMemo(() => {
     if (visibleQuestions.length === 0) return 0;
-    return Math.round((currentQuestionIndex / visibleQuestions.length) * 100);
-  }, [currentQuestionIndex, visibleQuestions.length]);
+    return Math.round((clampedIndex / visibleQuestions.length) * 100);
+  }, [clampedIndex, visibleQuestions.length]);
 
   // Calculate overall progress
   const calculateOverallProgress = useCallback((stages, currentStageId) => {
@@ -231,7 +237,7 @@ export function useQuestionNavigation(questions, stageId = null) {
     totalQuestions: visibleQuestions.length,
 
     // Navigation state
-    currentQuestionIndex,
+    currentQuestionIndex: clampedIndex,
     isFirstQuestion,
     isLastQuestion,
     hasCurrentValue,
