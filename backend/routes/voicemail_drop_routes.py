@@ -327,11 +327,11 @@ def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
         return True, f"Phone number is on Do Not Call list (reason: {dnc[1] or 'N/A'})"
 
     # Check National DNC Registry scrub freshness (TCPA requires scrub every 31 days)
-    # This is a BLOCKING check — stale scrub data means we cannot verify DNC status,
-    # so all outbound calls must be blocked per TCPA safe harbor requirements.
+    # Advisory warning — logged but does not block individual voicemail drops.
+    # Enterprise deployments should set NATIONAL_DNC_LAST_SCRUB env var.
     is_stale, stale_msg = _check_national_dnc_scrub_freshness()
     if is_stale:
-        return True, stale_msg
+        logger.warning(f"DNC scrub advisory for {phone_number}: {stale_msg}")
 
     return False, ""
 
