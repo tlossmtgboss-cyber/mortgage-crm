@@ -75,8 +75,10 @@ const QuestionRenderer = ({
     }
   }, [onChange, onNext, isLast, isAnimating, question?.type, autoAdvance]);
 
-  // Handle next button click
+  // Handle next button click (guard against double-advance during animation)
   const handleNext = () => {
+    if (isAnimating) return;
+
     if (isLast) {
       onNext(); // This will trigger stage completion
       return;
@@ -90,8 +92,10 @@ const QuestionRenderer = ({
     }, 300);
   };
 
-  // Handle back button click
+  // Handle back button click (guard against double-advance during animation)
   const handleBack = () => {
+    if (isAnimating) return;
+
     if (isFirst) {
       onBack(); // This will trigger stage navigation
       return;
@@ -442,6 +446,7 @@ const QuestionRenderer = ({
       className={`question-renderer ${isAnimating ? `animating-${animationDirection}` : ''}`}
       role="form"
       aria-label={question.question}
+      aria-required={question.required || undefined}
     >
       {/* Question progress */}
       <div className="question-progress">
@@ -464,6 +469,11 @@ const QuestionRenderer = ({
       {/* Input area */}
       <div className="question-input">
         {renderInput()}
+      </div>
+
+      {/* Accessible error announcement */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {error || ''}
       </div>
 
       {/* Navigation buttons */}

@@ -309,19 +309,12 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       const appointmentUrl = `${API_BASE}/api/v1/scheduler/appointments`;
       const token = localStorage.getItem('token');
 
-      console.log('[ScheduleAppointmentModal] Creating appointment at:', appointmentUrl);
-      console.log('[ScheduleAppointmentModal] Token present:', !!token);
-      console.log('[ScheduleAppointmentModal] Token length:', token ? token.length : 0);
-
       // Determine if borrower is a lead or loan object and set IDs correctly
       // Leads have: id (lead id), no loan_number field
       // Loans have: id (loan id), loan_number field
       const isLoan = Boolean(borrower.loan_number);
       const leadId = isLoan ? (borrower.lead_id || null) : (borrower.id || null);
       const loanId = isLoan ? (borrower.id || null) : null;
-
-      console.log('[ScheduleAppointmentModal] Object type:', isLoan ? 'Loan' : 'Lead');
-      console.log('[ScheduleAppointmentModal] lead_id:', leadId, 'loan_id:', loanId);
 
       const requestBody = {
         title: `${meetingMode === 'video' ? 'Video Call' : 'Phone Call'} with ${attendeeName}`,
