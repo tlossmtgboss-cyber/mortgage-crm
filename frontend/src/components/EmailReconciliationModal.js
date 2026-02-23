@@ -33,7 +33,7 @@ function EmailReconciliationModal({ emailData, onClose, onComplete }) {
     setLoading(true);
     try {
       // Search by sender email or matched borrower name
-      const searchTerm = emailData.matchedBorrower || emailData.from.split('@')[0];
+      const searchTerm = emailData.matchedBorrower || emailData.from?.split('@')[0] || '';
 
       // Search leads and loans in parallel
       const [leadsResponse, loansResponse] = await Promise.all([

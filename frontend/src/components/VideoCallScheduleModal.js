@@ -175,8 +175,8 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
     const slots = [];
     const baseDate = new Date(selectedDate);
 
-    const startHour = parseInt(teamMemberWorkHours.work_hours_start.split(':')[0], 10);
-    const endHour = parseInt(teamMemberWorkHours.work_hours_end.split(':')[0], 10);
+    const startHour = parseInt((teamMemberWorkHours.work_hours_start || '09:00').split(':')[0], 10);
+    const endHour = parseInt((teamMemberWorkHours.work_hours_end || '17:00').split(':')[0], 10);
 
     for (let hour = startHour; hour < endHour; hour++) {
       for (let min = 0; min < 60; min += 30) {

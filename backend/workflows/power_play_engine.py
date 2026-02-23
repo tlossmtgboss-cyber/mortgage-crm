@@ -617,7 +617,7 @@ class PowerPlayEngine:
         Rate Lock Intelligence integration, milestone management
         """
         actions = []
-        borrower_name = loan.borrower_name or "Borrower"
+        borrower_name = (loan.borrower_name or "Borrower").strip() or "Borrower"
         first_name = borrower_name.split()[0]
 
         if trigger == "new_contract":
@@ -881,7 +881,8 @@ class PowerPlayEngine:
         Relationship nurturing for referral partners (realtors, CPAs, attorneys, etc.)
         """
         actions = []
-        partner_name = partner.name if hasattr(partner, 'name') else "Partner"
+        partner_name = (partner.name if hasattr(partner, 'name') else "Partner") or "Partner"
+        partner_name = partner_name.strip() or "Partner"
         first_name = partner_name.split()[0]
         partner_type = getattr(partner, 'partner_type', 'realtor')
 

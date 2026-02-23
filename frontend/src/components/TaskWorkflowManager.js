@@ -355,7 +355,7 @@ function TaskWorkflowManager() {
                                   {member.avatar ? (
                                     <img src={member.avatar} alt={member.name} />
                                   ) : (
-                                    <span>{member.name.split(' ').map(n => n[0]).join('')}</span>
+                                    <span>{(member.name || '?').split(' ').map(n => n[0]).join('')}</span>
                                   )}
                                 </div>
                                 <div className="member-details">
