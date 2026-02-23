@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi';
+import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { isMasterAdmin } from '../config/roleConfig';
 import AdminContracts from '../components/AdminContracts';
@@ -55,14 +56,14 @@ function SmartDocs() {
       const token = localStorage.getItem('token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-      let response = await fetch('/api/v1/smart-docs/loans', { headers });
+      let response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/loans`, { headers });
 
       if (response.ok) {
         const data = await response.json();
         loans = data.loans || [];
       } else {
         // Fallback to main loans endpoint if smart-docs endpoint fails
-        response = await fetch('/api/v1/loans/', { headers });
+        response = await fetch(`${API_BASE_URL}/api/v1/loans/`, { headers });
         if (response.ok) {
           const data = await response.json();
           loans = Array.isArray(data) ? data : (data.loans || []);

@@ -132,6 +132,14 @@ async def get_needs_list(
                     if not result.get("borrower_name"):
                         result["borrower_name"] = f"{borrower_contact.first_name or ''} {borrower_contact.last_name or ''}".strip()
 
+    # Get borrower_id from the first request that has one, for top-level response
+    first_borrower_id = None
+    for req in result.get("all_requests", []):
+        if req.get("borrower_id"):
+            first_borrower_id = req["borrower_id"]
+            break
+    result["borrower_id"] = first_borrower_id
+
     # Enrich each request with uploaded document info
     for req in result.get("all_requests", []):
         request_id = req.get("id")
@@ -144,6 +152,7 @@ async def get_needs_list(
 
             if uploaded_docs:
                 latest_doc = uploaded_docs[0]
+                req["document_id"] = latest_doc.id
                 req["filename"] = latest_doc.file_name
                 req["uploaded_at"] = latest_doc.created_at.isoformat() if latest_doc.created_at else None
 
@@ -1460,6 +1469,7 @@ async def get_client_queue_detail(
 
             if uploaded_docs:
                 latest_doc = uploaded_docs[0]
+                req["document_id"] = latest_doc.id
                 req["filename"] = latest_doc.file_name
                 req["uploaded_at"] = latest_doc.created_at.isoformat() if latest_doc.created_at else None
 

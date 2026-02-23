@@ -88,7 +88,8 @@ function SmartDocsClientDetail() {
             name: needsListData.borrower_name || 'Unknown',
             email: needsListData.borrower_email,
             loanNumber: needsListData.loan_number,
-            stage: needsListData.stage
+            stage: needsListData.stage,
+            borrowerId: needsListData.borrower_id || null
           });
           clientInfoFound = true;
         }
@@ -110,7 +111,8 @@ function SmartDocsClientDetail() {
               name: queueData.borrower_name || 'Unknown',
               email: queueData.borrower_email,
               loanNumber: queueData.loan_number,
-              stage: queueData.stage
+              stage: queueData.stage,
+              borrowerId: queueData.borrower_id || (requests[0]?.borrower_id) || null
             });
             clientInfoFound = true;
           }
@@ -197,6 +199,16 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = localStorage.getItem('token');
+      // Map selected request IDs to actual document IDs
+      const documentIds = documents
+        .filter(doc => selectedDocs.has(doc.id))
+        .map(doc => doc.document_id)
+        .filter(Boolean);
+      if (documentIds.length === 0) {
+        toast.error('No uploaded documents found for the selected items');
+        setActionLoading(false);
+        return;
+      }
       const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/merge`, {
         method: 'POST',
         headers: {
@@ -205,7 +217,7 @@ function SmartDocsClientDetail() {
         },
         body: JSON.stringify({
           loan_id: loanId,
-          document_ids: Array.from(selectedDocs)
+          document_ids: documentIds
         })
       });
 
@@ -233,6 +245,16 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = localStorage.getItem('token');
+      // Map selected request IDs to actual document IDs
+      const documentIds = documents
+        .filter(doc => selectedDocs.has(doc.id))
+        .map(doc => doc.document_id)
+        .filter(Boolean);
+      if (documentIds.length === 0) {
+        toast.error('No uploaded documents found for the selected items');
+        setActionLoading(false);
+        return;
+      }
       await fetch(`${API_BASE_URL}/api/v1/smart-docs/merge-email`, {
         method: 'POST',
         headers: {
@@ -241,7 +263,7 @@ function SmartDocsClientDetail() {
         },
         body: JSON.stringify({
           loan_id: loanId,
-          document_ids: Array.from(selectedDocs)
+          document_ids: documentIds
         })
       });
       toast.success('Documents merged and email sent!');
@@ -935,7 +957,7 @@ function SmartDocsClientDetail() {
         isOpen={showIncomeModal}
         onClose={() => setShowIncomeModal(false)}
         loanId={parseInt(loanId)}
-        borrowerId={1}
+        borrowerId={client?.borrowerId}
         borrowerName={client?.name}
         onSave={(income) => {
           console.log('Income saved:', income);
@@ -961,7 +983,7 @@ function SmartDocsClientDetail() {
         isOpen={requestDocModalOpen}
         onClose={() => setRequestDocModalOpen(false)}
         loanId={parseInt(loanId)}
-        borrowerId={1}
+        borrowerId={client?.borrowerId}
         borrowerName={client?.name}
         borrowerEmail={client?.email}
         onSuccess={() => {

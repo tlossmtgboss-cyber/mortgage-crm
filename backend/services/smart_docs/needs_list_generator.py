@@ -527,6 +527,7 @@ class NeedsListGenerator:
         """Convert request to dictionary for API response."""
         return {
             "id": request.id,
+            "borrower_id": request.borrower_id,
             "doc_type": request.doc_type.value,
             "title": request.title,
             "description": request.description,

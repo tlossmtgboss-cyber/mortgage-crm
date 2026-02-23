@@ -11,16 +11,16 @@ function SmartDocumentUpload({ loanId, borrowerId, onUploadComplete }) {
   const fileInputRef = useRef(null);
 
   const documentCategories = [
-    { value: 'paystub', label: 'Paystub' },
-    { value: 'w2', label: 'W-2' },
-    { value: 'tax_return', label: 'Tax Return' },
-    { value: 'bank_statement', label: 'Bank Statement' },
-    { value: 'drivers_license', label: "Driver's License" },
-    { value: 'purchase_contract', label: 'Purchase Contract' },
-    { value: 'appraisal', label: 'Appraisal' },
-    { value: 'title', label: 'Title Document' },
-    { value: 'insurance', label: 'Insurance' },
-    { value: 'other', label: 'Other' },
+    { value: 'PAYSTUB', label: 'Paystub' },
+    { value: 'W2', label: 'W-2' },
+    { value: 'TAX_RETURN', label: 'Tax Return' },
+    { value: 'BANK_STATEMENT', label: 'Bank Statement' },
+    { value: 'DRIVERS_LICENSE', label: "Driver's License" },
+    { value: 'PURCHASE_CONTRACT', label: 'Purchase Contract' },
+    { value: 'APPRAISAL', label: 'Appraisal' },
+    { value: 'TITLE_REPORT', label: 'Title Document' },
+    { value: 'HOMEOWNERS_INSURANCE', label: 'Insurance' },
+    { value: 'OTHER', label: 'Other' },
   ];
 
   const handleFileSelect = (e) => {

@@ -428,7 +428,7 @@ function App() {
       try {
         // Fetch all counts in parallel
         const [tasksResponse, reconciliationResponse, smartDocsResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/v1/tasks`, { headers }),
+          fetch(`${API_BASE_URL}/api/v1/tasks`, { headers }).catch(() => null),
           fetch(`${API_BASE_URL}/api/v1/reconciliation/pending`, { headers }).catch(() => null),
           fetch(`${API_BASE_URL}/api/v1/smart-docs/applicants/pending-review`, { headers }).catch(() => null)
         ]);
@@ -436,7 +436,7 @@ function App() {
         let updates = {};
 
         // Process tasks
-        if (tasksResponse.ok) {
+        if (tasksResponse && tasksResponse.ok) {
           const tasks = await tasksResponse.json();
           const outstandingTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'done').length;
           const urgentTasks = tasks.filter(t => t.priority === 'high' && t.status !== 'completed' && t.status !== 'done').length;
