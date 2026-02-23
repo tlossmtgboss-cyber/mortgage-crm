@@ -177,8 +177,10 @@ function LeadDetail() {
     'Pre-Qualified',
     'Pre-Approved',
     'Long-Term Nurture',
+    'Credit Repair',
     'Withdrawn',
     'Does Not Qualify',
+    'Do Not Call',
     // Active Loan stages
     { label: 'Active Loan Stages', isHeader: true },
     'Disclosed',

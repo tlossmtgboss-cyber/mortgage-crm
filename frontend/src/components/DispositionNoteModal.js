@@ -186,6 +186,7 @@ DispositionNoteModal.REQUIRES_NOTE = [
   'Credit Repair',
   'Withdrawn',
   'Does Not Qualify',
+  'Do Not Call',
 ];
 
 export default DispositionNoteModal;

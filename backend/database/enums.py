@@ -40,6 +40,7 @@ class LeadStage(str, enum.Enum):
     WITHDRAWN = "Withdrawn"
     DOES_NOT_QUALIFY = "Does Not Qualify"
     CREDIT_REPAIR = "Credit Repair"
+    DO_NOT_CALL = "Do Not Call"
     DISCLOSED = "Disclosed"  # Lead converted to Active Loan
     FUNDED = "Funded"  # Loan funded - lead moves to MUM/Portfolio
 

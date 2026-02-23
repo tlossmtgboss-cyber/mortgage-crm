@@ -102,6 +102,7 @@ function Leads() {
     'Credit Repair',
     'Withdrawn',
     'Does Not Qualify',
+    'Do Not Call',
   ];
 
   // Stages that belong on the Leads page — anything else belongs on Active Loans or MUM
@@ -109,6 +110,7 @@ function Leads() {
     'New', 'Attempted Contact', 'Prospect', 'Application', 'Application Started',
     'Document Fulfillment', 'Pre-Qualified', 'Pre-Approved', 'Under Contract',
     'Long-Term Nurture', 'Nurture', 'Credit Repair', 'Withdrawn', 'Does Not Qualify',
+    'Do Not Call',
   ]);
 
   const statusOptions = [
@@ -124,6 +126,7 @@ function Leads() {
     'Credit Repair',
     'Withdrawn',
     'Does Not Qualify',
+    'Do Not Call',
     // Active Loan stages
     { label: 'Active Loan Stages', isHeader: true },
     'Disclosed',
