@@ -767,16 +767,34 @@ function Leads() {
     await executeStatusChange(newStatus, leadId, lead);
   };
 
+  // Active Loan stages that require loan creation (not valid LeadStage values)
+  const ACTIVE_LOAN_STAGES = [
+    'Disclosed', 'Processing', 'Submitted', 'Underwriting', 'UW Received',
+    'Conditional Approval', 'Approved', 'Suspended', 'CTC', 'Clear to Close',
+    'Closing', 'Docs', 'Docs Out', 'Funded', 'Cancelled', 'Denied', 'Dead',
+  ];
+
   const executeStatusChange = async (newStatus, leadId, lead) => {
     if (!leadId) return;
 
     try {
-      // Special handling for Disclosed/Funded — convert lead to loan
-      if (newStatus === 'Disclosed' || newStatus === 'Funded') {
+      // Active Loan stages — convert lead to loan (or update existing loan)
+      if (ACTIVE_LOAN_STAGES.includes(newStatus)) {
         const timestamp = Date.now().toString(36).toUpperCase();
         const loanNumber = `LEAD-${leadId}-${timestamp}`;
         const borrowerName = lead ? `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || lead.name || 'Unknown Borrower' : 'Unknown Borrower';
         const loanAmount = parseFloat(lead?.loan_amount || lead?.amount) || 1;
+
+        // Map display names to DB stage values (UPPERCASE)
+        const STAGE_MAP = {
+          'Disclosed': 'DISCLOSED', 'Processing': 'PROCESSING', 'Submitted': 'SUBMITTED',
+          'Underwriting': 'UNDERWRITING', 'UW Received': 'UW_RECEIVED',
+          'Conditional Approval': 'CONDITIONAL_APPROVAL', 'Approved': 'APPROVED',
+          'Suspended': 'SUSPENDED', 'CTC': 'CTC', 'Clear to Close': 'CLEAR_TO_CLOSE',
+          'Closing': 'CLOSING', 'Docs': 'DOCS', 'Docs Out': 'DOCS_OUT',
+          'Funded': 'FUNDED', 'Cancelled': 'CANCELLED', 'Denied': 'DENIED', 'Dead': 'DEAD',
+        };
+        const dbStage = STAGE_MAP[newStatus] || newStatus;
 
         try {
           await loansAPI.create({
@@ -785,12 +803,13 @@ function Leads() {
             borrower_email: lead?.email,
             borrower_phone: lead?.phone,
             amount: loanAmount,
-            stage: newStatus,
+            stage: dbStage,
             property_address: lead?.property_address,
           }, true);
 
-          // Update lead stage too
-          try { await leadsAPI.update(leadId, { stage: newStatus }); } catch (e) { /* loan created, lead update optional */ }
+          // Update lead stage too (use Disclosed for all active loan stages since they've converted)
+          const leadStage = newStatus === 'Funded' ? 'Funded' : 'Disclosed';
+          try { await leadsAPI.update(leadId, { stage: leadStage }); } catch (e) { /* loan created, lead update optional */ }
 
           localStorage.removeItem('leads_data');
           localStorage.removeItem('leads_data_time');
@@ -801,7 +820,7 @@ function Leads() {
           if (newStatus === 'Funded') {
             toast.success(`${borrowerName} has been moved to Funded.`);
           } else {
-            toast.success(`${borrowerName} has been moved to ${newStatus}.`);
+            toast.success(`${borrowerName} has been moved to Active Loans (${newStatus}).`);
           }
           return;
         } catch (loanError) {
