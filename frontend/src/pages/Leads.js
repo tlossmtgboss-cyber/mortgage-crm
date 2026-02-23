@@ -295,6 +295,20 @@ function Leads() {
     return LEAD_PIPELINE_STAGES.has(lead.stage);
   });
 
+  // Count leads per filter tab
+  const filterCounts = useMemo(() => {
+    const counts = { All: safeLeads.length };
+    filters.forEach(f => {
+      if (f === 'All') return;
+      if (f === 'Nurture') {
+        counts[f] = safeLeads.filter(l => l.stage === 'Nurture' || l.stage === 'Long-Term Nurture').length;
+      } else {
+        counts[f] = safeLeads.filter(l => l.stage === f).length;
+      }
+    });
+    return counts;
+  }, [safeLeads]);
+
   // Filter by stage
   let filteredLeads;
   if (activeFilter === 'All') {
@@ -850,7 +864,7 @@ function Leads() {
             className={`filter-tab ${activeFilter === filter ? 'active' : ''}`}
             onClick={() => setActiveFilter(filter)}
           >
-            {filter}
+            {filter} <span className="filter-count">{filterCounts[filter] || 0}</span>
           </button>
         ))}
       </div>
