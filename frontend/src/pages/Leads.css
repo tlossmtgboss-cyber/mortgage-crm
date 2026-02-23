@@ -805,14 +805,17 @@
 
 /* Status Dropdown Popup */
 .status-dropdown-popup {
-  position: absolute;
+  position: fixed;
   background: white;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   border: 1px solid #e5e7eb;
   z-index: 1000;
   min-width: 200px;
+  max-height: 70vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   animation: dropdownFadeIn 0.15s ease-out;
 }
 
@@ -843,7 +846,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 300px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 

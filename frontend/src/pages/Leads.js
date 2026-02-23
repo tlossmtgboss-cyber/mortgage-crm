@@ -742,14 +742,17 @@ function Leads() {
   const handleStatusClick = (e, leadId, currentStage) => {
     e.stopPropagation(); // Prevent row click
     const rect = e.target.getBoundingClientRect();
+    const dropdownHeight = 420; // maxHeight(400) + header(~20)
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUpward = spaceBelow < dropdownHeight && rect.top > spaceBelow;
+
     setStatusDropdown({
       show: true,
       leadId,
       currentStage: currentStage || null,
-      position: {
-        top: rect.bottom + window.scrollY + 5,
-        left: rect.left + window.scrollX,
-      },
+      position: openUpward
+        ? { bottom: window.innerHeight - rect.top + 5, left: rect.left, top: 'auto' }
+        : { top: rect.bottom + 5, left: rect.left, bottom: 'auto' },
     });
   };
 
@@ -1540,7 +1543,9 @@ function Leads() {
           <div
             className="status-dropdown-popup"
             style={{
+              position: 'fixed',
               top: statusDropdown.position.top,
+              bottom: statusDropdown.position.bottom,
               left: statusDropdown.position.left,
             }}
           >
@@ -1552,7 +1557,7 @@ function Leads() {
                 </span>
               )}
             </div>
-            <div className="status-dropdown-options" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <div className="status-dropdown-options">
               {statusOptions.map((status, index) => {
                 if (status.isHeader) {
                   return (
