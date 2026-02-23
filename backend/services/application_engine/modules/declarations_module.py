@@ -274,7 +274,7 @@ class DeclarationsAuditModule(BaseAuditModule):
                 try:
                     from dateutil import parser
                     data.bankruptcy_discharge_date = parser.parse(str(discharge_date)).date()
-                except:
+                except (ValueError, TypeError):
                     pass
 
         # Collect explanation notes

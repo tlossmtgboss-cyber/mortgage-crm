@@ -35,9 +35,9 @@ def main():
                             DELETE FROM {table} 
                             WHERE loan_id IN (SELECT id FROM loans WHERE borrower_name = :name)
                         """), {"name": name})
-                    except:
+                    except Exception:
                         pass
-                
+
                 # Delete the loans
                 result = conn.execute(text("DELETE FROM loans WHERE borrower_name = :name"), {"name": name})
                 total_loans += result.rowcount
@@ -60,9 +60,9 @@ def main():
                             AND last_name = ANY(:last_names)
                         )
                     """), {"first_names": sample_first_names, "last_names": sample_last_names})
-                except:
+                except Exception:
                     pass
-            
+
             result = conn.execute(text("""
                 DELETE FROM leads 
                 WHERE first_name = ANY(:first_names) 

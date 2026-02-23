@@ -440,7 +440,7 @@ async def quick_upload_recording(
         # Cleanup temp file
         try:
             os_module.remove(audio_path)
-        except:
+        except OSError:
             pass
 
         return QuickUploadResponse(

@@ -558,7 +558,7 @@ async def create_brief(
         try:
             parts = request.scheduled_time.split(":")
             scheduled_time = time(int(parts[0]), int(parts[1]))
-        except:
+        except (ValueError, TypeError, IndexError):
             pass
 
     brief = ContentBrief(
@@ -708,7 +708,7 @@ async def update_brief(
         try:
             parts = updates["scheduled_time"].split(":")
             updates["scheduled_time"] = time(int(parts[0]), int(parts[1]))
-        except:
+        except (ValueError, TypeError, IndexError):
             del updates["scheduled_time"]
 
     brief = service.update_brief(brief_id, updates)

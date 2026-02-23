@@ -1041,7 +1041,7 @@ async def sync_all_loans_from_salesforce(
                     if date_str:
                         try:
                             return date_str[:10]  # YYYY-MM-DD
-                        except:
+                        except (ValueError, TypeError):
                             return None
                     return None
 

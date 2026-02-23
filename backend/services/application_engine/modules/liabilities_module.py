@@ -246,7 +246,7 @@ class LiabilitiesAuditModule(BaseAuditModule):
 
         try:
             return Decimal(cleaned)
-        except:
+        except (ValueError, TypeError, ArithmeticError):
             return Decimal("0")
 
     def _validate_data(self, data: LiabilitiesData) -> Tuple[List[str], List[str]]:

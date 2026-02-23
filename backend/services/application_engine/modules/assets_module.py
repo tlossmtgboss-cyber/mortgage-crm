@@ -240,7 +240,7 @@ class AssetsAuditModule(BaseAuditModule):
 
         try:
             return Decimal(cleaned)
-        except:
+        except (ValueError, TypeError, ArithmeticError):
             return Decimal("0")
 
     def _validate_data(self, data: AssetsData) -> Tuple[List[str], List[str]]:

@@ -526,7 +526,7 @@ class BaseAuditModule(ABC):
                 from dateutil import parser
                 parser.parse(value)
                 return True, None
-            except:
+            except (ValueError, TypeError):
                 return False, f"Invalid date format: {value}"
 
         return False, f"Invalid date type: {type(value)}"

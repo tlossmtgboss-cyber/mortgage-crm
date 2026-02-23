@@ -284,7 +284,7 @@ class IncomeAuditModule(BaseAuditModule):
 
         try:
             return Decimal(cleaned)
-        except:
+        except (ValueError, TypeError, ArithmeticError):
             return Decimal("0")
 
     def _identify_required_documents(self, income_sources: List[IncomeSourceData]) -> List[str]:

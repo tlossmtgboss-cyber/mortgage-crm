@@ -292,7 +292,7 @@ class IdentityAuditModule(BaseAuditModule):
                         issues.append("Borrower appears to be under 18 years old")
                     elif age > 100:
                         warnings.append("Please verify date of birth - age appears over 100")
-                except:
+                except (ValueError, TypeError):
                     pass
 
         # Validate citizenship for non-permanent residents

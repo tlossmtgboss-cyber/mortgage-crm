@@ -449,7 +449,7 @@ class RecruitingDialerService:
             logger.error(f"Error updating call record: {e}")
             try:
                 self.db.rollback()
-            except:
+            except Exception:
                 pass
 
 
