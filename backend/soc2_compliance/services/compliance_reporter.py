@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from uuid import UUID
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger("soc2.reporting")
 
@@ -18,20 +18,20 @@ logger = logging.getLogger("soc2.reporting")
 class ComplianceReporter:
     """
     Generate SOC 2 compliance evidence reports.
-    
+
     Usage:
         reporter = ComplianceReporter(db)
-        report = await reporter.generate_full_report(
+        report = reporter.generate_full_report(
             tenant_id=tenant_id,
             start_date=datetime(2025, 1, 1),
             end_date=datetime(2025, 12, 31),
         )
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def generate_full_report(
+    def generate_full_report(
         self,
         tenant_id: UUID,
         start_date: datetime,
@@ -46,24 +46,24 @@ class ComplianceReporter:
                 "period_end": end_date.isoformat(),
                 "report_type": "SOC 2 Type II Evidence Report",
             },
-            "executive_summary": await self._executive_summary(tenant_id, start_date, end_date),
-            "cc6_access_controls": await self._access_control_evidence(tenant_id, start_date, end_date),
-            "cc7_incident_response": await self._incident_evidence(tenant_id, start_date, end_date),
-            "cc8_change_management": await self._change_management_evidence(tenant_id, start_date, end_date),
-            "c1_confidentiality": await self._confidentiality_evidence(tenant_id, start_date, end_date),
-            "cc4_monitoring": await self._monitoring_evidence(tenant_id, start_date, end_date),
-            "compliance_checks": await self._compliance_check_results(start_date, end_date),
-            "data_retention": await self._retention_evidence(),
+            "executive_summary": self._executive_summary(tenant_id, start_date, end_date),
+            "cc6_access_controls": self._access_control_evidence(tenant_id, start_date, end_date),
+            "cc7_incident_response": self._incident_evidence(tenant_id, start_date, end_date),
+            "cc8_change_management": self._change_management_evidence(tenant_id, start_date, end_date),
+            "c1_confidentiality": self._confidentiality_evidence(tenant_id, start_date, end_date),
+            "cc4_monitoring": self._monitoring_evidence(tenant_id, start_date, end_date),
+            "compliance_checks": self._compliance_check_results(start_date, end_date),
+            "data_retention": self._retention_evidence(),
         }
 
         return report
 
-    async def _executive_summary(
+    def _executive_summary(
         self, tenant_id: UUID, start: datetime, end: datetime
     ) -> Dict:
         """High-level summary stats."""
         # Audit stats
-        audit_result = await self.db.execute(
+        audit_result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total_audit_events,
@@ -78,7 +78,7 @@ class ComplianceReporter:
         audit = dict(audit_result.fetchone()._mapping)
 
         # Access stats
-        access_result = await self.db.execute(
+        access_result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) FILTER (WHERE success = TRUE AND event_type = 'login') as successful_logins,
@@ -92,7 +92,7 @@ class ComplianceReporter:
         access = dict(access_result.fetchone()._mapping)
 
         # Incident stats
-        incident_result = await self.db.execute(
+        incident_result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total_incidents,
@@ -107,7 +107,7 @@ class ComplianceReporter:
         incidents = dict(incident_result.fetchone()._mapping)
 
         # Change stats
-        change_result = await self.db.execute(
+        change_result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total_changes,
@@ -127,12 +127,12 @@ class ComplianceReporter:
             "changes": changes,
         }
 
-    async def _access_control_evidence(
+    def _access_control_evidence(
         self, tenant_id: UUID, start: datetime, end: datetime
     ) -> Dict:
         """CC6 — Access control evidence."""
         # Failed login trends (by week)
-        failed_trends = await self.db.execute(
+        failed_trends = self.db.execute(
             text("""
                 SELECT
                     DATE_TRUNC('week', timestamp) as week,
@@ -150,7 +150,7 @@ class ComplianceReporter:
         )
 
         # Account lockout events
-        lockouts = await self.db.execute(
+        lockouts = self.db.execute(
             text("""
                 SELECT timestamp, attempted_email, ip_address, failure_reason
                 FROM soc2_access_event
@@ -168,11 +168,11 @@ class ComplianceReporter:
             "lockout_events": [dict(row._mapping) for row in lockouts.fetchall()],
         }
 
-    async def _incident_evidence(
+    def _incident_evidence(
         self, tenant_id: UUID, start: datetime, end: datetime
     ) -> Dict:
         """CC7 — Incident response evidence."""
-        incidents = await self.db.execute(
+        incidents = self.db.execute(
             text("""
                 SELECT id, title, category, severity, status,
                        detected_at, contained_at, resolved_at, closed_at,
@@ -187,7 +187,7 @@ class ComplianceReporter:
         )
 
         # Mean time to contain / resolve
-        mttr = await self.db.execute(
+        mttr = self.db.execute(
             text("""
                 SELECT
                     AVG(EXTRACT(EPOCH FROM (contained_at - detected_at))/3600)
@@ -205,11 +205,11 @@ class ComplianceReporter:
             "response_times": dict(mttr.fetchone()._mapping),
         }
 
-    async def _change_management_evidence(
+    def _change_management_evidence(
         self, tenant_id: UUID, start: datetime, end: datetime
     ) -> Dict:
         """CC8 — Change management evidence."""
-        changes = await self.db.execute(
+        changes = self.db.execute(
             text("""
                 SELECT id, title, change_type, status, risk_level,
                        requested_by, approved_by, implemented_by,
@@ -223,7 +223,7 @@ class ComplianceReporter:
         )
 
         # Unauthorized changes (implemented without approval)
-        unauthorized = await self.db.execute(
+        unauthorized = self.db.execute(
             text("""
                 SELECT COUNT(*) FROM soc2_change_record
                 WHERE tenant_id = :tid
@@ -239,22 +239,23 @@ class ComplianceReporter:
             "unauthorized_changes": unauthorized.fetchone()[0],
         }
 
-    async def _confidentiality_evidence(
+    def _confidentiality_evidence(
         self, tenant_id: UUID, start: datetime, end: datetime
     ) -> Dict:
         """C1 — Confidentiality / encryption evidence."""
         # PII access audit
-        pii_access = await self.db.execute(
+        pii_access = self.db.execute(
             text("""
                 SELECT
                     user_email, action, resource_type,
                     COUNT(*) as access_count,
                     array_agg(DISTINCT unnest_field) as fields
-                FROM soc2_audit_log,
-                     LATERAL unnest(fields_accessed) as unnest_field
+                FROM soc2_audit_log
+                LEFT JOIN LATERAL unnest(fields_accessed) as unnest_field ON TRUE
                 WHERE tenant_id = :tid
                   AND timestamp BETWEEN :s AND :e
                   AND contains_pii = TRUE
+                  AND fields_accessed IS NOT NULL
                 GROUP BY user_email, action, resource_type
                 ORDER BY access_count DESC
                 LIMIT 50
@@ -263,7 +264,7 @@ class ComplianceReporter:
         )
 
         # Data classification coverage
-        classification = await self.db.execute(
+        classification = self.db.execute(
             text("""
                 SELECT
                     classification,
@@ -280,12 +281,12 @@ class ComplianceReporter:
             "data_classification": [dict(row._mapping) for row in classification.fetchall()],
         }
 
-    async def _monitoring_evidence(
+    def _monitoring_evidence(
         self, tenant_id: UUID, start: datetime, end: datetime
     ) -> Dict:
         """CC4 — Monitoring evidence."""
         # Audit volume trends
-        trends = await self.db.execute(
+        trends = self.db.execute(
             text("""
                 SELECT
                     DATE_TRUNC('day', timestamp) as day,
@@ -303,11 +304,11 @@ class ComplianceReporter:
             "daily_event_trends": [dict(row._mapping) for row in trends.fetchall()],
         }
 
-    async def _compliance_check_results(
+    def _compliance_check_results(
         self, start: datetime, end: datetime
     ) -> Dict:
         """Automated compliance check results."""
-        checks = await self.db.execute(
+        checks = self.db.execute(
             text("""
                 SELECT check_name, check_category, status, trust_criteria,
                        details, run_at, remediation_required, remediated_at
@@ -319,7 +320,7 @@ class ComplianceReporter:
         )
 
         # Pass rate
-        pass_rate = await self.db.execute(
+        pass_rate = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total,
@@ -337,7 +338,7 @@ class ComplianceReporter:
             "summary": dict(pass_rate.fetchone()._mapping),
         }
 
-    async def _retention_evidence(self) -> Dict:
+    def _retention_evidence(self) -> Dict:
         """Data retention compliance evidence."""
         tables = [
             ("soc2_audit_log", "timestamp"),
@@ -348,16 +349,19 @@ class ComplianceReporter:
 
         status = {}
         for table, ts_col in tables:
-            result = await self.db.execute(
-                text(f"""
-                    SELECT
-                        COUNT(*) as total_records,
-                        MIN({ts_col}) as oldest,
-                        MAX({ts_col}) as newest
-                    FROM {table}
-                """)
-            )
-            row = result.fetchone()
-            status[table] = dict(row._mapping)
+            try:
+                result = self.db.execute(
+                    text(f"""
+                        SELECT
+                            COUNT(*) as total_records,
+                            MIN({ts_col}) as oldest,
+                            MAX({ts_col}) as newest
+                        FROM {table}
+                    """)
+                )
+                row = result.fetchone()
+                status[table] = dict(row._mapping)
+            except Exception as e:
+                status[table] = {"error": str(e)}
 
         return status

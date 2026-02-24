@@ -9,22 +9,19 @@ Usage:
 
 Or programmatically:
     from soc2_compliance.scripts.generate_report import generate_weekly_report
-    await generate_weekly_report(db)
+    report = generate_weekly_report(db)
 """
-import argparse
-import asyncio
-import json
 import logging
 from datetime import datetime, timezone, timedelta
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ..services.compliance_reporter import ComplianceReporter
 
 logger = logging.getLogger("soc2.report_generator")
 
 
-async def generate_weekly_report(db: AsyncSession, tenant_id=None) -> dict:
+def generate_weekly_report(db: Session, tenant_id=None) -> dict:
     """
     Generate a weekly compliance evidence report.
     Intended to be called from a scheduled task.
@@ -35,7 +32,7 @@ async def generate_weekly_report(db: AsyncSession, tenant_id=None) -> dict:
     reporter = ComplianceReporter(db)
 
     if tenant_id:
-        report = await reporter.generate_full_report(
+        report = reporter.generate_full_report(
             tenant_id=tenant_id,
             start_date=start_date,
             end_date=end_date,
@@ -47,8 +44,8 @@ async def generate_weekly_report(db: AsyncSession, tenant_id=None) -> dict:
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "compliance_checks": await reporter._compliance_check_results(start_date, end_date),
-            "data_retention": await reporter._retention_evidence(),
+            "compliance_checks": reporter._compliance_check_results(start_date, end_date),
+            "data_retention": reporter._retention_evidence(),
         }
 
     # Store report as JSON (could also write to S3, send via email, etc.)
@@ -66,8 +63,8 @@ async def generate_weekly_report(db: AsyncSession, tenant_id=None) -> dict:
     return report
 
 
-async def generate_audit_period_report(
-    db: AsyncSession,
+def generate_audit_period_report(
+    db: Session,
     tenant_id,
     start_date: datetime,
     end_date: datetime,
@@ -77,7 +74,7 @@ async def generate_audit_period_report(
     This is the primary deliverable for auditors.
     """
     reporter = ComplianceReporter(db)
-    return await reporter.generate_full_report(
+    return reporter.generate_full_report(
         tenant_id=tenant_id,
         start_date=start_date,
         end_date=end_date,

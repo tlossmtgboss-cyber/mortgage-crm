@@ -3,10 +3,12 @@ Audit Middleware — Automatic request/response audit logging.
 SOC 2 Criteria: CC4 (Monitoring), CC2 (Communication)
 
 Automatically captures all API requests and responses in the audit log.
-Integrates with FastAPI's middleware system.
+Uses the app's sync SQLAlchemy sessions via a background thread to avoid
+blocking the request pipeline.
 """
 import logging
 import time
+import threading
 from typing import Optional
 from uuid import uuid4
 
@@ -20,17 +22,70 @@ from ..constants import AuditAction, SeverityLevel, AUDIT_EXCLUDE_PATHS, WRITE_M
 logger = logging.getLogger("soc2.middleware.audit")
 
 
+def _write_audit_log_bg(
+    user_id, user_email, user_role, tenant_id,
+    action, method, path, request_id, ip, user_agent,
+    status_code, success, severity, description
+):
+    """Write audit log entry in a background thread using a fresh sync session."""
+    try:
+        from db import SessionLocal
+        session = SessionLocal()
+        try:
+            session.execute(
+                text("""
+                    INSERT INTO soc2_audit_log (
+                        timestamp, user_id, user_email, user_role, tenant_id,
+                        action, request_method, request_path,
+                        request_id, ip_address, user_agent,
+                        status_code, success, severity,
+                        description
+                    ) VALUES (
+                        NOW(), :user_id, :user_email, :user_role, :tenant_id,
+                        :action, :method, :path,
+                        :request_id, :ip::inet, :user_agent,
+                        :status_code, :success, :severity,
+                        :description
+                    )
+                """),
+                {
+                    "user_id": str(user_id) if user_id else None,
+                    "user_email": user_email,
+                    "user_role": user_role,
+                    "tenant_id": str(tenant_id) if tenant_id else None,
+                    "action": action,
+                    "method": method,
+                    "path": path,
+                    "request_id": request_id,
+                    "ip": ip,
+                    "user_agent": user_agent,
+                    "status_code": status_code,
+                    "success": success,
+                    "severity": severity,
+                    "description": description,
+                }
+            )
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.warning(f"Audit log write failed: {e}")
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning(f"Audit middleware DB unavailable: {e}")
+
+
 class AuditMiddleware(BaseHTTPMiddleware):
     """
     FastAPI middleware that automatically logs all API requests to the audit trail.
-    
+
     Captures:
     - Request method, path, IP, user agent
-    - Authenticated user (from request state)
+    - Authenticated user (from request state, set by TenantContextMiddleware)
     - Response status code
     - Request duration
     - Correlation ID (request_id)
-    
+
     Add to FastAPI:
         app.add_middleware(AuditMiddleware)
     """
@@ -54,11 +109,14 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         duration_ms = (time.time() - start_time) * 1000
 
-        # Extract user info from request state (set by your auth middleware)
+        # Extract user info from request state (set by TenantContextMiddleware)
         user_id = getattr(request.state, "user_id", None)
         user_email = getattr(request.state, "user_email", None)
         user_role = getattr(request.state, "user_role", None)
-        tenant_id = getattr(request.state, "tenant_id", None)
+        tenant_id = (
+            getattr(request.state, "tenant_id", None)
+            or getattr(request.state, "organization_id", None)
+        )
 
         # Determine action type
         action = self._determine_action(request.method, request.url.path)
@@ -74,50 +132,22 @@ class AuditMiddleware(BaseHTTPMiddleware):
         elif request.method in WRITE_METHODS:
             severity = SeverityLevel.MEDIUM if not success else SeverityLevel.LOW
 
-        # Log to database asynchronously
-        try:
-            # Get DB session from app state
-            # NOTE: Adapt this to your DB session management
-            db = getattr(request.app.state, "db_session_factory", None)
-            if db:
-                async with db() as session:
-                    await session.execute(
-                        text("""
-                            INSERT INTO soc2_audit_log (
-                                timestamp, user_id, user_email, user_role, tenant_id,
-                                action, request_method, request_path,
-                                request_id, ip_address, user_agent,
-                                status_code, success, severity,
-                                description
-                            ) VALUES (
-                                NOW(), :user_id, :user_email, :user_role, :tenant_id,
-                                :action, :method, :path,
-                                :request_id, :ip::inet, :user_agent,
-                                :status_code, :success, :severity,
-                                :description
-                            )
-                        """),
-                        {
-                            "user_id": str(user_id) if user_id else None,
-                            "user_email": user_email,
-                            "user_role": user_role,
-                            "tenant_id": str(tenant_id) if tenant_id else None,
-                            "action": action,
-                            "method": request.method,
-                            "path": request.url.path,
-                            "request_id": request_id,
-                            "ip": request.client.host if request.client else None,
-                            "user_agent": request.headers.get("user-agent", ""),
-                            "status_code": response.status_code,
-                            "success": success,
-                            "severity": severity,
-                            "description": f"{request.method} {request.url.path} → {response.status_code} ({duration_ms:.0f}ms)",
-                        }
-                    )
-                    await session.commit()
-        except Exception as e:
-            # Never let audit logging break the request
-            logger.error(f"Audit middleware logging failed: {e}")
+        ip = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "")
+        description = f"{request.method} {request.url.path} → {response.status_code} ({duration_ms:.0f}ms)"
+
+        # Log to database in a background thread to avoid blocking
+        thread = threading.Thread(
+            target=_write_audit_log_bg,
+            args=(
+                user_id, user_email, user_role, tenant_id,
+                action, request.method, request.url.path,
+                request_id, ip, user_agent,
+                response.status_code, success, severity, description,
+            ),
+            daemon=True,
+        )
+        thread.start()
 
         # Add correlation headers to response
         response.headers["X-Request-Id"] = request_id
@@ -135,12 +165,13 @@ class AuditMiddleware(BaseHTTPMiddleware):
             "DELETE": AuditAction.DELETE,
         }
 
-        # Special path-based overrides
-        if "/login" in path or "/auth" in path:
+        # Special path-based overrides (match final path segment to avoid false positives)
+        path_tail = path.rstrip("/").rsplit("/", 1)[-1]
+        if path_tail in ("login", "token"):
             return AuditAction.LOGIN
-        if "/logout" in path:
+        if path_tail == "logout":
             return AuditAction.LOGOUT
-        if "/export" in path:
+        if path_tail == "export":
             return AuditAction.DATA_EXPORT
 
         return method_action_map.get(method, AuditAction.READ)

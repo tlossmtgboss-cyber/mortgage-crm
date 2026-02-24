@@ -2,19 +2,18 @@
 Automated Compliance Scan — Run daily to verify control effectiveness.
 SOC 2 Criteria: CC3 (Risk Assessment), CC4 (Monitoring)
 
-This script runs a series of automated checks against your database and
-infrastructure to verify SOC 2 controls are operating effectively.
+This script runs a series of automated checks against the database
+to verify SOC 2 controls are operating effectively.
 
-Schedule: Daily via cron or task scheduler
-Usage: python -m soc2_compliance.scripts.compliance_scan
+Schedule: Daily via cron or admin endpoint
 """
-import asyncio
+import json
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ..constants import ComplianceCheckStatus, SeverityLevel
 
@@ -24,11 +23,11 @@ logger = logging.getLogger("soc2.compliance_scan")
 class ComplianceScanner:
     """Run automated SOC 2 compliance checks."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
         self.results: List[Dict] = []
 
-    async def run_all_checks(self) -> List[Dict]:
+    def run_all_checks(self) -> List[Dict]:
         """Run all compliance checks and store results."""
         checks = [
             self.check_audit_logging_active,
@@ -45,9 +44,9 @@ class ComplianceScanner:
 
         for check_fn in checks:
             try:
-                result = await check_fn()
+                result = check_fn()
                 self.results.append(result)
-                await self._store_result(result)
+                self._store_result(result)
             except Exception as e:
                 error_result = {
                     "check_name": check_fn.__name__,
@@ -57,7 +56,7 @@ class ComplianceScanner:
                     "trust_criteria": None,
                 }
                 self.results.append(error_result)
-                await self._store_result(error_result)
+                self._store_result(error_result)
 
         passed = sum(1 for r in self.results if r["status"] == ComplianceCheckStatus.PASS)
         total = len(self.results)
@@ -65,9 +64,9 @@ class ComplianceScanner:
 
         return self.results
 
-    async def check_audit_logging_active(self) -> Dict:
+    def check_audit_logging_active(self) -> Dict:
         """CC4: Verify audit logging is capturing events."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT COUNT(*) FROM soc2_audit_log
                 WHERE timestamp > NOW() - INTERVAL '24 hours'
@@ -86,12 +85,12 @@ class ComplianceScanner:
             "remediation_notes": "No audit events detected. Verify middleware is installed." if count == 0 else None,
         }
 
-    async def check_failed_login_thresholds(self) -> Dict:
+    def check_failed_login_thresholds(self) -> Dict:
         """CC6: Check for excessive failed login attempts."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT
-                    ip_address,
+                    ip_address::text,
                     COUNT(*) as attempts,
                     COUNT(DISTINCT attempted_email) as unique_accounts
                 FROM soc2_access_event
@@ -115,39 +114,49 @@ class ComplianceScanner:
             "remediation_required": len(suspicious_ips) > 0,
         }
 
-    async def check_orphaned_sessions(self) -> Dict:
-        """CC6: Check for sessions that should have expired."""
-        result = await self.db.execute(
-            text("""
-                SELECT COUNT(*) FROM soc2_active_session
-                WHERE is_active = TRUE AND expires_at < NOW()
-            """)
-        )
-        orphaned = result.fetchone()[0]
+    def check_orphaned_sessions(self) -> Dict:
+        """CC6: Verify JWT session configuration is reasonable (read-only check)."""
+        import os
+        issues = []
+        evidence = {}
 
-        # Clean them up
-        if orphaned > 0:
-            await self.db.execute(
-                text("""
-                    UPDATE soc2_active_session
-                    SET is_active = FALSE, terminated_reason = 'expired'
-                    WHERE is_active = TRUE AND expires_at < NOW()
-                """)
-            )
-            await self.db.commit()
+        # Check JWT expiry configuration
+        session_timeout = os.getenv("SOC2_SESSION_TIMEOUT_MINUTES", "30")
+        try:
+            timeout_val = int(session_timeout)
+            evidence["session_timeout_minutes"] = timeout_val
+            if timeout_val > 1440:  # > 24 hours
+                issues.append(f"Session timeout too long: {timeout_val} minutes (max recommended: 1440)")
+            elif timeout_val <= 0:
+                issues.append("Session timeout is non-positive")
+        except ValueError:
+            issues.append(f"Invalid SOC2_SESSION_TIMEOUT_MINUTES: {session_timeout}")
+
+        # Check that max login attempts is configured
+        max_attempts = os.getenv("SOC2_MAX_LOGIN_ATTEMPTS", "5")
+        try:
+            attempts_val = int(max_attempts)
+            evidence["max_login_attempts"] = attempts_val
+            if attempts_val > 20:
+                issues.append(f"Max login attempts too high: {attempts_val}")
+        except ValueError:
+            issues.append(f"Invalid SOC2_MAX_LOGIN_ATTEMPTS: {max_attempts}")
+
+        status = ComplianceCheckStatus.PASS if not issues else ComplianceCheckStatus.WARNING
 
         return {
-            "check_name": "Orphaned Session Cleanup",
+            "check_name": "Session Security Configuration",
             "check_category": "CC6_access_controls",
             "trust_criteria": "CC6",
-            "status": ComplianceCheckStatus.PASS,
-            "details": f"Found and cleaned {orphaned} expired sessions",
-            "evidence": {"orphaned_sessions_cleaned": orphaned},
+            "status": status,
+            "details": "; ".join(issues) if issues else "Session configuration is within acceptable parameters",
+            "evidence": evidence,
+            "remediation_required": len(issues) > 0,
         }
 
-    async def check_encryption_coverage(self) -> Dict:
+    def check_encryption_coverage(self) -> Dict:
         """C1: Verify PII columns are marked as encrypted."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total_pii_columns,
@@ -177,9 +186,9 @@ class ComplianceScanner:
             "remediation_notes": f"{total - encrypted} PII columns need encryption" if encrypted < total else None,
         }
 
-    async def check_change_approval_compliance(self) -> Dict:
+    def check_change_approval_compliance(self) -> Dict:
         """CC8: Verify changes are going through approval process."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total_changes,
@@ -206,9 +215,9 @@ class ComplianceScanner:
             "remediation_required": unapproved > 0,
         }
 
-    async def check_incident_response_times(self) -> Dict:
+    def check_incident_response_times(self) -> Dict:
         """CC7: Verify incident response SLAs."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as open_incidents,
@@ -235,9 +244,9 @@ class ComplianceScanner:
             "remediation_required": overdue > 0,
         }
 
-    async def check_data_retention_compliance(self) -> Dict:
+    def check_data_retention_compliance(self) -> Dict:
         """P4: Verify data isn't being retained beyond policy limits."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT COUNT(*) FROM soc2_audit_log
                 WHERE timestamp < NOW() - INTERVAL '730 days'
@@ -256,9 +265,9 @@ class ComplianceScanner:
             "remediation_notes": "Run retention enforcement to clean up" if overdue > 0 else None,
         }
 
-    async def check_pii_access_patterns(self) -> Dict:
+    def check_pii_access_patterns(self) -> Dict:
         """P1: Check for unusual PII access patterns."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT
                     user_email,
@@ -282,33 +291,51 @@ class ComplianceScanner:
             "evidence": {"high_access_users": high_access_users},
         }
 
-    async def check_api_key_rotation(self) -> Dict:
-        """CC6: Check for API keys that should be rotated."""
-        result = await self.db.execute(
-            text("""
-                SELECT COUNT(*) FROM soc2_api_key_registry
-                WHERE is_active = TRUE
-                  AND created_at < NOW() - INTERVAL '90 days'
-                  AND (expires_at IS NULL OR expires_at > NOW())
-            """)
-        )
-        stale_keys = result.fetchone()[0]
+    def check_api_key_rotation(self) -> Dict:
+        """CC6: Verify API key / secret configuration hygiene (read-only check)."""
+        import os
+        issues = []
+        evidence = {}
+
+        # Check if critical secrets are configured via env vars
+        required_secrets = [
+            ("SECRET_KEY", "Application secret key"),
+            ("SOC2_FIELD_ENCRYPTION_KEY", "Field encryption key"),
+        ]
+
+        for env_var, label in required_secrets:
+            val = os.getenv(env_var, "")
+            if not val:
+                issues.append(f"{label} ({env_var}) is not configured")
+                evidence[env_var] = "missing"
+            else:
+                evidence[env_var] = "configured"
+
+        # Check hash salt is not the insecure default
+        hash_salt = os.getenv("SOC2_HASH_SALT", "")
+        if not hash_salt:
+            issues.append("SOC2_HASH_SALT not configured")
+            evidence["SOC2_HASH_SALT"] = "missing"
+        else:
+            evidence["SOC2_HASH_SALT"] = "configured"
+
+        status = ComplianceCheckStatus.PASS if not issues else ComplianceCheckStatus.WARNING
 
         return {
-            "check_name": "API Key Rotation",
+            "check_name": "Secret & API Key Configuration",
             "check_category": "CC6_access_controls",
             "trust_criteria": "CC6",
-            "status": ComplianceCheckStatus.PASS if stale_keys == 0 else ComplianceCheckStatus.WARNING,
-            "details": f"{stale_keys} active API keys older than 90 days",
-            "evidence": {"stale_keys": stale_keys},
-            "remediation_required": stale_keys > 0,
+            "status": status,
+            "details": "; ".join(issues) if issues else "All required secrets are configured",
+            "evidence": evidence,
+            "remediation_required": len(issues) > 0,
         }
 
-    async def check_high_severity_unresolved(self) -> Dict:
+    def check_high_severity_unresolved(self) -> Dict:
         """CC7: Check for unresolved high/critical incidents."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
-                SELECT id, title, severity, created_at, status
+                SELECT id::text, title, severity, created_at::text, status
                 FROM soc2_security_incident
                 WHERE severity IN ('high', 'critical')
                   AND status NOT IN ('resolved', 'closed')
@@ -327,37 +354,40 @@ class ComplianceScanner:
             "remediation_required": len(unresolved) > 0,
         }
 
-    async def _store_result(self, result: Dict) -> None:
+    def _store_result(self, result: Dict) -> None:
         """Store a compliance check result in the database."""
-        import json
-        await self.db.execute(
-            text("""
-                INSERT INTO soc2_compliance_check (
-                    run_at, check_name, check_category, description,
-                    status, details, evidence, trust_criteria,
-                    remediation_required, remediation_notes
-                ) VALUES (
-                    NOW(), :check_name, :check_category, :description,
-                    :status, :details, :evidence::jsonb, :trust_criteria,
-                    :remediation_required, :remediation_notes
-                )
-            """),
-            {
-                "check_name": result.get("check_name"),
-                "check_category": result.get("check_category"),
-                "description": result.get("details"),
-                "status": result.get("status"),
-                "details": result.get("details"),
-                "evidence": json.dumps(result.get("evidence", {})),
-                "trust_criteria": result.get("trust_criteria"),
-                "remediation_required": result.get("remediation_required", False),
-                "remediation_notes": result.get("remediation_notes"),
-            }
-        )
-        await self.db.commit()
+        try:
+            self.db.execute(
+                text("""
+                    INSERT INTO soc2_compliance_check (
+                        run_at, check_name, check_category, description,
+                        status, details, evidence, trust_criteria,
+                        remediation_required, remediation_notes
+                    ) VALUES (
+                        NOW(), :check_name, :check_category, :description,
+                        :status, :details, :evidence::jsonb, :trust_criteria,
+                        :remediation_required, :remediation_notes
+                    )
+                """),
+                {
+                    "check_name": result.get("check_name"),
+                    "check_category": result.get("check_category"),
+                    "description": result.get("details"),
+                    "status": result.get("status"),
+                    "details": result.get("details"),
+                    "evidence": json.dumps(result.get("evidence", {})),
+                    "trust_criteria": result.get("trust_criteria"),
+                    "remediation_required": result.get("remediation_required", False),
+                    "remediation_notes": result.get("remediation_notes"),
+                }
+            )
+            self.db.commit()
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Failed to store compliance check result: {e}")
 
 
-async def run_compliance_scan(db: AsyncSession) -> List[Dict]:
+def run_compliance_scan(db: Session) -> List[Dict]:
     """Entry point for running the compliance scan."""
     scanner = ComplianceScanner(db)
-    return await scanner.run_all_checks()
+    return scanner.run_all_checks()

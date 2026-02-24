@@ -31,7 +31,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Prevent XSS
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["X-XSS-Protection"] = "0"  # Modern best practice: rely on CSP
 
         # Prevent clickjacking
         response.headers["X-Frame-Options"] = "DENY"

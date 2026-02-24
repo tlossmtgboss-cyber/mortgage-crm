@@ -398,6 +398,8 @@ ALTER TABLE soc2_audit_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE soc2_access_event ENABLE ROW LEVEL SECURITY;
 ALTER TABLE soc2_security_incident ENABLE ROW LEVEL SECURITY;
 ALTER TABLE soc2_change_record ENABLE ROW LEVEL SECURITY;
+ALTER TABLE soc2_active_session ENABLE ROW LEVEL SECURITY;
+ALTER TABLE soc2_api_key_registry ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can only see their own tenant's data
 -- Adjust the role name and session variable to match your auth setup
@@ -416,6 +418,19 @@ CREATE POLICY tenant_isolation_incident ON soc2_security_incident
 CREATE POLICY tenant_isolation_change ON soc2_change_record
     FOR ALL
     USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
+
+CREATE POLICY tenant_isolation_session ON soc2_active_session
+    FOR ALL
+    USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
+
+CREATE POLICY tenant_isolation_api_key ON soc2_api_key_registry
+    FOR ALL
+    USING (tenant_id = current_setting('app.current_tenant_id')::UUID);
+
+-- NOTE: The following tables do NOT have RLS because they are system-wide:
+-- - soc2_incident_timeline: inherits access from parent incident (CASCADE delete)
+-- - soc2_data_classification: system-wide metadata, same for all tenants
+-- - soc2_compliance_check: system-wide automated scan results
 
 
 COMMIT;

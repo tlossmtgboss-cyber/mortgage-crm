@@ -6,13 +6,14 @@ This service provides the primary interface for recording audit events throughou
 the Perennia AI platform. Every significant action — data access, modifications,
 authentication events, and system operations — should be logged through this service.
 """
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, func, and_, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from ..constants import AuditAction, SeverityLevel, DataClassification, PII_FIELDS
 
@@ -22,10 +23,10 @@ logger = logging.getLogger("soc2.audit")
 class AuditService:
     """
     Central audit logging service.
-    
+
     Usage:
         audit = AuditService(db_session)
-        await audit.log(
+        audit.log(
             action=AuditAction.UPDATE,
             resource_type="loan_application",
             resource_id="LA-12345",
@@ -36,10 +37,10 @@ class AuditService:
         )
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def log(
+    def log(
         self,
         action: str,
         resource_type: Optional[str] = None,
@@ -63,10 +64,10 @@ class AuditService:
         error_message: Optional[str] = None,
         severity: str = SeverityLevel.LOW,
         data_classification: str = DataClassification.INTERNAL,
-    ) -> int:
+    ) -> Optional[int]:
         """
         Record an audit log entry.
-        
+
         Returns the ID of the created audit log entry.
         """
         # Auto-detect PII involvement
@@ -82,54 +83,60 @@ class AuditService:
         if contains_pii and severity == SeverityLevel.LOW:
             severity = SeverityLevel.MEDIUM
 
-        result = await self.db.execute(
-            text("""
-                INSERT INTO soc2_audit_log (
-                    timestamp, user_id, user_email, user_role, tenant_id,
-                    action, resource_type, resource_id, description,
-                    fields_accessed, old_values, new_values,
-                    ip_address, user_agent, request_method, request_path,
-                    request_id, session_id, status_code, success,
-                    error_message, severity, data_classification, contains_pii
-                ) VALUES (
-                    :timestamp, :user_id, :user_email, :user_role, :tenant_id,
-                    :action, :resource_type, :resource_id, :description,
-                    :fields_accessed, :old_values::jsonb, :new_values::jsonb,
-                    :ip_address::inet, :user_agent, :request_method, :request_path,
-                    :request_id, :session_id, :status_code, :success,
-                    :error_message, :severity, :data_classification, :contains_pii
-                ) RETURNING id
-            """),
-            {
-                "timestamp": datetime.now(timezone.utc),
-                "user_id": str(user_id) if user_id else None,
-                "user_email": user_email,
-                "user_role": user_role,
-                "tenant_id": str(tenant_id) if tenant_id else None,
-                "action": action,
-                "resource_type": resource_type,
-                "resource_id": str(resource_id) if resource_id else None,
-                "description": description,
-                "fields_accessed": fields_accessed,
-                "old_values": sanitized_old,
-                "new_values": sanitized_new,
-                "ip_address": ip_address,
-                "user_agent": user_agent,
-                "request_method": request_method,
-                "request_path": request_path,
-                "request_id": str(request_id) if request_id else str(uuid4()),
-                "session_id": session_id,
-                "status_code": status_code,
-                "success": success,
-                "error_message": error_message,
-                "severity": severity,
-                "data_classification": data_classification,
-                "contains_pii": contains_pii,
-            }
-        )
-        await self.db.commit()
-        row = result.fetchone()
-        log_id = row[0] if row else None
+        try:
+            result = self.db.execute(
+                text("""
+                    INSERT INTO soc2_audit_log (
+                        timestamp, user_id, user_email, user_role, tenant_id,
+                        action, resource_type, resource_id, description,
+                        fields_accessed, old_values, new_values,
+                        ip_address, user_agent, request_method, request_path,
+                        request_id, session_id, status_code, success,
+                        error_message, severity, data_classification, contains_pii
+                    ) VALUES (
+                        :timestamp, :user_id, :user_email, :user_role, :tenant_id,
+                        :action, :resource_type, :resource_id, :description,
+                        :fields_accessed, :old_values::jsonb, :new_values::jsonb,
+                        :ip_address::inet, :user_agent, :request_method, :request_path,
+                        :request_id, :session_id, :status_code, :success,
+                        :error_message, :severity, :data_classification, :contains_pii
+                    ) RETURNING id
+                """),
+                {
+                    "timestamp": datetime.now(timezone.utc),
+                    "user_id": str(user_id) if user_id else None,
+                    "user_email": user_email,
+                    "user_role": user_role,
+                    "tenant_id": str(tenant_id) if tenant_id else None,
+                    "action": action,
+                    "resource_type": resource_type,
+                    "resource_id": str(resource_id) if resource_id else None,
+                    "description": description,
+                    "fields_accessed": fields_accessed,
+                    "old_values": json.dumps(sanitized_old) if sanitized_old else None,
+                    "new_values": json.dumps(sanitized_new) if sanitized_new else None,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "request_method": request_method,
+                    "request_path": request_path,
+                    "request_id": str(request_id) if request_id else str(uuid4()),
+                    "session_id": session_id,
+                    "status_code": status_code,
+                    "success": success,
+                    "error_message": error_message,
+                    "severity": severity,
+                    "data_classification": data_classification,
+                    "contains_pii": contains_pii,
+                }
+            )
+            # Flush to write the row without committing — let the caller manage the transaction.
+            # The audit middleware's background thread commits its own session separately.
+            self.db.flush()
+            row = result.fetchone()
+            log_id = row[0] if row else None
+        except Exception as e:
+            logger.error(f"Failed to write audit log: {e}")
+            return None
 
         # Also emit structured log for SIEM integration
         logger.info(
@@ -150,7 +157,7 @@ class AuditService:
 
         return log_id
 
-    async def log_data_access(
+    def log_data_access(
         self,
         user_id: UUID,
         resource_type: str,
@@ -159,9 +166,9 @@ class AuditService:
         fields_accessed: Optional[List[str]] = None,
         tenant_id: Optional[UUID] = None,
         ip_address: Optional[str] = None,
-    ) -> int:
+    ) -> Optional[int]:
         """Convenience method for logging data access events."""
-        return await self.log(
+        return self.log(
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -177,7 +184,7 @@ class AuditService:
             ),
         )
 
-    async def log_data_modification(
+    def log_data_modification(
         self,
         user_id: UUID,
         resource_type: str,
@@ -188,13 +195,13 @@ class AuditService:
         description: Optional[str] = None,
         tenant_id: Optional[UUID] = None,
         ip_address: Optional[str] = None,
-    ) -> int:
+    ) -> Optional[int]:
         """Convenience method for logging data modifications with before/after values."""
         fields = list(set(
             list(old_values.keys() if old_values else []) +
             list(new_values.keys() if new_values else [])
         ))
-        return await self.log(
+        return self.log(
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -208,7 +215,7 @@ class AuditService:
             severity=SeverityLevel.MEDIUM if action == AuditAction.DELETE else SeverityLevel.LOW,
         )
 
-    async def query_logs(
+    def query_logs(
         self,
         tenant_id: Optional[UUID] = None,
         user_id: Optional[UUID] = None,
@@ -223,7 +230,7 @@ class AuditService:
     ) -> List[Dict]:
         """Query audit logs with filters. Used for compliance reporting and investigation."""
         conditions = []
-        params = {"limit": limit, "offset": offset}
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
         if tenant_id:
             conditions.append("tenant_id = :tenant_id")
@@ -252,7 +259,7 @@ class AuditService:
 
         where_clause = " AND ".join(conditions) if conditions else "TRUE"
 
-        result = await self.db.execute(
+        result = self.db.execute(
             text(f"""
                 SELECT id, timestamp, user_id, user_email, action,
                        resource_type, resource_id, description,
@@ -267,14 +274,14 @@ class AuditService:
 
         return [dict(row._mapping) for row in result.fetchall()]
 
-    async def get_audit_summary(
+    def get_audit_summary(
         self,
         tenant_id: UUID,
         start_time: datetime,
         end_time: datetime,
     ) -> Dict[str, Any]:
         """Generate audit summary for compliance reporting."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total_events,
@@ -303,27 +310,27 @@ class AuditService:
         new_values: Optional[Dict],
     ) -> bool:
         """Check if any PII fields are involved in this operation."""
-        all_fields = set()
+        all_fields: set = set()
         if fields_accessed:
             all_fields.update(fields_accessed)
         if old_values:
             all_fields.update(old_values.keys())
         if new_values:
             all_fields.update(new_values.keys())
+        # Normalize to lowercase for case-insensitive matching against PII_FIELDS
+        all_fields = {f.lower() for f in all_fields}
         return bool(all_fields & PII_FIELDS)
 
     def _sanitize_values(self, values: Dict[str, Any]) -> Dict[str, Any]:
         """
         Redact PII values before storing in audit log.
         We log THAT a field was changed, but not the actual PII value.
+        Full redaction — no partial values leaked.
         """
         sanitized = {}
         for key, value in values.items():
             if key.lower() in PII_FIELDS:
-                if isinstance(value, str) and len(value) > 4:
-                    sanitized[key] = f"***{value[-4:]}"  # Last 4 chars only
-                else:
-                    sanitized[key] = "***REDACTED***"
+                sanitized[key] = "***REDACTED***"
             else:
                 sanitized[key] = value
         return sanitized

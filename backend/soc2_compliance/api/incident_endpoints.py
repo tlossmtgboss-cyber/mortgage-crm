@@ -3,12 +3,12 @@ Incident Management Endpoints
 CRUD operations for security incidents.
 """
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ..services.incident_service import IncidentService
 from ..constants import IncidentCategory, IncidentStatus, SeverityLevel
@@ -23,12 +23,16 @@ class CreateIncidentRequest(BaseModel):
     category: IncidentCategory
     severity: SeverityLevel
     assigned_to: Optional[UUID] = None
-    affected_systems: Optional[list[str]] = None
+    affected_systems: Optional[List[str]] = None
 
 
 class UpdateStatusRequest(BaseModel):
     status: IncidentStatus
     notes: Optional[str] = None
+
+
+class AddNoteRequest(BaseModel):
+    note: str = Field(..., max_length=10000)
 
 
 class RootCauseRequest(BaseModel):
@@ -40,12 +44,12 @@ class RootCauseRequest(BaseModel):
 @router.post("/")
 async def create_incident(
     request: CreateIncidentRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """Create a new security incident."""
     service = IncidentService(db)
-    incident_id = await service.create(
+    incident_id = service.create(
         title=request.title,
         description=request.description,
         category=request.category,
@@ -65,12 +69,12 @@ async def list_incidents(
     start_time: Optional[datetime] = Query(None),
     end_time: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """List security incidents."""
     service = IncidentService(db)
-    incidents = await service.list_incidents(
+    incidents = service.list_incidents(
         tenant_id=current_user.tenant_id,
         status=status,
         severity=severity,
@@ -84,12 +88,12 @@ async def list_incidents(
 @router.get("/{incident_id}")
 async def get_incident(
     incident_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """Get incident details with full timeline."""
     service = IncidentService(db)
-    incident = await service.get_incident(incident_id)
+    incident = service.get_incident(incident_id, tenant_id=current_user.tenant_id)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident
@@ -99,15 +103,16 @@ async def get_incident(
 async def update_incident_status(
     incident_id: UUID,
     request: UpdateStatusRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """Update incident status (triggers timeline entry)."""
     service = IncidentService(db)
-    success = await service.update_status(
+    success = service.update_status(
         incident_id=incident_id,
         new_status=request.status,
         actor_id=current_user.id,
+        tenant_id=current_user.tenant_id,
         notes=request.notes,
     )
     if not success:
@@ -118,13 +123,17 @@ async def update_incident_status(
 @router.post("/{incident_id}/note")
 async def add_incident_note(
     incident_id: UUID,
-    note: str,
-    db: AsyncSession = Depends(get_db),
+    request: AddNoteRequest,
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """Add a note to an incident timeline."""
     service = IncidentService(db)
-    await service.add_note(incident_id, note, current_user.id)
+    found = service.add_note(
+        incident_id, request.note, current_user.id, tenant_id=current_user.tenant_id
+    )
+    if not found:
+        raise HTTPException(status_code=404, detail="Incident not found")
     return {"status": "note_added"}
 
 
@@ -132,16 +141,19 @@ async def add_incident_note(
 async def set_root_cause(
     incident_id: UUID,
     request: RootCauseRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """Document root cause analysis and remediation."""
     service = IncidentService(db)
-    await service.set_root_cause(
+    found = service.set_root_cause(
         incident_id=incident_id,
         root_cause=request.root_cause,
         remediation_steps=request.remediation_steps,
         preventive_measures=request.preventive_measures,
         actor_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
+    if not found:
+        raise HTTPException(status_code=404, detail="Incident not found")
     return {"status": "root_cause_documented"}

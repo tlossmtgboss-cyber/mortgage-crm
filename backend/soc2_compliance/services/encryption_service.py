@@ -46,6 +46,12 @@ class EncryptionService:
         """Initialize Fernet encryption with the configured key."""
         key = self.config.field_encryption_key
         if not key:
+            # In production, encryption MUST be configured
+            if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("PRODUCTION"):
+                raise ValueError(
+                    "SOC2_FIELD_ENCRYPTION_KEY must be set in production. "
+                    "Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+                )
             logger.warning(
                 "SOC2_FIELD_ENCRYPTION_KEY not set. "
                 "Field-level encryption is DISABLED. "
@@ -110,7 +116,11 @@ class EncryptionService:
         """
         if not value:
             return value
-        salt = salt or os.getenv("SOC2_HASH_SALT", "perennia-ai-soc2")
+        salt = salt or os.getenv("SOC2_HASH_SALT", "")
+        if not salt:
+            raise ValueError(
+                "SOC2_HASH_SALT environment variable must be set for secure hashing."
+            )
         return hashlib.sha256(f"{salt}:{value}".encode("utf-8")).hexdigest()
 
     def mask_value(self, value: str, visible_chars: int = 4) -> str:

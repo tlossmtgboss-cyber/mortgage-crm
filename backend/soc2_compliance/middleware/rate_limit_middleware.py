@@ -7,7 +7,6 @@ abuse and ensure service availability.
 """
 import logging
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional, Dict
 
@@ -41,13 +40,17 @@ class TokenBucket:
         return False
 
 
+_MAX_BUCKETS = 10000
+_EVICTION_STALE_SECONDS = 300  # 5 minutes
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
     Rate limiting middleware with per-IP and per-user limits.
-    
+
     Add to FastAPI:
         app.add_middleware(RateLimitMiddleware)
-    
+
     Rate limit headers returned:
         X-RateLimit-Limit: Maximum requests per window
         X-RateLimit-Remaining: Remaining requests
@@ -57,20 +60,27 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, config: SOC2Config = None):
         super().__init__(app)
         self.config = config or SOC2Config.from_env()
-        self._buckets: Dict[str, TokenBucket] = defaultdict(
-            lambda: TokenBucket(
-                tokens=self.config.rate_limit_burst,
-                max_tokens=self.config.rate_limit_burst,
-                refill_rate=self.config.rate_limit_requests_per_minute / 60.0,
+        self._buckets: Dict[str, TokenBucket] = {}
+        self._login_buckets: Dict[str, TokenBucket] = {}
+
+    def _get_bucket(self, buckets: Dict[str, TokenBucket], key: str, max_tokens: int, refill_rate: float) -> TokenBucket:
+        """Get or create a bucket, evicting stale entries if over threshold."""
+        if len(buckets) > _MAX_BUCKETS:
+            now = time.time()
+            stale_keys = [
+                k for k, b in buckets.items()
+                if (now - b.last_refill) > _EVICTION_STALE_SECONDS
+            ]
+            for k in stale_keys:
+                del buckets[k]
+
+        if key not in buckets:
+            buckets[key] = TokenBucket(
+                tokens=max_tokens,
+                max_tokens=max_tokens,
+                refill_rate=refill_rate,
             )
-        )
-        self._login_buckets: Dict[str, TokenBucket] = defaultdict(
-            lambda: TokenBucket(
-                tokens=self.config.rate_limit_login_per_minute,
-                max_tokens=self.config.rate_limit_login_per_minute,
-                refill_rate=self.config.rate_limit_login_per_minute / 60.0,
-            )
-        )
+        return buckets[key]
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
@@ -87,9 +97,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
 
         if is_auth_endpoint:
-            bucket = self._login_buckets[client_ip]
+            bucket = self._get_bucket(
+                self._login_buckets, client_ip,
+                self.config.rate_limit_login_per_minute,
+                self.config.rate_limit_login_per_minute / 60.0,
+            )
         else:
-            bucket = self._buckets[rate_key]
+            bucket = self._get_bucket(
+                self._buckets, rate_key,
+                self.config.rate_limit_burst,
+                self.config.rate_limit_requests_per_minute / 60.0,
+            )
 
         if not bucket.consume():
             logger.warning(

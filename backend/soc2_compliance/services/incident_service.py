@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ..constants import IncidentStatus, IncidentCategory, SeverityLevel
 
@@ -21,25 +21,25 @@ logger = logging.getLogger("soc2.incidents")
 class IncidentService:
     """
     Security incident management.
-    
+
     Usage:
         incidents = IncidentService(db)
-        
-        incident_id = await incidents.create(
+
+        incident_id = incidents.create(
             title="Unauthorized API access detected",
             description="Multiple failed auth attempts from IP 1.2.3.4",
             category=IncidentCategory.UNAUTHORIZED_ACCESS,
             severity=SeverityLevel.HIGH,
             reported_by=admin_user_id,
         )
-        
-        await incidents.update_status(incident_id, IncidentStatus.INVESTIGATING, admin_user_id)
+
+        incidents.update_status(incident_id, IncidentStatus.INVESTIGATING, admin_user_id)
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
-    async def create(
+    def create(
         self,
         title: str,
         description: str,
@@ -55,7 +55,7 @@ class IncidentService:
         incident_id = uuid4()
         now = datetime.now(timezone.utc)
 
-        await self.db.execute(
+        self.db.execute(
             text("""
                 INSERT INTO soc2_security_incident (
                     id, created_at, updated_at, title, description,
@@ -84,14 +84,14 @@ class IncidentService:
         )
 
         # Add timeline entry
-        await self._add_timeline(
+        self._add_timeline(
             incident_id=incident_id,
             action="incident_created",
             actor_id=reported_by,
             description=f"Incident created: {title}",
         )
 
-        await self.db.commit()
+        self.db.commit()
 
         logger.warning(
             "security_incident_created",
@@ -105,18 +105,25 @@ class IncidentService:
 
         return incident_id
 
-    async def update_status(
+    def update_status(
         self,
         incident_id: UUID,
         new_status: str,
         actor_id: Optional[UUID] = None,
+        tenant_id: Optional[UUID] = None,
         notes: Optional[str] = None,
     ) -> bool:
         """Update incident status with timeline tracking."""
-        # Get current status
-        result = await self.db.execute(
-            text("SELECT status FROM soc2_security_incident WHERE id = :id"),
-            {"id": str(incident_id)}
+        # Get current status with tenant isolation
+        params: Dict[str, Any] = {"id": str(incident_id)}
+        tenant_filter = ""
+        if tenant_id:
+            tenant_filter = " AND tenant_id = :tenant_id"
+            params["tenant_id"] = str(tenant_id)
+
+        result = self.db.execute(
+            text(f"SELECT status FROM soc2_security_incident WHERE id = :id{tenant_filter}"),
+            params
         )
         row = result.fetchone()
         if not row:
@@ -134,16 +141,22 @@ class IncidentService:
         elif new_status == IncidentStatus.CLOSED:
             timestamp_updates = ", closed_at = :now"
 
-        await self.db.execute(
+        update_params: Dict[str, Any] = {"id": str(incident_id), "new_status": new_status, "now": now}
+        update_tenant_filter = ""
+        if tenant_id:
+            update_tenant_filter = " AND tenant_id = :tenant_id"
+            update_params["tenant_id"] = str(tenant_id)
+
+        self.db.execute(
             text(f"""
                 UPDATE soc2_security_incident
                 SET status = :new_status, updated_at = :now {timestamp_updates}
-                WHERE id = :id
+                WHERE id = :id{update_tenant_filter}
             """),
-            {"id": str(incident_id), "new_status": new_status, "now": now}
+            update_params
         )
 
-        await self._add_timeline(
+        self._add_timeline(
             incident_id=incident_id,
             action="status_change",
             actor_id=actor_id,
@@ -152,70 +165,98 @@ class IncidentService:
             new_value=new_status,
         )
 
-        await self.db.commit()
+        self.db.commit()
         return True
 
-    async def add_note(
+    def add_note(
         self,
         incident_id: UUID,
         note: str,
         actor_id: Optional[UUID] = None,
-    ) -> None:
+        tenant_id: Optional[UUID] = None,
+    ) -> bool:
         """Add a note to an incident's timeline."""
-        await self._add_timeline(
+        # Verify incident belongs to tenant before adding note
+        if tenant_id:
+            result = self.db.execute(
+                text("SELECT id FROM soc2_security_incident WHERE id = :id AND tenant_id = :tenant_id"),
+                {"id": str(incident_id), "tenant_id": str(tenant_id)}
+            )
+            if not result.fetchone():
+                return False
+
+        self._add_timeline(
             incident_id=incident_id,
             action="note_added",
             actor_id=actor_id,
             description=note,
         )
-        await self.db.commit()
+        self.db.commit()
+        return True
 
-    async def set_root_cause(
+    def set_root_cause(
         self,
         incident_id: UUID,
         root_cause: str,
         remediation_steps: str,
         preventive_measures: str,
         actor_id: Optional[UUID] = None,
-    ) -> None:
+        tenant_id: Optional[UUID] = None,
+    ) -> bool:
         """Record root cause analysis and remediation."""
-        await self.db.execute(
-            text("""
+        params: Dict[str, Any] = {
+            "id": str(incident_id),
+            "root_cause": root_cause,
+            "remediation_steps": remediation_steps,
+            "preventive_measures": preventive_measures,
+            "now": datetime.now(timezone.utc),
+        }
+        tenant_filter = ""
+        if tenant_id:
+            tenant_filter = " AND tenant_id = :tenant_id"
+            params["tenant_id"] = str(tenant_id)
+
+        result = self.db.execute(
+            text(f"""
                 UPDATE soc2_security_incident
                 SET root_cause = :root_cause,
                     remediation_steps = :remediation_steps,
                     preventive_measures = :preventive_measures,
                     updated_at = :now
-                WHERE id = :id
+                WHERE id = :id{tenant_filter}
             """),
-            {
-                "id": str(incident_id),
-                "root_cause": root_cause,
-                "remediation_steps": remediation_steps,
-                "preventive_measures": preventive_measures,
-                "now": datetime.now(timezone.utc),
-            }
+            params
         )
 
-        await self._add_timeline(
+        if result.rowcount == 0:
+            return False
+
+        self._add_timeline(
             incident_id=incident_id,
             action="root_cause_documented",
             actor_id=actor_id,
             description="Root cause analysis and remediation plan documented",
         )
-        await self.db.commit()
+        self.db.commit()
+        return True
 
-    async def get_incident(self, incident_id: UUID) -> Optional[Dict]:
+    def get_incident(self, incident_id: UUID, tenant_id: Optional[UUID] = None) -> Optional[Dict]:
         """Get full incident details with timeline."""
-        result = await self.db.execute(
-            text("SELECT * FROM soc2_security_incident WHERE id = :id"),
-            {"id": str(incident_id)}
+        params: Dict[str, Any] = {"id": str(incident_id)}
+        tenant_filter = ""
+        if tenant_id:
+            tenant_filter = " AND tenant_id = :tenant_id"
+            params["tenant_id"] = str(tenant_id)
+
+        result = self.db.execute(
+            text(f"SELECT * FROM soc2_security_incident WHERE id = :id{tenant_filter}"),
+            params
         )
         incident = result.fetchone()
         if not incident:
             return None
 
-        timeline_result = await self.db.execute(
+        timeline_result = self.db.execute(
             text("""
                 SELECT * FROM soc2_incident_timeline
                 WHERE incident_id = :id ORDER BY timestamp ASC
@@ -228,7 +269,7 @@ class IncidentService:
             "timeline": [dict(row._mapping) for row in timeline_result.fetchall()],
         }
 
-    async def list_incidents(
+    def list_incidents(
         self,
         tenant_id: Optional[UUID] = None,
         status: Optional[str] = None,
@@ -239,7 +280,7 @@ class IncidentService:
     ) -> List[Dict]:
         """List incidents with filters."""
         conditions = []
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if tenant_id:
             conditions.append("tenant_id = :tenant_id")
@@ -259,7 +300,7 @@ class IncidentService:
 
         where = " AND ".join(conditions) if conditions else "TRUE"
 
-        result = await self.db.execute(
+        result = self.db.execute(
             text(f"""
                 SELECT id, created_at, title, category, severity, status,
                        affected_users, data_compromised, pii_involved
@@ -272,14 +313,14 @@ class IncidentService:
         )
         return [dict(row._mapping) for row in result.fetchall()]
 
-    async def get_incident_metrics(
+    def get_incident_metrics(
         self,
         tenant_id: UUID,
         start_time: datetime,
         end_time: datetime,
     ) -> Dict[str, Any]:
         """Generate incident metrics for compliance reporting."""
-        result = await self.db.execute(
+        result = self.db.execute(
             text("""
                 SELECT
                     COUNT(*) as total_incidents,
@@ -305,7 +346,7 @@ class IncidentService:
         row = result.fetchone()
         return dict(row._mapping) if row else {}
 
-    async def _add_timeline(
+    def _add_timeline(
         self,
         incident_id: UUID,
         action: str,
@@ -316,7 +357,7 @@ class IncidentService:
         is_automated: bool = False,
     ) -> None:
         """Add a timeline entry to an incident."""
-        await self.db.execute(
+        self.db.execute(
             text("""
                 INSERT INTO soc2_incident_timeline (
                     incident_id, timestamp, action, actor_id,
