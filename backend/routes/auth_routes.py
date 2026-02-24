@@ -23,6 +23,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import time
+import threading
 from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -71,6 +72,39 @@ def _check_auth_rate_limit(client_ip: str, max_requests: int) -> bool:
         return False
     _auth_rate_store[key].append(now)
     return True
+
+
+def _log_access_event_bg(
+    user_id=None, tenant_id=None, attempted_email=None,
+    success=True, event_type=None, failure_reason=None,
+    ip="unknown", user_agent="", auth_method="password",
+):
+    """Log SOC 2 access event in a background thread. Never blocks auth flow."""
+    def _write():
+        try:
+            from db import SessionLocal
+            from soc2_compliance.services.access_control_service import AccessControlService
+            session = SessionLocal()
+            try:
+                svc = AccessControlService(session)
+                svc.log_authentication(
+                    user_id=user_id,
+                    tenant_id=tenant_id,
+                    attempted_email=attempted_email,
+                    success=success,
+                    event_type=event_type,
+                    failure_reason=failure_reason,
+                    ip=ip,
+                    user_agent=user_agent,
+                    auth_method=auth_method,
+                )
+            finally:
+                session.close()
+        except Exception as e:
+            logger.debug(f"SOC 2 access event log skipped: {e}")
+
+    thread = threading.Thread(target=_write, daemon=True)
+    thread.start()
 
 
 # =============================================================================
@@ -251,6 +285,11 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
 
         # Check user exists and has a valid hashed_password before verification
         if not user:
+            _log_access_event_bg(
+                attempted_email=form_data.username,
+                success=False, failure_reason="user_not_found",
+                ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -265,6 +304,12 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                 org = db.query(Organization).filter(Organization.id == user.organization_id).first()
                 if org and getattr(org, 'sso_enforced', False):
                     logger.warning(f"Password login rejected for SSO-enforced org: user={user.email}, org={org.name}")
+                    _log_access_event_bg(
+                        user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                        attempted_email=form_data.username,
+                        success=False, failure_reason="sso_enforced",
+                        ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Password login is disabled for your organization. Please use Single Sign-On (SSO).",
@@ -280,6 +325,13 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             from auth.account_lockout import check_account_locked, record_failed_login, reset_failed_login
             if check_account_locked(user):
                 logger.warning(f"Login attempt on locked account: {user.email}")
+                _log_access_event_bg(
+                    user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                    attempted_email=form_data.username,
+                    success=False, event_type="account_locked",
+                    failure_reason="account_locked",
+                    ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_423_LOCKED,
                     detail="Account is temporarily locked due to too many failed login attempts. Please try again later.",
@@ -291,6 +343,12 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
 
         if not user.hashed_password:
             logger.warning("Login attempt for user with no password set")
+            _log_access_event_bg(
+                user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                attempted_email=form_data.username,
+                success=False, failure_reason="no_password_set",
+                ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -304,6 +362,13 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
                 lockout_result = record_failed_login(db, user)
                 if lockout_result.get("locked"):
                     logger.warning(f"Account locked after failed attempts: {user.email}")
+                    _log_access_event_bg(
+                        user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                        attempted_email=form_data.username,
+                        success=False, event_type="account_locked",
+                        failure_reason="locked_after_failed_attempts",
+                        ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_423_LOCKED,
                         detail="Account has been locked due to too many failed login attempts. Please try again in 30 minutes.",
@@ -313,6 +378,12 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             except Exception as e:
                 logger.debug(f"Failed to record failed login attempt in login: {e}")
 
+            _log_access_event_bg(
+                user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                attempted_email=form_data.username,
+                success=False, failure_reason="incorrect_password",
+                ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -382,6 +453,14 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
 
         # MFA is required if user has it enabled OR org mandates it OR admin role
         mfa_required = user_mfa_enabled or org_mfa_required or admin_mfa_required
+
+        # SOC 2: Log successful authentication
+        _log_access_event_bg(
+            user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+            attempted_email=user.email,
+            success=True, event_type="login",
+            ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+        )
 
         return {
             "access_token": access_token,
@@ -495,6 +574,7 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
 
     @app.post("/logout")
     async def logout(
+        http_request: Request,
         token: str = Depends(oauth2_scheme),
         current_user = Depends(get_current_user),
     ):
@@ -503,6 +583,16 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
 
         This immediately invalidates the token, preventing reuse.
         """
+        # SOC 2: Log logout event
+        _log_access_event_bg(
+            user_id=current_user.id,
+            tenant_id=getattr(current_user, 'organization_id', None),
+            attempted_email=getattr(current_user, 'email', None),
+            success=True, event_type="logout",
+            ip=_get_real_client_ip(http_request),
+            user_agent=http_request.headers.get("user-agent", ""),
+        )
+
         config = get_auth_config()
         token_blacklist = config['token_blacklist']
         _USE_SECURE_TOKENS = config['_USE_SECURE_TOKENS']
@@ -699,6 +789,14 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
         if hasattr(user, 'password_changed_at'):
             user.password_changed_at = datetime.now(timezone.utc)
         db.commit()
+
+        # SOC 2: Log password reset event
+        _log_access_event_bg(
+            user_id=user.id,
+            attempted_email=email,
+            success=True, event_type="password_reset",
+            ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+        )
 
         logger.info(f"Password reset successful for user ID {user.id}")
 

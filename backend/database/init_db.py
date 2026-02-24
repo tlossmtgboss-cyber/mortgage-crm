@@ -1629,6 +1629,17 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Comprehensive migration note: {e}")
 
+        # Deploy SOC 2 compliance tables (idempotent)
+        try:
+            from migrations.deploy_soc2_tables import deploy_soc2_tables
+            created = deploy_soc2_tables(_engine)
+            if created:
+                logger.info(f"✅ SOC 2 tables created: {', '.join(created)}")
+            else:
+                logger.info("✅ SOC 2 tables already exist")
+        except Exception as e:
+            logger.warning(f"⚠️ SOC 2 table migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

@@ -1,13 +1,8 @@
 """
 SOC 2 API Dependencies — Bridge to the main app's auth and DB systems.
 
-NOTE: The SOC 2 services use async SQLAlchemy (AsyncSession), while the main app
-uses sync sessions. Full SOC 2 API endpoint functionality requires either:
-1. A PostgreSQL database with soc2_* tables created (via migrations/soc2_tables.sql)
-2. An async session factory added to the app
-
-For now, these dependencies wire up auth so routes register correctly.
-The compliance scan script can be run independently against a PostgreSQL DB.
+Wires up the SOC 2 compliance endpoints to use the main app's sync
+SQLAlchemy sessions and authentication system.
 """
 import logging
 

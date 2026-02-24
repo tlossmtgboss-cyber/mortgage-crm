@@ -1326,6 +1326,14 @@ async def startup_event():
         import traceback
         traceback.print_exc()
 
+    # Register SOC 2 compliance scheduled jobs
+    try:
+        from soc2_compliance.scheduler import register_soc2_jobs
+        register_soc2_jobs(scheduler)
+        logger.info("✅ SOC 2 compliance jobs registered")
+    except Exception as e:
+        logger.warning(f"⚠️ SOC 2 scheduler registration skipped: {e}")
+
 
 def _run_critical_schema_migrations():
     """Run critical schema migrations at startup.

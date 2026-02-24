@@ -7,7 +7,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ..services.audit_service import AuditService
 from .dependencies import get_soc2_db as get_db, get_current_admin_user
@@ -26,7 +26,7 @@ async def query_audit_logs(
     end_time: Optional[datetime] = Query(None, description="End of time range"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """
@@ -36,7 +36,7 @@ async def query_audit_logs(
     audit = AuditService(db)
     tenant_id = getattr(current_user, "tenant_id", None)
 
-    logs = await audit.query_logs(
+    logs = audit.query_logs(
         tenant_id=tenant_id,
         user_id=user_id,
         action=action,
@@ -56,7 +56,7 @@ async def query_audit_logs(
 async def get_audit_summary(
     start_time: datetime = Query(..., description="Start of reporting period"),
     end_time: datetime = Query(..., description="End of reporting period"),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """Get audit event summary for a time period."""
@@ -66,7 +66,7 @@ async def get_audit_summary(
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
-    summary = await audit.get_audit_summary(tenant_id, start_time, end_time)
+    summary = audit.get_audit_summary(tenant_id, start_time, end_time)
     return {"data": summary}
 
 
@@ -75,14 +75,14 @@ async def get_resource_audit_trail(
     resource_type: str,
     resource_id: str,
     limit: int = Query(50, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_admin_user),
 ):
     """Get complete audit trail for a specific resource (e.g., a loan application)."""
     audit = AuditService(db)
     tenant_id = getattr(current_user, "tenant_id", None)
 
-    logs = await audit.query_logs(
+    logs = audit.query_logs(
         tenant_id=tenant_id,
         resource_type=resource_type,
         resource_id=resource_id,
