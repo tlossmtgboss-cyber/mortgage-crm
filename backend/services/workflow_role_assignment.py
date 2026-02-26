@@ -375,43 +375,43 @@ class RoleAssignmentService:
         Returns:
             User ID or None if not resolvable
         """
-        # Check entity-specific assignment
-        if lead_id:
-            result = self.db.execute(text("""
-                SELECT assigned_user_id
-                FROM lead_workflow_role_assignments
-                WHERE lead_id = :lead_id AND role_id = :role_id AND is_active = true
+        # 1. Check org-wide default_role_assignments (primary source of truth)
+        try:
+            org_id = 1
+            if lead_id:
+                lead = self.db.query(self.Lead).filter(self.Lead.id == lead_id).first()
+                if lead and lead.owner_id:
+                    owner = self.db.query(self.User).filter(self.User.id == lead.owner_id).first()
+                    org_id = owner.organization_id if owner else 1
+            elif loan_id:
+                loan = self.db.query(self.Loan).filter(self.Loan.id == loan_id).first()
+                if loan and loan.loan_officer_id:
+                    lo = self.db.query(self.User).filter(self.User.id == loan.loan_officer_id).first()
+                    org_id = lo.organization_id if lo else 1
+
+            default_result = self.db.execute(text("""
+                SELECT user_id FROM default_role_assignments
+                WHERE role_id = :role_id AND organization_id = :org_id AND user_id IS NOT NULL
                 LIMIT 1
-            """), {"lead_id": lead_id, "role_id": role_id}).fetchone()
+            """), {"role_id": role_id, "org_id": org_id}).fetchone()
 
-            if result:
-                return result[0]
+            if default_result:
+                return default_result[0]
+        except Exception as e:
+            logger.debug(f"Org-wide default lookup failed: {e}")
 
-            # Fallback to lead owner
-            if fallback_to_owner:
+        # 2. Fallback to entity owner
+        if fallback_to_owner:
+            if lead_id:
                 lead = self.db.query(self.Lead).filter(self.Lead.id == lead_id).first()
                 if lead and lead.owner_id:
                     return lead.owner_id
-
-        if loan_id:
-            result = self.db.execute(text("""
-                SELECT assigned_user_id
-                FROM loan_workflow_role_assignments
-                WHERE loan_id = :loan_id AND role_id = :role_id AND is_active = true
-                LIMIT 1
-            """), {"loan_id": loan_id, "role_id": role_id}).fetchone()
-
-            if result:
-                return result[0]
-
-            # Fallback to loan officer
-            if fallback_to_owner:
+            if loan_id:
                 loan = self.db.query(self.Loan).filter(self.Loan.id == loan_id).first()
                 if loan and loan.loan_officer_id:
                     return loan.loan_officer_id
 
-        # RL-004: Org-level fallback — find any active user with this role,
-        # ordered by pending task count (least loaded first)
+        # 3. Least-loaded user with this role
         try:
             org_fallback = self.db.execute(text("""
                 SELECT u.id

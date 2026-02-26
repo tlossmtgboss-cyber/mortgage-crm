@@ -440,6 +440,7 @@ async def get_loans(
     current_user=Depends(get_current_user_dep()),
 ):
     """Get all loans with optional stage filtering and permission-based access."""
+    from sqlalchemy import text
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
 
@@ -452,7 +453,29 @@ async def get_loans(
 
         loans = query.order_by(Loan.created_at.desc()).offset(skip).limit(limit).all()
 
-        return [_loan_to_dict(loan) for loan in loans]
+        # Resolve org-wide Production Assistant 1 name (single query for all loans)
+        pa_name = None
+        try:
+            org_id = current_user.organization_id or 1
+            pa_row = db.execute(text("""
+                SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
+                FROM default_role_assignments dra
+                JOIN roles r ON r.id = dra.role_id
+                JOIN users u ON u.id = dra.user_id
+                WHERE dra.organization_id = :org_id AND r.name = 'Production Assistant 1'
+                LIMIT 1
+            """), {"org_id": org_id}).fetchone()
+            if pa_row:
+                pa_name = pa_row[0] if pa_row[0] and pa_row[0].strip() else None
+        except Exception as e:
+            logger.debug(f"Production assistant lookup: {e}")
+
+        result = []
+        for loan in loans:
+            d = _loan_to_dict(loan)
+            d["production_assistant"] = pa_name
+            result.append(d)
+        return result
 
     except Exception as e:
         logger.error(f"get_loans error: {e}", exc_info=True)

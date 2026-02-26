@@ -207,6 +207,23 @@ async def get_leads(
 
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 
+        # Resolve org-wide Production Assistant 1 name (single query for all leads)
+        pa_name = None
+        try:
+            org_id = current_user.organization_id or 1
+            pa_row = db.execute(text("""
+                SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
+                FROM default_role_assignments dra
+                JOIN roles r ON r.id = dra.role_id
+                JOIN users u ON u.id = dra.user_id
+                WHERE dra.organization_id = :org_id AND r.name = 'Production Assistant 1'
+                LIMIT 1
+            """), {"org_id": org_id}).fetchone()
+            if pa_row:
+                pa_name = pa_row[0] if pa_row[0] and pa_row[0].strip() else None
+        except Exception as e:
+            logger.debug(f"Production assistant lookup: {e}")
+
         # Convert to dict manually to avoid Pydantic validation issues
         result = []
         for lead in leads:
@@ -226,7 +243,7 @@ async def get_leads(
                 "phone": lead.phone,
                 "stage": stage_value,
                 "source": lead.source,
-                "production_assistant": getattr(lead, 'production_assistant', None),
+                "production_assistant": pa_name,
                 "ai_score": lead.ai_score,
                 "sentiment": lead.sentiment,
                 "next_action": lead.next_action,

@@ -2695,7 +2695,6 @@ function LoanDetail() {
             {/* Workflow Role Assignments */}
             <div style={{ marginBottom: '24px' }}>
               <WorkflowRoleAssignment
-                loanId={parseInt(id)}
                 onUpdate={() => {
                   // Optionally refresh data when assignments change
                 }}

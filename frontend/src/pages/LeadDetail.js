@@ -3567,7 +3567,6 @@ function LeadDetail() {
             {/* Workflow Role Assignments */}
             <div style={{ marginBottom: '24px' }}>
               <WorkflowRoleAssignment
-                leadId={parseInt(id)}
                 onUpdate={() => {
                   // Optionally refresh data when assignments change
                 }}

@@ -6,19 +6,16 @@ import './WorkflowRoleAssignment.css';
 /**
  * WorkflowRoleAssignment Component
  *
- * Allows users to assign team members to workflow roles for a specific loan or lead.
- * Each role (Loan Officer, Processor, Underwriter, etc.) can have a user assigned
- * who will receive tasks related to that role.
+ * Organization-wide workflow team assignments. These roles apply to ALL loans
+ * and leads in the organization — not per-file. Changes here update the entire
+ * workflow routing for the org.
  */
 function WorkflowRoleAssignment({
-  loanId = null,
-  leadId = null,
   onUpdate = null,
   compact = false,
   showTitle = true
 }) {
-  const [roles, setRoles] = useState([]);
-  const [assignments, setAssignments] = useState([]);
+  const [roleAssignments, setRoleAssignments] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
@@ -28,50 +25,25 @@ function WorkflowRoleAssignment({
     'Content-Type': 'application/json',
   }), []);
 
-  // Load available roles
-  const loadRoles = useCallback(async () => {
+  // Load org-wide role assignments (roles + current assignments in one call)
+  const loadRoleAssignments = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/roles`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles`, {
         headers: getAuthHeaders(),
       });
 
       if (response.ok) {
         const data = await response.json();
-        setRoles(data.roles || []);
+        setRoleAssignments(data.assignments || []);
       } else {
-        console.error('Failed to load roles');
+        console.error('Failed to load role assignments');
       }
     } catch (error) {
-      console.error('Error loading roles:', error);
+      console.error('Error loading role assignments:', error);
     }
   }, [getAuthHeaders]);
 
-  // Load current assignments for the entity
-  const loadAssignments = useCallback(async () => {
-    if (!loanId && !leadId) return;
-
-    try {
-      const entityType = loanId ? 'loans' : 'leads';
-      const entityId = loanId || leadId;
-
-      const response = await fetch(`${API_BASE_URL}/api/v1/${entityType}/${entityId}/roles`, {
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAssignments(data.assignments || []);
-      } else {
-        // No assignments yet - that's fine
-        setAssignments([]);
-      }
-    } catch (error) {
-      console.error('Error loading assignments:', error);
-      setAssignments([]);
-    }
-  }, [loanId, leadId, getAuthHeaders]);
-
-  // Load team members
+  // Load team members for dropdown options
   const loadTeamMembers = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
@@ -91,37 +63,32 @@ function WorkflowRoleAssignment({
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([loadRoles(), loadAssignments(), loadTeamMembers()]);
+      await Promise.all([loadRoleAssignments(), loadTeamMembers()]);
       setLoading(false);
     };
     loadData();
-  }, [loadRoles, loadAssignments, loadTeamMembers]);
+  }, [loadRoleAssignments, loadTeamMembers]);
 
   // Get assigned user for a role
   const getAssignedUser = (roleId) => {
-    const assignment = assignments.find(a => a.role_id === roleId);
+    const assignment = roleAssignments.find(a => a.role_id === roleId);
     return assignment ? assignment.user_id : null;
   };
 
   // Get assigned user name for a role
   const getAssignedUserName = (roleId) => {
-    const assignment = assignments.find(a => a.role_id === roleId);
+    const assignment = roleAssignments.find(a => a.role_id === roleId);
     return assignment ? assignment.user_name : null;
   };
 
-  // Handle role assignment change
+  // Handle role assignment change (org-wide)
   const handleAssignmentChange = async (roleId, userId) => {
-    if (!loanId && !leadId) return;
-
-    const entityType = loanId ? 'loans' : 'leads';
-    const entityId = loanId || leadId;
-
     setSaving(prev => ({ ...prev, [roleId]: true }));
 
     try {
       if (userId) {
-        // Assign user to role
-        const response = await fetch(`${API_BASE_URL}/api/v1/${entityType}/${entityId}/roles/${roleId}/assign`, {
+        // Assign user to role org-wide
+        const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({ user_id: parseInt(userId) }),
@@ -132,34 +99,33 @@ function WorkflowRoleAssignment({
           toast.success(data.message || 'Role assigned successfully');
 
           // Update local state
-          setAssignments(prev => {
-            const existing = prev.find(a => a.role_id === roleId);
-            const selectedUser = teamMembers.find(m => m.id === parseInt(userId));
-            const newAssignment = {
-              role_id: roleId,
-              user_id: parseInt(userId),
-              user_name: selectedUser?.name || `${selectedUser?.first_name || ''} ${selectedUser?.last_name || ''}`.trim()
-            };
-
-            if (existing) {
-              return prev.map(a => a.role_id === roleId ? newAssignment : a);
-            }
-            return [...prev, newAssignment];
-          });
+          const selectedUser = teamMembers.find(m => m.id === parseInt(userId));
+          const userName = selectedUser?.name || `${selectedUser?.first_name || ''} ${selectedUser?.last_name || ''}`.trim();
+          setRoleAssignments(prev =>
+            prev.map(a => a.role_id === roleId
+              ? { ...a, user_id: parseInt(userId), user_name: userName }
+              : a
+            )
+          );
         } else {
           const error = await response.json();
           toast.error(error.detail || 'Failed to assign role');
         }
       } else {
         // Remove assignment
-        const response = await fetch(`${API_BASE_URL}/api/v1/${entityType}/${entityId}/roles/${roleId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/v1/settings/team-roles/${roleId}`, {
           method: 'DELETE',
           headers: getAuthHeaders(),
         });
 
         if (response.ok) {
           toast.success('Role assignment removed');
-          setAssignments(prev => prev.filter(a => a.role_id !== roleId));
+          setRoleAssignments(prev =>
+            prev.map(a => a.role_id === roleId
+              ? { ...a, user_id: null, user_name: '' }
+              : a
+            )
+          );
         } else {
           const error = await response.json();
           toast.error(error.detail || 'Failed to remove assignment');
@@ -224,25 +190,14 @@ function WorkflowRoleAssignment({
     );
   }
 
-  if (!loanId && !leadId) {
-    return (
-      <div className={`workflow-role-assignment ${compact ? 'compact' : ''}`}>
-        <div className="role-assignment-empty">
-          Select a loan or lead to manage role assignments
-        </div>
-      </div>
-    );
-  }
-
   // Filter to show only workflow-relevant roles
-  const workflowRoles = roles.filter(role =>
-    ['Loan Officer', 'Production Assistant 1', 'Production Assistant 2',
-     'Processor', 'Underwriter', 'Closer', 'Funder', 'Post-Closer',
-     'Concierge', 'Team Lead', 'Branch Manager'].includes(role.name)
-  );
-
-  // If no specific workflow roles found, show all roles
-  const displayRoles = workflowRoles.length > 0 ? workflowRoles : roles;
+  const workflowRoleNames = [
+    'Loan Officer', 'Production Assistant 1', 'Production Assistant 2',
+    'Processor', 'Underwriter', 'Closer', 'Funder', 'Post-Closer',
+    'Concierge', 'Team Lead', 'Branch Manager'
+  ];
+  const displayRoles = roleAssignments.filter(a => workflowRoleNames.includes(a.role_name));
+  const finalRoles = displayRoles.length > 0 ? displayRoles : roleAssignments;
 
   return (
     <div className={`workflow-role-assignment ${compact ? 'compact' : ''}`}>
@@ -253,23 +208,23 @@ function WorkflowRoleAssignment({
             Workflow Team Assignments
           </h4>
           <p className="header-subtitle">
-            Assign team members to handle tasks for each role
+            Organization-wide team assignments — applies to all loans and leads
           </p>
         </div>
       )}
 
       <div className="role-assignment-grid">
-        {displayRoles.map(role => (
+        {finalRoles.map(role => (
           <div
-            key={role.id}
-            className={`role-assignment-card ${getAssignedUser(role.id) ? 'assigned' : 'unassigned'}`}
+            key={role.role_id}
+            className={`role-assignment-card ${getAssignedUser(role.role_id) ? 'assigned' : 'unassigned'}`}
           >
             <div className="role-header">
-              <span className="role-icon">{getRoleIcon(role.name)}</span>
+              <span className="role-icon">{getRoleIcon(role.role_name)}</span>
               <div className="role-info">
-                <span className="role-name">{role.name}</span>
+                <span className="role-name">{role.role_name}</span>
                 {!compact && (
-                  <span className="role-description">{getRoleDescription(role.name)}</span>
+                  <span className="role-description">{getRoleDescription(role.role_name)}</span>
                 )}
               </div>
             </div>
@@ -277,9 +232,9 @@ function WorkflowRoleAssignment({
             <div className="role-assignment-control">
               <select
                 className="role-user-select"
-                value={getAssignedUser(role.id) || ''}
-                onChange={(e) => handleAssignmentChange(role.id, e.target.value)}
-                disabled={saving[role.id]}
+                value={getAssignedUser(role.role_id) || ''}
+                onChange={(e) => handleAssignmentChange(role.role_id, e.target.value)}
+                disabled={saving[role.role_id]}
               >
                 <option value="">-- Not Assigned --</option>
                 {teamMembers.map(member => (
@@ -289,30 +244,30 @@ function WorkflowRoleAssignment({
                 ))}
               </select>
 
-              {saving[role.id] && (
+              {saving[role.role_id] && (
                 <div className="saving-indicator">
                   <div className="saving-spinner"></div>
                 </div>
               )}
 
-              {getAssignedUser(role.id) && !saving[role.id] && (
+              {getAssignedUser(role.role_id) && !saving[role.role_id] && (
                 <span className="assigned-badge">
                   ✓ Assigned
                 </span>
               )}
             </div>
 
-            {getAssignedUser(role.id) && !compact && (
+            {getAssignedUser(role.role_id) && !compact && (
               <div className="assigned-user-preview">
                 <span className="preview-label">Currently:</span>
-                <span className="preview-name">{getAssignedUserName(role.id)}</span>
+                <span className="preview-name">{getAssignedUserName(role.role_id)}</span>
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {displayRoles.length === 0 && (
+      {finalRoles.length === 0 && (
         <div className="role-assignment-empty">
           <span className="empty-icon">📋</span>
           <p>No workflow roles configured.</p>
