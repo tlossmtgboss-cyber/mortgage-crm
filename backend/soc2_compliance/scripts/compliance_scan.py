@@ -115,8 +115,9 @@ class ComplianceScanner:
         }
 
     def check_orphaned_sessions(self) -> Dict:
-        """CC6: Verify JWT session configuration is reasonable (read-only check)."""
+        """CC6: Verify JWT session configuration and SECRET_KEY entropy."""
         import os
+        import math
         issues = []
         evidence = {}
 
@@ -142,6 +143,21 @@ class ComplianceScanner:
         except ValueError:
             issues.append(f"Invalid SOC2_MAX_LOGIN_ATTEMPTS: {max_attempts}")
 
+        # SECRET_KEY entropy check
+        secret_key = os.getenv("SECRET_KEY", "")
+        if secret_key:
+            evidence["secret_key_length"] = len(secret_key)
+            if len(secret_key) < 32:
+                issues.append(f"SECRET_KEY too short: {len(secret_key)} chars (min 32)")
+            # Shannon entropy check
+            entropy = _calculate_shannon_entropy(secret_key)
+            evidence["secret_key_entropy"] = round(entropy, 2)
+            if entropy < 3.0:
+                issues.append(f"SECRET_KEY entropy too low: {entropy:.2f} (min 3.0)")
+        else:
+            issues.append("SECRET_KEY not configured")
+            evidence["secret_key_length"] = 0
+
         status = ComplianceCheckStatus.PASS if not issues else ComplianceCheckStatus.WARNING
 
         return {
@@ -155,7 +171,7 @@ class ComplianceScanner:
         }
 
     def check_encryption_coverage(self) -> Dict:
-        """C1: Verify PII columns are marked as encrypted."""
+        """C1: Verify PII columns are marked as encrypted and encryption works at runtime."""
         result = self.db.execute(
             text("""
                 SELECT
@@ -175,14 +191,36 @@ class ComplianceScanner:
         elif encrypted < total:
             status = ComplianceCheckStatus.FAIL
 
+        evidence = {"total_pii": total, "encrypted": encrypted}
+
+        # Runtime encrypt/decrypt round-trip verification
+        try:
+            from soc2_compliance.services.encryption_service import EncryptionService
+            from soc2_compliance.config import SOC2Config
+            enc = EncryptionService(config=SOC2Config.from_env())
+            test_value = "SOC2-ROUNDTRIP-TEST"
+            encrypted_val = enc.encrypt(test_value)
+            decrypted_val = enc.decrypt(encrypted_val)
+            roundtrip_ok = (decrypted_val == test_value)
+            evidence["encryption_roundtrip"] = "pass" if roundtrip_ok else "fail"
+            if not roundtrip_ok:
+                status = ComplianceCheckStatus.FAIL
+        except ValueError:
+            evidence["encryption_roundtrip"] = "not_configured"
+            if status == ComplianceCheckStatus.PASS:
+                status = ComplianceCheckStatus.WARNING
+        except Exception as e:
+            evidence["encryption_roundtrip"] = f"error: {str(e)[:100]}"
+            status = ComplianceCheckStatus.FAIL
+
         return {
             "check_name": "PII Encryption Coverage",
             "check_category": "C1_confidentiality",
             "trust_criteria": "C1",
             "status": status,
             "details": f"{encrypted}/{total} PII columns encrypted",
-            "evidence": {"total_pii": total, "encrypted": encrypted},
-            "remediation_required": encrypted < total,
+            "evidence": evidence,
+            "remediation_required": encrypted < total or evidence.get("encryption_roundtrip") != "pass",
             "remediation_notes": f"{total - encrypted} PII columns need encryption" if encrypted < total else None,
         }
 
@@ -294,6 +332,7 @@ class ComplianceScanner:
     def check_api_key_rotation(self) -> Dict:
         """CC6: Verify API key / secret configuration hygiene (read-only check)."""
         import os
+        import base64
         issues = []
         evidence = {}
 
@@ -310,6 +349,23 @@ class ComplianceScanner:
                 evidence[env_var] = "missing"
             else:
                 evidence[env_var] = "configured"
+
+        # Validate Fernet key format (44 chars, valid base64 encoding 32 bytes)
+        fernet_key = os.getenv("SOC2_FIELD_ENCRYPTION_KEY", "")
+        if fernet_key:
+            evidence["fernet_key_length"] = len(fernet_key)
+            if len(fernet_key) != 44:
+                issues.append(f"Fernet key length is {len(fernet_key)} (expected 44)")
+            else:
+                try:
+                    decoded = base64.urlsafe_b64decode(fernet_key.encode())
+                    if len(decoded) != 32:
+                        issues.append(f"Fernet key decodes to {len(decoded)} bytes (expected 32)")
+                    else:
+                        evidence["fernet_key_format"] = "valid"
+                except Exception:
+                    issues.append("Fernet key is not valid base64")
+                    evidence["fernet_key_format"] = "invalid"
 
         # Check hash salt is not the insecure default
         hash_salt = os.getenv("SOC2_HASH_SALT", "")
@@ -385,6 +441,18 @@ class ComplianceScanner:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Failed to store compliance check result: {e}")
+
+
+def _calculate_shannon_entropy(s: str) -> float:
+    """Calculate Shannon entropy of a string (bits per character)."""
+    import math
+    if not s:
+        return 0.0
+    freq = {}
+    for c in s:
+        freq[c] = freq.get(c, 0) + 1
+    length = len(s)
+    return -sum((count / length) * math.log2(count / length) for count in freq.values())
 
 
 def run_compliance_scan(db: Session) -> List[Dict]:

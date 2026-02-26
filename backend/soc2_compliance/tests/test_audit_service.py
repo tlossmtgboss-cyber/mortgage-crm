@@ -170,15 +170,15 @@ class TestAuditServiceSanitization:
         ) is False
 
     def test_sanitize_values_redacts_pii(self):
-        """Should redact PII values, showing only last 4 chars."""
+        """Should fully redact PII values."""
         result = self.service._sanitize_values({
             "ssn": "123-45-6789",
             "name": "John Doe",
             "income": "75000",
         })
-        assert result["ssn"] == "***6789"
+        assert result["ssn"] == "***REDACTED***"
         assert result["name"] == "John Doe"  # Not PII
-        assert result["income"] == "***5000"
+        assert result["income"] == "***REDACTED***"
 
     def test_sanitize_short_values(self):
         """Short PII values should be fully redacted."""

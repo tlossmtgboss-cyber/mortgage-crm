@@ -7,10 +7,12 @@ Provides:
 2. Daily retention policy enforcement
 3. Weekly data classification audit
 4. Admin endpoint for manual triggering
+5. Alert emails on compliance scan failures
 
 Integrates with the existing APScheduler-based scheduler_service.
 """
 import logging
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -22,6 +24,61 @@ def _get_session() -> Session:
     """Get a fresh sync session from the app's SessionLocal."""
     from db import SessionLocal
     return SessionLocal()
+
+
+def _send_compliance_alert(failed_checks, warning_checks, total):
+    """Send compliance scan failure alert via email and DataDog (best-effort)."""
+    alert_email = os.getenv("SOC2_ALERT_EMAIL", "")
+
+    # DataDog gauges
+    try:
+        from datadog import statsd
+        statsd.gauge("soc2.compliance_scan.passed", total - len(failed_checks) - len(warning_checks))
+        statsd.gauge("soc2.compliance_scan.failed", len(failed_checks))
+        statsd.gauge("soc2.compliance_scan.warnings", len(warning_checks))
+    except Exception:
+        pass
+
+    if not failed_checks:
+        return
+
+    # Build alert body
+    failed_names = [c.get("check_name", "unknown") for c in failed_checks]
+    warning_names = [c.get("check_name", "unknown") for c in warning_checks]
+    subject = f"SOC 2 Compliance Alert: {len(failed_checks)} check(s) FAILED"
+    body = (
+        f"SOC 2 daily compliance scan completed with failures.\n\n"
+        f"FAILED ({len(failed_checks)}):\n"
+        + "\n".join(f"  - {name}" for name in failed_names)
+        + (f"\n\nWARNINGS ({len(warning_checks)}):\n"
+           + "\n".join(f"  - {name}" for name in warning_names)
+           if warning_checks else "")
+        + "\n\nPlease investigate and remediate."
+    )
+
+    if alert_email:
+        try:
+            from services.notification_service import NotificationService
+            NotificationService.send_email(
+                to_email=alert_email,
+                subject=subject,
+                body=body,
+            )
+            logger.info(f"SOC 2 compliance alert sent to {alert_email}")
+        except Exception as e:
+            logger.warning(f"Failed to send SOC 2 compliance alert email: {e}")
+
+    # DataDog event for SIEM
+    try:
+        from datadog import statsd
+        statsd.event(
+            title=subject,
+            text=body,
+            alert_type="error",
+            tags=["soc2:compliance_scan", f"failed:{len(failed_checks)}"],
+        )
+    except Exception:
+        pass
 
 
 def run_daily_compliance_scan():
@@ -42,6 +99,13 @@ def run_daily_compliance_scan():
             f"SOC 2 daily scan complete: {passed} passed, {failed} failed, "
             f"{warnings} warnings out of {len(results)} checks"
         )
+
+        # Alert on failures
+        failed_checks = [r for r in results if r.get("status") == "fail"]
+        warning_checks = [r for r in results if r.get("status") == "warning"]
+        if failed_checks:
+            _send_compliance_alert(failed_checks, warning_checks, len(results))
+
         return results
     except Exception as e:
         logger.error(f"SOC 2 daily scan failed: {e}")

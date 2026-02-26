@@ -52,6 +52,8 @@ class ComplianceReporter:
             "cc8_change_management": self._change_management_evidence(tenant_id, start_date, end_date),
             "c1_confidentiality": self._confidentiality_evidence(tenant_id, start_date, end_date),
             "cc4_monitoring": self._monitoring_evidence(tenant_id, start_date, end_date),
+            "a1_availability": self._availability_evidence(tenant_id, start_date, end_date),
+            "p1_privacy": self._privacy_evidence(tenant_id, start_date, end_date),
             "compliance_checks": self._compliance_check_results(start_date, end_date),
             "data_retention": self._retention_evidence(),
         }
@@ -302,6 +304,116 @@ class ComplianceReporter:
 
         return {
             "daily_event_trends": [dict(row._mapping) for row in trends.fetchall()],
+        }
+
+    def _availability_evidence(
+        self, tenant_id: UUID, start: datetime, end: datetime
+    ) -> Dict:
+        """A1 — Availability evidence: rate limits, incident impact, response times."""
+        # Rate limit events (429 responses in audit log)
+        rate_limit_result = self.db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as total_429s,
+                    COUNT(DISTINCT ip_address) as unique_ips,
+                    DATE_TRUNC('day', timestamp) as day
+                FROM soc2_audit_log
+                WHERE tenant_id = :tid
+                  AND timestamp BETWEEN :s AND :e
+                  AND status_code = 429
+                GROUP BY DATE_TRUNC('day', timestamp)
+                ORDER BY day
+            """),
+            {"tid": str(tenant_id), "s": start, "e": end}
+        )
+
+        # Response time distribution from audit log
+        response_times = self.db.execute(
+            text("""
+                SELECT
+                    DATE_TRUNC('day', timestamp) as day,
+                    COUNT(*) as total_requests,
+                    COUNT(*) FILTER (WHERE status_code >= 500) as server_errors
+                FROM soc2_audit_log
+                WHERE tenant_id = :tid
+                  AND timestamp BETWEEN :s AND :e
+                GROUP BY DATE_TRUNC('day', timestamp)
+                ORDER BY day
+            """),
+            {"tid": str(tenant_id), "s": start, "e": end}
+        )
+
+        # Incidents affecting availability
+        availability_incidents = self.db.execute(
+            text("""
+                SELECT id::text, title, severity, status, detected_at, resolved_at,
+                       affected_users
+                FROM soc2_security_incident
+                WHERE tenant_id = :tid
+                  AND created_at BETWEEN :s AND :e
+                  AND 'application' = ANY(affected_systems)
+                ORDER BY created_at DESC
+            """),
+            {"tid": str(tenant_id), "s": start, "e": end}
+        )
+
+        return {
+            "rate_limit_events": [dict(row._mapping) for row in rate_limit_result.fetchall()],
+            "daily_request_summary": [dict(row._mapping) for row in response_times.fetchall()],
+            "availability_incidents": [dict(row._mapping) for row in availability_incidents.fetchall()],
+        }
+
+    def _privacy_evidence(
+        self, tenant_id: UUID, start: datetime, end: datetime
+    ) -> Dict:
+        """P1-P8 — Privacy evidence: PII classification, retention, access patterns."""
+        # PII classification coverage
+        classification_result = self.db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as total_classified,
+                    COUNT(*) FILTER (WHERE is_pii = TRUE) as pii_columns,
+                    COUNT(*) FILTER (WHERE is_pii = TRUE AND is_encrypted = TRUE) as pii_encrypted,
+                    COUNT(*) FILTER (WHERE retention_policy IS NOT NULL) as with_retention_policy
+                FROM soc2_data_classification
+            """)
+        )
+        classification = dict(classification_result.fetchone()._mapping)
+
+        # Retention enforcement results (from audit log)
+        retention_result = self.db.execute(
+            text("""
+                SELECT timestamp, new_values, description
+                FROM soc2_audit_log
+                WHERE action = 'retention_enforcement'
+                  AND timestamp BETWEEN :s AND :e
+                ORDER BY timestamp DESC
+                LIMIT 30
+            """),
+            {"s": start, "e": end}
+        )
+
+        # PII access by user role
+        pii_by_role = self.db.execute(
+            text("""
+                SELECT
+                    user_role,
+                    COUNT(*) as pii_access_count,
+                    COUNT(DISTINCT user_id) as unique_users
+                FROM soc2_audit_log
+                WHERE tenant_id = :tid
+                  AND timestamp BETWEEN :s AND :e
+                  AND contains_pii = TRUE
+                GROUP BY user_role
+                ORDER BY pii_access_count DESC
+            """),
+            {"tid": str(tenant_id), "s": start, "e": end}
+        )
+
+        return {
+            "data_classification_coverage": classification,
+            "retention_enforcement_history": [dict(row._mapping) for row in retention_result.fetchall()],
+            "pii_access_by_role": [dict(row._mapping) for row in pii_by_role.fetchall()],
         }
 
     def _compliance_check_results(

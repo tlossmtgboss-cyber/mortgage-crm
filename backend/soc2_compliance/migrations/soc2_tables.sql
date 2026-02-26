@@ -368,6 +368,81 @@ CREATE INDEX idx_api_key_active ON soc2_api_key_registry(is_active) WHERE is_act
 
 
 -- ============================================================================
+-- WORM TRIGGERS — Prevent modification/deletion of audit trail records
+-- Exception: Retention service sets soc2.retention_bypass = 'true' for purges
+-- ============================================================================
+CREATE OR REPLACE FUNCTION prevent_audit_log_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Allow DELETE only when retention bypass is explicitly enabled
+    IF TG_OP = 'DELETE' THEN
+        IF current_setting('soc2.retention_bypass', true) = 'true' THEN
+            RETURN OLD;
+        END IF;
+        RAISE EXCEPTION 'WORM violation: DELETE on % is prohibited. Audit logs are immutable.', TG_TABLE_NAME;
+    END IF;
+
+    -- UPDATE is never allowed on audit trail tables
+    IF TG_OP = 'UPDATE' THEN
+        RAISE EXCEPTION 'WORM violation: UPDATE on % is prohibited. Audit logs are immutable.', TG_TABLE_NAME;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER worm_protect_audit_log
+    BEFORE UPDATE OR DELETE ON soc2_audit_log
+    FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification();
+
+CREATE TRIGGER worm_protect_access_event
+    BEFORE UPDATE OR DELETE ON soc2_access_event
+    FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification();
+
+
+-- ============================================================================
+-- RETENTION ARCHIVE — Archive records before retention deletion
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS soc2_retention_archive (
+    id              BIGSERIAL PRIMARY KEY,
+    source_table    VARCHAR(100) NOT NULL,
+    source_id       VARCHAR(255) NOT NULL,
+    original_timestamp TIMESTAMPTZ NOT NULL,
+    record_data     JSONB NOT NULL,
+    retention_policy VARCHAR(100),
+    archived_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    archived_by     UUID
+);
+
+CREATE INDEX IF NOT EXISTS idx_retention_archive_source ON soc2_retention_archive(source_table, source_id);
+CREATE INDEX IF NOT EXISTS idx_retention_archive_at ON soc2_retention_archive(archived_at);
+
+
+-- ============================================================================
+-- VENDOR REGISTRY — Track third-party vendor risk
+-- Maps to: CC9 (Risk Mitigation)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS soc2_vendor_registry (
+    id              SERIAL PRIMARY KEY,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    vendor_name     VARCHAR(255) NOT NULL UNIQUE,
+    category        VARCHAR(100) NOT NULL,
+    data_access_level VARCHAR(50) NOT NULL,
+    soc2_status     VARCHAR(100),
+    last_review_date DATE,
+    next_review_date DATE,
+    contract_expiry  DATE,
+    risk_level      VARCHAR(20) DEFAULT 'medium',
+    notes           TEXT
+);
+
+CREATE TRIGGER update_vendor_registry_timestamp
+    BEFORE UPDATE ON soc2_vendor_registry
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+-- ============================================================================
 -- TRIGGERS — Auto-update timestamps
 -- ============================================================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()

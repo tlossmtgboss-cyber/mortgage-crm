@@ -120,7 +120,27 @@ class AccessControlService:
         if not success and attempted_email:
             self._check_lockout(attempted_email, ip)
 
-        # Log high-risk anomalous logins
+        # DataDog metrics forwarding (best-effort, never blocks)
+        try:
+            from datadog import statsd
+            tags = [
+                f"event_type:{event_type}",
+                f"success:{success}",
+                f"auth_method:{auth_method}",
+            ]
+            statsd.increment("soc2.access_events", tags=tags)
+
+            if is_anomalous:
+                statsd.event(
+                    title=f"SOC2 Anomalous Login Detected",
+                    text=f"User {user_id}, IP {ip}, risk score {risk_score}, reason: {anomaly_reason}",
+                    alert_type="warning" if risk_score < 80 else "error",
+                    tags=tags + [f"risk_score:{risk_score}"],
+                )
+        except Exception:
+            pass  # DataDog unavailable — non-blocking
+
+        # Log and escalate high-risk anomalous logins
         if is_anomalous:
             logger.warning(
                 "anomalous_login_detected",
@@ -131,6 +151,31 @@ class AccessControlService:
                     "reason": anomaly_reason,
                 }
             )
+
+            # Auto-create incident for high-risk anomalous logins
+            if risk_score >= 60:
+                try:
+                    from .incident_service import IncidentService
+                    incident_svc = IncidentService(self.db)
+                    severity_level = SeverityLevel.HIGH if risk_score >= 80 else SeverityLevel.MEDIUM
+                    incident_svc.create(
+                        title=f"Anomalous login detected (risk score: {risk_score})",
+                        description=(
+                            f"Automated escalation: anomalous login for user {user_id} "
+                            f"from IP {ip}. Risk score: {risk_score}. "
+                            f"Reason: {anomaly_reason}"
+                        ),
+                        category="unauthorized_access",
+                        severity=severity_level,
+                        tenant_id=tenant_id,
+                        affected_systems=["authentication"],
+                    )
+                    logger.info(
+                        f"Auto-created incident for anomalous login: "
+                        f"user={user_id}, risk_score={risk_score}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to auto-create incident for anomalous login: {e}")
 
         return event_id
 

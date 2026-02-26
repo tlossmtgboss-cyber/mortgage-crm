@@ -6,9 +6,10 @@ Automatically captures all API requests and responses in the audit log.
 Uses the app's sync SQLAlchemy sessions via a background thread to avoid
 blocking the request pipeline.
 """
+import atexit
 import logging
 import time
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from uuid import uuid4
 
@@ -20,6 +21,10 @@ from sqlalchemy import text
 from ..constants import AuditAction, SeverityLevel, AUDIT_EXCLUDE_PATHS, WRITE_METHODS
 
 logger = logging.getLogger("soc2.middleware.audit")
+
+# Thread pool for background audit log writes — ensures graceful shutdown
+_audit_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="soc2-audit")
+atexit.register(_audit_pool.shutdown, wait=True, cancel_futures=False)
 
 
 def _write_audit_log_bg(
@@ -136,18 +141,14 @@ class AuditMiddleware(BaseHTTPMiddleware):
         user_agent = request.headers.get("user-agent", "")
         description = f"{request.method} {request.url.path} → {response.status_code} ({duration_ms:.0f}ms)"
 
-        # Log to database in a background thread to avoid blocking
-        thread = threading.Thread(
-            target=_write_audit_log_bg,
-            args=(
-                user_id, user_email, user_role, tenant_id,
-                action, request.method, request.url.path,
-                request_id, ip, user_agent,
-                response.status_code, success, severity, description,
-            ),
-            daemon=True,
+        # Log to database in a background thread pool to avoid blocking
+        _audit_pool.submit(
+            _write_audit_log_bg,
+            user_id, user_email, user_role, tenant_id,
+            action, request.method, request.url.path,
+            request_id, ip, user_agent,
+            response.status_code, success, severity, description,
         )
-        thread.start()
 
         # Add correlation headers to response
         response.headers["X-Request-Id"] = request_id

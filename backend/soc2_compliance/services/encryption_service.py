@@ -81,7 +81,8 @@ class EncryptionService:
             return plaintext
         try:
             encrypted = self._fernet.encrypt(plaintext.encode("utf-8"))
-            return base64.urlsafe_b64encode(encrypted).decode("utf-8")
+            # Fernet.encrypt() already returns URL-safe base64 bytes
+            return encrypted.decode("utf-8")
         except Exception as e:
             logger.error(f"Encryption failed: {e}")
             raise
@@ -99,8 +100,8 @@ class EncryptionService:
         if not ciphertext:
             return ciphertext
         try:
-            decoded = base64.urlsafe_b64decode(ciphertext.encode("utf-8"))
-            decrypted = self._fernet.decrypt(decoded)
+            # Fernet tokens are already URL-safe base64 — decrypt directly
+            decrypted = self._fernet.decrypt(ciphertext.encode("utf-8"))
             return decrypted.decode("utf-8")
         except InvalidToken:
             logger.error("Decryption failed — invalid token. Possible key mismatch or data corruption.")

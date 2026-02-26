@@ -5,6 +5,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Set
 
+from .constants import PII_FIELDS as _CANONICAL_PII_FIELDS
+
 
 @dataclass
 class SOC2Config:
@@ -36,11 +38,9 @@ class SOC2Config:
     rate_limit_burst: int = 100
     rate_limit_login_per_minute: int = 10
 
-    # PII Fields to track/encrypt
-    pii_fields: Set[str] = field(default_factory=lambda: {
-        "ssn", "tax_id", "bank_account", "routing_number",
-        "dob", "income", "credit_score"
-    })
+    # PII Fields to track/encrypt — defaults to the canonical 30-field set from constants.py
+    # Can be overridden via SOC2_PII_FIELDS env var (comma-separated)
+    pii_fields: Set[str] = field(default_factory=lambda: set(_CANONICAL_PII_FIELDS))
 
     # Data Retention
     default_retention_days: int = 730

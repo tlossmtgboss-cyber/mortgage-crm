@@ -1334,6 +1334,24 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ SOC 2 scheduler registration skipped: {e}")
 
+    # Record deployment event for SOC 2 change management (CC8)
+    try:
+        from db import SessionLocal
+        from soc2_compliance.services.change_management_service import ChangeManagementService
+        import os
+        cms_session = SessionLocal()
+        cms = ChangeManagementService(cms_session)
+        cms.record_deployment(
+            title=f"Application startup — {os.getenv('RAILWAY_DEPLOYMENT_ID', 'local')[:12]}",
+            description="Automated deployment event recorded at application startup",
+            git_commit=os.getenv("RAILWAY_GIT_COMMIT_SHA"),
+            git_branch=os.getenv("RAILWAY_GIT_BRANCH"),
+            deployment_id=os.getenv("RAILWAY_DEPLOYMENT_ID"),
+        )
+        cms_session.close()
+    except Exception as e:
+        logger.debug(f"SOC 2 deployment record skipped: {e}")
+
 
 def _run_critical_schema_migrations():
     """Run critical schema migrations at startup.

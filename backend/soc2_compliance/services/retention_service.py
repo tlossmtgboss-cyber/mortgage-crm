@@ -27,6 +27,7 @@ ALLOWED_TABLES = frozenset({
     "soc2_incident_timeline",
     "soc2_change_record",
     "soc2_compliance_check",
+    "soc2_retention_archive",
 })
 
 
@@ -123,8 +124,38 @@ class RetentionService:
                     # Delete in batches to avoid long locks
                     total_deleted = 0
                     batch_size = 10000
+                    policy_key_for_archive = rule["policy"].value if hasattr(rule["policy"], "value") else str(rule["policy"])
 
                     while total_deleted < count:
+                        # Archive records before deletion
+                        try:
+                            self.db.execute(
+                                text(f"""
+                                    INSERT INTO soc2_retention_archive
+                                        (source_table, source_id, original_timestamp, record_data, retention_policy)
+                                    SELECT
+                                        :source_table,
+                                        id::text,
+                                        {rule['timestamp_col']},
+                                        row_to_json({rule['table']}),
+                                        :policy
+                                    FROM {rule['table']}
+                                    WHERE {rule['timestamp_col']} < :cutoff
+                                    LIMIT :batch_size
+                                """),
+                                {
+                                    "source_table": rule["table"],
+                                    "policy": policy_key_for_archive,
+                                    "cutoff": cutoff,
+                                    "batch_size": batch_size,
+                                }
+                            )
+                        except Exception as archive_err:
+                            logger.warning(f"Archive before delete failed for {rule['table']}: {archive_err}")
+
+                        # Enable WORM bypass for retention deletion
+                        self.db.execute(text("SET LOCAL soc2.retention_bypass = 'true'"))
+
                         delete_result = self.db.execute(
                             text(f"""
                                 DELETE FROM {rule['table']}
@@ -137,6 +168,10 @@ class RetentionService:
                             {"cutoff": cutoff, "batch_size": batch_size}
                         )
                         batch_deleted = delete_result.rowcount
+
+                        # Disable WORM bypass
+                        self.db.execute(text("SET LOCAL soc2.retention_bypass = 'false'"))
+
                         total_deleted += batch_deleted
                         self.db.commit()
 
@@ -202,6 +237,10 @@ class RetentionService:
         tables = [
             ("soc2_audit_log", "timestamp", RETENTION_PERIODS[RetentionPolicy.AUDIT_LOGS]),
             ("soc2_access_event", "timestamp", RETENTION_PERIODS[RetentionPolicy.ACCESS_LOGS]),
+            ("soc2_security_incident", "created_at", RETENTION_PERIODS[RetentionPolicy.INCIDENT_RECORDS]),
+            ("soc2_change_record", "created_at", RETENTION_PERIODS[RetentionPolicy.CHANGE_RECORDS]),
+            ("soc2_compliance_check", "run_at", 730),
+            ("soc2_incident_timeline", "timestamp", RETENTION_PERIODS[RetentionPolicy.INCIDENT_RECORDS]),
         ]
 
         for table, ts_col, days in tables:

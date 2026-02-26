@@ -155,6 +155,29 @@ class AuditService:
             }
         )
 
+        # DataDog metrics forwarding (best-effort, never blocks)
+        try:
+            from datadog import statsd
+            tags = [
+                f"action:{action}",
+                f"severity:{severity}",
+                f"success:{success}",
+                f"contains_pii:{contains_pii}",
+            ]
+            if resource_type:
+                tags.append(f"resource_type:{resource_type}")
+            statsd.increment("soc2.audit_events", tags=tags)
+
+            if severity in (SeverityLevel.HIGH, SeverityLevel.CRITICAL):
+                statsd.event(
+                    title=f"SOC2 High-Severity Audit Event: {action}",
+                    text=description or f"{action} on {resource_type}/{resource_id}",
+                    alert_type="warning" if severity == SeverityLevel.HIGH else "error",
+                    tags=tags,
+                )
+        except Exception:
+            pass  # DataDog unavailable — non-blocking
+
         return log_id
 
     def log_data_access(

@@ -27,6 +27,8 @@ SOC2_TABLES = [
     "soc2_compliance_check",
     "soc2_active_session",
     "soc2_api_key_registry",
+    "soc2_retention_archive",
+    "soc2_vendor_registry",
 ]
 
 
