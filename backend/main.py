@@ -1246,6 +1246,18 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# MORTGAGE COACH ROUTES
+# ============================================================================
+try:
+    from routes.mortgage_coach_routes import router as mortgage_coach_router
+    app.include_router(mortgage_coach_router, tags=["Mortgage Coach"])
+    logger.info("Mortgage Coach routes loaded")
+except Exception as e:
+    logger.error(f"Mortgage Coach routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================
 try:

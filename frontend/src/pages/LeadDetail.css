@@ -1101,6 +1101,31 @@ button.borrower-btn.add-borrower-btn:hover {
   cursor: not-allowed;
 }
 
+/* Mortgage Coach button - distinctive orange/amber for third-party action */
+.action-btn.mortgage-coach {
+  background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
+  border-color: #e67e22;
+  color: white;
+  box-shadow: 0 2px 8px rgba(230, 126, 34, 0.3);
+}
+
+.action-btn.mortgage-coach:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d35400 0%, #a04000 100%);
+  border-color: #d35400;
+  box-shadow: 0 8px 24px rgba(230, 126, 34, 0.4);
+}
+
+.action-btn.mortgage-coach.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.action-btn.mortgage-coach:disabled {
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+  border-color: #9ca3af;
+  cursor: not-allowed;
+}
+
 /* Email History */
 .email-list {
   display: flex;

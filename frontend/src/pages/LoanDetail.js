@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI, dialerAPI, borrowerApplicationAPI } from '../services/api';
+import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI, dialerAPI, borrowerApplicationAPI, mortgageCoachAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SMSModal from '../components/SMSModal';
@@ -101,6 +101,9 @@ function LoanDetail() {
   // Salesforce sync state
   const [salesforceStatus, setSalesforceStatus] = useState(null);
   const [salesforcePulling, setSalesforcePulling] = useState(false);
+
+  // Mortgage Coach state
+  const [mortgageCoachLoading, setMortgageCoachLoading] = useState(false);
 
   // Archive state
   const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
@@ -922,6 +925,26 @@ function LoanDetail() {
     }
   };
 
+  const handleMortgageCoachTCA = async () => {
+    if (mortgageCoachLoading) return;
+    try {
+      setMortgageCoachLoading(true);
+      const result = await mortgageCoachAPI.createTCA(id);
+      if (result.status === 'success' && result.tca_url) {
+        toast.success('Mortgage Coach Total Cost Analysis created');
+        window.open(result.tca_url, '_blank');
+      } else {
+        toast.error(result.message || 'Failed to create TCA');
+      }
+    } catch (error) {
+      console.error('Mortgage Coach TCA error:', error);
+      const errorMsg = error.response?.data?.detail || error.message;
+      toast.error(`Mortgage Coach error: ${errorMsg}`);
+    } finally {
+      setMortgageCoachLoading(false);
+    }
+  };
+
   // Fetch Salesforce sync status when loan loads
   useEffect(() => {
     const fetchSalesforceStatus = async () => {
@@ -1034,6 +1057,9 @@ function LoanDetail() {
         break;
       case 'salesforce-pull':
         handleSalesforcePull();
+        break;
+      case 'mortgage_coach':
+        handleMortgageCoachTCA();
         break;
       default:
         break;
@@ -4292,6 +4318,14 @@ function LoanDetail() {
               <span>{salesforcePulling ? 'Syncing...' : 'Sync from SF'}</span>
             </button>
           )}
+          <button
+            className={`action-btn mortgage-coach ${mortgageCoachLoading ? 'loading' : ''}`}
+            onClick={() => handleAction('mortgage_coach')}
+            disabled={mortgageCoachLoading}
+            title="Create Mortgage Coach Total Cost Analysis"
+          >
+            <span>{mortgageCoachLoading ? 'Creating...' : 'Mortgage Coach'}</span>
+          </button>
         </div>
       </div>
     </CalendarSidebar>

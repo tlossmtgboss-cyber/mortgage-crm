@@ -2801,6 +2801,21 @@ export const salesforceAPI = {
   },
 };
 
+// Mortgage Coach API
+export const mortgageCoachAPI = {
+  // Create a Total Cost Analysis via Salesforce Mortgage Coach button
+  createTCA: async (loanId) => {
+    const response = await api.post(`/api/v1/mortgage-coach/create-tca/${loanId}`);
+    return response.data;
+  },
+
+  // Check TCA status for a loan
+  getTCAStatus: async (loanId) => {
+    const response = await api.get(`/api/v1/mortgage-coach/tca-status/${loanId}`);
+    return response.data;
+  },
+};
+
 // Rate Monitor API
 export const rateMonitorAPI = {
   // Dashboard

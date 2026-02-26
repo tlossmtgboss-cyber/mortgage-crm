@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { loansAPI, activitiesAPI, schedulerAPI, dialerAPI, borrowerApplicationAPI, purlAPI } from '../services/api';
+import { loansAPI, activitiesAPI, schedulerAPI, dialerAPI, borrowerApplicationAPI, purlAPI, mortgageCoachAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
@@ -89,6 +89,7 @@ function ClientProfile() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [milestones, setMilestones] = useState([]);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
+  const [mortgageCoachLoading, setMortgageCoachLoading] = useState(false);
 
   // Status options — all stages across Lead, Active Loan, and MUM
   const statusOptions = [
@@ -712,6 +713,26 @@ function ClientProfile() {
     }
   };
 
+  const handleMortgageCoachTCA = async () => {
+    if (mortgageCoachLoading) return;
+    try {
+      setMortgageCoachLoading(true);
+      const result = await mortgageCoachAPI.createTCA(id);
+      if (result.status === 'success' && result.tca_url) {
+        toast.success('Mortgage Coach Total Cost Analysis created');
+        window.open(result.tca_url, '_blank');
+      } else {
+        toast.error(result.message || 'Failed to create TCA');
+      }
+    } catch (error) {
+      console.error('Mortgage Coach TCA error:', error);
+      const errorMsg = error.response?.data?.detail || error.message;
+      toast.error(`Mortgage Coach error: ${errorMsg}`);
+    } finally {
+      setMortgageCoachLoading(false);
+    }
+  };
+
   const handleAction = async (action) => {
     const phone = client.borrower_phone || client.phone;
     switch(action) {
@@ -769,6 +790,9 @@ function ClientProfile() {
         break;
       case 'escalation':
         setShowEscalationModal(true);
+        break;
+      case 'mortgage_coach':
+        handleMortgageCoachTCA();
         break;
       default:
         break;
@@ -2491,6 +2515,14 @@ function ClientProfile() {
               </button>
               <button className="action-btn escalation" onClick={() => handleAction('escalation')} title="Escalate issue">
                 <span>Escalation</span>
+              </button>
+              <button
+                className={`action-btn mortgage-coach ${mortgageCoachLoading ? 'loading' : ''}`}
+                onClick={() => handleAction('mortgage_coach')}
+                disabled={mortgageCoachLoading}
+                title="Create Mortgage Coach Total Cost Analysis"
+              >
+                <span>{mortgageCoachLoading ? 'Creating...' : 'Mortgage Coach'}</span>
               </button>
             </div>
           </div>
