@@ -226,6 +226,7 @@ async def get_leads(
                 "phone": lead.phone,
                 "stage": stage_value,
                 "source": lead.source,
+                "production_assistant": getattr(lead, 'production_assistant', None),
                 "ai_score": lead.ai_score,
                 "sentiment": lead.sentiment,
                 "next_action": lead.next_action,

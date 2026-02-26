@@ -776,6 +776,7 @@ function Loans() {
               <th>Status</th>
               <th>Days in Process</th>
               <th>Loan Officer</th>
+              <th>Production Assistant</th>
             </tr>
           </thead>
           <tbody>
@@ -830,6 +831,7 @@ function Loans() {
                 </td>
                 <td>{loan.days_in_process || calculateDays(loan.created_at)}</td>
                 <td>{loan.loan_officer || 'Unassigned'}</td>
+                <td>{loan.production_assistant || '—'}</td>
               </tr>
             ))}
           </tbody>

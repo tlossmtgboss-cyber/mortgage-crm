@@ -331,7 +331,7 @@ function Leads() {
       lead.name?.toLowerCase().includes(query) ||
       lead.email?.toLowerCase().includes(query) ||
       lead.phone?.toLowerCase().includes(query) ||
-      lead.source?.toLowerCase().includes(query)
+      lead.production_assistant?.toLowerCase().includes(query)
     );
   }
 
@@ -742,17 +742,17 @@ function Leads() {
   const handleStatusClick = (e, leadId, currentStage) => {
     e.stopPropagation(); // Prevent row click
     const rect = e.target.getBoundingClientRect();
-    const dropdownHeight = 420; // maxHeight(400) + header(~20)
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const openUpward = spaceBelow < dropdownHeight && rect.top > spaceBelow;
+    const spaceBelow = window.innerHeight - rect.bottom - 10;
+    const spaceAbove = rect.top - 10;
+    const openUpward = spaceBelow < 300 && spaceAbove > spaceBelow;
 
     setStatusDropdown({
       show: true,
       leadId,
       currentStage: currentStage || null,
       position: openUpward
-        ? { bottom: window.innerHeight - rect.top + 5, left: rect.left, top: 'auto' }
-        : { top: rect.bottom + 5, left: rect.left, bottom: 'auto' },
+        ? { bottom: window.innerHeight - rect.top + 5, left: rect.left, top: 'auto', maxHeight: spaceAbove }
+        : { top: rect.bottom + 5, left: rect.left, bottom: 'auto', maxHeight: spaceBelow },
     });
   };
 
@@ -912,7 +912,7 @@ function Leads() {
         <input
           type="text"
           className="search-bar"
-          placeholder="Search leads by name, email, phone, or source..."
+          placeholder="Search leads by name, email, phone, or production assistant..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
@@ -1026,7 +1026,7 @@ function Leads() {
               <th>Email</th>
               <th>Status</th>
               <th>Referral Partner</th>
-              <th>Source</th>
+              <th>Production Assistant</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1084,7 +1084,7 @@ function Leads() {
                   </span>
                 </td>
                 <td>{lead.referral_partner_name || '—'}</td>
-                <td>{lead.source || '—'}</td>
+                <td>{lead.production_assistant || '—'}</td>
                 <td>
                   <div className="table-actions">
                     <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }} title="Delete">
@@ -1547,6 +1547,7 @@ function Leads() {
               top: statusDropdown.position.top,
               bottom: statusDropdown.position.bottom,
               left: statusDropdown.position.left,
+              maxHeight: statusDropdown.position.maxHeight,
             }}
           >
             <div className="status-dropdown-header">

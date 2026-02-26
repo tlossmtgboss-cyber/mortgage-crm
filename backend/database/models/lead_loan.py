@@ -119,6 +119,7 @@ class Lead(Base):
     loan_officer = Column(String)
     processor = Column(String)
     underwriter = Column(String)
+    production_assistant = Column(String)
     appraisal_value = Column(Numeric(18, 2))
     ltv = Column(Numeric(8, 4))
     cltv = Column(Numeric(8, 4))
@@ -314,6 +315,7 @@ class Loan(Base):
     underwriter_email = Column(String)
     closer = Column(String)
     closer_email = Column(String)
+    production_assistant = Column(String)
 
     # SLA tracking
     days_in_stage = Column(Integer, default=0)

@@ -1629,6 +1629,16 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ Comprehensive migration note: {e}")
 
+        # Add production_assistant column to leads and loans
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS production_assistant VARCHAR"))
+                conn.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS production_assistant VARCHAR"))
+                conn.commit()
+                logger.info("✅ Added production_assistant column to leads and loans")
+        except Exception as e:
+            logger.warning(f"⚠️ production_assistant column migration note: {e}")
+
         # Deploy SOC 2 compliance tables (idempotent)
         try:
             from migrations.deploy_soc2_tables import deploy_soc2_tables

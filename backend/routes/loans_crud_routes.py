@@ -725,6 +725,7 @@ def _loan_to_dict(loan) -> dict:
         "loan_officer_name": loan.loan_officer_name,
         "processor": loan.processor,
         "underwriter": loan.underwriter,
+        "production_assistant": getattr(loan, 'production_assistant', None),
         "days_in_stage": loan.days_in_stage,
         "sla_status": loan.sla_status,
         "ai_insights": loan.ai_insights,
