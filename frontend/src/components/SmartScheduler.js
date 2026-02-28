@@ -8,6 +8,8 @@ const API_BASE = window.location.hostname !== 'localhost' && window.location.hos
 function SmartScheduler({
   onSelect,
   selectedSlot,
+  slug = 'demo',
+  appointmentTypeId,
   appointmentType = 'pre-qualification-call',
   durationMinutes = 30,
   daysAhead = 14,
@@ -19,6 +21,27 @@ function SmartScheduler({
   const [slotsByDate, setSlotsByDate] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [resolvedTypeId, setResolvedTypeId] = useState(appointmentTypeId);
+
+  // On mount, fetch booking link to resolve the appointment type ID if not provided
+  useEffect(() => {
+    if (resolvedTypeId) return;
+    const resolveType = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/scheduler/public/book/${slug}`);
+        if (res.ok) {
+          const data = await res.json();
+          const types = data.booking_page?.appointment_types || data.appointment_types || [];
+          if (types.length > 0) {
+            setResolvedTypeId(types[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to resolve booking link:', err);
+      }
+    };
+    resolveType();
+  }, [slug, resolvedTypeId]);
 
   // Generate calendar days
   const generateCalendarDays = useCallback(() => {
@@ -64,43 +87,60 @@ function SmartScheduler({
     return days;
   }, [currentMonth, daysAhead, selectedDate, slotsByDate]);
 
-  // Fetch available slots
+  // Fetch available slots for the visible month using real booking API
   useEffect(() => {
+    if (!resolvedTypeId) return;
+
     const fetchSlots = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const startDate = new Date();
-        const endDate = new Date();
-        endDate.setDate(endDate.getDate() + daysAhead);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const maxDate = new Date();
+        maxDate.setDate(maxDate.getDate() + daysAhead);
 
-        const response = await fetch(`${API_BASE}/api/v1/scheduler/public/available-slots`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            start_date: startDate.toISOString().split('T')[0],
-            end_date: endDate.toISOString().split('T')[0],
-            duration_minutes: durationMinutes,
-            appointment_type: appointmentType
-          })
-        });
+        // Determine the date range for the current month view
+        const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+        const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+        const rangeStart = monthStart < today ? today : monthStart;
+        const rangeEnd = monthEnd > maxDate ? maxDate : monthEnd;
 
-        if (response.ok) {
-          const data = await response.json();
-          const slots = data.available_slots || [];
-
-          // Group slots by date
-          const grouped = {};
-          slots.forEach(slot => {
-            const dateStr = new Date(slot.start_time).toISOString().split('T')[0];
-            if (!grouped[dateStr]) grouped[dateStr] = [];
-            grouped[dateStr].push(slot);
-          });
-          setSlotsByDate(grouped);
-        } else {
-          setError('Unable to load available times');
+        if (rangeStart > rangeEnd) {
+          setSlotsByDate({});
+          setLoading(false);
+          return;
         }
+
+        // Fetch slots day-by-day using the real booking link API
+        const grouped = {};
+        const fetchPromises = [];
+        const currentDate = new Date(rangeStart);
+
+        while (currentDate <= rangeEnd) {
+          const dateStr = currentDate.toISOString().split('T')[0];
+          const fetchDate = dateStr;
+          fetchPromises.push(
+            fetch(`${API_BASE}/api/v1/scheduler/public/book/${slug}/slots?date=${fetchDate}&appointment_type_id=${resolvedTypeId}&duration_minutes=${durationMinutes}`)
+              .then(res => res.ok ? res.json() : { available_slots: [] })
+              .then(data => {
+                const daySlots = (data.available_slots || []).map(s => ({
+                  start_time: s.start,
+                  end_time: s.end,
+                  ...s
+                }));
+                if (daySlots.length > 0) {
+                  grouped[fetchDate] = daySlots;
+                }
+              })
+              .catch(() => {})
+          );
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        await Promise.all(fetchPromises);
+        setSlotsByDate(grouped);
       } catch (err) {
         console.error('Failed to fetch slots:', err);
         setError('Unable to load available times');
@@ -110,7 +150,7 @@ function SmartScheduler({
     };
 
     fetchSlots();
-  }, [appointmentType, durationMinutes, daysAhead]);
+  }, [slug, resolvedTypeId, durationMinutes, daysAhead, currentMonth]);
 
   const handleDateClick = (dayInfo) => {
     if (dayInfo.isPast || dayInfo.isTooFar || !dayInfo.hasSlots) return;

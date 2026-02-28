@@ -103,6 +103,25 @@ class LoanOfficerResponse(BaseModel):
         from_attributes = True
 
 
+def _build_lo_response(lo: LoanOfficerSchedule, service) -> LoanOfficerResponse:
+    """Build LO response with real-time appointment counts."""
+    return LoanOfficerResponse(
+        id=lo.id,
+        user_id=lo.user_id,
+        lo_name=lo.lo_name,
+        lo_email=lo.lo_email,
+        lo_phone=lo.lo_phone,
+        is_active=lo.is_active,
+        priority=lo.priority,
+        max_daily_appointments=lo.max_daily_appointments,
+        max_weekly_appointments=lo.max_weekly_appointments,
+        custom_hours=lo.custom_hours,
+        total_appointments=lo.total_appointments or 0,
+        appointments_this_week=service._get_real_time_appointment_count(lo.id, "week"),
+        appointments_today=service._get_real_time_appointment_count(lo.id, "today"),
+    )
+
+
 class BookAppointmentRequest(BaseModel):
     contact_name: str
     contact_email: EmailStr
@@ -260,21 +279,7 @@ def get_loan_officers(
             LoanOfficerSchedule.priority.desc()
         ).all()
 
-    return [LoanOfficerResponse(
-        id=lo.id,
-        user_id=lo.user_id,
-        lo_name=lo.lo_name,
-        lo_email=lo.lo_email,
-        lo_phone=lo.lo_phone,
-        is_active=lo.is_active,
-        priority=lo.priority,
-        max_daily_appointments=lo.max_daily_appointments,
-        max_weekly_appointments=lo.max_weekly_appointments,
-        custom_hours=lo.custom_hours,
-        total_appointments=lo.total_appointments or 0,
-        appointments_this_week=lo.appointments_this_week or 0,
-        appointments_today=lo.appointments_today or 0
-    ) for lo in los]
+    return [_build_lo_response(lo, service) for lo in los]
 
 
 @router.post("/loan-officers", response_model=LoanOfficerResponse)
@@ -310,21 +315,7 @@ def add_loan_officer(
     db.commit()
     db.refresh(lo)
 
-    return LoanOfficerResponse(
-        id=lo.id,
-        user_id=lo.user_id,
-        lo_name=lo.lo_name,
-        lo_email=lo.lo_email,
-        lo_phone=lo.lo_phone,
-        is_active=lo.is_active,
-        priority=lo.priority,
-        max_daily_appointments=lo.max_daily_appointments,
-        max_weekly_appointments=lo.max_weekly_appointments,
-        custom_hours=lo.custom_hours,
-        total_appointments=lo.total_appointments or 0,
-        appointments_this_week=lo.appointments_this_week or 0,
-        appointments_today=lo.appointments_today or 0
-    )
+    return _build_lo_response(lo, service)
 
 
 @router.put("/loan-officers/{lo_id}", response_model=LoanOfficerResponse)
@@ -363,21 +354,7 @@ def update_loan_officer(
     if not lo:
         raise HTTPException(status_code=404, detail="Loan officer not found")
 
-    return LoanOfficerResponse(
-        id=lo.id,
-        user_id=lo.user_id,
-        lo_name=lo.lo_name,
-        lo_email=lo.lo_email,
-        lo_phone=lo.lo_phone,
-        is_active=lo.is_active,
-        priority=lo.priority,
-        max_daily_appointments=lo.max_daily_appointments,
-        max_weekly_appointments=lo.max_weekly_appointments,
-        custom_hours=lo.custom_hours,
-        total_appointments=lo.total_appointments or 0,
-        appointments_this_week=lo.appointments_this_week or 0,
-        appointments_today=lo.appointments_today or 0
-    )
+    return _build_lo_response(lo, service)
 
 
 @router.delete("/loan-officers/{lo_id}")

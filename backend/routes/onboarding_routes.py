@@ -1059,7 +1059,8 @@ async def create_team_member(
             user_metadata=user_metadata,
             is_active=True,
             email_verified=False,
-            onboarding_completed=False
+            onboarding_completed=False,
+            organization_id=current_user.organization_id,
         )
 
         db.add(new_user)
@@ -1078,7 +1079,10 @@ async def create_team_member(
 
     except Exception as e:
         db.rollback()
-        logger.error(f"Create team member error: {e}")
+        logger.exception(f"Create team member error: {e}")
+        error_msg = str(e).lower()
+        if "unique" in error_msg or "duplicate" in error_msg:
+            raise HTTPException(status_code=409, detail="A user with that email already exists")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

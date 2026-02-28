@@ -1189,6 +1189,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         from smart_scheduler_models import create_smart_scheduler_models
         from smart_scheduler_routes import router as smart_scheduler_router, set_dependencies as set_scheduler_deps
 
+        # Ensure the simple scheduler tables exist (with organization_id column)
+        try:
+            from services.smart_scheduler_service import ensure_scheduler_tables
+            ensure_scheduler_tables()
+        except Exception as tbl_err:
+            logger.warning(f"Scheduler table setup: {tbl_err}")
+
         # Create smart scheduler models using our Base
         smart_scheduler_models = create_smart_scheduler_models(Base)
 

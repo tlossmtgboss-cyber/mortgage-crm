@@ -477,12 +477,15 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
         return;
       }
 
-      // Fetch fields for each relevant object in parallel
+      // Fetch fields for each relevant object in parallel (with per-request timeout)
       const allFields = [];
       const fieldPromises = relevantObjects.map(async (obj) => {
+        const fieldController = new AbortController();
+        const fieldTimeout = setTimeout(() => fieldController.abort(), 10000);
         try {
           const res = await fetch(`${API_URL}/api/integrations/salesforce/schema/objects/${obj.name}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${token}` },
+            signal: fieldController.signal,
           });
           if (res.ok) {
             const data = await res.json();
@@ -497,7 +500,13 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
             }
           }
         } catch (err) {
-          console.error(`Failed to fetch fields for ${obj.name}:`, err);
+          if (err.name === 'AbortError') {
+            console.warn(`Timed out fetching fields for ${obj.name}`);
+          } else {
+            console.error(`Failed to fetch fields for ${obj.name}:`, err);
+          }
+        } finally {
+          clearTimeout(fieldTimeout);
         }
       });
       await Promise.all(fieldPromises);

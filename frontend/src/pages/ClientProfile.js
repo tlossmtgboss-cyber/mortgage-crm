@@ -1779,6 +1779,59 @@ function ClientProfile() {
           {/* Important Dates Tab */}
           {activeTab === 'important-dates' && (
           <div className="tab-content">
+            {/* Last Touched Date - auto-updated on any file change */}
+            <div className="info-section" style={{
+              background: 'linear-gradient(135deg, #f0f4ff 0%, #e8eeff 100%)',
+              border: '1px solid #c7d2fe',
+              borderRadius: '10px',
+              padding: '16px 20px',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: '#6366f1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <span style={{ color: '#fff', fontSize: '18px' }}>&#128197;</span>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Last Touched Date
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: 600, color: '#1e1b4b', marginTop: '2px' }}>
+                  {client?.updated_at
+                    ? new Date(client.updated_at).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })
+                    : 'No updates recorded'}
+                </div>
+              </div>
+              <div style={{
+                fontSize: '11px',
+                color: '#6b7280',
+                background: '#fff',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb',
+                whiteSpace: 'nowrap'
+              }}>
+                Auto-updated
+              </div>
+            </div>
+
             <div className="info-section">
               <h2>Lead Stage Dates</h2>
               <p className="section-subtitle">Track key milestone dates throughout the lead journey</p>

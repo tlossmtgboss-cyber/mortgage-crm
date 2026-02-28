@@ -1124,7 +1124,7 @@ function SalesforceIntegrationPage() {
         {activeSection === 'schema' && renderSchema()}
         {activeSection === 'mappings' && (
           <SalesforceFieldMapper
-            isConnected={connectionStatus?.status === 'connected' || connectionStatus?.status === 'active'}
+            isConnected={connectionStatus?.connected === true}
             onMappingSaved={() => {
               toast.success('Field mapping updated');
               loadMappingStats();

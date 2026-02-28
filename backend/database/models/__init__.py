@@ -285,6 +285,13 @@ from .compliance import (
     AdverseActionReason,
 )
 
+# AI Prospect Re-Engagement models
+from .ai_prospect_conversation import (
+    AIProspectConversation,
+    AIReengagementConfig,
+    ConversationState,
+)
+
 # SSO configuration models (SAML, OIDC)
 from .sso import SSOConfig
 
@@ -561,6 +568,13 @@ __all__ = [
     "ToleranceCategory",
     "DisclosureType",
     "AdverseActionReason",
+
+    # =====================
+    # AI Prospect Re-Engagement
+    # =====================
+    "AIProspectConversation",
+    "AIReengagementConfig",
+    "ConversationState",
 
     # =====================
     # SSO (SAML, OIDC)

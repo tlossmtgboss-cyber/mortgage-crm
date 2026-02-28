@@ -1246,6 +1246,26 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# AI PROSPECT RE-ENGAGEMENT ROUTES
+# ============================================================================
+try:
+    from routes.prospect_reengagement_routes import router as prospect_reengagement_router
+    app.include_router(prospect_reengagement_router, tags=["Prospect Re-Engagement"])
+    logger.info("AI Prospect Re-Engagement routes loaded")
+
+    # Create tables if needed
+    try:
+        from database.models.ai_prospect_conversation import create_tables_if_needed
+        from db import engine
+        create_tables_if_needed(engine)
+    except Exception as e:
+        logger.warning(f"AI Re-Engagement table creation skipped: {e}")
+except Exception as e:
+    logger.error(f"AI Prospect Re-Engagement routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================
 try:

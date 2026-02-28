@@ -51,6 +51,76 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+# ============================================================================
+# CROSS-SOURCE CONFLICT HELPERS
+# ============================================================================
+
+def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt):
+    """
+    Gather all busy time blocks from all 3 calendar sources for a user.
+    Returns a list of (start, end) tuples representing occupied time.
+    """
+    conflicts = []
+
+    # Source 1: ScheduledAppointment (AI-booked appointments)
+    try:
+        from services.smart_scheduler_service import ScheduledAppointment as SAModel
+        sa_appts = db.query(SAModel).filter(
+            SAModel.loan_officer_id == target_user_id,
+            SAModel.status.in_(["scheduled", "confirmed"]),
+            SAModel.start_time >= start_dt,
+            SAModel.start_time <= end_dt
+        ).all()
+        for a in sa_appts:
+            if a.start_time and a.end_time:
+                conflicts.append((a.start_time, a.end_time))
+    except Exception as e:
+        logger.debug(f"ScheduledAppointment cross-source check skipped: {e}")
+
+    # Source 2: CalendarEvent (manual calendar entries)
+    try:
+        import main
+        CalendarEvent = main.CalendarEvent
+        cal_events = db.query(CalendarEvent).filter(
+            CalendarEvent.user_id == target_user_id,
+            CalendarEvent.status != "cancelled",
+            CalendarEvent.start_time >= start_dt,
+            CalendarEvent.start_time <= end_dt
+        ).all()
+        for e in cal_events:
+            if e.start_time and e.end_time:
+                conflicts.append((e.start_time, e.end_time))
+    except Exception as ex:
+        logger.debug(f"CalendarEvent cross-source check skipped: {ex}")
+
+    # Source 3: CRMCalendarEvent (Salesforce-synced events)
+    try:
+        from models.calendar_sync_models import CRMCalendarEvent
+        crm_events = db.query(CRMCalendarEvent).filter(
+            CRMCalendarEvent.owner_user_id == target_user_id,
+            CRMCalendarEvent.status != "canceled",
+            CRMCalendarEvent.start_at >= start_dt,
+            CRMCalendarEvent.start_at <= end_dt
+        ).all()
+        for e in crm_events:
+            if e.start_at and e.end_at:
+                conflicts.append((e.start_at, e.end_at))
+    except Exception as ex:
+        logger.debug(f"CRMCalendarEvent cross-source check skipped: {ex}")
+
+    return conflicts
+
+
+def _has_cross_source_conflict(conflicts, slot_start, slot_end, buffer_before=0, buffer_after=0):
+    """Check if a proposed slot conflicts with any cross-source busy time."""
+    for busy_start, busy_end in conflicts:
+        buffered_start = busy_start - timedelta(minutes=buffer_before)
+        buffered_end = busy_end + timedelta(minutes=buffer_after)
+        if slot_start < buffered_end and slot_end > buffered_start:
+            return True
+    return False
+
 # ============================================================================
 # DEPENDENCY INJECTION STORAGE
 # ============================================================================
@@ -1436,13 +1506,16 @@ async def get_available_slots(
             BlockedTime.end_datetime >= start_dt
         ).all()
 
-        # Get existing appointments
+        # Get existing appointments from primary Appointment table
         existing_appts = db.query(Appointment).filter(
             Appointment.assigned_user_id == target_user_id,
             Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
             Appointment.scheduled_start >= start_dt,
             Appointment.scheduled_start <= end_dt
         ).all()
+
+        # Cross-source: also check ScheduledAppointment, CalendarEvent, CRMCalendarEvent
+        cross_source_busy = _get_cross_source_conflicts(db, target_user_id, start_dt, end_dt)
 
         # Generate slots for each day
         current_date = slot_request.start_date
@@ -1457,10 +1530,12 @@ async def get_available_slots(
                 current_date += timedelta(days=1)
                 continue
 
-            # Count appointments for this day
+            # Count appointments for this day (primary + cross-source)
             day_appts = [a for a in existing_appts
                         if a.scheduled_start.date() == current_date]
-            if len(day_appts) >= max_per_day:
+            day_cross = [c for c in cross_source_busy
+                        if c[0].date() == current_date]
+            if (len(day_appts) + len(day_cross)) >= max_per_day:
                 current_date += timedelta(days=1)
                 continue
 
@@ -1504,6 +1579,13 @@ async def get_available_slots(
                     if (slot_start < appt_end_with_buffer and slot_end > appt_start_with_buffer):
                         conflict = True
                         break
+
+                # Check cross-source conflicts (ScheduledAppointment, CalendarEvent, CRMCalendarEvent)
+                if not conflict:
+                    conflict = _has_cross_source_conflict(
+                        cross_source_busy, slot_start, slot_end,
+                        buffer_before, buffer_after
+                    )
 
                 if not conflict:
                     available_slots.append({
@@ -1834,13 +1916,16 @@ async def get_public_available_slots(
             BlockedTime.end_datetime >= start_dt
         ).all()
 
-        # Get existing appointments
+        # Get existing appointments from primary Appointment table
         existing_appts = db.query(Appointment).filter(
             Appointment.assigned_user_id == target_user_id,
             Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
             Appointment.scheduled_start >= start_dt,
             Appointment.scheduled_start <= end_dt
         ).all()
+
+        # Cross-source: also check ScheduledAppointment, CalendarEvent, CRMCalendarEvent
+        cross_source_busy = _get_cross_source_conflicts(db, target_user_id, start_dt, end_dt)
 
         # Generate slots
         current_date = start_date
@@ -1872,18 +1957,26 @@ async def get_public_available_slots(
                     slot_start += timedelta(minutes=30)
                     continue
 
-                # Check conflicts
+                # Check conflicts with blocked time
                 blocked = any(
                     slot_start < bt.end_datetime and slot_end > bt.start_datetime
                     for bt in blocked_times
                 )
 
                 if not blocked:
+                    # Check primary Appointment table
                     conflict = any(
                         slot_start < (appt.scheduled_end + timedelta(minutes=buffer_after)) and
                         slot_end > (appt.scheduled_start - timedelta(minutes=buffer_before))
                         for appt in existing_appts
                     )
+
+                    # Check cross-source conflicts
+                    if not conflict:
+                        conflict = _has_cross_source_conflict(
+                            cross_source_busy, slot_start, slot_end,
+                            buffer_before, buffer_after
+                        )
 
                     if not conflict:
                         all_slots.append({

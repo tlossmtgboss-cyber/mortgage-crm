@@ -2,20 +2,20 @@
 Smart Scheduler Service
 
 AI-powered appointment scheduling with multiple assignment strategies:
+- Direct: Book directly with a specific LO
 - Round Robin: Distribute appointments evenly among loan officers
 - Priority: Assign based on LO priority/seniority
-- Availability: Assign to first available LO
-- Load Balanced: Assign to LO with fewest active appointments
+- Availability: Assign to first available LO (checks all calendar sources)
+- Load Balanced: Assign to LO with fewest active appointments (real-time count)
 """
 
-import os
 import logging
 from datetime import datetime, timedelta, time
 from typing import Dict, List, Optional, Any
 from enum import Enum
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, JSON, Text, ForeignKey, Enum as SQLEnum
-from sqlalchemy.orm import relationship
-from database import Base, engine, SessionLocal
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, JSON, Text, func
+from sqlalchemy.orm import Session
+from database import Base, SessionLocal
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -47,12 +47,13 @@ class AppointmentStatus(str, Enum):
 # =============================================================================
 
 class SchedulerSettings(Base):
-    """Global scheduler configuration"""
+    """Per-organization scheduler configuration"""
     __tablename__ = "scheduler_settings"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)  # Organization/user who owns settings
+    organization_id = Column(Integer, index=True, nullable=True)
 
     # Scheduling method
     scheduling_method = Column(String(50), default=SchedulingMethod.ROUND_ROBIN.value)
@@ -91,6 +92,7 @@ class LoanOfficerSchedule(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)  # References users table
+    organization_id = Column(Integer, index=True, nullable=True)
 
     # LO Info (denormalized for quick access)
     lo_name = Column(String(255))
@@ -110,7 +112,7 @@ class LoanOfficerSchedule(Base):
     # Blocked times (JSON array of {"start": datetime, "end": datetime, "reason": str})
     blocked_times = Column(JSON, default=[])
 
-    # Stats
+    # Stats (kept for backward compat but real-time queries are preferred)
     total_appointments = Column(Integer, default=0)
     appointments_this_week = Column(Integer, default=0)
     appointments_today = Column(Integer, default=0)
@@ -128,6 +130,7 @@ class ScheduledAppointment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     appointment_id = Column(String(50), unique=True, index=True)  # APPT-XXXXXXXX
+    organization_id = Column(Integer, index=True, nullable=True)
 
     # Loan Officer
     loan_officer_id = Column(Integer, index=True)
@@ -173,14 +176,95 @@ class ScheduledAppointment(Base):
     cancelled_at = Column(DateTime, nullable=True)
 
 
-# Create tables
-try:
-    SchedulerSettings.__table__.create(engine, checkfirst=True)
-    LoanOfficerSchedule.__table__.create(engine, checkfirst=True)
-    ScheduledAppointment.__table__.create(engine, checkfirst=True)
-    logger.info("Smart Scheduler tables created/verified")
-except Exception as e:
-    logger.warning(f"Could not create Smart Scheduler tables: {e}")
+def ensure_scheduler_tables():
+    """Create scheduler tables if they don't exist. Call during app startup, not at import."""
+    from database import engine
+    try:
+        SchedulerSettings.__table__.create(engine, checkfirst=True)
+        LoanOfficerSchedule.__table__.create(engine, checkfirst=True)
+        ScheduledAppointment.__table__.create(engine, checkfirst=True)
+        # Add organization_id columns if missing (tables may pre-date this column)
+        from sqlalchemy import text, inspect
+        insp = inspect(engine)
+        for table_name, model in [
+            ("scheduler_settings", SchedulerSettings),
+            ("loan_officer_schedules", LoanOfficerSchedule),
+            ("scheduled_appointments", ScheduledAppointment),
+        ]:
+            if table_name in insp.get_table_names():
+                existing_cols = {c["name"] for c in insp.get_columns(table_name)}
+                if "organization_id" not in existing_cols:
+                    with engine.begin() as conn:
+                        conn.execute(text(
+                            f"ALTER TABLE {table_name} ADD COLUMN organization_id INTEGER"
+                        ))
+                        conn.execute(text(
+                            f"CREATE INDEX IF NOT EXISTS ix_{table_name}_organization_id "
+                            f"ON {table_name} (organization_id)"
+                        ))
+                    logger.info(f"Added organization_id column to {table_name}")
+        logger.info("Smart Scheduler tables created/verified")
+    except Exception as e:
+        logger.warning(f"Could not create Smart Scheduler tables: {e}")
+
+
+# =============================================================================
+# CROSS-SOURCE AVAILABILITY HELPERS
+# =============================================================================
+
+def _get_cross_source_busy_times(db: Session, user_id: int, start_dt: datetime, end_dt: datetime):
+    """
+    Gather all busy time blocks from all 3 calendar sources for a user.
+    Returns a list of (start, end) tuples representing occupied time.
+    """
+    conflicts = []
+
+    # Source 1: ScheduledAppointment (this module's appointments)
+    try:
+        sa_appts = db.query(ScheduledAppointment).filter(
+            ScheduledAppointment.loan_officer_id == user_id,
+            ScheduledAppointment.status.in_(["scheduled", "confirmed"]),
+            ScheduledAppointment.start_time >= start_dt,
+            ScheduledAppointment.start_time <= end_dt
+        ).all()
+        for a in sa_appts:
+            if a.start_time and a.end_time:
+                conflicts.append((a.start_time, a.end_time))
+    except Exception as e:
+        logger.debug(f"ScheduledAppointment cross-source check: {e}")
+
+    # Source 2: CalendarEvent (manual calendar entries)
+    try:
+        import main
+        CalendarEvent = main.CalendarEvent
+        cal_events = db.query(CalendarEvent).filter(
+            CalendarEvent.user_id == user_id,
+            CalendarEvent.status != "cancelled",
+            CalendarEvent.start_time >= start_dt,
+            CalendarEvent.start_time <= end_dt
+        ).all()
+        for ev in cal_events:
+            if ev.start_time and ev.end_time:
+                conflicts.append((ev.start_time, ev.end_time))
+    except Exception as ex:
+        logger.debug(f"CalendarEvent cross-source check skipped: {ex}")
+
+    # Source 3: CRMCalendarEvent (Salesforce-synced events)
+    try:
+        from models.calendar_sync_models import CRMCalendarEvent
+        crm_events = db.query(CRMCalendarEvent).filter(
+            CRMCalendarEvent.owner_user_id == user_id,
+            CRMCalendarEvent.status != "canceled",
+            CRMCalendarEvent.start_at >= start_dt,
+            CRMCalendarEvent.start_at <= end_dt
+        ).all()
+        for ev in crm_events:
+            if ev.start_at and ev.end_at:
+                conflicts.append((ev.start_at, ev.end_at))
+    except Exception as ex:
+        logger.debug(f"CRMCalendarEvent cross-source check skipped: {ex}")
+
+    return conflicts
 
 
 # =============================================================================
@@ -188,20 +272,26 @@ except Exception as e:
 # =============================================================================
 
 class SmartSchedulerService:
-    """Service for intelligent appointment scheduling"""
+    """Service for intelligent appointment scheduling.
 
-    def __init__(self, db_session=None):
-        self.db = db_session or SessionLocal()
+    Always instantiate with a db session — never cache across requests.
+    """
+
+    def __init__(self, db_session: Session):
+        self.db = db_session
         self._ensure_default_settings()
 
     def _ensure_default_settings(self):
         """Ensure default scheduler settings exist"""
-        settings = self.db.query(SchedulerSettings).first()
-        if not settings:
-            settings = SchedulerSettings()
-            self.db.add(settings)
-            self.db.commit()
-            logger.info("Created default scheduler settings")
+        try:
+            settings = self.db.query(SchedulerSettings).first()
+            if not settings:
+                settings = SchedulerSettings()
+                self.db.add(settings)
+                self.db.commit()
+                logger.info("Created default scheduler settings")
+        except Exception as e:
+            logger.debug(f"Default settings check: {e}")
 
     def get_settings(self, user_id: int = None) -> SchedulerSettings:
         """Get scheduler settings"""
@@ -232,7 +322,8 @@ class SmartSchedulerService:
         ).order_by(LoanOfficerSchedule.priority.desc()).all()
 
     def add_loan_officer(self, user_id: int, name: str, email: str,
-                         phone: str = None, priority: int = 1) -> LoanOfficerSchedule:
+                         phone: str = None, priority: int = 1,
+                         organization_id: int = None) -> LoanOfficerSchedule:
         """Add a loan officer to the scheduling pool"""
         lo = LoanOfficerSchedule(
             user_id=user_id,
@@ -240,7 +331,8 @@ class SmartSchedulerService:
             lo_email=email,
             lo_phone=phone,
             priority=priority,
-            is_active=True
+            is_active=True,
+            organization_id=organization_id
         )
         self.db.add(lo)
         self.db.commit()
@@ -261,6 +353,32 @@ class SmartSchedulerService:
         self.db.commit()
         self.db.refresh(lo)
         return lo
+
+    def _get_real_time_appointment_count(self, lo_user_id: int, period: str = "week") -> int:
+        """Get real-time appointment count from the database instead of stale counters."""
+        now = datetime.utcnow()
+        if period == "today":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=1)
+        elif period == "week":
+            # Monday of current week
+            start = now - timedelta(days=now.weekday())
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = start + timedelta(days=7)
+        else:
+            return 0
+
+        count = self.db.query(func.count(ScheduledAppointment.id)).filter(
+            ScheduledAppointment.loan_officer_id == lo_user_id,
+            ScheduledAppointment.start_time >= start,
+            ScheduledAppointment.start_time < end,
+            ScheduledAppointment.status.in_([
+                AppointmentStatus.SCHEDULED.value,
+                AppointmentStatus.CONFIRMED.value
+            ])
+        ).scalar() or 0
+
+        return count
 
     def assign_loan_officer(self, appointment_time: datetime = None) -> Optional[LoanOfficerSchedule]:
         """
@@ -350,42 +468,64 @@ class SmartSchedulerService:
         return los[0] if los else None
 
     def _assign_load_balanced(self, los: List[LoanOfficerSchedule]) -> Optional[LoanOfficerSchedule]:
-        """Assign to LO with fewest appointments this week"""
+        """Assign to LO with fewest appointments this week (real-time count)"""
         if not los:
             return None
 
-        # Sort by appointments this week (ascending)
-        sorted_los = sorted(los, key=lambda x: x.appointments_this_week or 0)
-        selected = sorted_los[0]
+        # Use real-time COUNT query instead of stale counter columns
+        lo_counts = []
+        for lo in los:
+            count = self._get_real_time_appointment_count(lo.id, "week")
+            lo_counts.append((lo, count))
 
-        logger.info(f"Load balanced assigned: {selected.lo_name} ({selected.appointments_this_week} appts this week)")
+        lo_counts.sort(key=lambda x: x[1])
+        selected = lo_counts[0][0]
+        week_count = lo_counts[0][1]
+
+        logger.info(f"Load balanced assigned: {selected.lo_name} ({week_count} appts this week)")
         return selected
 
     def _is_lo_available(self, lo: LoanOfficerSchedule, appointment_time: datetime = None) -> bool:
-        """Check if LO is available at the given time"""
+        """Check if LO is available at the given time.
+
+        Checks all 3 calendar sources: ScheduledAppointment, CalendarEvent, CRMCalendarEvent.
+        """
         if not appointment_time:
             return True
 
-        # Check blocked times
+        settings = self.get_settings()
+        buffer_mins = settings.buffer_between_appointments if settings else 15
+
+        # Check blocked times (JSON on the LO record)
         blocked_times = lo.blocked_times or []
         for blocked in blocked_times:
-            blocked_start = datetime.fromisoformat(blocked.get("start", ""))
-            blocked_end = datetime.fromisoformat(blocked.get("end", ""))
-            if blocked_start <= appointment_time <= blocked_end:
+            try:
+                blocked_start = datetime.fromisoformat(blocked.get("start", ""))
+                blocked_end = datetime.fromisoformat(blocked.get("end", ""))
+                if blocked_start <= appointment_time <= blocked_end:
+                    return False
+            except (ValueError, TypeError):
+                continue
+
+        # Check daily capacity (real-time)
+        if lo.max_daily_appointments:
+            today_count = self._get_real_time_appointment_count(lo.id, "today")
+            if today_count >= lo.max_daily_appointments:
                 return False
 
-        # Check existing appointments
-        existing = self.db.query(ScheduledAppointment).filter(
-            ScheduledAppointment.loan_officer_id == lo.id,
-            ScheduledAppointment.start_time <= appointment_time,
-            ScheduledAppointment.end_time > appointment_time,
-            ScheduledAppointment.status.in_([
-                AppointmentStatus.SCHEDULED.value,
-                AppointmentStatus.CONFIRMED.value
-            ])
-        ).first()
+        # Check all calendar sources for conflicts at the proposed time
+        check_start = appointment_time - timedelta(minutes=buffer_mins)
+        check_end = appointment_time + timedelta(minutes=(settings.default_duration_minutes if settings else 30) + buffer_mins)
+        busy_times = _get_cross_source_busy_times(self.db, lo.id, check_start, check_end)
 
-        return existing is None
+        for busy_start, busy_end in busy_times:
+            # Apply buffer around busy times
+            buffered_start = busy_start - timedelta(minutes=buffer_mins)
+            buffered_end = busy_end + timedelta(minutes=buffer_mins)
+            if appointment_time < buffered_end and (appointment_time + timedelta(minutes=(settings.default_duration_minutes if settings else 30))) > buffered_start:
+                return False
+
+        return True
 
     def book_appointment(
         self,
@@ -399,6 +539,7 @@ class SmartSchedulerService:
         notes: str = None,
         conversation_id: str = None,
         loan_officer_id: int = None,
+        organization_id: int = None,
     ) -> Dict[str, Any]:
         """
         Book an appointment with automatic or specified LO assignment.
@@ -446,15 +587,14 @@ class SmartSchedulerService:
             duration_minutes=duration,
             notes=notes,
             conversation_id=conversation_id,
-            booked_via="ai_assistant"
+            booked_via="ai_assistant",
+            organization_id=organization_id or lo.organization_id
         )
 
         self.db.add(appointment)
 
-        # Update LO stats
+        # Update LO stats (legacy counters — kept for backward compat)
         lo.total_appointments = (lo.total_appointments or 0) + 1
-        lo.appointments_this_week = (lo.appointments_this_week or 0) + 1
-        lo.appointments_today = (lo.appointments_today or 0) + 1
         lo.last_appointment_at = datetime.utcnow()
 
         self.db.commit()
@@ -502,13 +642,6 @@ class SmartSchedulerService:
         appointment.cancelled_at = datetime.utcnow()
         if reason:
             appointment.internal_notes = f"Cancelled: {reason}"
-
-        # Update LO stats
-        lo = self.db.query(LoanOfficerSchedule).filter(
-            LoanOfficerSchedule.id == appointment.loan_officer_id
-        ).first()
-        if lo:
-            lo.appointments_this_week = max(0, (lo.appointments_this_week or 1) - 1)
 
         self.db.commit()
         logger.info(f"Appointment cancelled: {appointment_id}")
@@ -568,13 +701,12 @@ class SmartSchedulerService:
         return query.order_by(ScheduledAppointment.start_time).all()
 
 
-# Global service instance
-_scheduler_service = None
-
-
 def get_scheduler_service(db_session=None) -> SmartSchedulerService:
-    """Get the smart scheduler service instance"""
-    global _scheduler_service
-    if _scheduler_service is None or db_session:
-        _scheduler_service = SmartSchedulerService(db_session)
-    return _scheduler_service
+    """Get a fresh SmartSchedulerService instance.
+
+    Always creates a new instance to avoid stale session bugs.
+    If no db_session is provided, creates one from SessionLocal (for backward compat).
+    """
+    if db_session is None:
+        db_session = SessionLocal()
+    return SmartSchedulerService(db_session)

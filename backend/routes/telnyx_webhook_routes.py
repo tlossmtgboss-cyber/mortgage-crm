@@ -334,6 +334,40 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
 
     logger.info(f"Inbound SMS from {from_number}: {message_body[:50]}...")
 
+    # ======================================================================
+    # AI Prospect Re-Engagement Intercept
+    # Check if this SMS belongs to an active AI conversation BEFORE
+    # normal SMS intelligence processing. If handled, still store the
+    # raw SMS for audit trail but skip the intelligence queue.
+    # ======================================================================
+    try:
+        from services.prospect_reengagement_service import ProspectReEngagementService
+        reengagement_svc = ProspectReEngagementService(db)
+        reengagement_result = reengagement_svc.handle_reply(normalized_from, message_body)
+        if reengagement_result is not None:
+            # Store raw SMS for audit trail
+            try:
+                db.execute(sa_text("""
+                    INSERT INTO sms_messages (
+                        direction, from_number, to_number, body,
+                        provider, provider_message_id, status, created_at
+                    ) VALUES (
+                        'inbound', :from_number, :to_number, :body,
+                        'telnyx', :message_id, 'received', NOW()
+                    )
+                """), {
+                    "from_number": from_number,
+                    "to_number": to_number,
+                    "body": message_body,
+                    "message_id": event.message_id,
+                })
+                db.commit()
+            except Exception as e:
+                logger.error(f"Failed to store intercepted SMS: {e}")
+            return {"status": "received", "handler": "ai_reengagement"}
+    except Exception as e:
+        logger.error(f"AI re-engagement intercept error (falling through): {e}")
+
     # Store inbound SMS in sms_messages table
     try:
         db.execute(sa_text("""

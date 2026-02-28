@@ -818,3 +818,191 @@ This time slot is now available in your calendar.
     except Exception as e:
         logger.error(f"Failed to send team member cancellation email: {e}", exc_info=True)
         return False
+
+
+def send_appointment_reminder_email(
+    attendee_email: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    duration_minutes: int = 30,
+    hours_before: int = 24,
+    meeting_mode: str = "Phone Call",
+    team_member_name: str = None,
+    team_member_email: str = None,
+    video_link: str = None,
+    scheduled_start: datetime = None,
+):
+    """Send appointment reminder email with ICS calendar attachment."""
+    try:
+        if hours_before >= 24:
+            subject_prefix = "Reminder: Tomorrow"
+            heading = "Your Appointment is Tomorrow!"
+            message = "This is a friendly reminder about your upcoming appointment."
+        else:
+            subject_prefix = "Starting Soon"
+            heading = "Your Appointment Starts Soon!"
+            message = "Your appointment is coming up shortly. Please be ready."
+
+        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+
+        video_button_section = ""
+        if video_link:
+            video_button_section = f"""
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                            Join Video Call
+                        </a>
+                    </div>
+            """
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+                    <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">{heading}</h1>
+                    </div>
+                    <div style="padding: 30px;">
+                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+                        <p style="font-size: 16px; color: #374151;">{message}</p>
+                        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration_minutes} minutes</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                            {team_member_section}
+                        </div>
+                        {video_button_section}
+                        <p style="font-size: 14px; color: #6b7280;">
+                            If you need to reschedule or cancel, please contact us as soon as possible.
+                        </p>
+                    </div>
+                </div>
+                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
+                    Sent from Perennia AI
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+        text_content = f"""
+{heading}
+
+Hi {attendee_name},
+
+{message}
+
+Date: {appointment_date}
+Time: {appointment_time}
+Duration: {duration_minutes} minutes
+Meeting Type: {meeting_mode}
+{f'Meeting with: {team_member_name}' if team_member_name else ''}
+{f'Join Video Call: {video_link}' if video_link else ''}
+
+If you need to reschedule or cancel, please contact us as soon as possible.
+
+- Perennia AI Team
+        """
+
+        # Generate ICS attachment if we have the scheduled_start datetime
+        attachments = []
+        if scheduled_start:
+            try:
+                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                organizer_name = team_member_name or "Perennia AI"
+
+                ics_content = generate_ics_content(
+                    appointment_title=appointment_title,
+                    start_datetime=scheduled_start,
+                    duration_minutes=duration_minutes,
+                    attendee_email=attendee_email,
+                    attendee_name=attendee_name,
+                    organizer_email=organizer_email,
+                    organizer_name=organizer_name,
+                    description=f"Reminder: {appointment_title}",
+                    video_link=video_link
+                )
+
+                attachments.append({
+                    'content': base64.b64encode(ics_content.encode('utf-8')).decode('utf-8'),
+                    'filename': 'appointment.ics',
+                    'type': 'text/calendar'
+                })
+            except Exception as ics_error:
+                logger.error(f"Failed to generate reminder ICS attachment: {ics_error}")
+
+        result = notification_service.send_email(
+            to_email=attendee_email,
+            subject=f"{subject_prefix}: {appointment_title} - {appointment_date} at {appointment_time}",
+            html_content=html_content,
+            plain_content=text_content,
+            attachments=attachments if attachments else None
+        )
+
+        if result.get("success"):
+            logger.info(f"Appointment reminder email sent to {attendee_email}")
+            return {"success": True, "error": None}
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Failed to send reminder email to {attendee_email}: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+    except Exception as e:
+        logger.error(f"Exception in send_appointment_reminder_email: {e}", exc_info=True)
+        return {"success": False, "error": "Internal server error"}
+
+
+def send_appointment_reminder_sms(
+    attendee_phone: str,
+    attendee_name: str,
+    appointment_date: str,
+    appointment_time: str,
+    hours_before: int = 24,
+    team_member_name: str = None,
+    video_link: str = None,
+):
+    """Send appointment reminder SMS via Telnyx."""
+    try:
+        from_number = os.getenv("TELNYX_PHONE_NUMBER")
+        if not from_number:
+            logger.warning("TELNYX_PHONE_NUMBER not configured - skipping reminder SMS")
+            return {"success": False, "error": "SMS not configured"}
+
+        import telnyx
+
+        if hours_before >= 24:
+            time_msg = "tomorrow"
+        else:
+            time_msg = "soon"
+
+        team_msg = f" with {team_member_name}" if team_member_name else ""
+        link_msg = f"\nJoin: {video_link}" if video_link else ""
+
+        message_body = (
+            f"Hi {attendee_name}! Reminder: Your appointment{team_msg} is {time_msg} "
+            f"on {appointment_date} at {appointment_time}.{link_msg} "
+            f"Reply HELP for assistance."
+        )
+
+        message = telnyx.Message.create(
+            from_=from_number,
+            to=attendee_phone,
+            text=message_body,
+        )
+
+        msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
+        logger.info(f"Appointment reminder SMS sent to {attendee_phone}, ID: {msg_id}")
+        return {"success": True, "message_id": msg_id}
+
+    except Exception as e:
+        logger.error(f"Failed to send appointment reminder SMS: {e}")
+        return {"success": False, "error": str(e)}

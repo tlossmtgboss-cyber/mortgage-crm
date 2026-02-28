@@ -1052,11 +1052,6 @@ def require_user(request: Request, db: Session = Depends(get_db)) -> int:
 
 def get_integration_profile(db: Session, user_id: int) -> Optional[IntegrationProfile]:
     """Get user's Salesforce integration profile."""
-    try:
-        # Ensure clean transaction state
-        db.rollback()
-    except Exception as e:
-        logger.error(f"Error in get_integration_profile (rollback): {e}")
     return db.query(IntegrationProfile).filter(
         IntegrationProfile.user_id == user_id,
         IntegrationProfile.provider == 'salesforce'

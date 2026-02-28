@@ -186,6 +186,28 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # AI PROSPECT RE-ENGAGEMENT JOBS
+        # =================================================================
+
+        # Daily prospect scan - 9:45 AM (staggered from other daily jobs)
+        self.scheduler.add_job(
+            func=self.run_prospect_reengagement_scan,
+            trigger=CronTrigger(hour=9, minute=45),
+            id="prospect_reengagement_scan",
+            name="AI Prospect Re-Engagement Scan",
+            replace_existing=True,
+        )
+
+        # Daily conversation expiry - 10:15 AM (staggered)
+        self.scheduler.add_job(
+            func=self.run_prospect_reengagement_expiry,
+            trigger=CronTrigger(hour=10, minute=15),
+            id="prospect_reengagement_expiry",
+            name="Expire Stale AI Re-Engagement Conversations",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
@@ -729,53 +751,80 @@ class SchedulerService:
             session.rollback()
 
     def _send_reminder_for_chat_appt(self, session, notifier, appt, hours_before: int):
-        """Send reminder for a chat widget appointment and record it."""
+        """Send reminder for a chat widget appointment using ICS-capable email service."""
         try:
             appt_dict = dict(appt._mapping)
             lo_name = appt_dict.get('lo_name', '') or 'Your Loan Officer'
             appointment_id = appt_dict["appointment_id"]
+            scheduled_start = appt_dict.get("scheduled_start")
 
-            # Determine reminder message based on hours
-            if hours_before == 24:
-                reminder_prefix = "Reminder: Tomorrow - "
-            elif hours_before == 1:
-                reminder_prefix = "Starting Soon: "
+            # Format date/time for the email template
+            if scheduled_start:
+                appointment_date = scheduled_start.strftime("%A, %B %d, %Y")
+                appointment_time = scheduled_start.strftime("%I:%M %p")
             else:
-                reminder_prefix = "Reminder: "
+                appointment_date = "Scheduled"
+                appointment_time = "Scheduled"
 
             email_sent = False
             sms_sent = False
 
-            # Send email reminder
+            # Send email reminder using the ICS-capable scheduler_email_service
             if appt_dict.get("attendee_email"):
                 try:
+                    from scheduler_email_service import send_appointment_reminder_email
+                    email_result = send_appointment_reminder_email(
+                        attendee_email=appt_dict["attendee_email"],
+                        attendee_name=appt_dict.get("attendee_name", "there"),
+                        appointment_title=appt_dict.get("title", "Consultation"),
+                        appointment_date=appointment_date,
+                        appointment_time=appointment_time,
+                        duration_minutes=30,
+                        hours_before=hours_before,
+                        team_member_name=lo_name,
+                        scheduled_start=scheduled_start,
+                    )
+                    email_sent = email_result.get("success", False)
+                    if email_sent:
+                        logger.info(f"Email reminder (with ICS) sent for chat appointment {appointment_id}")
+                except ImportError:
+                    # Fallback to simpler notification service if scheduler_email_service unavailable
                     email_result = notifier.send_appointment_confirmation(
                         borrower_email=appt_dict["attendee_email"],
                         borrower_name=appt_dict.get("attendee_name", "there"),
-                        appointment_type=f"{reminder_prefix}Consultation with {lo_name}",
-                        appointment_time=appt_dict["scheduled_start"],
+                        appointment_type=f"Reminder: Consultation with {lo_name}",
+                        appointment_time=scheduled_start,
                         lo_name=lo_name,
                         meeting_link=None,
                     )
                     email_sent = email_result.get("success", False)
-                    if email_sent:
-                        logger.info(f"Email reminder sent for chat appointment {appointment_id}")
                 except Exception as e:
                     logger.error(f"Failed to send email reminder for chat appointment {appointment_id}: {e}")
 
-            # Send SMS reminder
+            # Send SMS reminder using the ICS-capable scheduler_email_service
             if appt_dict.get("attendee_phone"):
                 try:
-                    sms_result = notifier.send_appointment_reminder_sms(
-                        borrower_phone=appt_dict["attendee_phone"],
-                        borrower_name=appt_dict.get("attendee_name", "there"),
-                        appointment_time=appt_dict["scheduled_start"],
-                        lo_name=lo_name,
-                        meeting_link=None,
+                    from scheduler_email_service import send_appointment_reminder_sms as sched_reminder_sms
+                    sms_result = sched_reminder_sms(
+                        attendee_phone=appt_dict["attendee_phone"],
+                        attendee_name=appt_dict.get("attendee_name", "there"),
+                        appointment_date=appointment_date,
+                        appointment_time=appointment_time,
+                        hours_before=hours_before,
+                        team_member_name=lo_name,
                     )
                     sms_sent = sms_result.get("success", False)
                     if sms_sent:
                         logger.info(f"SMS reminder sent for chat appointment {appointment_id}")
+                except ImportError:
+                    sms_result = notifier.send_appointment_reminder_sms(
+                        borrower_phone=appt_dict["attendee_phone"],
+                        borrower_name=appt_dict.get("attendee_name", "there"),
+                        appointment_time=scheduled_start,
+                        lo_name=lo_name,
+                        meeting_link=None,
+                    )
+                    sms_sent = sms_result.get("success", False)
                 except Exception as e:
                     logger.error(f"Failed to send SMS reminder for chat appointment {appointment_id}: {e}")
 
@@ -979,6 +1028,28 @@ class SchedulerService:
             logger.error(f"Listing weekly updates job failed: {e}")
         finally:
             session.close()
+
+    # =========================================================================
+    # AI PROSPECT RE-ENGAGEMENT METHODS
+    # =========================================================================
+
+    def run_prospect_reengagement_scan(self):
+        """Scan for stale prospects and initiate AI re-engagement outreach."""
+        logger.info("Running AI prospect re-engagement scan")
+        try:
+            from services.prospect_reengagement_service import run_prospect_reengagement_scan
+            run_prospect_reengagement_scan()
+        except Exception as e:
+            logger.error(f"Prospect re-engagement scan job failed: {e}")
+
+    def run_prospect_reengagement_expiry(self):
+        """Expire stale AI re-engagement conversations with no response."""
+        logger.info("Running AI prospect re-engagement expiry")
+        try:
+            from services.prospect_reengagement_service import run_prospect_reengagement_expiry
+            run_prospect_reengagement_expiry()
+        except Exception as e:
+            logger.error(f"Prospect re-engagement expiry job failed: {e}")
 
     def get_job_status(self) -> List[Dict[str, Any]]:
         """Get status of all scheduled jobs."""
