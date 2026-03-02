@@ -15,67 +15,19 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
+from auth.dependencies import get_current_user
+from database.models import User
 from services.perennia_s3_service import get_s3_service
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
-
-security = HTTPBearer(auto_error=False)
-
-
-# User proxy class for auth
-class UserProxy:
-    def __init__(self, row):
-        self.id = row[0]
-        self.email = row[1]
-        self.name = row[2] if len(row) > 2 else None
-
-
-# Auth dependency
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Get current user from JWT token."""
-    from jose import jwt
-
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    try:
-        token = credentials.credentials
-        secret = os.getenv("SECRET_KEY", "")
-        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
-        email = payload.get("sub")
-
-        if not email:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        # Get user with raw SQL
-        result = db.execute(
-            text("SELECT id, email, full_name FROM users WHERE email = :email"),
-            {"email": email}
-        )
-        user_row = result.fetchone()
-
-        if not user_row:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        return {"user_id": user_row[0], "email": user_row[1], "name": user_row[2]}
-
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        logger.error(f"Auth error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
 
 router = APIRouter(prefix="/api/v1/recruiting/video", tags=["Recruiting Video"])
 
@@ -191,7 +143,7 @@ Watch it now in the Videos section of your portal."""
 @router.post("/upload-url", response_model=UploadUrlResponse)
 async def get_upload_url(
     request: UploadUrlRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get a presigned URL for uploading a video.
@@ -243,7 +195,7 @@ async def get_upload_url(
 @router.post("/complete")
 async def complete_upload(
     request: CompleteUploadRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db=Depends(get_db)
 ):
     """
@@ -252,7 +204,7 @@ async def complete_upload(
     This is called after the video has been uploaded to S3.
     """
     s3_service = get_s3_service()
-    user_id = current_user.get("user_id") or current_user.get("id") or 1
+    user_id = current_user.id
 
     # Verify the video exists in S3
     verify_result = s3_service.verify_upload(request.video_key)
@@ -379,7 +331,7 @@ async def complete_upload(
 async def get_candidate_videos(
     candidate_id: int,
     limit: int = Query(default=10, le=50),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db=Depends(get_db)
 ):
     """Get all videos sent to a candidate."""

@@ -370,7 +370,7 @@ async def get_email_queue(
                        rt.due_date, rt.priority, rt.assigned_to,
                        rc.first_name, rc.last_name, rc.email
                 FROM recruiting_tasks rt
-                JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                JOIN mm_candidates rc ON rc.id = rt.candidate_id
                 WHERE {where_sql}
                 ORDER BY rt.due_date ASC,
                          CASE rt.priority
@@ -555,7 +555,7 @@ async def preview_email_for_task(task_id: int):
                        rt.assigned_to,
                        rc.first_name, rc.last_name, rc.email as candidate_email
                 FROM recruiting_tasks rt
-                JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                JOIN mm_candidates rc ON rc.id = rt.candidate_id
                 WHERE rt.id = :task_id
             """),
             {"task_id": task_id}

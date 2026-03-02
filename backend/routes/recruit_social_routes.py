@@ -336,7 +336,7 @@ async def enrich_from_linkedin(
         if enrichment:
             # Store enrichment data
             db.execute(text("""
-                UPDATE recruiting_candidates
+                UPDATE mm_candidates
                 SET linkedin_url = :linkedin_url,
                     linkedin_data = :linkedin_data,
                     updated_at = NOW()
@@ -367,7 +367,7 @@ async def get_candidate_linkedin_posts(
         # Get candidate's LinkedIn info
         result = db.execute(text("""
             SELECT id, name, linkedin_url, linkedin_data
-            FROM recruiting_candidates
+            FROM mm_candidates
             WHERE id = :candidate_id
         """), {"candidate_id": candidate_id})
         candidate = result.fetchone()

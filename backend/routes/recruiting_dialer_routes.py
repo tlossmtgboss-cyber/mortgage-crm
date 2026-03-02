@@ -8,7 +8,7 @@ Endpoints for:
 - Telephony webhooks for call status
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Form, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Form, Response, Request
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -21,6 +21,37 @@ import logging
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
+
+
+async def _verify_telnyx_webhook(request: Request):
+    """Validate Telnyx webhook signature. Fail-closed when key not configured."""
+    if not TELNYX_PUBLIC_KEY:
+        logger.error("TELNYX_PUBLIC_KEY not configured — rejecting recruiting dialer webhook")
+        raise HTTPException(status_code=403, detail="Webhook validation not configured")
+
+    signature = request.headers.get("telnyx-signature-ed25519", "")
+    timestamp = request.headers.get("telnyx-timestamp", "")
+    if not signature or not timestamp:
+        logger.warning("Missing Telnyx signature headers on recruiting dialer webhook")
+        raise HTTPException(status_code=403, detail="Missing webhook signature")
+
+    body = await request.body()
+
+    try:
+        from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
+        if not validate_telnyx_webhook(body, signature, timestamp, TELNYX_PUBLIC_KEY):
+            logger.warning("Invalid Telnyx webhook signature on recruiting dialer")
+            raise HTTPException(status_code=403, detail="Invalid webhook signature")
+    except ImportError:
+        logger.error("Telnyx webhook validation module not available")
+        raise HTTPException(status_code=403, detail="Webhook validation unavailable")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Telnyx signature validation error: {e}")
+        raise HTTPException(status_code=403, detail="Webhook validation failed")
 
 # ============================================================================
 # FEATURE TIER: PREMIUM
@@ -282,7 +313,7 @@ async def connect_call_via_telephony(call_id: str):
 # Telephony Webhook Endpoints
 # =============================================================================
 
-@router.post("/telnyx/recruiter-answered/{call_id}")
+@router.post("/telnyx/recruiter-answered/{call_id}", dependencies=[Depends(_verify_telnyx_webhook)])
 async def telephony_recruiter_answered(call_id: str):
     """
     Telephony webhook: Recruiter answered the call.
@@ -307,7 +338,7 @@ async def telephony_recruiter_answered(call_id: str):
         return Response(content=str(response), media_type="application/xml")
 
 
-@router.post("/telnyx/recruiter-response/{call_id}")
+@router.post("/telnyx/recruiter-response/{call_id}", dependencies=[Depends(_verify_telnyx_webhook)])
 async def telephony_recruiter_response(
     call_id: str,
     Digits: str = Form("")
@@ -336,7 +367,7 @@ async def telephony_recruiter_response(
         return Response(content=str(response), media_type="application/xml")
 
 
-@router.post("/telnyx/call-complete/{call_id}")
+@router.post("/telnyx/call-complete/{call_id}", dependencies=[Depends(_verify_telnyx_webhook)])
 async def telephony_call_complete(
     call_id: str,
     DialCallStatus: str = Form("completed")
@@ -363,7 +394,7 @@ async def telephony_call_complete(
         return Response(content=str(response), media_type="application/xml")
 
 
-@router.post("/telnyx/status/{call_id}")
+@router.post("/telnyx/status/{call_id}", dependencies=[Depends(_verify_telnyx_webhook)])
 async def telephony_status_callback(
     call_id: str,
     CallStatus: str = Form(""),
@@ -394,7 +425,7 @@ async def telephony_status_callback(
         return {"received": True, "error": "Internal server error"}
 
 
-@router.post("/telnyx/candidate-status/{call_id}")
+@router.post("/telnyx/candidate-status/{call_id}", dependencies=[Depends(_verify_telnyx_webhook)])
 async def telephony_candidate_status(
     call_id: str,
     CallStatus: str = Form(""),
@@ -419,7 +450,7 @@ async def telephony_candidate_status(
     return {"received": True, "call_id": call_id, "status": CallStatus}
 
 
-@router.post("/telnyx/recording/{call_id}")
+@router.post("/telnyx/recording/{call_id}", dependencies=[Depends(_verify_telnyx_webhook)])
 async def telephony_recording_callback(
     call_id: str,
     RecordingUrl: str = Form(""),

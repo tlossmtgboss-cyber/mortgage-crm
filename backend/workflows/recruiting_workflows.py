@@ -324,7 +324,7 @@ class RecruitingWorkflowService:
                            rt.due_date, rt.priority, rt.route_to, rt.status,
                            rc.first_name, rc.last_name
                     FROM recruiting_tasks rt
-                    JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                    JOIN mm_candidates rc ON rc.id = rt.candidate_id
                     WHERE {where_sql}
                     ORDER BY rt.due_date ASC,
                              CASE rt.priority
@@ -408,7 +408,7 @@ class RecruitingWorkflowService:
                            rt.due_date, rt.priority,
                            rc.first_name, rc.last_name, rc.phone, rc.email
                     FROM recruiting_tasks rt
-                    JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                    JOIN mm_candidates rc ON rc.id = rt.candidate_id
                     WHERE {where_sql}
                     ORDER BY rt.due_date ASC,
                              CASE rt.priority

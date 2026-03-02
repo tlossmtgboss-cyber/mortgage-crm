@@ -208,18 +208,18 @@ export const resolveAlert = async (alertId, userId, notes = null) => {
 // =============================================================================
 
 export const runMigration = async () => {
-  const response = await fetch(`${API_URL}/api/v1/master-manager/admin/run-migration?admin_key=perennia-admin-2024`, {
+  const response = await fetch(`${API_URL}/api/v1/master-manager/admin/run-migration`, {
     method: 'POST',
-    headers: getAuthHeaders()
+    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
   });
   if (!response.ok) throw new Error('Failed to run migration');
   return response.json();
 };
 
 export const initializeCapacities = async () => {
-  const response = await fetch(`${API_URL}/api/v1/master-manager/admin/initialize-capacities?admin_key=perennia-admin-2024`, {
+  const response = await fetch(`${API_URL}/api/v1/master-manager/admin/initialize-capacities`, {
     method: 'POST',
-    headers: getAuthHeaders()
+    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
   });
   if (!response.ok) throw new Error('Failed to initialize capacities');
   return response.json();
@@ -493,9 +493,9 @@ export const updateCandidateBasicInfo = async (candidateId, basicData) => {
 };
 
 export const runSocialProductionMigration = async () => {
-  const response = await fetch(`${API_URL}/api/v1/recruiting/admin/add-social-production-fields?admin_key=perennia-admin-2024`, {
+  const response = await fetch(`${API_URL}/api/v1/recruiting/admin/add-social-production-fields`, {
     method: 'POST',
-    headers: getAuthHeaders()
+    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
   });
   if (!response.ok) throw new Error('Failed to run migration');
   return response.json();
@@ -508,20 +508,19 @@ export const runSocialProductionMigration = async () => {
 export const createCandidatePortalWorkspace = async (candidateId, slug = null) => {
   const params = new URLSearchParams();
   params.append('candidate_id', candidateId);
-  params.append('admin_key', 'perennia-admin-2024');
   if (slug) params.append('slug', slug);
 
   const response = await fetch(`${API_URL}/api/v1/recruit-portal/admin/workspaces?${params}`, {
     method: 'POST',
-    headers: getAuthHeaders()
+    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
   });
   if (!response.ok) throw new Error('Failed to create portal workspace');
   return response.json();
 };
 
 export const getCandidatePortalWorkspace = async (candidateId) => {
-  const response = await fetch(`${API_URL}/api/v1/recruit-portal/admin/workspaces/by-candidate/${candidateId}?admin_key=perennia-admin-2024`, {
-    headers: getAuthHeaders()
+  const response = await fetch(`${API_URL}/api/v1/recruit-portal/admin/workspaces/by-candidate/${candidateId}`, {
+    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Failed to fetch portal workspace');

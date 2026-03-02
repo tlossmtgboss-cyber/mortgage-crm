@@ -669,7 +669,7 @@ class RecruitingEmailService:
                        rc.first_name, rc.last_name, rc.email as candidate_email,
                        rc.phone as candidate_phone
                 FROM recruiting_tasks rt
-                JOIN recruiting_candidates rc ON rc.id = rt.candidate_id
+                JOIN mm_candidates rc ON rc.id = rt.candidate_id
                 WHERE rt.id = :task_id
             """),
             {"task_id": task_id}
