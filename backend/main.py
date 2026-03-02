@@ -1171,6 +1171,22 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# OPS MANAGER ROUTES - Pipeline Sweep & Impediment Detection
+# ============================================================================
+try:
+    from routes.ops_manager_routes import register_ops_manager_routes
+    register_ops_manager_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Ops Manager routes loaded (sweep, summary, history)")
+except Exception as e:
+    logger.error(f"❌ Ops Manager routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # ENCOMPASS LOS INTEGRATION ROUTES
 # ============================================================================
 try:

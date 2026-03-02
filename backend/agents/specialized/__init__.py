@@ -1,7 +1,7 @@
 """
 Perennia AI - Specialized Agent Tools
 
-This module contains 20 specialized AI agents with 160+ tools designed
+This module contains 23 specialized AI agents with 194+ tools designed
 for mortgage CRM operations:
 
 CORE CRM AGENTS (8):
@@ -14,7 +14,7 @@ CORE CRM AGENTS (8):
 7. Portfolio Agent - Post-close client management
 8. Compliance Agent - Regulatory compliance monitoring
 
-EXTENDED AGENTS (14):
+EXTENDED AGENTS (15):
 9. Receptionist Agent - AI voice/chat receptionist
 10. Profitability Agent - Loan and branch profitability analysis
 11. Subscription Agent - SaaS subscription and billing management
@@ -29,6 +29,7 @@ EXTENDED AGENTS (14):
 20. Rate Advisor Agent - Rate lock and pricing advice
 21. Salesforce Agent - Salesforce integration and bidirectional sync
 22. Content Marketing Agent - Content calendars, carousels, SEO, publishing
+23. Ops Manager Agent - Proactive pipeline patrol and impediment detection
 """
 
 from .base import SpecializedAgent, AgentTool, AgentRegistry, ToolCategory, RiskLevel, ToolResult
@@ -58,6 +59,7 @@ from .integrations_agent import IntegrationsAgent
 from .rate_advisor_agent import RateAdvisorAgent
 from .salesforce_agent import SalesforceAgent
 from .content_marketing_agent import ContentMarketingAgent
+from .ops_manager_agent import OpsManagerAgent
 
 __all__ = [
     # Base classes
@@ -78,7 +80,7 @@ __all__ = [
     "PortfolioAgent",
     "ComplianceAgent",
 
-    # Extended Agents (14)
+    # Extended Agents (15)
     "ReceptionistAgent",
     "ProfitabilityAgent",
     "SubscriptionAgent",
@@ -93,8 +95,9 @@ __all__ = [
     "RateAdvisorAgent",
     "SalesforceAgent",
     "ContentMarketingAgent",
+    "OpsManagerAgent",
 ]
 
 # Agent count for verification
-AGENT_COUNT = 22
-TOOL_COUNT = 186  # 22 agents × ~8.5 tools average
+AGENT_COUNT = 23
+TOOL_COUNT = 194  # 23 agents × ~8.4 tools average

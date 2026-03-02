@@ -118,6 +118,7 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "coaching": ["team_coach"],
     "customer": ["customer_intelligence"],
     "integrations": ["integrations"],
+    "operations": ["ops_manager"],
     "general": ["pipeline_analyst", "task_automation"],  # Default
 }
 
@@ -325,6 +326,14 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"\bAUS\b",
         r"e.?sign",
         r"sync",
+    ],
+    "operations": [
+        r"(ops|operations?) (manager|sweep|scan|check)",
+        r"pipeline (sweep|scan|health|check)",
+        r"(impediment|blocker|stuck|stalled)",
+        r"(team|staff) (gap|assignment|missing)",
+        r"(unassigned|missing) (lo|loan officer|processor|closer)",
+        r"run (a )?sweep",
     ],
 }
 

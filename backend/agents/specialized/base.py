@@ -422,6 +422,18 @@ class AgentRegistry:
         # Intent to agent mapping for all agents
         # Note: More specific phrases should come before generic ones
         intent_mapping = {
+            # Operations Manager Agent (specific phrases first)
+            "ops manager": "OpsManagerAgent",
+            "operations manager": "OpsManagerAgent",
+            "pipeline sweep": "OpsManagerAgent",
+            "impediment": "OpsManagerAgent",
+            "team gap": "OpsManagerAgent",
+            "stalled file": "OpsManagerAgent",
+            "missing processor": "OpsManagerAgent",
+            "missing closer": "OpsManagerAgent",
+            "unassigned lead": "OpsManagerAgent",
+            "unassigned loan": "OpsManagerAgent",
+
             # Content Marketing Agent (specific phrases first to avoid matching generic terms)
             "content calendar": "ContentMarketingAgent",
             "brand voice": "ContentMarketingAgent",
