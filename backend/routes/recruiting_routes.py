@@ -34,6 +34,17 @@ router = APIRouter(
 )
 
 
+def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
+    """Verify candidate belongs to the caller's organization. Returns the row or raises 404."""
+    row = db.execute(text("""
+        SELECT id FROM mm_candidates
+        WHERE id = :id AND organization_id = :org_id AND is_active = true
+    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return row
+
+
 # =============================================================================
 # QUIZ TEMPLATES ENDPOINTS
 # =============================================================================
@@ -260,15 +271,16 @@ async def list_partner_recruits(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     List partner recruits (realtors) from referral_partners table.
     These are potential realtor partners imported from RETR.
     """
-    params = {"limit": limit, "offset": offset}
-    filters = ["1=1"]  # Base filter
+    organization_id = current_user.organization_id
+    params = {"limit": limit, "offset": offset, "org_id": organization_id}
+    filters = ["organization_id = :org_id"]
 
     # Filter for realtor category (partners from RETR)
     filters.append("(category = 'realtor' OR type = 'Realtor')")
@@ -331,6 +343,7 @@ async def list_partner_recruits(
 @router.get("/partners/{partner_id}")
 async def get_partner_recruit(
     partner_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get detailed partner recruit information."""
@@ -341,8 +354,8 @@ async def get_partner_recruit(
             category, type, status,
             created_at
         FROM referral_partners
-        WHERE id = :id
-    """), {"id": partner_id}).fetchone()
+        WHERE id = :id AND organization_id = :org_id
+    """), {"id": partner_id, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Partner not found")
@@ -367,6 +380,7 @@ async def get_partner_recruit(
 async def update_partner_recruit_status(
     partner_id: int,
     status: str = Query(..., description="New status: active, prospect, inactive, converted"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update partner recruit status."""
@@ -377,9 +391,9 @@ async def update_partner_recruit_status(
     result = db.execute(text("""
         UPDATE referral_partners
         SET status = :status, updated_at = CURRENT_TIMESTAMP
-        WHERE id = :id
+        WHERE id = :id AND organization_id = :org_id
         RETURNING id
-    """), {"id": partner_id, "status": status}).fetchone()
+    """), {"id": partner_id, "status": status, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Partner not found")
@@ -390,6 +404,7 @@ async def update_partner_recruit_status(
 
 @router.get("/partners/stats/overview")
 async def get_partner_recruit_stats(
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get partner recruiting statistics overview."""
@@ -408,8 +423,9 @@ async def get_partner_recruit_stats(
             COUNT(CASE WHEN created_at >= CURRENT_DATE - 7 THEN 1 END) as new_this_week,
             COUNT(CASE WHEN created_at >= CURRENT_DATE - 30 THEN 1 END) as new_this_month
         FROM referral_partners
-        WHERE category = 'realtor' OR type = 'Realtor'
-    """)).fetchone()
+        WHERE (category = 'realtor' OR type = 'Realtor')
+        AND organization_id = :org_id
+    """), {"org_id": current_user.organization_id}).fetchone()
 
     # Calculate conversion rates
     total = stats.total or 0
@@ -571,13 +587,13 @@ class CandidateNoteCreate(BaseModel):
 @router.get("/pipeline/metrics")
 async def get_pipeline_metrics(
     days: int = Query(90, ge=7, le=365),
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get recruiting pipeline metrics."""
     service = RecruitingService(db)
     metrics = await service.get_pipeline_metrics(
-        organization_id=organization_id,
+        organization_id=current_user.organization_id,
         days=days
     )
     return {
@@ -602,13 +618,13 @@ async def list_candidates(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List candidates with filters."""
     service = RecruitingService(db)
     candidates = await service.get_candidates(
-        organization_id=organization_id,
+        organization_id=current_user.organization_id,
         status=status,
         role_id=role_id,
         source=source,
@@ -622,14 +638,14 @@ async def list_candidates(
 @router.get("/candidates/{candidate_id}")
 async def get_candidate(
     candidate_id: int,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get detailed candidate information."""
     service = RecruitingService(db)
     candidate = await service.get_candidate_detail(
         candidate_id=candidate_id,
-        organization_id=organization_id
+        organization_id=current_user.organization_id
     )
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -639,8 +655,7 @@ async def get_candidate(
 @router.post("/candidates")
 async def create_candidate(
     data: CandidateCreate,
-    user_id: Optional[int] = None,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a new candidate."""
@@ -648,8 +663,8 @@ async def create_candidate(
         service = RecruitingService(db)
         result = await service.create_candidate(
             data=data.model_dump(),
-            created_by=user_id or 1,
-            organization_id=organization_id
+            created_by=current_user.id,
+            organization_id=current_user.organization_id
         )
         return result
     except Exception as e:
@@ -676,12 +691,15 @@ class CandidateUpdate(BaseModel):
 async def update_candidate(
     candidate_id: int,
     data: CandidateUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update candidate details."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     # Build SET clause dynamically from provided fields
     updates = []
-    params = {"id": candidate_id}
+    params = {"id": candidate_id, "org_id": current_user.organization_id}
 
     for field, value in data.model_dump(exclude_none=True).items():
         if value is not None:
@@ -692,7 +710,7 @@ async def update_candidate(
         raise HTTPException(status_code=400, detail="No fields to update")
 
     updates.append("updated_at = NOW()")
-    query = f"UPDATE mm_candidates SET {', '.join(updates)} WHERE id = :id RETURNING id"
+    query = f"UPDATE mm_candidates SET {', '.join(updates)} WHERE id = :id AND organization_id = :org_id RETURNING id"
 
     result = db.execute(text(query), params).fetchone()
     if not result:
@@ -790,7 +808,6 @@ async def fix_candidate_portals(
 async def update_candidate_status(
     candidate_id: int,
     data: CandidateStatusUpdate,
-    organization_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -802,7 +819,7 @@ async def update_candidate_status(
             new_status=data.status,
             updated_by=current_user.id,
             reason=data.reason,
-            organization_id=organization_id
+            organization_id=current_user.organization_id
         )
         return result
     except ValueError as e:
@@ -822,16 +839,18 @@ async def escalate_candidate(
     db: Session = Depends(get_db)
 ):
     """Escalate/reassign a candidate to another team member."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     # Update the candidate's assigned_to
     result = db.execute(
         text("""
             UPDATE mm_candidates
             SET assigned_to = :assigned_to,
                 updated_at = NOW()
-            WHERE id = :candidate_id
+            WHERE id = :candidate_id AND organization_id = :org_id
             RETURNING id, first_name, last_name, assigned_to
         """),
-        {"candidate_id": candidate_id, "assigned_to": data.assigned_to}
+        {"candidate_id": candidate_id, "assigned_to": data.assigned_to, "org_id": current_user.organization_id}
     )
     row = result.fetchone()
 
@@ -870,13 +889,13 @@ async def escalate_candidate(
 async def list_job_postings(
     is_published: Optional[bool] = None,
     limit: int = Query(50, ge=1, le=200),
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List job postings."""
     service = RecruitingService(db)
     postings = await service.get_job_postings(
-        organization_id=organization_id,
+        organization_id=current_user.organization_id,
         is_published=is_published,
         limit=limit
     )
@@ -886,8 +905,7 @@ async def list_job_postings(
 @router.post("/job-postings")
 async def create_job_posting(
     data: JobPostingCreate,
-    user_id: Optional[int] = None,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a new job posting."""
@@ -895,8 +913,8 @@ async def create_job_posting(
         service = RecruitingService(db)
         result = await service.create_job_posting(
             data=data.model_dump(),
-            created_by=user_id or 1,
-            organization_id=organization_id
+            created_by=current_user.id,
+            organization_id=current_user.organization_id
         )
         return result
     except Exception as e:
@@ -912,12 +930,12 @@ async def create_job_posting(
 async def update_job_posting(
     posting_id: int,
     data: JobPostingUpdate,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update a job posting."""
     update_fields = []
-    params = {"id": posting_id}
+    params = {"id": posting_id, "org_id": current_user.organization_id}
 
     for field, value in data.model_dump(exclude_unset=True).items():
         if value is not None:
@@ -933,10 +951,9 @@ async def update_job_posting(
         UPDATE mm_job_postings
         SET {', '.join(update_fields)}
         WHERE id = :id
-        AND (:org_id IS NULL OR organization_id = :org_id)
+        AND organization_id = :org_id
         RETURNING id
     """)
-    params["org_id"] = organization_id
 
     result = db.execute(query, params).fetchone()
     if not result:
@@ -949,7 +966,7 @@ async def update_job_posting(
 @router.post("/job-postings/{posting_id}/publish")
 async def publish_job_posting(
     posting_id: int,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Publish a job posting."""
@@ -959,9 +976,9 @@ async def publish_job_posting(
             published_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = :id
-        AND (:org_id IS NULL OR organization_id = :org_id)
+        AND organization_id = :org_id
         RETURNING id, slug
-    """), {"id": posting_id, "org_id": organization_id}).fetchone()
+    """), {"id": posting_id, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Job posting not found")
@@ -973,7 +990,7 @@ async def publish_job_posting(
 @router.post("/job-postings/{posting_id}/unpublish")
 async def unpublish_job_posting(
     posting_id: int,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Unpublish a job posting."""
@@ -982,9 +999,9 @@ async def unpublish_job_posting(
         SET is_published = false,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = :id
-        AND (:org_id IS NULL OR organization_id = :org_id)
+        AND organization_id = :org_id
         RETURNING id
-    """), {"id": posting_id, "org_id": organization_id}).fetchone()
+    """), {"id": posting_id, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Job posting not found")
@@ -1000,9 +1017,12 @@ async def unpublish_job_posting(
 @router.get("/candidates/{candidate_id}/interviews")
 async def list_candidate_interviews(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List all interviews for a candidate."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     results = db.execute(text("""
         SELECT
             i.id, i.interview_type, i.interview_round, i.title,
@@ -1044,9 +1064,8 @@ async def list_candidate_interviews(
 async def schedule_interview(
     candidate_id: int,
     data: InterviewSchedule,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ):
     """Schedule an interview for a candidate."""
     import logging
@@ -1062,7 +1081,7 @@ async def schedule_interview(
             candidate_id=candidate_id,
             data=data.model_dump(),
             created_by=current_user.id,
-            organization_id=organization_id or current_user.organization_id
+            organization_id=current_user.organization_id
         )
         return result
     except Exception as e:
@@ -1081,9 +1100,8 @@ async def schedule_interview(
 async def submit_feedback(
     interview_id: int,
     data: InterviewFeedback,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
 ):
     """Submit feedback for an interview."""
     service = RecruitingService(db)
@@ -1092,7 +1110,7 @@ async def submit_feedback(
             interview_id=interview_id,
             interviewer_id=current_user.id,
             feedback=data.model_dump(),
-            organization_id=organization_id or current_user.organization_id
+            organization_id=current_user.organization_id
         )
         return result
     except ValueError as e:
@@ -1103,6 +1121,7 @@ async def submit_feedback(
 async def update_interview_status(
     interview_id: int,
     status: str = Query(..., description="New status: scheduled, confirmed, completed, cancelled, no_show"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update interview status."""
@@ -1114,9 +1133,9 @@ async def update_interview_status(
         UPDATE mm_interviews
         SET status = :status,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = :id
+        WHERE id = :id AND organization_id = :org_id
         RETURNING id
-    """), {"id": interview_id, "status": status}).fetchone()
+    """), {"id": interview_id, "status": status, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Interview not found")
@@ -1145,7 +1164,7 @@ async def send_interview_notifications(
 
     logger = logging.getLogger(__name__)
 
-    # Get interview details
+    # Get interview details (scoped to caller's org)
     interview = db.execute(text("""
         SELECT
             i.id, i.interview_type, i.scheduled_at, i.duration_minutes,
@@ -1155,8 +1174,8 @@ async def send_interview_notifications(
             c.phone as candidate_phone
         FROM mm_interviews i
         JOIN mm_candidates c ON c.id = i.candidate_id
-        WHERE i.id = :interview_id
-    """), {"interview_id": interview_id}).fetchone()
+        WHERE i.id = :interview_id AND c.organization_id = :org_id
+    """), {"interview_id": interview_id, "org_id": current_user.organization_id}).fetchone()
 
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
@@ -1299,7 +1318,7 @@ async def send_interview_notifications(
 async def list_offers(
     status: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List all offers."""
@@ -1311,14 +1330,14 @@ async def list_offers(
             c.id as candidate_id
         FROM mm_offers o
         JOIN mm_candidates c ON c.id = o.candidate_id
-        WHERE (:org_id IS NULL OR o.organization_id = :org_id)
+        WHERE o.organization_id = :org_id
         AND (:status IS NULL OR o.status = :status)
         ORDER BY o.created_at DESC
         LIMIT :limit
     """)
 
     results = db.execute(query, {
-        "org_id": organization_id,
+        "org_id": current_user.organization_id,
         "status": status,
         "limit": limit
     }).fetchall()
@@ -1346,17 +1365,17 @@ async def list_offers(
 async def create_offer(
     candidate_id: int,
     data: OfferCreate,
-    user_id: Optional[int] = None,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create an offer for a candidate."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
     service = RecruitingService(db)
     result = await service.create_offer(
         candidate_id=candidate_id,
         data=data.model_dump(),
-        created_by=user_id or 1,
-        organization_id=organization_id
+        created_by=current_user.id,
+        organization_id=current_user.organization_id
     )
     return result
 
@@ -1364,7 +1383,7 @@ async def create_offer(
 @router.get("/offers/{offer_id}")
 async def get_offer(
     offer_id: int,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get offer details."""
@@ -1378,8 +1397,8 @@ async def get_offer(
         JOIN mm_candidates c ON c.id = o.candidate_id
         LEFT JOIN users u ON u.id = o.reports_to_user_id
         WHERE o.id = :id
-        AND (:org_id IS NULL OR o.organization_id = :org_id)
-    """), {"id": offer_id, "org_id": organization_id}).fetchone()
+        AND o.organization_id = :org_id
+    """), {"id": offer_id, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Offer not found")
@@ -1423,8 +1442,7 @@ async def get_offer(
 async def send_offer(
     offer_id: int,
     data: OfferSend,
-    user_id: Optional[int] = None,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Send an offer to the candidate."""
@@ -1432,9 +1450,9 @@ async def send_offer(
     try:
         result = await service.send_offer(
             offer_id=offer_id,
-            sent_by=user_id or 1,
+            sent_by=current_user.id,
             expires_in_days=data.expires_in_days,
-            organization_id=organization_id
+            organization_id=current_user.organization_id
         )
         return result
     except ValueError as e:
@@ -1445,7 +1463,7 @@ async def send_offer(
 async def respond_to_offer(
     offer_id: int,
     data: OfferResponse,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Record candidate's response to an offer."""
@@ -1454,7 +1472,7 @@ async def respond_to_offer(
         offer_id=offer_id,
         accepted=data.accepted,
         notes=data.notes,
-        organization_id=organization_id
+        organization_id=current_user.organization_id
     )
     return result
 
@@ -1463,7 +1481,7 @@ async def respond_to_offer(
 async def withdraw_offer(
     offer_id: int,
     reason: Optional[str] = None,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Withdraw an offer."""
@@ -1474,9 +1492,9 @@ async def withdraw_offer(
             withdrawn_reason = :reason,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = :id
-        AND (:org_id IS NULL OR organization_id = :org_id)
+        AND organization_id = :org_id
         RETURNING id, candidate_id
-    """), {"id": offer_id, "reason": reason, "org_id": organization_id}).fetchone()
+    """), {"id": offer_id, "reason": reason, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Offer not found")
@@ -1493,10 +1511,12 @@ async def withdraw_offer(
 async def list_candidate_notes(
     candidate_id: int,
     include_private: bool = False,
-    user_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List notes for a candidate."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     query = text("""
         SELECT
             n.id, n.note_type, n.content, n.is_private, n.created_at,
@@ -1511,7 +1531,7 @@ async def list_candidate_notes(
     results = db.execute(query, {
         "candidate_id": candidate_id,
         "include_private": include_private,
-        "user_id": user_id or 0
+        "user_id": current_user.id
     }).fetchall()
 
     return {
@@ -1533,11 +1553,12 @@ async def list_candidate_notes(
 async def create_candidate_note(
     candidate_id: int,
     data: CandidateNoteCreate,
-    user_id: Optional[int] = None,
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a note for a candidate."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     result = db.execute(text("""
         INSERT INTO mm_candidate_notes (
             organization_id, candidate_id, note_type, content, is_private, created_by
@@ -1546,12 +1567,12 @@ async def create_candidate_note(
         )
         RETURNING id
     """), {
-        "org_id": organization_id,
+        "org_id": current_user.organization_id,
         "candidate_id": candidate_id,
         "note_type": data.note_type,
         "content": data.content,
         "is_private": data.is_private,
-        "created_by": user_id or 1
+        "created_by": current_user.id
     }).fetchone()
 
     db.commit()
@@ -1566,9 +1587,12 @@ async def create_candidate_note(
 async def list_candidate_activities(
     candidate_id: int,
     limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List activity feed for a candidate."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     results = db.execute(text("""
         SELECT
             a.id, a.activity_type, a.description, a.created_at,
@@ -1604,10 +1628,12 @@ async def list_candidate_activities(
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get recruiting dashboard statistics."""
+    organization_id = current_user.organization_id
+
     # Get various stats in parallel
     candidates_stats = db.execute(text("""
         SELECT
@@ -1618,7 +1644,7 @@ async def get_dashboard_stats(
             COUNT(CASE WHEN applied_at >= CURRENT_DATE - 7 THEN 1 END) as this_week
         FROM mm_candidates
         WHERE is_active = true
-        AND (:org_id IS NULL OR organization_id = :org_id)
+        AND organization_id = :org_id
     """), {"org_id": organization_id}).fetchone()
 
     interviews_stats = db.execute(text("""
@@ -1627,7 +1653,7 @@ async def get_dashboard_stats(
             COUNT(CASE WHEN status = 'scheduled' AND scheduled_at::date = CURRENT_DATE THEN 1 END) as today,
             COUNT(CASE WHEN status = 'completed' AND completed_at >= CURRENT_DATE - 7 THEN 1 END) as completed_this_week
         FROM mm_interviews
-        WHERE (:org_id IS NULL OR organization_id = :org_id)
+        WHERE organization_id = :org_id
     """), {"org_id": organization_id}).fetchone()
 
     offers_stats = db.execute(text("""
@@ -1636,7 +1662,7 @@ async def get_dashboard_stats(
             COUNT(CASE WHEN status = 'sent' THEN 1 END) as pending_response,
             COUNT(CASE WHEN status = 'accepted' AND accepted_at >= CURRENT_DATE - 30 THEN 1 END) as accepted_this_month
         FROM mm_offers
-        WHERE (:org_id IS NULL OR organization_id = :org_id)
+        WHERE organization_id = :org_id
     """), {"org_id": organization_id}).fetchone()
 
     positions_stats = db.execute(text("""
@@ -1645,7 +1671,7 @@ async def get_dashboard_stats(
             COALESCE(SUM(CASE WHEN is_published = true THEN views ELSE 0 END), 0) as total_views,
             COALESCE(SUM(CASE WHEN is_published = true THEN applications ELSE 0 END), 0) as total_applications
         FROM mm_job_postings
-        WHERE (:org_id IS NULL OR organization_id = :org_id)
+        WHERE organization_id = :org_id
     """), {"org_id": organization_id}).fetchone()
 
     return {
@@ -1677,7 +1703,7 @@ async def get_dashboard_stats(
 @router.get("/dashboard/upcoming-interviews")
 async def get_upcoming_interviews(
     limit: int = Query(10, ge=1, le=50),
-    organization_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get upcoming interviews for the dashboard."""
@@ -1693,10 +1719,10 @@ async def get_upcoming_interviews(
         LEFT JOIN users u ON u.id = i.primary_interviewer_id
         WHERE i.status = 'scheduled'
         AND i.scheduled_at >= CURRENT_TIMESTAMP
-        AND (:org_id IS NULL OR i.organization_id = :org_id)
+        AND i.organization_id = :org_id
         ORDER BY i.scheduled_at ASC
         LIMIT :limit
-    """), {"org_id": organization_id, "limit": limit}).fetchall()
+    """), {"org_id": current_user.organization_id, "limit": limit}).fetchall()
 
     return {
         "interviews": [
@@ -1984,6 +2010,7 @@ async def add_social_production_fields(
 @router.get("/candidates/{candidate_id}/full-profile")
 async def get_candidate_full_profile(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get complete candidate profile including production data and social media."""
@@ -2007,8 +2034,8 @@ async def get_candidate_full_profile(
             c.education, c.certifications, c.awards, c.testimonials,
             c.created_at, c.updated_at
         FROM mm_candidates c
-        WHERE c.id = :id AND c.is_active = true
-    """), {"id": candidate_id}).fetchone()
+        WHERE c.id = :id AND c.is_active = true AND c.organization_id = :org_id
+    """), {"id": candidate_id, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -2168,9 +2195,12 @@ async def update_candidate_social_media(
     instagram_url: Optional[str] = None,
     twitter_url: Optional[str] = None,
     linkedin_url: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update candidate social media URLs."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     result = db.execute(text("""
         UPDATE mm_candidates
         SET facebook_url = COALESCE(:facebook, facebook_url),
@@ -2178,10 +2208,11 @@ async def update_candidate_social_media(
             twitter_url = COALESCE(:twitter, twitter_url),
             linkedin_url = COALESCE(:linkedin, linkedin_url),
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = :id
+        WHERE id = :id AND organization_id = :org_id
         RETURNING id
     """), {
         "id": candidate_id,
+        "org_id": current_user.organization_id,
         "facebook": facebook_url,
         "instagram": instagram_url,
         "twitter": twitter_url,
@@ -2204,10 +2235,12 @@ async def update_candidate_production(
     current_company: Optional[str] = None,
     current_title: Optional[str] = None,
     license_states: Optional[List[str]] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update candidate production data."""
     import json
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     result = db.execute(text("""
         UPDATE mm_candidates
@@ -2218,10 +2251,11 @@ async def update_candidate_production(
             current_title = COALESCE(:title, current_title),
             license_states = COALESCE(CAST(:states AS JSONB), license_states),
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = :id
+        WHERE id = :id AND organization_id = :org_id
         RETURNING id
     """), {
         "id": candidate_id,
+        "org_id": current_user.organization_id,
         "volume": annual_volume,
         "units": annual_units,
         "nmls": nmls_id,
@@ -2244,9 +2278,12 @@ async def update_candidate_basic_info(
     last_name: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update candidate basic information (name, email, phone)."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     result = db.execute(text("""
         UPDATE mm_candidates
         SET first_name = COALESCE(:first_name, first_name),
@@ -2254,10 +2291,11 @@ async def update_candidate_basic_info(
             email = COALESCE(:email, email),
             phone = COALESCE(:phone, phone),
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = :id
+        WHERE id = :id AND organization_id = :org_id
         RETURNING id
     """), {
         "id": candidate_id,
+        "org_id": current_user.organization_id,
         "first_name": first_name,
         "last_name": last_name,
         "email": email,

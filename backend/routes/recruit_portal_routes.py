@@ -9,17 +9,22 @@ Includes:
 - Appointment scheduling
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from database import get_db
 import secrets
 import logging
 import os
+import time
+import threading
+from collections import defaultdict
 
+from auth.dependencies import get_current_user
+from database.models import User
 from services.recruit_portal_service import RecruitPortalService
 from sqlalchemy.exc import SQLAlchemyError
 from models.recruit_portal_models import (
@@ -31,8 +36,83 @@ logger = logging.getLogger(__name__)
 
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
+# Portal token TTL — tokens older than this are rejected
+PORTAL_TOKEN_TTL_DAYS = int(os.getenv("PORTAL_TOKEN_TTL_DAYS", "90"))
+
+# ── Rate limiter for public portal endpoints ────────────────────────────
+# Keyed by client IP.  Separate limits for general vs AI chat endpoints.
+_rate_store: dict = defaultdict(list)
+_rate_lock = threading.Lock()
+_RATE_WINDOW = 60          # seconds
+_RATE_MAX_GENERAL = 30     # requests per window for general endpoints
+_RATE_MAX_CHAT = 5         # requests per window for AI chat (expensive)
+_RATE_MAX_KEYS = 10_000    # max tracked IPs before forced cleanup
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate_limit(ip: str, bucket: str, max_requests: int) -> bool:
+    """Return True if the request is allowed, False if rate-limited."""
+    now = time.time()
+    key = f"portal:{bucket}:{ip}"
+    with _rate_lock:
+        _rate_store[key] = [t for t in _rate_store[key] if now - t < _RATE_WINDOW]
+        # Periodic cleanup
+        if len(_rate_store) > _RATE_MAX_KEYS:
+            stale = [k for k, v in _rate_store.items() if not v or now - v[-1] > _RATE_WINDOW]
+            for k in stale:
+                del _rate_store[k]
+        if len(_rate_store[key]) >= max_requests:
+            return False
+        _rate_store[key].append(now)
+    return True
+
+
+def _enforce_rate_limit(request: Request, bucket: str = "general", max_requests: int = _RATE_MAX_GENERAL):
+    ip = _get_client_ip(request)
+    if not _check_rate_limit(ip, bucket, max_requests):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
+
 router = APIRouter(prefix="/api/v1/recruit-portal", tags=["recruit-portal"])
 portal_service = RecruitPortalService()
+
+
+# ── Helper: validate portal token with expiration ───────────────────────
+
+def _validate_portal_token(db: Session, token: str, *, require_active: bool = True):
+    """Look up candidate by portal token, enforcing TTL.
+
+    Returns the candidate row or raises 404.
+    """
+    row = db.execute(text("""
+        SELECT id, first_name, last_name, email, phone, status,
+               portal_token_created_at
+        FROM mm_candidates
+        WHERE portal_token = :token
+          AND is_active = true
+    """), {"token": token}).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Invalid or expired portal token")
+
+    # Enforce token TTL
+    if row.portal_token_created_at:
+        created = row.portal_token_created_at
+        # Handle naive datetimes from PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+        if created.tzinfo is None:
+            cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=PORTAL_TOKEN_TTL_DAYS)
+        else:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=PORTAL_TOKEN_TTL_DAYS)
+        if created < cutoff:
+            raise HTTPException(status_code=410, detail="Portal token has expired. Please contact your recruiter for a new link.")
+
+    return row
 
 
 # =============================================================================
@@ -42,20 +122,21 @@ portal_service = RecruitPortalService()
 @router.post("/generate-token/{candidate_id}")
 async def generate_portal_token(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Generate a portal access token for a candidate (internal use)."""
+    """Generate a portal access token for a candidate (requires auth)."""
     # Generate a secure token
     token = secrets.token_urlsafe(32)
 
-    # Store the token
+    # Store the token — scoped to the caller's organization
     result = db.execute(text("""
         UPDATE mm_candidates
         SET portal_token = :token,
             portal_token_created_at = CURRENT_TIMESTAMP
-        WHERE id = :id
+        WHERE id = :id AND organization_id = :org_id
         RETURNING id, first_name, last_name, email
-    """), {"id": candidate_id, "token": token}).fetchone()
+    """), {"id": candidate_id, "token": token, "org_id": current_user.organization_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
@@ -80,10 +161,16 @@ async def generate_portal_token(
 @router.get("/{token}")
 async def get_candidate_portal(
     token: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get candidate portal data using access token."""
-    # Look up candidate by token - use only base columns that always exist
+    _enforce_rate_limit(request)
+
+    # Validate token with TTL enforcement
+    validated = _validate_portal_token(db, token)
+
+    # Fetch full profile using validated candidate id
     result = db.execute(text("""
         SELECT
             c.id, c.first_name, c.last_name, c.email, c.phone,
@@ -94,8 +181,8 @@ async def get_candidate_portal(
             c.culture_fit_score, c.placement_recommendation, c.talent_profile,
             c.created_at, c.updated_at
         FROM mm_candidates c
-        WHERE c.portal_token = :token AND c.is_active = true
-    """), {"token": token}).fetchone()
+        WHERE c.id = :id AND c.is_active = true
+    """), {"id": validated.id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Invalid or expired portal token")
@@ -248,17 +335,13 @@ class InterestRequest(BaseModel):
 @router.post("/{token}/express-interest")
 async def express_interest(
     token: str,
-    request: InterestRequest,
+    interest: InterestRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Allow candidate to express interest in another position."""
-    # Verify token
-    result = db.execute(text("""
-        SELECT id FROM mm_candidates WHERE portal_token = :token
-    """), {"token": token}).fetchone()
-
-    if not result:
-        raise HTTPException(status_code=404, detail="Invalid token")
+    _enforce_rate_limit(request)
+    result = _validate_portal_token(db, token)
 
     # Log the interest
     db.execute(text("""
@@ -266,7 +349,7 @@ async def express_interest(
         VALUES (:cid, 'expressed_interest', :desc, CURRENT_TIMESTAMP)
     """), {
         "cid": result.id,
-        "desc": f"Expressed interest in job posting #{request.job_id} via portal"
+        "desc": f"Expressed interest in job posting #{interest.job_id} via portal"
     })
 
     db.commit()
@@ -277,18 +360,14 @@ async def express_interest(
 @router.post("/{token}/update-contact")
 async def update_contact_info(
     token: str,
+    request: Request,
     phone: Optional[str] = None,
     email: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Allow candidate to update their contact information."""
-    # Verify token
-    result = db.execute(text("""
-        SELECT id FROM mm_candidates WHERE portal_token = :token
-    """), {"token": token}).fetchone()
-
-    if not result:
-        raise HTTPException(status_code=404, detail="Invalid token")
+    _enforce_rate_limit(request)
+    result = _validate_portal_token(db, token)
 
     updates = []
     params = {"id": result.id}
@@ -492,10 +571,12 @@ async def create_portal_tables(
 @router.get("/purl/{slug}")
 async def get_purl_portal_data(
     slug: str,
+    request: Request,
     token: Optional[str] = Query(None, description="Portal access token"),
     db: Session = Depends(get_db)
 ):
     """Get PURL portal data for candidate including calculator config and company info."""
+    _enforce_rate_limit(request)
     try:
         portal_data = portal_service.get_portal_by_slug(slug, token)
         if not portal_data:
@@ -509,11 +590,13 @@ async def get_purl_portal_data(
 @router.get("/purl/{slug}/updates")
 async def get_purl_company_updates(
     slug: str,
+    request: Request,
     category: Optional[str] = None,
     limit: int = Query(10, le=50),
     db: Session = Depends(get_db)
 ):
     """Get company updates/propaganda for the PURL portal."""
+    _enforce_rate_limit(request)
     try:
         updates = portal_service.get_company_updates(category=category, limit=limit)
         return {"updates": updates}
@@ -525,10 +608,12 @@ async def get_purl_company_updates(
 @router.post("/purl/{slug}/chat", response_model=ChatResponse)
 async def purl_chat_with_assistant(
     slug: str,
-    request: ChatRequest,
+    chat_request: ChatRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """AI chat interaction for candidate questions on PURL portal."""
+    _enforce_rate_limit(request, "chat", _RATE_MAX_CHAT)
     try:
         portal_data = portal_service.get_portal_by_slug(slug)
         if not portal_data:
@@ -536,8 +621,8 @@ async def purl_chat_with_assistant(
 
         result = portal_service.chat_with_assistant(
             workspace_id=portal_data.workspace_id,
-            message=request.message,
-            context=request.context
+            message=chat_request.message,
+            context=chat_request.context
         )
         return ChatResponse(response=result.get("response", ""), metadata={"timestamp": datetime.now().isoformat()})
     except Exception as e:
@@ -548,11 +633,13 @@ async def purl_chat_with_assistant(
 @router.get("/purl/{slug}/availability")
 async def get_purl_availability(
     slug: str,
+    request: Request,
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
     duration_minutes: int = Query(30, description="Meeting duration"),
     db: Session = Depends(get_db)
 ):
     """Get available time slots for scheduling on PURL portal."""
+    _enforce_rate_limit(request)
     try:
         portal_data = portal_service.get_portal_by_slug(slug)
         if not portal_data:
@@ -572,9 +659,11 @@ async def get_purl_availability(
 async def schedule_purl_appointment(
     slug: str,
     appointment: AppointmentCreate,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Book an appointment through the PURL portal."""
+    _enforce_rate_limit(request)
     try:
         portal_data = portal_service.get_portal_by_slug(slug)
         if not portal_data:
@@ -599,9 +688,11 @@ async def schedule_purl_appointment(
 async def calculate_purl_production_impact(
     slug: str,
     input_data: CalculatorInput,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Calculate production impact if candidate joins the company."""
+    _enforce_rate_limit(request)
     try:
         result = portal_service.calculate_production_impact(input_data)
         return result
@@ -613,10 +704,12 @@ async def calculate_purl_production_impact(
 @router.get("/purl/{slug}/chat-history")
 async def get_purl_chat_history(
     slug: str,
+    request: Request,
     limit: int = Query(50, le=100),
     db: Session = Depends(get_db)
 ):
     """Get chat message history for the PURL portal."""
+    _enforce_rate_limit(request)
     try:
         portal_data = portal_service.get_portal_by_slug(slug)
         if not portal_data:
