@@ -303,7 +303,7 @@ class OpsManagerAgent(SpecializedAgent):
     # ========================================================================
 
     async def _run_pipeline_sweep(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Orchestrate a full sweep of all 3 pipelines"""
+        """Orchestrate a full sweep of all 3 pipelines using a single DB session"""
         from database import SessionLocal
         from sqlalchemy import text
 
@@ -311,113 +311,120 @@ class OpsManagerAgent(SpecializedAgent):
         dry_run = input_data.get("dry_run", False)
         started_at = datetime.utcnow()
 
-        # Run each sub-sweep
-        lead_result = await self._sweep_lead_pipeline(
-            {"organization_id": org_id, "stale_days": 7, "dry_run": dry_run}, context)
-        loan_result = await self._sweep_active_loans(
-            {"organization_id": org_id, "lock_warning_days": 5, "doc_warning_days": 14, "dry_run": dry_run}, context)
-        mum_result = await self._sweep_mum_pipeline(
-            {"organization_id": org_id, "overdue_days": 90, "dry_run": dry_run}, context)
-        team_result = await self._detect_team_gaps(
-            {"organization_id": org_id, "dry_run": dry_run}, context)
-        stalled_result = await self._detect_stalled_files(
-            {"organization_id": org_id, "stalled_days": 14, "dry_run": dry_run}, context)
-
-        completed_at = datetime.utcnow()
-        duration = (completed_at - started_at).total_seconds()
-
-        # Aggregate results
-        lead_data = lead_result.data or {}
-        loan_data = loan_result.data or {}
-        mum_data = mum_result.data or {}
-        team_data = team_result.data or {}
-        stalled_data = stalled_result.data or {}
-
-        total_impediments = (
-            lead_data.get("impediments_found", 0) +
-            loan_data.get("impediments_found", 0) +
-            mum_data.get("impediments_found", 0) +
-            team_data.get("impediments_found", 0) +
-            stalled_data.get("impediments_found", 0)
-        )
-        total_tasks_created = (
-            lead_data.get("tasks_created", 0) +
-            loan_data.get("tasks_created", 0) +
-            mum_data.get("tasks_created", 0) +
-            team_data.get("tasks_created", 0) +
-            stalled_data.get("tasks_created", 0)
-        )
-        total_skipped = (
-            lead_data.get("tasks_skipped_dedup", 0) +
-            loan_data.get("tasks_skipped_dedup", 0) +
-            mum_data.get("tasks_skipped_dedup", 0) +
-            team_data.get("tasks_skipped_dedup", 0) +
-            stalled_data.get("tasks_skipped_dedup", 0)
-        )
-
-        impediment_breakdown = {}
-        for sub_data in [lead_data, loan_data, mum_data, team_data, stalled_data]:
-            for cat, count in sub_data.get("by_category", {}).items():
-                impediment_breakdown[cat] = impediment_breakdown.get(cat, 0) + count
-
-        # Record sweep result
+        # Share a single DB session across all sub-sweeps to avoid connection exhaustion
         db = SessionLocal()
+        shared_context = dict(context) if context else {}
+        shared_context["_shared_db"] = db
+
         try:
-            db.execute(text("""
-                INSERT INTO ops_sweep_results (
-                    organization_id, sweep_type, started_at, completed_at,
-                    duration_seconds, leads_scanned, loans_scanned, mum_scanned,
-                    impediments_found, tasks_created, tasks_skipped_dedup,
-                    impediment_breakdown, dry_run
-                ) VALUES (
-                    :org_id, 'full', :started, :completed,
-                    :duration, :leads, :loans, :mum,
-                    :impediments, :created, :skipped,
-                    :breakdown, :dry_run
-                )
-            """), {
-                "org_id": org_id,
-                "started": started_at,
-                "completed": completed_at,
-                "duration": round(duration, 2),
-                "leads": lead_data.get("scanned", 0),
-                "loans": loan_data.get("scanned", 0),
-                "mum": mum_data.get("scanned", 0),
-                "impediments": total_impediments,
-                "created": total_tasks_created,
-                "skipped": total_skipped,
-                "breakdown": json.dumps(impediment_breakdown),
-                "dry_run": dry_run,
-            })
-            db.commit()
-        except Exception:
-            db.rollback()
+            # Run each sub-sweep with shared session
+            lead_result = await self._sweep_lead_pipeline(
+                {"organization_id": org_id, "stale_days": 7, "dry_run": dry_run}, shared_context)
+            loan_result = await self._sweep_active_loans(
+                {"organization_id": org_id, "lock_warning_days": 5, "doc_warning_days": 14, "dry_run": dry_run}, shared_context)
+            mum_result = await self._sweep_mum_pipeline(
+                {"organization_id": org_id, "overdue_days": 90, "dry_run": dry_run}, shared_context)
+            team_result = await self._detect_team_gaps(
+                {"organization_id": org_id, "dry_run": dry_run}, shared_context)
+            stalled_result = await self._detect_stalled_files(
+                {"organization_id": org_id, "stalled_days": 14, "dry_run": dry_run}, shared_context)
+
+            completed_at = datetime.utcnow()
+            duration = (completed_at - started_at).total_seconds()
+
+            # Aggregate results
+            lead_data = lead_result.data or {}
+            loan_data = loan_result.data or {}
+            mum_data = mum_result.data or {}
+            team_data = team_result.data or {}
+            stalled_data = stalled_result.data or {}
+
+            total_impediments = (
+                lead_data.get("impediments_found", 0) +
+                loan_data.get("impediments_found", 0) +
+                mum_data.get("impediments_found", 0) +
+                team_data.get("impediments_found", 0) +
+                stalled_data.get("impediments_found", 0)
+            )
+            total_tasks_created = (
+                lead_data.get("tasks_created", 0) +
+                loan_data.get("tasks_created", 0) +
+                mum_data.get("tasks_created", 0) +
+                team_data.get("tasks_created", 0) +
+                stalled_data.get("tasks_created", 0)
+            )
+            total_skipped = (
+                lead_data.get("tasks_skipped_dedup", 0) +
+                loan_data.get("tasks_skipped_dedup", 0) +
+                mum_data.get("tasks_skipped_dedup", 0) +
+                team_data.get("tasks_skipped_dedup", 0) +
+                stalled_data.get("tasks_skipped_dedup", 0)
+            )
+
+            impediment_breakdown = {}
+            for sub_data in [lead_data, loan_data, mum_data, team_data, stalled_data]:
+                for cat, count in sub_data.get("by_category", {}).items():
+                    impediment_breakdown[cat] = impediment_breakdown.get(cat, 0) + count
+
+            # Record sweep result
+            try:
+                db.execute(text("""
+                    INSERT INTO ops_sweep_results (
+                        organization_id, sweep_type, started_at, completed_at,
+                        duration_seconds, leads_scanned, loans_scanned, mum_scanned,
+                        impediments_found, tasks_created, tasks_skipped_dedup,
+                        impediment_breakdown, dry_run
+                    ) VALUES (
+                        :org_id, 'full', :started, :completed,
+                        :duration, :leads, :loans, :mum,
+                        :impediments, :created, :skipped,
+                        :breakdown, :dry_run
+                    )
+                """), {
+                    "org_id": org_id,
+                    "started": started_at,
+                    "completed": completed_at,
+                    "duration": round(duration, 2),
+                    "leads": lead_data.get("scanned", 0),
+                    "loans": loan_data.get("scanned", 0),
+                    "mum": mum_data.get("scanned", 0),
+                    "impediments": total_impediments,
+                    "created": total_tasks_created,
+                    "skipped": total_skipped,
+                    "breakdown": json.dumps(impediment_breakdown),
+                    "dry_run": dry_run,
+                })
+                db.commit()
+            except Exception:
+                db.rollback()
+
+            return ToolResult(
+                success=True,
+                data={
+                    "sweep_type": "full",
+                    "dry_run": dry_run,
+                    "duration_seconds": round(duration, 2),
+                    "leads_scanned": lead_data.get("scanned", 0),
+                    "loans_scanned": loan_data.get("scanned", 0),
+                    "mum_scanned": mum_data.get("scanned", 0),
+                    "impediments_found": total_impediments,
+                    "tasks_created": total_tasks_created,
+                    "tasks_skipped_dedup": total_skipped,
+                    "impediment_breakdown": impediment_breakdown,
+                    "sub_results": {
+                        "leads": lead_data,
+                        "loans": loan_data,
+                        "mum": mum_data,
+                        "team_gaps": team_data,
+                        "stalled_files": stalled_data,
+                    },
+                },
+                message=f"Sweep complete: {total_impediments} impediments, {total_tasks_created} tasks created, {total_skipped} deduped ({round(duration, 1)}s)"
+            )
+        except Exception as e:
+            return ToolResult(success=False, error=str(e))
         finally:
             db.close()
-
-        return ToolResult(
-            success=True,
-            data={
-                "sweep_type": "full",
-                "dry_run": dry_run,
-                "duration_seconds": round(duration, 2),
-                "leads_scanned": lead_data.get("scanned", 0),
-                "loans_scanned": loan_data.get("scanned", 0),
-                "mum_scanned": mum_data.get("scanned", 0),
-                "impediments_found": total_impediments,
-                "tasks_created": total_tasks_created,
-                "tasks_skipped_dedup": total_skipped,
-                "impediment_breakdown": impediment_breakdown,
-                "sub_results": {
-                    "leads": lead_data,
-                    "loans": loan_data,
-                    "mum": mum_data,
-                    "team_gaps": team_data,
-                    "stalled_files": stalled_data,
-                },
-            },
-            message=f"Sweep complete: {total_impediments} impediments, {total_tasks_created} tasks created, {total_skipped} deduped ({round(duration, 1)}s)"
-        )
 
     # ========================================================================
     # TOOL 2: LEAD PIPELINE SWEEP
@@ -432,7 +439,8 @@ class OpsManagerAgent(SpecializedAgent):
         stale_days = input_data.get("stale_days", 7)
         dry_run = input_data.get("dry_run", False)
 
-        db = SessionLocal()
+        shared_db = context.get("_shared_db") if context else None
+        db = shared_db or SessionLocal()
         try:
             org_filter = "AND l.organization_id = :org_id" if org_id else ""
             params = {"stale_days": stale_days}
@@ -526,10 +534,12 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Lead sweep: {len(impediments)} impediments from {scanned} leads"
             )
         except Exception as e:
-            db.rollback()
+            if not shared_db:
+                db.rollback()
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not shared_db:
+                db.close()
 
     # ========================================================================
     # TOOL 3: ACTIVE LOANS SWEEP
@@ -545,7 +555,8 @@ class OpsManagerAgent(SpecializedAgent):
         doc_days = input_data.get("doc_warning_days", 14)
         dry_run = input_data.get("dry_run", False)
 
-        db = SessionLocal()
+        shared_db = context.get("_shared_db") if context else None
+        db = shared_db or SessionLocal()
         try:
             terminal_list = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
             org_filter = "AND l.organization_id = :org_id" if org_id else ""
@@ -734,10 +745,12 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Loan sweep: {len(impediments)} impediments from {scanned} active loans"
             )
         except Exception as e:
-            db.rollback()
+            if not shared_db:
+                db.rollback()
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not shared_db:
+                db.close()
 
     # ========================================================================
     # TOOL 4: MUM PIPELINE SWEEP
@@ -752,7 +765,8 @@ class OpsManagerAgent(SpecializedAgent):
         overdue_days = input_data.get("overdue_days", 90)
         dry_run = input_data.get("dry_run", False)
 
-        db = SessionLocal()
+        shared_db = context.get("_shared_db") if context else None
+        db = shared_db or SessionLocal()
         try:
             org_filter = "AND l.organization_id = :org_id" if org_id else ""
             params = {}
@@ -828,10 +842,12 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"MUM sweep: {len(impediments)} overdue from {scanned} funded loans"
             )
         except Exception as e:
-            db.rollback()
+            if not shared_db:
+                db.rollback()
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not shared_db:
+                db.close()
 
     # ========================================================================
     # TOOL 5: TEAM GAPS DETECTION
@@ -845,7 +861,8 @@ class OpsManagerAgent(SpecializedAgent):
         org_id = input_data.get("organization_id")
         dry_run = input_data.get("dry_run", False)
 
-        db = SessionLocal()
+        shared_db = context.get("_shared_db") if context else None
+        db = shared_db or SessionLocal()
         try:
             terminal_list = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
             org_filter = "AND l.organization_id = :org_id" if org_id else ""
@@ -933,10 +950,12 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Team gaps: {len(impediments)} found"
             )
         except Exception as e:
-            db.rollback()
+            if not shared_db:
+                db.rollback()
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not shared_db:
+                db.close()
 
     # ========================================================================
     # TOOL 6: STALLED FILES DETECTION
@@ -951,7 +970,8 @@ class OpsManagerAgent(SpecializedAgent):
         stalled_days = input_data.get("stalled_days", 14)
         dry_run = input_data.get("dry_run", False)
 
-        db = SessionLocal()
+        shared_db = context.get("_shared_db") if context else None
+        db = shared_db or SessionLocal()
         try:
             terminal_list = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
             org_filter = "AND l.organization_id = :org_id" if org_id else ""
@@ -1018,10 +1038,12 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Stalled files: {len(impediments)} loans with no activity in {stalled_days}+ days"
             )
         except Exception as e:
-            db.rollback()
+            if not shared_db:
+                db.rollback()
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not shared_db:
+                db.close()
 
     # ========================================================================
     # TOOL 7: IMPEDIMENT SUMMARY
