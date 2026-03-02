@@ -2901,5 +2901,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             results = run_migration()
             return {"status": "success", **results}
         except Exception as e:
-            logger.error(f"Recruiting org_id migration failed: {e}")
-            raise HTTPException(status_code=500, detail="Migration failed")
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"Recruiting org_id migration failed: {e}\n{tb}")
+            return {"status": "error", "error": str(e), "traceback": tb}
