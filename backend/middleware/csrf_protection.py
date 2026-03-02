@@ -54,6 +54,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/borrower",  # Borrower portal uses JWT auth
         "/api/v1/csrf-token",  # Token endpoint itself
         "/api/v1/public",  # Public endpoints (migrations, etc.)
+        "/api/v1/scheduler/public",  # Public booking endpoints (unauthenticated POST)
+        "/api/v1/admin/unlock-account",  # Admin unlock - uses admin key auth
         "/api/v1/admin-onboarding",  # Subscription onboarding - uses invite token auth, no session
         "/api/v1/invitations/activate",  # Public account activation from invite
         "/api/integrations",  # New integration routes

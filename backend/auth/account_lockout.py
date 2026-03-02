@@ -13,9 +13,21 @@ MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 30
 
 
+def _utcnow_naive() -> datetime:
+    """Return current UTC time as a naive datetime.
+
+    The User.locked_until column is Column(DateTime) — a PostgreSQL
+    ``timestamp without time zone``.  Values written with tzinfo are
+    stored with the timezone stripped, and values read back are naive.
+    Comparing a naive DB value against an aware datetime raises TypeError.
+    Using naive UTC everywhere avoids this mismatch.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def check_account_locked(user) -> bool:
     """Check if account is currently locked."""
-    if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+    if user.locked_until and user.locked_until > _utcnow_naive():
         return True
     return False
 
@@ -23,10 +35,10 @@ def check_account_locked(user) -> bool:
 def record_failed_login(db: Session, user) -> dict:
     """Record a failed login attempt and lock if threshold exceeded."""
     user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-    user.last_failed_login_at = datetime.now(timezone.utc)
+    user.last_failed_login_at = _utcnow_naive()
 
     if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
-        user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+        user.locked_until = _utcnow_naive() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
         logger.warning(f"Account locked for user {user.email} after {user.failed_login_attempts} failed attempts")
         db.commit()
         return {

@@ -860,6 +860,37 @@ async def admin_force_password_reset(request: AdminPasswordResetRequest, db: Ses
     }
 
 
+class AdminUnlockRequest(BaseModel):
+    email: EmailStr
+    admin_key: str
+
+
+@router.post("/api/v1/admin/unlock-account")
+async def admin_unlock_account(request: AdminUnlockRequest, db: Session = Depends(get_db)):
+    """
+    Admin endpoint to unlock a locked user account.
+    Uses the same ADMIN_RESET_KEY authentication as password reset.
+    """
+    models = get_models()
+    User = models['User']
+
+    expected_key = os.getenv("ADMIN_RESET_KEY", "")
+    if not expected_key or request.admin_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
+    user = db.query(User).filter(func.lower(User.email) == request.email.lower()).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    from auth.account_lockout import unlock_account
+    unlock_account(db, user)
+
+    return {
+        "success": True,
+        "message": f"Account unlocked for {request.email}",
+    }
+
+
 # =============================================================================
 # ADMIN UTILITY ROUTES
 # =============================================================================

@@ -413,33 +413,49 @@ def _serialize(val):
 
 
 def _write_audit_batch(entries: list):
-    """Write audit log entries via a separate connection (avoids flush recursion)."""
+    """Write audit log entries in a background thread to avoid holding two pool
+    connections simultaneously (the caller's session + this write connection).
+
+    Previously this ran synchronously inside after_flush, which meant every
+    db.commit() needed TWO pool connections at once.  With pool_size=3 +
+    max_overflow=5 (8 total), concurrent requests could exhaust the pool and
+    cause TimeoutError → 500 Internal Server Error on login and other routes.
+    """
     import json as _json
-    try:
-        with engine.connect() as conn:
-            for entry in entries:
-                conn.execute(
-                    text("""
-                        INSERT INTO audit_logs
-                            (user_id, changed_by_id, change_type, entity_type, entity_id,
-                             before_state, after_state, timestamp, organization_id)
-                        VALUES
-                            (NULL, NULL, :change_type, :entity_type, :entity_id,
-                             :before_state, :after_state, :ts, :org_id)
-                    """),
-                    {
-                        "change_type": entry["change_type"],
-                        "entity_type": entry["entity_type"],
-                        "entity_id": entry.get("entity_id"),
-                        "before_state": _json.dumps(entry.get("before_state")) if entry.get("before_state") else None,
-                        "after_state": _json.dumps(entry.get("after_state")) if entry.get("after_state") else None,
-                        "ts": datetime.now(timezone.utc),
-                        "org_id": entry.get("organization_id"),
-                    },
-                )
-            conn.commit()
-    except Exception as e:
-        logger.warning(f"Mutation audit batch write failed: {e}")
+
+    # Snapshot the data needed — entries are plain dicts, already safe to pass
+    # across threads.  Capture timestamp now so it reflects commit time.
+    ts = datetime.now(timezone.utc)
+
+    def _bg_write():
+        try:
+            with engine.connect() as conn:
+                for entry in entries:
+                    conn.execute(
+                        text("""
+                            INSERT INTO audit_logs
+                                (user_id, changed_by_id, change_type, entity_type, entity_id,
+                                 before_state, after_state, timestamp, organization_id)
+                            VALUES
+                                (NULL, NULL, :change_type, :entity_type, :entity_id,
+                                 :before_state, :after_state, :ts, :org_id)
+                        """),
+                        {
+                            "change_type": entry["change_type"],
+                            "entity_type": entry["entity_type"],
+                            "entity_id": entry.get("entity_id"),
+                            "before_state": _json.dumps(entry.get("before_state")) if entry.get("before_state") else None,
+                            "after_state": _json.dumps(entry.get("after_state")) if entry.get("after_state") else None,
+                            "ts": ts,
+                            "org_id": entry.get("organization_id"),
+                        },
+                    )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"Mutation audit batch write failed: {e}")
+
+    thread = threading.Thread(target=_bg_write, daemon=True)
+    thread.start()
 
 
 # Initialize on module load
