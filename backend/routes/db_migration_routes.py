@@ -2886,3 +2886,20 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             logger.error(f"Fix task assignments failed: {e}")
             raise HTTPException(status_code=500, detail="Internal server error")
+
+    @app.post("/api/v1/public/migrations/enforce-recruiting-org-id", response_model=None)
+    async def enforce_recruiting_org_id_migration(
+        migration_key: str = "",
+        db: Session = Depends(get_db)
+    ):
+        """Enforce organization_id NOT NULL on all recruiting tables."""
+        if migration_key != "recruit-org-2026":
+            raise HTTPException(status_code=403, detail="Invalid migration key")
+
+        try:
+            from migrations.enforce_recruiting_org_id import run_migration
+            results = run_migration()
+            return {"status": "success", **results}
+        except Exception as e:
+            logger.error(f"Recruiting org_id migration failed: {e}")
+            raise HTTPException(status_code=500, detail="Migration failed")
