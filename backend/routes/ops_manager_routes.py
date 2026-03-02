@@ -73,11 +73,12 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
 
             org_id = organization_id or getattr(current_user, "organization_id", None)
 
-            context = AgentContext(
-                user_id=str(getattr(current_user, "id", "system")),
-                user_email=getattr(current_user, "email", ""),
-                user_role=getattr(current_user, "role", "admin"),
-            )
+            context = {
+                "user_id": str(getattr(current_user, "id", "system")),
+                "user_email": getattr(current_user, "email", ""),
+                "user_role": getattr(current_user, "role", "admin"),
+                "_shared_db": db,
+            }
 
             agent = OpsManagerAgent(context)
             result = await agent.execute_tool("run_pipeline_sweep", {
@@ -114,11 +115,12 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
 
             org_id = organization_id or getattr(current_user, "organization_id", None)
 
-            context = AgentContext(
-                user_id=str(getattr(current_user, "id", "system")),
-                user_email=getattr(current_user, "email", ""),
-                user_role=getattr(current_user, "role", "admin"),
-            )
+            context = {
+                "user_id": str(getattr(current_user, "id", "system")),
+                "user_email": getattr(current_user, "email", ""),
+                "user_role": getattr(current_user, "role", "admin"),
+                "_shared_db": db,
+            }
 
             agent = OpsManagerAgent(context)
             result = await agent.execute_tool("get_impediment_summary", {
@@ -155,11 +157,12 @@ def register_ops_manager_routes(app, get_db, get_current_user, **kwargs):
 
             org_id = organization_id or getattr(current_user, "organization_id", None)
 
-            context = AgentContext(
-                user_id=str(getattr(current_user, "id", "system")),
-                user_email=getattr(current_user, "email", ""),
-                user_role=getattr(current_user, "role", "admin"),
-            )
+            context = {
+                "user_id": str(getattr(current_user, "id", "system")),
+                "user_email": getattr(current_user, "email", ""),
+                "user_role": getattr(current_user, "role", "admin"),
+                "_shared_db": db,
+            }
 
             agent = OpsManagerAgent(context)
             result = await agent.execute_tool("get_sweep_history", {

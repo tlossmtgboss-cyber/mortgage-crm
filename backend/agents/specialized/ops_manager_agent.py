@@ -311,8 +311,9 @@ class OpsManagerAgent(SpecializedAgent):
         dry_run = input_data.get("dry_run", False)
         started_at = datetime.utcnow()
 
-        # Share a single DB session across all sub-sweeps to avoid connection exhaustion
-        db = SessionLocal()
+        # Use route's DB session if available, otherwise create one
+        existing_db = context.get("_shared_db") if context else None
+        db = existing_db or SessionLocal()
         shared_context = dict(context) if context else {}
         shared_context["_shared_db"] = db
 
@@ -424,7 +425,8 @@ class OpsManagerAgent(SpecializedAgent):
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not existing_db:
+                db.close()
 
     # ========================================================================
     # TOOL 2: LEAD PIPELINE SWEEP
@@ -1051,13 +1053,17 @@ class OpsManagerAgent(SpecializedAgent):
 
     async def _get_impediment_summary(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Query open ops tasks grouped by category prefix"""
-        from database import SessionLocal
         from sqlalchemy import text
 
         org_id = input_data.get("organization_id")
         category = input_data.get("category")
 
-        db = SessionLocal()
+        shared_db = context.get("_shared_db") if context else None
+        if shared_db:
+            db = shared_db
+        else:
+            from database import SessionLocal
+            db = SessionLocal()
         try:
             org_filter = "AND t.organization_id = :org_id" if org_id else ""
             params = {}
@@ -1115,9 +1121,12 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"{total} open impediments across {len(categories)} categories"
             )
         except Exception as e:
+            if not shared_db:
+                db.rollback()
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not shared_db:
+                db.close()
 
     # ========================================================================
     # TOOL 8: SWEEP HISTORY
@@ -1125,13 +1134,17 @@ class OpsManagerAgent(SpecializedAgent):
 
     async def _get_sweep_history(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Query ops_sweep_results table for sweep history"""
-        from database import SessionLocal
         from sqlalchemy import text
 
         org_id = input_data.get("organization_id")
         limit = input_data.get("limit", 20)
 
-        db = SessionLocal()
+        shared_db = context.get("_shared_db") if context else None
+        if shared_db:
+            db = shared_db
+        else:
+            from database import SessionLocal
+            db = SessionLocal()
         try:
             org_filter = "WHERE organization_id = :org_id" if org_id else ""
             params = {"limit": limit}
@@ -1175,6 +1188,9 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"{len(results)} sweep records found"
             )
         except Exception as e:
+            if not shared_db:
+                db.rollback()
             return ToolResult(success=False, error=str(e))
         finally:
-            db.close()
+            if not shared_db:
+                db.close()
