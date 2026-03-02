@@ -15,6 +15,7 @@ detects impediments, and creates corrective tasks automatically.
 8. get_sweep_history - Query ops_sweep_results table
 """
 
+import json
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
@@ -53,7 +54,12 @@ STAGE_SLA_DAYS = {
 
 TERMINAL_STAGES = (
     "FUNDED", "CANCELLED", "DENIED", "DEAD",
-    "WITHDRAWN", "DOES_NOT_QUALIFY", "NURTURE"
+    "WITHDRAWN", "DOES_NOT_QUALIFY"
+)
+
+# Terminal lead stages (from LeadStage enum in database/enums.py)
+TERMINAL_LEAD_STAGES = (
+    "Closed", "Funded", "Withdrawn", "Does Not Qualify", "Do Not Call"
 )
 
 # Stage thresholds for team role requirements
@@ -314,6 +320,8 @@ class OpsManagerAgent(SpecializedAgent):
             {"organization_id": org_id, "overdue_days": 90, "dry_run": dry_run}, context)
         team_result = await self._detect_team_gaps(
             {"organization_id": org_id, "dry_run": dry_run}, context)
+        stalled_result = await self._detect_stalled_files(
+            {"organization_id": org_id, "stalled_days": 14, "dry_run": dry_run}, context)
 
         completed_at = datetime.utcnow()
         duration = (completed_at - started_at).total_seconds()
@@ -323,28 +331,32 @@ class OpsManagerAgent(SpecializedAgent):
         loan_data = loan_result.data or {}
         mum_data = mum_result.data or {}
         team_data = team_result.data or {}
+        stalled_data = stalled_result.data or {}
 
         total_impediments = (
             lead_data.get("impediments_found", 0) +
             loan_data.get("impediments_found", 0) +
             mum_data.get("impediments_found", 0) +
-            team_data.get("impediments_found", 0)
+            team_data.get("impediments_found", 0) +
+            stalled_data.get("impediments_found", 0)
         )
         total_tasks_created = (
             lead_data.get("tasks_created", 0) +
             loan_data.get("tasks_created", 0) +
             mum_data.get("tasks_created", 0) +
-            team_data.get("tasks_created", 0)
+            team_data.get("tasks_created", 0) +
+            stalled_data.get("tasks_created", 0)
         )
         total_skipped = (
             lead_data.get("tasks_skipped_dedup", 0) +
             loan_data.get("tasks_skipped_dedup", 0) +
             mum_data.get("tasks_skipped_dedup", 0) +
-            team_data.get("tasks_skipped_dedup", 0)
+            team_data.get("tasks_skipped_dedup", 0) +
+            stalled_data.get("tasks_skipped_dedup", 0)
         )
 
         impediment_breakdown = {}
-        for sub_data in [lead_data, loan_data, mum_data, team_data]:
+        for sub_data in [lead_data, loan_data, mum_data, team_data, stalled_data]:
             for cat, count in sub_data.get("by_category", {}).items():
                 impediment_breakdown[cat] = impediment_breakdown.get(cat, 0) + count
 
@@ -374,7 +386,7 @@ class OpsManagerAgent(SpecializedAgent):
                 "impediments": total_impediments,
                 "created": total_tasks_created,
                 "skipped": total_skipped,
-                "breakdown": str(impediment_breakdown).replace("'", '"'),
+                "breakdown": json.dumps(impediment_breakdown),
                 "dry_run": dry_run,
             })
             db.commit()
@@ -401,6 +413,7 @@ class OpsManagerAgent(SpecializedAgent):
                     "loans": loan_data,
                     "mum": mum_data,
                     "team_gaps": team_data,
+                    "stalled_files": stalled_data,
                 },
             },
             message=f"Sweep complete: {total_impediments} impediments, {total_tasks_created} tasks created, {total_skipped} deduped ({round(duration, 1)}s)"
@@ -437,7 +450,7 @@ class OpsManagerAgent(SpecializedAgent):
                        l.last_contact,
                        EXTRACT(EPOCH FROM (NOW() - COALESCE(l.last_contact, l.created_at))) / 86400 AS days_no_contact
                 FROM leads l
-                WHERE l.stage NOT IN ('Converted', 'Dead', 'Disqualified', 'Funded')
+                WHERE l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')
                     AND COALESCE(l.last_contact, l.created_at) < NOW() - INTERVAL ':stale_days days'
                     {org_filter}
                 ORDER BY days_no_contact DESC
@@ -468,7 +481,7 @@ class OpsManagerAgent(SpecializedAgent):
                 SELECT l.id, l.first_name, l.last_name, l.organization_id, l.created_at
                 FROM leads l
                 WHERE l.owner_id IS NULL
-                    AND l.stage NOT IN ('Converted', 'Dead', 'Disqualified', 'Funded')
+                    AND l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')
                     {org_filter}
                 ORDER BY l.created_at ASC
                 LIMIT :limit
@@ -495,7 +508,7 @@ class OpsManagerAgent(SpecializedAgent):
 
             scanned_row = db.execute(text(f"""
                 SELECT COUNT(*) as cnt FROM leads l
-                WHERE l.stage NOT IN ('Converted', 'Dead', 'Disqualified', 'Funded')
+                WHERE l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')
                 {org_filter}
             """), params).fetchone()
             scanned = scanned_row.cnt if scanned_row else 0
@@ -568,7 +581,7 @@ class OpsManagerAgent(SpecializedAgent):
             for loan in sla_loans:
                 days = int(loan.days_in_stage)
                 title = f"[SLA] {loan.stage} overdue ({days}d): {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
-                priority = "urgent" if days > loan.sla_target * 2 else "high"
+                priority = "high"
                 impediments.append({"category": "SLA_BREACH", "title": title, "priority": priority})
                 if not dry_run:
                     created = _dedup_and_create_task(
@@ -599,7 +612,7 @@ class OpsManagerAgent(SpecializedAgent):
                 days_left = int(loan.days_until_expiry) if loan.days_until_expiry and loan.days_until_expiry > 0 else 0
                 expired = loan.days_until_expiry is not None and loan.days_until_expiry < 0
                 title = f"[LOCK] Rate lock {'EXPIRED' if expired else f'expires in {days_left}d'}: {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
-                priority = "urgent" if expired or days_left <= 2 else "high"
+                priority = "high"
                 impediments.append({"category": "LOCK_EXPIRING", "title": title, "priority": priority})
                 if not dry_run:
                     created = _dedup_and_create_task(
@@ -661,7 +674,7 @@ class OpsManagerAgent(SpecializedAgent):
             by_category["COMPLIANCE_OPEN"] = len(compliance_alerts)
             for alert in compliance_alerts:
                 title = f"[COMPLIANCE] {alert.alert_title}: {alert.borrower_name or 'Unknown'} ({alert.loan_number or ''})"
-                priority = "urgent" if alert.severity == "critical" else "high"
+                priority = "high"
                 impediments.append({"category": "COMPLIANCE_OPEN", "title": title, "priority": priority})
                 if not dry_run:
                     created = _dedup_and_create_task(
@@ -858,20 +871,20 @@ class OpsManagerAgent(SpecializedAgent):
             by_category["LOAN_MISSING_LO"] = len(no_lo)
             for loan in no_lo:
                 title = f"[ASSIGN] Loan needs LO: {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
-                impediments.append({"category": "LOAN_MISSING_LO", "title": title, "priority": "urgent"})
+                impediments.append({"category": "LOAN_MISSING_LO", "title": title, "priority": "high"})
                 if not dry_run:
                     created = _dedup_and_create_task(
                         db, title=title,
                         description=f"Active loan in {loan.stage} has no assigned loan officer.",
-                        priority="urgent", loan_id=loan.id, organization_id=loan.organization_id)
+                        priority="high", loan_id=loan.id, organization_id=loan.organization_id)
                     tasks_created += 1 if created else 0
                     tasks_skipped += 0 if created else 1
 
             # --- LOAN_TEAM_GAPS: missing processor/closer/PA based on stage ---
             for role, required_stages in ROLE_STAGE_REQUIREMENTS.items():
                 stages_list = ", ".join(f"'{s}'" for s in required_stages)
-                # Map role name to DB column
-                col_name = f"{role}_id" if role != "production_assistant" else "production_assistant_id"
+                # Columns are plain String (name), not FK _id columns
+                col_name = role  # processor, closer, production_assistant
 
                 try:
                     gaps = db.execute(text(f"""
@@ -879,7 +892,7 @@ class OpsManagerAgent(SpecializedAgent):
                                l.loan_officer_id, l.organization_id
                         FROM loans l
                         WHERE l.stage IN ({stages_list})
-                            AND l.{col_name} IS NULL
+                            AND (l.{col_name} IS NULL OR TRIM(l.{col_name}) = '')
                             AND l.stage NOT IN ({terminal_list})
                             {org_filter}
                         LIMIT :limit
