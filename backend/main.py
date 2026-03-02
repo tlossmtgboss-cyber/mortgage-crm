@@ -1178,7 +1178,7 @@ try:
     register_ops_manager_routes(
         app=app,
         get_db=get_db,
-        get_current_user=get_current_user
+        get_current_user=get_current_user_flexible
     )
     logger.info("✅ Ops Manager routes loaded (sweep, summary, history)")
 except Exception as e:
