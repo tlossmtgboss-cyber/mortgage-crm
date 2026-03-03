@@ -1044,3 +1044,15 @@ def register_health_routes(app, get_db, **kwargs):
         except ImportError:
             return {"error": "Error handling module not available"}
 
+    @app.get("/health/diag-errors", tags=["Health"])
+    async def diag_errors(request: Request, secret: str = ""):
+        """Temporary diagnostic endpoint for recent errors. Remove after debugging."""
+        if secret != "perennia-diag-2026-03":
+            return JSONResponse(status_code=403, content={"detail": "Invalid secret"})
+        try:
+            from utils.error_handling import get_recent_errors
+            errors = get_recent_errors(limit=10)
+            return {"total_captured": len(errors), "errors": errors}
+        except ImportError:
+            return {"error": "Error handling module not available"}
+
