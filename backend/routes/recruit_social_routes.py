@@ -3,7 +3,7 @@ Recruit Social Media Routes
 API endpoints for LinkedIn, Facebook, and Instagram integrations.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Header
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
@@ -11,14 +11,14 @@ from pydantic import BaseModel
 from datetime import datetime
 from urllib.parse import urlparse
 from database import get_db
+from auth.dependencies import get_current_user
+from database.models import User
 from services.recruit_social_service import recruit_social_service, SocialProfile
 import logging
 import os
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
-
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 _ALLOWED_REDIRECT_HOSTS = {"app.perenniaai.com", "localhost", "127.0.0.1"}
 
@@ -33,15 +33,7 @@ def _validate_redirect_uri(uri: str) -> str:
     return uri
 
 
-def _get_current_user():
-    """Lazy import auth dependency for router-level protection."""
-    from auth.dependencies import get_current_user_flexible
-    return get_current_user_flexible
-
-router = APIRouter(
-    prefix="/api/v1/recruit-social", tags=["recruit-social"],
-    dependencies=[Depends(_get_current_user())],
-)
+router = APIRouter(prefix="/api/v1/recruit-social", tags=["recruit-social"])
 
 
 # ============================================================================
@@ -78,7 +70,8 @@ class CandidateLinkedInPostsResponse(BaseModel):
 
 @router.get("/oauth/facebook/url")
 async def get_facebook_oauth_url(
-    redirect_uri: str = Query(..., description="OAuth callback URL")
+    redirect_uri: str = Query(..., description="OAuth callback URL"),
+    current_user: User = Depends(get_current_user),
 ):
     """Get Facebook OAuth authorization URL."""
     _validate_redirect_uri(redirect_uri)
@@ -88,7 +81,8 @@ async def get_facebook_oauth_url(
 
 @router.get("/oauth/linkedin/url")
 async def get_linkedin_oauth_url(
-    redirect_uri: str = Query(..., description="OAuth callback URL")
+    redirect_uri: str = Query(..., description="OAuth callback URL"),
+    current_user: User = Depends(get_current_user),
 ):
     """Get LinkedIn OAuth authorization URL."""
     _validate_redirect_uri(redirect_uri)
@@ -99,6 +93,7 @@ async def get_linkedin_oauth_url(
 @router.post("/oauth/facebook/callback")
 async def facebook_oauth_callback(
     request: OAuthCallbackRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Exchange Facebook authorization code for access token."""
@@ -138,6 +133,7 @@ async def facebook_oauth_callback(
 @router.post("/oauth/linkedin/callback")
 async def linkedin_oauth_callback(
     request: OAuthCallbackRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Exchange LinkedIn authorization code for access token."""
@@ -181,6 +177,7 @@ async def linkedin_oauth_callback(
 @router.post("/posts")
 async def create_social_post(
     post: SocialPostCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a post across social media platforms."""
@@ -236,14 +233,16 @@ async def create_social_post(
 
         # Log the post to database
         db.execute(text("""
-            INSERT INTO recruit_social_posts (content, platforms, image_url, scheduled_at, status, created_at)
-            VALUES (:content, :platforms, :image_url, :scheduled_at, :status, NOW())
+            INSERT INTO recruit_social_posts (content, platforms, image_url, scheduled_at, status, organization_id, created_by, created_at)
+            VALUES (:content, :platforms, :image_url, :scheduled_at, :status, :org_id, :created_by, NOW())
         """), {
             "content": post.content,
             "platforms": ",".join(post.platforms),
             "image_url": post.image_url,
             "scheduled_at": post.scheduled_time,
-            "status": "scheduled" if post.scheduled_time else "posted"
+            "status": "scheduled" if post.scheduled_time else "posted",
+            "org_id": current_user.organization_id,
+            "created_by": current_user.id
         })
         db.commit()
 
@@ -257,19 +256,22 @@ async def create_social_post(
 async def get_social_posts(
     limit: int = Query(20, le=100),
     status: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get recruiting social media posts."""
     try:
+        org_id = current_user.organization_id
         query = """
             SELECT id, content, platforms, image_url, scheduled_at,
                    status, posted_at, engagement_data, created_at
             FROM recruit_social_posts
+            WHERE (organization_id = :org_id OR organization_id IS NULL)
         """
-        params = {"limit": limit}
+        params = {"limit": limit, "org_id": org_id}
 
         if status:
-            query += " WHERE status = :status"
+            query += " AND status = :status"
             params["status"] = status
 
         query += " ORDER BY created_at DESC LIMIT :limit"
@@ -286,6 +288,7 @@ async def get_social_posts(
 @router.get("/posts/{post_id}/analytics")
 async def get_post_analytics(
     post_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get engagement analytics for a social post."""
@@ -293,8 +296,8 @@ async def get_post_analytics(
         result = db.execute(text("""
             SELECT id, platforms, engagement_data, external_post_ids
             FROM recruit_social_posts
-            WHERE id = :post_id
-        """), {"post_id": post_id})
+            WHERE id = :post_id AND (organization_id = :org_id OR organization_id IS NULL)
+        """), {"post_id": post_id, "org_id": current_user.organization_id})
         post = result.fetchone()
 
         if not post:
@@ -325,26 +328,35 @@ async def get_post_analytics(
 @router.post("/enrich/linkedin")
 async def enrich_from_linkedin(
     request: LinkedInProfileEnrich,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Enrich candidate data from LinkedIn profile."""
     try:
+        # Verify candidate belongs to user's org
+        org_check = db.execute(text(
+            "SELECT id FROM mm_candidates WHERE id = :cid AND organization_id = :org_id"
+        ), {"cid": request.candidate_id, "org_id": current_user.organization_id})
+        if not org_check.fetchone():
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
         enrichment = await recruit_social_service.enrich_candidate_from_linkedin(
             request.linkedin_url
         )
 
         if enrichment:
-            # Store enrichment data
+            # Store enrichment data (already verified org ownership above)
             db.execute(text("""
                 UPDATE mm_candidates
                 SET linkedin_url = :linkedin_url,
                     linkedin_data = :linkedin_data,
                     updated_at = NOW()
-                WHERE id = :candidate_id
+                WHERE id = :candidate_id AND organization_id = :org_id
             """), {
                 "candidate_id": request.candidate_id,
                 "linkedin_url": request.linkedin_url,
-                "linkedin_data": str(enrichment)
+                "linkedin_data": str(enrichment),
+                "org_id": current_user.organization_id
             })
             db.commit()
 
@@ -360,16 +372,17 @@ async def enrich_from_linkedin(
 @router.get("/candidates/{candidate_id}/linkedin-posts")
 async def get_candidate_linkedin_posts(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get recent LinkedIn posts for a candidate."""
     try:
-        # Get candidate's LinkedIn info
+        # Get candidate's LinkedIn info (tenant-scoped)
         result = db.execute(text("""
             SELECT id, name, linkedin_url, linkedin_data
             FROM mm_candidates
-            WHERE id = :candidate_id
-        """), {"candidate_id": candidate_id})
+            WHERE id = :candidate_id AND organization_id = :org_id
+        """), {"candidate_id": candidate_id, "org_id": current_user.organization_id})
         candidate = result.fetchone()
 
         if not candidate:
@@ -417,7 +430,10 @@ async def get_candidate_linkedin_posts(
 # ============================================================================
 
 @router.get("/connections")
-async def get_social_connections(db: Session = Depends(get_db)):
+async def get_social_connections(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Get status of social media connections."""
     try:
         result = db.execute(text("""
@@ -457,7 +473,7 @@ async def get_social_connections(db: Session = Depends(get_db)):
 
 
 @router.get("/page-info/facebook")
-async def get_facebook_page_info():
+async def get_facebook_page_info(current_user: User = Depends(get_current_user)):
     """Get connected Facebook page information."""
     try:
         page_id = os.getenv("FACEBOOK_PAGE_ID", "")
@@ -472,7 +488,7 @@ async def get_facebook_page_info():
 
 
 @router.get("/profile/linkedin")
-async def get_linkedin_profile():
+async def get_linkedin_profile(current_user: User = Depends(get_current_user)):
     """Get connected LinkedIn profile information."""
     try:
         profile = await recruit_social_service.get_linkedin_profile()
@@ -490,148 +506,13 @@ async def get_linkedin_profile():
 
 
 # ============================================================================
-# MIGRATION ENDPOINT
+# Migration/admin endpoints removed — use backend/migrations/ scripts instead.
 # ============================================================================
-
-@router.post("/admin/run-migration")
-async def run_social_migration(
-    admin_key: str = Query(...),
-    db: Session = Depends(get_db)
-):
-    """Run migration to create social media tables."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        db.execute(text("""
-            -- Social tokens storage
-            CREATE TABLE IF NOT EXISTS social_tokens (
-                id SERIAL PRIMARY KEY,
-                platform VARCHAR(50) UNIQUE NOT NULL,
-                access_token TEXT,
-                refresh_token TEXT,
-                expires_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-
-            -- Recruiting social posts
-            CREATE TABLE IF NOT EXISTS recruit_social_posts (
-                id SERIAL PRIMARY KEY,
-                content TEXT NOT NULL,
-                platforms VARCHAR(100),
-                image_url TEXT,
-                scheduled_at TIMESTAMP,
-                posted_at TIMESTAMP,
-                status VARCHAR(20) DEFAULT 'draft',
-                external_post_ids JSONB DEFAULT '{}',
-                engagement_data JSONB DEFAULT '{}',
-                created_by INTEGER,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_recruit_social_posts_status
-                ON recruit_social_posts(status);
-            CREATE INDEX IF NOT EXISTS idx_recruit_social_posts_scheduled
-                ON recruit_social_posts(scheduled_at) WHERE status = 'scheduled';
-
-            -- Cached LinkedIn posts for candidates
-            CREATE TABLE IF NOT EXISTS candidate_linkedin_posts (
-                id SERIAL PRIMARY KEY,
-                candidate_id INTEGER NOT NULL,
-                post_content TEXT,
-                post_url TEXT,
-                likes INTEGER DEFAULT 0,
-                comments INTEGER DEFAULT 0,
-                shares INTEGER DEFAULT 0,
-                posted_at TIMESTAMP,
-                cached_at TIMESTAMP DEFAULT NOW()
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_candidate_linkedin_posts_candidate
-                ON candidate_linkedin_posts(candidate_id);
-        """))
-        db.commit()
-
-        return {"status": "success", "message": "Social media tables created"}
-    except SQLAlchemyError as e:
-        logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
 # PUBLIC PORTAL ENDPOINTS (no auth required)
 # ============================================================================
-
-@router.post("/admin/seed-posts")
-async def seed_sample_posts(
-    x_admin_key: str = Header(..., alias="X-Admin-Key"),
-    db: Session = Depends(get_db)
-):
-    """Seed sample social posts for demo purposes."""
-    import hmac
-    if not _ADMIN_API_KEY or not hmac.compare_digest(x_admin_key, _ADMIN_API_KEY):
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        sample_posts = [
-            {
-                "content": "🎉 Welcome to our newest team members! We're thrilled to have you join the Perennia family. Here's to building something amazing together! #TeamPerennia #MortgageLife #NewBeginnings",
-                "platforms": "linkedin,facebook",
-                "image_url": "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800",
-            },
-            {
-                "content": "💡 Industry insight: The mortgage market is evolving rapidly. At Perennia, we're staying ahead with cutting-edge AI tools that help our LOs close more deals. Want to learn more? Let's connect! #MortgageIndustry #AIinMortgage",
-                "platforms": "linkedin",
-                "image_url": None,
-            },
-            {
-                "content": "🏆 Congratulations to our top producers this month! Your dedication and hard work inspire us all. #TopProducers #MortgageSuccess #PerenniaProud",
-                "platforms": "linkedin,facebook,instagram",
-                "image_url": "https://images.unsplash.com/photo-1552664730-d307ca884978?w=800",
-            },
-            {
-                "content": "📈 Q4 is here! Are you ready to finish the year strong? Our team has the tools, leads, and support to help you hit your goals. DM us to learn about opportunities! #Recruiting #MortgageCareers",
-                "platforms": "linkedin,facebook",
-                "image_url": None,
-            },
-            {
-                "content": "🎯 What sets us apart? Technology that works FOR you, not against you. See how our AI-powered CRM is helping loan officers save 10+ hours per week. #MortgageTech #Efficiency",
-                "platforms": "linkedin,instagram",
-                "image_url": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800",
-            },
-            {
-                "content": "🤝 Culture matters. At Perennia, we believe in supporting each other's growth. Our mentorship program pairs new LOs with experienced pros. Ready to grow? #CompanyCulture #Mentorship",
-                "platforms": "facebook,instagram",
-                "image_url": "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800",
-            },
-        ]
-
-        from datetime import timedelta
-        import random
-
-        for i, post in enumerate(sample_posts):
-            # Stagger posted_at times over the past week
-            posted_at = datetime.now() - timedelta(days=i, hours=random.randint(1, 12))
-
-            db.execute(text("""
-                INSERT INTO recruit_social_posts
-                (content, platforms, image_url, status, posted_at, engagement_data, created_at)
-                VALUES (:content, :platforms, :image_url, 'posted', :posted_at, :engagement, NOW())
-            """), {
-                "content": post["content"],
-                "platforms": post["platforms"],
-                "image_url": post["image_url"],
-                "posted_at": posted_at,
-                "engagement": f'{{"likes": {random.randint(15, 150)}, "comments": {random.randint(2, 25)}, "shares": {random.randint(1, 20)}}}'
-            })
-
-        db.commit()
-        return {"status": "success", "message": f"Seeded {len(sample_posts)} sample posts"}
-    except SQLAlchemyError as e:
-        logger.error(f"Error seeding posts: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
 
 @router.get("/public/feed")
 async def get_public_social_feed(

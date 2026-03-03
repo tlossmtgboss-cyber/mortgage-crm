@@ -210,7 +210,7 @@ export const resolveAlert = async (alertId, userId, notes = null) => {
 export const runMigration = async () => {
   const response = await fetch(`${API_URL}/api/v1/master-manager/admin/run-migration`, {
     method: 'POST',
-    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
+    headers: getAuthHeaders()
   });
   if (!response.ok) throw new Error('Failed to run migration');
   return response.json();
@@ -219,7 +219,7 @@ export const runMigration = async () => {
 export const initializeCapacities = async () => {
   const response = await fetch(`${API_URL}/api/v1/master-manager/admin/initialize-capacities`, {
     method: 'POST',
-    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
+    headers: getAuthHeaders()
   });
   if (!response.ok) throw new Error('Failed to initialize capacities');
   return response.json();
@@ -492,14 +492,7 @@ export const updateCandidateBasicInfo = async (candidateId, basicData) => {
   return response.json();
 };
 
-export const runSocialProductionMigration = async () => {
-  const response = await fetch(`${API_URL}/api/v1/recruiting/admin/add-social-production-fields`, {
-    method: 'POST',
-    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
-  });
-  if (!response.ok) throw new Error('Failed to run migration');
-  return response.json();
-};
+// Migration endpoint removed — run backend/migrations/ scripts directly.
 
 // =============================================================================
 // RECRUIT PORTAL ENDPOINTS
@@ -512,7 +505,7 @@ export const createCandidatePortalWorkspace = async (candidateId, slug = null) =
 
   const response = await fetch(`${API_URL}/api/v1/recruit-portal/admin/workspaces?${params}`, {
     method: 'POST',
-    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
+    headers: getAuthHeaders()
   });
   if (!response.ok) throw new Error('Failed to create portal workspace');
   return response.json();
@@ -520,7 +513,7 @@ export const createCandidatePortalWorkspace = async (candidateId, slug = null) =
 
 export const getCandidatePortalWorkspace = async (candidateId) => {
   const response = await fetch(`${API_URL}/api/v1/recruit-portal/admin/workspaces/by-candidate/${candidateId}`, {
-    headers: { ...getAuthHeaders(), 'X-Admin-Key': 'true' }
+    headers: getAuthHeaders()
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('Failed to fetch portal workspace');

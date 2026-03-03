@@ -27,8 +27,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
-
 router = APIRouter(prefix="/api/v1/recruiting/video", tags=["Recruiting Video"])
 
 
@@ -143,13 +141,21 @@ Watch it now in the Videos section of your portal."""
 @router.post("/upload-url", response_model=UploadUrlResponse)
 async def get_upload_url(
     request: UploadUrlRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db)
 ):
     """
     Get a presigned URL for uploading a video.
 
     This URL allows direct upload to S3 from the browser.
     """
+    # Verify candidate belongs to user's org
+    org_check = db.execute(text(
+        "SELECT id FROM mm_candidates WHERE id = :cid AND organization_id = :org_id"
+    ), {"cid": request.candidate_id, "org_id": current_user.organization_id})
+    if not org_check.fetchone():
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
     s3_service = get_s3_service()
 
     # Generate unique video key
@@ -205,6 +211,13 @@ async def complete_upload(
     """
     s3_service = get_s3_service()
     user_id = current_user.id
+
+    # Verify candidate belongs to user's org
+    org_check = db.execute(text(
+        "SELECT id FROM mm_candidates WHERE id = :cid AND organization_id = :org_id"
+    ), {"cid": request.candidate_id, "org_id": current_user.organization_id})
+    if not org_check.fetchone():
+        raise HTTPException(status_code=404, detail="Candidate not found")
 
     # Verify the video exists in S3
     verify_result = s3_service.verify_upload(request.video_key)
@@ -335,6 +348,8 @@ async def get_candidate_videos(
     db=Depends(get_db)
 ):
     """Get all videos sent to a candidate."""
+    org_id = current_user.organization_id
+
     try:
         result = db.execute(text("""
             SELECT
@@ -348,11 +363,12 @@ async def get_candidate_videos(
                 v.viewed_at,
                 u.full_name as recruiter_name
             FROM recruit_video_messages v
+            JOIN mm_candidates rc ON rc.id = v.candidate_id
             LEFT JOIN users u ON u.id = v.recruiter_id
-            WHERE v.candidate_id = :candidate_id
+            WHERE v.candidate_id = :candidate_id AND rc.organization_id = :org_id
             ORDER BY v.created_at DESC
             LIMIT :limit
-        """), {"candidate_id": candidate_id, "limit": limit})
+        """), {"candidate_id": candidate_id, "limit": limit, "org_id": org_id})
 
         videos = []
         s3_service = get_s3_service()
@@ -409,196 +425,8 @@ async def mark_video_viewed(
 
 
 # =============================================================================
-# Public Portal Routes (no auth required)
+# Migration/admin endpoints removed — use backend/migrations/ scripts instead.
 # =============================================================================
-
-@router.post("/admin/run-migration")
-async def run_video_migration(
-    admin_key: str = Query(...),
-    db=Depends(get_db)
-):
-    """Run migration to create video messages table."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS recruit_video_messages (
-                id SERIAL PRIMARY KEY,
-                candidate_id INTEGER NOT NULL,
-                recruiter_id INTEGER,
-                video_key VARCHAR(500),
-                video_url TEXT,
-                message TEXT,
-                duration_seconds INTEGER,
-                created_at TIMESTAMP DEFAULT NOW(),
-                viewed_at TIMESTAMP
-            )
-        """))
-        logger.info("Created recruit_video_messages table")
-
-        db.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_recruit_video_messages_candidate
-            ON recruit_video_messages(candidate_id)
-        """))
-
-        db.execute(text("""
-            CREATE INDEX IF NOT EXISTS idx_recruit_video_messages_recruiter
-            ON recruit_video_messages(recruiter_id)
-        """))
-
-        db.commit()
-        return {"status": "success", "message": "Video messages table created"}
-
-    except SQLAlchemyError as e:
-        logger.error(f"Migration error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/admin/debug-s3")
-async def debug_s3(
-    admin_key: str = Query(...),
-    video_key: str = Query(default="recruit-videos/20/20260101_171523_5b8d5321376944509318c338e80ec64d.webm")
-):
-    """Debug S3 access for video."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    s3_service = get_s3_service()
-
-    # Check if video exists
-    verify = s3_service.verify_upload(video_key)
-
-    # Generate presigned URL
-    presigned = s3_service.get_presigned_download_url(video_key, expires_in=3600)
-
-    return {
-        "bucket": s3_service.bucket_name,
-        "region": s3_service.region,
-        "video_key": video_key,
-        "verify_result": verify,
-        "presigned_result": presigned
-    }
-
-
-@router.post("/admin/fix-video-urls")
-async def fix_video_urls(
-    admin_key: str = Query(...),
-    db=Depends(get_db)
-):
-    """Fix existing video URLs by making them public."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    s3_service = get_s3_service()
-    fixed_count = 0
-    errors = []
-
-    try:
-        # Get all videos with video_key
-        result = db.execute(text("""
-            SELECT id, video_key, video_url
-            FROM recruit_video_messages
-            WHERE video_key IS NOT NULL
-        """))
-
-        for row in result.fetchall():
-            try:
-                # Make video public
-                public_result = s3_service.make_public_and_get_url(row.video_key)
-                if public_result.get("success"):
-                    new_url = public_result.get("public_url") or public_result.get("presigned_url")
-                    db.execute(text("""
-                        UPDATE recruit_video_messages
-                        SET video_url = :url
-                        WHERE id = :id
-                    """), {"url": new_url, "id": row.id})
-                    fixed_count += 1
-                else:
-                    errors.append(f"Video {row.id}: {public_result.get('error')}")
-            except SQLAlchemyError as e:
-                logger.error(f"Video {row.id} processing failed: {e}")
-                errors.append(f"Video {row.id}: processing failed")
-
-        db.commit()
-
-        return {
-            "status": "success",
-            "fixed_count": fixed_count,
-            "errors": errors[:10] if errors else []
-        }
-
-    except SQLAlchemyError as e:
-        logger.error(f"Fix videos error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/admin/add-test-video")
-async def add_test_video(
-    admin_key: str = Query(...),
-    candidate_id: int = Query(...),
-    message: str = Query(default="Welcome to the team! We're excited about the opportunity to work with you."),
-    db=Depends(get_db)
-):
-    """Add a test video for a candidate (admin only)."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        # Use a public sample video URL for testing
-        test_video_url = "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-
-        # Get a recruiter (first admin user by role)
-        recruiter_result = db.execute(text("""
-            SELECT id, full_name FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1
-        """))
-        recruiter = recruiter_result.fetchone()
-        recruiter_id = recruiter.id if recruiter else 1
-        recruiter_name = recruiter.full_name if recruiter else "Tim Loss"
-
-        # Insert test video
-        result = db.execute(text("""
-            INSERT INTO recruit_video_messages (
-                candidate_id,
-                recruiter_id,
-                video_key,
-                video_url,
-                message,
-                duration_seconds,
-                created_at
-            ) VALUES (
-                :candidate_id,
-                :recruiter_id,
-                'test-video',
-                :video_url,
-                :message,
-                15,
-                NOW()
-            )
-            RETURNING id
-        """), {
-            "candidate_id": candidate_id,
-            "recruiter_id": recruiter_id,
-            "video_url": test_video_url,
-            "message": message
-        })
-
-        video_id = result.fetchone().id
-        db.commit()
-
-        return {
-            "success": True,
-            "video_id": video_id,
-            "candidate_id": candidate_id,
-            "message": message,
-            "video_url": test_video_url,
-            "recruiter_name": recruiter_name
-        }
-
-    except SQLAlchemyError as e:
-        logger.error(f"Failed to add test video: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/portal/{slug}/videos")

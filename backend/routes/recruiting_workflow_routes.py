@@ -15,6 +15,8 @@ from pydantic import BaseModel
 from workflows.recruiting_workflows import recruiting_workflow_service, RECRUITING_WORKFLOWS
 from services.recruiting_email_service import get_recruiting_email_service
 from sqlalchemy.exc import SQLAlchemyError
+from auth.dependencies import get_current_user
+from database.models import User
 from routes.auth_deps import require_auth
 
 router = APIRouter(prefix="/api/v1/recruiting/workflow", tags=["Recruiting Workflow"], dependencies=[Depends(require_auth)])
@@ -27,7 +29,6 @@ router = APIRouter(prefix="/api/v1/recruiting/workflow", tags=["Recruiting Workf
 class CreateTasksRequest(BaseModel):
     disposition: str
     assigned_to: int
-    organization_id: int = 1
 
 
 class CompleteTaskRequest(BaseModel):
@@ -87,7 +88,8 @@ async def get_workflow_definition(disposition: str):
 @router.post("/candidates/{candidate_id}/create-tasks")
 async def create_tasks_for_candidate(
     candidate_id: int,
-    request: CreateTasksRequest
+    request: CreateTasksRequest,
+    current_user: User = Depends(get_current_user)
 ):
     """
     Create workflow tasks for a candidate when their disposition changes.
@@ -106,7 +108,7 @@ async def create_tasks_for_candidate(
         candidate_id=candidate_id,
         disposition=request.disposition,
         assigned_to=request.assigned_to,
-        organization_id=request.organization_id
+        organization_id=current_user.organization_id
     )
 
     return {
@@ -120,13 +122,13 @@ async def create_tasks_for_candidate(
 async def get_pending_tasks(
     candidate_id: Optional[int] = None,
     assigned_to: Optional[int] = None,
-    organization_id: int = 1
+    current_user: User = Depends(get_current_user)
 ):
     """Get pending tasks, optionally filtered by candidate or assignee."""
     tasks = recruiting_workflow_service.get_pending_tasks(
         candidate_id=candidate_id,
         assigned_to=assigned_to,
-        organization_id=organization_id
+        organization_id=current_user.organization_id
     )
 
     # Group by priority for dashboard view
@@ -148,11 +150,11 @@ async def get_pending_tasks(
 
 
 @router.get("/candidates/{candidate_id}/tasks")
-async def get_candidate_tasks(candidate_id: int, organization_id: int = 1):
+async def get_candidate_tasks(candidate_id: int, current_user: User = Depends(get_current_user)):
     """Get all tasks for a specific candidate."""
     tasks = recruiting_workflow_service.get_pending_tasks(
         candidate_id=candidate_id,
-        organization_id=organization_id
+        organization_id=current_user.organization_id
     )
     return {"candidate_id": candidate_id, "tasks": tasks, "total": len(tasks)}
 
@@ -189,7 +191,7 @@ async def skip_task(task_id: int, request: SkipTaskRequest):
 @router.get("/dialer-queue")
 async def get_dialer_queue(
     assigned_to: Optional[int] = None,
-    organization_id: int = 1
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get tasks routed to the dialer queue.
@@ -198,7 +200,7 @@ async def get_dialer_queue(
     """
     queue = recruiting_workflow_service.get_dialer_queue(
         assigned_to=assigned_to,
-        organization_id=organization_id
+        organization_id=current_user.organization_id
     )
     return {
         "queue_length": len(queue),
@@ -238,13 +240,13 @@ async def start_call_for_task(task_id: int, user_id: int = Query(...)):
 @router.get("/dashboard")
 async def get_workflow_dashboard(
     assigned_to: Optional[int] = None,
-    organization_id: int = 1
+    current_user: User = Depends(get_current_user)
 ):
     """Get workflow dashboard data including task counts and dialer queue."""
     from database import engine
     from sqlalchemy import text
 
-    params = {"org_id": organization_id}
+    params = {"org_id": current_user.organization_id}
     user_filter = ""
     if assigned_to:
         user_filter = "AND assigned_to = :assigned_to"
@@ -340,7 +342,7 @@ async def get_workflow_dashboard(
 @router.get("/email-queue")
 async def get_email_queue(
     assigned_to: Optional[int] = None,
-    organization_id: int = 1
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get tasks routed to email automation that are pending.
@@ -350,7 +352,7 @@ async def get_email_queue(
     from database import engine
     from sqlalchemy import text
 
-    params = {"org_id": organization_id}
+    params = {"org_id": current_user.organization_id}
     filters = [
         "rt.organization_id = :org_id",
         "rt.status = 'pending'",
@@ -450,8 +452,8 @@ async def send_email_for_task(task_id: int, user_id: int = Query(...)):
 @router.post("/email-queue/process-all")
 async def process_all_pending_emails(
     user_id: int = Query(...),
-    organization_id: int = 1,
-    limit: int = 50
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
 ):
     """
     Process all pending email automation tasks.
@@ -480,7 +482,7 @@ async def process_all_pending_emails(
                 ORDER BY due_date ASC
                 LIMIT :limit
             """),
-            {"org_id": organization_id, "limit": limit}
+            {"org_id": current_user.organization_id, "limit": limit}
         ).fetchall()
 
         email_service = get_recruiting_email_service(conn)

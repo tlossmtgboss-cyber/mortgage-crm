@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from datetime import datetime
 from sqlalchemy import text
 from database import SessionLocal
+from auth.dependencies import get_current_user
+from database.models import User
 from contextlib import contextmanager
 import os
 import uuid
@@ -59,8 +61,6 @@ async def _verify_telnyx_webhook(request: Request):
 # See backend/config/feature_tiers.py for tier definitions.
 # ============================================================================
 
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
-
 @contextmanager
 def get_db_connection():
     """Context manager for database connections."""
@@ -71,15 +71,7 @@ def get_db_connection():
         db.close()
 
 
-def _get_current_user():
-    """Lazy import auth dependency for router-level protection."""
-    from auth.dependencies import get_current_user_flexible
-    return get_current_user_flexible
-
-router = APIRouter(
-    prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"],
-    dependencies=[Depends(_get_current_user())],
-)
+router = APIRouter(prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"])
 
 
 # =============================================================================
@@ -118,7 +110,8 @@ class CallHistoryItem(BaseModel):
 @router.post("/candidates/{candidate_id}/call")
 async def initiate_candidate_call(
     candidate_id: int,
-    request: InitiateCallRequest
+    request: InitiateCallRequest,
+    current_user: User = Depends(get_current_user)
 ):
     """
     Initiate a click-to-call to a candidate via the telephony provider.
@@ -131,6 +124,8 @@ async def initiate_candidate_call(
     5. On recruiter confirmation, connect to candidate
     6. Record the call
     """
+    org_id = current_user.organization_id
+
     # Get candidate details for whisper context
     with get_db_connection() as conn:
         result = conn.execute(
@@ -142,9 +137,9 @@ async def initiate_candidate_call(
                         WHERE candidate_id = rc.id
                         ORDER BY created_at DESC LIMIT 1) as last_note
                 FROM mm_candidates rc
-                WHERE rc.id = :candidate_id
+                WHERE rc.id = :candidate_id AND rc.organization_id = :org_id
             """),
-            {"candidate_id": candidate_id}
+            {"candidate_id": candidate_id, "org_id": org_id}
         )
         row = result.fetchone()
 
@@ -252,12 +247,17 @@ async def initiate_candidate_call(
 
 
 @router.post("/calls/{call_id}/connect")
-async def connect_call_via_telephony(call_id: str):
+async def connect_call_via_telephony(
+    call_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """
     Retry/reconnect a call via the telephony provider.
 
     Used when an initial call attempt fails and user wants to retry.
     """
+    org_id = current_user.organization_id
+
     # Get call details
     with get_db_connection() as conn:
         result = conn.execute(
@@ -266,9 +266,9 @@ async def connect_call_via_telephony(call_id: str):
                        ch.phone_to, rc.first_name, rc.last_name, rc.phone
                 FROM recruiting_call_history ch
                 JOIN mm_candidates rc ON rc.id = ch.candidate_id
-                WHERE ch.id = :call_id
+                WHERE ch.id = :call_id AND rc.organization_id = :org_id
             """),
-            {"call_id": call_id}
+            {"call_id": call_id, "org_id": org_id}
         )
         row = result.fetchone()
 
@@ -488,9 +488,12 @@ async def telephony_recording_callback(
 @router.get("/candidates/{candidate_id}/call-history")
 async def get_candidate_call_history(
     candidate_id: int,
-    limit: int = 20
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
 ):
     """Get call history for a specific candidate."""
+    org_id = current_user.organization_id
+
     with get_db_connection() as conn:
         result = conn.execute(
             text("""
@@ -500,12 +503,13 @@ async def get_candidate_call_history(
                        ch.called_at, ch.status, ch.recording_url,
                        ch.twilio_call_sid as call_sid
                 FROM recruiting_call_history ch
+                JOIN mm_candidates rc ON rc.id = ch.candidate_id
                 LEFT JOIN users u ON u.id = ch.caller_user_id
-                WHERE ch.candidate_id = :candidate_id
+                WHERE ch.candidate_id = :candidate_id AND rc.organization_id = :org_id
                 ORDER BY ch.called_at DESC
                 LIMIT :limit
             """),
-            {"candidate_id": candidate_id, "limit": limit}
+            {"candidate_id": candidate_id, "limit": limit, "org_id": org_id}
         )
         rows = result.fetchall()
 
@@ -534,23 +538,33 @@ async def get_candidate_call_history(
 
 
 @router.post("/calls/{call_id}/notes")
-async def add_call_notes(call_id: str, request: CallNoteRequest):
+async def add_call_notes(
+    call_id: str,
+    request: CallNoteRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Add notes and outcome to a call."""
+    org_id = current_user.organization_id
+
     with get_db_connection() as conn:
-        # Update call record
+        # Update call record (tenant-scoped via JOIN)
         conn.execute(
             text("""
-                UPDATE recruiting_call_history
+                UPDATE recruiting_call_history ch
                 SET notes = :notes,
                     outcome = :outcome,
                     status = 'completed',
                     completed_at = NOW()
-                WHERE id = :call_id
+                FROM mm_candidates rc
+                WHERE ch.candidate_id = rc.id
+                    AND ch.id = :call_id
+                    AND rc.organization_id = :org_id
             """),
             {
                 "call_id": call_id,
                 "notes": request.note,
-                "outcome": request.outcome
+                "outcome": request.outcome,
+                "org_id": org_id
             }
         )
 
@@ -568,16 +582,17 @@ async def add_call_notes(call_id: str, request: CallNoteRequest):
                     text("""
                         INSERT INTO recruiting_tasks
                         (candidate_id, title, description, due_date, priority,
-                         route_to, status, assigned_to, created_at)
+                         route_to, status, assigned_to, organization_id, created_at)
                         VALUES (:candidate_id, 'Callback requested',
                                 :notes, :due_date, 'high',
-                                'dialer_queue', 'pending', :user_id, NOW())
+                                'dialer_queue', 'pending', :user_id, :org_id, NOW())
                     """),
                     {
                         "candidate_id": row.candidate_id,
                         "notes": f"Callback requested: {request.note}",
                         "due_date": request.callback_date,
-                        "user_id": request.user_id
+                        "user_id": request.user_id,
+                        "org_id": org_id
                     }
                 )
 
@@ -587,17 +602,22 @@ async def add_call_notes(call_id: str, request: CallNoteRequest):
 
 
 @router.get("/calls/{call_id}/status")
-async def get_call_status(call_id: str):
+async def get_call_status(
+    call_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """Get the current status of a call."""
+    org_id = current_user.organization_id
+
     with get_db_connection() as conn:
         result = conn.execute(
             text("""
                 SELECT ch.*, rc.first_name, rc.last_name
                 FROM recruiting_call_history ch
                 JOIN mm_candidates rc ON rc.id = ch.candidate_id
-                WHERE ch.id = :call_id
+                WHERE ch.id = :call_id AND rc.organization_id = :org_id
             """),
-            {"call_id": call_id}
+            {"call_id": call_id, "org_id": org_id}
         )
         row = result.fetchone()
 
@@ -622,14 +642,14 @@ async def get_call_status(call_id: str):
 @router.get("/queue")
 async def get_recruiting_dialer_queue(
     assigned_to: Optional[int] = None,
-    organization_id: int = 1
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get the dialer queue with candidate details for calling.
 
     Combines workflow tasks routed to dialer with candidate contact info.
     """
-    params = {"org_id": organization_id}
+    params = {"org_id": current_user.organization_id}
     user_filter = ""
     if assigned_to:
         user_filter = "AND rt.assigned_to = :assigned_to"
@@ -691,72 +711,5 @@ async def get_recruiting_dialer_queue(
 
 
 # =============================================================================
-# Migration Endpoint (Development)
+# Migration endpoints removed — use backend/migrations/ scripts instead.
 # =============================================================================
-
-@router.post("/admin/run-migration")
-async def run_dialer_migration(admin_key: str = Query(...)):
-    """Create call history table if it doesn't exist and add telephony columns."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    # Step 1: Create table if it doesn't exist (base columns for backwards compat)
-    create_table_sql = """
-    CREATE TABLE IF NOT EXISTS recruiting_call_history (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        candidate_id INTEGER NOT NULL,
-        caller_user_id INTEGER,
-        direction VARCHAR(20) DEFAULT 'outbound',
-        phone_from VARCHAR(20),
-        phone_to VARCHAR(20),
-        whisper_context TEXT,
-        duration_seconds INTEGER,
-        status VARCHAR(20) DEFAULT 'initiated',
-        outcome VARCHAR(50),
-        notes TEXT,
-        recording_url TEXT,
-        called_at TIMESTAMP DEFAULT NOW(),
-        completed_at TIMESTAMP,
-        CONSTRAINT fk_call_candidate FOREIGN KEY (candidate_id)
-            REFERENCES mm_candidates(id) ON DELETE CASCADE
-    )
-    """
-
-    # Step 2: Add telephony columns if missing (twilio_call_sid is a legacy column name)
-    alter_sql = [
-        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS twilio_call_sid VARCHAR(50)",
-        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS recording_sid VARCHAR(50)",
-        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS phone_to VARCHAR(20)",
-        "ALTER TABLE recruiting_call_history ADD COLUMN IF NOT EXISTS phone_from VARCHAR(20)",
-    ]
-
-    # Step 3: Create indexes
-    index_sql = [
-        "CREATE INDEX IF NOT EXISTS idx_call_history_candidate ON recruiting_call_history(candidate_id)",
-        "CREATE INDEX IF NOT EXISTS idx_call_history_caller ON recruiting_call_history(caller_user_id)",
-        "CREATE INDEX IF NOT EXISTS idx_call_history_twilio_sid ON recruiting_call_history(twilio_call_sid)",
-    ]
-
-    try:
-        with get_db_connection() as conn:
-            # Create table
-            conn.execute(text(create_table_sql))
-
-            # Add columns if missing
-            for alter in alter_sql:
-                try:
-                    conn.execute(text(alter))
-                except Exception as e:
-                    logger.debug(f"Skipping column migration in run_dialer_migration: {e}")
-
-            # Create indexes
-            for idx in index_sql:
-                try:
-                    conn.execute(text(idx))
-                except Exception as e:
-                    logger.debug(f"Skipping index creation in run_dialer_migration: {e}")
-
-            conn.commit()
-        return {"status": "success", "message": "Call history table created/updated with telephony columns"}
-    except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail="Internal server error")

@@ -17,7 +17,7 @@ import json
 import os
 from sqlalchemy.exc import SQLAlchemyError
 
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
 
 router = APIRouter(prefix="/api/v1/partner-recruiting", tags=["partner-recruiting"])
 
@@ -1635,21 +1635,5 @@ async def update_partner_assessment(
 
 
 # =============================================================================
-# ADMIN / MIGRATION
+# Migration/admin endpoints removed — use backend/migrations/ scripts instead.
 # =============================================================================
-
-@router.post("/admin/run-migration")
-async def run_partner_recruiting_migration(
-    admin_key: str = Query(...),
-    db: Session = Depends(get_db)
-):
-    """Run the partner recruiting tables migration."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        from migrations.add_partner_recruiting_tables import run_migration
-        result = run_migration()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Migration failed")

@@ -8,12 +8,11 @@ Endpoints for:
 - Production calculator
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Request
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-import os
 from database import get_db
 from services.recruit_assessment_service import recruit_assessment_service
 from sqlalchemy.exc import SQLAlchemyError
@@ -26,9 +25,9 @@ from models.recruit_assessment_models import (
     CalculatorInput,
     CalculatorResult,
 )
+from auth.dependencies import get_current_user
+from database.models import User
 from routes.auth_deps import require_auth
-
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 router = APIRouter(prefix="/api/v1/recruiting", tags=["Recruiting Assessment"], dependencies=[Depends(require_auth)])
 
@@ -123,24 +122,18 @@ async def recalculate_scores(candidate_id: int):
 # =============================================================================
 
 @router.get("/calculator/config", response_model=CalculatorConfig)
-async def get_calculator_config(organization_id: int = 1):
+async def get_calculator_config(current_user: User = Depends(get_current_user)):
     """Get production calculator configuration."""
-    return recruit_assessment_service.get_calculator_config(organization_id)
+    return recruit_assessment_service.get_calculator_config(current_user.organization_id)
 
 
 @router.put("/calculator/config", response_model=CalculatorConfig)
 async def update_calculator_config(
     config: CalculatorConfig,
-    organization_id: int = 1,
-    request: Request = None,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
 ):
     """Update production calculator configuration (admin only)."""
-    from auth.dependencies import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
-    return recruit_assessment_service.update_calculator_config(config, organization_id)
+    return recruit_assessment_service.update_calculator_config(config, current_user.organization_id)
 
 
 @router.post("/calculator/calculate", response_model=CalculatorResult)
@@ -175,12 +168,8 @@ class QuizTemplateCreate(BaseModel):
 
 
 @router.get("/quiz/templates/all")
-async def get_all_quiz_templates(request: Request = None, db: Session = Depends(get_db)):
+async def get_all_quiz_templates(current_user: User = Depends(get_current_user)):
     """Get all quiz templates (admin only)."""
-    from auth.dependencies import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
     from database import engine
     from sqlalchemy import text
 
@@ -212,12 +201,8 @@ async def get_all_quiz_templates(request: Request = None, db: Session = Depends(
 
 
 @router.post("/quiz/templates")
-async def create_quiz_template(template: QuizTemplateCreate, request: Request = None, db: Session = Depends(get_db)):
+async def create_quiz_template(template: QuizTemplateCreate, current_user: User = Depends(get_current_user)):
     """Create a new quiz template (admin only)."""
-    from auth.dependencies import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
     from database import engine
     from sqlalchemy import text
 
@@ -245,12 +230,8 @@ async def create_quiz_template(template: QuizTemplateCreate, request: Request = 
 
 
 @router.delete("/quiz/templates/{template_id}")
-async def delete_quiz_template(template_id: int, request: Request = None, db: Session = Depends(get_db)):
+async def delete_quiz_template(template_id: int, current_user: User = Depends(get_current_user)):
     """Soft delete a quiz template (admin only)."""
-    from auth.dependencies import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
     from database import engine
     from sqlalchemy import text
 
@@ -265,20 +246,5 @@ async def delete_quiz_template(template_id: int, request: Request = None, db: Se
 
 
 # =============================================================================
-# Migration Endpoint (Development)
+# Migration/admin endpoints removed — use backend/migrations/ scripts instead.
 # =============================================================================
-
-@router.post("/admin/run-assessment-migration")
-async def run_assessment_migration(request: Request = None, db: Session = Depends(get_db)):
-    """Run the assessment tables migration (admin only)."""
-    from auth.dependencies import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "") if request else ""
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
-
-    try:
-        from migrations.add_recruit_assessment_tables import run_migration
-        run_migration()
-        return {"status": "success", "message": "Migration completed"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error")

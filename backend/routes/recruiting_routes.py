@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # See backend/config/feature_tiers.py for tier definitions.
 # ============================================================================
 
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+
 
 router = APIRouter(
     prefix="/api/v1/recruiting",
@@ -509,90 +509,6 @@ async def update_candidate(
 
     db.commit()
     return {"id": candidate_id, "updated": True}
-
-
-@router.post("/admin/fix-candidate-portals")
-async def fix_candidate_portals(
-    admin_key: str = Query(..., description="Admin API key"),
-    default_recruiter_id: int = Query(57, description="Default recruiter user ID"),
-    db: Session = Depends(get_db)
-):
-    """
-    Admin endpoint to fix existing candidates without portal workspaces.
-    Creates workspaces and assigns default recruiter if missing.
-    """
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    import secrets
-    import re
-
-    # Find candidates without portal workspaces
-    candidates = db.execute(text("""
-        SELECT c.id, c.first_name, c.last_name, c.referrer_user_id
-        FROM mm_candidates c
-        LEFT JOIN recruit_portal_workspaces w ON w.candidate_id = c.id
-        WHERE w.id IS NULL
-    """)).fetchall()
-
-    fixed = []
-    for c in candidates:
-        # Generate slug
-        first = c.first_name or "candidate"
-        last = c.last_name or str(c.id)
-        base_slug = f"{first.lower()}-{last.lower()}"
-        base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
-        slug = base_slug
-
-        # Ensure unique slug
-        count = 1
-        while True:
-            existing = db.execute(
-                text("SELECT id FROM recruit_portal_workspaces WHERE slug = :slug"),
-                {"slug": slug}
-            ).fetchone()
-            if not existing:
-                break
-            slug = f"{base_slug}-{count}"
-            count += 1
-
-        # Create workspace
-        result = db.execute(text("""
-            INSERT INTO recruit_portal_workspaces (candidate_id, slug, is_active, created_at)
-            VALUES (:candidate_id, :slug, true, NOW())
-            RETURNING id
-        """), {"candidate_id": c.id, "slug": slug})
-        workspace_id = result.fetchone().id
-
-        # Create token
-        token = f"recruit_{secrets.token_hex(32)}"
-        db.execute(text("""
-            INSERT INTO recruit_portal_tokens (workspace_id, token, scope, created_at)
-            VALUES (:workspace_id, :token, 'full', NOW())
-        """), {"workspace_id": workspace_id, "token": token})
-
-        # Update referrer if missing
-        if not c.referrer_user_id:
-            db.execute(text("""
-                UPDATE mm_candidates SET referrer_user_id = :recruiter WHERE id = :id
-            """), {"recruiter": default_recruiter_id, "id": c.id})
-
-        fixed.append({"candidate_id": c.id, "slug": slug, "portal_url": f"/join/{slug}"})
-
-    # Also update any candidates with missing referrer but existing workspace
-    db.execute(text("""
-        UPDATE mm_candidates
-        SET referrer_user_id = :recruiter
-        WHERE referrer_user_id IS NULL
-    """), {"recruiter": default_recruiter_id})
-
-    db.commit()
-
-    return {
-        "message": f"Fixed {len(fixed)} candidates without portals",
-        "default_recruiter_assigned": default_recruiter_id,
-        "fixed_candidates": fixed
-    }
 
 
 @router.patch("/candidates/{candidate_id}/status")
@@ -1535,267 +1451,8 @@ async def get_upcoming_interviews(
 
 
 # =============================================================================
-# ADMIN ENDPOINTS
+# Migration/admin endpoints removed — use backend/migrations/ scripts instead.
 # =============================================================================
-
-@router.post("/admin/seed-test-data")
-async def seed_test_data(
-    admin_key: str = Query(..., description="Admin API key"),
-    db: Session = Depends(get_db)
-):
-    """Seed test candidates and job postings."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    import json
-    results = {"candidates": [], "job_postings": [], "errors": []}
-
-    try:
-        # Create test candidates
-        candidates = [
-            ("Sarah", "Johnson", "sarah.johnson@example.com", "555-123-4567", "linkedin", "Senior Loan Officer", 8, 6, True),
-            ("Michael", "Chen", "michael.chen@example.com", "555-234-5678", "referral", "Loan Processor", 4, 3, True),
-            ("Emily", "Rodriguez", "emily.rodriguez@example.com", "555-345-6789", "indeed", "Junior Loan Officer", 1, 0, False),
-            ("David", "Williams", "david.williams@example.com", "555-456-7890", "website", "Senior Loan Officer", 10, 8, True),
-            ("Jessica", "Martinez", "jessica.martinez@example.com", "555-567-8901", "referral", "Loan Processor", 3, 2, True),
-        ]
-
-        for c in candidates:
-            try:
-                result = db.execute(text("""
-                    INSERT INTO mm_candidates (
-                        first_name, last_name, email, phone, source,
-                        target_role_name, years_experience, years_mortgage_experience,
-                        has_mortgage_experience, status, applied_at, is_active
-                    ) VALUES (
-                        :first_name, :last_name, :email, :phone, :source,
-                        :target_role, :years_exp, :years_mortgage,
-                        :has_mortgage, 'new', CURRENT_TIMESTAMP, true
-                    )
-                    RETURNING id
-                """), {
-                    "first_name": c[0], "last_name": c[1], "email": c[2], "phone": c[3],
-                    "source": c[4], "target_role": c[5], "years_exp": c[6],
-                    "years_mortgage": c[7], "has_mortgage": c[8]
-                }).fetchone()
-                results["candidates"].append({"id": result.id, "name": f"{c[0]} {c[1]}"})
-            except Exception as e:
-                logger.error(f"Candidate {c[0]} {c[1]} creation failed: {e}")
-                results["errors"].append(f"Candidate {c[0]} {c[1]}: creation failed")
-
-        # Create test job postings
-        job_postings = [
-            ("Senior Loan Officer", "senior-loan-officer", "Experienced LO for growing team", 80000, 150000, "Charlotte, NC"),
-            ("Loan Processor", "loan-processor", "Detail-oriented processor", 50000, 70000, "Remote"),
-            ("Junior Loan Officer", "junior-loan-officer", "Entry-level opportunity", 45000, 60000, "Atlanta, GA"),
-        ]
-
-        for jp in job_postings:
-            try:
-                result = db.execute(text("""
-                    INSERT INTO mm_job_postings (
-                        title, slug, summary, salary_min, salary_max, location,
-                        is_published, employment_type, requirements, responsibilities, benefits
-                    ) VALUES (
-                        :title, :slug, :summary, :salary_min, :salary_max, :location,
-                        true, 'full_time', '[]'::jsonb, '[]'::jsonb, '[]'::jsonb
-                    )
-                    RETURNING id, slug
-                """), {
-                    "title": jp[0], "slug": jp[1], "summary": jp[2],
-                    "salary_min": jp[3], "salary_max": jp[4], "location": jp[5]
-                }).fetchone()
-                results["job_postings"].append({"id": result.id, "slug": result.slug})
-            except SQLAlchemyError as e:
-                logger.error(f"Job {jp[0]} creation failed: {e}")
-                results["errors"].append(f"Job {jp[0]}: creation failed")
-
-        db.commit()
-        return results
-
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Seed failed")
-
-
-@router.post("/admin/run-migration")
-async def run_recruiting_migration(
-    admin_key: str = Query(..., description="Admin API key"),
-    db: Session = Depends(get_db)
-):
-    """Run the recruiting tables migration."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        from migrations.add_recruiting_tables import run_migration
-        result = run_migration()
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Migration failed")
-
-
-@router.post("/admin/add-quiz-templates")
-async def add_quiz_templates(
-    admin_key: str = Query(..., description="Admin API key"),
-    db: Session = Depends(get_db)
-):
-    """Create quiz tables (templates, responses, scores) and seed with initial data."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        from sqlalchemy import text
-        messages = []
-
-        # Create quiz templates table
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS recruit_quiz_templates (
-                id SERIAL PRIMARY KEY,
-                disposition VARCHAR(50) NOT NULL,
-                question_text TEXT NOT NULL,
-                question_type VARCHAR(20) DEFAULT 'likert',
-                category VARCHAR(50) NOT NULL,
-                weight DECIMAL(3,2) DEFAULT 1.0,
-                display_order INTEGER DEFAULT 0,
-                is_active BOOLEAN DEFAULT true,
-                created_at TIMESTAMP DEFAULT NOW()
-            );
-        """))
-        messages.append("recruit_quiz_templates table ready")
-
-        # Create quiz responses table
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS recruit_quiz_responses (
-                id SERIAL PRIMARY KEY,
-                candidate_id INTEGER NOT NULL,
-                template_id INTEGER REFERENCES recruit_quiz_templates(id),
-                disposition VARCHAR(50) NOT NULL,
-                response_value TEXT,
-                numeric_score DECIMAL(3,1),
-                responded_by INTEGER,
-                responded_at TIMESTAMP DEFAULT NOW()
-            );
-        """))
-        messages.append("recruit_quiz_responses table ready")
-
-        # Create assessment scores table
-        db.execute(text("""
-            CREATE TABLE IF NOT EXISTS recruit_assessment_scores (
-                id SERIAL PRIMARY KEY,
-                candidate_id INTEGER NOT NULL UNIQUE,
-                production_score DECIMAL(3,1),
-                disc_score DECIMAL(3,1),
-                character_score DECIMAL(3,1),
-                skills_score DECIMAL(3,1),
-                culture_fit_score DECIMAL(3,1),
-                overall_score DECIMAL(3,1),
-                last_quiz_disposition VARCHAR(50),
-                quiz_count INTEGER DEFAULT 0,
-                last_updated TIMESTAMP DEFAULT NOW()
-            );
-        """))
-        messages.append("recruit_assessment_scores table ready")
-
-        # Check if template data exists
-        result = db.execute(text("SELECT COUNT(*) FROM recruit_quiz_templates"))
-        count = result.scalar()
-
-        if count == 0:
-            # Insert seed data
-            db.execute(text("""
-                INSERT INTO recruit_quiz_templates (disposition, question_text, question_type, category, weight, display_order) VALUES
-                ('screening', 'Rate production volume', 'likert', 'production', 1.0, 1),
-                ('screening', 'Has required licenses?', 'yes_no', 'skills', 1.0, 2),
-                ('phone_screen', 'Communication skills?', 'likert', 'skills', 1.0, 1),
-                ('phone_screen', 'Enthusiasm level?', 'likert', 'culture_fit', 0.9, 2),
-                ('interview', 'Dominance trait', 'likert', 'disc', 1.0, 1),
-                ('interview', 'Influence trait', 'likert', 'disc', 1.0, 2),
-                ('interview', 'Integrity rating', 'likert', 'character', 1.0, 3),
-                ('assessment', 'Technical performance?', 'likert', 'skills', 1.0, 1),
-                ('assessment', 'Product knowledge?', 'likert', 'skills', 1.0, 2),
-                ('assessment', 'Problem-solving?', 'likert', 'character', 0.9, 3),
-                ('offer', 'Values alignment', 'likert', 'culture_fit', 1.0, 1),
-                ('offer', 'Team compatibility', 'likert', 'culture_fit', 1.0, 2);
-            """))
-            messages.append("12 quiz templates seeded")
-        else:
-            messages.append(f"Templates exist ({count} records)")
-
-        db.commit()
-        return {"status": "success", "messages": messages}
-
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Migration failed")
-
-
-@router.post("/admin/add-social-production-fields")
-async def add_social_production_fields(
-    admin_key: str = Query(..., description="Admin API key"),
-    db: Session = Depends(get_db)
-):
-    """Add social media and production fields to mm_candidates table."""
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
-
-    try:
-        # Production fields from RETR
-        production_columns = [
-            ("annual_volume", "NUMERIC(15,2)"),
-            ("annual_units", "INTEGER"),
-            ("avg_loan_size", "NUMERIC(12,2)"),
-            ("nmls_id", "VARCHAR(20)"),
-            ("license_states", "JSONB"),
-            ("production_history", "JSONB"),
-            ("current_company", "VARCHAR(255)"),
-            ("current_title", "VARCHAR(100)"),
-        ]
-
-        # Social media fields
-        social_columns = [
-            ("facebook_url", "VARCHAR(500)"),
-            ("instagram_url", "VARCHAR(500)"),
-            ("twitter_url", "VARCHAR(500)"),
-            ("social_profiles", "JSONB"),
-            ("social_posts", "JSONB"),
-            ("social_last_synced", "TIMESTAMP"),
-        ]
-
-        # Profile enhancement fields
-        profile_columns = [
-            ("headshot_url", "VARCHAR(500)"),
-            ("bio", "TEXT"),
-            ("specialties", "JSONB"),
-            ("market_areas", "JSONB"),
-            ("education", "JSONB"),
-            ("certifications", "JSONB"),
-            ("awards", "JSONB"),
-            ("testimonials", "JSONB"),
-        ]
-
-        all_columns = production_columns + social_columns + profile_columns
-        added = []
-        skipped = []
-
-        for col_name, col_type in all_columns:
-            try:
-                db.execute(text(f"""
-                    ALTER TABLE mm_candidates
-                    ADD COLUMN IF NOT EXISTS {col_name} {col_type}
-                """))
-                added.append(col_name)
-            except SQLAlchemyError as e:
-                if "already exists" in str(e).lower():
-                    skipped.append(col_name)
-                else:
-                    skipped.append(f"{col_name}: {str(e)}")
-
-        db.commit()
-        return {"success": True, "added": added, "skipped": skipped}
-    except SQLAlchemyError as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 @router.get("/candidates/{candidate_id}/full-profile")
@@ -1816,7 +1473,9 @@ async def get_candidate_full_profile(
             c.previous_companies, c.licenses,
             -- Production fields
             c.annual_volume, c.annual_units, c.avg_loan_size, c.nmls_id,
-            c.license_states, c.production_history, c.current_company, c.current_title,
+            c.license_states, c.license_expiration_dates, c.ce_credits_completed,
+            c.sponsorship_transfer_status,
+            c.production_history, c.current_company, c.current_title,
             -- Social media fields
             c.facebook_url, c.instagram_url, c.twitter_url, c.social_profiles,
             c.social_posts, c.social_last_synced,
@@ -1884,6 +1543,9 @@ async def get_candidate_full_profile(
             "avg_loan_size": float(result.avg_loan_size) if result.avg_loan_size else None,
             "nmls_id": result.nmls_id,
             "license_states": result.license_states or [],
+            "license_expiration_dates": result.license_expiration_dates or {},
+            "ce_credits_completed": result.ce_credits_completed,
+            "sponsorship_transfer_status": result.sponsorship_transfer_status,
             "production_history": result.production_history or [],
             "current_company": result.current_company,
             "current_title": result.current_title,

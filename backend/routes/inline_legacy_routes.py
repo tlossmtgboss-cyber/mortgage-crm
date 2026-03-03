@@ -1703,6 +1703,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"Could not load Partner Recruiting routes: {e}")
 
+    # Include EEOC compliance routes
+    try:
+        from routes.recruit_eeoc_routes import router as recruit_eeoc_router
+        app.include_router(recruit_eeoc_router, tags=["Recruiting EEOC"])
+        logger.info("✅ Recruiting EEOC routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Recruiting EEOC routes: {e}")
+
     # Include Portal Video routes (video recording for client/realtor portals)
     try:
         from routes.portal_video_routes import router as portal_video_router

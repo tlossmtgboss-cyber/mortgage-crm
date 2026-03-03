@@ -586,6 +586,22 @@ class Candidate(Base):
     recruiter_notes = Column(Text)
     hiring_manager_notes = Column(Text)
 
+    # NMLS License Tracking (mortgage-specific compliance)
+    nmls_id = Column(String(20))
+    license_states = Column(JSON)  # List of state codes where licensed
+    license_expiration_dates = Column(JSON)  # {state: expiry_date}
+    ce_credits_completed = Column(Boolean)  # Continuing education current
+    sponsorship_transfer_status = Column(String(30))  # pending, in_progress, completed, not_required
+
+    # EEOC/OFCCP Demographic Data (voluntary, self-identified)
+    # Stored separately from hiring decisions per EEOC guidelines
+    eeoc_consent_given = Column(Boolean, default=False)
+    eeoc_consent_date = Column(DateTime)
+    eeoc_gender = Column(String(30))  # male, female, non_binary, prefer_not_to_say
+    eeoc_race_ethnicity = Column(String(50))  # Per EEO-1 categories
+    eeoc_veteran_status = Column(String(30))  # veteran, not_veteran, prefer_not_to_say
+    eeoc_disability_status = Column(String(30))  # yes, no, prefer_not_to_say
+
     # Soft delete
     is_active = Column(Boolean, default=True)
 
