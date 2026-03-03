@@ -1299,3 +1299,4 @@ class OpsManagerAgent(SpecializedAgent):
         finally:
             if not shared_db:
                 db.close()
+# Ops Manager v2 - 1772579967
