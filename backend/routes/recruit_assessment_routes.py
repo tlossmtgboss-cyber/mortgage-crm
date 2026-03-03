@@ -174,6 +174,7 @@ async def update_calculator_config(
     current_user: User = Depends(get_current_user),
 ):
     """Update production calculator configuration (admin only)."""
+    _require_admin(current_user)
     return recruit_assessment_service.update_calculator_config(config, current_user.organization_id)
 
 

@@ -35,6 +35,16 @@ def _verify_task_org(db: Session, task_id: int, organization_id: int):
         raise HTTPException(status_code=404, detail="Task not found")
 
 
+def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
+    """Verify candidate belongs to the caller's organization."""
+    row = db.execute(text("""
+        SELECT id FROM mm_candidates
+        WHERE id = :id AND organization_id = :org_id AND is_active = true
+    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+
 # =============================================================================
 # Request/Response Models
 # =============================================================================
@@ -102,13 +112,15 @@ async def get_workflow_definition(disposition: str):
 async def create_tasks_for_candidate(
     candidate_id: int,
     request: CreateTasksRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Create workflow tasks for a candidate when their disposition changes.
 
     This is typically called automatically when a candidate status is updated.
     """
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
     workflow = recruiting_workflow_service.get_workflow_for_disposition(request.disposition)
     if not workflow:
         return {
@@ -163,8 +175,13 @@ async def get_pending_tasks(
 
 
 @router.get("/candidates/{candidate_id}/tasks")
-async def get_candidate_tasks(candidate_id: int, current_user: User = Depends(get_current_user)):
+async def get_candidate_tasks(
+    candidate_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get all tasks for a specific candidate."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
     tasks = recruiting_workflow_service.get_pending_tasks(
         candidate_id=candidate_id,
         organization_id=current_user.organization_id

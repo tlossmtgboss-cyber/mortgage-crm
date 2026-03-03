@@ -406,10 +406,20 @@ async def get_candidate_videos(
 @router.post("/mark-viewed/{video_id}")
 async def mark_video_viewed(
     video_id: int,
-    db=Depends(get_db)
+    token: str = Query(..., description="Portal token for candidate verification"),
+    db: Session = Depends(get_db),
 ):
-    """Mark a video as viewed by the candidate."""
+    """Mark a video as viewed by the candidate. Requires portal token."""
     try:
+        # Verify the token matches a valid candidate who owns this video
+        row = db.execute(text("""
+            SELECT v.id FROM recruit_video_messages v
+            JOIN mm_candidates c ON c.id = v.candidate_id
+            WHERE v.id = :video_id AND c.portal_token = :token AND c.is_active = true
+        """), {"video_id": video_id, "token": token}).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Video not found")
+
         db.execute(text("""
             UPDATE recruit_video_messages
             SET viewed_at = NOW()
@@ -419,6 +429,8 @@ async def mark_video_viewed(
 
         return {"success": True}
 
+    except HTTPException:
+        raise
     except SQLAlchemyError as e:
         logger.error(f"Failed to mark video viewed: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

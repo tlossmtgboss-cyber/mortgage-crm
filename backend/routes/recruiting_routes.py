@@ -559,6 +559,14 @@ async def escalate_candidate(
     """Escalate/reassign a candidate to another team member."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
+    # Verify assigned_to user belongs to the same organization
+    target_user = db.execute(
+        text("SELECT id FROM users WHERE id = :user_id AND organization_id = :org_id"),
+        {"user_id": data.assigned_to, "org_id": current_user.organization_id}
+    ).fetchone()
+    if not target_user:
+        raise HTTPException(status_code=400, detail="Target user not found in your organization")
+
     # Update the candidate's assigned_to
     result = db.execute(
         text("""
