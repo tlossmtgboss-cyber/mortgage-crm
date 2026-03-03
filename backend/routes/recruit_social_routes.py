@@ -107,16 +107,18 @@ async def facebook_oauth_callback(
             raise HTTPException(status_code=400, detail="Failed to exchange code")
 
         # Store token in database
+        org_id = current_user.organization_id
         db.execute(text("""
-            INSERT INTO social_tokens (platform, access_token, expires_at, created_at)
-            VALUES ('facebook', :token, :expires, NOW())
-            ON CONFLICT (platform) DO UPDATE SET
+            INSERT INTO social_tokens (platform, access_token, expires_at, organization_id, created_at)
+            VALUES ('facebook', :token, :expires, :org_id, NOW())
+            ON CONFLICT (platform, organization_id) DO UPDATE SET
                 access_token = :token,
                 expires_at = :expires,
                 updated_at = NOW()
         """), {
             "token": token_data.get("access_token"),
-            "expires": datetime.now().isoformat() if not token_data.get("expires_in") else None
+            "expires": datetime.now().isoformat() if not token_data.get("expires_in") else None,
+            "org_id": org_id,
         })
         db.commit()
 
@@ -147,16 +149,18 @@ async def linkedin_oauth_callback(
             raise HTTPException(status_code=400, detail="Failed to exchange code")
 
         # Store token in database
+        org_id = current_user.organization_id
         db.execute(text("""
-            INSERT INTO social_tokens (platform, access_token, expires_at, created_at)
-            VALUES ('linkedin', :token, :expires, NOW())
-            ON CONFLICT (platform) DO UPDATE SET
+            INSERT INTO social_tokens (platform, access_token, expires_at, organization_id, created_at)
+            VALUES ('linkedin', :token, :expires, :org_id, NOW())
+            ON CONFLICT (platform, organization_id) DO UPDATE SET
                 access_token = :token,
                 expires_at = :expires,
                 updated_at = NOW()
         """), {
             "token": token_data.get("access_token"),
-            "expires": datetime.now().isoformat() if not token_data.get("expires_in") else None
+            "expires": datetime.now().isoformat() if not token_data.get("expires_in") else None,
+            "org_id": org_id,
         })
         db.commit()
 
@@ -266,7 +270,7 @@ async def get_social_posts(
             SELECT id, content, platforms, image_url, scheduled_at,
                    status, posted_at, engagement_data, created_at
             FROM recruit_social_posts
-            WHERE (organization_id = :org_id OR organization_id IS NULL)
+            WHERE organization_id = :org_id
         """
         params = {"limit": limit, "org_id": org_id}
 
@@ -296,7 +300,7 @@ async def get_post_analytics(
         result = db.execute(text("""
             SELECT id, platforms, engagement_data, external_post_ids
             FROM recruit_social_posts
-            WHERE id = :post_id AND (organization_id = :org_id OR organization_id IS NULL)
+            WHERE id = :post_id AND organization_id = :org_id
         """), {"post_id": post_id, "org_id": current_user.organization_id})
         post = result.fetchone()
 
@@ -442,7 +446,8 @@ async def get_social_connections(
                    expires_at,
                    updated_at
             FROM social_tokens
-        """))
+            WHERE organization_id = :org_id
+        """), {"org_id": current_user.organization_id})
         tokens = [dict(row._mapping) for row in result]
 
         # Build connection status

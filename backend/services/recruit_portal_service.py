@@ -59,11 +59,13 @@ class RecruitPortalService:
 
             # Generate slug if not provided
             if not slug:
+                import secrets
                 base_slug = f"{candidate.first_name.lower()}-{candidate.last_name.lower()}"
                 base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
-                slug = base_slug
+                random_suffix = secrets.token_hex(3)
+                slug = f"{base_slug}-{random_suffix}"
 
-                # Check for uniqueness
+                # Check for uniqueness (collision is extremely unlikely with 6 hex chars)
                 count = 1
                 while True:
                     result = conn.execute(
@@ -72,7 +74,8 @@ class RecruitPortalService:
                     )
                     if not result.fetchone():
                         break
-                    slug = f"{base_slug}-{count}"
+                    random_suffix = secrets.token_hex(3)
+                    slug = f"{base_slug}-{random_suffix}"
                     count += 1
 
             # Create workspace

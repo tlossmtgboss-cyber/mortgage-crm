@@ -1682,6 +1682,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ AI audit log note: {e}")
 
+        # Fix 7: Add organization_id to social_tokens for tenant isolation
+        try:
+            from migrations.add_social_tokens_org_id import run_migration as run_social_tokens_org
+            run_social_tokens_org(engine)
+            logger.info("✅ social_tokens org_id migration complete")
+        except Exception as e:
+            logger.warning(f"⚠️ social_tokens org_id note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -53,22 +53,35 @@ VALID_VETERAN_STATUSES = {"veteran", "not_veteran", "prefer_not_to_say"}
 VALID_DISABILITY_STATUSES = {"yes", "no", "prefer_not_to_say"}
 
 
+def _validate_candidate_portal_token(db: Session, candidate_id: int, token: str):
+    """Validate that the portal token matches the candidate."""
+    row = db.execute(text("""
+        SELECT id FROM mm_candidates
+        WHERE id = :id AND portal_token = :token AND is_active = true
+    """), {"id": candidate_id, "token": token}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Invalid candidate or token")
+
+
 # =============================================================================
-# Public Portal Endpoint (no auth — candidate self-service)
+# Public Portal Endpoint (token-authenticated candidate self-service)
 # =============================================================================
 
 @router.post("/candidates/{candidate_id}/self-identify")
 async def submit_eeoc_self_identification(
     candidate_id: int,
     data: EEOCSelfIdentification,
-    db: Session = Depends(get_db)
+    token: str = Query(..., description="Portal access token for candidate verification"),
+    db: Session = Depends(get_db),
 ):
     """
     Submit voluntary EEOC self-identification for a candidate.
 
-    This is typically accessed from the candidate portal during the application process.
-    All fields are optional and consent must be given.
+    This is accessed from the candidate portal during the application process.
+    Requires a valid portal token. All fields are optional and consent must be given.
     """
+    _validate_candidate_portal_token(db, candidate_id, token)
+
     if not data.consent_given:
         return {"message": "Self-identification declined", "saved": False}
 
@@ -83,7 +96,7 @@ async def submit_eeoc_self_identification(
         raise HTTPException(status_code=400, detail="Invalid disability status value")
 
     try:
-        db.execute(text("""
+        result = db.execute(text("""
             UPDATE mm_candidates
             SET eeoc_consent_given = true,
                 eeoc_consent_date = :consent_date,
@@ -92,7 +105,7 @@ async def submit_eeoc_self_identification(
                 eeoc_veteran_status = :veteran_status,
                 eeoc_disability_status = :disability_status,
                 updated_at = NOW()
-            WHERE id = :candidate_id
+            WHERE id = :candidate_id AND is_active = true
         """), {
             "candidate_id": candidate_id,
             "consent_date": datetime.now(timezone.utc),
@@ -103,7 +116,12 @@ async def submit_eeoc_self_identification(
         })
         db.commit()
 
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+
         return {"message": "Self-identification saved", "saved": True}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to save EEOC data for candidate {candidate_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

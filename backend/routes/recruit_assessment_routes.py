@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from database import get_db
 from services.recruit_assessment_service import recruit_assessment_service
@@ -30,6 +31,22 @@ from database.models import User
 from routes.auth_deps import require_auth
 
 router = APIRouter(prefix="/api/v1/recruiting", tags=["Recruiting Assessment"], dependencies=[Depends(require_auth)])
+
+
+def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
+    """Verify candidate belongs to the user's organization."""
+    row = db.execute(text("""
+        SELECT id FROM mm_candidates
+        WHERE id = :id AND organization_id = :org_id AND is_active = true
+    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+
+def _require_admin(current_user: User):
+    """Require admin role for template management."""
+    if current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
 
 # =============================================================================
@@ -64,13 +81,16 @@ async def get_quiz_for_disposition(disposition: str):
 async def submit_quiz_responses(
     candidate_id: int,
     submission: QuizSubmission,
-    responded_by: int = Query(..., description="User ID of the person completing the quiz")
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Submit quiz responses for a candidate and update their assessment scores.
 
     The quiz must be completed when changing a candidate's disposition.
     """
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
     if not submission.responses:
         raise HTTPException(status_code=400, detail="No responses provided")
 
@@ -78,7 +98,7 @@ async def submit_quiz_responses(
         scores = recruit_assessment_service.submit_quiz_responses(
             candidate_id=candidate_id,
             submission=submission,
-            responded_by=responded_by
+            responded_by=current_user.id
         )
         return scores
     except Exception as e:
@@ -86,8 +106,14 @@ async def submit_quiz_responses(
 
 
 @router.get("/candidates/{candidate_id}/quiz-completed/{disposition}")
-async def check_quiz_completed(candidate_id: int, disposition: str):
+async def check_quiz_completed(
+    candidate_id: int,
+    disposition: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Check if a quiz has been completed for a specific disposition."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
     completed = recruit_assessment_service.check_quiz_completed(candidate_id, disposition)
     return {"completed": completed, "disposition": disposition}
 
@@ -97,8 +123,13 @@ async def check_quiz_completed(candidate_id: int, disposition: str):
 # =============================================================================
 
 @router.get("/candidates/{candidate_id}/scores", response_model=Optional[AssessmentScores])
-async def get_candidate_scores(candidate_id: int):
+async def get_candidate_scores(
+    candidate_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get assessment scores for a candidate."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
     scores = recruit_assessment_service.get_candidate_scores(candidate_id)
     if not scores:
         return AssessmentScores(candidate_id=candidate_id)
@@ -106,14 +137,24 @@ async def get_candidate_scores(candidate_id: int):
 
 
 @router.get("/candidates/{candidate_id}/scores/breakdown", response_model=AssessmentScoreBreakdown)
-async def get_score_breakdown(candidate_id: int):
+async def get_score_breakdown(
+    candidate_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get detailed score breakdown with quiz history and recommendations."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
     return recruit_assessment_service.get_score_breakdown(candidate_id)
 
 
 @router.post("/candidates/{candidate_id}/scores/recalculate", response_model=AssessmentScores)
-async def recalculate_scores(candidate_id: int):
+async def recalculate_scores(
+    candidate_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Force recalculation of assessment scores from all quiz responses."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
     return recruit_assessment_service.calculate_and_update_scores(candidate_id)
 
 
@@ -170,8 +211,8 @@ class QuizTemplateCreate(BaseModel):
 @router.get("/quiz/templates/all")
 async def get_all_quiz_templates(current_user: User = Depends(get_current_user)):
     """Get all quiz templates (admin only)."""
+    _require_admin(current_user)
     from database import engine
-    from sqlalchemy import text
 
     with engine.connect() as conn:
         result = conn.execute(
@@ -203,8 +244,8 @@ async def get_all_quiz_templates(current_user: User = Depends(get_current_user))
 @router.post("/quiz/templates")
 async def create_quiz_template(template: QuizTemplateCreate, current_user: User = Depends(get_current_user)):
     """Create a new quiz template (admin only)."""
+    _require_admin(current_user)
     from database import engine
-    from sqlalchemy import text
 
     with engine.connect() as conn:
         result = conn.execute(
@@ -232,15 +273,18 @@ async def create_quiz_template(template: QuizTemplateCreate, current_user: User 
 @router.delete("/quiz/templates/{template_id}")
 async def delete_quiz_template(template_id: int, current_user: User = Depends(get_current_user)):
     """Soft delete a quiz template (admin only)."""
+    _require_admin(current_user)
     from database import engine
-    from sqlalchemy import text
 
     with engine.connect() as conn:
-        conn.execute(
+        result = conn.execute(
             text("UPDATE recruit_quiz_templates SET is_active = false WHERE id = :id"),
             {"id": template_id}
         )
         conn.commit()
+
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
 
     return {"message": "Template deactivated"}
 

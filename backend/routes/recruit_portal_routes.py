@@ -93,6 +93,12 @@ def _enforce_rate_limit(request: Request, bucket: str = "general", max_requests:
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
 
+def _enforce_rate_limit_by_key(key: str, bucket: str, max_requests: int):
+    """Rate limit by an arbitrary key (e.g., slug) instead of IP."""
+    if not _check_rate_limit(key, bucket, max_requests):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
+
 router = APIRouter(prefix="/api/v1/recruit-portal", tags=["recruit-portal"])
 portal_service = RecruitPortalService()
 
@@ -584,13 +590,12 @@ async def create_portal_tables(
 async def get_purl_portal_data(
     slug: str,
     request: Request,
-    token: Optional[str] = Query(None, description="Portal access token"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get PURL portal data for candidate including calculator config and company info."""
     _enforce_rate_limit(request)
     try:
-        portal_data = portal_service.get_portal_by_slug(slug, token)
+        portal_data = portal_service.get_portal_by_slug(slug)
         if not portal_data:
             raise HTTPException(status_code=404, detail="Portal not found")
         return portal_data
@@ -626,6 +631,7 @@ async def purl_chat_with_assistant(
 ):
     """AI chat interaction for candidate questions on PURL portal."""
     _enforce_rate_limit(request, "chat", _RATE_MAX_CHAT)
+    _enforce_rate_limit_by_key(slug, "chat_slug", max_requests=20)
     try:
         portal_data = portal_service.get_portal_by_slug(slug)
         if not portal_data:

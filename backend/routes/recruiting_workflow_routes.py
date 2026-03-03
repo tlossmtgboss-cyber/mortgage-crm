@@ -11,15 +11,28 @@ Endpoints for:
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional, List
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from workflows.recruiting_workflows import recruiting_workflow_service, RECRUITING_WORKFLOWS
 from services.recruiting_email_service import get_recruiting_email_service
 from sqlalchemy.exc import SQLAlchemyError
 from auth.dependencies import get_current_user
 from database.models import User
+from database import get_db
 from routes.auth_deps import require_auth
 
 router = APIRouter(prefix="/api/v1/recruiting/workflow", tags=["Recruiting Workflow"], dependencies=[Depends(require_auth)])
+
+
+def _verify_task_org(db: Session, task_id: int, organization_id: int):
+    """Verify task belongs to the caller's organization."""
+    row = db.execute(text("""
+        SELECT id FROM recruiting_tasks
+        WHERE id = :task_id AND organization_id = :org_id
+    """), {"task_id": task_id, "org_id": organization_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Task not found")
 
 
 # =============================================================================
@@ -32,12 +45,12 @@ class CreateTasksRequest(BaseModel):
 
 
 class CompleteTaskRequest(BaseModel):
-    completed_by: int
+    completed_by: Optional[int] = None  # Deprecated: server uses authenticated user
 
 
 class SkipTaskRequest(BaseModel):
     reason: str
-    skipped_by: int
+    skipped_by: Optional[int] = None  # Deprecated: server uses authenticated user
 
 
 # =============================================================================
@@ -160,11 +173,17 @@ async def get_candidate_tasks(candidate_id: int, current_user: User = Depends(ge
 
 
 @router.post("/tasks/{task_id}/complete")
-async def complete_task(task_id: int, request: CompleteTaskRequest):
+async def complete_task(
+    task_id: int,
+    request: CompleteTaskRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Mark a task as completed."""
+    _verify_task_org(db, task_id, current_user.organization_id)
     success = recruiting_workflow_service.complete_task(
         task_id=task_id,
-        completed_by=request.completed_by
+        completed_by=current_user.id
     )
     if success:
         return {"message": "Task completed", "task_id": task_id}
@@ -172,12 +191,18 @@ async def complete_task(task_id: int, request: CompleteTaskRequest):
 
 
 @router.post("/tasks/{task_id}/skip")
-async def skip_task(task_id: int, request: SkipTaskRequest):
+async def skip_task(
+    task_id: int,
+    request: SkipTaskRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Skip a task with a reason."""
+    _verify_task_org(db, task_id, current_user.organization_id)
     success = recruiting_workflow_service.skip_task(
         task_id=task_id,
         reason=request.reason,
-        skipped_by=request.skipped_by
+        skipped_by=current_user.id
     )
     if success:
         return {"message": "Task skipped", "task_id": task_id}
@@ -209,25 +234,29 @@ async def get_dialer_queue(
 
 
 @router.post("/dialer-queue/{task_id}/start-call")
-async def start_call_for_task(task_id: int, user_id: int = Query(...)):
+async def start_call_for_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user)
+):
     """
     Mark a dialer task as being worked on.
 
     This can be called when initiating a call to prevent duplicate calls.
     """
     from database import engine
-    from sqlalchemy import text
 
     with engine.connect() as conn:
-        # Update task status to in_progress
-        conn.execute(
+        result = conn.execute(
             text("""
                 UPDATE recruiting_tasks
                 SET status = 'in_progress'
                 WHERE id = :task_id AND status = 'pending'
+                    AND organization_id = :org_id
             """),
-            {"task_id": task_id}
+            {"task_id": task_id, "org_id": current_user.organization_id}
         )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Task not found or not pending")
         conn.commit()
 
     return {"message": "Call started", "task_id": task_id}
@@ -406,16 +435,26 @@ async def get_email_queue(
 
 
 @router.post("/email-queue/{task_id}/send")
-async def send_email_for_task(task_id: int, user_id: int = Query(...)):
+async def send_email_for_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user)
+):
     """
     Process and send an email for a specific email automation task.
 
     This marks the task as completed after successful send.
     """
     from database import engine
-    from sqlalchemy import text
 
     with engine.connect() as conn:
+        # Verify task belongs to caller's org
+        check = conn.execute(
+            text("SELECT id FROM recruiting_tasks WHERE id = :task_id AND organization_id = :org_id"),
+            {"task_id": task_id, "org_id": current_user.organization_id}
+        ).fetchone()
+        if not check:
+            raise HTTPException(status_code=404, detail="Task not found")
+
         email_service = get_recruiting_email_service(conn)
 
         # Process the email task
@@ -429,9 +468,9 @@ async def send_email_for_task(task_id: int, user_id: int = Query(...)):
                     SET status = 'completed',
                         completed_at = NOW(),
                         completed_by = :user_id
-                    WHERE id = :task_id
+                    WHERE id = :task_id AND organization_id = :org_id
                 """),
-                {"task_id": task_id, "user_id": user_id}
+                {"task_id": task_id, "user_id": current_user.id, "org_id": current_user.organization_id}
             )
             conn.commit()
 
@@ -451,7 +490,6 @@ async def send_email_for_task(task_id: int, user_id: int = Query(...)):
 
 @router.post("/email-queue/process-all")
 async def process_all_pending_emails(
-    user_id: int = Query(...),
     limit: int = 50,
     current_user: User = Depends(get_current_user)
 ):
@@ -503,7 +541,7 @@ async def process_all_pending_emails(
                                 completed_by = :user_id
                             WHERE id = :task_id
                         """),
-                        {"task_id": task.id, "user_id": user_id}
+                        {"task_id": task.id, "user_id": current_user.id}
                     )
                     results["succeeded"] += 1
                     results["details"].append({
@@ -536,21 +574,23 @@ async def process_all_pending_emails(
 
 
 @router.post("/email-queue/{task_id}/preview")
-async def preview_email_for_task(task_id: int):
+async def preview_email_for_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user)
+):
     """
     Preview the email that would be sent for a task without actually sending it.
 
     Useful for reviewing email content before sending.
     """
     from database import engine
-    from sqlalchemy import text
     from services.recruiting_email_service import RecruitingEmailTemplates
     import os
 
     FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
 
     with engine.connect() as conn:
-        # Get task and candidate info
+        # Get task and candidate info (scoped to caller's org)
         task = conn.execute(
             text("""
                 SELECT rt.id, rt.candidate_id, rt.title, rt.description,
@@ -559,8 +599,9 @@ async def preview_email_for_task(task_id: int):
                 FROM recruiting_tasks rt
                 JOIN mm_candidates rc ON rc.id = rt.candidate_id
                 WHERE rt.id = :task_id
+                    AND rt.organization_id = :org_id
             """),
-            {"task_id": task_id}
+            {"task_id": task_id, "org_id": current_user.organization_id}
         ).fetchone()
 
         if not task:

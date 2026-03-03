@@ -579,7 +579,7 @@ async def escalate_candidate(
     db.execute(
         text("""
             INSERT INTO mm_candidate_activities
-            (candidate_id, type, description, performed_by, created_at)
+            (candidate_id, activity_type, description, performed_by, created_at)
             VALUES (:candidate_id, 'escalated', :description, :performed_by, NOW())
         """),
         {
@@ -1808,7 +1808,7 @@ async def get_adverse_impact_report(
 
         ethnicity_stats = db.execute(text("""
             SELECT
-                COALESCE(eeoc_ethnicity, 'undisclosed') as group_name,
+                COALESCE(eeoc_race_ethnicity, 'undisclosed') as group_name,
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'hired' THEN 1 END) as selected,
                 COUNT(CASE WHEN disposition_code IS NOT NULL THEN 1 END) as dispositioned
@@ -1816,7 +1816,7 @@ async def get_adverse_impact_report(
             WHERE organization_id = :org_id
               AND applied_at >= CURRENT_DATE - :days
               AND is_active = true
-            GROUP BY COALESCE(eeoc_ethnicity, 'undisclosed')
+            GROUP BY COALESCE(eeoc_race_ethnicity, 'undisclosed')
             HAVING COUNT(*) >= 3
         """), {"org_id": org_id, "days": days}).fetchall()
 
