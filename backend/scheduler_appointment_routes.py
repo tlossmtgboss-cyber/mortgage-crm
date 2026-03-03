@@ -190,7 +190,7 @@ async def get_email_service_status():
 
 
 @router.post("/test-email")
-async def test_email_send(to_email: str = "tloss@me.com"):
+async def test_email_send(to_email: str = Query(..., description="Email address to send test to")):
     """Test endpoint to send a test email and see actual SendGrid response"""
     try:
         result = notification_service.send_email(
@@ -381,6 +381,7 @@ async def create_availability_slot(
             pass
 
     slot = AvailabilitySlot(
+        organization_id=org_id,
         config_id=config.id,
         user_id=user.id,
         day_of_week=day_of_week,
@@ -408,12 +409,14 @@ async def delete_availability_slot(
 ):
     """Delete an availability slot"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     AvailabilitySlot = _models['AvailabilitySlot']
 
     slot = db.query(AvailabilitySlot).filter(
         AvailabilitySlot.id == slot_id,
-        AvailabilitySlot.user_id == user.id
+        AvailabilitySlot.user_id == user.id,
+        AvailabilitySlot.organization_id == org_id
     ).first()
 
     if not slot:
@@ -505,6 +508,9 @@ async def list_appointments(
         from services.smart_scheduler_service import ScheduledAppointment
 
         ai_query = db.query(ScheduledAppointment).filter(
+            ScheduledAppointment.loan_officer_id == user.id,
+            ScheduledAppointment.organization_id == org_id
+        ) if hasattr(ScheduledAppointment, 'organization_id') else db.query(ScheduledAppointment).filter(
             ScheduledAppointment.loan_officer_id == user.id
         )
 
@@ -766,7 +772,7 @@ async def create_appointment(
                             f"<strong>Duration:</strong> {html.escape(duration_str)}<br>"
                             f"<strong>Meeting Type:</strong> {html.escape(meeting_mode_str or '')}</p>"
                             + (f"<p><strong>With:</strong> {html.escape(team_member_name)}</p>" if team_member_name else "")
-                            + (f"<p><a href='{video_link}'>Join Video Call</a></p>" if video_link else "")
+                            + (f"<p><a href='{html.escape(video_link)}'>Join Video Call</a></p>" if video_link else "")
                             + "<p>We'll send you a reminder before your appointment.</p>"
                         )
                         sf_result = await sf_email_service.send_email_via_salesforce(
@@ -857,18 +863,18 @@ async def create_appointment(
 
     if appointment.assigned_user_id:
         try:
-            # Build event description
+            # Build event description — escape all user data for HTML context
             event_description = f"""
             <h3>Client Meeting</h3>
-            <p><strong>Client:</strong> {appt_data.attendee_name or 'Not specified'}</p>
-            <p><strong>Email:</strong> {appt_data.attendee_email or 'Not specified'}</p>
-            <p><strong>Phone:</strong> {appt_data.attendee_phone or 'Not specified'}</p>
-            <p><strong>Meeting Type:</strong> {calendar_meeting_mode}</p>
+            <p><strong>Client:</strong> {html.escape(appt_data.attendee_name or 'Not specified')}</p>
+            <p><strong>Email:</strong> {html.escape(appt_data.attendee_email or 'Not specified')}</p>
+            <p><strong>Phone:</strong> {html.escape(appt_data.attendee_phone or 'Not specified')}</p>
+            <p><strong>Meeting Type:</strong> {html.escape(calendar_meeting_mode)}</p>
             """
             if appointment.description:
-                event_description += f"<p><strong>Notes:</strong> {appointment.description}</p>"
+                event_description += f"<p><strong>Notes:</strong> {html.escape(appointment.description)}</p>"
             if calendar_video_link:
-                event_description += f"<p><strong>Video Link:</strong> <a href='{calendar_video_link}'>{calendar_video_link}</a></p>"
+                event_description += f"<p><strong>Video Link:</strong> <a href='{html.escape(calendar_video_link)}'>{html.escape(calendar_video_link)}</a></p>"
 
             # Create calendar event via Microsoft Graph
             calendar_result: CalendarResult = await create_event_via_graph(
@@ -2292,7 +2298,7 @@ async def confirm_public_booking(
             if appointment.description:
                 event_description += f"<p><strong>Notes:</strong> {html.escape(appointment.description)}</p>"
             if video_link:
-                event_description += f"<p><strong>Video Link:</strong> <a href='{video_link}'>{video_link}</a></p>"
+                event_description += f"<p><strong>Video Link:</strong> <a href='{html.escape(video_link)}'>{html.escape(video_link)}</a></p>"
 
             # Create calendar event via Microsoft Graph
             calendar_result: CalendarResult = await create_event_via_graph(

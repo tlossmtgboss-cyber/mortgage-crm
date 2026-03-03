@@ -428,11 +428,23 @@ class SmartSchedulerService:
 
     def _assign_round_robin(self, settings: SchedulerSettings,
                             los: List[LoanOfficerSchedule]) -> Optional[LoanOfficerSchedule]:
-        """Assign using round robin - rotate through LOs evenly"""
+        """Assign using round robin - rotate through LOs evenly.
+
+        Uses SELECT FOR UPDATE to prevent race conditions where two concurrent
+        bookings could be assigned to the same LO.
+        """
         if not los:
             return None
 
-        last_assigned_id = settings.last_assigned_lo_id
+        # Lock the settings row to prevent concurrent reads of stale last_assigned_lo_id
+        locked_settings = self.db.query(SchedulerSettings).with_for_update().filter(
+            SchedulerSettings.id == settings.id
+        ).first()
+
+        if not locked_settings:
+            return los[0]
+
+        last_assigned_id = locked_settings.last_assigned_lo_id
         lo_ids = [lo.id for lo in los]
 
         if last_assigned_id is None or last_assigned_id not in lo_ids:
@@ -445,7 +457,7 @@ class SmartSchedulerService:
             next_lo = los[next_idx]
 
         # Update last assigned
-        settings.last_assigned_lo_id = next_lo.id
+        locked_settings.last_assigned_lo_id = next_lo.id
         self.db.commit()
 
         logger.info(f"Round robin assigned: {next_lo.lo_name}")

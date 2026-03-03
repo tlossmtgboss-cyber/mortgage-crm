@@ -103,20 +103,21 @@ def send_appointment_confirmation_email(
         safe_duration = html.escape(str(duration) if duration else '')
         safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
         safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+        safe_video_link = html.escape(video_link) if video_link else None
 
         team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
         # Add video call button if video link is provided
         video_button_section = ""
-        if video_link:
+        if safe_video_link:
             video_button_section = f"""
                     <div style="text-align: center; margin: 25px 0;">
-                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                             Join Video Call
                         </a>
                     </div>
                     <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
-                        Or copy this link: <a href="{video_link}" style="color: #217F8D;">{video_link}</a>
+                        Or copy this link: <a href="{safe_video_link}" style="color: #217F8D;">{safe_video_link}</a>
                     </p>
             """
 
@@ -317,6 +318,7 @@ def send_appointment_update_email(
         safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
         safe_old_date = html.escape(old_date or '') if old_date else None
         safe_old_time = html.escape(old_time or '') if old_time else None
+        safe_video_link = html.escape(video_link) if video_link else None
 
         team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
@@ -334,10 +336,10 @@ def send_appointment_update_email(
             """
 
         video_button_section = ""
-        if video_link:
+        if safe_video_link:
             video_button_section = f"""
                     <div style="text-align: center; margin: 25px 0;">
-                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                             Join Video Call
                         </a>
                     </div>
@@ -519,18 +521,19 @@ def send_team_member_notification_email(
         safe_appointment_time = html.escape(appointment_time or '')
         safe_duration = html.escape(str(duration) if duration else '')
         safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
+        safe_video_link = html.escape(video_link) if video_link else None
 
         # Add video call button if video link is provided
         video_button_section = ""
-        if video_link:
+        if safe_video_link:
             video_button_section = f"""
                     <div style="text-align: center; margin: 25px 0;">
-                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                             Join Video Call
                         </a>
                     </div>
                     <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
-                        Video link: <a href="{video_link}" style="color: #217F8D;">{video_link}</a>
+                        Video link: <a href="{safe_video_link}" style="color: #217F8D;">{safe_video_link}</a>
                     </p>
             """
 
@@ -903,14 +906,15 @@ def send_appointment_reminder_email(
         safe_duration_minutes = html.escape(str(duration_minutes) if duration_minutes else '')
         safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
         safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+        safe_video_link = html.escape(video_link) if video_link else None
 
         team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
         video_button_section = ""
-        if video_link:
+        if safe_video_link:
             video_button_section = f"""
                     <div style="text-align: center; margin: 25px 0;">
-                        <a href="{video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                             Join Video Call
                         </a>
                     </div>
