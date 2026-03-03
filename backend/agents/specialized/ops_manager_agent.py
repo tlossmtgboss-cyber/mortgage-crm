@@ -136,12 +136,17 @@ class SweepHistoryInput(BaseModel):
 def _dedup_and_create_task(db, title: str, description: str, priority: str,
                            loan_id=None, lead_id=None, owner_id=None,
                            organization_id=None, due_date=None,
-                           related_type=None, related_contact_name=None) -> bool:
-    """Check for existing open task with same title, create if not found. Returns True if created."""
+                           category=None, borrower_name=None) -> bool:
+    """Check for existing open task with same title in ai_tasks, create if not found.
+
+    Writes to ai_tasks table (not tasks) so tasks appear in the frontend task list.
+    Uses type='Human Needed' for open ops tasks; dedup excludes 'Completed' tasks.
+    Returns True if created.
+    """
     from sqlalchemy import text
 
-    # Build dedup query
-    conditions = ["title = :title", "status NOT IN ('completed', 'cancelled')"]
+    # Build dedup query against ai_tasks
+    conditions = ["title = :title", "type != 'Completed'"]
     params = {"title": title}
 
     if loan_id:
@@ -152,14 +157,14 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
         params["lead_id"] = lead_id
 
     where = " AND ".join(conditions)
-    existing = db.execute(text(f"SELECT id FROM tasks WHERE {where} LIMIT 1"), params).fetchone()
+    existing = db.execute(text(f"SELECT id FROM ai_tasks WHERE {where} LIMIT 1"), params).fetchone()
 
     if existing:
         return False
 
-    # Create the task
-    insert_cols = ["title", "description", "priority", "status", "created_at"]
-    insert_vals = [":title", ":description", ":priority", "'pending'", "NOW()"]
+    # Create the task in ai_tasks
+    insert_cols = ["title", "description", "priority", "type", "created_at"]
+    insert_vals = [":title", ":description", ":priority", "'Human Needed'", "NOW()"]
     insert_params = {"title": title, "description": description, "priority": priority}
 
     if loan_id:
@@ -171,9 +176,9 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
         insert_vals.append(":lead_id")
         insert_params["lead_id"] = lead_id
     if owner_id:
-        insert_cols.append("owner_id")
-        insert_vals.append(":owner_id")
-        insert_params["owner_id"] = owner_id
+        insert_cols.append("assigned_to_id")
+        insert_vals.append(":assigned_to_id")
+        insert_params["assigned_to_id"] = owner_id
     if organization_id:
         insert_cols.append("organization_id")
         insert_vals.append(":organization_id")
@@ -182,18 +187,18 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
         insert_cols.append("due_date")
         insert_vals.append(":due_date")
         insert_params["due_date"] = due_date
-    if related_type:
-        insert_cols.append("related_type")
-        insert_vals.append(":related_type")
-        insert_params["related_type"] = related_type
-    if related_contact_name:
-        insert_cols.append("related_contact_name")
-        insert_vals.append(":related_contact_name")
-        insert_params["related_contact_name"] = related_contact_name
+    if category:
+        insert_cols.append("category")
+        insert_vals.append(":category")
+        insert_params["category"] = category
+    if borrower_name:
+        insert_cols.append("borrower_name")
+        insert_vals.append(":borrower_name")
+        insert_params["borrower_name"] = borrower_name
 
     cols_sql = ", ".join(insert_cols)
     vals_sql = ", ".join(insert_vals)
-    db.execute(text(f"INSERT INTO tasks ({cols_sql}) VALUES ({vals_sql})"), insert_params)
+    db.execute(text(f"INSERT INTO ai_tasks ({cols_sql}) VALUES ({vals_sql})"), insert_params)
     return True
 
 
@@ -876,7 +881,7 @@ class OpsManagerAgent(SpecializedAgent):
                         description=f"Post-close client '{name}' has not been contacted in {days} days. Funded: {client.funded_date}.",
                         priority=priority, loan_id=client.id, owner_id=client.loan_officer_id,
                         organization_id=client.organization_id,
-                        related_type="mum_client", related_contact_name=name)
+                        category="mum_client", borrower_name=name)
                     tasks_created += 1 if created else 0
                     tasks_skipped += 0 if created else 1
 
@@ -1170,8 +1175,8 @@ class OpsManagerAgent(SpecializedAgent):
                     END as category,
                     t.priority,
                     COUNT(*) as count
-                FROM tasks t
-                WHERE t.status NOT IN ('completed', 'cancelled')
+                FROM ai_tasks t
+                WHERE t.type != 'Completed'
                     AND ({ops_prefixes})
                     {category_filter}
                     {org_filter}
