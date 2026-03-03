@@ -371,8 +371,27 @@ class OpsManagerAgent(SpecializedAgent):
                 for cat, count in sub_data.get("by_category", {}).items():
                     impediment_breakdown[cat] = impediment_breakdown.get(cat, 0) + count
 
-            # Record sweep result
+            # Record sweep result (auto-create table if missing)
             try:
+                db.execute(text("""
+                    CREATE TABLE IF NOT EXISTS ops_sweep_results (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER,
+                        sweep_type VARCHAR(50) NOT NULL DEFAULT 'full',
+                        started_at TIMESTAMP NOT NULL,
+                        completed_at TIMESTAMP,
+                        duration_seconds NUMERIC(10,2),
+                        leads_scanned INTEGER DEFAULT 0,
+                        loans_scanned INTEGER DEFAULT 0,
+                        mum_scanned INTEGER DEFAULT 0,
+                        impediments_found INTEGER DEFAULT 0,
+                        tasks_created INTEGER DEFAULT 0,
+                        tasks_skipped_dedup INTEGER DEFAULT 0,
+                        impediment_breakdown JSONB DEFAULT '{}',
+                        dry_run BOOLEAN DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """))
                 db.execute(text("""
                     INSERT INTO ops_sweep_results (
                         organization_id, sweep_type, started_at, completed_at,
@@ -400,8 +419,12 @@ class OpsManagerAgent(SpecializedAgent):
                     "dry_run": dry_run,
                 })
                 db.commit()
-            except Exception:
-                db.rollback()
+            except Exception as e:
+                logger.warning(f"Failed to record sweep result: {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
             return ToolResult(
                 success=True,
@@ -1123,6 +1146,15 @@ class OpsManagerAgent(SpecializedAgent):
                 category_filter = "AND t.title LIKE :cat_pattern"
                 params["cat_pattern"] = f"[{category.upper()}]%"
 
+            # Only match ops-manager-created task prefixes (not arbitrary [xyz] tasks)
+            ops_prefixes = (
+                "t.title LIKE '[SLA]%' OR t.title LIKE '[LOCK]%' OR "
+                "t.title LIKE '[DOCS]%' OR t.title LIKE '[COMPLIANCE]%' OR "
+                "t.title LIKE '[LEAD]%' OR t.title LIKE '[ASSIGN]%' OR "
+                "t.title LIKE '[TEAM]%' OR t.title LIKE '[MUM]%' OR "
+                "t.title LIKE '[STALLED]%'"
+            )
+
             summary = db.execute(text(f"""
                 SELECT
                     CASE
@@ -1135,13 +1167,12 @@ class OpsManagerAgent(SpecializedAgent):
                         WHEN t.title LIKE '[TEAM]%' THEN 'TEAM_GAPS'
                         WHEN t.title LIKE '[MUM]%' THEN 'MUM_OVERDUE'
                         WHEN t.title LIKE '[STALLED]%' THEN 'STALLED'
-                        ELSE 'OTHER'
                     END as category,
                     t.priority,
                     COUNT(*) as count
                 FROM tasks t
                 WHERE t.status NOT IN ('completed', 'cancelled')
-                    AND t.title LIKE '[%]%'
+                    AND ({ops_prefixes})
                     {category_filter}
                     {org_filter}
                 GROUP BY category, t.priority
@@ -1197,6 +1228,20 @@ class OpsManagerAgent(SpecializedAgent):
             from database import SessionLocal
             db = SessionLocal()
         try:
+            # Check if table exists (it may not have been created yet)
+            table_check = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'ops_sweep_results'
+                )
+            """)).scalar()
+            if not table_check:
+                return ToolResult(
+                    success=True,
+                    data={"sweeps": [], "count": 0},
+                    message="No sweep history yet (table not created — run a sweep first)"
+                )
+
             org_filter = "WHERE organization_id = :org_id" if org_id else ""
             params = {"limit": limit}
             if org_id:
