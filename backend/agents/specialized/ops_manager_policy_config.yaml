@@ -1,0 +1,336 @@
+# AI Operations Manager — Policy Configuration
+# Version: 2026.03.02.v1
+# System: Perennia AI Mortgage CRM
+#
+# This file is the single source of truth for all deterministic policies
+# the AI Operations Manager evaluates against. Changes to this file
+# should be versioned and deployed as new active versions (never edit in place).
+
+rule_version: "2026.03.02.v1"
+
+# ═══════════════════════════════════════════════════════════════════════
+# STAGE TRANSITIONS
+# ═══════════════════════════════════════════════════════════════════════
+# Each entry defines whether a stage transition is allowed and what
+# prerequisites must be met. The AI Ops Manager evaluates these on
+# every POST /transitions/evaluate request.
+#
+# Fields:
+#   hard_block: true  = transition denied if any prereq fails
+#   hard_block: false = transition allowed but warnings returned
+#   required_roles: roles that must have active assignments on the loan
+#   required_milestones: milestones that must be status='Completed'
+#   disallow_if_open_exception_types: exception types that block transition
+
+stage_transitions:
+  - id: "transition.lead_to_preapproval"
+    from: "Lead"
+    to: "PreApproval"
+    allowed: true
+    hard_block: true
+    required_roles: ["LO", "PA"]
+    required_milestones: []
+    disallow_if_open_exception_types: ["Compliance"]
+
+  - id: "transition.preapproval_to_active"
+    from: "PreApproval"
+    to: "ActiveLoan"
+    allowed: true
+    hard_block: true
+    required_roles: ["LO", "PA", "UW"]
+    required_milestones: ["AUSDecisionCaptured"]
+    disallow_if_open_exception_types: ["Guideline", "Compliance"]
+
+  - id: "transition.active_to_preclosing"
+    from: "ActiveLoan"
+    to: "PreClosing"
+    allowed: true
+    hard_block: true
+    required_roles: ["LO", "Processor", "UW"]
+    required_milestones: ["ConditionalApprovalIssued"]
+    disallow_if_open_exception_types: ["SLA", "Compliance"]
+
+  - id: "transition.preclosing_to_funded"
+    from: "PreClosing"
+    to: "Funded"
+    allowed: true
+    hard_block: true
+    required_roles: ["LO", "Processor", "Closer"]
+    required_milestones: ["CDIssued", "FinalVOEComplete"]
+    disallow_if_open_exception_types: ["Compliance"]
+
+  - id: "transition.funded_to_archived"
+    from: "Funded"
+    to: "Archived"
+    allowed: true
+    hard_block: true
+    required_roles: ["PostCloseReviewer"]
+    required_milestones: ["PostCloseQCComplete"]
+    disallow_if_open_exception_types: ["Compliance"]
+
+  # Terminal state entries (allowed from any non-terminal stage)
+  # These are handled programmatically — any non-terminal stage can
+  # transition to Withdrawn or Denied without prerequisites.
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SLA POLICIES
+# ═══════════════════════════════════════════════════════════════════════
+# SLA policies define time-bound obligations triggered by field changes.
+# When triggered, the AI Ops Manager auto-generates a milestone with a
+# due date and monitors it through the escalation scheduler.
+#
+# max_days_from_trigger:
+#   Positive = days AFTER the trigger field value
+#   Negative = days BEFORE the trigger field value (e.g., -10 means
+#              due_date = closing_date - 10 days)
+#
+# applies_to: optional filters to limit which loans this SLA applies to.
+#   null = applies to all loans.
+
+sla_policies:
+  - id: "sla.disclosure_due"
+    name: "Disclosures issued within 3 days of contract"
+    trigger_type: "FieldChange"
+    trigger_field: "contract_date"
+    milestone_to_create: "DisclosureDue"
+    max_days_from_trigger: 3
+    escalation_intervals_hours: [24, 48, 72]
+    applies_to:
+      channel: null
+      program_type: null
+      loan_amount:
+        min: null
+        max: null
+
+  - id: "sla.cd_issued"
+    name: "CD issued 10 days before closing"
+    trigger_type: "FieldChange"
+    trigger_field: "closing_date"
+    milestone_to_create: "CDIssuedDue"
+    max_days_from_trigger: -10
+    escalation_intervals_hours: [6, 24, 48]
+    applies_to:
+      channel: null
+      program_type: null
+      loan_amount:
+        min: null
+        max: null
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# RULES
+# ═══════════════════════════════════════════════════════════════════════
+# Rules are evaluated on every loan snapshot change (Loop 1).
+# Each rule defines:
+#   when: conditions that must be true for the rule to apply
+#   require_roles / require_milestones / assert: what is checked
+#   exception: what exception to create if the check fails
+#
+# Rule types:
+#   Staffing    — required role assignments per stage
+#   DataIntegrity — field consistency checks
+#   LockRisk    — rate lock expiration monitoring
+#   Milestone   — required milestone completion per stage
+#   Compliance  — regulatory requirement checks
+
+rules:
+
+  # ─── STAFFING RULES ───────────────────────────────────────────────
+  # These fire when a loan enters a stage and the required roles
+  # are not yet assigned. Auto-resolved when the role is assigned.
+
+  - id: "staffing.lead_requires_lo_pa"
+    description: "Leads must have LO and PA assigned within 4 hours"
+    when:
+      loan.stage: "Lead"
+    require_roles: ["LO", "PA"]
+    exception:
+      type: "Staffing"
+      severity: "Warning"
+      owner_role: "LO"
+      due_in_hours: 4
+
+  - id: "staffing.preapproval_requires_uw"
+    description: "PreApproval loans must have UW assigned within 6 hours"
+    when:
+      loan.stage: "PreApproval"
+    require_roles: ["UW"]
+    exception:
+      type: "Staffing"
+      severity: "Critical"
+      owner_role: "UW"
+      due_in_hours: 6
+
+  - id: "staffing.active_requires_processor"
+    description: "Active loans must have Processor assigned within 6 hours"
+    when:
+      loan.stage: "ActiveLoan"
+    require_roles: ["Processor"]
+    exception:
+      type: "Staffing"
+      severity: "Critical"
+      owner_role: "Processor"
+      due_in_hours: 6
+
+  - id: "staffing.preclosing_requires_closer"
+    description: "PreClosing loans must have Closer assigned within 6 hours"
+    when:
+      loan.stage: "PreClosing"
+    require_roles: ["Closer"]
+    exception:
+      type: "Staffing"
+      severity: "Critical"
+      owner_role: "Closer"
+      due_in_hours: 6
+
+  # ─── DATA INTEGRITY RULES ─────────────────────────────────────────
+  # These catch field-level inconsistencies that indicate data entry
+  # errors or process violations.
+
+  - id: "data.contract_date_requires_active_stage"
+    description: "Contract date should only be set on ActiveLoan+ stages"
+    when:
+      loan.contract_date: "is_not_null"
+    assert:
+      loan.stage_in: ["ActiveLoan", "PreClosing", "Funded", "Archived"]
+    exception:
+      type: "DataIntegrity"
+      severity: "Warning"
+      owner_role: "Processor"
+      due_in_hours: 24
+
+  - id: "data.closing_date_requires_contract_date"
+    description: "Closing date cannot be set without a contract date"
+    when:
+      loan.closing_date: "is_not_null"
+    assert:
+      loan.contract_date: "is_not_null"
+    exception:
+      type: "DataIntegrity"
+      severity: "Warning"
+      owner_role: "Processor"
+      due_in_hours: 24
+
+  # ─── LOCK RISK RULES ──────────────────────────────────────────────
+  # Monitor rate lock expiration to prevent costly lock extensions
+  # or fallout from expired locks.
+
+  - id: "lock.lock_expiring_soon"
+    description: "Rate lock expiring within 3 days while loan is locked"
+    when:
+      loan.lock_expiration_date: "is_within_days:3"
+      loan.lock_status: "equals:Locked"
+    exception:
+      type: "LockRisk"
+      severity: "Critical"
+      owner_role: "LO"
+      due_in_hours: 12
+
+  # ─── MILESTONE PRESENCE RULES ─────────────────────────────────────
+  # These ensure that critical milestones are completed at each stage.
+  # They fire continuously until the milestone is marked Completed.
+
+  - id: "milestone.preapproval_requires_aus"
+    description: "PreApproval requires AUS decision to be captured"
+    when:
+      loan.stage: "PreApproval"
+    require_milestones:
+      - type: "AUSDecisionCaptured"
+        status: "Completed"
+    exception:
+      type: "Compliance"
+      severity: "Critical"
+      owner_role: "PA"
+      due_in_hours: 12
+
+  - id: "milestone.active_requires_disclosures"
+    description: "Active loans require disclosures to be issued"
+    when:
+      loan.stage: "ActiveLoan"
+    require_milestones:
+      - type: "DisclosuresIssued"
+        status: "Completed"
+    exception:
+      type: "SLA"
+      severity: "Critical"
+      owner_role: "Processor"
+      due_in_hours: 24
+
+  - id: "milestone.preclosing_requires_cd"
+    description: "PreClosing requires Closing Disclosure to be issued"
+    when:
+      loan.stage: "PreClosing"
+    require_milestones:
+      - type: "CDIssued"
+        status: "Completed"
+    exception:
+      type: "SLA"
+      severity: "Critical"
+      owner_role: "Closer"
+      due_in_hours: 12
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# PRIORITY SCORING WEIGHTS
+# ═══════════════════════════════════════════════════════════════════════
+# Used by Loop 4 (Daily Priority Queue Generation) to calculate
+# priority_score for each exception and assign buckets.
+#
+# Final score = base + time_pressure + revenue + type_urgency
+# Bucket thresholds determine MustToday / ShouldToday / Strategic
+
+priority_scoring:
+  severity_weights:
+    Critical: 100
+    Warning: 50
+    Info: 10
+
+  time_pressure:
+    overdue: 80                    # exception due_date has passed
+    due_within_4h: 60              # exception due within 4 hours
+    closing_within_3d: 40          # loan closing_date within 3 days
+    lock_within_3d: 30             # lock_expiration_date within 3 days
+
+  revenue_weights:
+    high_threshold: 15000          # revenue_estimate >= this
+    high_bonus: 20
+    medium_threshold: 8000         # revenue_estimate >= this
+    medium_bonus: 10
+
+  type_urgency:
+    Compliance: 25
+    LockRisk: 20
+    SLA: 15
+    Staffing: 10
+    DataIntegrity: 5
+
+  bucket_thresholds:
+    MustToday: 140                 # priority_score >= 140
+    ShouldToday: 80                # priority_score >= 80
+    # Below 80 → Strategic
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ESCALATION DEFAULTS
+# ═══════════════════════════════════════════════════════════════════════
+# Default escalation behavior when a rule does not specify its own
+# escalation_intervals_hours.
+
+escalation_defaults:
+  default_intervals_hours: [24, 48, 72]
+  severity_escalation:
+    level_2_upgrade_to: "Critical"   # Warning → Critical at Level 2
+  max_escalation_level: 3
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# AI SUGGESTION THRESHOLDS
+# ═══════════════════════════════════════════════════════════════════════
+# Thresholds that trigger AI advisory suggestions (Section 8 of SKILL.md)
+
+ai_suggestion_thresholds:
+  workload_rebalance_ratio: 3.0    # suggest rebalance when user has 3x peer avg
+  transition_readiness_check: true  # suggest transitions when all prereqs met
+  proactive_milestone_days: 5       # suggest milestones when within N days of next stage
+  lock_extension_buffer_days: 5     # suggest extension when lock expires within N days but on track
