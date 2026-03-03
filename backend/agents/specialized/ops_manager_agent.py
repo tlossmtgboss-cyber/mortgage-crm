@@ -1,5 +1,5 @@
 """
-Operations Manager Agent
+Operations Manager Agent — v2.1
 
 Proactive, always-on agent that sweeps all three pipelines (Leads, Active Loans, MUM),
 detects impediments, and creates corrective tasks automatically.
