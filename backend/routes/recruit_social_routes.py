@@ -521,23 +521,35 @@ async def get_linkedin_profile(current_user: User = Depends(get_current_user)):
 
 @router.get("/public/feed")
 async def get_public_social_feed(
+    slug: str = Query(..., description="Portal workspace slug to scope feed to correct organization"),
     limit: int = Query(10, le=50),
     db: Session = Depends(get_db)
 ):
     """
     Get recent social posts for public display on recruit portal.
-    No authentication required - only shows published posts.
+    No authentication required - only shows published posts scoped to the portal's organization.
     """
     try:
+        # Resolve slug → organization_id via workspace/candidate join
+        workspace = db.execute(text("""
+            SELECT c.organization_id
+            FROM recruit_portal_workspaces w
+            JOIN mm_candidates c ON c.id = w.candidate_id
+            WHERE w.slug = :slug AND w.is_active = true
+        """), {"slug": slug}).fetchone()
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Portal not found")
+
         result = db.execute(text("""
             SELECT id, content, platforms, image_url, posted_at,
                    engagement_data, created_at
             FROM recruit_social_posts
             WHERE status = 'posted'
               AND posted_at IS NOT NULL
+              AND organization_id = :org_id
             ORDER BY posted_at DESC
             LIMIT :limit
-        """), {"limit": limit})
+        """), {"limit": limit, "org_id": workspace.organization_id})
 
         posts = []
         for row in result:

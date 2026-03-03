@@ -3,7 +3,7 @@ import './SocialFeed.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
-const SocialFeed = () => {
+const SocialFeed = ({ slug }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -25,7 +25,8 @@ const SocialFeed = () => {
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/api/v1/recruit-social/public/feed?limit=10`);
+      if (!slug) return;
+      const response = await fetch(`${API_URL}/api/v1/recruit-social/public/feed?slug=${encodeURIComponent(slug)}&limit=10`);
       if (response.ok) {
         const data = await response.json();
         setPosts(data.posts || []);
@@ -38,7 +39,7 @@ const SocialFeed = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [slug]);
 
   useEffect(() => {
     fetchPosts();
