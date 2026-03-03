@@ -16,9 +16,13 @@ detects impediments, and creates corrective tasks automatically.
 """
 
 import json
+import traceback
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -543,9 +547,13 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Lead sweep: {len(impediments)} impediments from {scanned} leads"
             )
         except Exception as e:
-            if not shared_db:
+            tb = traceback.format_exc()
+            logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
+            try:
                 db.rollback()
-            return ToolResult(success=False, error=str(e))
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
             if not shared_db:
                 db.close()
@@ -754,9 +762,13 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Loan sweep: {len(impediments)} impediments from {scanned} active loans"
             )
         except Exception as e:
-            if not shared_db:
+            tb = traceback.format_exc()
+            logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
+            try:
                 db.rollback()
-            return ToolResult(success=False, error=str(e))
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
             if not shared_db:
                 db.close()
@@ -851,9 +863,13 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"MUM sweep: {len(impediments)} overdue from {scanned} funded loans"
             )
         except Exception as e:
-            if not shared_db:
+            tb = traceback.format_exc()
+            logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
+            try:
                 db.rollback()
-            return ToolResult(success=False, error=str(e))
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
             if not shared_db:
                 db.close()
@@ -959,9 +975,13 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Team gaps: {len(impediments)} found"
             )
         except Exception as e:
-            if not shared_db:
+            tb = traceback.format_exc()
+            logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
+            try:
                 db.rollback()
-            return ToolResult(success=False, error=str(e))
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
             if not shared_db:
                 db.close()
@@ -1047,9 +1067,13 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"Stalled files: {len(impediments)} loans with no activity in {stalled_days}+ days"
             )
         except Exception as e:
-            if not shared_db:
+            tb = traceback.format_exc()
+            logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
+            try:
                 db.rollback()
-            return ToolResult(success=False, error=str(e))
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
             if not shared_db:
                 db.close()
@@ -1128,9 +1152,13 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"{total} open impediments across {len(categories)} categories"
             )
         except Exception as e:
-            if not shared_db:
+            tb = traceback.format_exc()
+            logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
+            try:
                 db.rollback()
-            return ToolResult(success=False, error=str(e))
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
             if not shared_db:
                 db.close()
@@ -1195,9 +1223,13 @@ class OpsManagerAgent(SpecializedAgent):
                 message=f"{len(results)} sweep records found"
             )
         except Exception as e:
-            if not shared_db:
+            tb = traceback.format_exc()
+            logger.error(f"Ops manager sub-sweep error: {e}\n{tb}")
+            try:
                 db.rollback()
-            return ToolResult(success=False, error=str(e))
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
         finally:
             if not shared_db:
                 db.close()
