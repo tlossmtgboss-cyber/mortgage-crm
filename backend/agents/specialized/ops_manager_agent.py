@@ -145,8 +145,8 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     """
     from sqlalchemy import text
 
-    # Build dedup query against ai_tasks (type is a PostgreSQL enum 'tasktype')
-    conditions = ["title = :title", "type != 'Completed'::tasktype"]
+    # Build dedup query against ai_tasks (type is a PostgreSQL enum — cast to text for safe comparison)
+    conditions = ["title = :title", "type::text != 'Completed'"]
     params = {"title": title}
 
     if loan_id:
@@ -162,10 +162,10 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     if existing:
         return False
 
-    # Create the task in ai_tasks (cast type to PostgreSQL enum)
+    # Create the task in ai_tasks
     insert_cols = ["title", "description", "priority", "type", "created_at"]
-    insert_vals = [":title", ":description", ":priority", "'Human Needed'::tasktype", "NOW()"]
-    insert_params = {"title": title, "description": description, "priority": priority}
+    insert_vals = [":title", ":description", ":priority", ":task_type", "NOW()"]
+    insert_params = {"title": title, "description": description, "priority": priority, "task_type": "Human Needed"}
 
     if loan_id:
         insert_cols.append("loan_id")
@@ -1176,7 +1176,7 @@ class OpsManagerAgent(SpecializedAgent):
                     t.priority,
                     COUNT(*) as count
                 FROM ai_tasks t
-                WHERE t.type != 'Completed'::tasktype
+                WHERE t.type::text != 'Completed'
                     AND ({ops_prefixes})
                     {category_filter}
                     {org_filter}
