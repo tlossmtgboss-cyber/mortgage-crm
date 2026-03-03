@@ -686,59 +686,75 @@ class OpsManagerAgent(SpecializedAgent):
             by_category["DOCS_EXPIRING"] = docs_count
 
             # --- COMPLIANCE_OPEN: critical/high compliance alerts ---
-            compliance_alerts = db.execute(text(f"""
-                SELECT ca.id, ca.title as alert_title, ca.severity, ca.loan_id,
-                       l.loan_number, l.borrower_name, l.loan_officer_id, l.organization_id
-                FROM compliance_alerts ca
-                JOIN loans l ON l.id = ca.loan_id
-                WHERE ca.status = 'open'
-                    AND ca.severity IN ('critical', 'high')
-                    AND l.stage NOT IN ({terminal_list})
-                    {org_filter.replace('l.organization_id', 'l.organization_id')}
-                ORDER BY CASE ca.severity WHEN 'critical' THEN 1 ELSE 2 END
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            try:
+                compliance_alerts = db.execute(text(f"""
+                    SELECT ca.id, ca.title as alert_title, ca.severity, ca.loan_id,
+                           l.loan_number, l.borrower_name, l.loan_officer_id, l.organization_id
+                    FROM compliance_alerts ca
+                    JOIN loans l ON l.id = ca.loan_id
+                    WHERE ca.status = 'open'
+                        AND ca.severity IN ('critical', 'high')
+                        AND l.stage NOT IN ({terminal_list})
+                        {org_filter}
+                    ORDER BY CASE ca.severity WHEN 'critical' THEN 1 ELSE 2 END
+                    LIMIT :limit
+                """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
-            by_category["COMPLIANCE_OPEN"] = len(compliance_alerts)
-            for alert in compliance_alerts:
-                title = f"[COMPLIANCE] {alert.alert_title}: {alert.borrower_name or 'Unknown'} ({alert.loan_number or ''})"
-                priority = "high"
-                impediments.append({"category": "COMPLIANCE_OPEN", "title": title, "priority": priority})
-                if not dry_run:
-                    created = _dedup_and_create_task(
-                        db, title=title,
-                        description=f"Open {alert.severity} compliance alert: {alert.alert_title}.",
-                        priority=priority, loan_id=alert.loan_id, owner_id=alert.loan_officer_id,
-                        organization_id=alert.organization_id)
-                    tasks_created += 1 if created else 0
-                    tasks_skipped += 0 if created else 1
+                by_category["COMPLIANCE_OPEN"] = len(compliance_alerts)
+                for alert in compliance_alerts:
+                    title = f"[COMPLIANCE] {alert.alert_title}: {alert.borrower_name or 'Unknown'} ({alert.loan_number or ''})"
+                    priority = "high"
+                    impediments.append({"category": "COMPLIANCE_OPEN", "title": title, "priority": priority})
+                    if not dry_run:
+                        created = _dedup_and_create_task(
+                            db, title=title,
+                            description=f"Open {alert.severity} compliance alert: {alert.alert_title}.",
+                            priority=priority, loan_id=alert.loan_id, owner_id=alert.loan_officer_id,
+                            organization_id=alert.organization_id)
+                        tasks_created += 1 if created else 0
+                        tasks_skipped += 0 if created else 1
+            except Exception as e:
+                logger.warning(f"COMPLIANCE_OPEN check skipped (table may not exist): {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                by_category["COMPLIANCE_OPEN"] = 0
 
             # --- MISSING_DOCS: loans past PROCESSING with <3 active documents ---
-            missing_doc_loans = db.execute(text(f"""
-                SELECT l.id, l.loan_number, l.borrower_name, l.stage,
-                       l.loan_officer_id, l.organization_id,
-                       COUNT(d.id) FILTER (WHERE d.status = 'active') as active_doc_count
-                FROM loans l
-                LEFT JOIN documents d ON d.loan_id = l.id
-                WHERE l.stage NOT IN ({terminal_list}, 'APPLICATION', 'DISCLOSED')
-                    {org_filter}
-                GROUP BY l.id, l.loan_number, l.borrower_name, l.stage, l.loan_officer_id, l.organization_id
-                HAVING COUNT(d.id) FILTER (WHERE d.status = 'active') < 3
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            try:
+                missing_doc_loans = db.execute(text(f"""
+                    SELECT l.id, l.loan_number, l.borrower_name, l.stage,
+                           l.loan_officer_id, l.organization_id,
+                           COUNT(d.id) FILTER (WHERE d.status = 'active') as active_doc_count
+                    FROM loans l
+                    LEFT JOIN documents d ON d.loan_id = l.id
+                    WHERE l.stage NOT IN ({terminal_list}, 'APPLICATION', 'DISCLOSED')
+                        {org_filter}
+                    GROUP BY l.id, l.loan_number, l.borrower_name, l.stage, l.loan_officer_id, l.organization_id
+                    HAVING COUNT(d.id) FILTER (WHERE d.status = 'active') < 3
+                    LIMIT :limit
+                """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
-            by_category["MISSING_DOCS"] = len(missing_doc_loans)
-            for loan in missing_doc_loans:
-                title = f"[DOCS] Missing documents ({loan.active_doc_count} on file): {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
-                impediments.append({"category": "MISSING_DOCS", "title": title, "priority": "medium"})
-                if not dry_run:
-                    created = _dedup_and_create_task(
-                        db, title=title,
-                        description=f"Loan in {loan.stage} has only {loan.active_doc_count} active documents. Minimum 3 expected.",
-                        priority="medium", loan_id=loan.id, owner_id=loan.loan_officer_id,
-                        organization_id=loan.organization_id)
-                    tasks_created += 1 if created else 0
-                    tasks_skipped += 0 if created else 1
+                by_category["MISSING_DOCS"] = len(missing_doc_loans)
+                for loan in missing_doc_loans:
+                    title = f"[DOCS] Missing documents ({loan.active_doc_count} on file): {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
+                    impediments.append({"category": "MISSING_DOCS", "title": title, "priority": "medium"})
+                    if not dry_run:
+                        created = _dedup_and_create_task(
+                            db, title=title,
+                            description=f"Loan in {loan.stage} has only {loan.active_doc_count} active documents. Minimum 3 expected.",
+                            priority="medium", loan_id=loan.id, owner_id=loan.loan_officer_id,
+                            organization_id=loan.organization_id)
+                        tasks_created += 1 if created else 0
+                        tasks_skipped += 0 if created else 1
+            except Exception as e:
+                logger.warning(f"MISSING_DOCS check skipped (table may not exist): {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                by_category["MISSING_DOCS"] = 0
 
             if not dry_run:
                 db.commit()
