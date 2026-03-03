@@ -23,6 +23,24 @@ import BlockedTimeManager from '../components/BlockedTimeManager';
 import SchedulerAnalytics from '../components/SchedulerAnalytics';
 import './SmartSchedulerSettings.css';
 
+// Tab IDs for ARIA keyboard navigation
+const TAB_IDS = [
+  'working-hours', 'booking', 'appointment-types', 'booking-links',
+  'blocked-time', 'ai', 'video', 'analytics', 'calendar-assignments',
+];
+
+const TAB_DEFINITIONS = [
+  { id: 'working-hours', label: 'Working Hours', icon: 'fa-clock' },
+  { id: 'booking', label: 'Booking', icon: 'fa-calendar-alt' },
+  { id: 'appointment-types', label: 'Appointment Types', icon: 'fa-list-alt' },
+  { id: 'booking-links', label: 'Booking Links', icon: 'fa-link' },
+  { id: 'blocked-time', label: 'Blocked Time', icon: 'fa-ban' },
+  { id: 'ai', label: 'AI Settings', icon: 'fa-robot' },
+  { id: 'video', label: 'Video', icon: 'fa-video' },
+  { id: 'analytics', label: 'Analytics', icon: 'fa-chart-bar' },
+  { id: 'calendar-assignments', label: 'Calendar Assignments', icon: 'fa-calendar-check' },
+];
+
 // Day order for display
 const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_LABELS = {
@@ -367,6 +385,29 @@ function SmartSchedulerSettings() {
     }
   };
 
+  // Tab keyboard navigation (arrow keys, Home, End)
+  const handleTabKeyDown = useCallback((e, currentId) => {
+    const idx = TAB_IDS.indexOf(currentId);
+    let newIdx;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      newIdx = (idx + 1) % TAB_IDS.length;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      newIdx = (idx - 1 + TAB_IDS.length) % TAB_IDS.length;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      newIdx = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      newIdx = TAB_IDS.length - 1;
+    } else {
+      return;
+    }
+    setActiveTab(TAB_IDS[newIdx]);
+    document.getElementById(`tab-${TAB_IDS[newIdx]}`)?.focus();
+  }, []);
+
   // Handle timezone search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -381,7 +422,7 @@ function SmartSchedulerSettings() {
   if (isLoadingSettings) {
     return (
       <div className="scheduler-settings-page">
-        <div className="loading-state">
+        <div className="loading-state" role="status">
           <div className="spinner"></div>
           <p>Loading scheduler settings...</p>
         </div>
@@ -486,76 +527,28 @@ function SmartSchedulerSettings() {
       )}
 
       {/* Tab Navigation */}
-      <div className="settings-tabs">
-        <button
-          className={`tab-btn ${activeTab === 'working-hours' ? 'active' : ''}`}
-          onClick={() => setActiveTab('working-hours')}
-          aria-label="View Working Hours settings"
-        >
-          <i className="fas fa-clock"></i> Working Hours
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'booking' ? 'active' : ''}`}
-          onClick={() => setActiveTab('booking')}
-          aria-label="View Booking settings"
-        >
-          <i className="fas fa-calendar-alt"></i> Booking
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'appointment-types' ? 'active' : ''}`}
-          onClick={() => setActiveTab('appointment-types')}
-          aria-label="View Appointment Types settings"
-        >
-          <i className="fas fa-list-alt"></i> Appointment Types
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'booking-links' ? 'active' : ''}`}
-          onClick={() => setActiveTab('booking-links')}
-          aria-label="View Booking Links settings"
-        >
-          <i className="fas fa-link"></i> Booking Links
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'blocked-time' ? 'active' : ''}`}
-          onClick={() => setActiveTab('blocked-time')}
-          aria-label="View Blocked Time settings"
-        >
-          <i className="fas fa-ban"></i> Blocked Time
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ai')}
-          aria-label="View AI Settings"
-        >
-          <i className="fas fa-robot"></i> AI Settings
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
-          onClick={() => setActiveTab('video')}
-          aria-label="View Video Conferencing settings"
-        >
-          <i className="fas fa-video"></i> Video
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('analytics')}
-          aria-label="View Scheduler Analytics"
-        >
-          <i className="fas fa-chart-bar"></i> Analytics
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'calendar-assignments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('calendar-assignments')}
-          aria-label="View Calendar Assignments settings"
-        >
-          <i className="fas fa-calendar-check"></i> Calendar Assignments
-        </button>
+      <div className="settings-tabs" role="tablist" aria-label="Scheduler settings">
+        {TAB_DEFINITIONS.map(tab => (
+          <button
+            key={tab.id}
+            role="tab"
+            id={`tab-${tab.id}`}
+            aria-selected={activeTab === tab.id}
+            aria-controls={`panel-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
+          >
+            <i className={`fas ${tab.icon}`}></i> {tab.label}
+          </button>
+        ))}
       </div>
 
       <form onSubmit={handleSave}>
         {/* Working Hours Tab */}
         {activeTab === 'working-hours' && (
-          <section className="settings-section">
+          <section className="settings-section" role="tabpanel" id="panel-working-hours" aria-labelledby="tab-working-hours">
             <h2>Working Hours</h2>
 
             {/* Timezone */}
@@ -576,7 +569,7 @@ function SmartSchedulerSettings() {
 
             {/* General error for business hours */}
             {fieldErrors.business_hours && (
-              <div className="section-error" role="alert">{fieldErrors.business_hours}</div>
+              <div id="error-business-hours" className="section-error" role="alert">{fieldErrors.business_hours}</div>
             )}
 
             {/* Days */}
@@ -605,8 +598,11 @@ function SmartSchedulerSettings() {
                             value={dayHours.start}
                             onChange={(e) => updateBusinessHours(day, 'start', e.target.value)}
                             className={hasStartError ? 'has-error' : ''}
+                            aria-label={`${DAY_LABELS[day]} start time`}
+                            aria-invalid={!!hasStartError}
+                            aria-describedby={hasStartError ? `error-${day}-start` : undefined}
                           />
-                          {hasStartError && <span className="field-error">{hasStartError}</span>}
+                          {hasStartError && <span id={`error-${day}-start`} className="field-error" role="alert">{hasStartError}</span>}
                         </div>
                         <span className="time-separator">to</span>
                         <div className="time-input-group">
@@ -615,8 +611,11 @@ function SmartSchedulerSettings() {
                             value={dayHours.end}
                             onChange={(e) => updateBusinessHours(day, 'end', e.target.value)}
                             className={hasEndError ? 'has-error' : ''}
+                            aria-label={`${DAY_LABELS[day]} end time`}
+                            aria-invalid={!!hasEndError}
+                            aria-describedby={hasEndError ? `error-${day}-end` : undefined}
                           />
-                          {hasEndError && <span className="field-error">{hasEndError}</span>}
+                          {hasEndError && <span id={`error-${day}-end`} className="field-error" role="alert">{hasEndError}</span>}
                         </div>
                       </div>
                     )}
@@ -629,7 +628,7 @@ function SmartSchedulerSettings() {
 
         {/* Booking Tab */}
         {activeTab === 'booking' && (
-          <section className="settings-section">
+          <section className="settings-section" role="tabpanel" id="panel-booking" aria-labelledby="tab-booking">
             <h2>Booking Settings</h2>
 
             {/* Scheduling Method */}
@@ -665,9 +664,11 @@ function SmartSchedulerSettings() {
                 value={settings.booking_settings.min_notice_hours}
                 onChange={(e) => updateSetting('booking_settings.min_notice_hours', parseInt(e.target.value) || 0)}
                 className={fieldErrors.min_notice_hours ? 'has-error' : ''}
+                aria-describedby={fieldErrors.min_notice_hours ? 'error-min-notice' : undefined}
+                aria-invalid={!!fieldErrors.min_notice_hours}
               />
               {fieldErrors.min_notice_hours && (
-                <span className="field-error">{fieldErrors.min_notice_hours}</span>
+                <span id="error-min-notice" className="field-error" role="alert">{fieldErrors.min_notice_hours}</span>
               )}
               <span className="field-hint">How far in advance bookings must be made</span>
             </div>
@@ -683,9 +684,11 @@ function SmartSchedulerSettings() {
                 value={settings.booking_settings.max_advance_days}
                 onChange={(e) => updateSetting('booking_settings.max_advance_days', parseInt(e.target.value) || 1)}
                 className={fieldErrors.max_advance_days ? 'has-error' : ''}
+                aria-describedby={fieldErrors.max_advance_days ? 'error-max-advance' : undefined}
+                aria-invalid={!!fieldErrors.max_advance_days}
               />
               {fieldErrors.max_advance_days && (
-                <span className="field-error">{fieldErrors.max_advance_days}</span>
+                <span id="error-max-advance" className="field-error" role="alert">{fieldErrors.max_advance_days}</span>
               )}
               <span className="field-hint">How far in the future clients can book</span>
             </div>
@@ -731,9 +734,11 @@ function SmartSchedulerSettings() {
                 value={settings.booking_settings.max_meetings_per_day}
                 onChange={(e) => updateSetting('booking_settings.max_meetings_per_day', parseInt(e.target.value) || 1)}
                 className={fieldErrors.max_meetings_per_day ? 'has-error' : ''}
+                aria-describedby={fieldErrors.max_meetings_per_day ? 'error-max-per-day' : undefined}
+                aria-invalid={!!fieldErrors.max_meetings_per_day}
               />
               {fieldErrors.max_meetings_per_day && (
-                <span className="field-error">{fieldErrors.max_meetings_per_day}</span>
+                <span id="error-max-per-day" className="field-error" role="alert">{fieldErrors.max_meetings_per_day}</span>
               )}
             </div>
           </section>
@@ -741,7 +746,7 @@ function SmartSchedulerSettings() {
 
         {/* AI Tab */}
         {activeTab === 'ai' && (
-          <section className="settings-section">
+          <section className="settings-section" role="tabpanel" id="panel-ai" aria-labelledby="tab-ai">
             <h2>AI Scheduling</h2>
 
             <div className="form-row checkbox-row">
@@ -811,7 +816,7 @@ function SmartSchedulerSettings() {
 
         {/* Video Tab */}
         {activeTab === 'video' && (
-          <section className="settings-section">
+          <section className="settings-section" role="tabpanel" id="panel-video" aria-labelledby="tab-video">
             <h2>Video Conferencing</h2>
 
             <div className="form-row">
@@ -916,11 +921,31 @@ function SmartSchedulerSettings() {
       </form>
 
       {/* Standalone tabs (outside form - each has own state & API calls) */}
-      {activeTab === 'appointment-types' && <AppointmentTypesManager />}
-      {activeTab === 'booking-links' && <BookingLinksManager />}
-      {activeTab === 'blocked-time' && <BlockedTimeManager />}
-      {activeTab === 'analytics' && <SchedulerAnalytics />}
-      {activeTab === 'calendar-assignments' && <CalendarManagement />}
+      {activeTab === 'appointment-types' && (
+        <div role="tabpanel" id="panel-appointment-types" aria-labelledby="tab-appointment-types">
+          <AppointmentTypesManager />
+        </div>
+      )}
+      {activeTab === 'booking-links' && (
+        <div role="tabpanel" id="panel-booking-links" aria-labelledby="tab-booking-links">
+          <BookingLinksManager />
+        </div>
+      )}
+      {activeTab === 'blocked-time' && (
+        <div role="tabpanel" id="panel-blocked-time" aria-labelledby="tab-blocked-time">
+          <BlockedTimeManager />
+        </div>
+      )}
+      {activeTab === 'analytics' && (
+        <div role="tabpanel" id="panel-analytics" aria-labelledby="tab-analytics">
+          <SchedulerAnalytics />
+        </div>
+      )}
+      {activeTab === 'calendar-assignments' && (
+        <div role="tabpanel" id="panel-calendar-assignments" aria-labelledby="tab-calendar-assignments">
+          <CalendarManagement />
+        </div>
+      )}
     </div>
   );
 }

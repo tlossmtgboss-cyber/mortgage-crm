@@ -126,6 +126,34 @@ const AppointmentTypesManager = () => {
     loadTypes();
   }, [loadTypes]);
 
+  // Focus trap for modal
+  useEffect(() => {
+    if (!showModal) return;
+    const modal = document.querySelector('.scheduler-modal');
+    if (!modal) return;
+    const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const focusable = modal.querySelectorAll(focusableSelector);
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const previousFocus = document.activeElement;
+    first?.focus();
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') { setShowModal(false); return; }
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+    };
+    modal.addEventListener('keydown', handleKeyDown);
+    return () => {
+      modal.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [showModal]);
+
   const generateKey = (name) => {
     return name
       .toLowerCase()
@@ -298,7 +326,7 @@ const AppointmentTypesManager = () => {
   if (loading) {
     return (
       <div className="atm-container">
-        <div className="atm-loading">
+        <div className="atm-loading" role="status">
           <div className="atm-spinner"></div>
           <p>Loading appointment types...</p>
         </div>
@@ -402,9 +430,9 @@ const AppointmentTypesManager = () => {
       {/* Modal */}
       {showModal && (
         <div className="scheduler-modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
+          <div className="scheduler-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="atm-modal-title">
             <div className="scheduler-modal-header">
-              <h3>{editingType ? 'Edit Appointment Type' : 'New Appointment Type'}</h3>
+              <h3 id="atm-modal-title">{editingType ? 'Edit Appointment Type' : 'New Appointment Type'}</h3>
               <button className="scheduler-modal-close" onClick={() => setShowModal(false)} aria-label="Close">
                 <i className="fas fa-times"></i>
               </button>
@@ -495,6 +523,7 @@ const AppointmentTypesManager = () => {
                       style={{ backgroundColor: color }}
                       onClick={() => setForm(prev => ({ ...prev, color }))}
                       aria-label={`Select color ${color}`}
+                      aria-pressed={form.color === color}
                     />
                   ))}
                 </div>

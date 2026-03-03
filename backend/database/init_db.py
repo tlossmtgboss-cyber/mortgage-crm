@@ -1650,6 +1650,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ SOC 2 table migration note: {e}")
 
+        # Add EEOC demographic + NMLS license tracking fields to mm_candidates
+        try:
+            from migrations.add_eeoc_nmls_candidate_fields import run_migration as run_eeoc_nmls_migration
+            eeoc_result = run_eeoc_nmls_migration()
+            logger.info(f"✅ EEOC/NMLS migration: {eeoc_result.get('message', 'done')}")
+        except Exception as e:
+            logger.warning(f"⚠️ EEOC/NMLS migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

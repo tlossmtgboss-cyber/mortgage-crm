@@ -121,7 +121,7 @@ const SchedulerAnalytics = () => {
   if (loading) {
     return (
       <div className="sa-container">
-        <div className="sa-loading">
+        <div className="sa-loading" role="status">
           <div className="sa-spinner"></div>
           <p>Loading analytics...</p>
         </div>
@@ -143,6 +143,7 @@ const SchedulerAnalytics = () => {
               className={`sa-period-btn ${period === opt.value ? 'active' : ''}`}
               onClick={() => setPeriod(opt.value)}
               aria-label={`View analytics for last ${opt.value} days`}
+              aria-current={period === opt.value ? 'true' : undefined}
             >
               {opt.label}
             </button>
@@ -175,6 +176,7 @@ const SchedulerAnalytics = () => {
             <div className="sa-metric-card">
               <div className={`sa-metric-value ${metrics.noShowRate > 15 ? 'warning' : ''}`}>
                 {metrics.noShowRate.toFixed(1)}%
+                {metrics.noShowRate > 15 && <span className="sr-only"> (high)</span>}
               </div>
               <div className="sa-metric-label">No-Show Rate</div>
             </div>
@@ -185,6 +187,7 @@ const SchedulerAnalytics = () => {
             <div className="sa-metric-card">
               <div className={`sa-metric-value ${metrics.completionRate > 80 ? 'success' : ''}`}>
                 {metrics.completionRate.toFixed(1)}%
+                {metrics.completionRate > 80 && <span className="sr-only"> (good)</span>}
               </div>
               <div className="sa-metric-label">Completion Rate</div>
             </div>
@@ -200,7 +203,7 @@ const SchedulerAnalytics = () => {
                 .map(([type, count]) => (
                   <div key={type} className="sa-bar-row">
                     <div className="sa-bar-label">{type}</div>
-                    <div className="sa-bar-track">
+                    <div className="sa-bar-track" role="img" aria-label={`${type}: ${count} appointments`}>
                       <div
                         className="sa-bar-fill"
                         style={{ width: `${maxByType > 0 ? (count / maxByType) * 100 : 0}%` }}
@@ -219,7 +222,7 @@ const SchedulerAnalytics = () => {
                   .sort((a, b) => b[1] - a[1])
                   .map(([status, count]) => (
                     <div key={status} className="sa-status-row">
-                      <span className={`sa-status-dot ${status}`}></span>
+                      <span className={`sa-status-dot ${status}`} aria-hidden="true"></span>
                       <span className="sa-status-name">{status.replace(/_/g, ' ')}</span>
                       <span className="sa-status-count">{count}</span>
                     </div>
@@ -237,7 +240,7 @@ const SchedulerAnalytics = () => {
                 .map(([user, count]) => (
                   <div key={user} className="sa-bar-row">
                     <div className="sa-bar-label user">{user}</div>
-                    <div className="sa-bar-track">
+                    <div className="sa-bar-track" role="img" aria-label={`${user}: ${count} appointments`}>
                       <div
                         className="sa-bar-fill teal"
                         style={{ width: `${maxByUser > 0 ? (count / maxByUser) * 100 : 0}%` }}

@@ -145,7 +145,7 @@ const CalendarManagement = () => {
 
   if (loading) {
     return (
-      <div className="calendar-management loading">
+      <div className="calendar-management loading" role="status">
         <div className="loading-spinner"></div>
         <p>Loading calendar settings...</p>
       </div>
@@ -346,7 +346,7 @@ const CalendarManagement = () => {
                     <span className="user-name">{user.name}</span>
                     <span className="user-email">{user.email}</span>
                     <span className="calendly-status connected">
-                      <span className="dot"></span> Calendar Active
+                      <span className="dot" aria-hidden="true"></span> Calendar Active
                     </span>
                   </div>
                 </div>
@@ -373,7 +373,7 @@ const CalendarManagement = () => {
                     <span className="user-email">/book/{link.slug}</span>
                     {link.owner_name && (
                       <span className="calendly-status connected">
-                        <span className="dot"></span> Owner: {link.owner_name}
+                        <span className="dot" aria-hidden="true"></span> Owner: {link.owner_name}
                       </span>
                     )}
                   </div>
