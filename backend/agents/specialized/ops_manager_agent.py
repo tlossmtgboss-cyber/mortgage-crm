@@ -419,6 +419,13 @@ class OpsManagerAgent(SpecializedAgent):
                         "team_gaps": team_data,
                         "stalled_files": stalled_data,
                     },
+                    "sub_errors": {
+                        name: res.error for name, res in [
+                            ("leads", lead_result), ("loans", loan_result),
+                            ("mum", mum_result), ("team_gaps", team_result),
+                            ("stalled_files", stalled_result),
+                        ] if not res.success and res.error
+                    },
                 },
                 message=f"Sweep complete: {total_impediments} impediments, {total_tasks_created} tasks created, {total_skipped} deduped ({round(duration, 1)}s)"
             )
