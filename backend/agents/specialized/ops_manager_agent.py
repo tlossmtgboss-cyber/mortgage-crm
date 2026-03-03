@@ -145,8 +145,8 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     """
     from sqlalchemy import text
 
-    # Build dedup query against ai_tasks
-    conditions = ["title = :title", "type != 'Completed'"]
+    # Build dedup query against ai_tasks (type is a PostgreSQL enum 'tasktype')
+    conditions = ["title = :title", "type != 'Completed'::tasktype"]
     params = {"title": title}
 
     if loan_id:
@@ -162,9 +162,9 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     if existing:
         return False
 
-    # Create the task in ai_tasks
+    # Create the task in ai_tasks (cast type to PostgreSQL enum)
     insert_cols = ["title", "description", "priority", "type", "created_at"]
-    insert_vals = [":title", ":description", ":priority", "'Human Needed'", "NOW()"]
+    insert_vals = [":title", ":description", ":priority", "'Human Needed'::tasktype", "NOW()"]
     insert_params = {"title": title, "description": description, "priority": priority}
 
     if loan_id:
@@ -1176,7 +1176,7 @@ class OpsManagerAgent(SpecializedAgent):
                     t.priority,
                     COUNT(*) as count
                 FROM ai_tasks t
-                WHERE t.type != 'Completed'
+                WHERE t.type != 'Completed'::tasktype
                     AND ({ops_prefixes})
                     {category_filter}
                     {org_filter}
