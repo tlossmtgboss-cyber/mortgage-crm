@@ -476,9 +476,10 @@ class RecruitingService:
         new_status: str,
         updated_by: int,
         reason: Optional[str] = None,
-        organization_id: Optional[int] = None
+        organization_id: Optional[int] = None,
+        disposition_code: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Update candidate status."""
+        """Update candidate status with optional OFCCP disposition tracking."""
 
         # Get current status
         current = self.db.execute(text("""
@@ -490,32 +491,81 @@ class RecruitingService:
 
         old_status = current.status
 
-        # Update status
-        self.db.execute(text("""
-            UPDATE mm_candidates
-            SET status = :status,
-                status_changed_at = CURRENT_TIMESTAMP,
-                status_changed_by = :user_id,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        """), {
-            "id": candidate_id,
-            "status": new_status,
-            "user_id": updated_by
-        })
+        # Build update query — include disposition fields when provided
+        if disposition_code:
+            self.db.execute(text("""
+                UPDATE mm_candidates
+                SET status = :status,
+                    status_changed_at = CURRENT_TIMESTAMP,
+                    status_changed_by = :user_id,
+                    disposition_code = :disposition_code,
+                    disposition_date = CURRENT_TIMESTAMP,
+                    disposition_by = :user_id,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+            """), {
+                "id": candidate_id,
+                "status": new_status,
+                "user_id": updated_by,
+                "disposition_code": disposition_code,
+            })
+        else:
+            self.db.execute(text("""
+                UPDATE mm_candidates
+                SET status = :status,
+                    status_changed_at = CURRENT_TIMESTAMP,
+                    status_changed_by = :user_id,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+            """), {
+                "id": candidate_id,
+                "status": new_status,
+                "user_id": updated_by,
+            })
 
         # Log activity
+        description = f"Status changed from {old_status} to {new_status}"
+        if reason:
+            description += f": {reason}"
+        if disposition_code:
+            description += f" [disposition: {disposition_code}]"
+
         await self._log_activity(
             candidate_id=candidate_id,
             activity_type="status_change",
-            description=f"Status changed from {old_status} to {new_status}" + (f": {reason}" if reason else ""),
+            description=description,
             performed_by=updated_by,
             organization_id=organization_id
         )
 
+        # Insert audit log entry for disposition tracking
+        if disposition_code:
+            try:
+                self.db.execute(text("""
+                    INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, created_at)
+                    VALUES (:user_id, 'disposition_set', 'candidate', :candidate_id,
+                            :details, CURRENT_TIMESTAMP)
+                """), {
+                    "user_id": updated_by,
+                    "candidate_id": str(candidate_id),
+                    "details": json.dumps({
+                        "old_status": old_status,
+                        "new_status": new_status,
+                        "disposition_code": disposition_code,
+                        "reason": reason,
+                    }),
+                })
+            except Exception as e:
+                logger.warning(f"Failed to insert audit log for disposition: {e}")
+
         self.db.commit()
 
-        return {"candidate_id": candidate_id, "old_status": old_status, "new_status": new_status}
+        return {
+            "candidate_id": candidate_id,
+            "old_status": old_status,
+            "new_status": new_status,
+            "disposition_code": disposition_code,
+        }
 
     # =========================================================================
     # JOB POSTINGS

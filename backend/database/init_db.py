@@ -1658,6 +1658,30 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ EEOC/NMLS migration note: {e}")
 
+        # C3: Add organization_id to remaining recruiting tables
+        try:
+            from migrations.add_org_id_recruiting_tables_v2 import run_migration as run_org_id_v2
+            org_v2_result = run_org_id_v2()
+            logger.info(f"✅ Recruiting org_id v2: {len(org_v2_result.get('processed', []))} tables")
+        except Exception as e:
+            logger.warning(f"⚠️ Recruiting org_id v2 note: {e}")
+
+        # C4: Add OFCCP disposition tracking columns
+        try:
+            from migrations.add_disposition_tracking import run_migration as run_disposition
+            disp_result = run_disposition()
+            logger.info(f"✅ Disposition tracking: {len(disp_result.get('added', []))} columns")
+        except Exception as e:
+            logger.warning(f"⚠️ Disposition tracking note: {e}")
+
+        # C5: Create AI decision audit log table
+        try:
+            from migrations.add_recruit_ai_audit_log import run_migration as run_ai_audit
+            ai_audit_result = run_ai_audit()
+            logger.info(f"✅ AI audit log: created={ai_audit_result.get('created', False)}")
+        except Exception as e:
+            logger.warning(f"⚠️ AI audit log note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

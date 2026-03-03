@@ -12,7 +12,9 @@ Features:
 """
 
 import os
+import re
 import json
+import hashlib
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
@@ -113,7 +115,9 @@ class CandidateAIAnalyzer:
         include_resume: bool = True,
         include_social: bool = True,
         include_interviews: bool = True,
-        include_notes: bool = True
+        include_notes: bool = True,
+        triggered_by: Optional[int] = None,
+        organization_id: Optional[int] = None
     ) -> AIAnalysisResult:
         """
         Run comprehensive AI analysis on a candidate.
@@ -140,6 +144,15 @@ class CandidateAIAnalyzer:
 
         # Store results in database
         await self._store_analysis(candidate_id, analysis)
+
+        # Log AI audit trail
+        if triggered_by and organization_id:
+            self._log_ai_audit(
+                candidate_id=candidate_id,
+                organization_id=organization_id,
+                triggered_by=triggered_by,
+                analysis=analysis,
+            )
 
         return analysis
 
@@ -419,7 +432,7 @@ You must respond in valid JSON format only. Be analytical, objective, and eviden
         if candidate_data.get('resume_text'):
             prompt += f"""
 ### Resume Content
-{candidate_data['resume_text'][:5000]}  # Truncate for token limits
+{self._sanitize_for_prompt(candidate_data['resume_text'][:5000])}
 """
 
         if candidate_data.get('social_media'):
@@ -441,9 +454,15 @@ You must respond in valid JSON format only. Be analytical, objective, and eviden
 """
 
         if candidate_data.get('notes'):
+            sanitized_notes = []
+            for note in candidate_data.get('notes', [])[:10]:
+                sanitized_note = dict(note)
+                if 'content' in sanitized_note:
+                    sanitized_note['content'] = self._sanitize_for_prompt(sanitized_note['content'])
+                sanitized_notes.append(sanitized_note)
             prompt += f"""
 ### Recruiter Notes
-{json.dumps(candidate_data.get('notes', [])[:10], indent=2)}
+{json.dumps(sanitized_notes, indent=2)}
 """
 
         prompt += """
@@ -533,6 +552,97 @@ Provide your analysis in the following JSON format:
 Be thorough but objective. Base scores only on available evidence. If data is limited, lower confidence accordingly."""
 
         return prompt
+
+    @staticmethod
+    def _sanitize_for_prompt(text_input: str) -> str:
+        """Strip potential injection patterns from user-provided text before sending to AI."""
+        if not text_input:
+            return ""
+        # Remove common prompt injection patterns
+        sanitized = re.sub(
+            r'(?i)(ignore\s+(?:all\s+)?(?:previous|above|prior)\s+instructions?'
+            r'|you\s+are\s+now\s+(?:a|an)\s+'
+            r'|system\s*:\s*'
+            r'|<\/?(?:system|instruction|prompt)>)',
+            '[REDACTED]',
+            text_input
+        )
+        # Limit length to prevent token abuse
+        return sanitized[:10000]
+
+    def _log_ai_audit(
+        self,
+        candidate_id: int,
+        organization_id: int,
+        triggered_by: int,
+        analysis: AIAnalysisResult,
+    ) -> None:
+        """Log AI analysis invocation to recruit_ai_audit_log and audit_logs."""
+        from sqlalchemy import text as sql_text
+
+        raw = analysis.raw_analysis or {}
+        prompt_tokens = raw.get("prompt_tokens")
+        response_tokens = raw.get("response_tokens")
+        model_used = raw.get("model", self.model)
+
+        # Compute prompt hash for reproducibility (hash of raw response is a proxy)
+        raw_response = raw.get("raw_response", "")
+        prompt_hash = hashlib.sha256(raw_response.encode("utf-8")).hexdigest()[:64] if raw_response else None
+
+        try:
+            self.db.execute(sql_text("""
+                INSERT INTO recruit_ai_audit_log (
+                    organization_id, candidate_id, triggered_by,
+                    model_used, prompt_hash, prompt_tokens, response_tokens,
+                    confidence_score, hire_recommendation, analysis_summary,
+                    created_at
+                ) VALUES (
+                    :org_id, :candidate_id, :triggered_by,
+                    :model_used, :prompt_hash, :prompt_tokens, :response_tokens,
+                    :confidence, :recommendation, :summary,
+                    CURRENT_TIMESTAMP
+                )
+            """), {
+                "org_id": organization_id,
+                "candidate_id": candidate_id,
+                "triggered_by": triggered_by,
+                "model_used": model_used,
+                "prompt_hash": prompt_hash,
+                "prompt_tokens": prompt_tokens,
+                "response_tokens": response_tokens,
+                "confidence": analysis.confidence_score,
+                "recommendation": analysis.hire_recommendation,
+                "summary": json.dumps({
+                    "strengths_count": len(analysis.strengths),
+                    "weaknesses_count": len(analysis.weaknesses),
+                    "red_flags": analysis.red_flags,
+                    "highlights": analysis.highlights,
+                }),
+            })
+
+            # Also insert into generic audit_logs for cross-module visibility
+            self.db.execute(sql_text("""
+                INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, created_at)
+                VALUES (:user_id, 'ai_analysis_run', 'candidate', :entity_id, :details, CURRENT_TIMESTAMP)
+            """), {
+                "user_id": triggered_by,
+                "entity_id": str(candidate_id),
+                "details": json.dumps({
+                    "model": model_used,
+                    "confidence": analysis.confidence_score,
+                    "recommendation": analysis.hire_recommendation,
+                    "prompt_tokens": prompt_tokens,
+                    "response_tokens": response_tokens,
+                }),
+            })
+
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to log AI audit for candidate {candidate_id}: {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
     def _parse_analysis_response(self, response_text: str) -> Dict[str, Any]:
         """Parse the JSON response from Claude."""

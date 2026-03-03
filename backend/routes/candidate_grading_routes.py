@@ -5,6 +5,7 @@ Endpoints for LO candidate assessment and grading operations.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -12,12 +13,23 @@ import logging
 
 from database import get_db
 from services.candidate_grading_service import CandidateGradingService
+from auth.dependencies import get_current_user
+from database.models import User
 from sqlalchemy.exc import SQLAlchemyError
-from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/recruiting/candidates", tags=["Candidate Grading"], dependencies=[Depends(require_auth)])
+router = APIRouter(prefix="/api/v1/recruiting/candidates", tags=["Candidate Grading"])
+
+
+def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
+    """Verify candidate belongs to the caller's organization."""
+    row = db.execute(text("""
+        SELECT id FROM mm_candidates
+        WHERE id = :id AND organization_id = :org_id AND is_active = true
+    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
 
 
 # =============================================================================
@@ -151,6 +163,7 @@ class OverrideRequest(BaseModel):
 @router.get("/{candidate_id}/assessment")
 async def get_candidate_assessment(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -159,6 +172,7 @@ async def get_candidate_assessment(
     Returns all scoring categories, grades, and breakdown details.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
         assessment = await service.get_assessment(candidate_id)
 
@@ -184,8 +198,7 @@ async def get_candidate_assessment(
 async def create_candidate_assessment(
     candidate_id: int,
     request: CreateAssessmentRequest,
-    assessed_by: int = Query(..., description="User ID of assessor"),
-    organization_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -194,6 +207,7 @@ async def create_candidate_assessment(
     Calculates grades for each category and overall grade based on weights.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
 
         # Convert request to dict, handling nested models
@@ -209,8 +223,8 @@ async def create_candidate_assessment(
 
         result = await service.create_assessment(
             candidate_id=candidate_id,
-            organization_id=organization_id,
-            assessed_by=assessed_by,
+            organization_id=current_user.organization_id,
+            assessed_by=current_user.id,
             data=data
         )
 
@@ -225,7 +239,7 @@ async def create_candidate_assessment(
 async def update_candidate_assessment(
     candidate_id: int,
     request: UpdateAssessmentRequest,
-    updated_by: int = Query(..., description="User ID making the update"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -235,6 +249,7 @@ async def update_candidate_assessment(
     Grades are recalculated automatically.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
 
         # Get current assessment ID
@@ -247,7 +262,7 @@ async def update_candidate_assessment(
         result = await service.update_assessment(
             assessment_id=current['id'],
             data=data,
-            updated_by=updated_by
+            updated_by=current_user.id
         )
 
         return result
@@ -262,6 +277,7 @@ async def update_candidate_assessment(
 @router.get("/{candidate_id}/assessment/history")
 async def get_assessment_history(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -270,6 +286,7 @@ async def get_assessment_history(
     Shows all score changes over time with who made them and why.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
         history = await service.get_assessment_history(candidate_id)
 
@@ -287,6 +304,7 @@ async def get_assessment_history(
 @router.get("/{candidate_id}/assessment/breakdown")
 async def get_assessment_breakdown(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -295,6 +313,7 @@ async def get_assessment_breakdown(
     Shows each category's contribution to the final score.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
         assessment = await service.get_assessment(candidate_id)
 
@@ -367,7 +386,7 @@ async def get_assessment_breakdown(
 async def update_disc_scores(
     candidate_id: int,
     request: DISCScoresRequest,
-    updated_by: int = Query(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -380,6 +399,7 @@ async def update_disc_scores(
     - Conscientiousness: 15%
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
 
         current = await service.get_assessment(candidate_id)
@@ -408,7 +428,7 @@ async def update_disc_scores(
                 'disc_notes': request.notes,
                 'disc_assessment_source': request.assessment_source
             },
-            updated_by=updated_by
+            updated_by=current_user.id
         )
 
         return {
@@ -436,7 +456,7 @@ async def update_disc_scores(
 async def update_character_scores(
     candidate_id: int,
     request: CharacterBreakdownRequest,
-    updated_by: int = Query(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -449,6 +469,7 @@ async def update_character_scores(
     - Work Ethic
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
 
         current = await service.get_assessment(candidate_id)
@@ -465,7 +486,7 @@ async def update_character_scores(
                 'character_score': char_result.score,
                 'character_grade': char_result.grade
             },
-            updated_by=updated_by
+            updated_by=current_user.id
         )
 
         return {
@@ -488,7 +509,7 @@ async def update_character_scores(
 async def update_skills_scores(
     candidate_id: int,
     request: SkillsBreakdownRequest,
-    updated_by: int = Query(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -501,6 +522,7 @@ async def update_skills_scores(
     - Technology proficiency
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
 
         current = await service.get_assessment(candidate_id)
@@ -517,7 +539,7 @@ async def update_skills_scores(
                 'skills_score': skills_result.score,
                 'skills_grade': skills_result.grade
             },
-            updated_by=updated_by
+            updated_by=current_user.id
         )
 
         return {
@@ -540,7 +562,7 @@ async def update_skills_scores(
 async def update_culture_fit_scores(
     candidate_id: int,
     request: CultureFitBreakdownRequest,
-    updated_by: int = Query(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -553,6 +575,7 @@ async def update_culture_fit_scores(
     - Growth mindset
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
 
         current = await service.get_assessment(candidate_id)
@@ -569,7 +592,7 @@ async def update_culture_fit_scores(
                 'culture_fit_score': culture_result.score,
                 'culture_fit_grade': culture_result.grade
             },
-            updated_by=updated_by
+            updated_by=current_user.id
         )
 
         return {
@@ -596,7 +619,7 @@ async def update_culture_fit_scores(
 async def override_assessment_scores(
     candidate_id: int,
     request: OverrideRequest,
-    override_by: int = Query(..., description="User ID making the override"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -606,6 +629,7 @@ async def override_assessment_scores(
     Original scores are preserved in history.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         service = CandidateGradingService(db)
 
         current = await service.get_assessment(candidate_id)
@@ -626,7 +650,7 @@ async def override_assessment_scores(
 
         result = await service.override_scores(
             assessment_id=current['id'],
-            override_by=override_by,
+            override_by=current_user.id,
             override_reason=request.override_reason,
             new_scores=new_scores
         )
@@ -645,7 +669,9 @@ async def override_assessment_scores(
 # =============================================================================
 
 @router.get("/grading/weights")
-async def get_grading_weights() -> Dict[str, Any]:
+async def get_grading_weights(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
     """
     Get the current grading weights and thresholds.
 
@@ -695,6 +721,7 @@ async def calculate_grade_preview(
     character_score: Optional[float] = Query(None, ge=0, le=100),
     skills_score: Optional[float] = Query(None, ge=0, le=100),
     culture_fit_score: Optional[float] = Query(None, ge=0, le=100),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -741,20 +768,17 @@ async def calculate_grade_preview(
 
 @router.post("/grading/run-migration")
 async def run_grading_migration(
-    admin_key: str = Query(..., description="Admin key for migration"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
     Run the candidate grading system migration.
 
     Creates tables for mm_candidate_assessments and mm_assessment_history.
-    Requires admin key for security.
+    Requires admin role.
     """
-    import os
-    expected_key = os.getenv("ADMIN_API_KEY", "")
-
-    if admin_key != expected_key:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    if current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     try:
         from sqlalchemy import text
@@ -922,6 +946,7 @@ class ApplySuggestionsRequest(BaseModel):
 async def run_ai_analysis(
     candidate_id: int,
     request: Optional[AIAnalysisRequest] = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -937,6 +962,7 @@ async def run_ai_analysis(
     and hire recommendation.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         from services.candidate_ai_analyzer import CandidateAIAnalyzer
 
         analyzer = CandidateAIAnalyzer(db)
@@ -948,7 +974,9 @@ async def run_ai_analysis(
             include_resume=req.include_resume,
             include_social=req.include_social,
             include_interviews=req.include_interviews,
-            include_notes=req.include_notes
+            include_notes=req.include_notes,
+            triggered_by=current_user.id,
+            organization_id=current_user.organization_id
         )
 
         return {
@@ -1031,7 +1059,7 @@ async def run_ai_analysis(
 async def apply_ai_suggestions(
     candidate_id: int,
     request: ApplySuggestionsRequest,
-    applied_by: int = Query(..., description="User ID applying suggestions"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -1040,8 +1068,8 @@ async def apply_ai_suggestions(
     Allows selecting which categories to apply.
     """
     try:
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
         from services.candidate_ai_analyzer import CandidateAIAnalyzer
-        from sqlalchemy import text
         import json
 
         # Get the stored AI analysis
@@ -1077,7 +1105,7 @@ async def apply_ai_suggestions(
             apply_character=request.apply_character,
             apply_skills=request.apply_skills,
             apply_culture=request.apply_culture,
-            applied_by=applied_by
+            applied_by=current_user.id
         )
 
         return {
@@ -1098,6 +1126,7 @@ async def apply_ai_suggestions(
 @router.get("/{candidate_id}/assessment/ai-status")
 async def get_ai_analysis_status(
     candidate_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
@@ -1106,7 +1135,7 @@ async def get_ai_analysis_status(
     Returns when analysis was last run and confidence score.
     """
     try:
-        from sqlalchemy import text
+        _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
         result = db.execute(text("""
             SELECT

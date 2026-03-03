@@ -281,6 +281,7 @@ class CandidateCreate(BaseModel):
 class CandidateStatusUpdate(BaseModel):
     status: str
     reason: Optional[str] = None
+    disposition_code: Optional[str] = None
 
 
 class JobPostingCreate(BaseModel):
@@ -519,6 +520,15 @@ async def update_candidate_status(
     db: Session = Depends(get_db)
 ):
     """Update candidate status."""
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
+    # Require disposition_code for terminal statuses
+    if data.status in ("rejected", "withdrawn", "not_selected") and not data.disposition_code:
+        raise HTTPException(
+            status_code=400,
+            detail="disposition_code is required when rejecting or withdrawing a candidate"
+        )
+
     service = RecruitingService(db)
     try:
         result = await service.update_candidate_status(
@@ -526,7 +536,8 @@ async def update_candidate_status(
             new_status=data.status,
             updated_by=current_user.id,
             reason=data.reason,
-            organization_id=current_user.organization_id
+            organization_id=current_user.organization_id,
+            disposition_code=data.disposition_code
         )
         return result
     except ValueError as e:
@@ -1760,3 +1771,92 @@ async def update_candidate_basic_info(
 
     db.commit()
     return {"id": candidate_id, "status": "updated"}
+
+
+# =============================================================================
+# EEOC / OFCCP ADVERSE IMPACT REPORTING
+# =============================================================================
+
+@router.get("/eeoc/adverse-impact")
+async def get_adverse_impact_report(
+    days: int = Query(365, description="Lookback period in days"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    OFCCP adverse impact report using the 4/5ths (80%) rule.
+
+    Compares selection rates across demographic groups. A group's rate
+    below 80% of the highest group's rate indicates potential adverse impact.
+    """
+    org_id = current_user.organization_id
+
+    try:
+        gender_stats = db.execute(text("""
+            SELECT
+                COALESCE(eeoc_gender, 'undisclosed') as group_name,
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'hired' THEN 1 END) as selected,
+                COUNT(CASE WHEN disposition_code IS NOT NULL THEN 1 END) as dispositioned
+            FROM mm_candidates
+            WHERE organization_id = :org_id
+              AND applied_at >= CURRENT_DATE - :days
+              AND is_active = true
+            GROUP BY COALESCE(eeoc_gender, 'undisclosed')
+            HAVING COUNT(*) >= 3
+        """), {"org_id": org_id, "days": days}).fetchall()
+
+        ethnicity_stats = db.execute(text("""
+            SELECT
+                COALESCE(eeoc_ethnicity, 'undisclosed') as group_name,
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'hired' THEN 1 END) as selected,
+                COUNT(CASE WHEN disposition_code IS NOT NULL THEN 1 END) as dispositioned
+            FROM mm_candidates
+            WHERE organization_id = :org_id
+              AND applied_at >= CURRENT_DATE - :days
+              AND is_active = true
+            GROUP BY COALESCE(eeoc_ethnicity, 'undisclosed')
+            HAVING COUNT(*) >= 3
+        """), {"org_id": org_id, "days": days}).fetchall()
+
+    except SQLAlchemyError as e:
+        logger.warning(f"EEOC columns may not exist yet: {e}")
+        return {
+            "period_days": days,
+            "message": "EEOC demographic columns not available. Run EEOC/NMLS migration first.",
+            "gender_analysis": [],
+            "ethnicity_analysis": [],
+        }
+
+    def analyze_groups(stats):
+        groups = []
+        for row in stats:
+            rate = row.selected / row.total if row.total > 0 else 0
+            groups.append({
+                "group": row.group_name,
+                "total_applicants": row.total,
+                "selected": row.selected,
+                "selection_rate": round(rate, 4),
+                "dispositioned": row.dispositioned,
+            })
+        if not groups:
+            return groups
+        max_rate = max(g["selection_rate"] for g in groups)
+        for g in groups:
+            if max_rate > 0:
+                ratio = g["selection_rate"] / max_rate
+                g["impact_ratio"] = round(ratio, 4)
+                g["adverse_impact"] = ratio < 0.80
+            else:
+                g["impact_ratio"] = None
+                g["adverse_impact"] = False
+        return groups
+
+    return {
+        "period_days": days,
+        "organization_id": org_id,
+        "gender_analysis": analyze_groups(gender_stats),
+        "ethnicity_analysis": analyze_groups(ethnicity_stats),
+        "methodology": "4/5ths (80%) rule per EEOC Uniform Guidelines",
+    }

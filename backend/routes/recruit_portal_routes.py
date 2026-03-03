@@ -34,33 +34,20 @@ from models.recruit_portal_models import (
 
 logger = logging.getLogger(__name__)
 
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+def _require_admin(current_user):
+    """Require admin role for portal admin endpoints."""
+    if current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
 
-def _validate_admin_access(admin_key: str = None, request: Request = None):
-    """Validate admin access via admin_key query param OR JWT Bearer token with admin role.
-
-    The frontend should use JWT auth (already in Authorization header).
-    The admin_key query param remains as a fallback for curl/scripts.
-    """
-    # Check admin_key query param (fallback for curl/scripts)
-    if admin_key and _ADMIN_API_KEY and admin_key == _ADMIN_API_KEY:
-        return True
-
-    # Check JWT Bearer token for admin role
-    if request:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            try:
-                from auth.tokens import verify_access_token
-                token = auth_header[7:]
-                payload = verify_access_token(token)
-                if payload and payload.get("role") in ("admin", "platform_admin", "site_admin"):
-                    return True
-            except Exception:
-                pass
-
-    raise HTTPException(status_code=403, detail="Admin access required")
+def _verify_candidate_org(db: Session, candidate_id: int, organization_id: int):
+    """Verify candidate belongs to the caller's organization."""
+    row = db.execute(text("""
+        SELECT id FROM mm_candidates
+        WHERE id = :id AND organization_id = :org_id AND is_active = true
+    """), {"id": candidate_id, "org_id": organization_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Candidate not found")
 
 
 # Portal token TTL — tokens older than this are rejected
@@ -430,12 +417,11 @@ async def update_contact_info(
 
 @router.post("/admin/add-portal-columns")
 async def add_portal_columns(
-    request: Request,
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Add portal token columns to mm_candidates table."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     columns = [
         ("portal_token", "VARCHAR(100)", "Unique access token for candidate portal"),
@@ -479,12 +465,11 @@ async def add_portal_columns(
 
 @router.post("/admin/create-portal-tables")
 async def create_portal_tables(
-    request: Request,
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create PURL portal tables."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
         db.execute(text("""
@@ -758,14 +743,14 @@ async def get_purl_chat_history(
 
 @router.post("/admin/workspaces")
 async def create_purl_portal_workspace(
-    request: Request,
     candidate_id: int,
     slug: Optional[str] = None,
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a PURL portal workspace for a candidate (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     try:
         workspace = portal_service.create_portal_workspace(
@@ -780,14 +765,14 @@ async def create_purl_portal_workspace(
 
 @router.put("/admin/workspaces/by-candidate/{candidate_id}/slug")
 async def update_workspace_slug_by_candidate(
-    request: Request,
     candidate_id: int,
     new_slug: str = Query(..., description="New slug for the workspace"),
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update workspace slug by candidate ID (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     try:
         result = db.execute(
@@ -795,9 +780,10 @@ async def update_workspace_slug_by_candidate(
                 UPDATE recruit_portal_workspaces
                 SET slug = :new_slug
                 WHERE candidate_id = :candidate_id
+                  AND candidate_id IN (SELECT id FROM mm_candidates WHERE organization_id = :org_id)
                 RETURNING id, slug, candidate_id
             """),
-            {"candidate_id": candidate_id, "new_slug": new_slug}
+            {"candidate_id": candidate_id, "new_slug": new_slug, "org_id": current_user.organization_id}
         )
         row = result.fetchone()
         db.commit()
@@ -813,13 +799,13 @@ async def update_workspace_slug_by_candidate(
 
 @router.get("/admin/workspaces/by-candidate/{candidate_id}")
 async def get_workspace_by_candidate(
-    request: Request,
     candidate_id: int,
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get workspace info by candidate ID (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     try:
         result = db.execute(
@@ -827,8 +813,9 @@ async def get_workspace_by_candidate(
                 SELECT id, slug, candidate_id, is_active, created_at
                 FROM recruit_portal_workspaces
                 WHERE candidate_id = :candidate_id
+                  AND candidate_id IN (SELECT id FROM mm_candidates WHERE organization_id = :org_id)
             """),
-            {"candidate_id": candidate_id}
+            {"candidate_id": candidate_id, "org_id": current_user.organization_id}
         )
         row = result.fetchone()
 
@@ -849,14 +836,13 @@ async def get_workspace_by_candidate(
 
 @router.get("/admin/workspaces")
 async def list_purl_portal_workspaces(
-    request: Request,
-    admin_key: str = Query(None),
     limit: int = Query(50, le=100),
     offset: int = 0,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List all PURL portal workspaces (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
         workspaces = portal_service.list_workspaces(limit=limit, offset=offset)
@@ -868,24 +854,24 @@ async def list_purl_portal_workspaces(
 
 @router.put("/admin/candidates/{candidate_id}/email")
 async def update_candidate_email(
-    request: Request,
     candidate_id: int,
     email: str = Query(..., description="New email address"),
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update candidate email address (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
+    _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
     try:
         result = db.execute(
             text("""
                 UPDATE mm_candidates
                 SET email = :email
-                WHERE id = :candidate_id
+                WHERE id = :candidate_id AND organization_id = :org_id
                 RETURNING id, first_name, last_name, email
             """),
-            {"candidate_id": candidate_id, "email": email}
+            {"candidate_id": candidate_id, "email": email, "org_id": current_user.organization_id}
         )
         row = result.fetchone()
         db.commit()
@@ -901,15 +887,14 @@ async def update_candidate_email(
 
 @router.post("/admin/workspaces/{workspace_id}/tokens")
 async def create_purl_portal_token(
-    request: Request,
     workspace_id: int,
     scope: str = "full",
     expires_days: Optional[int] = None,
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create an access token for a PURL portal workspace."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
         token = portal_service.create_portal_token(
@@ -933,14 +918,12 @@ class CompanyUpdateCreate(BaseModel):
 
 @router.post("/admin/updates")
 async def create_purl_company_update(
-    request: Request,
     update: CompanyUpdateCreate,
-    admin_key: str = Query(None),
-    created_by: int = 1,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a company update/propaganda post (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
         created = portal_service.create_company_update(
@@ -949,7 +932,7 @@ async def create_purl_company_update(
             media_url=update.media_url,
             category=update.category,
             is_featured=update.is_featured,
-            created_by=created_by
+            created_by=current_user.id
         )
         return created
     except Exception as e:
@@ -959,14 +942,13 @@ async def create_purl_company_update(
 
 @router.get("/admin/updates")
 async def list_purl_company_updates(
-    request: Request,
-    admin_key: str = Query(None),
     category: Optional[str] = None,
     limit: int = Query(50, le=100),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List company updates (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
         updates = portal_service.get_company_updates(category=category, limit=limit)
@@ -979,12 +961,11 @@ async def list_purl_company_updates(
 @router.delete("/admin/updates/{update_id}")
 async def delete_purl_company_update(
     update_id: int,
-    request: Request,
-    admin_key: str = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Delete a company update (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
         portal_service.delete_company_update(update_id)
@@ -1006,17 +987,15 @@ class CalculatorConfigUpdate(BaseModel):
 @router.put("/admin/calculator-config")
 async def update_purl_calculator_config(
     config: CalculatorConfigUpdate,
-    request: Request,
-    admin_key: str = Query(None),
-    organization_id: int = 1,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update production calculator configuration (admin)."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
         updated = portal_service.update_calculator_config(
-            organization_id=organization_id,
+            organization_id=current_user.organization_id,
             **config.dict(exclude_unset=True)
         )
         return updated
@@ -1027,16 +1006,14 @@ async def update_purl_calculator_config(
 
 @router.get("/admin/calculator-config")
 async def get_purl_calculator_config(
-    request: Request,
-    admin_key: str = Query(None),
-    organization_id: int = 1,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get production calculator configuration."""
-    _validate_admin_access(admin_key, request)
+    _require_admin(current_user)
 
     try:
-        config = portal_service.get_calculator_config(organization_id)
+        config = portal_service.get_calculator_config(current_user.organization_id)
         return config
     except Exception as e:
         logger.error(f"Error getting calculator config: {e}")
