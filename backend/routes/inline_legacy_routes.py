@@ -1373,6 +1373,22 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         from video_meeting_signaling import router as video_signaling_router
         app.include_router(video_signaling_router, tags=["Video Meeting Signaling"])
         logger.info("✅ Video Meeting Signaling (WebRTC) routes loaded")
+
+        # Load Chime SDK meeting routes
+        try:
+            from chime_meeting_routes import router as chime_router, set_dependencies as set_chime_deps
+            set_chime_deps(get_db, get_current_user, video_meeting_models)
+            app.include_router(chime_router, tags=["Chime Video Meetings"])
+            logger.info("✅ Chime SDK meeting routes loaded")
+        except Exception as chime_err:
+            logger.warning(f"Chime meeting routes not loaded (AWS SDK may not be configured): {chime_err}")
+
+        # Run Chime migration (add chime columns to video meeting tables)
+        try:
+            from migrations.migrate_video_to_chime import run_migration as run_chime_migration
+            run_chime_migration()
+        except Exception as chime_mig_err:
+            logger.warning(f"Chime migration: {chime_mig_err}")
     except Exception as e:
         import traceback
         _video_meeting_error = f"{e}"

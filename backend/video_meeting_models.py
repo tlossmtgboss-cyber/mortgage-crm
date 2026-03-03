@@ -67,6 +67,7 @@ class MeetingProvider(str, enum.Enum):
     GOOGLE_MEET = "google_meet"     # Google Meet
     TEAMS = "teams"                 # Microsoft Teams
     WEBEX = "webex"                 # Cisco Webex
+    CHIME = "chime"              # Amazon Chime SDK
 
 
 class AIAnalysisType(str, enum.Enum):
@@ -107,6 +108,10 @@ def create_video_meeting_models(Base):
         provider = Column(String(50), default="internal")  # internal, zoom, google_meet, etc.
         external_meeting_id = Column(String(255))  # ID from external provider
         external_meeting_url = Column(String(1000))  # Join URL from external provider
+
+        # Amazon Chime SDK
+        chime_meeting_id = Column(String(255), index=True)
+        chime_media_region = Column(String(50), default="us-east-1")
 
         # Host information
         host_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -248,6 +253,11 @@ def create_video_meeting_models(Base):
         storage_provider = Column(String(50), default="s3")  # s3, gcs, azure, local
         storage_path = Column(String(1000))
         storage_bucket = Column(String(255))
+
+        # Amazon Chime SDK recording
+        chime_pipeline_id = Column(String(255))
+        s3_key = Column(String(1000))
+
         file_size_bytes = Column(Integer)
 
         # Format
@@ -272,7 +282,7 @@ def create_video_meeting_models(Base):
         action_items_requested = Column(Boolean, default=True)
 
         # Privacy and retention
-        retention_days = Column(Integer, default=90)
+        retention_days = Column(Integer, default=1825)  # 5 years per TILA/Reg Z
         auto_delete_at = Column(DateTime)
         is_deleted = Column(Boolean, default=False)
         deleted_at = Column(DateTime)

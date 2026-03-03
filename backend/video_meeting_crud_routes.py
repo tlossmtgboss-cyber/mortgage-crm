@@ -985,7 +985,7 @@ async def join_meeting_by_code(
             if password != room.room_password:
                 raise HTTPException(status_code=403, detail="Incorrect meeting password")
 
-    return {
+    response = {
         "meeting": {
             "id": room.id,
             "room_code": room.room_code,
@@ -999,6 +999,24 @@ async def join_meeting_by_code(
             "recording_enabled": room.recording_enabled
         }
     }
+
+    # If this is a Chime-backed meeting, include SDK join info
+    chime_meeting_id = getattr(room, 'chime_meeting_id', None)
+    if chime_meeting_id:
+        try:
+            from services.chime_meeting_service import get_chime_service
+            chime = get_chime_service()
+            # Create an attendee — use "guest" as external ID for unauthenticated joins
+            attendee = chime.create_attendee(chime_meeting_id, f"guest-{room_code}")
+            join_info = chime.get_meeting_join_info(chime_meeting_id, attendee["AttendeeId"])
+            response["chime"] = {
+                "meeting": join_info["Meeting"],
+                "attendee": join_info["Attendee"],
+            }
+        except Exception as e:
+            logger.warning(f"Could not get Chime join info for room {room_code}: {e}")
+
+    return response
 
 
 # ============================================================================
