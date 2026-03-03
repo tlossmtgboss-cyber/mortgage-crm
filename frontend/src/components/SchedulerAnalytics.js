@@ -142,6 +142,7 @@ const SchedulerAnalytics = () => {
               key={opt.value}
               className={`sa-period-btn ${period === opt.value ? 'active' : ''}`}
               onClick={() => setPeriod(opt.value)}
+              aria-label={`View analytics for last ${opt.value} days`}
             >
               {opt.label}
             </button>
@@ -150,7 +151,7 @@ const SchedulerAnalytics = () => {
       </div>
 
       {error && (
-        <div className="sa-error">
+        <div className="sa-error" role="alert">
           <i className="fas fa-exclamation-circle"></i>
           {error}
           <button onClick={() => setError(null)}>&times;</button>
@@ -158,7 +159,7 @@ const SchedulerAnalytics = () => {
       )}
 
       {!metrics ? (
-        <div className="sa-empty">
+        <div className="sa-empty" role="status">
           <i className="fas fa-chart-bar"></i>
           <h3>No Data</h3>
           <p>No appointments found for the selected period.</p>

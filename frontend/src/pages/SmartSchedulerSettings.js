@@ -430,7 +430,7 @@ function SmartSchedulerSettings() {
 
       {/* Warnings Banner */}
       {warnings.length > 0 && (
-        <div className="warnings-banner">
+        <div className="warnings-banner" role="alert">
           <i className="fas fa-exclamation-triangle"></i>
           <div>
             <strong>Configuration Warnings</strong>
@@ -445,7 +445,7 @@ function SmartSchedulerSettings() {
 
       {/* Test Result */}
       {testResult && (
-        <div className={`test-result ${testResult.success ? 'success' : 'warning'}`}>
+        <div className={`test-result ${testResult.success ? 'success' : 'warning'}`} role="status">
           <div className="test-header">
             <i className={`fas ${testResult.success ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
             <strong>{testResult.success ? 'Test Passed' : 'Issues Found'}</strong>
@@ -490,54 +490,63 @@ function SmartSchedulerSettings() {
         <button
           className={`tab-btn ${activeTab === 'working-hours' ? 'active' : ''}`}
           onClick={() => setActiveTab('working-hours')}
+          aria-label="View Working Hours settings"
         >
           <i className="fas fa-clock"></i> Working Hours
         </button>
         <button
           className={`tab-btn ${activeTab === 'booking' ? 'active' : ''}`}
           onClick={() => setActiveTab('booking')}
+          aria-label="View Booking settings"
         >
           <i className="fas fa-calendar-alt"></i> Booking
         </button>
         <button
           className={`tab-btn ${activeTab === 'appointment-types' ? 'active' : ''}`}
           onClick={() => setActiveTab('appointment-types')}
+          aria-label="View Appointment Types settings"
         >
           <i className="fas fa-list-alt"></i> Appointment Types
         </button>
         <button
           className={`tab-btn ${activeTab === 'booking-links' ? 'active' : ''}`}
           onClick={() => setActiveTab('booking-links')}
+          aria-label="View Booking Links settings"
         >
           <i className="fas fa-link"></i> Booking Links
         </button>
         <button
           className={`tab-btn ${activeTab === 'blocked-time' ? 'active' : ''}`}
           onClick={() => setActiveTab('blocked-time')}
+          aria-label="View Blocked Time settings"
         >
           <i className="fas fa-ban"></i> Blocked Time
         </button>
         <button
           className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai')}
+          aria-label="View AI Settings"
         >
           <i className="fas fa-robot"></i> AI Settings
         </button>
         <button
           className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
           onClick={() => setActiveTab('video')}
+          aria-label="View Video Conferencing settings"
         >
           <i className="fas fa-video"></i> Video
         </button>
         <button
           className={`tab-btn ${activeTab === 'analytics' ? 'active' : ''}`}
           onClick={() => setActiveTab('analytics')}
+          aria-label="View Scheduler Analytics"
         >
           <i className="fas fa-chart-bar"></i> Analytics
         </button>
         <button
           className={`tab-btn ${activeTab === 'calendar-assignments' ? 'active' : ''}`}
           onClick={() => setActiveTab('calendar-assignments')}
+          aria-label="View Calendar Assignments settings"
         >
           <i className="fas fa-calendar-check"></i> Calendar Assignments
         </button>
@@ -551,8 +560,9 @@ function SmartSchedulerSettings() {
 
             {/* Timezone */}
             <div className="form-row">
-              <label>Timezone</label>
+              <label htmlFor="timezone-select">Timezone</label>
               <select
+                id="timezone-select"
                 value={settings.timezone}
                 onChange={(e) => updateSetting('timezone', e.target.value)}
               >
@@ -566,7 +576,7 @@ function SmartSchedulerSettings() {
 
             {/* General error for business hours */}
             {fieldErrors.business_hours && (
-              <div className="section-error">{fieldErrors.business_hours}</div>
+              <div className="section-error" role="alert">{fieldErrors.business_hours}</div>
             )}
 
             {/* Days */}
@@ -870,7 +880,7 @@ function SmartSchedulerSettings() {
             </div>
 
             {!settings.zoom_enabled && !settings.google_meet_enabled && (
-              <div className="inline-warning">
+              <div className="inline-warning" role="alert">
                 <i className="fas fa-exclamation-triangle"></i>
                 No video conferencing integrations enabled. Video meetings won't have auto-generated links.
               </div>

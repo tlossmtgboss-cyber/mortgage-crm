@@ -20,6 +20,7 @@ from sqlalchemy import and_, or_
 from datetime import datetime, timedelta, date, time
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
+import html
 import logging
 import pytz
 import os
@@ -152,6 +153,24 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return await _get_current_user_func(token=token, request=request, db=db)
 
 
+def _get_org_id(user) -> int:
+    """Get organization_id from user, raise 403 if missing."""
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
+
+
+def _get_user_timezone(db, user_id: int) -> str:
+    """Get user's configured timezone from SchedulerConfig, defaulting to America/Chicago."""
+    SchedulerConfig = _models.get('SchedulerConfig')
+    if SchedulerConfig and user_id:
+        config = db.query(SchedulerConfig).filter(SchedulerConfig.user_id == user_id).first()
+        if config and getattr(config, 'timezone', None):
+            return config.timezone
+    return 'America/Chicago'
+
+
 # ============================================================================
 # EMAIL SERVICE STATUS ENDPOINT
 # ============================================================================
@@ -218,6 +237,7 @@ async def get_availability(
 ):
     """Get availability slots for a date range"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
     AvailabilitySlot = _models['AvailabilitySlot']
@@ -228,7 +248,8 @@ async def get_availability(
 
     # Get config
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == target_user_id
+        SchedulerConfig.user_id == target_user_id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
@@ -259,9 +280,10 @@ async def get_availability(
 
     blocked = db.query(BlockedTime).filter(
         BlockedTime.is_active == True,
+        BlockedTime.organization_id == org_id,
         or_(
             BlockedTime.user_id == target_user_id,
-            BlockedTime.applies_to_all_users == True
+            and_(BlockedTime.applies_to_all_users == True, BlockedTime.organization_id == org_id)
         ),
         BlockedTime.start_datetime <= end_dt,
         BlockedTime.end_datetime >= start_dt
@@ -269,6 +291,7 @@ async def get_availability(
 
     # Get existing appointments
     appointments = db.query(Appointment).filter(
+        Appointment.organization_id == org_id,
         Appointment.assigned_user_id == target_user_id,
         Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
         Appointment.scheduled_start >= start_dt,
@@ -321,12 +344,14 @@ async def create_availability_slot(
 ):
     """Create a custom availability slot"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
     AvailabilitySlot = _models['AvailabilitySlot']
 
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
@@ -418,11 +443,13 @@ async def list_appointments(
 ):
     """List appointments with filters - includes both Appointment and ScheduledAppointment tables"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     Appointment = _models['Appointment']
 
     # Query main Appointment table
     query = db.query(Appointment).filter(
+        Appointment.organization_id == org_id,
         or_(
             Appointment.assigned_user_id == user.id,
             Appointment.created_by_user_id == user.id
@@ -546,11 +573,13 @@ async def get_appointment(
 ):
     """Get appointment details"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     Appointment = _models['Appointment']
 
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id,
+        Appointment.organization_id == org_id,
         or_(
             Appointment.assigned_user_id == user.id,
             Appointment.created_by_user_id == user.id
@@ -603,6 +632,7 @@ async def create_appointment(
 ):
     """Create a new appointment"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     Appointment = _models['Appointment']
 
@@ -625,6 +655,7 @@ async def create_appointment(
             pass
 
     appointment = Appointment(
+        organization_id=org_id,
         appointment_type_id=appt_data.appointment_type_id,
         assigned_user_id=appt_data.assigned_user_id or user.id,
         created_by_user_id=user.id,
@@ -728,13 +759,13 @@ async def create_appointment(
                     ).first()
                     if sf_profile:
                         sf_html = (
-                            f"<p>Hi {appt_data.attendee_name or 'there'},</p>"
+                            f"<p>Hi {html.escape(appt_data.attendee_name or 'there')},</p>"
                             f"<p>Your appointment has been confirmed!</p>"
-                            f"<p><strong>Date:</strong> {appointment_date}<br>"
-                            f"<strong>Time:</strong> {appointment_time}<br>"
-                            f"<strong>Duration:</strong> {duration_str}<br>"
-                            f"<strong>Meeting Type:</strong> {meeting_mode_str}</p>"
-                            + (f"<p><strong>With:</strong> {team_member_name}</p>" if team_member_name else "")
+                            f"<p><strong>Date:</strong> {html.escape(appointment_date)}<br>"
+                            f"<strong>Time:</strong> {html.escape(appointment_time)}<br>"
+                            f"<strong>Duration:</strong> {html.escape(duration_str)}<br>"
+                            f"<strong>Meeting Type:</strong> {html.escape(meeting_mode_str or '')}</p>"
+                            + (f"<p><strong>With:</strong> {html.escape(team_member_name)}</p>" if team_member_name else "")
                             + (f"<p><a href='{video_link}'>Join Video Call</a></p>" if video_link else "")
                             + "<p>We'll send you a reminder before your appointment.</p>"
                         )
@@ -788,7 +819,7 @@ async def create_appointment(
                             ).first()
                             if sf_prof:
                                 tm_subject = f"New Appointment: {appointment.title}"
-                                tm_body = f"<p>New appointment with {appt_data.attendee_name or 'Client'} on {appointment_date} at {appointment_time} ({duration_str}).</p>"
+                                tm_body = f"<p>New appointment with {html.escape(appt_data.attendee_name or 'Client')} on {html.escape(appointment_date)} at {html.escape(appointment_time)} ({html.escape(duration_str)}).</p>"
                                 sf_tm_result = await sf_svc.send_email_via_salesforce(
                                     db=db, integration_profile_id=sf_prof.id,
                                     to_email=team_member_email, subject=tm_subject, html_body=tm_body
@@ -886,12 +917,16 @@ async def update_appointment(
 ):
     """Update an appointment and send notification emails/SMS"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     Appointment = _models['Appointment']
     User = _models['User']
 
     # First try to find the appointment
-    appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id,
+        Appointment.organization_id == org_id
+    ).first()
 
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -916,7 +951,7 @@ async def update_appointment(
     # Store OLD date/time before any updates for comparison
     old_date = None
     old_time = None
-    tz = pytz.timezone('America/Chicago')
+    tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id))
     if appointment.scheduled_start:
         old_local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
         old_date = old_local_start.strftime('%B %d, %Y')
@@ -1102,6 +1137,7 @@ async def cancel_appointment(
 ):
     """Cancel an appointment and send cancellation notifications"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
     reason = cancel_data.reason if cancel_data else None
 
     Appointment = _models['Appointment']
@@ -1109,6 +1145,7 @@ async def cancel_appointment(
 
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id,
+        Appointment.organization_id == org_id,
         or_(
             Appointment.assigned_user_id == user.id,
             Appointment.created_by_user_id == user.id
@@ -1125,7 +1162,7 @@ async def cancel_appointment(
 
     # Format date and time for emails
     if appointment.scheduled_start:
-        tz = pytz.timezone('America/Chicago')
+        tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id))
         local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
         appointment_date = local_start.strftime('%B %d, %Y')
         appointment_time = local_start.strftime('%I:%M %p %Z')
@@ -1211,14 +1248,16 @@ async def list_blocked_times(
 ):
     """List blocked time periods"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     BlockedTime = _models['BlockedTime']
 
     query = db.query(BlockedTime).filter(
         BlockedTime.is_active == True,
+        BlockedTime.organization_id == org_id,
         or_(
             BlockedTime.user_id == user.id,
-            BlockedTime.applies_to_all_users == True
+            and_(BlockedTime.applies_to_all_users == True, BlockedTime.organization_id == org_id)
         )
     )
 
@@ -1257,10 +1296,12 @@ async def create_blocked_time(
 ):
     """Create a blocked time period"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     BlockedTime = _models['BlockedTime']
 
     blocked = BlockedTime(
+        organization_id=org_id,
         user_id=user.id,
         title=block_data.title,
         description=block_data.description,
@@ -1289,11 +1330,13 @@ async def delete_blocked_time(
 ):
     """Delete a blocked time period"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     BlockedTime = _models['BlockedTime']
 
     blocked = db.query(BlockedTime).filter(
         BlockedTime.id == block_id,
+        BlockedTime.organization_id == org_id,
         BlockedTime.user_id == user.id
     ).first()
 
@@ -1317,12 +1360,14 @@ async def list_all_booking_links(
 ):
     """List all active booking links for admin use (calendar assignment)"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     BookingLink = _models['BookingLink']
     User = _models.get('User')
 
     links = db.query(BookingLink).filter(
-        BookingLink.is_active == True
+        BookingLink.is_active == True,
+        BookingLink.organization_id == org_id
     ).all()
 
     result = []
@@ -1354,11 +1399,13 @@ async def list_booking_links(
 ):
     """List user's booking links"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     BookingLink = _models['BookingLink']
 
     links = db.query(BookingLink).filter(
         BookingLink.user_id == user.id,
+        BookingLink.organization_id == org_id,
         BookingLink.is_active == True
     ).all()
 
@@ -1389,11 +1436,15 @@ async def create_booking_link(
 ):
     """Create a booking link"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     BookingLink = _models['BookingLink']
 
-    # Check for duplicate slug
-    existing = db.query(BookingLink).filter(BookingLink.slug == link_data.slug).first()
+    # Check for duplicate slug within this organization
+    existing = db.query(BookingLink).filter(
+        BookingLink.slug == link_data.slug,
+        BookingLink.organization_id == org_id
+    ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Slug already in use")
 
@@ -1406,6 +1457,7 @@ async def create_booking_link(
             pass
 
     link = BookingLink(
+        organization_id=org_id,
         user_id=user.id,
         slug=link_data.slug,
         link_name=link_data.link_name,
@@ -1438,11 +1490,13 @@ async def delete_booking_link(
 ):
     """Delete a booking link"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     BookingLink = _models['BookingLink']
 
     link = db.query(BookingLink).filter(
         BookingLink.id == link_id,
+        BookingLink.organization_id == org_id,
         BookingLink.user_id == user.id
     ).first()
 
@@ -1470,6 +1524,7 @@ async def get_available_slots(
     This is the core slot calculation engine.
     """
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
     BlockedTime = _models['BlockedTime']
@@ -1483,7 +1538,8 @@ async def get_available_slots(
     for target_user_id in user_ids:
         # Get user's config
         config = db.query(SchedulerConfig).filter(
-            SchedulerConfig.user_id == target_user_id
+            SchedulerConfig.user_id == target_user_id,
+            SchedulerConfig.organization_id == org_id
         ).first()
 
         working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
@@ -1498,9 +1554,10 @@ async def get_available_slots(
 
         blocked_times = db.query(BlockedTime).filter(
             BlockedTime.is_active == True,
+            BlockedTime.organization_id == org_id,
             or_(
                 BlockedTime.user_id == target_user_id,
-                BlockedTime.applies_to_all_users == True
+                and_(BlockedTime.applies_to_all_users == True, BlockedTime.organization_id == org_id)
             ),
             BlockedTime.start_datetime <= end_dt,
             BlockedTime.end_datetime >= start_dt
@@ -1508,6 +1565,7 @@ async def get_available_slots(
 
         # Get existing appointments from primary Appointment table
         existing_appts = db.query(Appointment).filter(
+            Appointment.organization_id == org_id,
             Appointment.assigned_user_id == target_user_id,
             Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
             Appointment.scheduled_start >= start_dt,
@@ -1722,32 +1780,36 @@ async def get_public_booking_page(
         BookingLink.is_public == True
     ).first()
 
-    # Auto-create booking link if it doesn't exist
+    # Auto-create booking link only for the "demo" slug to prevent user enumeration
     if not link:
+        if slug != "demo":
+            raise HTTPException(status_code=404, detail="Booking link not found")
+
         try:
             SchedulerConfig = _models['SchedulerConfig']
 
             if User:
-                # Check if slug matches a user's slug (for microsite booking)
-                target_user = db.query(User).filter(User.slug == slug).first()
-
-                # Fallback: for demo slug, use admin user
-                if not target_user and slug == "demo":
-                    target_user = db.query(User).filter(User.is_admin == True).first()
-                    if not target_user:
-                        target_user = db.query(User).first()
+                # For demo slug, use admin user
+                target_user = db.query(User).filter(User.is_admin == True).first()
+                if not target_user:
+                    target_user = db.query(User).first()
 
                 if target_user:
+                    demo_org_id = getattr(target_user, 'organization_id', None)
                     user_name = getattr(target_user, 'full_name', None) or getattr(target_user, 'name', 'Loan Officer')
                     first_name = user_name.split()[0] if user_name else 'Loan Officer'
 
                     # Get or create SchedulerConfig for this user
-                    user_config = db.query(SchedulerConfig).filter(
+                    config_query = db.query(SchedulerConfig).filter(
                         SchedulerConfig.user_id == target_user.id
-                    ).first()
+                    )
+                    if demo_org_id:
+                        config_query = config_query.filter(SchedulerConfig.organization_id == demo_org_id)
+                    user_config = config_query.first()
 
                     if not user_config:
                         user_config = SchedulerConfig(
+                            organization_id=demo_org_id,
                             user_id=target_user.id,
                             config_name=f"{first_name}'s Schedule",
                             description=f"Availability settings for {user_name}",
@@ -1767,13 +1829,12 @@ async def get_public_booking_page(
                     ).first()
 
                     if not user_type:
-                        type_key = f"{slug}_consultation" if slug != "demo" else "demo_consultation"
-
                         user_type = AppointmentType(
+                            organization_id=demo_org_id,
                             config_id=user_config.id,
-                            type_name="Discovery Call" if slug != "demo" else "Product Demo",
-                            type_key=type_key,
-                            description=f"Schedule a call with {first_name}" if slug != "demo" else "Schedule a personalized demo of our platform",
+                            type_name="Product Demo",
+                            type_key="demo_consultation",
+                            description="Schedule a personalized demo of our platform",
                             default_duration_minutes=30,
                             allowed_durations=[15, 30, 45, 60],
                             meeting_type="consultation",
@@ -1790,15 +1851,16 @@ async def get_public_booking_page(
                         db.flush()
 
                     link = BookingLink(
+                        organization_id=demo_org_id,
                         user_id=target_user.id,
                         slug=slug,
-                        link_name=f"Schedule with {first_name}" if slug != "demo" else "Schedule a Demo",
-                        description=f"Book a call with {user_name}" if slug != "demo" else "Book a personalized demo of Perennia AI",
+                        link_name="Schedule a Demo",
+                        description="Book a personalized demo of Perennia AI",
                         is_active=True,
                         is_public=True,
                         appointment_type_ids=[user_type.id],
-                        custom_title=f"Schedule a Call" if slug != "demo" else "Schedule Your Demo",
-                        custom_description=f"Choose a time that works for you to speak with {first_name}." if slug != "demo" else "See how Perennia AI can transform your mortgage operations."
+                        custom_title="Schedule Your Demo",
+                        custom_description="See how Perennia AI can transform your mortgage operations."
                     )
                     db.add(link)
                     db.commit()
@@ -1892,10 +1954,16 @@ async def get_public_available_slots(
 
     all_slots = []
 
+    # Derive org_id from the booking link for tenant isolation
+    link_org_id = getattr(link, 'organization_id', None)
+
     for target_user_id in user_ids:
-        config = db.query(SchedulerConfig).filter(
+        config_query = db.query(SchedulerConfig).filter(
             SchedulerConfig.user_id == target_user_id
-        ).first()
+        )
+        if link_org_id:
+            config_query = config_query.filter(SchedulerConfig.organization_id == link_org_id)
+        config = config_query.first()
 
         working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
         buffer_before = config.buffer_before_minutes if config else 5
@@ -1906,7 +1974,7 @@ async def get_public_available_slots(
         start_dt = datetime.combine(start_date, time.min)
         end_dt = datetime.combine(end_date, time.max)
 
-        blocked_times = db.query(BlockedTime).filter(
+        blocked_query = db.query(BlockedTime).filter(
             BlockedTime.is_active == True,
             or_(
                 BlockedTime.user_id == target_user_id,
@@ -1914,15 +1982,21 @@ async def get_public_available_slots(
             ),
             BlockedTime.start_datetime <= end_dt,
             BlockedTime.end_datetime >= start_dt
-        ).all()
+        )
+        if link_org_id:
+            blocked_query = blocked_query.filter(BlockedTime.organization_id == link_org_id)
+        blocked_times = blocked_query.all()
 
         # Get existing appointments from primary Appointment table
-        existing_appts = db.query(Appointment).filter(
+        appt_query = db.query(Appointment).filter(
             Appointment.assigned_user_id == target_user_id,
             Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
             Appointment.scheduled_start >= start_dt,
             Appointment.scheduled_start <= end_dt
-        ).all()
+        )
+        if link_org_id:
+            appt_query = appt_query.filter(Appointment.organization_id == link_org_id)
+        existing_appts = appt_query.all()
 
         # Cross-source: also check ScheduledAppointment, CalendarEvent, CRMCalendarEvent
         cross_source_busy = _get_cross_source_conflicts(db, target_user_id, start_dt, end_dt)
@@ -2024,6 +2098,9 @@ async def confirm_public_booking(
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
 
+    # Derive org_id from the booking link for tenant isolation
+    link_org_id = getattr(link, 'organization_id', None)
+
     appt_type = db.query(AppointmentType).filter(
         AppointmentType.id == appointment_type_id,
         AppointmentType.is_active == True
@@ -2045,6 +2122,7 @@ async def confirm_public_booking(
     slot_end = slot_start + timedelta(minutes=duration_minutes)
 
     appointment = Appointment(
+        organization_id=link_org_id,
         appointment_type_id=appointment_type_id,
         assigned_user_id=assigned_user_id,
         title=f"{appt_type.type_name} with {attendee_name}",
@@ -2203,16 +2281,16 @@ async def confirm_public_booking(
     outlook_event_id = None
     if assigned_user_id:
         try:
-            # Build event description
+            # Build event description — escape all user data for HTML context
             event_description = f"""
             <h3>Client Meeting</h3>
-            <p><strong>Client:</strong> {attendee_name or 'Not specified'}</p>
-            <p><strong>Email:</strong> {attendee_email or 'Not specified'}</p>
-            <p><strong>Phone:</strong> {attendee_phone or 'Not specified'}</p>
-            <p><strong>Meeting Type:</strong> {meeting_mode_str}</p>
+            <p><strong>Client:</strong> {html.escape(attendee_name or 'Not specified')}</p>
+            <p><strong>Email:</strong> {html.escape(attendee_email or 'Not specified')}</p>
+            <p><strong>Phone:</strong> {html.escape(attendee_phone or 'Not specified')}</p>
+            <p><strong>Meeting Type:</strong> {html.escape(meeting_mode_str or '')}</p>
             """
             if appointment.description:
-                event_description += f"<p><strong>Notes:</strong> {appointment.description}</p>"
+                event_description += f"<p><strong>Notes:</strong> {html.escape(appointment.description)}</p>"
             if video_link:
                 event_description += f"<p><strong>Video Link:</strong> <a href='{video_link}'>{video_link}</a></p>"
 
@@ -2337,9 +2415,11 @@ async def get_website_demo_available_slots(
             ).first()
             if link:
                 # Use the booking link's assigned users
+                link_org_id = getattr(link, 'organization_id', None)
                 user_ids = link.assigned_users if link.assigned_users else [link.user_id]
                 return await _generate_slots_for_users(
-                    db, user_ids, start_date, end_date, request.duration_minutes
+                    db, user_ids, start_date, end_date, request.duration_minutes,
+                    org_id=link_org_id
                 )
 
     # If there's an assigned user, get their availability
@@ -2369,7 +2449,8 @@ async def _generate_slots_for_users(
     user_ids: List[int],
     start_date: date,
     end_date: date,
-    duration_minutes: int = 30
+    duration_minutes: int = 30,
+    org_id: Optional[int] = None
 ) -> dict:
     """Generate available slots for a list of users."""
     SchedulerConfig = _models.get('SchedulerConfig') if _models else None
@@ -2385,9 +2466,12 @@ async def _generate_slots_for_users(
     min_notice_hours = 2  # Default minimum notice
 
     for user_id in user_ids:
-        config = db.query(SchedulerConfig).filter(
+        config_query = db.query(SchedulerConfig).filter(
             SchedulerConfig.user_id == user_id
-        ).first()
+        )
+        if org_id:
+            config_query = config_query.filter(SchedulerConfig.organization_id == org_id)
+        config = config_query.first()
 
         working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
         buffer_before = config.buffer_before_minutes if config else 5
@@ -2401,7 +2485,7 @@ async def _generate_slots_for_users(
         start_dt = datetime.combine(start_date, time.min)
         end_dt = datetime.combine(end_date, time.max)
 
-        blocked_times = db.query(BlockedTime).filter(
+        blocked_query = db.query(BlockedTime).filter(
             BlockedTime.is_active == True,
             or_(
                 BlockedTime.user_id == user_id,
@@ -2409,15 +2493,21 @@ async def _generate_slots_for_users(
             ),
             BlockedTime.start_datetime <= end_dt,
             BlockedTime.end_datetime >= start_dt
-        ).all()
+        )
+        if org_id:
+            blocked_query = blocked_query.filter(BlockedTime.organization_id == org_id)
+        blocked_times = blocked_query.all()
 
         # Get existing appointments
-        existing_appts = db.query(Appointment).filter(
+        appt_query = db.query(Appointment).filter(
             Appointment.assigned_user_id == user_id,
             Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
             Appointment.scheduled_start >= start_dt,
             Appointment.scheduled_start <= end_dt
-        ).all()
+        )
+        if org_id:
+            appt_query = appt_query.filter(Appointment.organization_id == org_id)
+        existing_appts = appt_query.all()
 
         # Generate slots for each day
         current_date = start_date
@@ -2501,7 +2591,7 @@ async def confirm_website_demo_booking(
     # Look up calendar assignment for website_demo purpose
     assignment_result = db.execute(text("""
         SELECT ca.id, ca.assigned_user_id, ca.calendly_url, ca.booking_link_id,
-               u.full_name as user_name, u.email as user_email
+               u.full_name as user_name, u.email as user_email, u.organization_id as user_org_id
         FROM calendar_assignments ca
         LEFT JOIN users u ON u.id = ca.assigned_user_id
         WHERE ca.purpose = 'website_demo' AND ca.is_active = true
@@ -2517,6 +2607,7 @@ async def confirm_website_demo_booking(
     assigned_user_id = assignment_result.assigned_user_id
     user_name = assignment_result.user_name or "Team Member"
     user_email = assignment_result.user_email
+    demo_org_id = getattr(assignment_result, 'user_org_id', None)
 
     try:
         # Parse the start time
@@ -2537,6 +2628,7 @@ async def confirm_website_demo_booking(
     appointment_id = f"demo-{uuid_lib.uuid4().hex[:8]}"
 
     new_appointment = Appointment(
+        organization_id=demo_org_id,
         appointment_id=appointment_id,
         assigned_user_id=assigned_user_id,
         scheduled_start=start_time,
@@ -2560,7 +2652,7 @@ async def confirm_website_demo_booking(
     db.refresh(new_appointment)
 
     # Format confirmation details
-    local_tz = pytz.timezone("America/Chicago")
+    local_tz = pytz.timezone(_get_user_timezone(db, assigned_user_id))
     local_start = start_time.astimezone(local_tz)
     date_str = local_start.strftime("%A, %B %d, %Y")
     time_str = local_start.strftime("%-I:%M %p %Z")

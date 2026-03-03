@@ -204,7 +204,7 @@
 
 .blm-empty i {
   font-size: 40px;
-  color: #94a3b8;
+  color: #64748b;
   margin-bottom: 12px;
 }
 
@@ -305,7 +305,7 @@
 
 .blm-stat i {
   font-size: 12px;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 /* Modal - reuse scheduler-modal from ATM */
@@ -383,7 +383,7 @@
 .blm-slug-prefix {
   padding: 9px 0 9px 12px;
   font-size: 14px;
-  color: #94a3b8;
+  color: #64748b;
   font-family: 'SF Mono', monospace;
   white-space: nowrap;
   background: #f8fafc;
@@ -409,7 +409,7 @@
 .blm-preview {
   display: block;
   font-size: 12px;
-  color: #94a3b8;
+  color: #64748b;
   margin-top: 4px;
   font-family: 'SF Mono', monospace;
 }
@@ -453,7 +453,7 @@
 .blm-type-duration {
   margin-left: auto;
   font-size: 12px;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 /* Checkbox */
@@ -472,7 +472,7 @@
 
 .blm-checkbox-hint {
   font-size: 12px;
-  color: #94a3b8;
+  color: #64748b;
   margin-left: 4px;
 }
 

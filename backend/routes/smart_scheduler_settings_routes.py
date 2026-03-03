@@ -59,6 +59,14 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return await _get_current_user(token=token, request=request, db=db)
 
 
+def _get_org_id(user) -> int:
+    """Get organization_id from user, raise 403 if missing."""
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
+
+
 # =============================================================================
 # ENUMS
 # =============================================================================
@@ -292,12 +300,12 @@ async def get_scheduler_settings(
                 sc.created_at,
                 sc.updated_at
             FROM scheduler_configs sc
-            WHERE sc.user_id = :user_id OR sc.team_id = :org_id
+            WHERE sc.organization_id = :org_id AND (sc.user_id = :user_id OR sc.team_id = :org_id)
             ORDER BY sc.user_id IS NOT NULL DESC
             LIMIT 1
         """), {
             "user_id": current_user.id,
-            "org_id": getattr(current_user, 'organization_id', None) or 1
+            "org_id": _get_org_id(current_user)
         })
 
         row = result.fetchone()
@@ -411,12 +419,12 @@ async def update_scheduler_settings(
     try:
         result = db.execute(text("""
             SELECT id FROM scheduler_configs
-            WHERE user_id = :user_id OR team_id = :org_id
+            WHERE organization_id = :org_id AND (user_id = :user_id OR team_id = :org_id)
             ORDER BY user_id IS NOT NULL DESC
             LIMIT 1
         """), {
             "user_id": current_user.id,
-            "org_id": getattr(current_user, 'organization_id', None) or 1
+            "org_id": _get_org_id(current_user)
         })
 
         row = result.fetchone()
@@ -428,7 +436,7 @@ async def update_scheduler_settings(
 
     # 4. Build update data
     update_fields = []
-    update_params = {"user_id": current_user.id, "org_id": getattr(current_user, 'organization_id', None) or 1}
+    update_params = {"user_id": current_user.id, "org_id": _get_org_id(current_user)}
 
     if settings.timezone:
         update_fields.append("timezone = :timezone")
@@ -516,7 +524,7 @@ async def update_scheduler_settings(
             # Create new config
             db.execute(text("""
                 INSERT INTO scheduler_configs (
-                    user_id, team_id, config_name, timezone, working_hours,
+                    organization_id, user_id, team_id, config_name, timezone, working_hours,
                     default_duration_minutes, buffer_before_minutes, buffer_after_minutes,
                     min_notice_hours, max_advance_days, max_meetings_per_day,
                     routing_strategy, ai_scheduling_enabled, ai_can_reschedule,
@@ -524,7 +532,7 @@ async def update_scheduler_settings(
                     default_meeting_mode, zoom_enabled, google_meet_enabled,
                     auto_create_meeting_link, is_active, created_at, updated_at
                 ) VALUES (
-                    :user_id, :org_id, 'Default Configuration',
+                    :org_id, :user_id, :org_id, 'Default Configuration',
                     :timezone, :working_hours,
                     :default_duration_minutes, :buffer_before_minutes, :buffer_after_minutes,
                     :min_notice_hours, :max_advance_days, :max_meetings_per_day,
@@ -535,7 +543,7 @@ async def update_scheduler_settings(
                 )
             """), {
                 "user_id": current_user.id,
-                "org_id": getattr(current_user, 'organization_id', None) or 1,
+                "org_id": _get_org_id(current_user),
                 "timezone": settings.timezone or "America/Chicago",
                 "working_hours": update_params.get("working_hours", {}),
                 "default_duration_minutes": update_params.get("default_duration_minutes", 30),
@@ -605,12 +613,12 @@ async def test_scheduler_configuration(
                 zoom_enabled,
                 google_meet_enabled
             FROM scheduler_configs
-            WHERE user_id = :user_id OR team_id = :org_id
+            WHERE organization_id = :org_id AND (user_id = :user_id OR team_id = :org_id)
             ORDER BY user_id IS NOT NULL DESC
             LIMIT 1
         """), {
             "user_id": current_user.id,
-            "org_id": getattr(current_user, 'organization_id', None) or 1
+            "org_id": _get_org_id(current_user)
         })
 
         row = result.fetchone()

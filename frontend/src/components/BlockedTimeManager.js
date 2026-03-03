@@ -218,13 +218,13 @@ const BlockedTimeManager = () => {
           <h2>Blocked Time</h2>
           <p className="btm-subtitle">Manage PTO, holidays, focus time, and other blocked periods.</p>
         </div>
-        <button className="btm-btn-primary" onClick={openCreate}>
+        <button className="btm-btn-primary" onClick={openCreate} aria-label="Create new blocked time period">
           <i className="fas fa-plus"></i> Block Time
         </button>
       </div>
 
       {error && (
-        <div className="btm-error">
+        <div className="btm-error" role="alert">
           <i className="fas fa-exclamation-circle"></i>
           {error}
           <button onClick={() => setError(null)}>&times;</button>
@@ -237,12 +237,14 @@ const BlockedTimeManager = () => {
           <button
             className={`btm-filter-btn ${viewFilter === 'upcoming' ? 'active' : ''}`}
             onClick={() => setViewFilter('upcoming')}
+            aria-label="Show upcoming blocked times"
           >
             Upcoming
           </button>
           <button
             className={`btm-filter-btn ${viewFilter === 'all' ? 'active' : ''}`}
             onClick={() => setViewFilter('all')}
+            aria-label="Show all blocked times"
           >
             All
           </button>
@@ -251,6 +253,7 @@ const BlockedTimeManager = () => {
           <button
             className={`btm-pill ${!typeFilter ? 'active' : ''}`}
             onClick={() => setTypeFilter(null)}
+            aria-label="Filter by All types"
           >
             All ({blocks.length})
           </button>
@@ -260,6 +263,7 @@ const BlockedTimeManager = () => {
               className={`btm-pill ${typeFilter === bt.value ? 'active' : ''}`}
               onClick={() => setTypeFilter(typeFilter === bt.value ? null : bt.value)}
               style={typeFilter === bt.value ? { borderColor: bt.color, color: bt.color } : {}}
+              aria-label={`Filter by ${bt.label}`}
             >
               <i className={`fas ${bt.icon}`}></i>
               {bt.label} ({typeCounts[bt.value] || 0})
@@ -314,6 +318,7 @@ const BlockedTimeManager = () => {
                           className="btm-btn-icon danger"
                           onClick={() => setDeleteConfirm(block.id)}
                           title="Delete"
+                          aria-label="Delete this blocked time"
                         >
                           <i className="fas fa-trash"></i>
                         </button>
@@ -346,15 +351,16 @@ const BlockedTimeManager = () => {
           <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
             <div className="scheduler-modal-header">
               <h3>Block Time</h3>
-              <button className="scheduler-modal-close" onClick={() => setShowModal(false)}>
+              <button className="scheduler-modal-close" onClick={() => setShowModal(false)} aria-label="Close">
                 <i className="fas fa-times"></i>
               </button>
             </div>
             <div className="scheduler-modal-body">
               {/* Title */}
               <div className="btm-form-group">
-                <label>Title <span className="required">*</span></label>
+                <label htmlFor="btm-title">Title <span className="required">*</span></label>
                 <input
+                  id="btm-title"
                   type="text"
                   value={form.title}
                   onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))}
@@ -364,8 +370,8 @@ const BlockedTimeManager = () => {
 
               {/* Block Type */}
               <div className="btm-form-group">
-                <label>Block Type</label>
-                <div className="btm-type-cards">
+                <label htmlFor="btm-type">Block Type</label>
+                <div className="btm-type-cards" id="btm-type" role="radiogroup" aria-label="Block Type">
                   {BLOCK_TYPES.map(bt => (
                     <label
                       key={bt.value}
@@ -402,16 +408,18 @@ const BlockedTimeManager = () => {
               {form.all_day ? (
                 <div className="btm-date-row">
                   <div className="btm-form-group">
-                    <label>Start Date</label>
+                    <label htmlFor="btm-start-date">Start Date</label>
                     <input
+                      id="btm-start-date"
                       type="date"
                       value={form.start_date}
                       onChange={e => setForm(prev => ({ ...prev, start_date: e.target.value }))}
                     />
                   </div>
                   <div className="btm-form-group">
-                    <label>End Date</label>
+                    <label htmlFor="btm-end-date">End Date</label>
                     <input
+                      id="btm-end-date"
                       type="date"
                       value={form.end_date}
                       onChange={e => setForm(prev => ({ ...prev, end_date: e.target.value }))}
@@ -421,16 +429,18 @@ const BlockedTimeManager = () => {
               ) : (
                 <div className="btm-date-row">
                   <div className="btm-form-group">
-                    <label>Start</label>
+                    <label htmlFor="btm-start-time">Start</label>
                     <input
+                      id="btm-start-time"
                       type="datetime-local"
                       value={form.start_time}
                       onChange={e => setForm(prev => ({ ...prev, start_time: e.target.value }))}
                     />
                   </div>
                   <div className="btm-form-group">
-                    <label>End</label>
+                    <label htmlFor="btm-end-time">End</label>
                     <input
+                      id="btm-end-time"
                       type="datetime-local"
                       value={form.end_time}
                       onChange={e => setForm(prev => ({ ...prev, end_time: e.target.value }))}
@@ -441,8 +451,9 @@ const BlockedTimeManager = () => {
 
               {/* Description */}
               <div className="btm-form-group">
-                <label>Description</label>
+                <label htmlFor="btm-reason">Description</label>
                 <textarea
+                  id="btm-reason"
                   value={form.description}
                   onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Optional notes..."
@@ -452,8 +463,9 @@ const BlockedTimeManager = () => {
 
               {/* Options */}
               <div className="btm-form-group">
-                <label className="btm-checkbox">
+                <label className="btm-checkbox" htmlFor="btm-all-users">
                   <input
+                    id="btm-all-users"
                     type="checkbox"
                     checked={form.applies_to_all}
                     onChange={e => setForm(prev => ({ ...prev, applies_to_all: e.target.checked }))}
@@ -463,8 +475,9 @@ const BlockedTimeManager = () => {
               </div>
 
               <div className="btm-form-group">
-                <label className="btm-checkbox">
+                <label className="btm-checkbox" htmlFor="btm-recurring">
                   <input
+                    id="btm-recurring"
                     type="checkbox"
                     checked={form.is_recurring}
                     onChange={e => setForm(prev => ({ ...prev, is_recurring: e.target.checked }))}
@@ -473,9 +486,11 @@ const BlockedTimeManager = () => {
                 </label>
                 {form.is_recurring && (
                   <select
+                    id="btm-recurrence-pattern"
                     className="btm-recurrence-select"
                     value={form.recurrence_pattern}
                     onChange={e => setForm(prev => ({ ...prev, recurrence_pattern: e.target.value }))}
+                    aria-label="Recurrence pattern"
                   >
                     {RECURRENCE_OPTIONS.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>

@@ -1196,6 +1196,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         except Exception as tbl_err:
             logger.warning(f"Scheduler table setup: {tbl_err}")
 
+        # Run tenant isolation migration (add organization_id, backfill, RLS policies)
+        try:
+            from migrations.add_scheduler_tenant_isolation import run_migration
+            run_migration()
+        except Exception as mig_err:
+            logger.warning(f"Scheduler tenant migration: {mig_err}")
+
         # Create smart scheduler models using our Base
         smart_scheduler_models = create_smart_scheduler_models(Base)
 

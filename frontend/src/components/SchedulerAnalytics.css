@@ -113,7 +113,7 @@
 
 .sa-empty i {
   font-size: 40px;
-  color: #94a3b8;
+  color: #64748b;
   margin-bottom: 12px;
 }
 
@@ -263,7 +263,7 @@
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: #94a3b8;
+  background: #64748b;
 }
 
 .sa-status-dot.completed {
@@ -283,7 +283,7 @@
 }
 
 .sa-status-dot.cancelled {
-  background: #94a3b8;
+  background: #64748b;
 }
 
 .sa-status-dot.no_show {

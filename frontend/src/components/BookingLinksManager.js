@@ -172,13 +172,13 @@ const BookingLinksManager = () => {
           <h2>Booking Links</h2>
           <p className="blm-subtitle">Create shareable booking pages for clients to schedule appointments.</p>
         </div>
-        <button className="blm-btn-primary" onClick={openCreate}>
+        <button className="blm-btn-primary" onClick={openCreate} aria-label="Create new booking link">
           <i className="fas fa-plus"></i> New Link
         </button>
       </div>
 
       {error && (
-        <div className="blm-error">
+        <div className="blm-error" role="alert">
           <i className="fas fa-exclamation-circle"></i>
           {error}
           <button onClick={() => setError(null)}>&times;</button>
@@ -213,6 +213,7 @@ const BookingLinksManager = () => {
                       className={`blm-btn-copy ${copiedId === link.id ? 'copied' : ''}`}
                       onClick={() => handleCopy(link)}
                       title="Copy booking URL"
+                      aria-label={copiedId === link.id ? "URL copied" : "Copy booking URL"}
                     >
                       <i className={`fas ${copiedId === link.id ? 'fa-check' : 'fa-copy'}`}></i>
                       {copiedId === link.id ? 'Copied!' : 'Copy'}
@@ -231,6 +232,7 @@ const BookingLinksManager = () => {
                         className="blm-btn-icon danger"
                         onClick={() => setDeleteConfirm(link.id)}
                         title="Delete"
+                        aria-label="Delete this booking link"
                       >
                         <i className="fas fa-trash"></i>
                       </button>
@@ -263,15 +265,16 @@ const BookingLinksManager = () => {
           <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
             <div className="scheduler-modal-header">
               <h3>New Booking Link</h3>
-              <button className="scheduler-modal-close" onClick={() => setShowModal(false)}>
+              <button className="scheduler-modal-close" onClick={() => setShowModal(false)} aria-label="Close">
                 <i className="fas fa-times"></i>
               </button>
             </div>
             <div className="scheduler-modal-body">
               {/* Link Name */}
               <div className="blm-form-group">
-                <label>Link Name <span className="required">*</span></label>
+                <label htmlFor="blm-name">Link Name <span className="required">*</span></label>
                 <input
+                  id="blm-name"
                   type="text"
                   value={form.link_name}
                   onChange={e => handleNameChange(e.target.value)}
@@ -281,10 +284,11 @@ const BookingLinksManager = () => {
 
               {/* Slug */}
               <div className="blm-form-group">
-                <label>URL Slug</label>
+                <label htmlFor="blm-slug">URL Slug</label>
                 <div className="blm-slug-input">
                   <span className="blm-slug-prefix">/book/</span>
                   <input
+                    id="blm-slug"
                     type="text"
                     value={form.slug}
                     onChange={e => setForm(prev => ({ ...prev, slug: e.target.value }))}
@@ -298,8 +302,9 @@ const BookingLinksManager = () => {
 
               {/* Description */}
               <div className="blm-form-group">
-                <label>Description</label>
+                <label htmlFor="blm-description">Description</label>
                 <textarea
+                  id="blm-description"
                   value={form.description}
                   onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Brief description of this booking page..."
@@ -333,8 +338,9 @@ const BookingLinksManager = () => {
 
               {/* Public */}
               <div className="blm-form-group">
-                <label className="blm-checkbox">
+                <label className="blm-checkbox" htmlFor="blm-public">
                   <input
+                    id="blm-public"
                     type="checkbox"
                     checked={form.is_public}
                     onChange={e => setForm(prev => ({ ...prev, is_public: e.target.checked }))}

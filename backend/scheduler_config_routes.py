@@ -60,6 +60,14 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return await _get_current_user_func(token=token, request=request, db=db)
 
 
+def _get_org_id(user) -> int:
+    """Get organization_id from user, raise 403 if missing."""
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
+
+
 # ============================================================================
 # SCHEDULER CONFIG ENDPOINTS
 # ============================================================================
@@ -71,11 +79,13 @@ async def get_scheduler_config(
 ):
     """Get the current user's scheduler configuration"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
 
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
@@ -124,12 +134,14 @@ async def create_scheduler_config(
 ):
     """Create scheduler configuration for the current user"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
 
     # Check if config already exists
     existing = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if existing:
@@ -145,6 +157,7 @@ async def create_scheduler_config(
 
     config = SchedulerConfig(
         user_id=user.id,
+        organization_id=org_id,
         config_name=config_data.config_name,
         description=config_data.description,
         timezone=config_data.timezone,
@@ -174,11 +187,13 @@ async def update_scheduler_config(
 ):
     """Update scheduler configuration"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
 
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
@@ -214,11 +229,13 @@ async def get_landing_page_settings(
 ):
     """Get landing page customization settings"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
 
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     # Return default settings if no config exists
@@ -262,17 +279,20 @@ async def update_landing_page_settings(
 ):
     """Update landing page customization settings"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
 
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
         # Auto-create config with landing page settings
         config = SchedulerConfig(
             user_id=user.id,
+            organization_id=org_id,
             config_name=f"{user.email}'s Schedule",
             working_hours=DEFAULT_WORKING_HOURS,
             landing_page_settings=settings_data.model_dump()
@@ -301,20 +321,25 @@ async def list_appointment_types(
 ):
     """List all appointment types"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
     AppointmentType = _models['AppointmentType']
 
     # Get user's config
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
         # Return default types
         return {"appointment_types": DEFAULT_APPOINTMENT_TYPES, "source": "defaults"}
 
-    query = db.query(AppointmentType).filter(AppointmentType.config_id == config.id)
+    query = db.query(AppointmentType).filter(
+        AppointmentType.config_id == config.id,
+        AppointmentType.organization_id == org_id
+    )
 
     if not include_inactive:
         query = query.filter(AppointmentType.is_active == True)
@@ -355,19 +380,22 @@ async def create_appointment_type(
 ):
     """Create a new appointment type"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
     AppointmentType = _models['AppointmentType']
 
     # Get or create config
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
         # Auto-create config
         config = SchedulerConfig(
             user_id=user.id,
+            organization_id=org_id,
             config_name=f"{user.email}'s Schedule",
             working_hours=DEFAULT_WORKING_HOURS
         )
@@ -378,6 +406,7 @@ async def create_appointment_type(
     # Check for duplicate type_key
     existing = db.query(AppointmentType).filter(
         AppointmentType.config_id == config.id,
+        AppointmentType.organization_id == org_id,
         AppointmentType.type_key == type_data.type_key
     ).first()
 
@@ -392,8 +421,18 @@ async def create_appointment_type(
         except ValueError:
             pass
 
+    # Scope slug uniqueness to org
+    if type_data.public_slug:
+        slug_exists = db.query(AppointmentType).filter(
+            AppointmentType.organization_id == org_id,
+            AppointmentType.public_slug == type_data.public_slug
+        ).first()
+        if slug_exists:
+            raise HTTPException(status_code=400, detail="An appointment type with this slug already exists")
+
     appt_type = AppointmentType(
         config_id=config.id,
+        organization_id=org_id,
         type_key=type_data.type_key,
         type_name=type_data.type_name,
         description=type_data.description,
@@ -426,13 +465,15 @@ async def update_appointment_type(
 ):
     """Update an appointment type"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     AppointmentType = _models['AppointmentType']
     SchedulerConfig = _models['SchedulerConfig']
 
-    # Verify ownership
+    # Verify ownership scoped to org
     appt_type = db.query(AppointmentType).join(SchedulerConfig).filter(
         AppointmentType.id == type_id,
+        AppointmentType.organization_id == org_id,
         SchedulerConfig.user_id == user.id
     ).first()
 
@@ -458,12 +499,14 @@ async def delete_appointment_type(
 ):
     """Delete (deactivate) an appointment type"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     AppointmentType = _models['AppointmentType']
     SchedulerConfig = _models['SchedulerConfig']
 
     appt_type = db.query(AppointmentType).join(SchedulerConfig).filter(
         AppointmentType.id == type_id,
+        AppointmentType.organization_id == org_id,
         SchedulerConfig.user_id == user.id
     ).first()
 
@@ -487,18 +530,21 @@ async def seed_default_appointment_types(
 ):
     """Seed default appointment types for the user"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     SchedulerConfig = _models['SchedulerConfig']
     AppointmentType = _models['AppointmentType']
 
     # Get or create config
     config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
     ).first()
 
     if not config:
         config = SchedulerConfig(
             user_id=user.id,
+            organization_id=org_id,
             config_name=f"{user.email}'s Schedule",
             working_hours=DEFAULT_WORKING_HOURS
         )
@@ -512,12 +558,14 @@ async def seed_default_appointment_types(
         # Check if already exists
         existing = db.query(AppointmentType).filter(
             AppointmentType.config_id == config.id,
+            AppointmentType.organization_id == org_id,
             AppointmentType.type_key == default_type["type_key"]
         ).first()
 
         if not existing:
             appt_type = AppointmentType(
                 config_id=config.id,
+                organization_id=org_id,
                 type_key=default_type["type_key"],
                 type_name=default_type["type_name"],
                 description=default_type["description"],
@@ -557,6 +605,7 @@ async def run_scheduler_migration(
     This is safe to call multiple times.
     """
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     try:
         # Get all model classes
@@ -612,14 +661,21 @@ async def run_scheduler_migration(
 
         logger.info(f"Scheduler migration complete. Created tables: {created}")
 
-        # Ensure demo booking link exists
-        demo_link = db.query(BookingLink).filter(BookingLink.slug == "demo").first()
+        # Ensure demo booking link exists (scoped to org)
+        demo_link = db.query(BookingLink).filter(
+            BookingLink.slug == "demo",
+            BookingLink.organization_id == org_id
+        ).first()
         if not demo_link:
             # Create default appointment types first
-            demo_type = db.query(AppointmentType).filter(AppointmentType.type_key == "demo_consultation").first()
+            demo_type = db.query(AppointmentType).filter(
+                AppointmentType.type_key == "demo_consultation",
+                AppointmentType.organization_id == org_id
+            ).first()
             if not demo_type:
                 demo_type = AppointmentType(
                     user_id=user.id,
+                    organization_id=org_id,
                     type_name="Demo Consultation",
                     type_key="demo_consultation",
                     description="Schedule a demo of our mortgage production management platform",
@@ -640,6 +696,7 @@ async def run_scheduler_migration(
 
             demo_link = BookingLink(
                 user_id=user.id,
+                organization_id=org_id,
                 slug="demo",
                 link_name="Schedule a Demo",
                 description="Book a personalized demo of Perennia AI - Intelligent Mortgage Production Manager",

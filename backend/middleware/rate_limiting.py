@@ -50,6 +50,7 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             'session_create': {'requests': 10, 'window': 3600},  # 10 sessions/hour
             'call_initiate': {'requests': 3, 'window': 3600},    # 3 calls/hour
             'analytics': {'requests': 100, 'window': 60},        # 100 req/min
+            'public_booking': {'requests': 20, 'window': 60},      # 20 req/min per IP
             'default': {'requests': 120, 'window': 60},          # 120 req/min default
             # API key rate limits (Enterprise Check 11.5)
             'api_key': {'requests': 1000, 'window': 60},         # 1000 req/min for API keys
@@ -185,6 +186,10 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         # API key requests get special higher limits
         if client_id.startswith('apikey:'):
             return 'api_key'
+
+        # Public booking endpoints (unauthenticated, tighter limits)
+        if '/public/book' in path_lower or '/public/available-slots' in path_lower or '/public/book-demo' in path_lower:
+            return 'public_booking'
 
         if '/messages' in path_lower and method == 'POST':
             return 'chat_message'

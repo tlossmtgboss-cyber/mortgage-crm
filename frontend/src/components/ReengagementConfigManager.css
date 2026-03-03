@@ -1,0 +1,436 @@
+/**
+ * Re-Engagement Config Manager Styles
+ */
+
+/* Panel Layout */
+.reengagement-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 80px; /* Space for sticky save bar */
+}
+
+.reengagement-section {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+/* Compliance Banner */
+.reengagement-compliance-banner {
+  display: flex;
+  gap: 14px;
+  padding: 16px 20px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 10px;
+}
+
+.reengagement-compliance-banner > i {
+  color: #d97706;
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.reengagement-compliance-banner strong {
+  display: block;
+  color: #92400e;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.reengagement-compliance-banner p {
+  margin: 0;
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+/* Info Card */
+.reengagement-info-card {
+  display: flex;
+  gap: 14px;
+  padding: 18px 20px;
+  background: #e6f5f5;
+  border: 1px solid #7cc5c5;
+  border-radius: 10px;
+}
+
+.reengagement-info-card > i {
+  color: #218D8D;
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.reengagement-info-card strong {
+  display: block;
+  color: #0d5252;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.reengagement-info-card p {
+  margin: 0;
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.reengagement-info-card em {
+  color: #176b6b;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* Enable/Disable Toggle */
+.reengagement-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.reengagement-toggle-label h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.reengagement-toggle-label p {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.reengagement-toggle {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 28px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.reengagement-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.reengagement-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #cbd5e1;
+  border-radius: 28px;
+  transition: background 0.2s;
+}
+
+.reengagement-toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.reengagement-toggle input:checked + .reengagement-toggle-slider {
+  background: #218D8D;
+}
+
+.reengagement-toggle input:checked + .reengagement-toggle-slider::before {
+  transform: translateX(24px);
+}
+
+/* Stage Chips */
+.stage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  min-height: 36px;
+}
+
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #e6f5f5;
+  color: #0d5252;
+  border: 1px solid #7cc5c5;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.stage-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: #176b6b;
+  cursor: pointer;
+  padding: 0;
+  font-size: 10px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.stage-chip-remove:hover {
+  background: #176b6b;
+  color: white;
+}
+
+.stage-chips-empty {
+  font-size: 13px;
+  color: #dc2626;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.stage-add-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stage-select {
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  background: white;
+  cursor: pointer;
+  min-width: 180px;
+}
+
+.stage-select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.stage-custom-add {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.stage-custom-add input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.stage-custom-add input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+/* Template Textarea */
+.template-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.template-textarea:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.template-textarea::placeholder {
+  color: #64748b;
+}
+
+.merge-fields-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.merge-fields-hint strong {
+  color: #475569;
+}
+
+/* Sticky Save Bar (unsaved changes) */
+.reengagement-save-bar-sticky {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  padding: 16px 24px;
+  z-index: 100;
+}
+
+.reengagement-save-bar-content {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.reengagement-save-bar-content > span {
+  font-weight: 500;
+  color: #475569;
+}
+
+.reengagement-save-bar-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* Form rows scoped to reengagement panel */
+.reengagement-panel .form-row {
+  display: block;
+  margin-bottom: 20px;
+}
+
+.reengagement-panel .form-row:last-child {
+  margin-bottom: 0;
+}
+
+.reengagement-panel .form-row > label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.reengagement-panel .form-row input[type="number"] {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.reengagement-panel .form-row input[type="number"]:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.reengagement-panel .section-description {
+  color: #64748b;
+  font-size: 14px;
+  margin: -12px 0 20px;
+}
+
+.reengagement-panel .settings-section h2 {
+  margin: 0 0 20px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Buttons (inherit from parent page if available, otherwise define locally) */
+.reengagement-panel .btn-primary,
+.reengagement-panel .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.reengagement-panel .btn-primary {
+  background: #218D8D;
+  color: white;
+}
+
+.reengagement-panel .btn-primary:hover:not(:disabled) {
+  background: #1a7a7a;
+}
+
+.reengagement-panel .btn-primary:disabled {
+  background: #7cc5c5;
+  cursor: not-allowed;
+}
+
+.reengagement-panel .btn-secondary {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.reengagement-panel .btn-secondary:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .reengagement-toggle-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .stage-add-row {
+    flex-direction: column;
+  }
+
+  .stage-select {
+    width: 100%;
+  }
+
+  .stage-custom-add {
+    width: 100%;
+  }
+
+  .reengagement-save-bar-content {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .reengagement-save-bar-actions {
+    width: 100%;
+  }
+
+  .reengagement-save-bar-actions button {
+    flex: 1;
+  }
+}

@@ -5,7 +5,7 @@ Extracted from smart_scheduler_routes.py
 
 from datetime import datetime, date
 from typing import List, Optional, Dict
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, validator
 
 
 class WorkingHoursDay(BaseModel):
@@ -193,7 +193,7 @@ class BookingLinkCreate(BaseModel):
 class AvailableSlotsRequest(BaseModel):
     appointment_type_id: Optional[int] = None
     meeting_type: Optional[str] = None
-    duration_minutes: int = 30
+    duration_minutes: int = Field(30, ge=15, le=480)
     start_date: date
     end_date: date
     timezone: str = "America/Chicago"
@@ -202,25 +202,25 @@ class AvailableSlotsRequest(BaseModel):
 class PublicBookingConfirmRequest(BaseModel):
     appointment_type_id: int
     start_time: datetime
-    duration_minutes: int = 30
-    attendee_name: str
+    duration_minutes: int = Field(30, ge=15, le=480)
+    attendee_name: str = Field(..., min_length=1, max_length=200)
     attendee_email: EmailStr
-    attendee_phone: Optional[str] = None
-    notes: Optional[str] = None
+    attendee_phone: Optional[str] = Field(None, max_length=20)
+    notes: Optional[str] = Field(None, max_length=2000)
     user_ids: List[int] = []  # Empty = any available user
     lead_id: Optional[int] = None
     loan_id: Optional[int] = None
     meeting_mode: Optional[str] = None  # video, phone, in_person
     team_member_id: Optional[int] = None
-    team_member_name: Optional[str] = None
+    team_member_name: Optional[str] = Field(None, max_length=200)
 
 
 class PublicAvailableSlotsRequest(BaseModel):
     """Request model for website demo scheduler"""
     start_date: str  # YYYY-MM-DD
     end_date: str    # YYYY-MM-DD
-    duration_minutes: int = 30
-    appointment_type: str = "platform-demo"
+    duration_minutes: int = Field(30, ge=15, le=480)
+    appointment_type: str = Field("platform-demo", max_length=100)
 
 
 class SlotRecommendation(BaseModel):
@@ -239,9 +239,9 @@ class CancelAppointmentRequest(BaseModel):
 class WebsiteDemoBookingRequest(BaseModel):
     """Request model for website demo booking confirmation"""
     start_time: str  # ISO datetime
-    duration_minutes: int = 30
-    attendee_name: str
+    duration_minutes: int = Field(30, ge=15, le=480)
+    attendee_name: str = Field(..., min_length=1, max_length=200)
     attendee_email: EmailStr
-    attendee_phone: Optional[str] = None
-    notes: Optional[str] = None
-    meeting_mode: str = "video"
+    attendee_phone: Optional[str] = Field(None, max_length=20)
+    notes: Optional[str] = Field(None, max_length=2000)
+    meeting_mode: str = Field("video", max_length=20)

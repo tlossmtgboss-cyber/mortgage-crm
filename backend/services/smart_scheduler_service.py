@@ -1,7 +1,15 @@
 """
-Smart Scheduler Service
+Smart Scheduler Service  [DEPRECATED — Mar 2026]
 
-AI-powered appointment scheduling with multiple assignment strategies:
+WARNING: This module has ZERO multi-tenant (organization_id) isolation.
+All queries return data across ALL organizations.
+
+DO NOT add new features here. Use the tenant-aware routes instead:
+  - scheduler_appointment_routes.py  (appointments, public booking)
+  - scheduler_config_routes.py       (config CRUD)
+  - routes/smart_scheduler_settings_routes.py  (settings UI)
+
+Legacy assignment strategies (kept for reference only):
 - Direct: Book directly with a specific LO
 - Round Robin: Distribute appointments evenly among loan officers
 - Priority: Assign based on LO priority/seniority
@@ -702,11 +710,18 @@ class SmartSchedulerService:
 
 
 def get_scheduler_service(db_session=None) -> SmartSchedulerService:
-    """Get a fresh SmartSchedulerService instance.
+    """DEPRECATED — this service has NO tenant isolation.
 
+    Use scheduler_appointment_routes.py or scheduler_config_routes.py instead.
     Always creates a new instance to avoid stale session bugs.
     If no db_session is provided, creates one from SessionLocal (for backward compat).
     """
+    import traceback
+    caller = traceback.extract_stack(limit=3)[0]
+    logger.warning(
+        f"DEPRECATED get_scheduler_service() called from {caller.filename}:{caller.lineno} "
+        f"— this service has NO tenant isolation. Migrate to scheduler_appointment_routes."
+    )
     if db_session is None:
         db_session = SessionLocal()
     return SmartSchedulerService(db_session)

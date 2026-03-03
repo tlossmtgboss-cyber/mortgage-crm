@@ -313,16 +313,16 @@ const AppointmentTypesManager = () => {
           <h2>Appointment Types</h2>
           <p className="atm-subtitle">Define the types of meetings available for booking.</p>
         </div>
-        <button className="atm-btn-primary" onClick={openCreate}>
+        <button className="atm-btn-primary" onClick={openCreate} aria-label="Create new appointment type">
           <i className="fas fa-plus"></i> New Type
         </button>
       </div>
 
       {error && (
-        <div className="atm-error">
+        <div className="atm-error" role="alert">
           <i className="fas fa-exclamation-circle"></i>
           {error}
-          <button onClick={() => setError(null)}>&times;</button>
+          <button onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
         </div>
       )}
 
@@ -352,10 +352,11 @@ const AppointmentTypesManager = () => {
                         type="checkbox"
                         checked={type.is_active}
                         onChange={() => handleToggleActive(type)}
+                        aria-label={`${type.is_active ? 'Deactivate' : 'Activate'} ${type.type_name}`}
                       />
                       <span className="atm-toggle-slider"></span>
                     </label>
-                    <button className="atm-btn-icon" onClick={() => openEdit(type)} title="Edit">
+                    <button className="atm-btn-icon" onClick={() => openEdit(type)} title="Edit" aria-label="Edit appointment type">
                       <i className="fas fa-pen"></i>
                     </button>
                     {deleteConfirm === type.id ? (
@@ -372,6 +373,7 @@ const AppointmentTypesManager = () => {
                         className="atm-btn-icon danger"
                         onClick={() => setDeleteConfirm(type.id)}
                         title="Delete"
+                        aria-label="Delete appointment type"
                       >
                         <i className="fas fa-trash"></i>
                       </button>
@@ -403,15 +405,16 @@ const AppointmentTypesManager = () => {
           <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
             <div className="scheduler-modal-header">
               <h3>{editingType ? 'Edit Appointment Type' : 'New Appointment Type'}</h3>
-              <button className="scheduler-modal-close" onClick={() => setShowModal(false)}>
+              <button className="scheduler-modal-close" onClick={() => setShowModal(false)} aria-label="Close">
                 <i className="fas fa-times"></i>
               </button>
             </div>
             <div className="scheduler-modal-body">
               {/* Type Name */}
               <div className="atm-form-group">
-                <label>Type Name <span className="required">*</span></label>
+                <label htmlFor="atm-name">Type Name <span className="required">*</span></label>
                 <input
+                  id="atm-name"
                   type="text"
                   value={form.type_name}
                   onChange={e => handleNameChange(e.target.value)}
@@ -421,8 +424,9 @@ const AppointmentTypesManager = () => {
 
               {/* Type Key */}
               <div className="atm-form-group">
-                <label>Type Key</label>
+                <label htmlFor="atm-slug">Type Key</label>
                 <input
+                  id="atm-slug"
                   type="text"
                   value={form.type_key}
                   onChange={e => setForm(prev => ({ ...prev, type_key: e.target.value }))}
@@ -434,8 +438,9 @@ const AppointmentTypesManager = () => {
 
               {/* Description */}
               <div className="atm-form-group">
-                <label>Description</label>
+                <label htmlFor="atm-description">Description</label>
                 <textarea
+                  id="atm-description"
                   value={form.description}
                   onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Brief description shown to clients..."
@@ -445,8 +450,9 @@ const AppointmentTypesManager = () => {
 
               {/* Duration */}
               <div className="atm-form-group">
-                <label>Duration</label>
+                <label htmlFor="atm-duration">Duration</label>
                 <select
+                  id="atm-duration"
                   value={form.duration_minutes}
                   onChange={e => setForm(prev => ({ ...prev, duration_minutes: parseInt(e.target.value) }))}
                 >
@@ -458,8 +464,8 @@ const AppointmentTypesManager = () => {
 
               {/* Allowed Modes */}
               <div className="atm-form-group">
-                <label>Allowed Modes</label>
-                <div className="atm-modes-grid">
+                <label id="atm-meeting-mode-label">Allowed Modes</label>
+                <div className="atm-modes-grid" role="group" aria-labelledby="atm-meeting-mode-label">
                   {MODE_OPTIONS.map(mode => (
                     <label
                       key={mode.value}
@@ -479,8 +485,8 @@ const AppointmentTypesManager = () => {
 
               {/* Color */}
               <div className="atm-form-group">
-                <label>Color</label>
-                <div className="atm-color-swatches">
+                <label id="atm-color-label">Color</label>
+                <div className="atm-color-swatches" role="group" aria-labelledby="atm-color-label">
                   {COLOR_PRESETS.map(color => (
                     <button
                       key={color}
@@ -488,6 +494,7 @@ const AppointmentTypesManager = () => {
                       className={`atm-swatch ${form.color === color ? 'selected' : ''}`}
                       style={{ backgroundColor: color }}
                       onClick={() => setForm(prev => ({ ...prev, color }))}
+                      aria-label={`Select color ${color}`}
                     />
                   ))}
                 </div>

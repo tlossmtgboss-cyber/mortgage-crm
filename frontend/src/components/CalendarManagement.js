@@ -160,9 +160,9 @@ const CalendarManagement = () => {
       </div>
 
       {message && (
-        <div className={`cm-message ${message.type}`}>
+        <div className={`cm-message ${message.type}`} role={message.type === 'error' ? 'alert' : 'status'}>
           {message.text}
-          <button onClick={() => setMessage(null)}>&times;</button>
+          <button onClick={() => setMessage(null)} aria-label="Dismiss message">&times;</button>
         </div>
       )}
 
@@ -227,8 +227,9 @@ const CalendarManagement = () => {
 
                   {/* User Selection (Required) */}
                   <div className="assignment-form">
-                    <label>Assign to Team Member: <span className="required-star">*</span></label>
+                    <label htmlFor={`calendar-assign-user-${purpose.purpose}`}>Assign to Team Member: <span className="required-star">*</span></label>
                     <select
+                      id={`calendar-assign-user-${purpose.purpose}`}
                       value={assignment?.assigned_user_id || ''}
                       onChange={(e) => handleAssignUser(purpose.purpose, e.target.value ? parseInt(e.target.value) : null)}
                       disabled={saving}
@@ -245,8 +246,9 @@ const CalendarManagement = () => {
                   {/* Booking Link Selection */}
                   {bookingLinks.length > 0 && (
                     <div className="assignment-form">
-                      <label>Scheduling Method - Booking Link:</label>
+                      <label htmlFor={`calendar-assign-booking-${purpose.purpose}`}>Scheduling Method - Booking Link:</label>
                       <select
+                        id={`calendar-assign-booking-${purpose.purpose}`}
                         value={assignment?.booking_link_id || ''}
                         onChange={(e) => handleAssignBookingLink(purpose.purpose, e.target.value ? parseInt(e.target.value) : null)}
                         disabled={saving}
@@ -269,10 +271,11 @@ const CalendarManagement = () => {
                   {/* Custom URL Option (alternative to booking link) */}
                   {!assignment?.booking_link_id && (
                     <div className="custom-url-section">
-                      <label>Or use a custom scheduling URL:</label>
+                      <label htmlFor={`calendar-custom-url-${purpose.purpose}`}>Or use a custom scheduling URL:</label>
                       {isEditing ? (
                         <div className="url-edit-form">
                           <input
+                            id={`calendar-custom-url-${purpose.purpose}`}
                             type="url"
                             placeholder="https://your-scheduling-link.com"
                             value={editForm.calendly_url}

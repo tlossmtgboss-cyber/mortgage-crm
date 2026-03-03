@@ -111,9 +111,13 @@ def create_smart_scheduler_models(Base):
         Defines availability windows, buffer times, and scheduling preferences.
         """
         __tablename__ = "scheduler_configs"
-        __table_args__ = {'extend_existing': True}
+        __table_args__ = (
+            Index('ix_scheduler_configs_org_id', 'organization_id'),
+            {'extend_existing': True}
+        )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null = team-level config
         team_id = Column(Integer, nullable=True)  # For team-level settings
 
@@ -192,10 +196,12 @@ def create_smart_scheduler_models(Base):
         __tablename__ = "availability_slots"
         __table_args__ = (
             Index('ix_availability_date_user', 'specific_date', 'user_id'),
+            Index('ix_availability_slots_org_id', 'organization_id'),
             {'extend_existing': True}
         )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
         config_id = Column(Integer, ForeignKey("scheduler_configs.id"), nullable=False)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
@@ -236,9 +242,14 @@ def create_smart_scheduler_models(Base):
         Defines what kinds of appointments can be booked.
         """
         __tablename__ = "appointment_types"
-        __table_args__ = {'extend_existing': True}
+        __table_args__ = (
+            UniqueConstraint('organization_id', 'public_slug', name='uq_appt_type_org_slug'),
+            Index('ix_appointment_types_org_id', 'organization_id'),
+            {'extend_existing': True}
+        )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
         config_id = Column(Integer, ForeignKey("scheduler_configs.id"), nullable=False)
 
         # Type identification
@@ -284,7 +295,7 @@ def create_smart_scheduler_models(Base):
 
         # Public booking
         is_public = Column(Boolean, default=True)  # Can be booked via public link
-        public_slug = Column(String(100), unique=True, nullable=True)
+        public_slug = Column(String(100), nullable=True)  # Per-org unique via __table_args__
 
         # Status
         is_active = Column(Boolean, default=True)
@@ -306,10 +317,12 @@ def create_smart_scheduler_models(Base):
             Index('ix_appointment_datetime', 'scheduled_start', 'scheduled_end'),
             Index('ix_appointment_user', 'assigned_user_id', 'scheduled_start'),
             Index('ix_appointment_status', 'status'),
+            Index('ix_appointment_org_user_start', 'organization_id', 'assigned_user_id', 'scheduled_start'),
             {'extend_existing': True}
         )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
 
         # Reference IDs
         appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
@@ -400,9 +413,13 @@ def create_smart_scheduler_models(Base):
         Determines which team member gets which appointment.
         """
         __tablename__ = "scheduler_routing_rules"
-        __table_args__ = {'extend_existing': True}
+        __table_args__ = (
+            Index('ix_routing_rules_org_id', 'organization_id'),
+            {'extend_existing': True}
+        )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
 
         # Rule identification
         rule_name = Column(String(100), nullable=False)
@@ -455,10 +472,12 @@ def create_smart_scheduler_models(Base):
         __tablename__ = "scheduler_blocked_times"
         __table_args__ = (
             Index('ix_blocked_time_range', 'start_datetime', 'end_datetime'),
+            Index('ix_blocked_times_org_id', 'organization_id'),
             {'extend_existing': True}
         )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null = company-wide
 
         # Block details
@@ -497,13 +516,18 @@ def create_smart_scheduler_models(Base):
         Like Calendly links but native to the platform.
         """
         __tablename__ = "scheduler_booking_links"
-        __table_args__ = {'extend_existing': True}
+        __table_args__ = (
+            UniqueConstraint('organization_id', 'slug', name='uq_booking_link_org_slug'),
+            Index('ix_booking_links_org_id', 'organization_id'),
+            {'extend_existing': True}
+        )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Owner
 
         # Link identification
-        slug = Column(String(100), unique=True, nullable=False)  # URL slug
+        slug = Column(String(100), nullable=False)  # URL slug — per-org unique via __table_args__
         link_name = Column(String(100), nullable=False)
         description = Column(Text)
 
@@ -562,9 +586,13 @@ def create_smart_scheduler_models(Base):
         Multi-channel reminder tracking for appointments.
         """
         __tablename__ = "scheduler_reminders"
-        __table_args__ = {'extend_existing': True}
+        __table_args__ = (
+            Index('ix_reminders_org_id', 'organization_id'),
+            {'extend_existing': True}
+        )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
         appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id"), nullable=False)
 
         # Reminder settings

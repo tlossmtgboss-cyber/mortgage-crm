@@ -15,6 +15,7 @@ Provides:
 
 import os
 import base64
+import html
 import logging
 import uuid as uuid_lib
 from datetime import datetime, timedelta
@@ -94,7 +95,16 @@ def send_appointment_confirmation_email(
     try:
         logger.info(f"Attempting to send appointment email to {attendee_email}")
 
-        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+        # Escape all user-controlled data for HTML context
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_duration = html.escape(str(duration) if duration else '')
+        safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
+        safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+
+        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
         # Add video call button if video link is provided
         video_button_section = ""
@@ -134,15 +144,15 @@ def send_appointment_confirmation_email(
                     </div>
 
                     <div style="padding: 30px;">
-                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">Your appointment has been scheduled. Here are the details:</p>
 
                         <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
-                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {safe_duration}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                             {team_member_section}
                         </div>
                         {video_button_section}
@@ -297,7 +307,18 @@ def send_appointment_update_email(
     try:
         logger.info(f"Attempting to send appointment update email to {attendee_email}")
 
-        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+        # Escape all user-controlled data for HTML context
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_duration = html.escape(str(duration) if duration else '')
+        safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
+        safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+        safe_old_date = html.escape(old_date or '') if old_date else None
+        safe_old_time = html.escape(old_time or '') if old_time else None
+
+        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
         # Show what changed if we have old date/time
         change_section = ""
@@ -306,8 +327,8 @@ def send_appointment_update_email(
                         <div style="background: #fef3c7; border-radius: 8px; padding: 16px; margin: 20px 0;">
                             <p style="margin: 0 0 8px 0; color: #92400e; font-weight: bold;">Appointment Rescheduled</p>
                             <p style="margin: 0; color: #92400e; font-size: 14px;">
-                                <s>Previous: {old_date} at {old_time}</s><br>
-                                <strong>New: {appointment_date} at {appointment_time}</strong>
+                                <s>Previous: {safe_old_date} at {safe_old_time}</s><br>
+                                <strong>New: {safe_appointment_date} at {safe_appointment_time}</strong>
                             </p>
                         </div>
             """
@@ -345,15 +366,15 @@ def send_appointment_update_email(
                     </div>
 
                     <div style="padding: 30px;">
-                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">Your appointment has been updated. Here are the new details:</p>
                         {change_section}
                         <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
-                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {safe_duration}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                             {team_member_section}
                         </div>
                         {video_button_section}
@@ -488,6 +509,17 @@ def send_team_member_notification_email(
     try:
         logger.info(f"Sending team member notification to {team_member_email}")
 
+        # Escape all user-controlled data for HTML context
+        safe_team_member_name = html.escape(team_member_name or '')
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_attendee_email = html.escape(attendee_email or '')
+        safe_attendee_phone = html.escape(attendee_phone or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_duration = html.escape(str(duration) if duration else '')
+        safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
+
         # Add video call button if video link is provided
         video_button_section = ""
         if video_link:
@@ -526,18 +558,18 @@ def send_team_member_notification_email(
                     </div>
 
                     <div style="padding: 30px;">
-                        <p style="font-size: 16px; color: #374151;">Hi {team_member_name},</p>
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_team_member_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">A new appointment has been scheduled for you:</p>
 
                         <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
-                            <p style="margin: 8px 0; color: #111827;"><strong>Client:</strong> {attendee_name}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Email:</strong> <a href="mailto:{attendee_email}" style="color: #217F8D;">{attendee_email}</a></p>
-                            {f'<p style="margin: 8px 0; color: #111827;"><strong>Phone:</strong> <a href="tel:{attendee_phone}" style="color: #217F8D;">{attendee_phone}</a></p>' if attendee_phone else ''}
-                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Client:</strong> {safe_attendee_name}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Email:</strong> <a href="mailto:{safe_attendee_email}" style="color: #217F8D;">{safe_attendee_email}</a></p>
+                            {f'<p style="margin: 8px 0; color: #111827;"><strong>Phone:</strong> <a href="tel:{safe_attendee_phone}" style="color: #217F8D;">{safe_attendee_phone}</a></p>' if attendee_phone else ''}
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {safe_duration}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                         </div>
                         {video_button_section}
                         {calendar_section}
@@ -634,8 +666,17 @@ def send_appointment_cancellation_email(
     try:
         logger.info(f"Sending cancellation email to {attendee_email}")
 
-        reason_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Reason:</strong> {cancellation_reason}</p>" if cancellation_reason else ""
-        team_member_section = f" with {team_member_name}" if team_member_name else ""
+        # Escape all user-controlled data for HTML context
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+        safe_cancellation_reason = html.escape(cancellation_reason or '') if cancellation_reason else None
+
+        reason_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Reason:</strong> {safe_cancellation_reason}</p>" if safe_cancellation_reason else ""
+        team_member_section = f" with {safe_team_member_name}" if safe_team_member_name else ""
+        text_team_member_section = f" with {team_member_name}" if team_member_name else ""
 
         html_content = f"""
         <!DOCTYPE html>
@@ -652,15 +693,15 @@ def send_appointment_cancellation_email(
                     </div>
 
                     <div style="padding: 30px;">
-                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">Your appointment{team_member_section} has been cancelled.</p>
 
                         <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin: 20px 0;">
                             <p style="margin: 8px 0; color: #991b1b;"><strong>Cancelled Appointment:</strong></p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Title:</strong> {appointment_title}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Title:</strong> {safe_appointment_title}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
                             {reason_section}
                         </div>
 
@@ -687,7 +728,7 @@ Appointment Cancelled
 
 Hi {attendee_name},
 
-Your appointment{team_member_section} has been cancelled.
+Your appointment{text_team_member_section} has been cancelled.
 
 Cancelled Appointment:
 Title: {appointment_title}
@@ -735,8 +776,17 @@ def send_team_member_cancellation_email(
     try:
         logger.info(f"Sending cancellation notification to team member {team_member_email}")
 
-        reason_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Reason:</strong> {cancellation_reason}</p>" if cancellation_reason else ""
-        cancelled_by_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Cancelled by:</strong> {cancelled_by}</p>" if cancelled_by else ""
+        # Escape all user-controlled data for HTML context
+        safe_team_member_name = html.escape(team_member_name or '')
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_cancellation_reason = html.escape(cancellation_reason or '') if cancellation_reason else None
+        safe_cancelled_by = html.escape(cancelled_by or '') if cancelled_by else None
+
+        reason_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Reason:</strong> {safe_cancellation_reason}</p>" if safe_cancellation_reason else ""
+        cancelled_by_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Cancelled by:</strong> {safe_cancelled_by}</p>" if safe_cancelled_by else ""
 
         html_content = f"""
         <!DOCTYPE html>
@@ -753,16 +803,16 @@ def send_team_member_cancellation_email(
                     </div>
 
                     <div style="padding: 30px;">
-                        <p style="font-size: 16px; color: #374151;">Hi {team_member_name},</p>
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_team_member_name},</p>
 
-                        <p style="font-size: 16px; color: #374151;">An appointment with <strong>{attendee_name}</strong> has been cancelled.</p>
+                        <p style="font-size: 16px; color: #374151;">An appointment with <strong>{safe_attendee_name}</strong> has been cancelled.</p>
 
                         <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin: 20px 0;">
                             <p style="margin: 8px 0; color: #991b1b;"><strong>Cancelled Appointment:</strong></p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Client:</strong> {attendee_name}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Title:</strong> {appointment_title}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Client:</strong> {safe_attendee_name}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Title:</strong> {safe_appointment_title}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
                             {reason_section}
                             {cancelled_by_section}
                         </div>
@@ -845,7 +895,16 @@ def send_appointment_reminder_email(
             heading = "Your Appointment Starts Soon!"
             message = "Your appointment is coming up shortly. Please be ready."
 
-        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {team_member_name}</p>" if team_member_name else ""
+        # Escape all user-controlled data for HTML context
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_duration_minutes = html.escape(str(duration_minutes) if duration_minutes else '')
+        safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
+        safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+
+        team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
         video_button_section = ""
         if video_link:
@@ -871,13 +930,13 @@ def send_appointment_reminder_email(
                         <h1 style="color: white; margin: 0; font-size: 24px;">{heading}</h1>
                     </div>
                     <div style="padding: 30px;">
-                        <p style="font-size: 16px; color: #374151;">Hi {attendee_name},</p>
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
                         <p style="font-size: 16px; color: #374151;">{message}</p>
                         <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
-                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {appointment_date}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {appointment_time}</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {duration_minutes} minutes</p>
-                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {meeting_mode}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {safe_duration_minutes} minutes</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                             {team_member_section}
                         </div>
                         {video_button_section}
