@@ -481,7 +481,14 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error for {form_data.username}: {type(e).__name__}: {str(e)}")
+        import traceback
+        tb_str = traceback.format_exc()
+        logger.error(f"Login error for {form_data.username}: {type(e).__name__}: {str(e)}\n{tb_str}")
+        try:
+            from utils.error_handling import _record_error
+            _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login service temporarily unavailable. Please try again.",
