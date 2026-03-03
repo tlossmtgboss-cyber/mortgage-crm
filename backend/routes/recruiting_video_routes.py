@@ -444,22 +444,23 @@ async def mark_video_viewed(
 @router.get("/portal/{slug}/videos")
 async def get_portal_videos(
     slug: str,
-    token: Optional[str] = Query(default=None),
+    token: str = Query(..., description="Portal token for candidate verification"),
     db=Depends(get_db)
 ):
     """
     Get videos for a candidate portal (public endpoint).
 
-    This is accessed from the RecruitPortal page.
+    This is accessed from the RecruitPortal page. Requires a valid portal token.
     """
     try:
-        # Get workspace and candidate
+        # Get workspace and candidate, verifying portal token
         result = db.execute(text("""
             SELECT w.id, w.candidate_id, c.first_name, c.last_name
             FROM recruit_portal_workspaces w
             JOIN mm_candidates c ON c.id = w.candidate_id
             WHERE w.slug = :slug AND w.is_active = true
-        """), {"slug": slug})
+              AND c.portal_token = :token AND c.is_active = true
+        """), {"slug": slug, "token": token})
 
         workspace = result.fetchone()
         if not workspace:

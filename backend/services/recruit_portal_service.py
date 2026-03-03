@@ -11,6 +11,7 @@ Handles:
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
+import html
 import secrets
 import re
 from sqlalchemy import text
@@ -506,7 +507,7 @@ Candidate's current status: {candidate.status}
                         <p style="margin: 0 0 10px 0;"><strong>Type:</strong> {friendly_type}</p>
                         <p style="margin: 0;"><strong>With:</strong> {portal_info.recruiter_name or 'Your Recruiter'}</p>
                     </div>
-                    {f'<p><strong>Notes:</strong> {notes}</p>' if notes else ''}
+                    {f'<p><strong>Notes:</strong> {html.escape(notes)}</p>' if notes else ''}
                     <p>We're looking forward to speaking with you!</p>
                     <p>Best regards,<br>{portal_info.recruiter_name or 'The Recruiting Team'}</p>
                 </div>

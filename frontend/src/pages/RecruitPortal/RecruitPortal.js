@@ -154,7 +154,8 @@ const RecruitPortal = () => {
 
   const fetchVideos = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/recruiting/video/portal/${slug}/videos`);
+      if (!token) return;
+      const response = await fetch(`${API_URL}/api/v1/recruiting/video/portal/${slug}/videos?token=${encodeURIComponent(token)}`);
       if (response.ok) {
         const data = await response.json();
         setVideos(data.videos || []);
@@ -162,7 +163,7 @@ const RecruitPortal = () => {
     } catch (err) {
       console.error('Error fetching videos:', err);
     }
-  }, [slug]);
+  }, [slug, token]);
 
   const markVideoViewed = async (videoId) => {
     try {
