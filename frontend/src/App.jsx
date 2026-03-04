@@ -89,6 +89,7 @@ const TeamMemberProfile = lazyRetry(() => import('./pages/TeamMemberProfile'));
 const MyProfile = lazyRetry(() => import('./pages/MyProfile'));
 const MyPermissions = lazyRetry(() => import('./pages/MyPermissions'));
 const ComplianceDashboard = lazyRetry(() => import('./pages/ComplianceDashboard'));
+const OpsManagerDashboard = lazyRetry(() => import('./pages/OpsManagerDashboard'));
 const AdminSettings = lazyRetry(() => import('./pages/AdminSettings'));
 const PermissionsPage = lazyRetry(() => import('./pages/PermissionsPage'));
 const AdminCustomDomains = lazyRetry(() => import('./pages/AdminCustomDomains'));
@@ -438,8 +439,13 @@ function App() {
         // Process tasks
         if (tasksResponse && tasksResponse.ok) {
           const tasks = await tasksResponse.json();
-          const outstandingTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'done').length;
-          const urgentTasks = tasks.filter(t => t.priority === 'high' && t.status !== 'completed' && t.status !== 'done').length;
+          // Check both 'type' and 'status' fields — backend returns 'type' (TaskType enum)
+          const isTaskCompleted = (t) => {
+            const s = (t.status || t.type || '').toLowerCase();
+            return s === 'completed' || s === 'done';
+          };
+          const outstandingTasks = tasks.filter(t => !isTaskCompleted(t)).length;
+          const urgentTasks = tasks.filter(t => t.priority === 'high' && !isTaskCompleted(t)).length;
           updates.tasks = outstandingTasks;
           updates.urgentTasks = urgentTasks;
         }
@@ -3710,6 +3716,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ComplianceDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/ops-manager"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><OpsManagerDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

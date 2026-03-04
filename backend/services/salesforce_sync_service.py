@@ -621,7 +621,14 @@ class SalesforceSyncService:
             loan_data["loan_number"] = f"SF-{loan_data['salesforce_id'][-8:]}"
 
         if "stage" not in loan_data:
-            loan_data["stage"] = "APPLICATION"
+            # Don't silently default to APPLICATION — let upsert_loan() decide:
+            # For UPDATES: preserve the existing stage (don't overwrite)
+            # For CREATES: APPLICATION is a reasonable default
+            loan_data["_stage_unmapped"] = True
+            logger.warning(
+                f"No stage mapped from Salesforce record "
+                f"(raw stage: {loan_data.get('salesforce_raw_stage', 'unknown')})"
+            )
 
         return loan_data
 
@@ -645,6 +652,18 @@ class SalesforceSyncService:
             """), {"sf_id": salesforce_id}).fetchone()
 
             old_data = {}
+
+            # Handle unmapped stage sentinel: for UPDATES, preserve existing stage;
+            # for CREATES, default to APPLICATION
+            stage_unmapped = loan_data.pop("_stage_unmapped", False)
+            if stage_unmapped:
+                if existing:
+                    # UPDATE: don't overwrite the existing stage with a guess
+                    loan_data.pop("stage", None)
+                else:
+                    # CREATE: APPLICATION is a reasonable default for new records
+                    loan_data["stage"] = "APPLICATION"
+
             if existing:
                 # Capture old data for SLA trigger comparison
                 old_data = {
@@ -656,6 +675,33 @@ class SalesforceSyncService:
                     "stage": existing[6],
                     "funded_date": existing[7],
                 }
+
+                # Pre-write stage validation: check transition BEFORE writing
+                new_stage = loan_data.get("stage")
+                old_stage_value = old_data.get("stage")
+                if new_stage and old_stage_value and new_stage != old_stage_value:
+                    try:
+                        from services.loan_reconciliation_service import LoanReconciliationService
+                        pre_recon = LoanReconciliationService(self.db)
+                        pre_check = pre_recon.reconcile(existing[0], old_data, loan_data)
+
+                        if pre_check.action.value == 'FLAG_FOR_REVIEW':
+                            logger.warning(
+                                f"Pre-write validation blocked stage change "
+                                f"{old_stage_value} -> {new_stage} on loan {existing[0]}: "
+                                f"flagged for review (raw SF stage: {loan_data.get('salesforce_raw_stage')})"
+                            )
+                            loan_data.pop("stage", None)
+                        elif pre_check.is_backward_movement:
+                            logger.warning(
+                                f"Pre-write validation blocked backward stage move "
+                                f"{old_stage_value} -> {new_stage} on loan {existing[0]}"
+                            )
+                            loan_data.pop("stage", None)
+                    except ImportError:
+                        pass  # Reconciliation service not available, proceed as-is
+                    except Exception as e:
+                        logger.warning(f"Pre-write stage validation error for loan {existing[0]}: {e}")
 
                 # Update existing loan
                 loan_id = existing[0]
@@ -865,21 +911,14 @@ class SalesforceSyncService:
                 + (f", warnings={recon_result.warnings}" if recon_result.warnings else "")
             )
 
-            # Disposition: revert stage if a disposition task was created (LO must apply)
+            # Note: Stage revert is no longer needed here — pre-write validation
+            # in upsert_loan() now strips invalid stage changes BEFORE they reach the DB.
+            # Disposition tasks are still created for auditing/LO review.
             if recon_result.should_create_disposition and recon_result.disposition_task_id:
-                try:
-                    old_stage_value = old_data.get("stage")
-                    if old_stage_value:
-                        self.db.execute(text(
-                            "UPDATE loans SET stage = :old_stage WHERE id = :loan_id"
-                        ), {"old_stage": old_stage_value, "loan_id": loan_id})
-                        self.db.commit()
-                        logger.info(
-                            f"Disposition task {recon_result.disposition_task_id} created for "
-                            f"loan {loan_id}, stage reverted to {old_stage_value} (change deferred)"
-                        )
-                except Exception as e:
-                    logger.warning(f"Could not revert stage for disposition on loan {loan_id}: {e}")
+                logger.info(
+                    f"Disposition task {recon_result.disposition_task_id} created for "
+                    f"loan {loan_id} (stage validated pre-write)"
+                )
 
             # Promote to MUM only when reconciliation says so
             if recon_result.should_promote_mum:

@@ -30,8 +30,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
-import jwt
-from jwt import PyJWTError as JWTError
+from jose import jwt, JWTError, ExpiredSignatureError
 
 from db import get_db
 
@@ -39,13 +38,38 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Authentication"])
 
-# In-memory rate limiter for auth endpoints
-_auth_rate_store: dict = defaultdict(list)
+# Rate limiter constants
 _AUTH_RATE_WINDOW = 60  # seconds
 _AUTH_RATE_MAX_LOGIN = 5  # max login attempts per window per IP
 _AUTH_RATE_MAX_RESET = 3  # max password reset requests per window per IP
 _AUTH_RATE_MAX_REGISTER = 3  # max registration attempts per window per IP
-_AUTH_RATE_MAX_KEYS = 10000  # max tracked IPs before forced cleanup
+
+# Redis-backed rate limiter (falls back to in-memory if Redis unavailable)
+_redis_client = None
+_redis_initialized = False
+_auth_rate_store: dict = defaultdict(list)  # In-memory fallback
+_AUTH_RATE_MAX_KEYS = 10000
+
+
+def _get_redis_client():
+    """Lazy-init Redis client for auth rate limiting."""
+    global _redis_client, _redis_initialized
+    if _redis_initialized:
+        return _redis_client
+    _redis_initialized = True
+    try:
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
+            import redis
+            _redis_client = redis.Redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+            _redis_client.ping()
+            logger.info("Auth rate limiter: using Redis")
+        else:
+            logger.info("Auth rate limiter: no REDIS_URL, using in-memory fallback")
+    except Exception as e:
+        logger.warning(f"Auth rate limiter: Redis unavailable ({e}), using in-memory fallback")
+        _redis_client = None
+    return _redis_client
 
 
 def _get_real_client_ip(request: Request) -> str:
@@ -60,7 +84,27 @@ def _get_real_client_ip(request: Request) -> str:
 
 
 def _check_auth_rate_limit(client_ip: str, max_requests: int) -> bool:
-    """Check if client IP is within auth rate limit. Returns True if allowed."""
+    """Check if client IP is within auth rate limit. Returns True if allowed.
+
+    Uses Redis if available (shared across workers/restarts), falls back to in-memory.
+    """
+    r = _get_redis_client()
+    if r is not None:
+        try:
+            key = f"auth_rl:{client_ip}"
+            current = r.get(key)
+            if current is None:
+                r.setex(key, _AUTH_RATE_WINDOW, 1)
+                return True
+            current = int(current)
+            if current >= max_requests:
+                return False
+            r.incr(key)
+            return True
+        except Exception as e:
+            logger.warning(f"Redis rate limit error, falling back to in-memory: {e}")
+
+    # In-memory fallback
     now = time.time()
     key = f"auth:{client_ip}"
     _auth_rate_store[key] = [t for t in _auth_rate_store[key] if now - t < _AUTH_RATE_WINDOW]
@@ -199,9 +243,9 @@ def verify_password_reset_token(token: str) -> Optional[dict]:
         if not email:
             return None
         return {"email": email, "iat": iat}
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         return None
-    except jwt.JWTError:
+    except JWTError:
         return None
 
 
@@ -406,18 +450,6 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             db.rollback()
             logger.debug(f"Failed to update last_activity_at in login: {e}")
 
-        # Create tokens with user context for proper security
-        tenant_id = str(user.organization_id) if hasattr(user, 'organization_id') and user.organization_id else None
-        access_token = auth_funcs['create_access_token'](
-            data={"sub": user.email},
-            user_id=user.id,
-            tenant_id=tenant_id
-        )
-        refresh_token = auth_funcs['create_refresh_token'](
-            data={"sub": user.email},
-            user_id=user.id
-        )
-
         # Check if MFA is enabled (Enterprise Security Check 4.6)
         user_mfa_enabled = getattr(user, 'mfa_enabled', False) or False
 
@@ -460,6 +492,52 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
             attempted_email=user.email,
             success=True, event_type="login",
             ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
+        )
+
+        # Create tokens with user context for proper security
+        tenant_id = str(user.organization_id) if hasattr(user, 'organization_id') and user.organization_id else None
+
+        if mfa_required and user_mfa_enabled:
+            # User has MFA set up and must verify — issue only a short-lived
+            # MFA-scoped token (5 min). Do NOT return full access_token or refresh_token.
+            mfa_token_data = {
+                "sub": user.email,
+                "scope": "mfa_verify",
+                "user_id": user.id,
+            }
+            mfa_token_expires = timedelta(minutes=5)
+            expire = datetime.now(timezone.utc) + mfa_token_expires
+            mfa_token_data["exp"] = expire
+            if tenant_id:
+                mfa_token_data["tenant_id"] = tenant_id
+            mfa_token = jwt.encode(mfa_token_data, config['SECRET_KEY'], algorithm=config['ALGORITHM'])
+
+            return {
+                "access_token": mfa_token,  # Short-lived, MFA-scoped only
+                "token_type": "bearer",
+                "expires_in": 300,  # 5 minutes
+                "mfa_required": True,
+                "mfa_setup_required": False,
+                "mfa_token": True,  # Signal to frontend this is NOT a full token
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "role": user.role,
+                    "permission_role": user.permission_role,
+                    "onboarding_completed": user.onboarding_completed
+                }
+            }
+
+        # Full token issuance (no MFA required, or MFA setup needed)
+        access_token = auth_funcs['create_access_token'](
+            data={"sub": user.email, "mfa_setup_pending": mfa_setup_required},
+            user_id=user.id,
+            tenant_id=tenant_id
+        )
+        refresh_token = auth_funcs['create_refresh_token'](
+            data={"sub": user.email},
+            user_id=user.id
         )
 
         return {
@@ -951,8 +1029,14 @@ async def kill_idle_connections(current_user=Depends(get_current_user_dep())):
 
 
 @router.post("/api/v1/admin/normalize-loan-stages")
-async def normalize_loan_stages(db: Session = Depends(get_db)):
-    """Normalize all loan stage values to uppercase. Fixes mixed-case data from legacy imports."""
+async def normalize_loan_stages(current_user=Depends(get_current_user_dep()), db: Session = Depends(get_db)):
+    """Normalize all loan stage values to uppercase. Fixes mixed-case data from legacy imports. Admin only."""
+    if not getattr(current_user, 'permission_role', None) or current_user.permission_role not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Enforce MFA for admin users (Enterprise Security - Domain 4)
+    from utils.auth import require_admin_mfa
+    require_admin_mfa(current_user)
     try:
         stage_map = {
             'Application': 'APPLICATION',

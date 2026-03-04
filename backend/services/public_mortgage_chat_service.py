@@ -64,6 +64,7 @@ class PublicMortgageChatService:
             "nmls_id": getattr(user, 'nmls_id', None),
             "bio": bio,
             "company": getattr(user, 'company', None),
+            "organization_id": getattr(user, 'organization_id', None),
         }
 
         # Try to load scheduler settings for this user
@@ -105,14 +106,17 @@ class PublicMortgageChatService:
             except Exception as profile_err:
                 logger.warning(f"Could not load user profile work hours: {profile_err}")
 
-            # Get scheduler settings (override if exists)
+            # Get scheduler settings (override if exists) — filter by org for tenant isolation
+            org_id = self.lo_info.get("organization_id") if self.lo_info else None
             settings = self.db.query(SchedulerSettings).filter(
                 SchedulerSettings.user_id == user_id
             ).first()
 
-            if not settings:
-                # Use default settings
-                settings = self.db.query(SchedulerSettings).first()
+            if not settings and org_id:
+                # Fallback to org-level settings
+                settings = self.db.query(SchedulerSettings).filter(
+                    SchedulerSettings.organization_id == org_id
+                ).first()
 
             if settings and settings.business_hours:
                 # Only override if scheduler settings has actual business_hours configured
@@ -251,13 +255,19 @@ class PublicMortgageChatService:
             from services.smart_scheduler_service import ScheduledAppointment
 
             end_date = start_date + timedelta(days=days_ahead)
+            org_id = self.lo_info.get("organization_id")
+
+            filters = [
+                ScheduledAppointment.loan_officer_id == self.lo_info["id"],
+                ScheduledAppointment.start_time >= start_date,
+                ScheduledAppointment.start_time <= end_date,
+                ScheduledAppointment.status.in_(["scheduled", "confirmed"]),
+            ]
+            if org_id:
+                filters.append(ScheduledAppointment.organization_id == org_id)
+
             appointments = self.db.query(ScheduledAppointment).filter(
-                and_(
-                    ScheduledAppointment.loan_officer_id == self.lo_info["id"],
-                    ScheduledAppointment.start_time >= start_date,
-                    ScheduledAppointment.start_time <= end_date,
-                    ScheduledAppointment.status.in_(["scheduled", "confirmed"])
-                )
+                and_(*filters)
             ).all()
 
             return [
@@ -299,8 +309,8 @@ class PublicMortgageChatService:
 
             end_time = appointment_time + timedelta(minutes=duration)
 
-            # Check for slot conflicts - prevent double booking
-            existing_appointment = self.db.query(ScheduledAppointment).filter(
+            # Check for slot conflicts - prevent double booking (with org filtering)
+            conflict_filters = [
                 ScheduledAppointment.loan_officer_id == self.lo_info["id"],
                 ScheduledAppointment.status.in_([
                     AppointmentStatus.SCHEDULED.value,
@@ -308,7 +318,14 @@ class PublicMortgageChatService:
                 ]),
                 # Check for any overlap: existing starts before our end AND existing ends after our start
                 ScheduledAppointment.start_time < end_time,
-                ScheduledAppointment.end_time > appointment_time
+                ScheduledAppointment.end_time > appointment_time,
+            ]
+            org_id = self.lo_info.get("organization_id")
+            if org_id:
+                conflict_filters.append(ScheduledAppointment.organization_id == org_id)
+
+            existing_appointment = self.db.query(ScheduledAppointment).filter(
+                *conflict_filters
             ).first()
 
             if existing_appointment:
@@ -366,7 +383,7 @@ class PublicMortgageChatService:
                 logger.warning(f"Could not create lead: {lead_error}")
                 # Continue with appointment booking even if lead creation fails
 
-            # Create the appointment
+            # Create the appointment with organization_id for tenant isolation
             appointment = ScheduledAppointment(
                 appointment_id=appointment_id,
                 loan_officer_id=self.lo_info["id"],
@@ -382,7 +399,8 @@ class PublicMortgageChatService:
                 duration_minutes=duration,
                 status=AppointmentStatus.SCHEDULED.value,
                 notes=notes,
-                booked_via="ai_assistant"
+                booked_via="ai_assistant",
+                organization_id=self.lo_info.get("organization_id"),
             )
 
             self.db.add(appointment)

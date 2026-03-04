@@ -63,14 +63,15 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     # PREMIUM - maintained when resources allow
     "microsite_builder": FeatureTier.PREMIUM,
     "video_meetings": FeatureTier.PREMIUM,
-    "avatar_studio": FeatureTier.PREMIUM,
-    "hr_management": FeatureTier.PREMIUM,
 
     # DEFERRED - parked until platform is stable
     "salesforce_sync": FeatureTier.PREMIUM,
     "encompass_sync": FeatureTier.PREMIUM,
 
-    # EXPERIMENTAL - frozen, no SLA
+    # EXPERIMENTAL - frozen, no SLA, not exposed to production orgs
+    "avatar_studio": FeatureTier.EXPERIMENTAL,
+    "hr_management": FeatureTier.EXPERIMENTAL,
+    "it_helpdesk": FeatureTier.EXPERIMENTAL,
     "decision_lab": FeatureTier.EXPERIMENTAL,
     "circle_of_cashflow": FeatureTier.EXPERIMENTAL,
 }

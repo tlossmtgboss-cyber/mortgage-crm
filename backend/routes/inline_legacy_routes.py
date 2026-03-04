@@ -943,19 +943,26 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Permission Core routes: {e}")
 
-    # Include HR Management routes
+    # Include HR Management routes (EXPERIMENTAL tier - gated)
     try:
-        from routes.hr_management_routes import router as hr_management_router
-        app.include_router(hr_management_router, tags=["HR Management"])
-        logger.info("✅ HR Management routes loaded")
+        from feature_tiers import get_tier, FeatureTier
+        if get_tier("hr_management") != FeatureTier.EXPERIMENTAL:
+            from routes.hr_management_routes import router as hr_management_router
+            app.include_router(hr_management_router, tags=["HR Management"])
+            logger.info("✅ HR Management routes loaded")
+        else:
+            logger.info("⏸️ HR Management routes skipped (EXPERIMENTAL tier)")
     except Exception as e:
         logger.warning(f"⚠️ Could not load HR Management routes: {e}")
 
-    # Include IT Helpdesk routes
+    # Include IT Helpdesk routes (EXPERIMENTAL tier - gated)
     try:
-        from routes.it_helpdesk_routes import router as it_helpdesk_router
-        app.include_router(it_helpdesk_router, prefix="/api/v1/it-helpdesk", tags=["IT Helpdesk"])
-        logger.info("✅ IT Helpdesk routes loaded")
+        if get_tier("it_helpdesk") != FeatureTier.EXPERIMENTAL:
+            from routes.it_helpdesk_routes import router as it_helpdesk_router
+            app.include_router(it_helpdesk_router, prefix="/api/v1/it-helpdesk", tags=["IT Helpdesk"])
+            logger.info("✅ IT Helpdesk routes loaded")
+        else:
+            logger.info("⏸️ IT Helpdesk routes skipped (EXPERIMENTAL tier)")
     except Exception as e:
         logger.warning(f"⚠️ Could not load IT Helpdesk routes: {e}")
 
@@ -2250,12 +2257,16 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Video OS routes not loaded: {e}")
 
-    # Avatar routes (AI avatar profile management and video generation)
+    # Avatar routes (EXPERIMENTAL tier - gated)
     try:
-        from routes.avatar_routes import router as avatar_router, set_dependencies as set_avatar_deps
-        set_avatar_deps(get_db, get_current_user)
-        app.include_router(avatar_router, tags=["AI Avatars"])
-        logger.info("✅ Avatar routes loaded")
+        from feature_tiers import get_tier, FeatureTier
+        if get_tier("avatar_studio") != FeatureTier.EXPERIMENTAL:
+            from routes.avatar_routes import router as avatar_router, set_dependencies as set_avatar_deps
+            set_avatar_deps(get_db, get_current_user)
+            app.include_router(avatar_router, tags=["AI Avatars"])
+            logger.info("✅ Avatar routes loaded")
+        else:
+            logger.info("⏸️ Avatar routes skipped (EXPERIMENTAL tier)")
     except Exception as e:
         logger.warning(f"⚠️ Avatar routes not loaded: {e}")
 

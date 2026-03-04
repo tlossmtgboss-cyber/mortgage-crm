@@ -191,7 +191,7 @@ async def import_closed_loans(
                     'organization_id': org_id,
                     'created_by_user_id': user_id,
                     'loan_officer_id': user_id,
-                    'status': 'funded',
+                    'stage': 'FUNDED',
                     'salesforce_sync_status': 'synced',
                     'salesforce_last_synced_at': datetime.utcnow(),
                 }

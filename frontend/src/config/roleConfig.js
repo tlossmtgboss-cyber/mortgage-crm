@@ -123,6 +123,12 @@ export const NAVIGATION_ITEMS = {
     module: 'base',
     adminOnly: true  // Owner-only: Cost tracking and pricing recommendations
   },
+  opsManager: {
+    path: '/ops-manager',
+    label: 'Ops Manager',
+    module: 'base',
+    adminOnly: true  // Admin/Site Admin only: Pipeline health & impediment detection
+  },
   capacity: {
     path: '/master-manager',
     label: 'Capacity',
@@ -348,6 +354,7 @@ export const ROLE_NAVIGATION = {
     'market',
     'profitability',
     'usageIntelligence',    // Owner-only: Usage costs & pricing
+    'opsManager',           // Ops Manager: Pipeline health & impediments
     'accounting',           // Accounting System
     'capacity',
     'recruiting',
@@ -378,7 +385,8 @@ export const ROLE_NAVIGATION = {
     'market',
     'profitability',
     'partnerRecruiting',
-    'integrations'
+    'integrations',
+    'opsManager'            // Ops Manager: Pipeline health & impediments
     // NOTE: No usageIntelligence, accounting, capacity, recruiting - these are platform admin only
   ],
 

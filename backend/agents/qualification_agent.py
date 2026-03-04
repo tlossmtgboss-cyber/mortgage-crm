@@ -631,47 +631,47 @@ class QualificationAgent:
         from datetime import timedelta
 
         try:
-            # Try to use Smart Scheduler for LO assignment
-            from services.smart_scheduler_service import get_scheduler_service
-            scheduler = get_scheduler_service(self.db)
+            # Direct ORM booking — bypasses deprecated SmartSchedulerService
+            from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
 
-            # Book through smart scheduler (handles LO assignment automatically)
-            result = scheduler.book_appointment(
+            duration_minutes = 30
+            end_time = appointment_time + timedelta(minutes=duration_minutes)
+            appt_id = f"APPT-{str(uuid.uuid4())[:8].upper()}"
+
+            org_id = self.organization.get("id") if self.organization else None
+            appointment = ScheduledAppointment(
+                appointment_id=appt_id,
+                organization_id=org_id,
                 contact_name=name,
                 contact_email=email,
-                appointment_time=appointment_time,
                 appointment_type="consultation",
-                duration_minutes=30,
+                start_time=appointment_time,
+                end_time=end_time,
+                duration_minutes=duration_minutes,
+                status=AppointmentStatus.SCHEDULED.value,
+                booked_via="ai_assistant",
             )
+            self.db.add(appointment)
+            self.db.commit()
+            self.db.refresh(appointment)
 
-            if result.get("success"):
-                lo_info = result.get("loan_officer", {})
-                appt_info = result.get("appointment", {})
+            display_time = appointment_time.strftime("%A, %B %d at %I:%M %p")
 
-                return {
-                    "success": True,
-                    "appointment_id": result["appointment_id"],
-                    "contact_email": email,
-                    "contact_name": name,
-                    "datetime": appt_info.get("start_time", appointment_time.isoformat()),
-                    "end_time": appt_info.get("end_time"),
-                    "display_time": appt_info.get("display_time", appointment_time.strftime("%A, %B %d at %I:%M %p")),
-                    "duration_minutes": appt_info.get("duration_minutes", 30),
-                    "type": "consultation",
-                    "title": result.get("title", f"Mortgage Consultation - {name}"),
-                    # Include loan officer info for calendar invite
-                    "loan_officer": {
-                        "id": lo_info.get("id"),
-                        "name": lo_info.get("name"),
-                        "email": lo_info.get("email"),
-                        "phone": lo_info.get("phone"),
-                    }
-                }
-            else:
-                logger.warning(f"Smart scheduler booking failed: {result.get('error')}")
-                # Fall through to basic booking
+            return {
+                "success": True,
+                "appointment_id": appt_id,
+                "contact_email": email,
+                "contact_name": name,
+                "datetime": appointment_time.isoformat(),
+                "end_time": end_time.isoformat(),
+                "display_time": display_time,
+                "duration_minutes": duration_minutes,
+                "type": "consultation",
+                "title": f"Mortgage Consultation - {name}",
+                "loan_officer": None,  # LO assignment handled separately
+            }
         except Exception as e:
-            logger.warning(f"Could not use Smart Scheduler, using basic booking: {e}")
+            logger.warning(f"Could not book via direct ORM, using basic booking: {e}")
 
         # Fallback: Basic booking without LO assignment
         appt_id = f"APPT-{str(uuid.uuid4())[:8].upper()}"

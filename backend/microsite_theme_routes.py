@@ -2087,12 +2087,25 @@ async def cancel_appointment_via_chat(
     """
     try:
         from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+        from database.models import User
         from datetime import datetime
 
-        # Find the appointment by appointment_id
-        appointment = db.query(ScheduledAppointment).filter(
+        # Resolve user_slug to org_id for tenant isolation
+        slug_user = db.query(User).filter(User.slug == user_slug, User.is_active == True).first()
+        if not slug_user:
+            try:
+                slug_user = db.query(User).filter(User.id == int(user_slug), User.is_active == True).first()
+            except ValueError:
+                pass
+        cancel_org_id = getattr(slug_user, 'organization_id', None) if slug_user else None
+
+        # Find the appointment by appointment_id, scoped to org
+        cancel_query = db.query(ScheduledAppointment).filter(
             ScheduledAppointment.appointment_id == request.appointment_id
-        ).first()
+        )
+        if cancel_org_id:
+            cancel_query = cancel_query.filter(ScheduledAppointment.organization_id == cancel_org_id)
+        appointment = cancel_query.first()
 
         if not appointment:
             return {
@@ -2255,12 +2268,25 @@ async def reschedule_appointment_via_chat(
     """
     try:
         from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+        from database.models import User
         from datetime import datetime, timedelta
 
-        # Find the appointment by appointment_id
-        appointment = db.query(ScheduledAppointment).filter(
+        # Resolve user_slug to org_id for tenant isolation
+        slug_user = db.query(User).filter(User.slug == user_slug, User.is_active == True).first()
+        if not slug_user:
+            try:
+                slug_user = db.query(User).filter(User.id == int(user_slug), User.is_active == True).first()
+            except ValueError:
+                pass
+        resched_org_id = getattr(slug_user, 'organization_id', None) if slug_user else None
+
+        # Find the appointment by appointment_id, scoped to org
+        resched_query = db.query(ScheduledAppointment).filter(
             ScheduledAppointment.appointment_id == request.appointment_id
-        ).first()
+        )
+        if resched_org_id:
+            resched_query = resched_query.filter(ScheduledAppointment.organization_id == resched_org_id)
+        appointment = resched_query.first()
 
         if not appointment:
             return {
@@ -2314,7 +2340,8 @@ async def reschedule_appointment_via_chat(
         new_end_time = new_start_time + timedelta(minutes=duration)
 
         # Check for conflicts with OTHER appointments (exclude current appointment)
-        conflicting = db.query(ScheduledAppointment).filter(
+        # Include organization_id filter for tenant isolation
+        conflict_filters = [
             ScheduledAppointment.loan_officer_id == appointment.loan_officer_id,
             ScheduledAppointment.id != appointment.id,  # Exclude current appointment
             ScheduledAppointment.status.in_([
@@ -2322,7 +2349,14 @@ async def reschedule_appointment_via_chat(
                 AppointmentStatus.CONFIRMED.value
             ]),
             ScheduledAppointment.start_time < new_end_time,
-            ScheduledAppointment.end_time > new_start_time
+            ScheduledAppointment.end_time > new_start_time,
+        ]
+        if appointment.organization_id:
+            conflict_filters.append(
+                ScheduledAppointment.organization_id == appointment.organization_id
+            )
+        conflicting = db.query(ScheduledAppointment).filter(
+            *conflict_filters
         ).first()
 
         if conflicting:

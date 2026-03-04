@@ -13,7 +13,7 @@ Central orchestrator that:
 import os
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -1424,9 +1424,9 @@ class CallMonitoringOrchestrator:
         participants = structured_data.get('participants', [])
         meeting_type = structured_data.get('meeting_type', 'phone')
 
-        # Try SmartSchedulerService first for proper LO assignment + availability
+        # Direct ORM booking — replaces deprecated SmartSchedulerService
         try:
-            from backend.services.smart_scheduler_service import SmartSchedulerService
+            from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
 
             # Resolve contact info from lead/loan
             contact_name = structured_data.get('contact_name', '')
@@ -1454,29 +1454,37 @@ class CallMonitoringOrchestrator:
             else:
                 raise ValueError(f"Cannot parse proposed_datetime: {proposed_datetime}")
 
-            scheduler = SmartSchedulerService(self.db)
-            result = scheduler.book_appointment(
+            end_time = appointment_time + timedelta(minutes=duration_minutes)
+            appt_id = f"APPT-{str(uuid.uuid4())[:8].upper()}"
+
+            lo_id = structured_data.get('loan_officer_id')
+            org_id = session.get('organization_id')
+
+            appointment = ScheduledAppointment(
+                appointment_id=appt_id,
+                loan_officer_id=lo_id,
+                contact_id=contact_id,
                 contact_name=contact_name or 'Unknown',
                 contact_email=contact_email or '',
-                appointment_time=appointment_time,
                 contact_phone=contact_phone,
-                contact_id=contact_id,
                 appointment_type=appointment_type,
+                start_time=appointment_time,
+                end_time=end_time,
                 duration_minutes=duration_minutes,
+                status=AppointmentStatus.SCHEDULED.value,
                 notes=content,
                 conversation_id=session.get('id'),
-                loan_officer_id=structured_data.get('loan_officer_id'),  # None = auto-assign
+                booked_via="call_monitoring",
+                organization_id=org_id,
             )
+            self.db.add(appointment)
+            self.db.commit()
 
-            if result.get('success'):
-                logger.info(f"Smart Scheduler booked appointment {result.get('appointment_id')} "
-                           f"with LO {result.get('loan_officer', {}).get('name', 'auto-assigned')}")
-                return result['appointment_id']
-            else:
-                logger.warning(f"Smart Scheduler failed: {result.get('error')}. Falling back to raw SQL.")
+            logger.info(f"Direct ORM booked appointment {appt_id} for LO {lo_id} (org {org_id})")
+            return appt_id
 
         except Exception as e:
-            logger.warning(f"SmartSchedulerService unavailable ({e}). Falling back to raw calendar_events INSERT.")
+            logger.warning(f"Direct ORM booking failed ({e}). Falling back to raw calendar_events INSERT.")
 
         # Fallback: raw SQL INSERT into calendar_events
         event_id = str(uuid.uuid4())

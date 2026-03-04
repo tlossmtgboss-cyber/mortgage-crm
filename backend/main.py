@@ -1653,6 +1653,46 @@ def _run_critical_schema_migrations():
             db.rollback()
             logger.debug(f"MUM name backfill: {e}")
 
+        # Chime SDK migration: add columns for video meeting Chime integration
+        chime_columns = {
+            "video_meeting_rooms": [
+                ("chime_meeting_id", "VARCHAR(255)"),
+                ("chime_media_region", "VARCHAR(50) DEFAULT 'us-east-1'"),
+            ],
+            "meeting_recordings": [
+                ("chime_pipeline_id", "VARCHAR(255)"),
+                ("s3_key", "VARCHAR(1000)"),
+            ],
+        }
+        for table, cols in chime_columns.items():
+            for col_name, col_type in cols:
+                try:
+                    db.execute(sa_text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.debug(f"{table}.{col_name} migration: {e}")
+        try:
+            db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_video_meeting_rooms_chime_meeting_id ON video_meeting_rooms (chime_meeting_id)"))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"chime_meeting_id index: {e}")
+        try:
+            db.execute(sa_text("ALTER TABLE meeting_recordings ALTER COLUMN retention_days SET DEFAULT 1825"))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"retention_days default: {e}")
+        try:
+            result = db.execute(sa_text("UPDATE meeting_recordings SET retention_days = 1825 WHERE retention_days = 90"))
+            db.commit()
+            if result.rowcount > 0:
+                logger.info(f"✅ Updated {result.rowcount} recording retention periods to 5 years")
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"retention_days update: {e}")
+
         logger.info("✅ Critical schema migrations complete")
     finally:
         db.close()

@@ -492,7 +492,7 @@ class CalendarEvent(Base):
     __tablename__ = "calendar_events"
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)  # Multi-tenant isolation
     title = Column(String, nullable=False)
     description = Column(Text)
     start_time = Column(DateTime, nullable=False)

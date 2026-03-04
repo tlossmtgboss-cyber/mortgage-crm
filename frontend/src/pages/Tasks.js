@@ -549,6 +549,7 @@ function Tasks() {
 
     } catch (error) {
       console.error('Failed to load tasks:', error);
+      toast.error('Failed to load some tasks. Please refresh.');
       // Load demo data on error - but NO emails (emails only on Reconciliation page)
       setPrioritizedTasks(mockPrioritizedTasks());
       setLoanIssues(mockLoanIssues());

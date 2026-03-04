@@ -1079,7 +1079,7 @@ class SalesforceSyncService:
             'Approved': 'APPROVED',
             'Conditions Cleared': 'APPROVED',
             'Clear to Close': 'CLEAR_TO_CLOSE',
-            'CTC': 'CTC',
+            'CTC': 'CLEAR_TO_CLOSE',
             'Closing': 'CLOSING',
             'Closing Scheduled': 'CLOSING',
             'Docs Drawing': 'DOCS',
@@ -2066,6 +2066,10 @@ class SalesforceSyncService:
             user_id = profile.user_id
             _token_refreshed = False  # Track if we've already refreshed once
 
+            # In-memory dedup: track SF IDs imported as leads in this batch,
+            # so the Opportunity import phase can detect cross-entity overlap.
+            _imported_lead_sf_ids = set()
+
             # ===== IMPORT SALESFORCE LEADS =====
             sf_leads = []
             try:
@@ -2104,6 +2108,10 @@ class SalesforceSyncService:
                     )
                     if created:
                         result['new_leads_created'] += 1
+                        # Track for cross-entity dedup in the Opportunity phase
+                        lead_sf_id = sf_lead.get('Id')
+                        if lead_sf_id:
+                            _imported_lead_sf_ids.add(lead_sf_id)
                     else:
                         result['duplicates_skipped'] += 1
                 except Exception as e:
@@ -2150,6 +2158,10 @@ class SalesforceSyncService:
                     )
                     if created:
                         result['new_leads_created'] += 1
+                        # Track for cross-entity dedup in the Opportunity phase
+                        contact_sf_id = sf_contact.get('Id')
+                        if contact_sf_id:
+                            _imported_lead_sf_ids.add(contact_sf_id)
                     else:
                         result['duplicates_skipped'] += 1
                 except Exception as e:
@@ -2191,6 +2203,14 @@ class SalesforceSyncService:
 
             for sf_opp in sf_opps:
                 try:
+                    # Belt-and-suspenders: warn if we just imported a lead for this SF ID
+                    opp_sf_id = sf_opp.get('Id')
+                    if opp_sf_id and opp_sf_id in _imported_lead_sf_ids:
+                        logger.warning(
+                            f"SF Opportunity {opp_sf_id} was also imported as a lead in this batch. "
+                            f"DB-level cross-entity dedup in _create_crm_loan_if_new will handle it."
+                        )
+
                     created = await self._create_crm_loan_if_new(
                         db, sf_opp, user_id
                     )
@@ -2424,6 +2444,22 @@ class SalesforceSyncService:
         if existing:
             return False
 
+        # Cross-entity dedup: check if a LOAN already exists with this SF ID.
+        # This prevents creating a duplicate lead when the legacy webhook
+        # already created a loan from the same Salesforce record.
+        existing_loan = db.execute(text("""
+            SELECT id, stage FROM loans
+            WHERE salesforce_id = :sf_id AND loan_officer_id = :user_id
+            LIMIT 1
+        """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
+
+        if existing_loan:
+            logger.info(
+                f"Skipping lead creation for SF {sf_type} {sf_id}: "
+                f"already exists as loan {existing_loan[0]} (stage={existing_loan[1]})"
+            )
+            return False
+
         # Check if already exists by email (for this user)
         if email:
             existing_by_email = db.execute(text("""
@@ -2442,6 +2478,20 @@ class SalesforceSyncService:
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = :lead_id
                 """), {"sf_id": sf_id, "sf_type": sf_type, "lead_id": existing_by_email.id})
+                return False
+
+            # Cross-entity dedup by email: check if a LOAN exists with this email
+            existing_loan_by_email = db.execute(text("""
+                SELECT id, stage FROM loans
+                WHERE LOWER(borrower_email) = LOWER(:email) AND loan_officer_id = :user_id
+                LIMIT 1
+            """), {"email": email, "user_id": user_id}).fetchone()
+
+            if existing_loan_by_email:
+                logger.info(
+                    f"Skipping lead creation for SF {sf_type} {sf_id}: "
+                    f"loan {existing_loan_by_email[0]} already exists with email {email}"
+                )
                 return False
 
         # Build new lead record
@@ -2552,6 +2602,14 @@ class SalesforceSyncService:
         if existing:
             return False
 
+        # Cross-entity dedup: check if a LEAD already exists with this SF ID.
+        # If so, we'll still create the loan but mark the lead as converted afterward.
+        existing_lead_sf_id = db.execute(text("""
+            SELECT id FROM leads
+            WHERE salesforce_id = :sf_id AND owner_id = :user_id
+            LIMIT 1
+        """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
+
         # Get user's organization_id for multi-tenant isolation
         user_row = db.execute(text("""
             SELECT organization_id FROM users WHERE id = :user_id
@@ -2635,6 +2693,27 @@ class SalesforceSyncService:
                 )
             except Exception as e:
                 logger.warning(f"SLA tracking hook failed for new SF loan {sf_id}: {e}")
+
+        # Mark existing lead as converted (cross-entity cleanup)
+        if existing_lead_sf_id:
+            try:
+                db.execute(text("""
+                    UPDATE leads SET
+                        stage = 'Disclosed',
+                        meta_data = COALESCE(meta_data, '{}'::jsonb) ||
+                            jsonb_build_object(
+                                'converted_to_loan', 'true',
+                                'converted_at', CURRENT_TIMESTAMP::text
+                            ),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :lead_id
+                """), {"lead_id": existing_lead_sf_id[0]})
+                logger.info(
+                    f"Marked lead {existing_lead_sf_id[0]} as converted "
+                    f"after loan creation from SF Opportunity {sf_id}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to mark lead as converted for SF {sf_id}: {e}")
 
         return True
 

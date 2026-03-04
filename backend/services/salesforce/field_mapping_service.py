@@ -58,19 +58,19 @@ TYPE_COMPATIBILITY = {
 
 # Default stage mappings
 DEFAULT_STAGE_MAPPINGS = {
-    'New Lead': 'LEAD',
-    'Contacted': 'LEAD',
-    'Qualified': 'QUALIFIED',
+    'New Lead': 'APPLICATION',
+    'Contacted': 'APPLICATION',
+    'Qualified': 'APPLICATION',
     'Application': 'APPLICATION',
     'Submitted': 'SUBMITTED',
     'Processing': 'PROCESSING',
     'Underwriting': 'UNDERWRITING',
     'Approved': 'APPROVED',
-    'Closing': 'CLOSING',
+    'Closing': 'CLEAR_TO_CLOSE',
     'Funded': 'FUNDED',
-    'Lost': 'LOST',
+    'Lost': 'CANCELLED',
     'Closed Won': 'FUNDED',
-    'Closed Lost': 'LOST'
+    'Closed Lost': 'CANCELLED',
 }
 
 

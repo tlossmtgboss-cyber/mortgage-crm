@@ -497,7 +497,10 @@ async def get_tasks(
     generate_recommended_action = main.generate_recommended_action
 
     try:
-        query = db.query(AITask).filter(AITask.assigned_to_id == current_user.id)
+        query = db.query(AITask).filter(
+            AITask.assigned_to_id == current_user.id,
+            AITask.type != TaskType.COMPLETED
+        )
         if type:
             try:
                 type_enum = TaskType(type)
@@ -907,241 +910,250 @@ async def get_unified_tasks(
         user_name = current_user.full_name or current_user.email or "Your Loan Officer"
 
         # 1. Get pending AI Tasks with joined loan data (avoid N+1)
-        ai_tasks = db.query(AITask).options(
-            joinedload(AITask.loan)
-        ).filter(
-            AITask.assigned_to_id == current_user.id,
-            AITask.type != TaskType.COMPLETED
-        ).order_by(AITask.created_at.desc()).limit(50).all()
-
-        # Collect all loan/lead IDs for batch lookup
         loan_ids = set()
         lead_ids = set()
-        for task in ai_tasks:
-            if task.loan_id:
-                loan_ids.add(task.loan_id)
-            elif task.lead_id:
-                lead_ids.add(task.lead_id)
-
-        # Batch fetch loans and leads for entity names
         loans_map = {}
         leads_map = {}
-        if loan_ids:
-            loans = db.query(Loan).filter(Loan.id.in_(loan_ids)).all()
-            loans_map = {l.id: l for l in loans}
-        if lead_ids:
-            leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
-            leads_map = {l.id: l for l in leads}
+        try:
+            ai_tasks = db.query(AITask).options(
+                joinedload(AITask.loan)
+            ).filter(
+                AITask.assigned_to_id == current_user.id,
+                AITask.type != TaskType.COMPLETED
+            ).order_by(AITask.created_at.desc()).limit(50).all()
 
-        for task in ai_tasks:
-            # Get entity name from pre-fetched data
-            entity_name = None
-            loan_stage = None
-            if task.loan_id and task.loan_id in loans_map:
-                loan = loans_map[task.loan_id]
-                entity_name = loan.borrower_name
-                loan_stage = str(loan.stage) if loan.stage else None
-            elif task.lead_id and task.lead_id in leads_map:
-                lead = leads_map[task.lead_id]
-                entity_name = lead.name
+            # Collect all loan/lead IDs for batch lookup
+            for task in ai_tasks:
+                if task.loan_id:
+                    loan_ids.add(task.loan_id)
+                elif task.lead_id:
+                    lead_ids.add(task.lead_id)
 
-            ai_response = task.suggested_action or task.ai_reasoning
-            # Prefer entity name from loan/lead relationship for accuracy
-            client_name = entity_name or task.borrower_name or "Client"
-            has_scheduling = detect_scheduling_intent(task.title or "", task.description or "")
+            # Batch fetch loans and leads for entity names
+            if loan_ids:
+                loans = db.query(Loan).filter(Loan.id.in_(loan_ids)).all()
+                loans_map = {l.id: l for l in loans}
+            if lead_ids:
+                leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+                leads_map = {l.id: l for l in leads}
 
-            # Only fetch calendly slots if needed (lazy load once)
-            if has_scheduling:
-                if calendly_slots is None:
-                    calendly_slots = get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
-                ai_response = generate_scheduling_email_draft(
-                    client_name=client_name,
-                    calendly_slots=calendly_slots,
-                    user_name=user_name
-                )
+            for task in ai_tasks:
+                # Get entity name from pre-fetched data
+                entity_name = None
+                loan_stage = None
+                if task.loan_id and task.loan_id in loans_map:
+                    loan = loans_map[task.loan_id]
+                    entity_name = loan.borrower_name
+                    loan_stage = str(loan.stage) if loan.stage else None
+                elif task.lead_id and task.lead_id in leads_map:
+                    lead = leads_map[task.lead_id]
+                    entity_name = lead.name
 
-            unified_tasks.append({
-                "id": task.id,
-                "source": "task",
-                "title": task.title,
-                "description": task.description,
-                "client_name": client_name,
-                "ai_confidence": int((task.ai_confidence or 0.5) * 100),
-                "ai_suggested_response": ai_response,
-                "priority": task.priority or "medium",
-                "due_date": task.due_date.isoformat() if task.due_date else None,
-                "created_at": task.created_at.isoformat() if task.created_at else None,
-                "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
-                "entity_id": task.loan_id or task.lead_id,
-                "stage": loan_stage or "AI Suggested",
-                "owner": "Loan Officer",
-                "communication_count": 0,
-                "has_calendly_slots": has_scheduling
-            })
+                ai_response = task.suggested_action or task.ai_reasoning
+                # Prefer entity name from loan/lead relationship for accuracy
+                client_name = entity_name or task.borrower_name or "Client"
+                has_scheduling = detect_scheduling_intent(task.title or "", task.description or "")
+
+                # Only fetch calendly slots if needed (lazy load once)
+                if has_scheduling:
+                    if calendly_slots is None:
+                        calendly_slots = get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
+                    ai_response = generate_scheduling_email_draft(
+                        client_name=client_name,
+                        calendly_slots=calendly_slots,
+                        user_name=user_name
+                    )
+
+                unified_tasks.append({
+                    "id": task.id,
+                    "source": "task",
+                    "title": task.title,
+                    "description": task.description,
+                    "client_name": client_name,
+                    "ai_confidence": int((task.ai_confidence or 0.5) * 100),
+                    "ai_suggested_response": ai_response,
+                    "priority": task.priority or "medium",
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
+                    "entity_id": task.loan_id or task.lead_id,
+                    "stage": loan_stage or "AI Suggested",
+                    "owner": "Loan Officer",
+                    "communication_count": 0,
+                    "has_calendly_slots": has_scheduling
+                })
+        except Exception as e:
+            logger.exception("unified-tasks: failed to load ai_tasks source: %s", e)
 
         # 2. Get pending workflow tasks with joined loan data
-        # Increased limit to ensure workflow tasks (which may have later due dates) are included
-        workflow_tasks = db.query(Task).options(
-            joinedload(Task.loan)
-        ).filter(
-            Task.owner_id == current_user.id,
-            Task.status.in_(["pending", "in_progress"])
-        ).order_by(Task.due_date.asc()).limit(200).all()
+        try:
+            # Increased limit to ensure workflow tasks (which may have later due dates) are included
+            workflow_tasks = db.query(Task).options(
+                joinedload(Task.loan)
+            ).filter(
+                Task.owner_id == current_user.id,
+                Task.status.in_(["pending", "in_progress"])
+            ).order_by(Task.due_date.asc()).limit(200).all()
 
-        # Collect additional loan/lead IDs from workflow tasks
-        for task in workflow_tasks:
-            if task.loan_id:
-                loan_ids.add(task.loan_id)
-            elif task.lead_id:
-                lead_ids.add(task.lead_id)
+            # Collect additional loan/lead IDs from workflow tasks
+            for task in workflow_tasks:
+                if task.loan_id:
+                    loan_ids.add(task.loan_id)
+                elif task.lead_id:
+                    lead_ids.add(task.lead_id)
 
-        # Fetch any additional loans/leads not yet in map
-        additional_loan_ids = loan_ids - set(loans_map.keys())
-        additional_lead_ids = lead_ids - set(leads_map.keys())
-        if additional_loan_ids:
-            additional_loans = db.query(Loan).filter(Loan.id.in_(additional_loan_ids)).all()
-            for l in additional_loans:
-                loans_map[l.id] = l
-        if additional_lead_ids:
-            additional_leads = db.query(Lead).filter(Lead.id.in_(additional_lead_ids)).all()
-            for l in additional_leads:
-                leads_map[l.id] = l
+            # Fetch any additional loans/leads not yet in map
+            additional_loan_ids = loan_ids - set(loans_map.keys())
+            additional_lead_ids = lead_ids - set(leads_map.keys())
+            if additional_loan_ids:
+                additional_loans = db.query(Loan).filter(Loan.id.in_(additional_loan_ids)).all()
+                for l in additional_loans:
+                    loans_map[l.id] = l
+            if additional_lead_ids:
+                additional_leads = db.query(Lead).filter(Lead.id.in_(additional_lead_ids)).all()
+                for l in additional_leads:
+                    leads_map[l.id] = l
 
-        for task in workflow_tasks:
-            entity_name = None
-            loan_stage = None
-            if task.loan_id and task.loan_id in loans_map:
-                loan = loans_map[task.loan_id]
-                entity_name = loan.borrower_name
-                loan_stage = str(loan.stage) if loan.stage else None
-            elif task.lead_id and task.lead_id in leads_map:
-                lead = leads_map[task.lead_id]
-                entity_name = lead.name
+            for task in workflow_tasks:
+                entity_name = None
+                loan_stage = None
+                if task.loan_id and task.loan_id in loans_map:
+                    loan = loans_map[task.loan_id]
+                    entity_name = loan.borrower_name
+                    loan_stage = str(loan.stage) if loan.stage else None
+                elif task.lead_id and task.lead_id in leads_map:
+                    lead = leads_map[task.lead_id]
+                    entity_name = lead.name
 
-            ai_confidence = 50
-            # Prefer loan/lead entity name over related_contact_name for accuracy
-            client_name = entity_name or task.related_contact_name or "Client"
-            ai_response = f"Complete task: {task.title}"
-            has_calendly = detect_scheduling_intent(task.title or "", task.description or "")
+                ai_confidence = 50
+                # Prefer loan/lead entity name over related_contact_name for accuracy
+                client_name = entity_name or task.related_contact_name or "Client"
+                ai_response = f"Complete task: {task.title}"
+                has_calendly = detect_scheduling_intent(task.title or "", task.description or "")
 
-            if has_calendly:
-                if calendly_slots is None:
-                    calendly_slots = get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
-                ai_response = generate_scheduling_email_draft(
-                    client_name=client_name,
-                    calendly_slots=calendly_slots,
-                    user_name=user_name
-                )
-                ai_confidence = 85
+                if has_calendly:
+                    if calendly_slots is None:
+                        calendly_slots = get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
+                    ai_response = generate_scheduling_email_draft(
+                        client_name=client_name,
+                        calendly_slots=calendly_slots,
+                        user_name=user_name
+                    )
+                    ai_confidence = 85
 
-            unified_tasks.append({
-                "id": task.id,
-                "source": "workflow",
-                "title": task.title,
-                "description": task.description,
-                "client_name": client_name,
-                "ai_confidence": ai_confidence,
-                "ai_suggested_response": ai_response,
-                "priority": task.priority or "medium",
-                "due_date": task.due_date.isoformat() if task.due_date else None,
-                "created_at": task.created_at.isoformat() if task.created_at else None,
-                "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
-                "entity_id": task.loan_id or task.lead_id,
-                "stage": loan_stage or "Workflow",
-                "owner": "Loan Officer",
-                "communication_count": 0,
-                "has_calendly_slots": has_calendly,
-                # SLA task fields
-                "sla_milestone_id": task.sla_milestone_id,
-                "sla_milestone_type": task.sla_milestone_type,
-                "sla_date_field": task.sla_date_field,
-                "related_type": task.related_type,
-                # SF Disposition fields
-                "sf_proposed_stage": getattr(task, 'sf_proposed_stage', None),
-                "sf_current_stage": getattr(task, 'sf_current_stage', None),
-                "is_disposition": getattr(task, 'related_type', None) == 'sf_disposition',
-            })
+                unified_tasks.append({
+                    "id": task.id,
+                    "source": "workflow",
+                    "title": task.title,
+                    "description": task.description,
+                    "client_name": client_name,
+                    "ai_confidence": ai_confidence,
+                    "ai_suggested_response": ai_response,
+                    "priority": task.priority or "medium",
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
+                    "entity_id": task.loan_id or task.lead_id,
+                    "stage": loan_stage or "Workflow",
+                    "owner": "Loan Officer",
+                    "communication_count": 0,
+                    "has_calendly_slots": has_calendly,
+                    # SLA task fields
+                    "sla_milestone_id": task.sla_milestone_id,
+                    "sla_milestone_type": task.sla_milestone_type,
+                    "sla_date_field": task.sla_date_field,
+                    "related_type": task.related_type,
+                    # SF Disposition fields
+                    "sf_proposed_stage": getattr(task, 'sf_proposed_stage', None),
+                    "sf_current_stage": getattr(task, 'sf_current_stage', None),
+                    "is_disposition": getattr(task, 'related_type', None) == 'sf_disposition',
+                })
+        except Exception as e:
+            logger.exception("unified-tasks: failed to load workflow tasks source: %s", e)
 
         # 3. Get pending reconciliation items (batch fetch events separately to avoid N+1)
-        # Only show items assigned to current user - don't show unassigned items to everyone
-        pending_reconciliation = db.query(ExtractedData).join(
-            IncomingDataEvent,
-            ExtractedData.event_id == IncomingDataEvent.id
-        ).filter(
-            IncomingDataEvent.user_id == current_user.id,
-            ExtractedData.status.in_(["pending_review", "needs_review"])
-        ).order_by(ExtractedData.created_at.desc()).limit(50).all()
+        try:
+            # Only show items assigned to current user - don't show unassigned items to everyone
+            pending_reconciliation = db.query(ExtractedData).join(
+                IncomingDataEvent,
+                ExtractedData.event_id == IncomingDataEvent.id
+            ).filter(
+                IncomingDataEvent.user_id == current_user.id,
+                ExtractedData.status.in_(["pending_review", "needs_review"])
+            ).order_by(ExtractedData.created_at.desc()).limit(50).all()
 
-        # Batch fetch all events for reconciliation items
-        event_ids = [item.event_id for item in pending_reconciliation if item.event_id]
-        events_map = {}
-        if event_ids:
-            events = db.query(IncomingDataEvent).filter(IncomingDataEvent.id.in_(event_ids)).all()
-            events_map = {e.id: e for e in events}
+            # Batch fetch all events for reconciliation items
+            event_ids = [item.event_id for item in pending_reconciliation if item.event_id]
+            events_map = {}
+            if event_ids:
+                events = db.query(IncomingDataEvent).filter(IncomingDataEvent.id.in_(event_ids)).all()
+                events_map = {e.id: e for e in events}
 
-        # Collect loan IDs from reconciliation items
-        recon_loan_ids = set()
-        for item in pending_reconciliation:
-            if item.match_entity_type == "loan" and item.match_entity_id:
-                recon_loan_ids.add(item.match_entity_id)
+            # Collect loan IDs from reconciliation items
+            recon_loan_ids = set()
+            for item in pending_reconciliation:
+                if item.match_entity_type == "loan" and item.match_entity_id:
+                    recon_loan_ids.add(item.match_entity_id)
 
-        # Batch fetch additional loans
-        new_loan_ids = recon_loan_ids - set(loans_map.keys())
-        if new_loan_ids:
-            new_loans = db.query(Loan).filter(Loan.id.in_(new_loan_ids)).all()
-            for l in new_loans:
-                loans_map[l.id] = l
+            # Batch fetch additional loans
+            new_loan_ids = recon_loan_ids - set(loans_map.keys())
+            if new_loan_ids:
+                new_loans = db.query(Loan).filter(Loan.id.in_(new_loan_ids)).all()
+                for l in new_loans:
+                    loans_map[l.id] = l
 
-        for item in pending_reconciliation:
-            event = events_map.get(item.event_id)  # Get from pre-fetched map
+            for item in pending_reconciliation:
+                event = events_map.get(item.event_id)  # Get from pre-fetched map
 
-            entity_name = None
-            if item.match_entity_type == "loan" and item.match_entity_id in loans_map:
-                entity_name = loans_map[item.match_entity_id].borrower_name
-            elif item.match_entity_type == "lead" and item.match_entity_id in leads_map:
-                entity_name = leads_map[item.match_entity_id].name
+                entity_name = None
+                if item.match_entity_type == "loan" and item.match_entity_id in loans_map:
+                    entity_name = loans_map[item.match_entity_id].borrower_name
+                elif item.match_entity_type == "lead" and item.match_entity_id in leads_map:
+                    entity_name = leads_map[item.match_entity_id].name
 
-            borrower_name = None
-            if item.fields:
-                borrower_name = item.fields.get("borrower_name", {}).get("value")
+                borrower_name = None
+                if item.fields:
+                    borrower_name = item.fields.get("borrower_name", {}).get("value")
 
-            # Simplified email intent classification (skip expensive AI calls)
-            ai_response = "Review and categorize this email"
-            if event and event.subject:
-                subject_lower = event.subject.lower()
-                if "appraisal" in subject_lower:
-                    ai_response = "Appraisal-related update: Review and add to loan file"
-                elif "rate" in subject_lower or "lock" in subject_lower:
-                    ai_response = "Rate/Lock update: Verify pricing and update borrower"
-                elif "condition" in subject_lower or "document" in subject_lower:
-                    ai_response = "Document request: Forward to borrower or upload to file"
-                elif "closing" in subject_lower:
-                    ai_response = "Closing update: Verify dates and notify parties"
+                # Simplified email intent classification (skip expensive AI calls)
+                ai_response = "Review and categorize this email"
+                if event and event.subject:
+                    subject_lower = event.subject.lower()
+                    if "appraisal" in subject_lower:
+                        ai_response = "Appraisal-related update: Review and add to loan file"
+                    elif "rate" in subject_lower or "lock" in subject_lower:
+                        ai_response = "Rate/Lock update: Verify pricing and update borrower"
+                    elif "condition" in subject_lower or "document" in subject_lower:
+                        ai_response = "Document request: Forward to borrower or upload to file"
+                    elif "closing" in subject_lower:
+                        ai_response = "Closing update: Verify dates and notify parties"
 
-            loan_stage = None
-            if item.match_entity_type == "loan" and item.match_entity_id in loans_map:
-                loan = loans_map[item.match_entity_id]
-                loan_stage = str(loan.stage) if loan.stage else None
+                loan_stage = None
+                if item.match_entity_type == "loan" and item.match_entity_id in loans_map:
+                    loan = loans_map[item.match_entity_id]
+                    loan_stage = str(loan.stage) if loan.stage else None
 
-            unified_tasks.append({
-                "id": item.id,
-                "source": "reconciliation",
-                "title": event.subject if event else "Email to Review",
-                "description": f"From: {event.sender if event else 'Unknown'}\n\n{(event.raw_text or '')[:300]}..." if event else "",
-                "client_name": borrower_name or entity_name or (event.sender if event else None),
-                "ai_confidence": int((item.ai_confidence or 0.5) * 100),
-                "ai_suggested_response": ai_response,
-                "priority": "high" if (item.ai_confidence or 0) < 0.7 else "medium",
-                "due_date": None,
-                "created_at": item.created_at.isoformat() if item.created_at else None,
-                "entity_type": item.match_entity_type,
-                "entity_id": item.match_entity_id,
-                "email_from": event.sender if event else None,
-                "email_subject": event.subject if event else None,
-                "stage": loan_stage or "AI Engine",
-                "owner": "Loan Officer",
-                "communication_count": 0
-            })
+                unified_tasks.append({
+                    "id": item.id,
+                    "source": "reconciliation",
+                    "title": event.subject if event else "Email to Review",
+                    "description": f"From: {event.sender if event else 'Unknown'}\n\n{(event.raw_text or '')[:300]}..." if event else "",
+                    "client_name": borrower_name or entity_name or (event.sender if event else None),
+                    "ai_confidence": int((item.ai_confidence or 0.5) * 100),
+                    "ai_suggested_response": ai_response,
+                    "priority": "high" if (item.ai_confidence or 0) < 0.7 else "medium",
+                    "due_date": None,
+                    "created_at": item.created_at.isoformat() if item.created_at else None,
+                    "entity_type": item.match_entity_type,
+                    "entity_id": item.match_entity_id,
+                    "email_from": event.sender if event else None,
+                    "email_subject": event.subject if event else None,
+                    "stage": loan_stage or "AI Engine",
+                    "owner": "Loan Officer",
+                    "communication_count": 0
+                })
+        except Exception as e:
+            logger.exception("unified-tasks: failed to load reconciliation source: %s", e)
 
         # Sort by priority and due date
         priority_order = {"high": 0, "medium": 1, "low": 2}

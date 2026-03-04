@@ -16,11 +16,11 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt .
+# Copy pinned requirements lockfile for reproducible builds
+COPY requirements.lock .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies from lockfile
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Copy application - force rebuild 2025-12-28T10:50:00Z
 COPY . .

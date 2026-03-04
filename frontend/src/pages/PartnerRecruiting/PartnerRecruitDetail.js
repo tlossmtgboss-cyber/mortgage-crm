@@ -18,20 +18,25 @@ import {
   getPartnerAssessment,
   updatePartnerAssessment,
   onboardPartner,
+  hireEmployeeCandidate,
   getStatusColor,
   getStatusLabel,
   getPartnerTypeLabel,
+  getAvailableStatuses,
   formatPhoneNumber,
   PARTNER_STATUSES,
   PARTNER_TYPES,
+  EMPLOYEE_STATUSES,
+  EMPLOYEE_ROLES,
   MEETING_TYPES,
   MEETING_OUTCOMES,
   CALL_OUTCOMES
 } from '../../services/partnerRecruitingApi';
 import './PartnerRecruiting.css';
 
-// Pipeline stages in order
-const PIPELINE_STAGES = ['new', 'contacted', 'qualified', 'meeting_scheduled', 'met', 'proposal_sent', 'negotiating', 'onboarded'];
+// Pipeline stages in order — category-aware
+const PARTNER_PIPELINE_STAGES = ['new', 'contacted', 'qualified', 'meeting_scheduled', 'met', 'proposal_sent', 'negotiating', 'onboarded'];
+const EMPLOYEE_PIPELINE_STAGES = ['new', 'contacted', 'qualified', 'meeting_scheduled', 'met', 'screening', 'interview', 'offer', 'hired'];
 
 const PartnerRecruitDetail = () => {
   const { partnerId } = useParams();
@@ -83,6 +88,7 @@ const PartnerRecruitDetail = () => {
       setError(null);
       const data = await getPartnerCandidate(partnerId);
       setPartner(data);
+      const isEmployee = data.candidate_category === 'employee';
       setEditForm({
         first_name: data.first_name || '',
         last_name: data.last_name || '',
@@ -93,7 +99,15 @@ const PartnerRecruitDetail = () => {
         city: data.city || '',
         state: data.state || '',
         years_in_business: data.years_in_business || '',
-        notes: data.notes || ''
+        notes: data.notes || '',
+        // Employee fields
+        ...(isEmployee && {
+          employee_role: data.employee_role || '',
+          nmls_id: data.nmls_id || '',
+          current_employer: data.current_employer || '',
+          years_experience: data.years_experience || '',
+          desired_compensation: data.desired_compensation || '',
+        }),
       });
     } catch (err) {
       setError(err.message);
@@ -271,6 +285,19 @@ const PartnerRecruitDetail = () => {
     }
   };
 
+  const handleHire = async () => {
+    if (!window.confirm('Mark this candidate as hired?')) {
+      return;
+    }
+    try {
+      await hireEmployeeCandidate(partnerId);
+      loadPartner();
+      loadActivities();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleSavePartner = async () => {
     try {
       await updatePartnerCandidate(partnerId, editForm);
@@ -281,15 +308,19 @@ const PartnerRecruitDetail = () => {
     }
   };
 
+  const isEmployee = partner?.candidate_category === 'employee';
+  const pipelineStages = isEmployee ? EMPLOYEE_PIPELINE_STAGES : PARTNER_PIPELINE_STAGES;
+  const statusList = isEmployee ? EMPLOYEE_STATUSES : PARTNER_STATUSES;
+
   const getCurrentStageIndex = () => {
-    return PIPELINE_STAGES.indexOf(partner?.status);
+    return pipelineStages.indexOf(partner?.status);
   };
 
   if (loading) {
     return (
       <div className="pr-loading">
         <div className="pr-spinner"></div>
-        <p>Loading Partner Profile...</p>
+        <p>Loading Profile...</p>
       </div>
     );
   }
@@ -309,7 +340,7 @@ const PartnerRecruitDetail = () => {
     return (
       <div className="pr-container">
         <div className="pr-error">
-          <span>Partner not found</span>
+          <span>Candidate not found</span>
           <button onClick={() => navigate(-1)}>Go Back</button>
         </div>
       </div>
@@ -329,15 +360,19 @@ const PartnerRecruitDetail = () => {
               <h1>{partner.first_name} {partner.last_name}</h1>
               <span
                 className="pr-status-badge"
-                style={{ backgroundColor: getStatusColor(partner.status) }}
+                style={{ backgroundColor: getStatusColor(partner.status, partner.candidate_category) }}
               >
-                {getStatusLabel(partner.status)}
+                {getStatusLabel(partner.status, partner.candidate_category)}
               </span>
             </div>
             <p className="pr-detail-subtitle">
-              {getPartnerTypeLabel(partner.partner_type)}
-              {partner.company_name && ` at ${partner.company_name}`}
-              {partner.license_number && <span className="pr-license"> | License #{partner.license_number}</span>}
+              {isEmployee
+                ? getPartnerTypeLabel(partner.employee_role)
+                : getPartnerTypeLabel(partner.partner_type)}
+              {!isEmployee && partner.company_name && ` at ${partner.company_name}`}
+              {isEmployee && partner.current_employer && ` at ${partner.current_employer}`}
+              {!isEmployee && partner.license_number && <span className="pr-license"> | License #{partner.license_number}</span>}
+              {isEmployee && partner.nmls_id && <span className="pr-license"> | NMLS #{partner.nmls_id}</span>}
             </p>
           </div>
         </div>
@@ -345,18 +380,23 @@ const PartnerRecruitDetail = () => {
           <button className="pr-btn pr-btn-secondary" onClick={() => setShowEditPartner(true)}>
             Edit
           </button>
-          {partner.status === 'negotiating' && (
+          {!isEmployee && partner.status === 'negotiating' && (
             <button className="pr-btn pr-btn-primary" onClick={handleOnboard}>
               Onboard Partner
+            </button>
+          )}
+          {isEmployee && partner.status === 'offer' && (
+            <button className="pr-btn pr-btn-primary" onClick={handleHire}>
+              Mark as Hired
             </button>
           )}
           <select
             value={partner.status}
             onChange={(e) => handleStatusChange(e.target.value)}
             className="pr-select"
-            style={{ backgroundColor: getStatusColor(partner.status), color: 'white' }}
+            style={{ backgroundColor: getStatusColor(partner.status, partner.candidate_category), color: 'white' }}
           >
-            {PARTNER_STATUSES.map((s) => (
+            {getAvailableStatuses(partner.candidate_category).map((s) => (
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
@@ -398,20 +438,39 @@ const PartnerRecruitDetail = () => {
         </div>
 
         <div className="pr-hero-stats">
-          <h4>Partner Info</h4>
+          <h4>{isEmployee ? 'Employee Info' : 'Partner Info'}</h4>
           <div className="pr-stats-row">
-            <div className="pr-stat-item">
-              <span className="pr-stat-value">{partner.years_in_business || '-'}</span>
-              <span className="pr-stat-label">Years in Business</span>
-            </div>
-            <div className="pr-stat-item">
-              <span className="pr-stat-value">{partner.avg_referrals_per_month || '-'}</span>
-              <span className="pr-stat-label">Avg Referrals/Mo</span>
-            </div>
-            <div className="pr-stat-item">
-              <span className="pr-stat-value">${(partner.production_volume || 0).toLocaleString()}</span>
-              <span className="pr-stat-label">Production Volume</span>
-            </div>
+            {isEmployee ? (
+              <>
+                <div className="pr-stat-item">
+                  <span className="pr-stat-value">{partner.years_experience || '-'}</span>
+                  <span className="pr-stat-label">Years Experience</span>
+                </div>
+                <div className="pr-stat-item">
+                  <span className="pr-stat-value">{getPartnerTypeLabel(partner.employee_role) || '-'}</span>
+                  <span className="pr-stat-label">Target Role</span>
+                </div>
+                <div className="pr-stat-item">
+                  <span className="pr-stat-value">{partner.current_employer || '-'}</span>
+                  <span className="pr-stat-label">Current Employer</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="pr-stat-item">
+                  <span className="pr-stat-value">{partner.years_in_business || '-'}</span>
+                  <span className="pr-stat-label">Years in Business</span>
+                </div>
+                <div className="pr-stat-item">
+                  <span className="pr-stat-value">{partner.avg_referrals_per_month || '-'}</span>
+                  <span className="pr-stat-label">Avg Referrals/Mo</span>
+                </div>
+                <div className="pr-stat-item">
+                  <span className="pr-stat-value">${(partner.production_volume || 0).toLocaleString()}</span>
+                  <span className="pr-stat-label">Production Volume</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -445,12 +504,14 @@ const PartnerRecruitDetail = () => {
         >
           Meetings
         </button>
-        <button
-          className={`pr-tab ${activeTab === 'proposals' ? 'active' : ''}`}
-          onClick={() => setActiveTab('proposals')}
-        >
-          Proposals
-        </button>
+        {!isEmployee && (
+          <button
+            className={`pr-tab ${activeTab === 'proposals' ? 'active' : ''}`}
+            onClick={() => setActiveTab('proposals')}
+          >
+            Proposals
+          </button>
+        )}
         <button
           className={`pr-tab ${activeTab === 'notes' ? 'active' : ''}`}
           onClick={() => setActiveTab('notes')}
@@ -466,30 +527,29 @@ const PartnerRecruitDetail = () => {
           <div className="pr-detail-section">
             <h3>Recruiting Pipeline</h3>
             <div className="pr-pipeline-tracker">
-              {PIPELINE_STAGES.map((stage, index) => {
-                const stageInfo = PARTNER_STATUSES.find(s => s.value === stage);
+              {pipelineStages.map((stage, index) => {
+                const stageInfo = statusList.find(s => s.value === stage);
                 const currentIndex = getCurrentStageIndex();
-                const isCompleted = currentIndex > index;
+                const isStageCompleted = currentIndex > index;
                 const isCurrent = currentIndex === index;
-                const isTerminal = ['declined', 'inactive'].includes(partner.status);
 
                 return (
                   <div
                     key={stage}
-                    className={`pr-pipeline-step ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}
+                    className={`pr-pipeline-step ${isStageCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}
                     onClick={() => handleStatusChange(stage)}
                   >
                     <div
                       className="pr-step-marker"
                       style={{
-                        backgroundColor: isCompleted || isCurrent ? stageInfo?.color : '#e5e7eb'
+                        backgroundColor: isStageCompleted || isCurrent ? stageInfo?.color : '#e5e7eb'
                       }}
                     >
-                      {isCompleted ? '✓' : index + 1}
+                      {isStageCompleted ? '✓' : index + 1}
                     </div>
                     <span className="pr-step-label">{stageInfo?.label}</span>
-                    {index < PIPELINE_STAGES.length - 1 && (
-                      <div className={`pr-step-connector ${isCompleted ? 'completed' : ''}`} />
+                    {index < pipelineStages.length - 1 && (
+                      <div className={`pr-step-connector ${isStageCompleted ? 'completed' : ''}`} />
                     )}
                   </div>
                 );
@@ -497,9 +557,9 @@ const PartnerRecruitDetail = () => {
             </div>
 
             {/* Terminal Status */}
-            {['declined', 'inactive'].includes(partner.status) && (
+            {['declined', 'inactive', 'withdrawn'].includes(partner.status) && (
               <div className="pr-terminal-status">
-                <span>Partner was {partner.status}</span>
+                <span>Candidate was {getStatusLabel(partner.status, partner.candidate_category)?.toLowerCase()}</span>
               </div>
             )}
 
@@ -533,6 +593,7 @@ const PartnerRecruitDetail = () => {
           <div className="pr-detail-section">
             <h3>Next Steps</h3>
             <div className="pr-task-list">
+              {/* Shared early stages */}
               {partner.status === 'new' && (
                 <button className="pr-task-item" onClick={() => setShowLogCall(true)}>
                   <span className="pr-task-icon">@</span>
@@ -548,14 +609,14 @@ const PartnerRecruitDetail = () => {
                     <span className="pr-task-icon">@</span>
                     <div className="pr-task-content">
                       <strong>Schedule Meeting</strong>
-                      <p>Set up coffee or lunch to discuss partnership</p>
+                      <p>{isEmployee ? 'Set up an introductory meeting' : 'Set up coffee or lunch to discuss partnership'}</p>
                     </div>
                   </button>
                   <button className="pr-task-item" onClick={() => handleStatusChange('qualified')}>
                     <span className="pr-task-icon">@</span>
                     <div className="pr-task-content">
                       <strong>Mark as Qualified</strong>
-                      <p>Confirm this is a good partnership fit</p>
+                      <p>{isEmployee ? 'Confirm this is a strong candidate' : 'Confirm this is a good partnership fit'}</p>
                     </div>
                   </button>
                 </>
@@ -565,11 +626,13 @@ const PartnerRecruitDetail = () => {
                   <span className="pr-task-icon">@</span>
                   <div className="pr-task-content">
                     <strong>Schedule/Confirm Meeting</strong>
-                    <p>Meet to discuss partnership details</p>
+                    <p>{isEmployee ? 'Meet to discuss the opportunity' : 'Meet to discuss partnership details'}</p>
                   </div>
                 </button>
               )}
-              {partner.status === 'met' && (
+
+              {/* Partner-specific stages */}
+              {!isEmployee && partner.status === 'met' && (
                 <button className="pr-task-item" onClick={() => setShowCreateProposal(true)}>
                   <span className="pr-task-icon">@</span>
                   <div className="pr-task-content">
@@ -578,7 +641,7 @@ const PartnerRecruitDetail = () => {
                   </div>
                 </button>
               )}
-              {partner.status === 'proposal_sent' && (
+              {!isEmployee && partner.status === 'proposal_sent' && (
                 <button className="pr-task-item" onClick={() => setShowLogCall(true)}>
                   <span className="pr-task-icon">@</span>
                   <div className="pr-task-content">
@@ -587,7 +650,7 @@ const PartnerRecruitDetail = () => {
                   </div>
                 </button>
               )}
-              {partner.status === 'negotiating' && (
+              {!isEmployee && partner.status === 'negotiating' && (
                 <button className="pr-task-item" onClick={handleOnboard}>
                   <span className="pr-task-icon">@</span>
                   <div className="pr-task-content">
@@ -596,12 +659,59 @@ const PartnerRecruitDetail = () => {
                   </div>
                 </button>
               )}
-              {partner.status === 'onboarded' && (
+              {!isEmployee && partner.status === 'onboarded' && (
                 <div className="pr-success-state">
                   <span className="pr-success-icon">@</span>
                   <div>
                     <strong>Partnership Active!</strong>
                     <p>Partner is now onboarded and ready for referrals</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Employee-specific stages */}
+              {isEmployee && partner.status === 'met' && (
+                <button className="pr-task-item" onClick={() => handleStatusChange('screening')}>
+                  <span className="pr-task-icon">@</span>
+                  <div className="pr-task-content">
+                    <strong>Begin Screening</strong>
+                    <p>Review qualifications, background, and references</p>
+                  </div>
+                </button>
+              )}
+              {isEmployee && partner.status === 'screening' && (
+                <button className="pr-task-item" onClick={() => handleStatusChange('interview')}>
+                  <span className="pr-task-icon">@</span>
+                  <div className="pr-task-content">
+                    <strong>Schedule Interview</strong>
+                    <p>Conduct formal interview with hiring team</p>
+                  </div>
+                </button>
+              )}
+              {isEmployee && partner.status === 'interview' && (
+                <button className="pr-task-item" onClick={() => handleStatusChange('offer')}>
+                  <span className="pr-task-icon">@</span>
+                  <div className="pr-task-content">
+                    <strong>Extend Offer</strong>
+                    <p>Present compensation package and offer letter</p>
+                  </div>
+                </button>
+              )}
+              {isEmployee && partner.status === 'offer' && (
+                <button className="pr-task-item" onClick={handleHire}>
+                  <span className="pr-task-icon">@</span>
+                  <div className="pr-task-content">
+                    <strong>Mark as Hired</strong>
+                    <p>Candidate accepted the offer</p>
+                  </div>
+                </button>
+              )}
+              {isEmployee && partner.status === 'hired' && (
+                <div className="pr-success-state">
+                  <span className="pr-success-icon">@</span>
+                  <div>
+                    <strong>Hired!</strong>
+                    <p>Employee has been onboarded to the team</p>
                   </div>
                 </div>
               )}
@@ -625,9 +735,11 @@ const PartnerRecruitDetail = () => {
               <button className="pr-quick-btn" onClick={() => setShowScheduleMeeting(true)}>
                 Schedule
               </button>
-              <button className="pr-quick-btn" onClick={() => setShowCreateProposal(true)}>
-                Proposal
-              </button>
+              {!isEmployee && (
+                <button className="pr-quick-btn" onClick={() => setShowCreateProposal(true)}>
+                  Proposal
+                </button>
+              )}
             </div>
 
             <h3 style={{ marginTop: '24px' }}>Recent Activity</h3>
@@ -784,7 +896,7 @@ const PartnerRecruitDetail = () => {
             <textarea
               value={newNote}
               onChange={(e) => setNewNote(e.target.value)}
-              placeholder="Add a note about this partner..."
+              placeholder={isEmployee ? "Add a note about this candidate..." : "Add a note about this partner..."}
               className="pr-textarea"
               rows="3"
             />
@@ -1017,12 +1129,12 @@ const PartnerRecruitDetail = () => {
         </div>
       )}
 
-      {/* Edit Partner Modal */}
+      {/* Edit Partner/Employee Modal */}
       {showEditPartner && (
         <div className="pr-modal-overlay">
           <div className="pr-modal pr-modal-large">
             <div className="pr-modal-header">
-              <h3>Edit Partner</h3>
+              <h3>{isEmployee ? 'Edit Employee' : 'Edit Partner'}</h3>
               <button className="pr-modal-close" onClick={() => setShowEditPartner(false)}>&times;</button>
             </div>
             <div className="pr-form-row">
@@ -1065,26 +1177,96 @@ const PartnerRecruitDetail = () => {
                 />
               </div>
             </div>
-            <div className="pr-form-row">
-              <div className="pr-form-group">
-                <label>Company Name</label>
-                <input
-                  type="text"
-                  value={editForm.company_name}
-                  onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })}
-                  className="pr-input"
-                />
-              </div>
-              <div className="pr-form-group">
-                <label>License Number</label>
-                <input
-                  type="text"
-                  value={editForm.license_number}
-                  onChange={(e) => setEditForm({ ...editForm, license_number: e.target.value })}
-                  className="pr-input"
-                />
-              </div>
-            </div>
+            {isEmployee ? (
+              <>
+                <div className="pr-form-row">
+                  <div className="pr-form-group">
+                    <label>Role</label>
+                    <select
+                      value={editForm.employee_role || ''}
+                      onChange={(e) => setEditForm({ ...editForm, employee_role: e.target.value })}
+                      className="pr-select"
+                    >
+                      <option value="">Select Role</option>
+                      {EMPLOYEE_ROLES.map(r => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="pr-form-group">
+                    <label>NMLS ID</label>
+                    <input
+                      type="text"
+                      value={editForm.nmls_id || ''}
+                      onChange={(e) => setEditForm({ ...editForm, nmls_id: e.target.value })}
+                      className="pr-input"
+                    />
+                  </div>
+                </div>
+                <div className="pr-form-row">
+                  <div className="pr-form-group">
+                    <label>Current Employer</label>
+                    <input
+                      type="text"
+                      value={editForm.current_employer || ''}
+                      onChange={(e) => setEditForm({ ...editForm, current_employer: e.target.value })}
+                      className="pr-input"
+                    />
+                  </div>
+                  <div className="pr-form-group">
+                    <label>Years Experience</label>
+                    <input
+                      type="number"
+                      value={editForm.years_experience || ''}
+                      onChange={(e) => setEditForm({ ...editForm, years_experience: parseInt(e.target.value) || '' })}
+                      className="pr-input"
+                    />
+                  </div>
+                </div>
+                <div className="pr-form-group">
+                  <label>Desired Compensation</label>
+                  <input
+                    type="text"
+                    value={editForm.desired_compensation || ''}
+                    onChange={(e) => setEditForm({ ...editForm, desired_compensation: e.target.value })}
+                    placeholder="e.g., $80K base + 50bps"
+                    className="pr-input"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="pr-form-row">
+                  <div className="pr-form-group">
+                    <label>Company Name</label>
+                    <input
+                      type="text"
+                      value={editForm.company_name}
+                      onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })}
+                      className="pr-input"
+                    />
+                  </div>
+                  <div className="pr-form-group">
+                    <label>License Number</label>
+                    <input
+                      type="text"
+                      value={editForm.license_number}
+                      onChange={(e) => setEditForm({ ...editForm, license_number: e.target.value })}
+                      className="pr-input"
+                    />
+                  </div>
+                </div>
+                <div className="pr-form-group">
+                  <label>Years in Business</label>
+                  <input
+                    type="number"
+                    value={editForm.years_in_business}
+                    onChange={(e) => setEditForm({ ...editForm, years_in_business: parseInt(e.target.value) || '' })}
+                    className="pr-input"
+                  />
+                </div>
+              </>
+            )}
             <div className="pr-form-row">
               <div className="pr-form-group">
                 <label>City</label>
@@ -1105,15 +1287,6 @@ const PartnerRecruitDetail = () => {
                   className="pr-input"
                 />
               </div>
-            </div>
-            <div className="pr-form-group">
-              <label>Years in Business</label>
-              <input
-                type="number"
-                value={editForm.years_in_business}
-                onChange={(e) => setEditForm({ ...editForm, years_in_business: parseInt(e.target.value) || '' })}
-                className="pr-input"
-              />
             </div>
             <div className="pr-form-group">
               <label>Notes</label>

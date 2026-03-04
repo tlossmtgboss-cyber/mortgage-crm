@@ -77,21 +77,59 @@ export const PARTNER_SOURCES = [
 ];
 
 // =============================================================================
+// EMPLOYEE RECRUITING CONSTANTS
+// =============================================================================
+
+export const EMPLOYEE_ROLES = [
+  { value: 'loan_officer', label: 'Loan Officer' },
+  { value: 'processor', label: 'Loan Processor' },
+  { value: 'closer', label: 'Closer/Funder' },
+  { value: 'underwriter', label: 'Underwriter' },
+  { value: 'assistant', label: 'Production Assistant' }
+];
+
+export const EMPLOYEE_STATUSES = [
+  { value: 'new', label: 'New', color: '#3b82f6', icon: 'plus-circle' },
+  { value: 'contacted', label: 'Contacted', color: '#8b5cf6', icon: 'phone' },
+  { value: 'qualified', label: 'Qualified', color: '#a855f7', icon: 'check-circle' },
+  { value: 'meeting_scheduled', label: 'Meeting Scheduled', color: '#f59e0b', icon: 'calendar' },
+  { value: 'met', label: 'Met', color: '#eab308', icon: 'users' },
+  { value: 'screening', label: 'Screening', color: '#f97316', icon: 'search' },
+  { value: 'interview', label: 'Interview', color: '#ec4899', icon: 'mic' },
+  { value: 'offer', label: 'Offer Extended', color: '#14b8a6', icon: 'file-text' },
+  { value: 'hired', label: 'Hired', color: '#10b981', icon: 'check' },
+  { value: 'declined', label: 'Declined', color: '#ef4444', icon: 'x-circle' },
+  { value: 'withdrawn', label: 'Withdrawn', color: '#9ca3af', icon: 'arrow-left' },
+  { value: 'inactive', label: 'Inactive', color: '#6b7280', icon: 'pause-circle' }
+];
+
+export const EMPLOYEE_SOURCES = [
+  { value: 'referral', label: 'Referral' },
+  { value: 'networking', label: 'Networking' },
+  { value: 'cold_outreach', label: 'Cold Outreach' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'job_board', label: 'Job Board' },
+  { value: 'internal_referral', label: 'Internal Referral' }
+];
+
+// =============================================================================
 // DASHBOARD & STATS
 // =============================================================================
 
-export const getDashboardStats = async () => {
-  const response = await fetch(`${API_URL}/api/v1/partner-recruiting/dashboard/stats`, {
-    headers: getAuthHeaders()
-  });
+export const getDashboardStats = async (candidateCategory = null) => {
+  const params = new URLSearchParams();
+  if (candidateCategory) params.append('candidate_category', candidateCategory);
+  const url = `${API_URL}/api/v1/partner-recruiting/dashboard/stats?${params}`;
+  const response = await fetch(url, { headers: getAuthHeaders() });
   if (!response.ok) throw new Error('Failed to fetch dashboard stats');
   return response.json();
 };
 
-export const getPipelineMetrics = async (days = 90) => {
-  const response = await fetch(`${API_URL}/api/v1/partner-recruiting/pipeline/metrics?days=${days}`, {
-    headers: getAuthHeaders()
-  });
+export const getPipelineMetrics = async (days = 90, candidateCategory = null) => {
+  const params = new URLSearchParams({ days });
+  if (candidateCategory) params.append('candidate_category', candidateCategory);
+  const url = `${API_URL}/api/v1/partner-recruiting/pipeline/metrics?${params}`;
+  const response = await fetch(url, { headers: getAuthHeaders() });
   if (!response.ok) throw new Error('Failed to fetch pipeline metrics');
   return response.json();
 };
@@ -106,12 +144,13 @@ export const getPartnerCandidates = async (params = {}) => {
   if (params.partner_type) searchParams.append('partner_type', params.partner_type);
   if (params.source) searchParams.append('source', params.source);
   if (params.search) searchParams.append('search', params.search);
+  if (params.candidate_category) searchParams.append('candidate_category', params.candidate_category);
   if (params.limit) searchParams.append('limit', params.limit);
   if (params.offset) searchParams.append('offset', params.offset);
 
   const url = `${API_URL}/api/v1/partner-recruiting/candidates?${searchParams}`;
   const response = await fetch(url, { headers: getAuthHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch partner candidates');
+  if (!response.ok) throw new Error('Failed to fetch candidates');
   return response.json();
 };
 
@@ -250,6 +289,35 @@ export const recordProposalResponse = async (proposalId, accepted, notes = null)
 };
 
 // =============================================================================
+// EMPLOYEE CANDIDATES
+// =============================================================================
+
+export const createEmployeeCandidate = async (data) => {
+  const response = await fetch(`${API_URL}/api/v1/partner-recruiting/employee-candidates`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to create employee candidate');
+  }
+  return response.json();
+};
+
+export const hireEmployeeCandidate = async (candidateId) => {
+  const response = await fetch(`${API_URL}/api/v1/partner-recruiting/candidates/${candidateId}/hire`, {
+    method: 'POST',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to mark as hired');
+  }
+  return response.json();
+};
+
+// =============================================================================
 // ONBOARDING
 // =============================================================================
 
@@ -344,19 +412,27 @@ export const updatePartnerAssessment = async (partnerId, data) => {
 // HELPERS
 // =============================================================================
 
-export const getStatusColor = (status) => {
-  const statusObj = PARTNER_STATUSES.find(s => s.value === status);
+export const getStatusColor = (status, category = 'partner') => {
+  const list = category === 'employee' ? EMPLOYEE_STATUSES : PARTNER_STATUSES;
+  const statusObj = list.find(s => s.value === status);
   return statusObj?.color || '#6b7280';
 };
 
-export const getStatusLabel = (status) => {
-  const statusObj = PARTNER_STATUSES.find(s => s.value === status);
+export const getStatusLabel = (status, category = 'partner') => {
+  const list = category === 'employee' ? EMPLOYEE_STATUSES : PARTNER_STATUSES;
+  const statusObj = list.find(s => s.value === status);
   return statusObj?.label || status;
 };
 
 export const getPartnerTypeLabel = (type) => {
   const typeObj = PARTNER_TYPES.find(t => t.value === type);
-  return typeObj?.label || type;
+  if (typeObj) return typeObj.label;
+  const roleObj = EMPLOYEE_ROLES.find(r => r.value === type);
+  return roleObj?.label || type;
+};
+
+export const getAvailableStatuses = (category = 'partner') => {
+  return category === 'employee' ? EMPLOYEE_STATUSES : PARTNER_STATUSES;
 };
 
 export const formatPhoneNumber = (phone) => {
@@ -380,6 +456,9 @@ const partnerRecruitingApi = {
   updatePartnerCandidate,
   deletePartnerCandidate,
   updatePartnerStatus,
+  // Employee Candidates
+  createEmployeeCandidate,
+  hireEmployeeCandidate,
   // Meetings
   getPartnerMeetings,
   scheduleMeeting,
@@ -406,10 +485,14 @@ const partnerRecruitingApi = {
   getStatusColor,
   getStatusLabel,
   getPartnerTypeLabel,
+  getAvailableStatuses,
   formatPhoneNumber,
   // Constants
   PARTNER_TYPES,
   PARTNER_STATUSES,
+  EMPLOYEE_ROLES,
+  EMPLOYEE_STATUSES,
+  EMPLOYEE_SOURCES,
   MEETING_TYPES,
   MEETING_OUTCOMES,
   CALL_OUTCOMES,

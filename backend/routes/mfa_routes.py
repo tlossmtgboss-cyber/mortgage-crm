@@ -225,7 +225,7 @@ class MFALoginVerifyRequest(BaseModel):
     """Request to verify MFA token during login."""
     email: str
     mfa_token: str  # 6-digit TOTP token or backup code
-    access_token: str  # The provisional token from /token endpoint
+    access_token: str  # The MFA-scoped provisional token from /token endpoint
 
 
 @router.post("/login-verify")
@@ -237,7 +237,8 @@ async def verify_mfa_login(
     Verify MFA token during the login flow.
 
     After /token returns mfa_required=true, the frontend sends the user's
-    TOTP code here. On success, returns a new fully-authenticated token pair.
+    TOTP code here along with the MFA-scoped provisional token.
+    On success, returns a new fully-authenticated token pair.
 
     This endpoint accepts either a 6-digit TOTP code or a backup code.
     """
@@ -246,6 +247,28 @@ async def verify_mfa_login(
     # Lazy imports for auth functions
     import main
     User = main.User
+
+    # Validate the MFA-scoped provisional token
+    try:
+        from jose import jwt as jose_jwt, JWTError as JoseJWTError
+        payload = jose_jwt.decode(
+            request.access_token,
+            main.SECRET_KEY,
+            algorithms=[main.ALGORITHM],
+            options={"verify_aud": False},
+        )
+        token_scope = payload.get("scope", "")
+        token_email = payload.get("sub", "")
+        if token_scope != "mfa_verify" or token_email != request.email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired MFA session token",
+            )
+    except JoseJWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired MFA session token",
+        )
 
     user = db.query(User).filter(User.email == request.email).first()
     if not user:

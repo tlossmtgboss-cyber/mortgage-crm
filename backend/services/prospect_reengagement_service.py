@@ -549,14 +549,29 @@ Classify intent and generate response:"""
             }
 
     def _get_available_slots_text(self, conv_data: Dict) -> str:
-        """Fetch available appointment slots from the smart scheduler."""
+        """Fetch available appointment slots via direct ORM query with org filtering."""
         try:
-            from services.smart_scheduler_service import get_scheduler_service
-            svc = get_scheduler_service(self.db)
-            upcoming = svc.get_upcoming_appointments(
-                loan_officer_id=conv_data.get("lo_user_id"),
-                days_ahead=5,
+            from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+
+            lo_user_id = conv_data.get("lo_user_id")
+            org_id = conv_data.get("organization_id")
+            now = datetime.utcnow()
+            end_dt = now + timedelta(days=5)
+
+            query = self.db.query(ScheduledAppointment).filter(
+                ScheduledAppointment.start_time >= now,
+                ScheduledAppointment.start_time <= end_dt,
+                ScheduledAppointment.status.in_([
+                    AppointmentStatus.SCHEDULED.value,
+                    AppointmentStatus.CONFIRMED.value,
+                ]),
             )
+            if lo_user_id:
+                query = query.filter(ScheduledAppointment.loan_officer_id == lo_user_id)
+            if org_id:
+                query = query.filter(ScheduledAppointment.organization_id == org_id)
+
+            upcoming = query.order_by(ScheduledAppointment.start_time).all()
 
             # Build busy times and suggest open slots
             busy_times = set()
@@ -597,43 +612,57 @@ Classify intent and generate response:"""
     # ------------------------------------------------------------------
 
     def _attempt_booking(self, conv_data: Dict, appointment_time_str: str) -> Dict[str, Any]:
-        """Attempt to book an appointment via SmartSchedulerService."""
+        """Attempt to book an appointment via direct ORM with organization_id filtering."""
         try:
-            from services.smart_scheduler_service import get_scheduler_service
+            from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
             from datetime import datetime as dt
+            import uuid as _uuid
 
             appointment_time = dt.fromisoformat(appointment_time_str)
-            svc = get_scheduler_service(self.db)
 
             context = conv_data.get("context") or {}
             if isinstance(context, str):
                 context = _json_loads(context)
 
-            result = svc.book_appointment(
-                contact_name=f"{context.get('lead_first_name', '')} {context.get('lead_last_name', '')}".strip() or "Prospect",
-                contact_email=context.get("lead_email", ""),
-                appointment_time=appointment_time,
-                contact_phone=conv_data["lead_phone"],
-                appointment_type="re_engagement_consultation",
-                loan_officer_id=conv_data["lo_user_id"],
-                organization_id=conv_data["organization_id"],
-                notes="Booked via AI prospect re-engagement",
-            )
+            contact_name = f"{context.get('lead_first_name', '')} {context.get('lead_last_name', '')}".strip() or "Prospect"
+            contact_email = context.get("lead_email", "")
+            contact_phone = conv_data["lead_phone"]
+            lo_user_id = conv_data["lo_user_id"]
+            org_id = conv_data["organization_id"]
 
-            if result.get("success"):
-                lo_name = context.get("lo_first_name", "your loan officer")
-                time_str = appointment_time.strftime("%A, %B %d at %I:%M %p")
-                confirmation = (
-                    f"You're all set! {lo_name} will call you on {time_str}. "
-                    f"We'll send a reminder before the call."
-                )
-                return {
-                    "success": True,
-                    "appointment_id": result.get("appointment_id"),
-                    "confirmation_message": confirmation,
-                }
-            else:
-                return {"success": False, "error": result.get("error", "Booking failed")}
+            duration_minutes = 30
+            end_time = appointment_time + timedelta(minutes=duration_minutes)
+            appt_id = f"APPT-{str(_uuid.uuid4())[:8].upper()}"
+
+            appointment = ScheduledAppointment(
+                appointment_id=appt_id,
+                loan_officer_id=lo_user_id,
+                contact_name=contact_name,
+                contact_email=contact_email,
+                contact_phone=contact_phone,
+                appointment_type="re_engagement_consultation",
+                start_time=appointment_time,
+                end_time=end_time,
+                duration_minutes=duration_minutes,
+                status=AppointmentStatus.SCHEDULED.value,
+                notes="Booked via AI prospect re-engagement",
+                booked_via="ai_assistant",
+                organization_id=org_id,
+            )
+            self.db.add(appointment)
+            self.db.commit()
+
+            lo_name = context.get("lo_first_name", "your loan officer")
+            time_str = appointment_time.strftime("%A, %B %d at %I:%M %p")
+            confirmation = (
+                f"You're all set! {lo_name} will call you on {time_str}. "
+                f"We'll send a reminder before the call."
+            )
+            return {
+                "success": True,
+                "appointment_id": appt_id,
+                "confirmation_message": confirmation,
+            }
 
         except Exception as e:
             logger.error(f"Booking attempt failed: {e}")
