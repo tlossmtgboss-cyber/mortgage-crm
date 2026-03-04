@@ -188,10 +188,7 @@ const MeetingRoom = () => {
               setCurrentUserId(userId);
               setDisplayName(userName);
             } else {
-              // Fallback to JWT parsing for display name
-              const payload = JSON.parse(atob(token.split('.')[1]));
-              userName = payload.sub?.split('@')[0] || 'Guest';
-              setDisplayName(userName);
+              setDisplayName('Guest');
             }
           } catch {
             setDisplayName('Guest');

@@ -14,6 +14,20 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+# Valid state transitions: maps current status → set of allowed next statuses.
+# Prevents invalid jumps like "new" → "hired" without going through the pipeline.
+VALID_TRANSITIONS = {
+    "new": {"screening", "phone_screen", "rejected", "withdrawn"},
+    "screening": {"phone_screen", "rejected", "withdrawn"},
+    "phone_screen": {"interview", "rejected", "withdrawn"},
+    "interview": {"assessment", "offer", "rejected", "withdrawn"},
+    "assessment": {"offer", "rejected", "withdrawn"},
+    "offer": {"hired", "rejected", "withdrawn"},
+    "hired": set(),  # Terminal state
+    "rejected": {"new"},  # Allow re-opening
+    "withdrawn": {"new"},  # Allow re-opening
+}
+
 # Score gates: minimum assessment score and required quizzes to advance to each stage
 SCORE_GATES = {
     "interview": {"min_score": 4.0, "required_quizzes": ["screening"]},
@@ -554,6 +568,15 @@ class RecruitingService:
             raise ValueError(f"Candidate {candidate_id} not found")
 
         old_status = current.status
+
+        # State machine: enforce valid transitions
+        allowed = VALID_TRANSITIONS.get(old_status)
+        if allowed is not None and new_status not in allowed:
+            allowed_list = ", ".join(sorted(allowed)) if allowed else "(none — terminal state)"
+            raise ValueError(
+                f"Invalid transition: '{old_status}' → '{new_status}'. "
+                f"Allowed transitions from '{old_status}': {allowed_list}"
+            )
 
         # Score gate check
         gate_error = self._check_score_gate(candidate_id, new_status, skip_score_gate)

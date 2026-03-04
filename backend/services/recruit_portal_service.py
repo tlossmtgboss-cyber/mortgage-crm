@@ -450,25 +450,52 @@ Candidate's current status: {candidate.status}
         workspace_id: int,
         date: str
     ) -> List[AvailabilitySlot]:
-        """Get available time slots for scheduling."""
-        # For now, return simulated availability
-        # In production, this would integrate with Calendly or a scheduling system
+        """Get available time slots for scheduling.
 
+        Generates 1-hour slots from 9 AM–5 PM and marks slots as unavailable
+        if an existing appointment overlaps that window.
+        """
         target_date = datetime.strptime(date, "%Y-%m-%d")
         slots = []
+
+        with SessionLocal() as conn:
+            # Fetch existing appointments for this workspace on the target date
+            booked = conn.execute(
+                text("""
+                    SELECT scheduled_at,
+                           COALESCE(duration_minutes, 60) as duration_minutes
+                    FROM recruit_portal_appointments
+                    WHERE workspace_id = :workspace_id
+                      AND status NOT IN ('cancelled', 'no_show')
+                      AND scheduled_at::date = :target_date
+                """),
+                {"workspace_id": workspace_id, "target_date": date}
+            ).fetchall()
+
+        # Build set of hours that are already booked
+        booked_hours = set()
+        for appt in booked:
+            appt_start = appt.scheduled_at
+            if isinstance(appt_start, str):
+                appt_start = datetime.fromisoformat(appt_start.replace('Z', '+00:00'))
+            appt_end = appt_start + timedelta(minutes=appt.duration_minutes)
+            # Mark every hour slot that overlaps this appointment
+            for hour in range(9, 17):
+                slot_start = target_date.replace(hour=hour, minute=0)
+                slot_end = slot_start + timedelta(hours=1)
+                # Check overlap: slot and appointment overlap if they don't not-overlap
+                if slot_start < appt_end and slot_end > appt_start.replace(tzinfo=None):
+                    booked_hours.add(hour)
 
         # Generate slots from 9 AM to 5 PM
         for hour in range(9, 17):
             start = target_date.replace(hour=hour, minute=0)
             end = start + timedelta(hours=1)
 
-            # Simulate some slots being unavailable
-            is_available = (hour % 3 != 0)  # Every 3rd slot is "booked"
-
             slots.append(AvailabilitySlot(
                 start_time=start.isoformat(),
                 end_time=end.isoformat(),
-                is_available=is_available
+                is_available=(hour not in booked_hours)
             ))
 
         return slots
@@ -601,13 +628,7 @@ Candidate's current status: {candidate.status}
             row = result.fetchone()
 
         if not row:
-            return {
-                "lead_conversion_lift": 1.25,
-                "avg_deal_size_lift": 1.15,
-                "tech_efficiency_gain": 1.20,
-                "marketing_lead_boost": 1.30,
-                "comp_percentage": 0.0125
-            }
+            return dict(self.CALCULATOR_DEFAULTS)
 
         return {
             "lead_conversion_lift": float(row.lead_conversion_lift),
@@ -617,6 +638,17 @@ Candidate's current status: {candidate.status}
             "comp_percentage": float(row.comp_percentage)
         }
 
+    # Canonical calculator defaults — must match CalculatorConfig model and DB defaults.
+    # Single source of truth for fallback values when no org-specific config exists.
+    CALCULATOR_DEFAULTS = {
+        "lead_conversion_lift": 1.25,
+        "avg_deal_size_lift": 1.15,
+        "closing_speed_factor": 0.85,
+        "tech_efficiency_gain": 1.20,
+        "marketing_lead_boost": 1.30,
+        "comp_percentage": 0.0125,
+    }
+
     def calculate_production_impact(self, input_data: CalculatorInput, organization_id: Optional[int] = None) -> CalculatorResult:
         """Calculate projected production impact.
 
@@ -625,14 +657,8 @@ Candidate's current status: {candidate.status}
         if organization_id:
             config = self.get_calculator_config(organization_id)
         else:
-            # Public portal: use defaults
-            config = {
-                "lead_conversion_lift": 1.15,
-                "avg_deal_size_lift": 1.10,
-                "tech_efficiency_gain": 1.20,
-                "marketing_lead_boost": 1.25,
-                "comp_percentage": 0.0125,
-            }
+            # Public portal: use canonical defaults (same as DB/CalculatorConfig model)
+            config = dict(self.CALCULATOR_DEFAULTS)
 
         current_volume = input_data.current_volume
         current_units = input_data.current_units

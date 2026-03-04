@@ -1,7 +1,7 @@
 """
 Partner Recruiting Routes
 API endpoints for Loan Officers to recruit and manage referral partners.
-Each LO only sees their own partner recruits (owner_id filtering).
+Each LO only sees their own partner recruits (owner_id + organization_id filtering).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -167,13 +167,21 @@ class EmployeeCandidateCreate(BaseModel):
 # HELPER FUNCTIONS
 # =============================================================================
 
-def verify_partner_ownership(partner_id: int, user_id: int, db: Session):
-    """Verify user owns this partner recruit."""
-    result = db.execute(text("""
-        SELECT id, first_name, last_name, status, candidate_category
-        FROM partner_candidates
-        WHERE id = :id AND owner_id = :user_id AND is_active = true
-    """), {"id": partner_id, "user_id": user_id}).fetchone()
+def verify_partner_ownership(partner_id: int, user_id: int, db: Session, organization_id: int = None):
+    """Verify user owns this partner recruit within their organization."""
+    if organization_id:
+        result = db.execute(text("""
+            SELECT id, first_name, last_name, status, candidate_category
+            FROM partner_candidates
+            WHERE id = :id AND owner_id = :user_id
+              AND organization_id = :org_id AND is_active = true
+        """), {"id": partner_id, "user_id": user_id, "org_id": organization_id}).fetchone()
+    else:
+        result = db.execute(text("""
+            SELECT id, first_name, last_name, status, candidate_category
+            FROM partner_candidates
+            WHERE id = :id AND owner_id = :user_id AND is_active = true
+        """), {"id": partner_id, "user_id": user_id}).fetchone()
 
     if not result:
         raise HTTPException(
@@ -253,9 +261,10 @@ async def get_dashboard_stats(
 ):
     """Get recruiting dashboard stats for current LO."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
     category_filter = ""
-    params = {"user_id": user_id}
+    params = {"user_id": user_id, "org_id": org_id}
     if candidate_category:
         category_filter = "AND candidate_category = :candidate_category"
         params["candidate_category"] = candidate_category
@@ -264,7 +273,7 @@ async def get_dashboard_stats(
     status_counts = db.execute(text(f"""
         SELECT status, COUNT(*) as count
         FROM partner_candidates
-        WHERE owner_id = :user_id AND is_active = true {category_filter}
+        WHERE owner_id = :user_id AND organization_id = :org_id AND is_active = true {category_filter}
         GROUP BY status
     """), params).fetchall()
 
@@ -274,7 +283,7 @@ async def get_dashboard_stats(
     recent_count = db.execute(text(f"""
         SELECT COUNT(*) as count
         FROM partner_candidates
-        WHERE owner_id = :user_id
+        WHERE owner_id = :user_id AND organization_id = :org_id
           AND is_active = true
           AND created_at >= CURRENT_DATE - INTERVAL '7 days'
           {category_filter}
@@ -356,9 +365,10 @@ async def get_pipeline_metrics(
 ):
     """Get pipeline conversion metrics for current LO."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
     category_filter = ""
-    params = {"user_id": user_id, "days": days}
+    params = {"user_id": user_id, "org_id": org_id, "days": days}
     if candidate_category:
         category_filter = "AND candidate_category = :candidate_category"
         params["candidate_category"] = candidate_category
@@ -380,7 +390,7 @@ async def get_pipeline_metrics(
                 COUNT(*) FILTER (WHERE status = 'hired') as hired,
                 COUNT(*) FILTER (WHERE status IN ('declined', 'withdrawn')) as declined
             FROM partner_candidates
-            WHERE owner_id = :user_id
+            WHERE owner_id = :user_id AND organization_id = :org_id
               AND is_active = true
               AND created_at >= CURRENT_DATE - :days * INTERVAL '1 day'
               {category_filter}
@@ -423,7 +433,7 @@ async def get_pipeline_metrics(
             COUNT(*) FILTER (WHERE status = 'onboarded') as onboarded,
             COUNT(*) FILTER (WHERE status = 'declined') as declined
         FROM partner_candidates
-        WHERE owner_id = :user_id
+        WHERE owner_id = :user_id AND organization_id = :org_id
           AND is_active = true
           AND created_at >= CURRENT_DATE - :days * INTERVAL '1 day'
           {category_filter}
@@ -468,10 +478,11 @@ async def list_partner_candidates(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List partner/employee candidates for current LO (owner_id filtered)."""
+    """List partner/employee candidates for current LO (owner_id + org filtered)."""
     user_id = current_user.id
-    params = {"user_id": user_id, "limit": limit, "offset": offset}
-    filters = ["owner_id = :user_id", "is_active = true"]
+    org_id = current_user.organization_id
+    params = {"user_id": user_id, "org_id": org_id, "limit": limit, "offset": offset}
+    filters = ["owner_id = :user_id", "organization_id = :org_id", "is_active = true"]
 
     if candidate_category:
         filters.append("candidate_category = :candidate_category")
@@ -581,6 +592,7 @@ async def get_partner_candidate(
 ):
     """Get detailed partner candidate information."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
     result = db.execute(text("""
         SELECT
@@ -588,8 +600,9 @@ async def get_partner_candidate(
             rp.id as referral_partner_id_linked
         FROM partner_candidates pc
         LEFT JOIN referral_partners rp ON rp.id = pc.referral_partner_id
-        WHERE pc.id = :partner_id AND pc.owner_id = :user_id AND pc.is_active = true
-    """), {"partner_id": partner_id, "user_id": user_id}).fetchone()
+        WHERE pc.id = :partner_id AND pc.owner_id = :user_id
+          AND pc.organization_id = :org_id AND pc.is_active = true
+    """), {"partner_id": partner_id, "user_id": user_id, "org_id": org_id}).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail="Partner not found")
@@ -708,12 +721,14 @@ async def create_partner_candidate(
 ):
     """Create a new partner candidate."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
-    # Check for duplicate email for this owner
+    # Check for duplicate email within this owner's org
     existing = db.execute(text("""
         SELECT id FROM partner_candidates
-        WHERE owner_id = :user_id AND email = :email AND is_active = true
-    """), {"user_id": user_id, "email": data.email}).fetchone()
+        WHERE owner_id = :user_id AND organization_id = :org_id
+          AND email = :email AND is_active = true
+    """), {"user_id": user_id, "org_id": org_id, "email": data.email}).fetchone()
 
     if existing:
         raise HTTPException(
@@ -777,6 +792,7 @@ async def create_employee_candidate(
 ):
     """Create a new employee recruit candidate."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
     if data.employee_role not in VALID_EMPLOYEE_ROLES:
         raise HTTPException(
@@ -784,11 +800,12 @@ async def create_employee_candidate(
             detail=f"Invalid employee_role. Must be one of: {VALID_EMPLOYEE_ROLES}"
         )
 
-    # Check for duplicate email for this owner
+    # Check for duplicate email within this owner's org
     existing = db.execute(text("""
         SELECT id FROM partner_candidates
-        WHERE owner_id = :user_id AND email = :email AND is_active = true
-    """), {"user_id": user_id, "email": data.email}).fetchone()
+        WHERE owner_id = :user_id AND organization_id = :org_id
+          AND email = :email AND is_active = true
+    """), {"user_id": user_id, "org_id": org_id, "email": data.email}).fetchone()
 
     if existing:
         raise HTTPException(
@@ -866,7 +883,7 @@ async def hire_employee_candidate(
 ):
     """Mark an employee candidate as hired."""
     user_id = current_user.id
-    candidate = verify_partner_ownership(partner_id, user_id, db)
+    candidate = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     category = getattr(candidate, 'candidate_category', 'partner') or 'partner'
     if category != 'employee':
@@ -883,8 +900,8 @@ async def hire_employee_candidate(
             status_changed_by = :user_id,
             last_activity_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = :partner_id
-    """), {"partner_id": partner_id, "user_id": user_id})
+        WHERE id = :partner_id AND organization_id = :org_id
+    """), {"partner_id": partner_id, "user_id": user_id, "org_id": current_user.organization_id})
 
     log_partner_activity(
         db, partner_id, "hired",
@@ -910,7 +927,8 @@ async def update_partner_candidate(
 ):
     """Update a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    org_id = current_user.organization_id
+    verify_partner_ownership(partner_id, user_id, db, org_id)
 
     # Allowlist of updatable fields to prevent SQL injection via dynamic field names
     allowed_fields = {
@@ -925,7 +943,7 @@ async def update_partner_candidate(
     }
 
     update_fields = []
-    params = {"partner_id": partner_id, "user_id": user_id}
+    params = {"partner_id": partner_id, "user_id": user_id, "org_id": org_id}
 
     for field, value in data.model_dump(exclude_unset=True).items():
         if value is not None and field in allowed_fields:
@@ -941,7 +959,7 @@ async def update_partner_candidate(
         result = db.execute(text(f"""
             UPDATE partner_candidates
             SET {', '.join(update_fields)}
-            WHERE id = :partner_id AND owner_id = :user_id
+            WHERE id = :partner_id AND owner_id = :user_id AND organization_id = :org_id
             RETURNING id
         """), params)
 
@@ -965,14 +983,15 @@ async def delete_partner_candidate(
 ):
     """Soft delete a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     try:
         db.execute(text("""
             UPDATE partner_candidates
             SET is_active = false, updated_at = CURRENT_TIMESTAMP
             WHERE id = :partner_id AND owner_id = :user_id
-        """), {"partner_id": partner_id, "user_id": user_id})
+              AND organization_id = :org_id
+        """), {"partner_id": partner_id, "user_id": user_id, "org_id": current_user.organization_id})
 
         log_partner_activity(db, partner_id, "deleted", "Partner candidate deleted", user_id)
         db.commit()
@@ -992,7 +1011,7 @@ async def update_partner_status(
 ):
     """Update partner/employee candidate status."""
     user_id = current_user.id
-    partner = verify_partner_ownership(partner_id, user_id, db)
+    partner = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
     old_status = partner.status
 
     # Category-aware status validation
@@ -1017,8 +1036,8 @@ async def update_partner_status(
             last_activity_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
             {extra_sets}
-        WHERE id = :partner_id
-    """), {"partner_id": partner_id, "status": data.status, "user_id": user_id})
+        WHERE id = :partner_id AND organization_id = :org_id
+    """), {"partner_id": partner_id, "status": data.status, "user_id": user_id, "org_id": current_user.organization_id})
 
     log_partner_activity(
         db, partner_id, "status_change",
@@ -1049,7 +1068,7 @@ async def list_partner_meetings(
 ):
     """List all meetings for a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     results = db.execute(text("""
         SELECT
@@ -1096,7 +1115,7 @@ async def schedule_partner_meeting(
 ):
     """Schedule a meeting with a partner candidate."""
     user_id = current_user.id
-    partner = verify_partner_ownership(partner_id, user_id, db)
+    partner = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     # Get the next round number
     round_result = db.execute(text("""
@@ -1166,14 +1185,15 @@ async def complete_partner_meeting(
 ):
     """Mark a meeting as completed with outcome."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
-    # Get meeting and verify ownership
+    # Get meeting and verify ownership + tenant isolation
     meeting = db.execute(text("""
         SELECT pm.*, pc.owner_id, pc.status as partner_status
         FROM partner_meetings pm
         JOIN partner_candidates pc ON pc.id = pm.partner_candidate_id
-        WHERE pm.id = :meeting_id
-    """), {"meeting_id": meeting_id}).fetchone()
+        WHERE pm.id = :meeting_id AND pc.organization_id = :org_id
+    """), {"meeting_id": meeting_id, "org_id": org_id}).fetchone()
 
     if not meeting or meeting.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Meeting not found")
@@ -1234,13 +1254,14 @@ async def cancel_partner_meeting(
 ):
     """Cancel a meeting."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
     meeting = db.execute(text("""
         SELECT pm.*, pc.owner_id
         FROM partner_meetings pm
         JOIN partner_candidates pc ON pc.id = pm.partner_candidate_id
-        WHERE pm.id = :meeting_id
-    """), {"meeting_id": meeting_id}).fetchone()
+        WHERE pm.id = :meeting_id AND pc.organization_id = :org_id
+    """), {"meeting_id": meeting_id, "org_id": org_id}).fetchone()
 
     if not meeting or meeting.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Meeting not found")
@@ -1277,7 +1298,7 @@ async def list_partner_proposals(
 ):
     """List all proposals for a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     results = db.execute(text("""
         SELECT
@@ -1324,7 +1345,7 @@ async def create_partner_proposal(
 ):
     """Create a new proposal for a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     result = db.execute(text("""
         INSERT INTO partner_proposals (
@@ -1377,13 +1398,14 @@ async def send_partner_proposal(
 ):
     """Send a proposal to a partner candidate."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
     proposal = db.execute(text("""
         SELECT pp.*, pc.owner_id, pc.first_name, pc.last_name, pc.email, pc.status as partner_status
         FROM partner_proposals pp
         JOIN partner_candidates pc ON pc.id = pp.partner_candidate_id
-        WHERE pp.id = :proposal_id
-    """), {"proposal_id": proposal_id}).fetchone()
+        WHERE pp.id = :proposal_id AND pc.organization_id = :org_id
+    """), {"proposal_id": proposal_id, "org_id": org_id}).fetchone()
 
     if not proposal or proposal.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -1435,13 +1457,14 @@ async def record_proposal_response(
 ):
     """Record partner's response to a proposal."""
     user_id = current_user.id
+    org_id = current_user.organization_id
 
     proposal = db.execute(text("""
         SELECT pp.*, pc.owner_id, pc.first_name, pc.last_name
         FROM partner_proposals pp
         JOIN partner_candidates pc ON pc.id = pp.partner_candidate_id
-        WHERE pp.id = :proposal_id
-    """), {"proposal_id": proposal_id}).fetchone()
+        WHERE pp.id = :proposal_id AND pc.organization_id = :org_id
+    """), {"proposal_id": proposal_id, "org_id": org_id}).fetchone()
 
     if not proposal or proposal.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -1512,12 +1535,14 @@ async def onboard_partner(
     This converts a recruited partner into an active referral partner.
     """
     user_id = current_user.id
-    partner = verify_partner_ownership(partner_id, user_id, db)
+    org_id = current_user.organization_id
+    partner = verify_partner_ownership(partner_id, user_id, db, org_id)
 
     # Get full partner data
     partner_data = db.execute(text("""
-        SELECT * FROM partner_candidates WHERE id = :partner_id
-    """), {"partner_id": partner_id}).fetchone()
+        SELECT * FROM partner_candidates
+        WHERE id = :partner_id AND organization_id = :org_id
+    """), {"partner_id": partner_id, "org_id": org_id}).fetchone()
 
     if partner_data.status == 'onboarded':
         raise HTTPException(status_code=400, detail="Partner is already onboarded")
@@ -1599,7 +1624,7 @@ async def list_partner_notes(
 ):
     """List notes for a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     results = db.execute(text("""
         SELECT
@@ -1638,7 +1663,7 @@ async def add_partner_note(
 ):
     """Add a note to a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     result = db.execute(text("""
         INSERT INTO partner_notes (
@@ -1686,7 +1711,7 @@ async def list_partner_activities(
 ):
     """List activity timeline for a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     results = db.execute(text("""
         SELECT
@@ -1732,7 +1757,7 @@ async def log_partner_call(
 ):
     """Log a phone call with a partner candidate."""
     user_id = current_user.id
-    partner = verify_partner_ownership(partner_id, user_id, db)
+    partner = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     # Update last activity and status if needed
     update_status = ""
@@ -1775,7 +1800,7 @@ async def log_partner_email(
 ):
     """Log an email sent to a partner candidate."""
     user_id = current_user.id
-    partner = verify_partner_ownership(partner_id, user_id, db)
+    partner = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     # Update status if new
     if partner.status == 'new':
@@ -1817,7 +1842,7 @@ async def get_partner_assessment(
 ):
     """Get assessment for a partner candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     result = db.execute(text("""
         SELECT * FROM partner_assessments WHERE partner_candidate_id = :partner_id
@@ -1857,7 +1882,7 @@ async def update_partner_assessment(
 ):
     """Create or update assessment for a partner/employee candidate."""
     user_id = current_user.id
-    candidate = verify_partner_ownership(partner_id, user_id, db)
+    candidate = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     # Determine scoring weights based on candidate category
     category = getattr(candidate, 'candidate_category', 'partner') or 'partner'

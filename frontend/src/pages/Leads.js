@@ -8,6 +8,7 @@ import DispositionNoteModal from '../components/DispositionNoteModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
+import { getCurrentUser } from '../utils/auth';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import './Leads.css';
@@ -185,19 +186,10 @@ function Leads() {
 
   // Check if master user on mount
   useEffect(() => {
-    const checkMasterUser = () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          // Check if user ID is 1 or email is admin
-          setIsMasterUser(payload.user_id === 1 || payload.sub === 'admin@perenniaai.com');
-        } catch (e) {
-          console.error('Error parsing token:', e);
-        }
-      }
-    };
-    checkMasterUser();
+    const user = getCurrentUser();
+    if (user) {
+      setIsMasterUser(user.id === 1 || user.user_id === 1 || user.email === 'admin@perenniaai.com');
+    }
   }, []);
 
   // Detect duplicates when leads data changes (memoized for performance)

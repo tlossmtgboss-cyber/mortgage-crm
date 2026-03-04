@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from '../../utils/toast';
+import { getCurrentUserId } from '../../utils/auth';
 import {
   getCandidateFullProfile,
   updateCandidateStatus,
@@ -48,22 +49,8 @@ const CANDIDATE_STATUSES = [
 // Pipeline stages in order (excluding terminal states)
 const PIPELINE_STAGES = ['new', 'screening', 'phone_screen', 'interview', 'assessment', 'offer', 'hired'];
 
-// Safe helper to get user ID from JWT token
-const getUserIdFromToken = () => {
-  try {
-    const token = localStorage.getItem('token');
-    if (token) {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(atob(parts[1]));
-        if (payload.user_id) return payload.user_id;
-      }
-    }
-  } catch (e) {
-    // Token parse failure — caller must handle null
-  }
-  return null;
-};
+// Get user ID from localStorage (set at login) — no JWT decoding needed
+const getUserIdFromToken = getCurrentUserId;
 
 const RecruitDetail = () => {
   const { candidateId } = useParams();

@@ -132,14 +132,18 @@ const RecruitPortal = () => {
   const [activeTab, setActiveTab] = useState('culture');
   const [playingVideoId, setPlayingVideoId] = useState(null);
 
+  // Build auth headers for portal token — sent via Authorization header, not URL params
+  const portalHeaders = token
+    ? { 'Authorization': `Bearer ${token}` }
+    : {};
+
   const fetchPortalData = useCallback(async () => {
     try {
       setLoading(true);
-      const url = token
-        ? `${API_URL}/api/v1/recruit-portal/purl/${slug}?token=${token}`
-        : `${API_URL}/api/v1/recruit-portal/purl/${slug}`;
-
-      const response = await fetch(url);
+      const response = await fetch(
+        `${API_URL}/api/v1/recruit-portal/purl/${slug}`,
+        { headers: portalHeaders }
+      );
       if (!response.ok) {
         throw new Error('Portal not found');
       }
@@ -155,7 +159,10 @@ const RecruitPortal = () => {
   const fetchVideos = useCallback(async () => {
     try {
       if (!token) return;
-      const response = await fetch(`${API_URL}/api/v1/recruiting/video/portal/${slug}/videos?token=${encodeURIComponent(token)}`);
+      const response = await fetch(
+        `${API_URL}/api/v1/recruiting/video/portal/${slug}/videos`,
+        { headers: portalHeaders }
+      );
       if (response.ok) {
         const data = await response.json();
         setVideos(data.videos || []);
@@ -168,8 +175,9 @@ const RecruitPortal = () => {
   const markVideoViewed = async (videoId) => {
     try {
       if (!token) return;
-      await fetch(`${API_URL}/api/v1/recruiting/video/mark-viewed/${videoId}?token=${encodeURIComponent(token)}`, {
-        method: 'POST'
+      await fetch(`${API_URL}/api/v1/recruiting/video/mark-viewed/${videoId}`, {
+        method: 'POST',
+        headers: portalHeaders,
       });
       setVideos(prev => prev.map(v =>
         v.id === videoId ? { ...v, is_new: false } : v

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getCurrentUserId } from '../../utils/auth';
 import './AssessmentQuizModal.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
@@ -99,7 +100,7 @@ const AssessmentQuizModal = ({
 
     try {
       const token = localStorage.getItem('token');
-      const userId = JSON.parse(atob(token.split('.')[1])).user_id || 1;
+      const userId = getCurrentUserId() || 1;
 
       const submission = {
         disposition: disposition,

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { getCurrentUserId } from '../utils/auth';
 import './EstimateComparison.css';
 import { getCalendlySchedulingUrl } from '../services/schedulingService';
 
@@ -63,23 +64,14 @@ function EstimateComparison() {
   useEffect(() => {
     const fetchCalendlyUrl = async () => {
       try {
-        // Try to get the user ID from localStorage or use a default
-        const token = localStorage.getItem('token');
-        if (token) {
-          // Parse the user ID from the JWT token (basic parsing)
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          const userId = payload.sub || payload.user_id;
-
-          if (userId) {
-            const result = await getCalendlySchedulingUrl(userId);
-            if (result.success && result.schedulingUrl) {
-              // Add params to hide event type details and GDPR banner
-              const url = new URL(result.schedulingUrl);
-              url.searchParams.set('hide_event_type_details', '1');
-              url.searchParams.set('hide_gdpr_banner', '1');
-              setCalendlyUrl(url.toString());
-              console.log('[EstimateComparison] Using dynamic Calendly URL:', url.toString());
-            }
+        const userId = getCurrentUserId();
+        if (userId) {
+          const result = await getCalendlySchedulingUrl(userId);
+          if (result.success && result.schedulingUrl) {
+            const url = new URL(result.schedulingUrl);
+            url.searchParams.set('hide_event_type_details', '1');
+            url.searchParams.set('hide_gdpr_banner', '1');
+            setCalendlyUrl(url.toString());
           }
         }
       } catch (error) {

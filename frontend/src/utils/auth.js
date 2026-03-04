@@ -56,6 +56,32 @@ export const getAuthHeaders = () => {
  * Returns headers with auth if logged in, just content-type if not
  * @returns {Object} Headers object
  */
+/**
+ * Get the current user from localStorage (set at login).
+ * Returns { user_id, email, full_name, organization_id, ... } or null.
+ * Avoids insecure client-side JWT decoding via atob().
+ */
+export const getCurrentUser = () => {
+  const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+  if (userStr) {
+    try {
+      return JSON.parse(userStr);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+/**
+ * Get the current user ID from localStorage.
+ * Returns the user_id number, or null if not logged in.
+ */
+export const getCurrentUserId = () => {
+  const user = getCurrentUser();
+  return user?.id || user?.user_id || null;
+};
+
 export const getAuthHeadersIfPresent = () => {
   const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
   if (token) {

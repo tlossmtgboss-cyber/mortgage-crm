@@ -9,7 +9,7 @@ Includes:
 - Appointment scheduling
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
@@ -586,24 +586,45 @@ async def create_portal_tables(
 # ENHANCED PORTAL FEATURES - PURL Portal v2
 # =============================================================================
 
+def _extract_portal_token(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    token: Optional[str] = Query(default=None, description="Deprecated: use Authorization header"),
+) -> Optional[str]:
+    """Extract portal token from Authorization header, falling back to query param.
+
+    Prefer: Authorization: Bearer <portal_token>
+    Deprecated fallback: ?token=<portal_token> (for backward compatibility)
+    """
+    # Prefer Authorization header
+    if authorization:
+        parts = authorization.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            return parts[1]
+    # Fall back to query param (deprecated — will be removed)
+    return token
+
+
 @router.get("/purl/{slug}")
 async def get_purl_portal_data(
     slug: str,
     request: Request,
-    token: Optional[str] = Query(default=None, description="Portal token for candidate verification"),
+    authorization: Optional[str] = Header(default=None),
+    token: Optional[str] = Query(default=None, description="Deprecated: use Authorization header"),
     db: Session = Depends(get_db),
 ):
     """Get PURL portal data for candidate including calculator config and company info."""
     _enforce_rate_limit(request)
+    portal_token = _extract_portal_token(request, authorization, token)
     try:
         # Validate token if provided — require slug+token match via candidate
-        if token:
+        if portal_token:
             valid = db.execute(text("""
                 SELECT w.id FROM recruit_portal_workspaces w
                 JOIN mm_candidates c ON c.id = w.candidate_id
                 WHERE w.slug = :slug AND w.is_active = true
                   AND c.portal_token = :token AND c.is_active = true
-            """), {"slug": slug, "token": token}).fetchone()
+            """), {"slug": slug, "token": portal_token}).fetchone()
             if not valid:
                 raise HTTPException(status_code=404, detail="Portal not found")
 

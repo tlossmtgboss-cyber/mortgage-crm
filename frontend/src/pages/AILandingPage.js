@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI, outreachAPI, API_BASE_URL } from '../services/api';
+import { getCurrentUser } from '../utils/auth';
 import ActionSidebar from '../components/ActionSidebar';
 import './AILandingPage.css';
 import { toast } from '../utils/toast';
@@ -167,12 +168,11 @@ function AILandingPage() {
       return;
     }
 
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const email = payload.sub || '';
-      const name = email.split('@')[0];
+    const user = getCurrentUser();
+    if (user) {
+      const name = user.full_name?.split(' ')[0] || user.email?.split('@')[0] || 'there';
       setUserName(name.charAt(0).toUpperCase() + name.slice(1));
-    } catch (e) {
+    } else {
       setUserName('there');
     }
   }, [navigate]);

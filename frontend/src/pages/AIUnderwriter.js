@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { aiAPI, API_BASE_URL } from '../services/api';
+import { getCurrentUserId } from '../utils/auth';
 import GuidelineUpdatesSidebar from '../components/GuidelineUpdatesSidebar';
 import GuidelineNotificationBadge from '../components/GuidelineNotificationBadge';
 import EscalationPanel from '../components/EscalationPanel';
@@ -302,20 +303,8 @@ function AIUnderwriter() {
   }, []);
 
   const loadCurrentUser = () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        // Decode JWT to get user ID
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setCurrentUserId(payload.user_id || payload.sub || 1); // Fallback to 1 if not found
-      } else {
-        // No token, default to user ID 1
-        setCurrentUserId(1);
-      }
-    } catch (error) {
-      console.error('Failed to load user ID:', error);
-      setCurrentUserId(1); // Fallback to user ID 1
-    }
+    const userId = getCurrentUserId();
+    setCurrentUserId(userId || 1);
   };
 
   const loadMemoryStats = async () => {
