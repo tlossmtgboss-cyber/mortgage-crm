@@ -1,10 +1,10 @@
 """
-Operations Manager Agent — v2.1
+Operations Manager Agent — v3.0
 
 Proactive, always-on agent that sweeps all three pipelines (Leads, Active Loans, MUM),
 detects impediments, and creates corrective tasks automatically.
 
-8 Tools:
+11 Tools:
 1. run_pipeline_sweep - Full sweep of all 3 pipelines (orchestrator)
 2. sweep_lead_pipeline - Detect stale leads, unassigned leads, no first contact
 3. sweep_active_loans - Detect SLA breaches, expiring locks/docs, missing documents
@@ -13,11 +13,16 @@ detects impediments, and creates corrective tasks automatically.
 6. detect_stalled_files - Find files with zero activity past threshold
 7. get_impediment_summary - Query open ops tasks by category
 8. get_sweep_history - Query ops_sweep_results table
+9. get_priority_queue - Bucketed priority queue (must_today/should_today/strategic)
+10. check_loan_health - Single-loan health score with impediment list
+11. evaluate_stage_transition - Stage transition gating per policy YAML
 """
 
 import json
 import traceback
 import logging
+import yaml
+from pathlib import Path
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
@@ -36,7 +41,30 @@ from .base import (
 
 
 # ============================================================================
-# CONSTANTS
+# YAML POLICY CONFIG LOADING (I5)
+# ============================================================================
+
+_POLICY_CONFIG = None
+_POLICY_CONFIG_PATH = Path(__file__).parent / "ops_manager_policy_config.yaml"
+
+
+def _get_policy_config():
+    """Load and cache policy config YAML. Falls back to hardcoded defaults."""
+    global _POLICY_CONFIG
+    if _POLICY_CONFIG is not None:
+        return _POLICY_CONFIG
+    try:
+        with open(_POLICY_CONFIG_PATH, 'r') as f:
+            _POLICY_CONFIG = yaml.safe_load(f)
+            logger.info(f"Policy config loaded: version {_POLICY_CONFIG.get('rule_version', 'unknown')}")
+    except Exception as e:
+        logger.warning(f"Failed to load policy config, using defaults: {e}")
+        _POLICY_CONFIG = {}
+    return _POLICY_CONFIG
+
+
+# ============================================================================
+# CONSTANTS (fallback defaults when YAML not available)
 # ============================================================================
 
 # SLA targets in days per stage
@@ -78,6 +106,21 @@ ROLE_STAGE_REQUIREMENTS = {
 }
 
 IMPEDIMENT_LIMIT = 100  # Max impediments per category per sweep
+
+# Standardized ops task categories (stored in ai_tasks.category column) (I9)
+OPS_CATEGORIES = {
+    "SLA_BREACH": "SLA_BREACH",
+    "LOCK_EXPIRING": "LOCK_EXPIRING",
+    "DOC_EXPIRING": "DOC_EXPIRING",
+    "DOC_MISSING": "DOC_MISSING",
+    "COMPLIANCE_OPEN": "COMPLIANCE_OPEN",
+    "LEAD_STALE": "LEAD_STALE",
+    "LEAD_UNASSIGNED": "LEAD_UNASSIGNED",
+    "TEAM_GAP": "TEAM_GAP",
+    "MUM_OVERDUE": "MUM_OVERDUE",
+    "STALLED": "STALLED",
+}
+ALL_OPS_CATEGORIES = tuple(OPS_CATEGORIES.values())
 
 
 # ============================================================================
@@ -121,12 +164,26 @@ class StalledFilesInput(BaseModel):
 
 class ImpedimentSummaryInput(BaseModel):
     organization_id: Optional[int] = Field(None, description="Organization ID")
-    category: Optional[str] = Field(None, description="Filter by category prefix (SLA, LOCK, DOCS, etc.)")
+    category: Optional[str] = Field(None, description="Filter by category (SLA_BREACH, LOCK_EXPIRING, etc.)")
 
 
 class SweepHistoryInput(BaseModel):
     organization_id: Optional[int] = Field(None, description="Organization ID")
     limit: int = Field(default=20, description="Number of recent sweeps to return")
+
+
+class PriorityQueueInput(BaseModel):
+    organization_id: Optional[int] = Field(None, description="Organization ID")
+    assigned_to_id: Optional[int] = Field(None, description="Filter by assigned user ID")
+
+
+class LoanHealthInput(BaseModel):
+    loan_id: int = Field(..., description="Loan ID to check health for")
+
+
+class TransitionEvalInput(BaseModel):
+    loan_id: int = Field(..., description="Loan ID to evaluate")
+    target_stage: str = Field(..., description="Target stage to transition to")
 
 
 # ============================================================================
@@ -176,8 +233,17 @@ def _get_task_type_value(db):
     return None
 
 
+_RESOLVED_COMPLETED_TYPE = None
+
+
 def _get_completed_type_value(db):
-    """Resolve the correct tasktype enum value for 'Completed'."""
+    """Resolve the correct tasktype enum value for 'Completed'.
+    Caches result globally like _get_task_type_value().
+    """
+    global _RESOLVED_COMPLETED_TYPE
+    if _RESOLVED_COMPLETED_TYPE is not None:
+        return _RESOLVED_COMPLETED_TYPE
+
     from sqlalchemy import text
     try:
         rows = db.execute(text(
@@ -185,6 +251,7 @@ def _get_completed_type_value(db):
         )).fetchall()
         for r in rows:
             if "complete" in r[0].lower():
+                _RESOLVED_COMPLETED_TYPE = r[0]
                 return r[0]
     except Exception:
         pass
@@ -199,6 +266,7 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
 
     Writes to ai_tasks table (not tasks) so tasks appear in the frontend task list.
     Dynamically resolves the tasktype enum values to handle DB/Python mismatches.
+    When category is provided, dedup also matches on category for more precise dedup (I9).
     Returns True if created.
     """
     from sqlalchemy import text
@@ -214,6 +282,10 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     if lead_id:
         conditions.append("lead_id = :lead_id")
         params["lead_id"] = lead_id
+    # Include category in dedup check when provided (I9) — more precise matching
+    if category:
+        conditions.append("category = :dedup_category")
+        params["dedup_category"] = category
 
     where = " AND ".join(conditions)
     existing = db.execute(text(f"SELECT id FROM ai_tasks WHERE {where} LIMIT 1"), params).fetchone()
@@ -269,6 +341,60 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
 
 
 # ============================================================================
+# PRIORITY SCORING (I5 / S12)
+# ============================================================================
+
+def _compute_priority_score(category, priority_str, loan_data=None):
+    """Compute weighted priority score per policy config."""
+    config = _get_policy_config()
+    scoring = config.get("priority_scoring", {})
+
+    severity_weights = scoring.get("severity_weights", {"Critical": 100, "Warning": 50, "Info": 10})
+    time_pressure = scoring.get("time_pressure", {})
+    type_urgency = scoring.get("type_urgency", {})
+
+    # Map priority string to severity
+    severity = "Critical" if priority_str == "high" else "Warning"
+    score = severity_weights.get(severity, 50)
+
+    # Add type urgency
+    category_type_map = {
+        "COMPLIANCE_OPEN": "Compliance",
+        "LOCK_EXPIRING": "LockRisk",
+        "SLA_BREACH": "SLA",
+        "TEAM_GAP": "Staffing",
+        "DOC_MISSING": "DataIntegrity",
+        "DOC_EXPIRING": "DataIntegrity",
+    }
+    mapped_type = category_type_map.get(category, "")
+    score += type_urgency.get(mapped_type, 0)
+
+    # Add time pressure if loan data provided
+    if loan_data:
+        if loan_data.get("is_overdue"):
+            score += time_pressure.get("overdue", 80)
+        if loan_data.get("closing_within_3d"):
+            score += time_pressure.get("closing_within_3d", 40)
+        if loan_data.get("lock_within_3d"):
+            score += time_pressure.get("lock_within_3d", 30)
+
+    return score
+
+
+def _get_priority_bucket(score):
+    """Get bucket name from score."""
+    config = _get_policy_config()
+    thresholds = config.get("priority_scoring", {}).get("bucket_thresholds", {})
+    must_today = thresholds.get("MustToday", 140)
+    should_today = thresholds.get("ShouldToday", 80)
+    if score >= must_today:
+        return "must_today"
+    elif score >= should_today:
+        return "should_today"
+    return "strategic"
+
+
+# ============================================================================
 # OPS MANAGER AGENT
 # ============================================================================
 
@@ -291,7 +417,7 @@ class OpsManagerAgent(SpecializedAgent):
         return "Proactive pipeline patrol — sweeps leads, loans, and MUM pipelines to detect impediments and create corrective tasks"
 
     def _register_tools(self):
-        """Register all 8 ops manager tools"""
+        """Register all 11 ops manager tools"""
 
         # Tool 1: Full pipeline sweep (orchestrator)
         self.register_tool(AgentTool(
@@ -373,6 +499,163 @@ class OpsManagerAgent(SpecializedAgent):
             input_schema=SweepHistoryInput
         ))
 
+        # Tool 9: Priority queue (S12)
+        self.register_tool(AgentTool(
+            name="get_priority_queue",
+            description="Get bucketed priority queue (must_today / should_today / strategic) for open ops tasks",
+            category=ToolCategory.QUERY,
+            risk_level=RiskLevel.LOW,
+            handler=self._get_priority_queue,
+            input_schema=PriorityQueueInput
+        ))
+
+        # Tool 10: Loan health check (S13)
+        self.register_tool(AgentTool(
+            name="check_loan_health",
+            description="Compute single-loan health score (0-100) with impediment list",
+            category=ToolCategory.ANALYSIS,
+            risk_level=RiskLevel.LOW,
+            handler=self._check_loan_health,
+            input_schema=LoanHealthInput
+        ))
+
+        # Tool 11: Stage transition gating (S11)
+        self.register_tool(AgentTool(
+            name="evaluate_stage_transition",
+            description="Evaluate whether a loan can transition to a target stage per policy rules",
+            category=ToolCategory.ANALYSIS,
+            risk_level=RiskLevel.LOW,
+            handler=self._evaluate_stage_transition,
+            input_schema=TransitionEvalInput
+        ))
+
+    # ========================================================================
+    # AUTO-RESOLVE STALE TASKS (I7)
+    # ========================================================================
+
+    def _resolve_stale_ops_tasks(self, db, org_id):
+        """Auto-resolve ops tasks whose impediments no longer exist.
+
+        Checks each open ops task to see if the underlying condition has been cleared,
+        and marks resolved ones as completed with completed_action='auto_resolved'.
+        Called at the START of _run_pipeline_sweep before sub-sweeps.
+        """
+        from sqlalchemy import text
+
+        completed_type = _get_completed_type_value(db)
+        if not completed_type:
+            logger.warning("Cannot auto-resolve: completed task type not found")
+            return 0
+
+        org_filter = "AND t.organization_id = :org_id" if org_id else ""
+        params = {}
+        if org_id:
+            params["org_id"] = org_id
+
+        cats_placeholder = ", ".join(f"'{c}'" for c in ALL_OPS_CATEGORIES)
+
+        # Fetch all open ops tasks
+        open_tasks = db.execute(text(f"""
+            SELECT t.id, t.category, t.loan_id, t.lead_id, t.created_at, t.title
+            FROM ai_tasks t
+            WHERE t.type::text NOT ILIKE '%completed%'
+                AND t.category IN ({cats_placeholder})
+                {org_filter}
+            ORDER BY t.created_at ASC
+            LIMIT 500
+        """), params).fetchall()
+
+        resolved_count = 0
+
+        for task in open_tasks:
+            should_resolve = False
+            try:
+                cat = task.category
+                loan_id = task.loan_id
+                lead_id = task.lead_id
+                task_created = task.created_at
+
+                if cat == OPS_CATEGORIES["LOCK_EXPIRING"] and loan_id:
+                    # Resolve if lock_expiration_date > NOW() + 5 days OR loan in terminal stage
+                    row = db.execute(text("""
+                        SELECT stage, lock_expiration_date FROM loans WHERE id = :lid
+                    """), {"lid": loan_id}).fetchone()
+                    if row:
+                        if row.stage in TERMINAL_STAGES:
+                            should_resolve = True
+                        elif row.lock_expiration_date and row.lock_expiration_date > datetime.utcnow() + timedelta(days=5):
+                            should_resolve = True
+
+                elif cat == OPS_CATEGORIES["SLA_BREACH"] and loan_id:
+                    # Resolve if loan has moved to a different stage since task creation
+                    row = db.execute(text("""
+                        SELECT stage, stage_changed_at FROM loans WHERE id = :lid
+                    """), {"lid": loan_id}).fetchone()
+                    if row:
+                        if row.stage in TERMINAL_STAGES:
+                            should_resolve = True
+                        elif row.stage_changed_at and task_created and row.stage_changed_at > task_created:
+                            should_resolve = True
+
+                elif cat == OPS_CATEGORIES["STALLED"] and loan_id:
+                    # Resolve if there is activity newer than task.created_at
+                    row = db.execute(text("""
+                        SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = :lid
+                    """), {"lid": loan_id}).fetchone()
+                    if row and row.last_activity and task_created and row.last_activity > task_created:
+                        should_resolve = True
+                    # Also resolve if loan moved to terminal
+                    loan_row = db.execute(text("SELECT stage FROM loans WHERE id = :lid"), {"lid": loan_id}).fetchone()
+                    if loan_row and loan_row.stage in TERMINAL_STAGES:
+                        should_resolve = True
+
+                elif cat in (OPS_CATEGORIES["LEAD_STALE"], OPS_CATEGORIES["LEAD_UNASSIGNED"]) and lead_id:
+                    # Resolve if lead now has owner or recent contact
+                    row = db.execute(text("""
+                        SELECT owner_id, last_contact, stage FROM leads WHERE id = :lid
+                    """), {"lid": lead_id}).fetchone()
+                    if row:
+                        if row.stage in TERMINAL_LEAD_STAGES:
+                            should_resolve = True
+                        elif cat == OPS_CATEGORIES["LEAD_UNASSIGNED"] and row.owner_id is not None:
+                            should_resolve = True
+                        elif cat == OPS_CATEGORIES["LEAD_STALE"] and row.last_contact and task_created and row.last_contact > task_created:
+                            should_resolve = True
+
+                elif cat == OPS_CATEGORIES["MUM_OVERDUE"] and loan_id:
+                    # Resolve if there is activity on loan since task creation
+                    row = db.execute(text("""
+                        SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = :lid
+                    """), {"lid": loan_id}).fetchone()
+                    if row and row.last_activity and task_created and row.last_activity > task_created:
+                        should_resolve = True
+
+                if should_resolve:
+                    db.execute(text("""
+                        UPDATE ai_tasks
+                        SET type = CAST(:completed_type AS tasktype),
+                            completed_at = NOW(),
+                            completed_action = 'auto_resolved'
+                        WHERE id = :task_id
+                    """), {"completed_type": completed_type, "task_id": task.id})
+                    resolved_count += 1
+
+            except Exception as e:
+                logger.debug(f"Auto-resolve check failed for task {task.id}: {e}")
+                continue
+
+        if resolved_count > 0:
+            try:
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            logger.info(f"Auto-resolved {resolved_count} stale ops tasks")
+
+        return resolved_count
+
     # ========================================================================
     # TOOL 1: FULL PIPELINE SWEEP (orchestrator)
     # ========================================================================
@@ -393,17 +676,53 @@ class OpsManagerAgent(SpecializedAgent):
         shared_context["_shared_db"] = db
 
         try:
-            # Run each sub-sweep with shared session
-            lead_result = await self._sweep_lead_pipeline(
-                {"organization_id": org_id, "stale_days": 7, "dry_run": dry_run}, shared_context)
-            loan_result = await self._sweep_active_loans(
-                {"organization_id": org_id, "lock_warning_days": 5, "doc_warning_days": 14, "dry_run": dry_run}, shared_context)
-            mum_result = await self._sweep_mum_pipeline(
-                {"organization_id": org_id, "overdue_days": 90, "dry_run": dry_run}, shared_context)
-            team_result = await self._detect_team_gaps(
-                {"organization_id": org_id, "dry_run": dry_run}, shared_context)
-            stalled_result = await self._detect_stalled_files(
-                {"organization_id": org_id, "stalled_days": 14, "dry_run": dry_run}, shared_context)
+            # Auto-resolve stale tasks before running new sweeps (I7)
+            auto_resolved = 0
+            if not dry_run:
+                try:
+                    db.begin_nested()
+                    auto_resolved = self._resolve_stale_ops_tasks(db, org_id)
+                except Exception as ar_err:
+                    logger.warning(f"Auto-resolve failed, continuing sweep: {ar_err}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
+            # Run each sub-sweep with savepoints so one failure doesn't abort the whole sweep
+            sub_sweeps = [
+                ("leads", self._sweep_lead_pipeline,
+                 {"organization_id": org_id, "stale_days": 7, "dry_run": dry_run}),
+                ("loans", self._sweep_active_loans,
+                 {"organization_id": org_id, "lock_warning_days": 5, "doc_warning_days": 14, "dry_run": dry_run}),
+                ("mum", self._sweep_mum_pipeline,
+                 {"organization_id": org_id, "overdue_days": 90, "dry_run": dry_run}),
+                ("team_gaps", self._detect_team_gaps,
+                 {"organization_id": org_id, "dry_run": dry_run}),
+                ("stalled_files", self._detect_stalled_files,
+                 {"organization_id": org_id, "stalled_days": 14, "dry_run": dry_run}),
+            ]
+
+            sub_results = {}
+            for name, handler, sweep_params in sub_sweeps:
+                try:
+                    db.begin_nested()  # Savepoint: isolates this sub-sweep
+                    result = await handler(sweep_params, shared_context)
+                    # Sub-sweep's own db.commit() releases the savepoint on success
+                    sub_results[name] = result
+                except Exception as sub_err:
+                    logger.warning(f"Sub-sweep '{name}' failed, rolling back savepoint: {sub_err}")
+                    try:
+                        db.rollback()  # Rolls back to savepoint, not entire transaction
+                    except Exception:
+                        pass
+                    sub_results[name] = ToolResult(success=False, error=str(sub_err))
+
+            lead_result = sub_results.get("leads", ToolResult(success=False, error="skipped"))
+            loan_result = sub_results.get("loans", ToolResult(success=False, error="skipped"))
+            mum_result = sub_results.get("mum", ToolResult(success=False, error="skipped"))
+            team_result = sub_results.get("team_gaps", ToolResult(success=False, error="skipped"))
+            stalled_result = sub_results.get("stalled_files", ToolResult(success=False, error="skipped"))
 
             completed_at = datetime.utcnow()
             duration = (completed_at - started_at).total_seconds()
@@ -442,27 +761,19 @@ class OpsManagerAgent(SpecializedAgent):
                 for cat, count in sub_data.get("by_category", {}).items():
                     impediment_breakdown[cat] = impediment_breakdown.get(cat, 0) + count
 
-            # Record sweep result (auto-create table if missing)
+            # Send in-app notifications for high-priority tasks created (S13 notifications)
+            if not dry_run:
+                try:
+                    self._send_high_priority_notifications(db, org_id, lead_data, loan_data, mum_data, team_data, stalled_data)
+                except Exception as notif_err:
+                    logger.warning(f"Failed to send notifications: {notif_err}")
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
+            # Record sweep result (table created by migrations/create_ops_sweep_results.py)
             try:
-                db.execute(text("""
-                    CREATE TABLE IF NOT EXISTS ops_sweep_results (
-                        id SERIAL PRIMARY KEY,
-                        organization_id INTEGER,
-                        sweep_type VARCHAR(50) NOT NULL DEFAULT 'full',
-                        started_at TIMESTAMP NOT NULL,
-                        completed_at TIMESTAMP,
-                        duration_seconds NUMERIC(10,2),
-                        leads_scanned INTEGER DEFAULT 0,
-                        loans_scanned INTEGER DEFAULT 0,
-                        mum_scanned INTEGER DEFAULT 0,
-                        impediments_found INTEGER DEFAULT 0,
-                        tasks_created INTEGER DEFAULT 0,
-                        tasks_skipped_dedup INTEGER DEFAULT 0,
-                        impediment_breakdown JSONB DEFAULT '{}',
-                        dry_run BOOLEAN DEFAULT FALSE,
-                        created_at TIMESTAMP DEFAULT NOW()
-                    )
-                """))
                 db.execute(text("""
                     INSERT INTO ops_sweep_results (
                         organization_id, sweep_type, started_at, completed_at,
@@ -503,6 +814,7 @@ class OpsManagerAgent(SpecializedAgent):
                     "sweep_type": "full",
                     "dry_run": dry_run,
                     "duration_seconds": round(duration, 2),
+                    "auto_resolved": auto_resolved,
                     "leads_scanned": lead_data.get("scanned", 0),
                     "loans_scanned": loan_data.get("scanned", 0),
                     "mum_scanned": mum_data.get("scanned", 0),
@@ -525,13 +837,75 @@ class OpsManagerAgent(SpecializedAgent):
                         ] if not res.success and res.error
                     },
                 },
-                message=f"Sweep complete: {total_impediments} impediments, {total_tasks_created} tasks created, {total_skipped} deduped ({round(duration, 1)}s)"
+                message=f"Sweep complete: {total_impediments} impediments, {total_tasks_created} tasks created, {total_skipped} deduped, {auto_resolved} auto-resolved ({round(duration, 1)}s)"
             )
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             if not existing_db:
                 db.close()
+
+    # ========================================================================
+    # NOTIFICATIONS HELPER (S13)
+    # ========================================================================
+
+    def _send_high_priority_notifications(self, db, org_id, lead_data, loan_data, mum_data, team_data, stalled_data):
+        """Send in-app notifications for high-priority impediments created during sweep."""
+        from sqlalchemy import text
+
+        # Collect all high-priority impediments that were newly created
+        all_impediments = []
+        for sub_data in [lead_data, loan_data, mum_data, team_data, stalled_data]:
+            for imp in sub_data.get("impediments", []):
+                if imp.get("priority") == "high":
+                    all_impediments.append(imp)
+
+        if not all_impediments:
+            return
+
+        # Get tasks that were just created (within last 5 minutes, high priority, ops categories)
+        cats_placeholder = ", ".join(f"'{c}'" for c in ALL_OPS_CATEGORIES)
+        org_filter = "AND t.organization_id = :org_id" if org_id else ""
+        params = {}
+        if org_id:
+            params["org_id"] = org_id
+
+        recent_tasks = db.execute(text(f"""
+            SELECT t.id, t.title, t.assigned_to_id, t.organization_id, t.loan_id, t.lead_id, t.category
+            FROM ai_tasks t
+            WHERE t.priority = 'high'
+                AND t.category IN ({cats_placeholder})
+                AND t.created_at >= NOW() - INTERVAL '5 minutes'
+                AND t.assigned_to_id IS NOT NULL
+                AND t.type::text NOT ILIKE '%completed%'
+                {org_filter}
+            ORDER BY t.created_at DESC
+            LIMIT 50
+        """), params).fetchall()
+
+        for task in recent_tasks:
+            try:
+                db.execute(text("""
+                    INSERT INTO notifications (user_id, organization_id, type, title, message, link, is_read, created_at)
+                    VALUES (:user_id, :org_id, 'ops_impediment', :title, :message, :link, false, NOW())
+                """), {
+                    "user_id": task.assigned_to_id,
+                    "org_id": task.organization_id,
+                    "title": f"Action Required: {task.category or 'Ops Task'}",
+                    "message": task.title[:255] if task.title else "New high-priority ops task requires attention",
+                    "link": f"/tasks?task_id={task.id}",
+                })
+            except Exception as e:
+                logger.debug(f"Failed to create notification for task {task.id}: {e}")
+                continue
+
+        try:
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
     # ========================================================================
     # TOOL 2: LEAD PIPELINE SWEEP
@@ -566,11 +940,11 @@ class OpsManagerAgent(SpecializedAgent):
                        EXTRACT(EPOCH FROM (NOW() - COALESCE(l.last_contact, l.created_at))) / 86400 AS days_no_contact
                 FROM leads l
                 WHERE l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')
-                    AND COALESCE(l.last_contact, l.created_at) < NOW() - INTERVAL ':stale_days days'
+                    AND COALESCE(l.last_contact, l.created_at) < NOW() - (CAST(:stale_days AS INTEGER) * INTERVAL '1 day')
                     {org_filter}
                 ORDER BY days_no_contact DESC
                 LIMIT :limit
-            """.replace(":stale_days days", f"{int(stale_days)} days")), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["LEAD_STALE"] = len(stale_leads)
             for lead in stale_leads:
@@ -585,13 +959,14 @@ class OpsManagerAgent(SpecializedAgent):
                         db, title=title,
                         description=f"Lead has had no contact in {days} days. Last contact: {lead.last_contact or 'never'}.",
                         priority=priority, lead_id=lead.id, owner_id=lead.owner_id,
-                        organization_id=lead.organization_id)
+                        organization_id=lead.organization_id,
+                        category=OPS_CATEGORIES["LEAD_STALE"])
                     if created:
                         tasks_created += 1
                     else:
                         tasks_skipped += 1
 
-            # --- LEAD_NO_OWNER: unassigned leads ---
+            # --- LEAD_UNASSIGNED: unassigned leads ---
             unassigned = db.execute(text(f"""
                 SELECT l.id, l.first_name, l.last_name, l.organization_id, l.created_at
                 FROM leads l
@@ -602,17 +977,18 @@ class OpsManagerAgent(SpecializedAgent):
                 LIMIT :limit
             """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
-            by_category["LEAD_NO_OWNER"] = len(unassigned)
+            by_category["LEAD_UNASSIGNED"] = len(unassigned)
             for lead in unassigned:
                 name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or "Unknown"
                 title = f"[ASSIGN] Unassigned lead needs LO: {name}"
-                impediments.append({"category": "LEAD_NO_OWNER", "title": title, "priority": "high"})
+                impediments.append({"category": "LEAD_UNASSIGNED", "title": title, "priority": "high"})
 
                 if not dry_run:
                     created = _dedup_and_create_task(
                         db, title=title,
                         description=f"Lead '{name}' has no assigned loan officer. Created: {lead.created_at}.",
-                        priority="high", lead_id=lead.id, organization_id=lead.organization_id)
+                        priority="high", lead_id=lead.id, organization_id=lead.organization_id,
+                        category=OPS_CATEGORIES["LEAD_UNASSIGNED"])
                     if created:
                         tasks_created += 1
                     else:
@@ -671,7 +1047,7 @@ class OpsManagerAgent(SpecializedAgent):
         try:
             terminal_list = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
             org_filter = "AND l.organization_id = :org_id" if org_id else ""
-            params = {}
+            params = {"lock_days": lock_days, "doc_days": doc_days}
             if org_id:
                 params["org_id"] = org_id
 
@@ -710,7 +1086,8 @@ class OpsManagerAgent(SpecializedAgent):
                         db, title=title,
                         description=f"Loan has been in {loan.stage} for {days} days (SLA target: {loan.sla_target}d).",
                         priority=priority, loan_id=loan.id, owner_id=loan.loan_officer_id,
-                        organization_id=loan.organization_id)
+                        organization_id=loan.organization_id,
+                        category=OPS_CATEGORIES["SLA_BREACH"])
                     tasks_created += 1 if created else 0
                     tasks_skipped += 0 if created else 1
 
@@ -722,12 +1099,12 @@ class OpsManagerAgent(SpecializedAgent):
                 FROM loans l
                 WHERE l.stage NOT IN ({terminal_list})
                     AND l.lock_expiration_date IS NOT NULL
-                    AND l.lock_expiration_date <= NOW() + INTERVAL ':lock_days days'
+                    AND l.lock_expiration_date <= NOW() + (CAST(:lock_days AS INTEGER) * INTERVAL '1 day')
                     AND l.lock_expiration_date > NOW() - INTERVAL '30 days'
                     {org_filter}
                 ORDER BY l.lock_expiration_date ASC
                 LIMIT :limit
-            """.replace(":lock_days days", f"{int(lock_days)} days")), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["LOCK_EXPIRING"] = len(lock_loans)
             for loan in lock_loans:
@@ -742,23 +1119,24 @@ class OpsManagerAgent(SpecializedAgent):
                         description=f"Rate lock expires {loan.lock_expiration_date}.",
                         priority=priority, loan_id=loan.id, owner_id=loan.loan_officer_id,
                         organization_id=loan.organization_id,
-                        due_date=loan.lock_expiration_date)
+                        due_date=loan.lock_expiration_date,
+                        category=OPS_CATEGORIES["LOCK_EXPIRING"])
                     tasks_created += 1 if created else 0
                     tasks_skipped += 0 if created else 1
 
-            # --- DOCS_EXPIRING: credit or appraisal docs expiring ---
+            # --- DOC_EXPIRING: credit or appraisal docs expiring ---
             doc_loans = db.execute(text(f"""
                 SELECT l.id, l.loan_number, l.borrower_name, l.loan_officer_id, l.organization_id,
                        l.credit_docs_expire_date, l.appraisal_docs_expire_date
                 FROM loans l
                 WHERE l.stage NOT IN ({terminal_list})
                     AND (
-                        (l.credit_docs_expire_date IS NOT NULL AND l.credit_docs_expire_date <= NOW() + INTERVAL ':doc_days days')
-                        OR (l.appraisal_docs_expire_date IS NOT NULL AND l.appraisal_docs_expire_date <= NOW() + INTERVAL ':doc_days days')
+                        (l.credit_docs_expire_date IS NOT NULL AND l.credit_docs_expire_date <= NOW() + (CAST(:doc_days AS INTEGER) * INTERVAL '1 day'))
+                        OR (l.appraisal_docs_expire_date IS NOT NULL AND l.appraisal_docs_expire_date <= NOW() + (CAST(:doc_days AS INTEGER) * INTERVAL '1 day'))
                     )
                     {org_filter}
                 LIMIT :limit
-            """.replace(":doc_days days", f"{int(doc_days)} days")), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             docs_count = 0
             for loan in doc_loans:
@@ -767,17 +1145,18 @@ class OpsManagerAgent(SpecializedAgent):
                     if col and col <= datetime.utcnow() + timedelta(days=doc_days):
                         exp_date = col.strftime("%m/%d/%Y") if hasattr(col, 'strftime') else str(col)
                         title = f"[DOCS] {doc_type} expiring {exp_date}: {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
-                        impediments.append({"category": "DOCS_EXPIRING", "title": title, "priority": "high"})
+                        impediments.append({"category": "DOC_EXPIRING", "title": title, "priority": "high"})
                         docs_count += 1
                         if not dry_run:
                             created = _dedup_and_create_task(
                                 db, title=title,
                                 description=f"{doc_type} expire on {exp_date}. Renewal needed.",
                                 priority="high", loan_id=loan.id, owner_id=loan.loan_officer_id,
-                                organization_id=loan.organization_id, due_date=col)
+                                organization_id=loan.organization_id, due_date=col,
+                                category=OPS_CATEGORIES["DOC_EXPIRING"])
                             tasks_created += 1 if created else 0
                             tasks_skipped += 0 if created else 1
-            by_category["DOCS_EXPIRING"] = docs_count
+            by_category["DOC_EXPIRING"] = docs_count
 
             # --- COMPLIANCE_OPEN: critical/high compliance alerts ---
             try:
@@ -804,7 +1183,8 @@ class OpsManagerAgent(SpecializedAgent):
                             db, title=title,
                             description=f"Open {alert.severity} compliance alert: {alert.alert_title}.",
                             priority=priority, loan_id=alert.loan_id, owner_id=alert.loan_officer_id,
-                            organization_id=alert.organization_id)
+                            organization_id=alert.organization_id,
+                            category=OPS_CATEGORIES["COMPLIANCE_OPEN"])
                         tasks_created += 1 if created else 0
                         tasks_skipped += 0 if created else 1
             except Exception as e:
@@ -815,7 +1195,7 @@ class OpsManagerAgent(SpecializedAgent):
                     pass
                 by_category["COMPLIANCE_OPEN"] = 0
 
-            # --- MISSING_DOCS: loans past PROCESSING with <3 active documents ---
+            # --- DOC_MISSING: loans past PROCESSING with <3 active documents ---
             try:
                 missing_doc_loans = db.execute(text(f"""
                     SELECT l.id, l.loan_number, l.borrower_name, l.stage,
@@ -830,25 +1210,26 @@ class OpsManagerAgent(SpecializedAgent):
                     LIMIT :limit
                 """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
-                by_category["MISSING_DOCS"] = len(missing_doc_loans)
+                by_category["DOC_MISSING"] = len(missing_doc_loans)
                 for loan in missing_doc_loans:
                     title = f"[DOCS] Missing documents ({loan.active_doc_count} on file): {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
-                    impediments.append({"category": "MISSING_DOCS", "title": title, "priority": "medium"})
+                    impediments.append({"category": "DOC_MISSING", "title": title, "priority": "medium"})
                     if not dry_run:
                         created = _dedup_and_create_task(
                             db, title=title,
                             description=f"Loan in {loan.stage} has only {loan.active_doc_count} active documents. Minimum 3 expected.",
                             priority="medium", loan_id=loan.id, owner_id=loan.loan_officer_id,
-                            organization_id=loan.organization_id)
+                            organization_id=loan.organization_id,
+                            category=OPS_CATEGORIES["DOC_MISSING"])
                         tasks_created += 1 if created else 0
                         tasks_skipped += 0 if created else 1
             except Exception as e:
-                logger.warning(f"MISSING_DOCS check skipped (table may not exist): {e}")
+                logger.warning(f"DOC_MISSING check skipped (table may not exist): {e}")
                 try:
                     db.rollback()
                 except Exception:
                     pass
-                by_category["MISSING_DOCS"] = 0
+                by_category["DOC_MISSING"] = 0
 
             if not dry_run:
                 db.commit()
@@ -884,7 +1265,7 @@ class OpsManagerAgent(SpecializedAgent):
                 db.close()
 
     # ========================================================================
-    # TOOL 4: MUM PIPELINE SWEEP
+    # TOOL 4: MUM PIPELINE SWEEP (C2: LEFT JOIN LATERAL)
     # ========================================================================
 
     async def _sweep_mum_pipeline(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
@@ -910,28 +1291,23 @@ class OpsManagerAgent(SpecializedAgent):
             tasks_skipped = 0
 
             # MUM clients = funded loans where borrower needs ongoing touchpoints
+            # C2: Replaced correlated subqueries with LEFT JOIN LATERAL
             mum_clients = db.execute(text(f"""
                 SELECT l.id, l.loan_number, l.borrower_name, l.borrower_email,
                        l.loan_officer_id, l.organization_id, l.funded_date,
-                       COALESCE(
-                           (SELECT MAX(a.created_at) FROM activities a WHERE a.loan_id = l.id),
-                           l.funded_date
-                       ) as last_activity,
-                       EXTRACT(EPOCH FROM (NOW() - COALESCE(
-                           (SELECT MAX(a.created_at) FROM activities a WHERE a.loan_id = l.id),
-                           l.funded_date
-                       ))) / 86400 AS days_since_contact
+                       COALESCE(la.last_activity, l.funded_date) as last_activity,
+                       EXTRACT(EPOCH FROM (NOW() - COALESCE(la.last_activity, l.funded_date))) / 86400 AS days_since_contact
                 FROM loans l
+                LEFT JOIN LATERAL (
+                    SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = l.id
+                ) la ON true
                 WHERE l.stage = 'FUNDED'
                     AND l.funded_date IS NOT NULL
-                    AND COALESCE(
-                        (SELECT MAX(a.created_at) FROM activities a WHERE a.loan_id = l.id),
-                        l.funded_date
-                    ) < NOW() - INTERVAL ':overdue days'
+                    AND COALESCE(la.last_activity, l.funded_date) < NOW() - (CAST(:overdue_days AS INTEGER) * INTERVAL '1 day')
                     {org_filter}
                 ORDER BY days_since_contact DESC
                 LIMIT :limit
-            """.replace(":overdue days", f"{int(overdue_days)} days")), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            """), {**params, "overdue_days": overdue_days, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["MUM_OVERDUE"] = len(mum_clients)
             for client in mum_clients:
@@ -947,7 +1323,7 @@ class OpsManagerAgent(SpecializedAgent):
                         description=f"Post-close client '{name}' has not been contacted in {days} days. Funded: {client.funded_date}.",
                         priority=priority, loan_id=client.id, owner_id=client.loan_officer_id,
                         organization_id=client.organization_id,
-                        category="mum_client", borrower_name=name)
+                        category=OPS_CATEGORIES["MUM_OVERDUE"], borrower_name=name)
                     tasks_created += 1 if created else 0
                     tasks_skipped += 0 if created else 1
 
@@ -1023,12 +1399,13 @@ class OpsManagerAgent(SpecializedAgent):
             by_category["LOAN_MISSING_LO"] = len(no_lo)
             for loan in no_lo:
                 title = f"[ASSIGN] Loan needs LO: {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
-                impediments.append({"category": "LOAN_MISSING_LO", "title": title, "priority": "high"})
+                impediments.append({"category": "TEAM_GAP", "title": title, "priority": "high"})
                 if not dry_run:
                     created = _dedup_and_create_task(
                         db, title=title,
                         description=f"Active loan in {loan.stage} has no assigned loan officer.",
-                        priority="high", loan_id=loan.id, organization_id=loan.organization_id)
+                        priority="high", loan_id=loan.id, organization_id=loan.organization_id,
+                        category=OPS_CATEGORIES["TEAM_GAP"])
                     tasks_created += 1 if created else 0
                     tasks_skipped += 0 if created else 1
 
@@ -1060,13 +1437,14 @@ class OpsManagerAgent(SpecializedAgent):
                 for loan in gaps:
                     title = f"[TEAM] Missing {role_label}: {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
                     priority = "high" if role == "processor" else "medium"
-                    impediments.append({"category": "LOAN_TEAM_GAPS", "title": title, "priority": priority})
+                    impediments.append({"category": "TEAM_GAP", "title": title, "priority": priority})
                     if not dry_run:
                         created = _dedup_and_create_task(
                             db, title=title,
                             description=f"Loan in {loan.stage} is missing a {role_label}.",
                             priority=priority, loan_id=loan.id, owner_id=loan.loan_officer_id,
-                            organization_id=loan.organization_id)
+                            organization_id=loan.organization_id,
+                            category=OPS_CATEGORIES["TEAM_GAP"])
                         tasks_created += 1 if created else 0
                         tasks_skipped += 0 if created else 1
 
@@ -1097,7 +1475,7 @@ class OpsManagerAgent(SpecializedAgent):
                 db.close()
 
     # ========================================================================
-    # TOOL 6: STALLED FILES DETECTION
+    # TOOL 6: STALLED FILES DETECTION (C2: LEFT JOIN LATERAL)
     # ========================================================================
 
     async def _detect_stalled_files(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
@@ -1118,30 +1496,22 @@ class OpsManagerAgent(SpecializedAgent):
             if org_id:
                 params["org_id"] = org_id
 
+            # C2: Replaced correlated subqueries with LEFT JOIN LATERAL
             stalled = db.execute(text(f"""
                 SELECT l.id, l.loan_number, l.borrower_name, l.stage,
                        l.loan_officer_id, l.organization_id,
-                       COALESCE(
-                           (SELECT MAX(a.created_at) FROM activities a WHERE a.loan_id = l.id),
-                           l.stage_changed_at,
-                           l.created_at
-                       ) as last_activity,
-                       EXTRACT(EPOCH FROM (NOW() - COALESCE(
-                           (SELECT MAX(a.created_at) FROM activities a WHERE a.loan_id = l.id),
-                           l.stage_changed_at,
-                           l.created_at
-                       ))) / 86400 AS days_stalled
+                       COALESCE(la.last_activity, l.stage_changed_at, l.created_at) as last_activity,
+                       EXTRACT(EPOCH FROM (NOW() - COALESCE(la.last_activity, l.stage_changed_at, l.created_at))) / 86400 AS days_stalled
                 FROM loans l
+                LEFT JOIN LATERAL (
+                    SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = l.id
+                ) la ON true
                 WHERE l.stage NOT IN ({terminal_list})
-                    AND COALESCE(
-                        (SELECT MAX(a.created_at) FROM activities a WHERE a.loan_id = l.id),
-                        l.stage_changed_at,
-                        l.created_at
-                    ) < NOW() - INTERVAL ':stalled days'
+                    AND COALESCE(la.last_activity, l.stage_changed_at, l.created_at) < NOW() - (CAST(:stalled_days AS INTEGER) * INTERVAL '1 day')
                     {org_filter}
                 ORDER BY days_stalled DESC
                 LIMIT :limit
-            """.replace(":stalled days", f"{int(stalled_days)} days")), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            """), {**params, "stalled_days": stalled_days, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             impediments = []
             tasks_created = 0
@@ -1158,7 +1528,8 @@ class OpsManagerAgent(SpecializedAgent):
                         db, title=title,
                         description=f"Loan in {loan.stage} has had no activity for {days} days. Last activity: {loan.last_activity}.",
                         priority=priority, loan_id=loan.id, owner_id=loan.loan_officer_id,
-                        organization_id=loan.organization_id)
+                        organization_id=loan.organization_id,
+                        category=OPS_CATEGORIES["STALLED"])
                     tasks_created += 1 if created else 0
                     tasks_skipped += 0 if created else 1
 
@@ -1189,11 +1560,11 @@ class OpsManagerAgent(SpecializedAgent):
                 db.close()
 
     # ========================================================================
-    # TOOL 7: IMPEDIMENT SUMMARY
+    # TOOL 7: IMPEDIMENT SUMMARY (I9: category column)
     # ========================================================================
 
     async def _get_impediment_summary(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Query open ops tasks grouped by category prefix"""
+        """Query open ops tasks grouped by category column (I9)"""
         from sqlalchemy import text
 
         org_id = input_data.get("organization_id")
@@ -1211,43 +1582,24 @@ class OpsManagerAgent(SpecializedAgent):
             if org_id:
                 params["org_id"] = org_id
 
-            # Tasks created by ops sweep have titles like [CATEGORY] ...
+            # Build category filter
             category_filter = ""
             if category:
-                category_filter = "AND t.title LIKE :cat_pattern"
-                params["cat_pattern"] = f"[{category.upper()}]%"
+                category_filter = "AND t.category = :cat_filter"
+                params["cat_filter"] = category.upper()
 
-            # Only match ops-manager-created task prefixes (not arbitrary [xyz] tasks)
-            ops_prefixes = (
-                "t.title LIKE '[SLA]%' OR t.title LIKE '[LOCK]%' OR "
-                "t.title LIKE '[DOCS]%' OR t.title LIKE '[COMPLIANCE]%' OR "
-                "t.title LIKE '[LEAD]%' OR t.title LIKE '[ASSIGN]%' OR "
-                "t.title LIKE '[TEAM]%' OR t.title LIKE '[MUM]%' OR "
-                "t.title LIKE '[STALLED]%'"
-            )
+            # Use the standardized category column (I9) instead of LIKE-based title parsing
+            cats_placeholder = ", ".join(f"'{c}'" for c in ALL_OPS_CATEGORIES)
 
             summary = db.execute(text(f"""
-                SELECT
-                    CASE
-                        WHEN t.title LIKE '[SLA]%' THEN 'SLA_BREACH'
-                        WHEN t.title LIKE '[LOCK]%' THEN 'LOCK_EXPIRING'
-                        WHEN t.title LIKE '[DOCS]%' THEN 'DOCS'
-                        WHEN t.title LIKE '[COMPLIANCE]%' THEN 'COMPLIANCE_OPEN'
-                        WHEN t.title LIKE '[LEAD]%' THEN 'LEAD_STALE'
-                        WHEN t.title LIKE '[ASSIGN]%' THEN 'UNASSIGNED'
-                        WHEN t.title LIKE '[TEAM]%' THEN 'TEAM_GAPS'
-                        WHEN t.title LIKE '[MUM]%' THEN 'MUM_OVERDUE'
-                        WHEN t.title LIKE '[STALLED]%' THEN 'STALLED'
-                    END as category,
-                    t.priority,
-                    COUNT(*) as count
+                SELECT category, priority, COUNT(*) as count
                 FROM ai_tasks t
-                WHERE t.type::text NOT ILIKE '%%completed%%'
-                    AND ({ops_prefixes})
+                WHERE t.type::text NOT ILIKE '%completed%'
+                    AND t.category IN ({cats_placeholder})
                     {category_filter}
                     {org_filter}
-                GROUP BY 1, t.priority
-                ORDER BY 1, t.priority
+                GROUP BY category, t.priority
+                ORDER BY category, t.priority
             """), params).fetchall()
 
             # Pivot into category -> {priority: count}
@@ -1365,4 +1717,485 @@ class OpsManagerAgent(SpecializedAgent):
         finally:
             if not shared_db:
                 db.close()
-# Ops Manager v2 - 1772579967
+
+    # ========================================================================
+    # TOOL 9: PRIORITY QUEUE (S12)
+    # ========================================================================
+
+    async def _get_priority_queue(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
+        """Get bucketed priority queue for open ops tasks"""
+        from sqlalchemy import text
+
+        org_id = input_data.get("organization_id")
+        assigned_to_id = input_data.get("assigned_to_id")
+
+        shared_db = context.get("_shared_db") if context else None
+        if shared_db:
+            db = shared_db
+        else:
+            from database import SessionLocal
+            db = SessionLocal()
+        try:
+            cats_placeholder = ", ".join(f"'{c}'" for c in ALL_OPS_CATEGORIES)
+            org_filter = "AND t.organization_id = :org_id" if org_id else ""
+            user_filter = "AND t.assigned_to_id = :assigned_to_id" if assigned_to_id else ""
+            params = {}
+            if org_id:
+                params["org_id"] = org_id
+            if assigned_to_id:
+                params["assigned_to_id"] = assigned_to_id
+
+            tasks = db.execute(text(f"""
+                SELECT t.id, t.title, t.category, t.priority, t.loan_id, t.lead_id,
+                       t.assigned_to_id, t.organization_id, t.created_at, t.due_date,
+                       t.borrower_name,
+                       l.closing_date, l.lock_expiration_date, l.stage as loan_stage,
+                       l.loan_number
+                FROM ai_tasks t
+                LEFT JOIN loans l ON l.id = t.loan_id
+                WHERE t.type::text NOT ILIKE '%completed%'
+                    AND t.category IN ({cats_placeholder})
+                    {org_filter}
+                    {user_filter}
+                ORDER BY t.created_at ASC
+                LIMIT 200
+            """), params).fetchall()
+
+            buckets = {"must_today": [], "should_today": [], "strategic": []}
+
+            for task in tasks:
+                # Build loan_data context for scoring
+                loan_data = {}
+                if task.due_date and task.due_date < datetime.utcnow():
+                    loan_data["is_overdue"] = True
+                if task.closing_date:
+                    days_to_close = (task.closing_date - datetime.utcnow()).total_seconds() / 86400
+                    if 0 < days_to_close <= 3:
+                        loan_data["closing_within_3d"] = True
+                if task.lock_expiration_date:
+                    days_to_lock = (task.lock_expiration_date - datetime.utcnow()).total_seconds() / 86400
+                    if 0 < days_to_lock <= 3:
+                        loan_data["lock_within_3d"] = True
+
+                score = _compute_priority_score(task.category or "", task.priority or "medium", loan_data)
+                bucket = _get_priority_bucket(score)
+
+                task_dict = {
+                    "task_id": task.id,
+                    "title": task.title,
+                    "category": task.category,
+                    "priority": task.priority,
+                    "priority_score": score,
+                    "bucket": bucket,
+                    "loan_id": task.loan_id,
+                    "loan_number": task.loan_number,
+                    "lead_id": task.lead_id,
+                    "assigned_to_id": task.assigned_to_id,
+                    "borrower_name": task.borrower_name,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                }
+                buckets[bucket].append(task_dict)
+
+            # Sort each bucket by score descending
+            for bucket_name in buckets:
+                buckets[bucket_name].sort(key=lambda x: x["priority_score"], reverse=True)
+
+            total = sum(len(b) for b in buckets.values())
+
+            return ToolResult(
+                success=True,
+                data={
+                    "total": total,
+                    "must_today": buckets["must_today"],
+                    "must_today_count": len(buckets["must_today"]),
+                    "should_today": buckets["should_today"],
+                    "should_today_count": len(buckets["should_today"]),
+                    "strategic": buckets["strategic"],
+                    "strategic_count": len(buckets["strategic"]),
+                },
+                message=f"Priority queue: {len(buckets['must_today'])} must-today, {len(buckets['should_today'])} should-today, {len(buckets['strategic'])} strategic"
+            )
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.error(f"Priority queue error: {e}\n{tb}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+        finally:
+            if not shared_db:
+                db.close()
+
+    # ========================================================================
+    # TOOL 10: LOAN HEALTH CHECK (S13)
+    # ========================================================================
+
+    async def _check_loan_health(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
+        """Compute single-loan health score (0-100) with impediment list"""
+        from sqlalchemy import text
+
+        loan_id = input_data.get("loan_id")
+        if not loan_id:
+            return ToolResult(success=False, error="loan_id is required")
+
+        shared_db = context.get("_shared_db") if context else None
+        if shared_db:
+            db = shared_db
+        else:
+            from database import SessionLocal
+            db = SessionLocal()
+        try:
+            # Fetch loan with all relevant fields
+            loan = db.execute(text("""
+                SELECT l.id, l.loan_number, l.borrower_name, l.stage,
+                       l.loan_officer_id, l.organization_id,
+                       l.stage_changed_at, l.lock_expiration_date, l.closing_date,
+                       l.processor, l.closer, l.production_assistant,
+                       l.loan_officer_name,
+                       CONCAT(u.first_name, ' ', u.last_name) as lo_name
+                FROM loans l
+                LEFT JOIN users u ON u.id = l.loan_officer_id
+                WHERE l.id = :loan_id
+            """), {"loan_id": loan_id}).fetchone()
+
+            if not loan:
+                return ToolResult(success=False, error=f"Loan {loan_id} not found")
+
+            # Start at 100, deduct for issues
+            health_score = 100
+            impediments = []
+
+            # 1. Days in stage vs SLA target
+            if loan.stage_changed_at and loan.stage not in TERMINAL_STAGES:
+                days_in_stage = (datetime.utcnow() - loan.stage_changed_at).total_seconds() / 86400
+                sla_target = STAGE_SLA_DAYS.get(loan.stage, 10)
+                if days_in_stage > sla_target:
+                    over_by = days_in_stage - sla_target
+                    deduction = min(30, int(over_by * 3))  # Up to 30 points
+                    health_score -= deduction
+                    impediments.append({
+                        "type": "SLA_BREACH",
+                        "severity": "high" if over_by > sla_target else "medium",
+                        "message": f"In {loan.stage} for {int(days_in_stage)}d (SLA: {sla_target}d, over by {int(over_by)}d)",
+                        "deduction": deduction,
+                    })
+
+            # 2. Role assignments
+            if not loan.loan_officer_id:
+                health_score -= 20
+                impediments.append({
+                    "type": "MISSING_ROLE",
+                    "severity": "high",
+                    "message": "No loan officer assigned",
+                    "deduction": 20,
+                })
+
+            if loan.stage in ROLE_STAGE_REQUIREMENTS.get("processor", []):
+                if not loan.processor or (isinstance(loan.processor, str) and not loan.processor.strip()):
+                    health_score -= 15
+                    impediments.append({
+                        "type": "MISSING_ROLE",
+                        "severity": "high",
+                        "message": "No processor assigned (required for this stage)",
+                        "deduction": 15,
+                    })
+
+            if loan.stage in ROLE_STAGE_REQUIREMENTS.get("closer", []):
+                if not loan.closer or (isinstance(loan.closer, str) and not loan.closer.strip()):
+                    health_score -= 10
+                    impediments.append({
+                        "type": "MISSING_ROLE",
+                        "severity": "medium",
+                        "message": "No closer assigned (required for this stage)",
+                        "deduction": 10,
+                    })
+
+            if loan.stage in ROLE_STAGE_REQUIREMENTS.get("production_assistant", []):
+                if not loan.production_assistant or (isinstance(loan.production_assistant, str) and not loan.production_assistant.strip()):
+                    health_score -= 5
+                    impediments.append({
+                        "type": "MISSING_ROLE",
+                        "severity": "low",
+                        "message": "No production assistant assigned",
+                        "deduction": 5,
+                    })
+
+            # 3. Active document count
+            try:
+                doc_row = db.execute(text("""
+                    SELECT COUNT(*) as cnt FROM documents
+                    WHERE loan_id = :loan_id AND status = 'active'
+                """), {"loan_id": loan_id}).fetchone()
+                doc_count = doc_row.cnt if doc_row else 0
+                if loan.stage not in ("APPLICATION", "DISCLOSED") + TERMINAL_STAGES and doc_count < 3:
+                    deduction = min(15, (3 - doc_count) * 5)
+                    health_score -= deduction
+                    impediments.append({
+                        "type": "DOC_MISSING",
+                        "severity": "medium",
+                        "message": f"Only {doc_count} active documents on file (minimum 3 expected)",
+                        "deduction": deduction,
+                    })
+            except Exception:
+                doc_count = -1  # Unknown
+
+            # 4. Lock expiration risk
+            if loan.lock_expiration_date and loan.stage not in TERMINAL_STAGES:
+                days_to_lock = (loan.lock_expiration_date - datetime.utcnow()).total_seconds() / 86400
+                if days_to_lock < 0:
+                    health_score -= 20
+                    impediments.append({
+                        "type": "LOCK_EXPIRED",
+                        "severity": "high",
+                        "message": f"Rate lock expired {int(abs(days_to_lock))} days ago",
+                        "deduction": 20,
+                    })
+                elif days_to_lock <= 3:
+                    health_score -= 10
+                    impediments.append({
+                        "type": "LOCK_EXPIRING",
+                        "severity": "high",
+                        "message": f"Rate lock expires in {int(days_to_lock)} days",
+                        "deduction": 10,
+                    })
+
+            # 5. Open compliance alerts
+            try:
+                alert_row = db.execute(text("""
+                    SELECT COUNT(*) as cnt FROM compliance_alerts
+                    WHERE loan_id = :loan_id AND status = 'open' AND severity IN ('critical', 'high')
+                """), {"loan_id": loan_id}).fetchone()
+                alert_count = alert_row.cnt if alert_row else 0
+                if alert_count > 0:
+                    deduction = min(20, alert_count * 10)
+                    health_score -= deduction
+                    impediments.append({
+                        "type": "COMPLIANCE_OPEN",
+                        "severity": "high",
+                        "message": f"{alert_count} open critical/high compliance alert(s)",
+                        "deduction": deduction,
+                    })
+            except Exception:
+                alert_count = -1  # Unknown (table may not exist)
+
+            # Clamp score
+            health_score = max(0, min(100, health_score))
+
+            # Determine grade
+            if health_score >= 90:
+                grade = "A"
+            elif health_score >= 75:
+                grade = "B"
+            elif health_score >= 50:
+                grade = "C"
+            elif health_score >= 25:
+                grade = "D"
+            else:
+                grade = "F"
+
+            return ToolResult(
+                success=True,
+                data={
+                    "loan_id": loan_id,
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "stage": loan.stage,
+                    "health_score": health_score,
+                    "grade": grade,
+                    "impediment_count": len(impediments),
+                    "impediments": impediments,
+                    "role_assignments": {
+                        "loan_officer": loan.lo_name or loan.loan_officer_name or None,
+                        "processor": loan.processor or None,
+                        "closer": loan.closer or None,
+                        "production_assistant": loan.production_assistant or None,
+                    },
+                },
+                message=f"Health score: {health_score}/100 (Grade {grade}) — {len(impediments)} issue(s)"
+            )
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.error(f"Loan health check error: {e}\n{tb}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+        finally:
+            if not shared_db:
+                db.close()
+
+    # ========================================================================
+    # TOOL 11: STAGE TRANSITION GATING (S11)
+    # ========================================================================
+
+    async def _evaluate_stage_transition(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
+        """Evaluate whether a loan can transition to a target stage per policy YAML"""
+        from sqlalchemy import text
+
+        loan_id = input_data.get("loan_id")
+        target_stage = input_data.get("target_stage")
+
+        if not loan_id or not target_stage:
+            return ToolResult(success=False, error="loan_id and target_stage are required")
+
+        shared_db = context.get("_shared_db") if context else None
+        if shared_db:
+            db = shared_db
+        else:
+            from database import SessionLocal
+            db = SessionLocal()
+        try:
+            loan = db.execute(text("""
+                SELECT l.id, l.loan_number, l.borrower_name, l.stage,
+                       l.loan_officer_id, l.processor, l.closer, l.production_assistant
+                FROM loans l
+                WHERE l.id = :loan_id
+            """), {"loan_id": loan_id}).fetchone()
+
+            if not loan:
+                return ToolResult(success=False, error=f"Loan {loan_id} not found")
+
+            current_stage = loan.stage
+            config = _get_policy_config()
+            transitions = config.get("stage_transitions", [])
+
+            # Find matching transition rule
+            matching_rule = None
+            for rule in transitions:
+                if rule.get("from") == current_stage and rule.get("to") == target_stage:
+                    matching_rule = rule
+                    break
+
+            if not matching_rule:
+                # No explicit rule — check if target is a terminal state (always allowed)
+                if target_stage in ("Withdrawn", "Denied", "Cancelled", "Dead"):
+                    return ToolResult(
+                        success=True,
+                        data={
+                            "loan_id": loan_id,
+                            "current_stage": current_stage,
+                            "target_stage": target_stage,
+                            "allowed": True,
+                            "hard_block": False,
+                            "reasons": [],
+                            "warnings": ["Terminal transition — no prerequisites required"],
+                        },
+                        message=f"Transition {current_stage} -> {target_stage}: ALLOWED (terminal)"
+                    )
+                return ToolResult(
+                    success=True,
+                    data={
+                        "loan_id": loan_id,
+                        "current_stage": current_stage,
+                        "target_stage": target_stage,
+                        "allowed": False,
+                        "hard_block": True,
+                        "reasons": [f"No transition rule defined for {current_stage} -> {target_stage}"],
+                        "warnings": [],
+                    },
+                    message=f"Transition {current_stage} -> {target_stage}: BLOCKED (no rule)"
+                )
+
+            if not matching_rule.get("allowed", True):
+                return ToolResult(
+                    success=True,
+                    data={
+                        "loan_id": loan_id,
+                        "current_stage": current_stage,
+                        "target_stage": target_stage,
+                        "allowed": False,
+                        "hard_block": True,
+                        "reasons": ["Transition explicitly disallowed by policy"],
+                        "warnings": [],
+                    },
+                    message=f"Transition {current_stage} -> {target_stage}: BLOCKED (disallowed)"
+                )
+
+            hard_block = matching_rule.get("hard_block", True)
+            reasons = []
+            warnings = []
+
+            # Check required_roles
+            required_roles = matching_rule.get("required_roles", [])
+            # Map policy role names to loan columns
+            role_column_map = {
+                "LO": ("loan_officer_id", loan.loan_officer_id),
+                "PA": ("production_assistant", loan.production_assistant),
+                "Processor": ("processor", loan.processor),
+                "Closer": ("closer", loan.closer),
+                "UW": ("processor", loan.processor),  # UW check uses processor as proxy
+                "PostCloseReviewer": ("processor", loan.processor),  # proxy
+            }
+            for role in required_roles:
+                col_name, col_val = role_column_map.get(role, (None, None))
+                if col_name is None:
+                    warnings.append(f"Unknown role '{role}' in policy — cannot validate")
+                    continue
+                if col_val is None or (isinstance(col_val, str) and not col_val.strip()):
+                    reasons.append(f"Required role '{role}' is not assigned")
+
+            # Check required_milestones (query compliance_alerts or milestones if available)
+            required_milestones = matching_rule.get("required_milestones", [])
+            for milestone in required_milestones:
+                # Check if a completed milestone of this type exists
+                # We check ai_tasks with category matching the milestone as a proxy
+                try:
+                    milestone_check = db.execute(text("""
+                        SELECT id FROM ai_tasks
+                        WHERE loan_id = :loan_id
+                            AND title ILIKE :milestone_pattern
+                            AND type::text ILIKE '%completed%'
+                        LIMIT 1
+                    """), {"loan_id": loan_id, "milestone_pattern": f"%{milestone}%"}).fetchone()
+                    if not milestone_check:
+                        reasons.append(f"Required milestone '{milestone}' not completed")
+                except Exception:
+                    warnings.append(f"Could not verify milestone '{milestone}' — table query failed")
+
+            # Check disallow_if_open_exception_types
+            blocking_types = matching_rule.get("disallow_if_open_exception_types", [])
+            for exc_type in blocking_types:
+                try:
+                    # Check compliance_alerts for open alerts of this type
+                    open_alert = db.execute(text("""
+                        SELECT id, title FROM compliance_alerts
+                        WHERE loan_id = :loan_id AND status = 'open'
+                            AND (alert_type ILIKE :exc_type OR severity ILIKE :exc_type)
+                        LIMIT 1
+                    """), {"loan_id": loan_id, "exc_type": f"%{exc_type}%"}).fetchone()
+                    if open_alert:
+                        reasons.append(f"Open '{exc_type}' exception blocks transition: {open_alert.title}")
+                except Exception:
+                    warnings.append(f"Could not verify '{exc_type}' exceptions — table query failed")
+
+            allowed = len(reasons) == 0
+
+            return ToolResult(
+                success=True,
+                data={
+                    "loan_id": loan_id,
+                    "loan_number": loan.loan_number,
+                    "current_stage": current_stage,
+                    "target_stage": target_stage,
+                    "allowed": allowed,
+                    "hard_block": hard_block and not allowed,
+                    "reasons": reasons,
+                    "warnings": warnings,
+                    "rule_id": matching_rule.get("id"),
+                },
+                message=f"Transition {current_stage} -> {target_stage}: {'ALLOWED' if allowed else 'BLOCKED'} ({len(reasons)} issue(s))"
+            )
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.error(f"Stage transition eval error: {e}\n{tb}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return ToolResult(success=False, error=f"{type(e).__name__}: {str(e)}")
+        finally:
+            if not shared_db:
+                db.close()
