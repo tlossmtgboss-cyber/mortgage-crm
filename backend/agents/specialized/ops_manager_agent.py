@@ -230,7 +230,7 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
 
     if task_type:
         insert_cols.append("type")
-        insert_vals.append(":task_type::tasktype")
+        insert_vals.append("CAST(:task_type AS tasktype)")
         insert_params["task_type"] = task_type
 
     if loan_id:
