@@ -569,46 +569,50 @@ async def create_partner_candidate(
             detail="You already have a partner with this email address"
         )
 
-    result = db.execute(text("""
-        INSERT INTO partner_candidates (
-            owner_id, first_name, last_name, email, phone,
-            partner_type, license_number, license_state,
-            company_name, business_name, title, years_in_business, website,
-            street_address, city, state, zip_code,
-            source, source_detail, notes, linkedin_url,
-            preferred_contact_method, best_contact_time,
-            status, status_changed_at, created_at, updated_at
-        ) VALUES (
-            :owner_id, :first_name, :last_name, :email, :phone,
-            :partner_type, :license_number, :license_state,
-            :company_name, :business_name, :title, :years_in_business, :website,
-            :street_address, :city, :state, :zip_code,
-            :source, :source_detail, :notes, :linkedin_url,
-            :preferred_contact_method, :best_contact_time,
-            'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    try:
+        result = db.execute(text("""
+            INSERT INTO partner_candidates (
+                owner_id, first_name, last_name, email, phone,
+                partner_type, license_number, license_state,
+                company_name, business_name, title, years_in_business, website,
+                street_address, city, state, zip_code,
+                source, source_detail, notes, linkedin_url,
+                preferred_contact_method, best_contact_time,
+                status, status_changed_at, created_at, updated_at
+            ) VALUES (
+                :owner_id, :first_name, :last_name, :email, :phone,
+                :partner_type, :license_number, :license_state,
+                :company_name, :business_name, :title, :years_in_business, :website,
+                :street_address, :city, :state, :zip_code,
+                :source, :source_detail, :notes, :linkedin_url,
+                :preferred_contact_method, :best_contact_time,
+                'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            RETURNING id
+        """), {
+            "owner_id": user_id,
+            **data.model_dump()
+        })
+
+        partner_id = result.fetchone().id
+
+        # Log activity
+        log_partner_activity(
+            db, partner_id, "created",
+            f"Partner candidate created: {data.first_name} {data.last_name}",
+            user_id
         )
-        RETURNING id
-    """), {
-        "owner_id": user_id,
-        **data.model_dump()
-    })
 
-    partner_id = result.fetchone().id
+        db.commit()
 
-    # Log activity
-    log_partner_activity(
-        db, partner_id, "created",
-        f"Partner candidate created: {data.first_name} {data.last_name}",
-        user_id
-    )
-
-    db.commit()
-
-    return {
-        "id": partner_id,
-        "status": "created",
-        "message": f"Partner candidate {data.first_name} {data.last_name} created successfully"
-    }
+        return {
+            "id": partner_id,
+            "status": "created",
+            "message": f"Partner candidate {data.first_name} {data.last_name} created successfully"
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create partner candidate")
 
 
 @router.put("/candidates/{partner_id}")
@@ -622,11 +626,20 @@ async def update_partner_candidate(
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db)
 
+    # Allowlist of updatable fields to prevent SQL injection via dynamic field names
+    allowed_fields = {
+        "first_name", "last_name", "email", "phone", "partner_type",
+        "license_number", "license_state", "company_name", "business_name",
+        "title", "years_in_business", "website", "street_address", "city",
+        "state", "zip_code", "source", "source_detail", "notes", "linkedin_url",
+        "preferred_contact_method", "best_contact_time"
+    }
+
     update_fields = []
     params = {"partner_id": partner_id, "user_id": user_id}
 
     for field, value in data.model_dump(exclude_unset=True).items():
-        if value is not None:
+        if value is not None and field in allowed_fields:
             update_fields.append(f"{field} = :{field}")
             params[field] = value
 
@@ -635,18 +648,24 @@ async def update_partner_candidate(
 
     update_fields.append("updated_at = CURRENT_TIMESTAMP")
 
-    result = db.execute(text(f"""
-        UPDATE partner_candidates
-        SET {', '.join(update_fields)}
-        WHERE id = :partner_id AND owner_id = :user_id
-        RETURNING id
-    """), params)
+    try:
+        result = db.execute(text(f"""
+            UPDATE partner_candidates
+            SET {', '.join(update_fields)}
+            WHERE id = :partner_id AND owner_id = :user_id
+            RETURNING id
+        """), params)
 
-    if not result.fetchone():
-        raise HTTPException(status_code=404, detail="Partner not found")
+        if not result.fetchone():
+            raise HTTPException(status_code=404, detail="Partner not found")
 
-    db.commit()
-    return {"id": partner_id, "updated": True}
+        db.commit()
+        return {"id": partner_id, "updated": True}
+    except HTTPException:
+        raise
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update partner candidate")
 
 
 @router.delete("/candidates/{partner_id}")
@@ -659,16 +678,20 @@ async def delete_partner_candidate(
     user_id = current_user.id
     verify_partner_ownership(partner_id, user_id, db)
 
-    db.execute(text("""
-        UPDATE partner_candidates
-        SET is_active = false, updated_at = CURRENT_TIMESTAMP
-        WHERE id = :partner_id AND owner_id = :user_id
-    """), {"partner_id": partner_id, "user_id": user_id})
+    try:
+        db.execute(text("""
+            UPDATE partner_candidates
+            SET is_active = false, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :partner_id AND owner_id = :user_id
+        """), {"partner_id": partner_id, "user_id": user_id})
 
-    log_partner_activity(db, partner_id, "deleted", "Partner candidate deleted", user_id)
-    db.commit()
+        log_partner_activity(db, partner_id, "deleted", "Partner candidate deleted", user_id)
+        db.commit()
 
-    return {"id": partner_id, "deleted": True}
+        return {"id": partner_id, "deleted": True}
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete partner candidate")
 
 
 @router.patch("/candidates/{partner_id}/status")

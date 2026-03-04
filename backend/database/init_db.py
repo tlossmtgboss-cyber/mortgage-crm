@@ -1682,6 +1682,22 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ AI audit log note: {e}")
 
+        # Create recruiting assessment quiz + portal tables (11 tables)
+        try:
+            from migrations.add_recruit_assessment_tables import run_migration as run_assessment
+            run_assessment()
+            logger.info("✅ recruit assessment + portal tables ready")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit assessment tables note: {e}")
+
+        # Create recruit_social_posts + candidate_linkedin_posts tables
+        try:
+            from migrations.create_social_recruiting_tables import run_migration as run_social_recruiting
+            run_social_recruiting(engine)
+            logger.info("✅ recruit social posts tables ready")
+        except Exception as e:
+            logger.warning(f"⚠️ recruit social posts tables note: {e}")
+
         # Create social_oauth_states + social_tokens tables (required by recruit_social_routes)
         try:
             from migrations.create_social_oauth_tables import run_migration as run_social_oauth

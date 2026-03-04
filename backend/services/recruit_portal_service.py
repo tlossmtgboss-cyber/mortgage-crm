@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import html
 import secrets
 import re
+from fastapi import HTTPException
 from sqlalchemy import text
 
 # Use shared engine from database.py to avoid connection pool exhaustion
@@ -359,6 +360,10 @@ Candidate's current status: {candidate.status}
             # Fallback to canned responses
             ai_response = self._get_fallback_response(message, candidate.status)
 
+        # Validate message length
+        if len(message) > 5000:
+            message = message[:5000]
+
         # Store the conversation
         with SessionLocal() as conn:
             conn.execute(
@@ -511,7 +516,10 @@ Candidate's current status: {candidate.status}
                 notification_service = NotificationService()
 
                 # Format appointment time nicely
-                appt_time = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
+                try:
+                    appt_time = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    raise HTTPException(status_code=422, detail="Invalid datetime format for scheduled_at")
                 formatted_time = appt_time.strftime("%A, %B %d, %Y at %I:%M %p")
 
                 # Map appointment type to friendly name

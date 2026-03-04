@@ -209,7 +209,8 @@ async def complete_task(
     _verify_task_org(db, task_id, current_user.organization_id)
     success = recruiting_workflow_service.complete_task(
         task_id=task_id,
-        completed_by=current_user.id
+        completed_by=current_user.id,
+        organization_id=current_user.organization_id
     )
     if success:
         return {"message": "Task completed", "task_id": task_id}
@@ -228,7 +229,8 @@ async def skip_task(
     success = recruiting_workflow_service.skip_task(
         task_id=task_id,
         reason=request.reason,
-        skipped_by=current_user.id
+        skipped_by=current_user.id,
+        organization_id=current_user.organization_id
     )
     if success:
         return {"message": "Task skipped", "task_id": task_id}
