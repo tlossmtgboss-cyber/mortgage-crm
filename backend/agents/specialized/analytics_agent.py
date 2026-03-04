@@ -119,7 +119,6 @@ class AnalyticsAgent(SpecializedAgent):
     def _register_tools(self):
         """Register all analytics tools"""
 
-        # Tool 1: Get Pipeline Report
         self.register_tool(AgentTool(
             name="get_pipeline_report",
             description="Generate comprehensive pipeline status report with volume, "
@@ -130,7 +129,6 @@ class AnalyticsAgent(SpecializedAgent):
             input_schema=GetPipelineReportInput
         ))
 
-        # Tool 2: Get Conversion Metrics
         self.register_tool(AgentTool(
             name="get_conversion_metrics",
             description="Get lead-to-loan and stage conversion metrics. "
@@ -141,7 +139,6 @@ class AnalyticsAgent(SpecializedAgent):
             input_schema=GetConversionMetricsInput
         ))
 
-        # Tool 3: Get Performance Metrics
         self.register_tool(AgentTool(
             name="get_performance_metrics",
             description="Get loan officer or team performance metrics including "
@@ -152,7 +149,6 @@ class AnalyticsAgent(SpecializedAgent):
             input_schema=GetPerformanceMetricsInput
         ))
 
-        # Tool 4: Get Revenue Forecast
         self.register_tool(AgentTool(
             name="get_revenue_forecast",
             description="Generate revenue forecast based on pipeline and historical data. "
@@ -163,7 +159,6 @@ class AnalyticsAgent(SpecializedAgent):
             input_schema=GetRevenueForecastInput
         ))
 
-        # Tool 5: Get Lead Source Analysis
         self.register_tool(AgentTool(
             name="get_lead_source_analysis",
             description="Analyze lead source effectiveness by conversion rate, "
@@ -174,7 +169,6 @@ class AnalyticsAgent(SpecializedAgent):
             input_schema=GetLeadSourceAnalysisInput
         ))
 
-        # Tool 6: Get Cycle Time Analysis
         self.register_tool(AgentTool(
             name="get_cycle_time_analysis",
             description="Analyze loan processing cycle times by stage. "
@@ -185,7 +179,6 @@ class AnalyticsAgent(SpecializedAgent):
             input_schema=GetCycleTimeAnalysisInput
         ))
 
-        # Tool 7: Get Comparison Report
         self.register_tool(AgentTool(
             name="get_comparison_report",
             description="Compare metrics between time periods, loan officers, "
@@ -196,7 +189,6 @@ class AnalyticsAgent(SpecializedAgent):
             input_schema=GetComparisonReportInput
         ))
 
-        # Tool 8: Export Report
         self.register_tool(AgentTool(
             name="export_report",
             description="Export a report to CSV, JSON, or PDF format. "
@@ -211,933 +203,389 @@ class AnalyticsAgent(SpecializedAgent):
     # TOOL IMPLEMENTATIONS
     # ========================================================================
 
-    async def _get_pipeline_report(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _get_pipeline_report(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Generate pipeline status report"""
         from database import SessionLocal
-
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            org_id = self.require_org_id()
             date_range = input_data.get("date_range_days", 30)
             lo_id = input_data.get("lo_id")
-
             params = {"date_range": date_range, "org_id": org_id}
             lo_filter = ""
-            org_filter = "AND organization_id = :org_id"
             if lo_id:
                 lo_filter = "AND assigned_lo = :lo_id"
                 params["lo_id"] = lo_id
-
-            # Pipeline summary
-            # Note: Stage values must match LoanStage enum in main.py exactly
             summary_query = text(f"""
-                SELECT
-                    COUNT(*) as total_loans,
-                    COALESCE(SUM(amount), 0) as total_volume,
+                SELECT COUNT(*) as total_loans, COALESCE(SUM(amount), 0) as total_volume,
                     COALESCE(AVG(amount), 0) as avg_loan_size,
                     COUNT(CASE WHEN expected_close_date < CURRENT_DATE THEN 1 END) as past_due,
                     COUNT(CASE WHEN expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7 THEN 1 END) as closing_7_days,
                     COUNT(CASE WHEN expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30 THEN 1 END) as closing_30_days
-                FROM loans
-                WHERE stage NOT IN ('Funded')
-                    AND created_at >= CURRENT_DATE - :date_range
-                    {lo_filter}
-                    {org_filter}
+                FROM loans WHERE stage NOT IN ('Funded') AND organization_id = :org_id
+                    AND created_at >= CURRENT_DATE - :date_range {lo_filter}
             """)
-
             summary = db.execute(summary_query, params).fetchone()
-
-            # Stage breakdown
-            # Note: Stage values must match LoanStage enum in main.py exactly
             stage_query = text(f"""
-                SELECT
-                    stage,
-                    COUNT(*) as count,
-                    COALESCE(SUM(amount), 0) as volume,
+                SELECT stage, COUNT(*) as count, COALESCE(SUM(amount), 0) as volume,
                     COALESCE(AVG(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)), 0) as avg_days
-                FROM loans
-                WHERE stage NOT IN ('Funded')
-                    {lo_filter}
-                    {org_filter}
+                FROM loans WHERE stage NOT IN ('Funded') AND organization_id = :org_id {lo_filter}
                 GROUP BY stage
-                ORDER BY
-                    CASE stage
-                        WHEN 'Disclosed' THEN 1
-                        WHEN 'Processing' THEN 2
-                        WHEN 'Submitted' THEN 3
-                        WHEN 'UW Received' THEN 4
-                        WHEN 'Approved' THEN 5
-                        WHEN 'Suspended' THEN 6
-                        WHEN 'CTC' THEN 7
-                        WHEN 'Docs Out' THEN 8
-                        ELSE 9
-                    END
+                ORDER BY CASE stage WHEN 'Disclosed' THEN 1 WHEN 'Processing' THEN 2 WHEN 'Submitted' THEN 3 WHEN 'UW Received' THEN 4 WHEN 'Approved' THEN 5 WHEN 'Suspended' THEN 6 WHEN 'CTC' THEN 7 WHEN 'Docs Out' THEN 8 ELSE 9 END
             """)
-
             stages = db.execute(stage_query, params).fetchall()
-
-            stage_data = [
-                {
-                    "stage": s.stage,
-                    "count": s.count,
-                    "volume": float(s.volume),
-                    "avg_days": round(float(s.avg_days), 1),
-                    "percentage": round((s.count / summary.total_loans * 100), 1) if summary.total_loans > 0 else 0
-                }
-                for s in stages
-            ]
-
-            # Recent funded
-            # Note: Stage values must match LoanStage enum in main.py exactly
+            stage_data = [{"stage": s.stage, "count": s.count, "volume": float(s.volume), "avg_days": round(float(s.avg_days), 1), "percentage": round((s.count / summary.total_loans * 100), 1) if summary.total_loans > 0 else 0} for s in stages]
             funded_query = text(f"""
-                SELECT
-                    COUNT(*) as count,
-                    COALESCE(SUM(amount), 0) as volume
-                FROM loans
-                WHERE stage = 'Funded'
-                    AND updated_at >= CURRENT_DATE - :date_range
-                    {lo_filter}
-                    {org_filter}
+                SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as volume
+                FROM loans WHERE stage = 'Funded' AND organization_id = :org_id AND updated_at >= CURRENT_DATE - :date_range {lo_filter}
             """)
-
             funded = db.execute(funded_query, params).fetchone()
-
-            # Health indicators
             health_score = 100
             health_issues = []
-
             if summary.past_due > 0:
                 health_score -= min(20, summary.past_due * 5)
                 health_issues.append(f"{summary.past_due} loans past expected close date")
-
             bottleneck_stages = [s for s in stage_data if s["avg_days"] > 7]
             if bottleneck_stages:
                 health_score -= min(20, len(bottleneck_stages) * 10)
                 health_issues.append(f"{len(bottleneck_stages)} stage(s) with aging loans")
-
-            return ToolResult(
-                success=True,
-                data={
-                    "period_days": date_range,
-                    "summary": {
-                        "total_loans": summary.total_loans,
-                        "total_volume": float(summary.total_volume),
-                        "avg_loan_size": float(summary.avg_loan_size),
-                        "past_due": summary.past_due,
-                        "closing_7_days": summary.closing_7_days,
-                        "closing_30_days": summary.closing_30_days
-                    },
-                    "stages": stage_data,
-                    "funded_period": {
-                        "count": funded.count,
-                        "volume": float(funded.volume)
-                    },
-                    "health": {
-                        "score": max(0, health_score),
-                        "status": "healthy" if health_score >= 80 else "warning" if health_score >= 60 else "critical",
-                        "issues": health_issues
-                    }
-                },
-                message=f"Pipeline: {summary.total_loans} loans, ${summary.total_volume:,.0f} volume, health score: {health_score}"
-            )
-
+            return ToolResult(success=True, data={"period_days": date_range, "summary": {"total_loans": summary.total_loans, "total_volume": float(summary.total_volume), "avg_loan_size": float(summary.avg_loan_size), "past_due": summary.past_due, "closing_7_days": summary.closing_7_days, "closing_30_days": summary.closing_30_days}, "stages": stage_data, "funded_period": {"count": funded.count, "volume": float(funded.volume)}, "health": {"score": max(0, health_score), "status": "healthy" if health_score >= 80 else "warning" if health_score >= 60 else "critical", "issues": health_issues}}, message=f"Pipeline: {summary.total_loans} loans, ${summary.total_volume:,.0f} volume, health score: {health_score}")
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
-    async def _get_conversion_metrics(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _get_conversion_metrics(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Get conversion metrics"""
         from database import SessionLocal
-
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            org_id = self.require_org_id()
             start_date = input_data.get("start_date", (date.today() - timedelta(days=90)).isoformat())
             end_date = input_data.get("end_date", date.today().isoformat())
-
             params = {"start_date": start_date, "end_date": end_date, "org_id": org_id}
-
             source_filter = ""
             if input_data.get("source"):
                 source_filter = "AND source = :source"
                 params["source"] = input_data["source"]
-
             lo_filter = ""
             if input_data.get("lo_id"):
                 lo_filter = "AND assigned_to = :lo_id"
                 params["lo_id"] = input_data["lo_id"]
-
-            org_filter = "AND organization_id = :org_id"
-
-            # Lead stage funnel
             funnel_query = text(f"""
-                SELECT
-                    stage,
-                    COUNT(*) as count
-                FROM leads
-                WHERE created_at BETWEEN :start_date AND :end_date
-                    {source_filter}
-                    {lo_filter}
-                    {org_filter}
+                SELECT stage, COUNT(*) as count FROM leads
+                WHERE created_at BETWEEN :start_date AND :end_date AND organization_id = :org_id {source_filter} {lo_filter}
                 GROUP BY stage
             """)
-
             funnel_results = db.execute(funnel_query, params).fetchall()
             funnel = {r.stage: r.count for r in funnel_results}
-
             total_leads = sum(funnel.values())
-
-            # Calculate conversion rates
             stage_order = ["new", "contacted", "qualified", "prospect", "application"]
             conversions = []
-
             for i in range(len(stage_order) - 1):
                 from_stage = stage_order[i]
                 to_stage = stage_order[i + 1]
-
                 from_count = sum(funnel.get(s, 0) for s in stage_order[i:])
                 to_count = sum(funnel.get(s, 0) for s in stage_order[i + 1:])
-
                 rate = (to_count / from_count * 100) if from_count > 0 else 0
-
-                conversions.append({
-                    "from_stage": from_stage,
-                    "to_stage": to_stage,
-                    "from_count": from_count,
-                    "to_count": to_count,
-                    "conversion_rate": round(rate, 1)
-                })
-
-            # Lead to loan conversion
+                conversions.append({"from_stage": from_stage, "to_stage": to_stage, "from_count": from_count, "to_count": to_count, "conversion_rate": round(rate, 1)})
             lead_to_loan_query = text(f"""
-                SELECT COUNT(DISTINCT lead_id) as converted
-                FROM loans
-                WHERE lead_id IS NOT NULL
-                    AND created_at BETWEEN :start_date AND :end_date
-                    {org_filter}
+                SELECT COUNT(DISTINCT lead_id) as converted FROM loans
+                WHERE lead_id IS NOT NULL AND organization_id = :org_id AND created_at BETWEEN :start_date AND :end_date
             """)
-
             converted = db.execute(lead_to_loan_query, params).fetchone()
-
             overall_rate = (converted.converted / total_leads * 100) if total_leads > 0 else 0
-
-            return ToolResult(
-                success=True,
-                data={
-                    "period": {"start": start_date, "end": end_date},
-                    "total_leads": total_leads,
-                    "funnel": funnel,
-                    "stage_conversions": conversions,
-                    "lead_to_loan": {
-                        "leads": total_leads,
-                        "converted": converted.converted,
-                        "rate": round(overall_rate, 1)
-                    }
-                },
-                message=f"Conversion: {overall_rate:.1f}% lead-to-loan from {total_leads} leads"
-            )
-
+            return ToolResult(success=True, data={"period": {"start": start_date, "end": end_date}, "total_leads": total_leads, "funnel": funnel, "stage_conversions": conversions, "lead_to_loan": {"leads": total_leads, "converted": converted.converted, "rate": round(overall_rate, 1)}}, message=f"Conversion: {overall_rate:.1f}% lead-to-loan from {total_leads} leads")
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
-    async def _get_performance_metrics(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _get_performance_metrics(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Get LO/team performance metrics"""
         from database import SessionLocal
-
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            org_id = self.require_org_id()
             period = input_data.get("period", "month")
             period_days = {"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30)
-
             lo_id = input_data.get("lo_id")
-
             params = {"period_days": period_days, "org_id": org_id}
-
-            org_filter = "AND l.organization_id = :org_id"
-
             if lo_id:
-                # Single LO metrics
-                query = text(f"""
-                    SELECT
-                        u.id, u.name,
-                        COUNT(DISTINCT l.id) as total_loans,
-                        COALESCE(SUM(l.amount), 0) as total_volume,
+                query = text("""
+                    SELECT u.id, u.name,
+                        COUNT(DISTINCT l.id) as total_loans, COALESCE(SUM(l.amount), 0) as total_volume,
                         COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded_count,
                         COALESCE(SUM(CASE WHEN l.stage = 'Funded' THEN l.amount END), 0) as funded_volume,
                         COUNT(DISTINCT ld.id) as total_leads,
                         COALESCE(AVG(EXTRACT(DAY FROM l.updated_at - l.created_at)), 0) as avg_cycle_days
                     FROM users u
-                    LEFT JOIN loans l ON l.assigned_lo = u.id
-                        AND l.created_at >= CURRENT_DATE - :period_days
-                        {org_filter}
-                    LEFT JOIN leads ld ON ld.assigned_to = u.id
-                        AND ld.created_at >= CURRENT_DATE - :period_days
-                    WHERE u.id = :lo_id
-                        AND u.organization_id = :org_id
-                    GROUP BY u.id, u.name
+                    LEFT JOIN loans l ON l.assigned_lo = u.id AND l.created_at >= CURRENT_DATE - :period_days AND l.organization_id = :org_id
+                    LEFT JOIN leads ld ON ld.assigned_to = u.id AND ld.created_at >= CURRENT_DATE - :period_days AND ld.organization_id = :org_id
+                    WHERE u.id = :lo_id GROUP BY u.id, u.name
                 """)
                 params["lo_id"] = lo_id
-
                 result = db.execute(query, params).fetchone()
-
                 if not result:
                     return ToolResult(success=False, error=f"LO {lo_id} not found")
-
-                metrics = {
-                    "lo_id": result.id,
-                    "name": result.name,
-                    "period": period,
-                    "total_loans": result.total_loans,
-                    "total_volume": float(result.total_volume),
-                    "funded_count": result.funded_count,
-                    "funded_volume": float(result.funded_volume),
-                    "total_leads": result.total_leads,
-                    "avg_cycle_days": round(float(result.avg_cycle_days), 1),
-                    "pull_through_rate": round((result.funded_count / result.total_loans * 100), 1) if result.total_loans > 0 else 0
-                }
-
-                # Get ranking if requested
+                metrics = {"lo_id": result.id, "name": result.name, "period": period, "total_loans": result.total_loans, "total_volume": float(result.total_volume), "funded_count": result.funded_count, "funded_volume": float(result.funded_volume), "total_leads": result.total_leads, "avg_cycle_days": round(float(result.avg_cycle_days), 1), "pull_through_rate": round((result.funded_count / result.total_loans * 100), 1) if result.total_loans > 0 else 0}
                 if input_data.get("include_ranking", True):
-                    rank_query = text(f"""
-                        SELECT
-                            u.id,
-                            COALESCE(SUM(l.amount), 0) as volume
-                        FROM users u
-                        LEFT JOIN loans l ON l.assigned_lo = u.id
-                            AND l.stage = 'Funded'
-                            AND l.updated_at >= CURRENT_DATE - :period_days
-                            {org_filter}
-                        WHERE u.role = 'loan_officer'
-                            AND u.organization_id = :org_id
-                        GROUP BY u.id
-                        ORDER BY volume DESC
+                    rank_query = text("""
+                        SELECT u.id, COALESCE(SUM(l.amount), 0) as volume FROM users u
+                        LEFT JOIN loans l ON l.assigned_lo = u.id AND l.stage = 'Funded' AND l.updated_at >= CURRENT_DATE - :period_days AND l.organization_id = :org_id
+                        WHERE u.role = 'loan_officer' GROUP BY u.id ORDER BY volume DESC
                     """)
-
                     rankings = db.execute(rank_query, params).fetchall()
                     rank = next((i + 1 for i, r in enumerate(rankings) if r.id == lo_id), None)
-
-                    metrics["ranking"] = {
-                        "rank": rank,
-                        "total_los": len(rankings)
-                    }
-
-                return ToolResult(
-                    success=True,
-                    data={"metrics": metrics},
-                    message=f"{result.name}: {result.funded_count} funded (${result.funded_volume:,.0f})"
-                )
-
+                    metrics["ranking"] = {"rank": rank, "total_los": len(rankings)}
+                return ToolResult(success=True, data={"metrics": metrics}, message=f"{result.name}: {result.funded_count} funded (${result.funded_volume:,.0f})")
             else:
-                # Team metrics
-                query = text(f"""
-                    SELECT
-                        u.id, u.name,
-                        COUNT(DISTINCT l.id) as total_loans,
-                        COALESCE(SUM(l.amount), 0) as total_volume,
+                query = text("""
+                    SELECT u.id, u.name,
+                        COUNT(DISTINCT l.id) as total_loans, COALESCE(SUM(l.amount), 0) as total_volume,
                         COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded_count,
                         COALESCE(SUM(CASE WHEN l.stage = 'Funded' THEN l.amount END), 0) as funded_volume
                     FROM users u
-                    LEFT JOIN loans l ON l.assigned_lo = u.id
-                        AND l.created_at >= CURRENT_DATE - :period_days
-                        {org_filter}
-                    WHERE u.role = 'loan_officer'
-                        AND u.organization_id = :org_id
-                    GROUP BY u.id, u.name
-                    ORDER BY funded_volume DESC
+                    LEFT JOIN loans l ON l.assigned_lo = u.id AND l.created_at >= CURRENT_DATE - :period_days AND l.organization_id = :org_id
+                    WHERE u.role = 'loan_officer' GROUP BY u.id, u.name ORDER BY funded_volume DESC
                 """)
-
                 results = db.execute(query, params).fetchall()
-
-                team_metrics = [
-                    {
-                        "lo_id": r.id,
-                        "name": r.name,
-                        "total_loans": r.total_loans,
-                        "total_volume": float(r.total_volume),
-                        "funded_count": r.funded_count,
-                        "funded_volume": float(r.funded_volume),
-                        "rank": i + 1
-                    }
-                    for i, r in enumerate(results)
-                ]
-
+                team_metrics = [{"lo_id": r.id, "name": r.name, "total_loans": r.total_loans, "total_volume": float(r.total_volume), "funded_count": r.funded_count, "funded_volume": float(r.funded_volume), "rank": i + 1} for i, r in enumerate(results)]
                 total_funded = sum(m["funded_volume"] for m in team_metrics)
                 total_count = sum(m["funded_count"] for m in team_metrics)
-
-                return ToolResult(
-                    success=True,
-                    data={
-                        "period": period,
-                        "team_metrics": team_metrics,
-                        "totals": {
-                            "funded_volume": total_funded,
-                            "funded_count": total_count,
-                            "avg_per_lo": total_funded / len(team_metrics) if team_metrics else 0
-                        }
-                    },
-                    message=f"Team: {total_count} loans funded (${total_funded:,.0f}) by {len(team_metrics)} LOs"
-                )
-
+                return ToolResult(success=True, data={"period": period, "team_metrics": team_metrics, "totals": {"funded_volume": total_funded, "funded_count": total_count, "avg_per_lo": total_funded / len(team_metrics) if team_metrics else 0}}, message=f"Team: {total_count} loans funded (${total_funded:,.0f}) by {len(team_metrics)} LOs")
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
-    async def _get_revenue_forecast(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _get_revenue_forecast(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Generate revenue forecast"""
         from database import SessionLocal
-
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            org_id = self.require_org_id()
             months_ahead = input_data.get("months_ahead", 3)
             lo_id = input_data.get("lo_id")
-
             params = {"org_id": org_id}
             lo_filter = ""
-            org_filter = "AND organization_id = :org_id"
             if lo_id:
                 lo_filter = "AND assigned_lo = :lo_id"
                 params["lo_id"] = lo_id
-
-            # Get pipeline by expected close date
             pipeline_query = text(f"""
-                SELECT
-                    DATE_TRUNC('month', expected_close_date) as close_month,
-                    COUNT(*) as loan_count,
-                    COALESCE(SUM(amount), 0) as volume,
-                    COALESCE(AVG(rate), 0) as avg_rate
-                FROM loans
-                WHERE stage NOT IN ('Funded')
-                    AND expected_close_date IS NOT NULL
-                    AND expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + :days
-                    {lo_filter}
-                    {org_filter}
-                GROUP BY DATE_TRUNC('month', expected_close_date)
-                ORDER BY close_month
+                SELECT DATE_TRUNC('month', expected_close_date) as close_month, COUNT(*) as loan_count,
+                    COALESCE(SUM(amount), 0) as volume, COALESCE(AVG(rate), 0) as avg_rate
+                FROM loans WHERE stage NOT IN ('Funded') AND organization_id = :org_id
+                    AND expected_close_date IS NOT NULL AND expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + :days {lo_filter}
+                GROUP BY DATE_TRUNC('month', expected_close_date) ORDER BY close_month
             """)
             params["days"] = months_ahead * 31
-
             pipeline = db.execute(pipeline_query, params).fetchall()
-
-            # Historical pull-through rate
             pull_through_query = text(f"""
-                SELECT
-                    COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float /
-                    NULLIF(COUNT(*), 0) as rate
-                FROM loans
-                WHERE created_at >= CURRENT_DATE - 180
-                    {lo_filter}
-                    {org_filter}
+                SELECT COUNT(CASE WHEN stage = 'Funded' THEN 1 END)::float / NULLIF(COUNT(*), 0) as rate
+                FROM loans WHERE created_at >= CURRENT_DATE - 180 AND organization_id = :org_id {lo_filter}
             """)
-
             pull_through = db.execute(pull_through_query, params).fetchone()
             pull_through_rate = float(pull_through.rate or 0.7)
-
-            # Assume 1% margin on funded loans
             margin_rate = 0.01
-
             forecasts = []
             total_expected = 0
             total_conservative = 0
             total_optimistic = 0
-
             for p in pipeline:
                 expected_volume = float(p.volume) * pull_through_rate
                 conservative = expected_volume * 0.8
                 optimistic = expected_volume * 1.1
-
                 expected_revenue = expected_volume * margin_rate
                 conservative_revenue = conservative * margin_rate
                 optimistic_revenue = optimistic * margin_rate
-
                 total_expected += expected_revenue
                 total_conservative += conservative_revenue
                 total_optimistic += optimistic_revenue
-
-                forecasts.append({
-                    "month": p.close_month.strftime("%Y-%m") if p.close_month else None,
-                    "pipeline_count": p.loan_count,
-                    "pipeline_volume": float(p.volume),
-                    "expected_volume": expected_volume,
-                    "expected_revenue": expected_revenue,
-                    "conservative_revenue": conservative_revenue,
-                    "optimistic_revenue": optimistic_revenue
-                })
-
-            return ToolResult(
-                success=True,
-                data={
-                    "months_ahead": months_ahead,
-                    "pull_through_rate": round(pull_through_rate * 100, 1),
-                    "margin_rate": margin_rate * 100,
-                    "monthly_forecast": forecasts,
-                    "totals": {
-                        "expected_revenue": total_expected,
-                        "conservative_revenue": total_conservative,
-                        "optimistic_revenue": total_optimistic
-                    }
-                },
-                message=f"Forecast: ${total_expected:,.0f} expected revenue over {months_ahead} months"
-            )
-
+                forecasts.append({"month": p.close_month.strftime("%Y-%m") if p.close_month else None, "pipeline_count": p.loan_count, "pipeline_volume": float(p.volume), "expected_volume": expected_volume, "expected_revenue": expected_revenue, "conservative_revenue": conservative_revenue, "optimistic_revenue": optimistic_revenue})
+            return ToolResult(success=True, data={"months_ahead": months_ahead, "pull_through_rate": round(pull_through_rate * 100, 1), "margin_rate": margin_rate * 100, "monthly_forecast": forecasts, "totals": {"expected_revenue": total_expected, "conservative_revenue": total_conservative, "optimistic_revenue": total_optimistic}}, message=f"Forecast: ${total_expected:,.0f} expected revenue over {months_ahead} months")
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
-    async def _get_lead_source_analysis(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _get_lead_source_analysis(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Analyze lead source effectiveness"""
         from database import SessionLocal
-
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            org_id = self.require_org_id()
             start_date = input_data.get("start_date", (date.today() - timedelta(days=90)).isoformat())
             end_date = input_data.get("end_date", date.today().isoformat())
             min_leads = input_data.get("min_leads", 5)
-
-            org_filter = "AND organization_id = :org_id"
-            extra_params = {"org_id": org_id}
-
-            query = text(f"""
+            query = text("""
                 WITH source_stats AS (
-                    SELECT
-                        source,
-                        COUNT(*) as total_leads,
+                    SELECT source, COUNT(*) as total_leads,
                         COUNT(CASE WHEN stage IN ('qualified', 'prospect', 'application') THEN 1 END) as qualified,
                         COUNT(CASE WHEN stage = 'application' THEN 1 END) as applications,
                         AVG(EXTRACT(DAY FROM updated_at - created_at)) as avg_days_to_qualify
-                    FROM leads
-                    WHERE created_at BETWEEN :start_date AND :end_date
-                        AND source IS NOT NULL
-                        {org_filter}
-                    GROUP BY source
-                    HAVING COUNT(*) >= :min_leads
+                    FROM leads WHERE created_at BETWEEN :start_date AND :end_date AND organization_id = :org_id AND source IS NOT NULL
+                    GROUP BY source HAVING COUNT(*) >= :min_leads
                 )
-                SELECT
-                    source,
-                    total_leads,
-                    qualified,
-                    applications,
-                    avg_days_to_qualify,
+                SELECT source, total_leads, qualified, applications, avg_days_to_qualify,
                     ROUND(qualified::numeric / total_leads * 100, 1) as qualification_rate,
                     ROUND(applications::numeric / total_leads * 100, 1) as application_rate
-                FROM source_stats
-                ORDER BY application_rate DESC
+                FROM source_stats ORDER BY application_rate DESC
             """)
-
-            results = db.execute(query, {
-                "start_date": start_date,
-                "end_date": end_date,
-                "min_leads": min_leads,
-                **extra_params
-            }).fetchall()
-
+            results = db.execute(query, {"start_date": start_date, "end_date": end_date, "min_leads": min_leads, "org_id": org_id}).fetchall()
             sources = []
             total_leads = 0
             total_qualified = 0
-
             for r in results:
                 total_leads += r.total_leads
                 total_qualified += r.qualified
-
-                # Quality score based on conversion rate and volume
-                quality_score = (float(r.application_rate or 0) * 0.6 +
-                                min(100, r.total_leads * 2) * 0.4)
-
-                sources.append({
-                    "source": r.source,
-                    "total_leads": r.total_leads,
-                    "qualified": r.qualified,
-                    "applications": r.applications,
-                    "qualification_rate": float(r.qualification_rate or 0),
-                    "application_rate": float(r.application_rate or 0),
-                    "avg_days_to_qualify": round(float(r.avg_days_to_qualify or 0), 1),
-                    "quality_score": round(quality_score, 1)
-                })
-
-            # Identify best and worst
+                quality_score = (float(r.application_rate or 0) * 0.6 + min(100, r.total_leads * 2) * 0.4)
+                sources.append({"source": r.source, "total_leads": r.total_leads, "qualified": r.qualified, "applications": r.applications, "qualification_rate": float(r.qualification_rate or 0), "application_rate": float(r.application_rate or 0), "avg_days_to_qualify": round(float(r.avg_days_to_qualify or 0), 1), "quality_score": round(quality_score, 1)})
             best_source = max(sources, key=lambda x: x["application_rate"]) if sources else None
             worst_source = min(sources, key=lambda x: x["application_rate"]) if sources else None
-
-            return ToolResult(
-                success=True,
-                data={
-                    "period": {"start": start_date, "end": end_date},
-                    "sources": sources,
-                    "total_leads": total_leads,
-                    "total_qualified": total_qualified,
-                    "insights": {
-                        "best_source": best_source["source"] if best_source else None,
-                        "best_conversion": best_source["application_rate"] if best_source else 0,
-                        "worst_source": worst_source["source"] if worst_source else None,
-                        "worst_conversion": worst_source["application_rate"] if worst_source else 0
-                    }
-                },
-                message=f"Analyzed {len(sources)} lead sources. Best: {best_source['source'] if best_source else 'N/A'} ({best_source['application_rate'] if best_source else 0}%)"
-            )
-
+            return ToolResult(success=True, data={"period": {"start": start_date, "end": end_date}, "sources": sources, "total_leads": total_leads, "total_qualified": total_qualified, "insights": {"best_source": best_source["source"] if best_source else None, "best_conversion": best_source["application_rate"] if best_source else 0, "worst_source": worst_source["source"] if worst_source else None, "worst_conversion": worst_source["application_rate"] if worst_source else 0}}, message=f"Analyzed {len(sources)} lead sources. Best: {best_source['source'] if best_source else 'N/A'} ({best_source['application_rate'] if best_source else 0}%)")
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
-    async def _get_cycle_time_analysis(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _get_cycle_time_analysis(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Analyze loan processing cycle times"""
         from database import SessionLocal
-
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            org_id = self.context.get("organization_id")
             start_date = input_data.get("start_date", (date.today() - timedelta(days=90)).isoformat())
             end_date = input_data.get("end_date", date.today().isoformat())
-
-            params = {"start_date": start_date, "end_date": end_date}
-
+            params = {"start_date": start_date, "end_date": end_date, "org_id": org_id}
             loan_type_filter = ""
-            org_filter = ""
             if input_data.get("loan_type"):
                 loan_type_filter = "AND program ILIKE :loan_type"
                 params["loan_type"] = f"%{input_data['loan_type']}%"
-            if org_id:
-                org_filter = "AND organization_id = :org_id"
-                params["org_id"] = org_id
-
-            # Stage duration analysis
             stage_query = text(f"""
-                SELECT
-                    stage,
-                    COUNT(*) as count,
+                SELECT stage, COUNT(*) as count,
                     AVG(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as avg_days,
                     MIN(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as min_days,
                     MAX(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as max_days,
                     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as median_days
-                FROM loans
-                WHERE created_at BETWEEN :start_date AND :end_date
-                    AND stage NOT IN ('Funded')
-                    {loan_type_filter}
-                    {org_filter}
+                FROM loans WHERE created_at BETWEEN :start_date AND :end_date AND organization_id = :org_id AND stage NOT IN ('Funded') {loan_type_filter}
                 GROUP BY stage
             """)
-
             stages = db.execute(stage_query, params).fetchall()
-
-            # SLA targets
-            sla_targets = {
-                "application": 3,
-                "processing": 5,
-                "underwriting": 3,
-                "conditional": 7,
-                "clear_to_close": 3,
-                "closing": 5
-            }
-
+            sla_targets = {"application": 3, "processing": 5, "underwriting": 3, "conditional": 7, "clear_to_close": 3, "closing": 5}
             stage_analysis = []
             bottlenecks = []
-
             for s in stages:
                 avg = float(s.avg_days or 0)
                 target = sla_targets.get(s.stage, 5)
                 variance = avg - target
-
                 is_bottleneck = variance > 2
                 if is_bottleneck:
                     bottlenecks.append(s.stage)
-
-                stage_analysis.append({
-                    "stage": s.stage,
-                    "count": s.count,
-                    "avg_days": round(avg, 1),
-                    "min_days": round(float(s.min_days or 0), 1),
-                    "max_days": round(float(s.max_days or 0), 1),
-                    "median_days": round(float(s.median_days or 0), 1),
-                    "sla_target": target,
-                    "variance": round(variance, 1),
-                    "is_bottleneck": is_bottleneck
-                })
-
-            # Overall cycle time for funded loans
+                stage_analysis.append({"stage": s.stage, "count": s.count, "avg_days": round(avg, 1), "min_days": round(float(s.min_days or 0), 1), "max_days": round(float(s.max_days or 0), 1), "median_days": round(float(s.median_days or 0), 1), "sla_target": target, "variance": round(variance, 1), "is_bottleneck": is_bottleneck})
             overall_query = text(f"""
-                SELECT
-                    AVG(EXTRACT(DAY FROM updated_at - created_at)) as avg_total,
+                SELECT AVG(EXTRACT(DAY FROM updated_at - created_at)) as avg_total,
                     MIN(EXTRACT(DAY FROM updated_at - created_at)) as min_total,
                     MAX(EXTRACT(DAY FROM updated_at - created_at)) as max_total
-                FROM loans
-                WHERE stage = 'Funded'
-                    AND updated_at BETWEEN :start_date AND :end_date
-                    {loan_type_filter}
-                    {org_filter}
+                FROM loans WHERE stage = 'Funded' AND organization_id = :org_id AND updated_at BETWEEN :start_date AND :end_date {loan_type_filter}
             """)
-
             overall = db.execute(overall_query, params).fetchone()
-
-            return ToolResult(
-                success=True,
-                data={
-                    "period": {"start": start_date, "end": end_date},
-                    "stage_analysis": stage_analysis,
-                    "bottlenecks": bottlenecks,
-                    "overall_cycle": {
-                        "avg_days": round(float(overall.avg_total or 0), 1),
-                        "min_days": round(float(overall.min_total or 0), 1),
-                        "max_days": round(float(overall.max_total or 0), 1)
-                    }
-                },
-                message=f"Cycle analysis: {len(bottlenecks)} bottleneck(s) identified. Avg cycle: {overall.avg_total:.0f} days"
-            )
-
+            return ToolResult(success=True, data={"period": {"start": start_date, "end": end_date}, "stage_analysis": stage_analysis, "bottlenecks": bottlenecks, "overall_cycle": {"avg_days": round(float(overall.avg_total or 0), 1), "min_days": round(float(overall.min_total or 0), 1), "max_days": round(float(overall.max_total or 0), 1)}}, message=f"Cycle analysis: {len(bottlenecks)} bottleneck(s) identified. Avg cycle: {overall.avg_total:.0f} days")
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
-    async def _get_comparison_report(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _get_comparison_report(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Generate comparison report"""
         from database import SessionLocal
-
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            org_id = self.context.get("organization_id")
             comparison_type = input_data["comparison_type"]
-
             if comparison_type == "period_over_period":
-                # Compare two time periods
                 p1_start = input_data.get("period_1_start", (date.today() - timedelta(days=60)).isoformat())
                 p1_end = input_data.get("period_1_end", (date.today() - timedelta(days=30)).isoformat())
                 p2_start = input_data.get("period_2_start", (date.today() - timedelta(days=30)).isoformat())
                 p2_end = input_data.get("period_2_end", date.today().isoformat())
-
-                org_clause = ""
-                org_params = {}
-                if org_id:
-                    org_clause = "AND organization_id = :org_id"
-                    org_params["org_id"] = org_id
-
-                period_query = text(f"""
-                    SELECT
-                        COUNT(*) as loans,
-                        COALESCE(SUM(amount), 0) as volume,
+                period_query = text("""
+                    SELECT COUNT(*) as loans, COALESCE(SUM(amount), 0) as volume,
                         COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded
-                    FROM loans
-                    WHERE created_at BETWEEN :start AND :end
-                        {org_clause}
+                    FROM loans WHERE organization_id = :org_id AND created_at BETWEEN :start AND :end
                 """)
-
-                p1 = db.execute(period_query, {"start": p1_start, "end": p1_end, **org_params}).fetchone()
-                p2 = db.execute(period_query, {"start": p2_start, "end": p2_end, **org_params}).fetchone()
-
+                p1 = db.execute(period_query, {"start": p1_start, "end": p1_end, "org_id": org_id}).fetchone()
+                p2 = db.execute(period_query, {"start": p2_start, "end": p2_end, "org_id": org_id}).fetchone()
                 def calc_change(old, new):
                     if old == 0:
                         return 100 if new > 0 else 0
                     return round(((new - old) / old) * 100, 1)
-
-                comparison = {
-                    "period_1": {"start": p1_start, "end": p1_end},
-                    "period_2": {"start": p2_start, "end": p2_end},
-                    "metrics": {
-                        "loans": {
-                            "period_1": p1.loans,
-                            "period_2": p2.loans,
-                            "change": calc_change(p1.loans, p2.loans)
-                        },
-                        "volume": {
-                            "period_1": float(p1.volume),
-                            "period_2": float(p2.volume),
-                            "change": calc_change(float(p1.volume), float(p2.volume))
-                        },
-                        "funded": {
-                            "period_1": p1.funded,
-                            "period_2": p2.funded,
-                            "change": calc_change(p1.funded, p2.funded)
-                        }
-                    }
-                }
-
-                return ToolResult(
-                    success=True,
-                    data=comparison,
-                    message=f"Volume change: {comparison['metrics']['volume']['change']}%"
-                )
-
+                comparison = {"period_1": {"start": p1_start, "end": p1_end}, "period_2": {"start": p2_start, "end": p2_end}, "metrics": {"loans": {"period_1": p1.loans, "period_2": p2.loans, "change": calc_change(p1.loans, p2.loans)}, "volume": {"period_1": float(p1.volume), "period_2": float(p2.volume), "change": calc_change(float(p1.volume), float(p2.volume))}, "funded": {"period_1": p1.funded, "period_2": p2.funded, "change": calc_change(p1.funded, p2.funded)}}}
+                return ToolResult(success=True, data=comparison, message=f"Volume change: {comparison['metrics']['volume']['change']}%")
             elif comparison_type == "lo_comparison":
-                # Compare loan officers
                 lo_ids = input_data.get("entity_ids", [])
-
                 if not lo_ids or len(lo_ids) < 2:
                     return ToolResult(success=False, error="Need at least 2 LO IDs to compare")
-
-                lo_org_clause = ""
-                lo_org_params = {}
-                if org_id:
-                    lo_org_clause = "AND l.organization_id = :org_id"
-                    lo_org_params["org_id"] = org_id
-
-                query = text(f"""
-                    SELECT
-                        u.id, u.name,
-                        COUNT(l.id) as loans,
-                        COALESCE(SUM(l.amount), 0) as volume,
+                query = text("""
+                    SELECT u.id, u.name, COUNT(l.id) as loans, COALESCE(SUM(l.amount), 0) as volume,
                         COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded
-                    FROM users u
-                    LEFT JOIN loans l ON l.assigned_lo = u.id
-                        AND l.created_at >= CURRENT_DATE - 30
-                        {lo_org_clause}
-                    WHERE u.id = ANY(:lo_ids)
-                    GROUP BY u.id, u.name
-                    ORDER BY volume DESC
+                    FROM users u LEFT JOIN loans l ON l.assigned_lo = u.id AND l.created_at >= CURRENT_DATE - 30 AND l.organization_id = :org_id
+                    WHERE u.id = ANY(:lo_ids) GROUP BY u.id, u.name ORDER BY volume DESC
                 """)
-
-                results = db.execute(query, {"lo_ids": lo_ids, **lo_org_params}).fetchall()
-
-                los = [
-                    {
-                        "id": r.id,
-                        "name": r.name,
-                        "loans": r.loans,
-                        "volume": float(r.volume),
-                        "funded": r.funded
-                    }
-                    for r in results
-                ]
-
-                return ToolResult(
-                    success=True,
-                    data={"loan_officers": los},
-                    message=f"Compared {len(los)} loan officers"
-                )
-
+                results = db.execute(query, {"lo_ids": lo_ids, "org_id": org_id}).fetchall()
+                los = [{"id": r.id, "name": r.name, "loans": r.loans, "volume": float(r.volume), "funded": r.funded} for r in results]
+                return ToolResult(success=True, data={"loan_officers": los}, message=f"Compared {len(los)} loan officers")
             else:
                 return ToolResult(success=False, error=f"Unknown comparison type: {comparison_type}")
-
         except Exception as e:
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
-    async def _export_report(
-        self,
-        input_data: Dict[str, Any],
-        context: AgentContext
-    ) -> ToolResult:
+    async def _export_report(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Export report to file"""
         import json
         import csv
         import io
-
         report_type = input_data["report_type"]
         export_format = input_data.get("format", "csv")
         date_range_days = input_data.get("date_range_days", 30)
-
-        # Generate report data based on type
         if report_type == "pipeline":
-            report_result = await self._get_pipeline_report(
-                {"date_range_days": date_range_days},
-                context
-            )
+            report_result = await self._get_pipeline_report({"date_range_days": date_range_days}, context)
         elif report_type == "conversion":
             report_result = await self._get_conversion_metrics({}, context)
         elif report_type == "performance":
-            report_result = await self._get_performance_metrics(
-                {"period": "month"},
-                context
-            )
+            report_result = await self._get_performance_metrics({"period": "month"}, context)
         else:
             return ToolResult(success=False, error=f"Unknown report type: {report_type}")
-
         if not report_result.success:
             return report_result
-
         data = report_result.data
-
-        # Generate file content
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{report_type}_report_{timestamp}.{export_format}"
-
         if export_format == "json":
             content = json.dumps(data, indent=2, default=str)
         elif export_format == "csv":
             output = io.StringIO()
             writer = csv.writer(output)
-
             def _sanitize_csv(val):
                 """Prevent CSV formula injection by prefixing dangerous characters."""
                 s = str(val) if val is not None else ""
                 if s and s[0] in ('=', '+', '-', '@', '\t', '\r'):
                     return "'" + s
                 return s
-
-            # Flatten data for CSV
             if report_type == "pipeline" and "stages" in data:
                 writer.writerow(["Stage", "Count", "Volume", "Avg Days", "Percentage"])
                 for stage in data["stages"]:
-                    writer.writerow([
-                        _sanitize_csv(stage["stage"]),
-                        stage["count"],
-                        stage["volume"],
-                        stage["avg_days"],
-                        stage["percentage"]
-                    ])
+                    writer.writerow([_sanitize_csv(stage["stage"]), stage["count"], stage["volume"], stage["avg_days"], stage["percentage"]])
             elif report_type == "performance" and "team_metrics" in data:
                 writer.writerow(["Rank", "Name", "Loans", "Volume", "Funded Count", "Funded Volume"])
                 for m in data["team_metrics"]:
-                    writer.writerow([
-                        m["rank"],
-                        _sanitize_csv(m["name"]),
-                        m["total_loans"],
-                        m["total_volume"],
-                        m["funded_count"],
-                        m["funded_volume"]
-                    ])
+                    writer.writerow([m["rank"], _sanitize_csv(m["name"]), m["total_loans"], m["total_volume"], m["funded_count"], m["funded_volume"]])
             else:
                 writer.writerow(["Key", "Value"])
                 for key, value in data.items():
                     writer.writerow([_sanitize_csv(key), _sanitize_csv(str(value))])
-
             content = output.getvalue()
         else:
             return ToolResult(success=False, error=f"Unsupported format: {export_format}")
-
-        # In production, save to file storage and return URL
-        return ToolResult(
-            success=True,
-            data={
-                "filename": filename,
-                "format": export_format,
-                "size_bytes": len(content),
-                "content_preview": content[:500] + "..." if len(content) > 500 else content
-            },
-            message=f"Report exported to {filename}"
-        )
+        return ToolResult(success=True, data={"filename": filename, "format": export_format, "size_bytes": len(content), "content_preview": content[:500] + "..." if len(content) > 500 else content}, message=f"Report exported to {filename}")

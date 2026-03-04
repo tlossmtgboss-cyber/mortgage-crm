@@ -251,22 +251,106 @@ class EmailIntelAgent(SpecializedAgent):
             message="Email parsed successfully"
         )
 
-    async def _classify_email_intent(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Classify email intent"""
-        subject = input_data["subject"].lower()
-        body = input_data["body"].lower()
-        combined = f"{subject} {body}"
+    # Valid classification categories for LLM and fallback
+    CLASSIFICATION_CATEGORIES = [
+        "inquiry", "application", "documentation", "rate_lock",
+        "closing", "complaint", "referral", "marketing", "internal", "other"
+    ]
 
+    async def _classify_email_intent(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
+        """Classify email intent using LLM with keyword fallback"""
+        subject = input_data["subject"]
+        body = input_data["body"]
+
+        # Attempt LLM-backed classification first
+        try:
+            llm_result = await self._classify_with_llm(subject, body)
+            if llm_result is not None:
+                return ToolResult(
+                    success=True,
+                    data={
+                        "intent": llm_result["category"],
+                        "confidence": llm_result["confidence"],
+                        "requires_response": llm_result["category"] in [
+                            "inquiry", "complaint", "application", "rate_lock"
+                        ],
+                        "classification_method": "llm"
+                    },
+                    message=f"Intent: {llm_result['category']} ({llm_result['confidence']:.0%} confidence)"
+                )
+        except Exception as e:
+            logger.warning(f"LLM classification failed, falling back to keywords: {e}")
+
+        # Fallback: keyword-based classification
+        return self._classify_with_keywords(subject, body)
+
+    async def _classify_with_llm(self, subject: str, body: str) -> Optional[Dict[str, Any]]:
+        """Classify email using OpenAI LLM. Returns None on failure."""
+        import os
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        if not api_key:
+            logger.debug("No OPENAI_API_KEY configured, skipping LLM classification")
+            return None
+
+        client = OpenAI(api_key=api_key)
+        categories_str = ", ".join(self.CLASSIFICATION_CATEGORIES)
+
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an email classifier for a mortgage CRM system. "
+                        f"Classify the email into exactly one of these categories: {categories_str}. "
+                        "Respond with ONLY a JSON object with two keys: "
+                        '"category" (one of the listed categories) and "confidence" (a float between 0.0 and 1.0). '
+                        "Do not include any other text."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": f"Subject: {subject}\n\nBody: {body}"
+                }
+            ],
+            temperature=0.1,
+            max_tokens=60
+        )
+
+        import json
+        raw = response.choices[0].message.content.strip()
+        parsed = json.loads(raw)
+
+        category = parsed.get("category", "other")
+        confidence = float(parsed.get("confidence", 0.5))
+
+        # Validate the category is in our allowed list
+        if category not in self.CLASSIFICATION_CATEGORIES:
+            logger.warning(f"LLM returned unknown category '{category}', falling back")
+            return None
+
+        return {"category": category, "confidence": min(1.0, max(0.0, confidence))}
+
+    def _classify_with_keywords(self, subject: str, body: str) -> ToolResult:
+        """Fallback keyword-based email classification."""
+        combined = f"{subject} {body}".lower()
+
+        # Map keywords to the unified classification categories
         intents = {
-            "status_inquiry": ["status", "update", "where", "progress"],
-            "document_submission": ["attached", "document", "uploading", "sending"],
-            "question": ["how", "what", "when", "why", "can you"],
-            "appointment_request": ["schedule", "meeting", "call", "time"],
-            "rate_inquiry": ["rate", "interest", "pricing", "quote"],
-            "complaint": ["unhappy", "frustrated", "problem", "issue", "wrong"]
+            "inquiry": ["status", "update", "where", "progress", "how", "what", "when", "why", "can you", "question"],
+            "application": ["apply", "application", "pre-approval", "preapproval", "qualify", "started"],
+            "documentation": ["attached", "document", "uploading", "sending", "paystub", "w2", "bank statement", "tax return"],
+            "rate_lock": ["rate", "interest", "lock", "pricing", "quote", "float"],
+            "closing": ["closing", "settlement", "clear to close", "ctc", "signing", "funded"],
+            "complaint": ["unhappy", "frustrated", "problem", "issue", "wrong", "disappointed", "escalate"],
+            "referral": ["referral", "recommend", "refer", "colleague", "friend"],
+            "marketing": ["unsubscribe", "newsletter", "promotion", "offer", "campaign"],
+            "internal": ["internal", "team", "staff", "memo", "fyi"],
         }
 
-        matched_intent = "general"
+        matched_intent = "other"
         confidence = 0.5
 
         for intent, keywords in intents.items():
@@ -281,7 +365,8 @@ class EmailIntelAgent(SpecializedAgent):
             data={
                 "intent": matched_intent,
                 "confidence": confidence,
-                "requires_response": matched_intent in ["question", "status_inquiry", "appointment_request"]
+                "requires_response": matched_intent in ["inquiry", "complaint", "application", "rate_lock"],
+                "classification_method": "keyword_fallback"
             },
             message=f"Intent: {matched_intent} ({confidence:.0%} confidence)"
         )

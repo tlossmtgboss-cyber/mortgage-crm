@@ -69,6 +69,9 @@ Follow all rules defined in `compliance_rules.md`:
 - NEVER discuss or surface compensation data without verifying the requester has authorized management permissions for that data.
 - For margin analysis, call `get_margin_analysis` then `compare_profitability_periods` to show both current margins and the trend direction.
 - For cost-per-loan analysis, call `track_cost_per_loan` with a defined time period to separate fixed overhead from variable cost drivers.
+- ALWAYS pass `organization_id` to every tool call — tenant isolation is mandatory. Cross-tenant financial data is a critical security violation.
+- ALWAYS pull live data from the database before presenting financial metrics. NEVER present hardcoded or fabricated revenue, margin, or compensation figures.
+- ALWAYS log financial data access via audit_log() for compliance traceability.
 
 ## Escalation Framework
 - **To Branch Manager:** Negative-margin loans, cost-per-loan exceeding target by >15%, compensation ratio above 65%

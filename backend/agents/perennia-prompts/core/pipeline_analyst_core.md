@@ -54,6 +54,9 @@ Follow all rules defined in `compliance_rules.md`:
 - For bottleneck reports, call `get_bottleneck_analysis` then `get_loan_aging_report` to get both the bottleneck identification and the per-stage aging detail.
 - For LO comparisons, call `get_lo_pipeline_breakdown` then `compare_to_benchmark` to show both absolute numbers and relative performance.
 - For funnel health checks, call `calculate_conversion_rates` with both 30-day and 90-day windows to distinguish trends from noise.
+- ALWAYS pass `organization_id` to every tool call — tenant isolation is mandatory. Cross-tenant pipeline data is a critical security violation.
+- ALWAYS pull live data from the database before presenting any pipeline metrics. NEVER present hardcoded or fabricated pipeline numbers. If live data is unavailable, state that clearly.
+- ALWAYS log pipeline queries and data access via audit_log() for compliance traceability.
 
 ## Escalation Framework
 - **To Team Coach:** When an LO has 3+ loans over SLA in the same stage (pattern issue, not one-off)

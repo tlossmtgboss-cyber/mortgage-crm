@@ -185,9 +185,9 @@ class CoachingAgent(SpecializedAgent):
             query = text("""
                 SELECT
                     COUNT(*) as loan_count,
-                    SUM(loan_amount) as total_volume,
-                    AVG(loan_amount) as avg_loan_size,
-                    COUNT(CASE WHEN status = 'funded' THEN 1 END) as funded_count
+                    COALESCE(SUM(amount), 0) as total_volume,
+                    AVG(amount) as avg_loan_size,
+                    COUNT(CASE WHEN stage = 'FUNDED' THEN 1 END) as funded_count
                 FROM loans
                 WHERE loan_officer_id = :lo_id
                 AND created_at >= CURRENT_DATE - :days
@@ -235,7 +235,7 @@ class CoachingAgent(SpecializedAgent):
             lo_query = text("""
                 SELECT
                     COUNT(*) as loans,
-                    SUM(loan_amount) as volume
+                    COALESCE(SUM(amount), 0) as volume
                 FROM loans
                 WHERE loan_officer_id = :lo_id
                 AND created_at >= CURRENT_DATE - 30
@@ -252,7 +252,7 @@ class CoachingAgent(SpecializedAgent):
                     SELECT
                         loan_officer_id,
                         COUNT(*) as loan_count,
-                        SUM(loan_amount) as volume
+                        COALESCE(SUM(amount), 0) as volume
                     FROM loans
                     WHERE created_at >= CURRENT_DATE - 30
                     AND organization_id = :org_id
@@ -295,36 +295,134 @@ class CoachingAgent(SpecializedAgent):
             db.close()
 
     async def _identify_coaching_opportunities(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Identify coaching opportunities"""
-        opportunities = [
-            {
-                "area": "lead_conversion",
-                "description": "Lead to application conversion rate below average",
-                "impact": "high",
-                "recommendation": "Focus on initial contact speed and follow-up cadence"
-            },
-            {
-                "area": "cycle_time",
-                "description": "Average time from application to close is longer than peers",
-                "impact": "medium",
-                "recommendation": "Review document collection process and condition clearing"
-            },
-            {
-                "area": "pull_through",
-                "description": "Pull-through rate has opportunity for improvement",
-                "impact": "high",
-                "recommendation": "Improve pre-qualification and set proper expectations early"
-            }
-        ]
+        """Identify coaching opportunities using DB metrics with static fallback"""
+        from database import SessionLocal
+        from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
+        lo_id = input_data["lo_id"]
         min_impact = input_data.get("min_impact", "medium")
         impact_order = ["low", "medium", "high"]
+
+        opportunities = []
+
+        db = SessionLocal()
+        try:
+            # Get LO's conversion rate (leads with a funded loan vs total leads)
+            lo_stats = db.execute(text("""
+                SELECT
+                    COUNT(DISTINCT ld.id) as total_leads,
+                    COUNT(DISTINCT CASE WHEN lo.stage = 'FUNDED' THEN lo.id END) as funded_loans,
+                    AVG(CASE WHEN lo.funded_date IS NOT NULL AND lo.application_date IS NOT NULL
+                        THEN EXTRACT(EPOCH FROM (lo.funded_date - lo.application_date)) / 86400
+                    END) as avg_cycle_days,
+                    COUNT(CASE WHEN lo.stage NOT IN ('FUNDED','CANCELLED','DENIED','DEAD','WITHDRAWN','DOES_NOT_QUALIFY') THEN 1 END) as active_loans,
+                    COUNT(CASE WHEN lo.stage IN ('CANCELLED','DENIED','DEAD','WITHDRAWN','DOES_NOT_QUALIFY') THEN 1 END) as fallout_loans
+                FROM leads ld
+                LEFT JOIN loans lo ON lo.loan_officer_id = :lo_id AND lo.organization_id = :org_id
+                WHERE ld.owner_id = :lo_id AND ld.organization_id = :org_id
+                    AND ld.created_at >= CURRENT_DATE - 90
+            """), {"lo_id": lo_id, "org_id": org_id}).fetchone()
+
+            # Get peer averages for comparison
+            peer_stats = db.execute(text("""
+                SELECT
+                    AVG(funded_rate) as avg_pull_through,
+                    AVG(cycle_days) as avg_cycle_days
+                FROM (
+                    SELECT
+                        loan_officer_id,
+                        CASE WHEN COUNT(*) > 0
+                            THEN COUNT(CASE WHEN stage = 'FUNDED' THEN 1 END)::float / COUNT(*)
+                            ELSE 0 END as funded_rate,
+                        AVG(CASE WHEN funded_date IS NOT NULL AND application_date IS NOT NULL
+                            THEN EXTRACT(EPOCH FROM (funded_date - application_date)) / 86400
+                        END) as cycle_days
+                    FROM loans
+                    WHERE organization_id = :org_id AND created_at >= CURRENT_DATE - 90
+                    GROUP BY loan_officer_id
+                ) peer
+            """), {"org_id": org_id}).fetchone()
+
+            total_leads = lo_stats.total_leads or 0
+            funded = lo_stats.funded_loans or 0
+            lo_cycle = lo_stats.avg_cycle_days
+            peer_cycle = peer_stats.avg_cycle_days if peer_stats else None
+            peer_pull_through = float(peer_stats.avg_pull_through or 0) if peer_stats else 0
+            active = lo_stats.active_loans or 0
+            fallout = lo_stats.fallout_loans or 0
+
+            # Determine pull-through rate
+            total_decisions = funded + fallout
+            lo_pull_through = (funded / total_decisions) if total_decisions > 0 else 0
+
+            # Lead conversion
+            if total_leads > 0 and funded < total_leads * 0.2:
+                opportunities.append({
+                    "area": "lead_conversion",
+                    "description": f"Only {funded}/{total_leads} leads converted to funded loans in 90 days",
+                    "impact": "high",
+                    "recommendation": "Focus on initial contact speed and follow-up cadence"
+                })
+
+            # Cycle time
+            if lo_cycle is not None and peer_cycle is not None and lo_cycle > peer_cycle * 1.15:
+                opportunities.append({
+                    "area": "cycle_time",
+                    "description": f"Avg cycle time ({lo_cycle:.0f} days) exceeds peer average ({peer_cycle:.0f} days)",
+                    "impact": "medium",
+                    "recommendation": "Review document collection process and condition clearing"
+                })
+
+            # Pull-through
+            if lo_pull_through < peer_pull_through * 0.9 and total_decisions > 0:
+                opportunities.append({
+                    "area": "pull_through",
+                    "description": f"Pull-through rate ({lo_pull_through:.0%}) below peer average ({peer_pull_through:.0%})",
+                    "impact": "high",
+                    "recommendation": "Improve pre-qualification and set proper expectations early"
+                })
+
+            # If no data-driven opportunities found, note that
+            if not opportunities:
+                opportunities.append({
+                    "area": "general",
+                    "description": "Performance metrics are at or above peer benchmarks",
+                    "impact": "low",
+                    "recommendation": "Continue current practices and focus on volume growth"
+                })
+
+        except Exception as e:
+            logger.warning(f"DB query for coaching opportunities failed, using defaults: {e}")
+            # Fallback to static opportunities
+            opportunities = [
+                {
+                    "area": "lead_conversion",
+                    "description": "Lead to application conversion rate below average",
+                    "impact": "high",
+                    "recommendation": "Focus on initial contact speed and follow-up cadence"
+                },
+                {
+                    "area": "cycle_time",
+                    "description": "Average time from application to close is longer than peers",
+                    "impact": "medium",
+                    "recommendation": "Review document collection process and condition clearing"
+                },
+                {
+                    "area": "pull_through",
+                    "description": "Pull-through rate has opportunity for improvement",
+                    "impact": "high",
+                    "recommendation": "Improve pre-qualification and set proper expectations early"
+                }
+            ]
+        finally:
+            db.close()
 
         filtered = [o for o in opportunities if impact_order.index(o["impact"]) >= impact_order.index(min_impact)]
 
         return ToolResult(
             success=True,
-            data={"opportunities": filtered, "lo_id": input_data["lo_id"]},
+            data={"opportunities": filtered, "lo_id": lo_id},
             message=f"Found {len(filtered)} coaching opportunities"
         )
 
@@ -450,41 +548,152 @@ class CoachingAgent(SpecializedAgent):
         )
 
     async def _generate_performance_report(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Generate performance report"""
+        """Generate performance report using DB data with static fallback"""
+        from database import SessionLocal
+        from sqlalchemy import text
+
+        org_id = self.context.get("organization_id")
+        lo_id = input_data["lo_id"]
+        period_days = input_data.get("period_days", 30)
+
         report = {
-            "lo_id": input_data["lo_id"],
-            "period_days": input_data.get("period_days", 30),
+            "lo_id": lo_id,
+            "period_days": period_days,
             "generated_at": datetime.now().isoformat(),
-            "summary": {
-                "total_loans": 15,
-                "total_volume": 4500000,
-                "avg_loan_size": 300000,
-                "pull_through": 75,
-                "avg_cycle_time": 32
-            },
-            "trends": {
-                "volume_change": 12,
-                "conversion_change": -5,
-                "speed_change": 8
-            },
-            "strengths": [
-                "Strong closing rate on qualified leads",
-                "Excellent customer satisfaction scores"
-            ],
-            "areas_for_improvement": [
-                "Lead response time",
-                "Initial qualification process"
-            ]
         }
 
+        db = SessionLocal()
+        try:
+            # Current period metrics
+            current = db.execute(text("""
+                SELECT
+                    COUNT(*) as total_loans,
+                    COALESCE(SUM(amount), 0) as total_volume,
+                    AVG(amount) as avg_loan_size,
+                    COUNT(CASE WHEN stage = 'FUNDED' THEN 1 END) as funded_count,
+                    COUNT(CASE WHEN stage IN ('CANCELLED','DENIED','DEAD','WITHDRAWN','DOES_NOT_QUALIFY') THEN 1 END) as fallout_count,
+                    AVG(CASE WHEN funded_date IS NOT NULL AND application_date IS NOT NULL
+                        THEN EXTRACT(EPOCH FROM (funded_date - application_date)) / 86400
+                    END) as avg_cycle_time
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND organization_id = :org_id
+                AND created_at >= CURRENT_DATE - :days
+            """), {"lo_id": lo_id, "org_id": org_id, "days": period_days}).fetchone()
+
+            # Prior period for trend comparison
+            prior = db.execute(text("""
+                SELECT
+                    COALESCE(SUM(amount), 0) as total_volume,
+                    COUNT(CASE WHEN stage = 'FUNDED' THEN 1 END) as funded_count,
+                    COUNT(*) as total_loans,
+                    AVG(CASE WHEN funded_date IS NOT NULL AND application_date IS NOT NULL
+                        THEN EXTRACT(EPOCH FROM (funded_date - application_date)) / 86400
+                    END) as avg_cycle_time
+                FROM loans
+                WHERE loan_officer_id = :lo_id
+                AND organization_id = :org_id
+                AND created_at >= CURRENT_DATE - :prior_end
+                AND created_at < CURRENT_DATE - :days
+            """), {"lo_id": lo_id, "org_id": org_id, "days": period_days, "prior_end": period_days * 2}).fetchone()
+
+            total_loans = current.total_loans or 0
+            funded = current.funded_count or 0
+            fallout = current.fallout_count or 0
+            total_decisions = funded + fallout
+            pull_through = round((funded / total_decisions) * 100, 1) if total_decisions > 0 else 0
+
+            report["summary"] = {
+                "total_loans": total_loans,
+                "total_volume": float(current.total_volume or 0),
+                "avg_loan_size": round(float(current.avg_loan_size or 0), 0),
+                "pull_through": pull_through,
+                "avg_cycle_time": round(float(current.avg_cycle_time or 0), 1) if current.avg_cycle_time else None,
+                "funded_count": funded,
+            }
+
+            # Calculate trends vs prior period
+            prior_volume = float(prior.total_volume or 0) if prior else 0
+            prior_funded = prior.funded_count or 0 if prior else 0
+            prior_total = prior.total_loans or 0 if prior else 0
+            prior_decisions = prior_funded + (prior_total - prior_funded)  # approximate
+            prior_cycle = float(prior.avg_cycle_time or 0) if prior and prior.avg_cycle_time else None
+
+            def pct_change(curr, prev):
+                if prev and prev > 0:
+                    return round(((curr - prev) / prev) * 100, 1)
+                return 0
+
+            report["trends"] = {
+                "volume_change": pct_change(float(current.total_volume or 0), prior_volume),
+                "loan_count_change": pct_change(total_loans, prior_total),
+                "cycle_time_change": pct_change(
+                    float(current.avg_cycle_time or 0),
+                    prior_cycle
+                ) if current.avg_cycle_time and prior_cycle else None,
+            }
+
+            # Data-driven strengths and areas for improvement
+            strengths = []
+            areas_for_improvement = []
+
+            if pull_through >= 70:
+                strengths.append("Strong pull-through rate on pipeline loans")
+            elif pull_through > 0:
+                areas_for_improvement.append("Pull-through rate below 70% target")
+
+            if current.avg_cycle_time and current.avg_cycle_time <= 35:
+                strengths.append("Efficient cycle times from application to funding")
+            elif current.avg_cycle_time and current.avg_cycle_time > 45:
+                areas_for_improvement.append("Cycle time exceeds 45-day target")
+
+            if report["trends"]["volume_change"] > 0:
+                strengths.append(f"Volume trending up {report['trends']['volume_change']}% vs prior period")
+            elif report["trends"]["volume_change"] < -10:
+                areas_for_improvement.append(f"Volume declined {abs(report['trends']['volume_change'])}% vs prior period")
+
+            if not strengths:
+                strengths.append("Consistent pipeline activity")
+            if not areas_for_improvement:
+                areas_for_improvement.append("Continue focusing on volume growth")
+
+            report["strengths"] = strengths
+            report["areas_for_improvement"] = areas_for_improvement
+
+        except Exception as e:
+            logger.warning(f"DB query for performance report failed, using defaults: {e}")
+            report["summary"] = {
+                "total_loans": 0,
+                "total_volume": 0,
+                "avg_loan_size": 0,
+                "pull_through": 0,
+                "avg_cycle_time": None
+            }
+            report["trends"] = {
+                "volume_change": 0,
+                "loan_count_change": 0,
+                "cycle_time_change": None
+            }
+            report["strengths"] = ["Unable to compute - database unavailable"]
+            report["areas_for_improvement"] = ["Unable to compute - database unavailable"]
+        finally:
+            db.close()
+
         if input_data.get("include_recommendations", True):
-            report["recommendations"] = [
-                "Implement speed-to-lead process for new inquiries",
-                "Schedule weekly pipeline review sessions"
-            ]
+            recommendations = []
+            for area in report.get("areas_for_improvement", []):
+                if "pull-through" in area.lower():
+                    recommendations.append("Improve pre-qualification and set proper expectations early")
+                elif "cycle time" in area.lower():
+                    recommendations.append("Review document collection process and condition clearing timelines")
+                elif "volume" in area.lower():
+                    recommendations.append("Increase referral partner outreach and lead follow-up cadence")
+            if not recommendations:
+                recommendations.append("Schedule weekly pipeline review sessions to maintain momentum")
+            report["recommendations"] = recommendations
 
         return ToolResult(
             success=True,
             data=report,
-            message=f"Performance report generated for LO {input_data['lo_id']}"
+            message=f"Performance report generated for LO {lo_id}"
         )
