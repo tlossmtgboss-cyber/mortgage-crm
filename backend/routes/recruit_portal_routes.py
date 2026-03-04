@@ -590,15 +590,29 @@ async def create_portal_tables(
 async def get_purl_portal_data(
     slug: str,
     request: Request,
+    token: Optional[str] = Query(default=None, description="Portal token for candidate verification"),
     db: Session = Depends(get_db),
 ):
     """Get PURL portal data for candidate including calculator config and company info."""
     _enforce_rate_limit(request)
     try:
+        # Validate token if provided — require slug+token match via candidate
+        if token:
+            valid = db.execute(text("""
+                SELECT w.id FROM recruit_portal_workspaces w
+                JOIN mm_candidates c ON c.id = w.candidate_id
+                WHERE w.slug = :slug AND w.is_active = true
+                  AND c.portal_token = :token AND c.is_active = true
+            """), {"slug": slug, "token": token}).fetchone()
+            if not valid:
+                raise HTTPException(status_code=404, detail="Portal not found")
+
         portal_data = portal_service.get_portal_by_slug(slug)
         if not portal_data:
             raise HTTPException(status_code=404, detail="Portal not found")
         return portal_data
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting portal data: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")

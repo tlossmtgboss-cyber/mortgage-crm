@@ -63,7 +63,7 @@ class RecruitPortalService:
                 import secrets
                 base_slug = f"{candidate.first_name.lower()}-{candidate.last_name.lower()}"
                 base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
-                random_suffix = secrets.token_hex(3)
+                random_suffix = secrets.token_hex(8)
                 slug = f"{base_slug}-{random_suffix}"
 
                 # Check for uniqueness (collision is extremely unlikely with 6 hex chars)
@@ -75,7 +75,7 @@ class RecruitPortalService:
                     )
                     if not result.fetchone():
                         break
-                    random_suffix = secrets.token_hex(3)
+                    random_suffix = secrets.token_hex(8)
                     slug = f"{base_slug}-{random_suffix}"
                     count += 1
 
@@ -497,19 +497,23 @@ Candidate's current status: {candidate.status}
                 friendly_type = type_names.get(appointment_type, appointment_type.replace("_", " ").title())
 
                 # Build email content
+                safe_candidate = html.escape(portal_info.candidate_first_name or 'there')
+                safe_recruiter = html.escape(portal_info.recruiter_name or 'Your Recruiter')
+                safe_type = html.escape(friendly_type)
+
                 html_content = f"""
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #2563eb;">Your Appointment is Confirmed!</h2>
-                    <p>Hi {portal_info.candidate_first_name or 'there'},</p>
-                    <p>Your <strong>{friendly_type}</strong> has been scheduled.</p>
+                    <p>Hi {safe_candidate},</p>
+                    <p>Your <strong>{safe_type}</strong> has been scheduled.</p>
                     <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                         <p style="margin: 0 0 10px 0;"><strong>Date & Time:</strong> {formatted_time}</p>
-                        <p style="margin: 0 0 10px 0;"><strong>Type:</strong> {friendly_type}</p>
-                        <p style="margin: 0;"><strong>With:</strong> {portal_info.recruiter_name or 'Your Recruiter'}</p>
+                        <p style="margin: 0 0 10px 0;"><strong>Type:</strong> {safe_type}</p>
+                        <p style="margin: 0;"><strong>With:</strong> {safe_recruiter}</p>
                     </div>
                     {f'<p><strong>Notes:</strong> {html.escape(notes)}</p>' if notes else ''}
                     <p>We're looking forward to speaking with you!</p>
-                    <p>Best regards,<br>{portal_info.recruiter_name or 'The Recruiting Team'}</p>
+                    <p>Best regards,<br>{safe_recruiter}</p>
                 </div>
                 """
 

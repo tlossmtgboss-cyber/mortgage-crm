@@ -490,11 +490,20 @@ async def update_candidate(
     """Update candidate details."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
 
+    # Explicit whitelist of updatable columns — prevents field name injection
+    ALLOWED_FIELDS = {
+        "first_name", "last_name", "email", "phone",
+        "referrer_user_id", "target_role_name",
+        "years_experience", "has_mortgage_experience",
+    }
+
     # Build SET clause dynamically from provided fields
     updates = []
     params = {"id": candidate_id, "org_id": current_user.organization_id}
 
     for field, value in data.model_dump(exclude_none=True).items():
+        if field not in ALLOWED_FIELDS:
+            continue
         if value is not None:
             updates.append(f"{field} = :{field}")
             params[field] = value

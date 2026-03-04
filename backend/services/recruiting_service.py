@@ -1003,12 +1003,12 @@ class RecruitingService:
                     responded_at = CURRENT_TIMESTAMP,
                     response_notes = :notes,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id {resp_org_filter}
+                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating') {resp_org_filter}
                 RETURNING candidate_id, offer_number
             """), resp_params_base).fetchone()
 
             if not result:
-                raise ValueError(f"Offer {offer_id} not found")
+                raise ValueError(f"Offer {offer_id} not found or already responded to")
 
             # Update candidate to hired (scoped via offer's candidate_id)
             hired_params = {"id": result.candidate_id}
@@ -1035,12 +1035,12 @@ class RecruitingService:
                     responded_at = CURRENT_TIMESTAMP,
                     declined_notes = :notes,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id {resp_org_filter}
+                WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating') {resp_org_filter}
                 RETURNING candidate_id, offer_number
             """), resp_params_base).fetchone()
 
             if not result:
-                raise ValueError(f"Offer {offer_id} not found")
+                raise ValueError(f"Offer {offer_id} not found or already responded to")
 
             activity_type = "offer_declined"
             description = f"Offer {result.offer_number} declined"

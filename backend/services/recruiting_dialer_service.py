@@ -392,12 +392,18 @@ class RecruitingDialerService:
         })
         logger.info(f"Recording saved for call {call_id}: {recording_url}")
 
-    def _get_user_phone(self, user_id: int) -> Optional[str]:
-        """Get user's phone number from database"""
+    def _get_user_phone(self, user_id: int, organization_id: Optional[int] = None) -> Optional[str]:
+        """Get user's phone number from database with optional org isolation."""
         try:
-            result = self.db.execute(text("""
-                SELECT phone FROM users WHERE id = :user_id
-            """), {"user_id": user_id}).first()
+            org_filter = ""
+            params = {"user_id": user_id}
+            if organization_id:
+                org_filter = "AND organization_id = :org_id"
+                params["org_id"] = organization_id
+
+            result = self.db.execute(text(f"""
+                SELECT phone FROM users WHERE id = :user_id {org_filter}
+            """), params).first()
             return result.phone if result else None
         except Exception as e:
             logger.error(f"Error getting user phone: {e}")
@@ -419,12 +425,20 @@ class RecruitingDialerService:
 
         return None
 
-    def _get_call_record(self, call_id: str) -> Optional[Dict[str, Any]]:
-        """Get call record from database"""
+    def _get_call_record(self, call_id: str, organization_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Get call record from database with optional org isolation."""
         try:
-            result = self.db.execute(text("""
-                SELECT * FROM recruiting_calls WHERE id = :call_id
-            """), {"call_id": call_id}).first()
+            org_filter = ""
+            params = {"call_id": call_id}
+            if organization_id:
+                org_filter = "AND rc.organization_id = :org_id"
+                params["org_id"] = organization_id
+
+            result = self.db.execute(text(f"""
+                SELECT rc.* FROM recruiting_calls rc
+                JOIN mm_candidates c ON c.id = rc.candidate_id
+                WHERE rc.id = :call_id {org_filter}
+            """), params).first()
 
             if result:
                 return dict(result._mapping)

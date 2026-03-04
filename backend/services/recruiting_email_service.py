@@ -720,10 +720,16 @@ class RecruitingEmailService:
                 error=f"Candidate has no email address",
             )
 
-        # Get recruiter info
+        # Get recruiter info (org-scoped to prevent cross-org data leakage)
+        recruiter_params = {"user_id": task.assigned_to}
+        recruiter_org_filter = ""
+        if task.organization_id:
+            recruiter_org_filter = "AND organization_id = :org_id"
+            recruiter_params["org_id"] = task.organization_id
+
         recruiter = db_session.execute(
-            text("SELECT full_name, email, phone FROM users WHERE id = :user_id"),
-            {"user_id": task.assigned_to}
+            text(f"SELECT full_name, email, phone FROM users WHERE id = :user_id {recruiter_org_filter}"),
+            recruiter_params
         ).fetchone()
 
         recruiter_name = recruiter.full_name if recruiter else "Recruiting Team"

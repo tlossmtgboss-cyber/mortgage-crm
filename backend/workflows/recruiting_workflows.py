@@ -354,33 +354,33 @@ class RecruitingWorkflowService:
         ]
 
     def complete_task(self, task_id: int, completed_by: int) -> bool:
-        """Mark a task as completed."""
+        """Mark a task as completed. Only pending tasks can be completed."""
         with engine.connect() as conn:
-            conn.execute(
+            result = conn.execute(
                 text("""
                     UPDATE recruiting_tasks
                     SET status = 'completed', completed_at = NOW(), completed_by = :completed_by
-                    WHERE id = :task_id
+                    WHERE id = :task_id AND status = 'pending'
                 """),
                 {"task_id": task_id, "completed_by": completed_by}
             )
             conn.commit()
-        return True
+        return result.rowcount > 0
 
     def skip_task(self, task_id: int, reason: str, skipped_by: int) -> bool:
-        """Skip a task with a reason."""
+        """Skip a task with a reason. Only pending tasks can be skipped."""
         with engine.connect() as conn:
-            conn.execute(
+            result = conn.execute(
                 text("""
                     UPDATE recruiting_tasks
                     SET status = 'skipped', skip_reason = :reason,
                         completed_at = NOW(), completed_by = :skipped_by
-                    WHERE id = :task_id
+                    WHERE id = :task_id AND status = 'pending'
                 """),
                 {"task_id": task_id, "reason": reason, "skipped_by": skipped_by}
             )
             conn.commit()
-        return True
+        return result.rowcount > 0
 
     def get_dialer_queue(
         self,
