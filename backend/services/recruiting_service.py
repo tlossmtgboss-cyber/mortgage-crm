@@ -279,50 +279,58 @@ class RecruitingService:
         if not result:
             return None
 
-        # Get interviews
+        # Get interviews (org-scoped via candidate FK)
         interviews = self.db.execute(text("""
             SELECT
                 i.id, i.interview_type, i.interview_round, i.title,
                 i.scheduled_at, i.status, i.overall_score, i.recommendation,
                 u.full_name as interviewer_name
             FROM mm_interviews i
+            JOIN mm_candidates c ON c.id = i.candidate_id
+                AND (:org_id IS NULL OR c.organization_id = :org_id)
             LEFT JOIN users u ON u.id = i.primary_interviewer_id
             WHERE i.candidate_id = :id
             ORDER BY i.scheduled_at DESC
-        """), {"id": candidate_id}).fetchall()
+        """), {"id": candidate_id, "org_id": organization_id}).fetchall()
 
-        # Get offers
+        # Get offers (org-scoped via candidate FK)
         offers = self.db.execute(text("""
             SELECT
                 o.id, o.offer_number, o.role_title, o.salary_amount,
                 o.status, o.sent_at, o.responded_at
             FROM mm_offers o
+            JOIN mm_candidates c ON c.id = o.candidate_id
+                AND (:org_id IS NULL OR c.organization_id = :org_id)
             WHERE o.candidate_id = :id
             ORDER BY o.created_at DESC
-        """), {"id": candidate_id}).fetchall()
+        """), {"id": candidate_id, "org_id": organization_id}).fetchall()
 
-        # Get activities
+        # Get activities (org-scoped via candidate FK)
         activities = self.db.execute(text("""
             SELECT
                 a.id, a.activity_type, a.description, a.created_at,
                 u.full_name as performed_by_name
             FROM mm_candidate_activities a
+            JOIN mm_candidates c ON c.id = a.candidate_id
+                AND (:org_id IS NULL OR c.organization_id = :org_id)
             LEFT JOIN users u ON u.id = a.performed_by
             WHERE a.candidate_id = :id
             ORDER BY a.created_at DESC
             LIMIT 20
-        """), {"id": candidate_id}).fetchall()
+        """), {"id": candidate_id, "org_id": organization_id}).fetchall()
 
-        # Get notes (exclude private notes — private notes are internal-only)
+        # Get notes (exclude private notes — org-scoped via candidate FK)
         notes = self.db.execute(text("""
             SELECT
                 n.id, n.note_type, n.content, n.is_private, n.created_at,
                 u.full_name as author_name
             FROM mm_candidate_notes n
+            JOIN mm_candidates c ON c.id = n.candidate_id
+                AND (:org_id IS NULL OR c.organization_id = :org_id)
             JOIN users u ON u.id = n.created_by
             WHERE n.candidate_id = :id AND (n.is_private = false OR n.is_private IS NULL)
             ORDER BY n.created_at DESC
-        """), {"id": candidate_id}).fetchall()
+        """), {"id": candidate_id, "org_id": organization_id}).fetchall()
 
         return {
             "id": result.id,

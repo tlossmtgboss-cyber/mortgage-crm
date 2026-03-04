@@ -141,6 +141,9 @@ class RecruitAssessmentService:
     def calculate_and_update_scores(self, candidate_id: int, organization_id: Optional[int] = None) -> AssessmentScores:
         """Calculate scores from all quiz responses and update the scores table."""
         with engine.connect() as conn:
+            if organization_id:
+                self._verify_candidate_org(conn, candidate_id, organization_id)
+
             # Get all responses with their categories and weights
             result = conn.execute(
                 text("""
@@ -382,7 +385,7 @@ class RecruitAssessmentService:
     # Production Calculator
     # =========================================================================
 
-    def get_calculator_config(self, organization_id: int = 1) -> CalculatorConfig:
+    def get_calculator_config(self, organization_id: int) -> CalculatorConfig:
         """Get calculator configuration for an organization."""
         with engine.connect() as conn:
             result = conn.execute(
@@ -416,7 +419,7 @@ class RecruitAssessmentService:
     def update_calculator_config(
         self,
         config: CalculatorConfig,
-        organization_id: int = 1
+        organization_id: int
     ) -> CalculatorConfig:
         """Update calculator configuration."""
         with engine.connect() as conn:
@@ -455,11 +458,20 @@ class RecruitAssessmentService:
     def calculate_production_impact(
         self,
         input_data: CalculatorInput,
-        config: Optional[CalculatorConfig] = None
+        config: Optional[CalculatorConfig] = None,
+        organization_id: Optional[int] = None
     ) -> CalculatorResult:
-        """Calculate projected production impact."""
+        """Calculate projected production impact.
+
+        organization_id is optional for public calculator endpoints.
+        Falls back to global defaults when no org specified.
+        """
         if config is None:
-            config = self.get_calculator_config()
+            if organization_id:
+                config = self.get_calculator_config(organization_id)
+            else:
+                # Public calculator: use global defaults
+                config = CalculatorConfig()
 
         current_volume = input_data.current_volume
         current_units = input_data.current_units

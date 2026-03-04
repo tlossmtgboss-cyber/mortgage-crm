@@ -952,7 +952,8 @@ async def create_purl_company_update(
             media_url=update.media_url,
             category=update.category,
             is_featured=update.is_featured,
-            created_by=current_user.id
+            created_by=current_user.id,
+            organization_id=current_user.organization_id
         )
         return created
     except Exception as e:

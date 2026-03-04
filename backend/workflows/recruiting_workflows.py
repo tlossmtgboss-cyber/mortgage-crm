@@ -248,7 +248,7 @@ class RecruitingWorkflowService:
         candidate_id: int,
         disposition: str,
         assigned_to: int,
-        organization_id: int = 1
+        organization_id: int
     ) -> List[Dict]:
         """Create workflow tasks when a candidate disposition changes."""
         workflow = self.get_workflow_for_disposition(disposition)
@@ -302,7 +302,8 @@ class RecruitingWorkflowService:
         self,
         candidate_id: Optional[int] = None,
         assigned_to: Optional[int] = None,
-        organization_id: int = 1
+        *,
+        organization_id: int
     ) -> List[Dict]:
         """Get pending tasks, optionally filtered by candidate or assignee."""
         params = {"org_id": organization_id}
@@ -393,7 +394,8 @@ class RecruitingWorkflowService:
     def get_dialer_queue(
         self,
         assigned_to: Optional[int] = None,
-        organization_id: int = 1
+        *,
+        organization_id: int
     ) -> List[Dict]:
         """Get tasks routed to the dialer queue."""
         params = {"org_id": organization_id}

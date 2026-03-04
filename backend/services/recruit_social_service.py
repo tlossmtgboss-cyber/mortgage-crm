@@ -55,7 +55,7 @@ class RecruitSocialService:
 
     def __init__(self):
         # Facebook/Instagram credentials
-        self.fb_app_id = os.getenv("FACEBOOK_APP_ID", "870154102050380")
+        self.fb_app_id = os.getenv("FACEBOOK_APP_ID", "")
         self.fb_app_secret = os.getenv("FACEBOOK_APP_SECRET", "")
         self.fb_access_token = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "")
 

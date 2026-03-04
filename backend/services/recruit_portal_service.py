@@ -257,7 +257,8 @@ class RecruitPortalService:
         category: str = "news",
         media_url: Optional[str] = None,
         is_featured: bool = False,
-        created_by: int = 1,
+        *,
+        created_by: int,
         organization_id: Optional[int] = None
     ) -> Dict:
         """Create a new company update."""
@@ -564,7 +565,7 @@ Candidate's current status: {candidate.status}
     # Production Calculator
     # =========================================================================
 
-    def get_calculator_config(self, organization_id: int = 1) -> Dict:
+    def get_calculator_config(self, organization_id: int) -> Dict:
         """Get calculator configuration."""
         with SessionLocal() as conn:
             result = conn.execute(
@@ -598,9 +599,22 @@ Candidate's current status: {candidate.status}
             "comp_percentage": float(row.comp_percentage)
         }
 
-    def calculate_production_impact(self, input_data: CalculatorInput) -> CalculatorResult:
-        """Calculate projected production impact."""
-        config = self.get_calculator_config()
+    def calculate_production_impact(self, input_data: CalculatorInput, organization_id: Optional[int] = None) -> CalculatorResult:
+        """Calculate projected production impact.
+
+        organization_id is optional for public portal endpoints.
+        """
+        if organization_id:
+            config = self.get_calculator_config(organization_id)
+        else:
+            # Public portal: use defaults
+            config = {
+                "lead_conversion_lift": 1.15,
+                "avg_deal_size_lift": 1.10,
+                "tech_efficiency_gain": 1.20,
+                "marketing_lead_boost": 1.25,
+                "comp_percentage": 0.0125,
+            }
 
         current_volume = input_data.current_volume
         current_units = input_data.current_units

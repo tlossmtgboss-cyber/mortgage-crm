@@ -1682,6 +1682,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ AI audit log note: {e}")
 
+        # Create social_oauth_states + social_tokens tables (required by recruit_social_routes)
+        try:
+            from migrations.create_social_oauth_tables import run_migration as run_social_oauth
+            run_social_oauth(engine)
+            logger.info("✅ social_oauth_states + social_tokens tables ready")
+        except Exception as e:
+            logger.warning(f"⚠️ social oauth tables note: {e}")
+
         # Fix 7: Add organization_id to social_tokens for tenant isolation
         try:
             from migrations.add_social_tokens_org_id import run_migration as run_social_tokens_org
@@ -1689,6 +1697,30 @@ def init_db():
             logger.info("✅ social_tokens org_id migration complete")
         except Exception as e:
             logger.warning(f"⚠️ social_tokens org_id note: {e}")
+
+        # Fix 8: Create ops_sweep_results table (moved from inline DDL in ops_manager_agent)
+        try:
+            from migrations.create_ops_sweep_results import run_migration as run_ops_sweep
+            run_ops_sweep(engine)
+            logger.info("✅ ops_sweep_results migration complete")
+        except Exception as e:
+            logger.warning(f"⚠️ ops_sweep_results note: {e}")
+
+        # Fix 9: Sync tasktype enum (ensure Python TaskType values exist in DB)
+        try:
+            from migrations.sync_tasktype_enum import run_migration as run_tasktype_sync
+            run_tasktype_sync(engine)
+            logger.info("✅ tasktype enum sync complete")
+        except Exception as e:
+            logger.warning(f"⚠️ tasktype enum sync note: {e}")
+
+        # Fix 10: Seed campaign email templates
+        try:
+            from migrations.seed_campaign_templates import run_migration as run_campaign_seed
+            run_campaign_seed(engine)
+            logger.info("✅ campaign template seed complete")
+        except Exception as e:
+            logger.warning(f"⚠️ campaign template seed note: {e}")
 
         return True
     except Exception as e:
