@@ -137,10 +137,30 @@ class PartnerAssessmentUpdate(BaseModel):
     professionalism_score: Optional[float] = None
     market_presence_score: Optional[float] = None
     communication_score: Optional[float] = None
+    technical_skills_score: Optional[float] = None
+    experience_score: Optional[float] = None
     strengths: Optional[List[str]] = None
     concerns: Optional[List[str]] = None
     talking_points: Optional[List[str]] = None
     recommended_approach: Optional[str] = None
+
+
+class EmployeeCandidateCreate(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+    phone: Optional[str] = None
+    employee_role: str  # loan_officer, processor, closer, underwriter, assistant
+    nmls_id: Optional[str] = None
+    license_states: Optional[List[str]] = None
+    current_employer: Optional[str] = None
+    years_experience: Optional[int] = None
+    desired_compensation: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    source: Optional[str] = None
+    notes: Optional[str] = None
+    linkedin_url: Optional[str] = None
 
 
 # =============================================================================
@@ -150,7 +170,7 @@ class PartnerAssessmentUpdate(BaseModel):
 def verify_partner_ownership(partner_id: int, user_id: int, db: Session):
     """Verify user owns this partner recruit."""
     result = db.execute(text("""
-        SELECT id, first_name, last_name, status
+        SELECT id, first_name, last_name, status, candidate_category
         FROM partner_candidates
         WHERE id = :id AND owner_id = :user_id AND is_active = true
     """), {"id": partner_id, "user_id": user_id}).fetchone()
@@ -163,6 +183,21 @@ def verify_partner_ownership(partner_id: int, user_id: int, db: Session):
     return result
 
 
+# Status lists by candidate category
+PARTNER_VALID_STATUSES = [
+    'new', 'contacted', 'qualified', 'meeting_scheduled', 'met',
+    'proposal_sent', 'negotiating', 'onboarded', 'declined', 'inactive'
+]
+
+EMPLOYEE_VALID_STATUSES = [
+    'new', 'contacted', 'qualified', 'meeting_scheduled', 'met',
+    'screening', 'interview', 'offer', 'hired',
+    'declined', 'inactive', 'withdrawn'
+]
+
+VALID_EMPLOYEE_ROLES = ['loan_officer', 'processor', 'closer', 'underwriter', 'assistant']
+
+
 def log_partner_activity(
     db: Session,
     partner_id: int,
@@ -171,13 +206,14 @@ def log_partner_activity(
     user_id: int,
     metadata: dict = None,
     meeting_id: int = None,
-    proposal_id: int = None
+    proposal_id: int = None,
+    organization_id: int = None
 ):
     """Log an activity for a partner candidate."""
     db.execute(text("""
         INSERT INTO partner_activities
-        (partner_candidate_id, activity_type, description, metadata, meeting_id, proposal_id, performed_by, created_at)
-        VALUES (:partner_id, :activity_type, :description, :metadata, :meeting_id, :proposal_id, :user_id, CURRENT_TIMESTAMP)
+        (partner_candidate_id, activity_type, description, metadata, meeting_id, proposal_id, performed_by, organization_id, created_at)
+        VALUES (:partner_id, :activity_type, :description, :metadata, :meeting_id, :proposal_id, :user_id, :org_id, CURRENT_TIMESTAMP)
     """), {
         "partner_id": partner_id,
         "activity_type": activity_type,
@@ -185,7 +221,8 @@ def log_partner_activity(
         "metadata": json.dumps(metadata) if metadata else "{}",
         "meeting_id": meeting_id,
         "proposal_id": proposal_id,
-        "user_id": user_id
+        "user_id": user_id,
+        "org_id": organization_id
     })
 
 
@@ -210,33 +247,41 @@ def calculate_overall_grade(score: float) -> str:
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(
+    candidate_category: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get partner recruiting dashboard stats for current LO."""
+    """Get recruiting dashboard stats for current LO."""
     user_id = current_user.id
 
+    category_filter = ""
+    params = {"user_id": user_id}
+    if candidate_category:
+        category_filter = "AND candidate_category = :candidate_category"
+        params["candidate_category"] = candidate_category
+
     # Get counts by status
-    status_counts = db.execute(text("""
+    status_counts = db.execute(text(f"""
         SELECT status, COUNT(*) as count
         FROM partner_candidates
-        WHERE owner_id = :user_id AND is_active = true
+        WHERE owner_id = :user_id AND is_active = true {category_filter}
         GROUP BY status
-    """), {"user_id": user_id}).fetchall()
+    """), params).fetchall()
 
     counts = {row.status: row.count for row in status_counts}
 
     # Get recent activity count (last 7 days)
-    recent_count = db.execute(text("""
+    recent_count = db.execute(text(f"""
         SELECT COUNT(*) as count
         FROM partner_candidates
         WHERE owner_id = :user_id
           AND is_active = true
           AND created_at >= CURRENT_DATE - INTERVAL '7 days'
-    """), {"user_id": user_id}).fetchone()
+          {category_filter}
+    """), params).fetchone()
 
     # Get upcoming meetings
-    upcoming_meetings = db.execute(text("""
+    upcoming_meetings = db.execute(text(f"""
         SELECT COUNT(*) as count
         FROM partner_meetings pm
         JOIN partner_candidates pc ON pc.id = pm.partner_candidate_id
@@ -244,29 +289,38 @@ async def get_dashboard_stats(
           AND pm.status IN ('scheduled', 'confirmed')
           AND pm.scheduled_at >= CURRENT_TIMESTAMP
           AND pm.scheduled_at < CURRENT_TIMESTAMP + INTERVAL '7 days'
-    """), {"user_id": user_id}).fetchone()
+          {category_filter.replace('candidate_category', 'pc.candidate_category') if category_filter else ''}
+    """), params).fetchone()
 
-    # Get pending proposals
-    pending_proposals = db.execute(text("""
+    # Get pending proposals (partner-only concept)
+    pending_proposals = db.execute(text(f"""
         SELECT COUNT(*) as count
         FROM partner_proposals pp
         JOIN partner_candidates pc ON pc.id = pp.partner_candidate_id
         WHERE pc.owner_id = :user_id
           AND pp.status IN ('sent', 'viewed')
-    """), {"user_id": user_id}).fetchone()
+          {category_filter.replace('candidate_category', 'pc.candidate_category') if category_filter else ''}
+    """), params).fetchone()
 
-    # Calculate total active pipeline
-    active_statuses = ['new', 'contacted', 'qualified', 'meeting_scheduled', 'met', 'proposal_sent', 'negotiating']
-    total_active = sum(counts.get(s, 0) for s in active_statuses)
-
-    return {
-        "total_active": total_active,
-        "new_this_week": recent_count.count if recent_count else 0,
-        "upcoming_meetings": upcoming_meetings.count if upcoming_meetings else 0,
-        "pending_proposals": pending_proposals.count if pending_proposals else 0,
-        "onboarded_total": counts.get('onboarded', 0),
-        "by_status": counts,
-        "pipeline_stages": [
+    # Calculate total active pipeline based on category
+    if candidate_category == 'employee':
+        active_statuses = ['new', 'contacted', 'qualified', 'meeting_scheduled', 'met', 'screening', 'interview', 'offer']
+        pipeline_stages = [
+            {"status": "new", "label": "New", "count": counts.get('new', 0)},
+            {"status": "contacted", "label": "Contacted", "count": counts.get('contacted', 0)},
+            {"status": "qualified", "label": "Qualified", "count": counts.get('qualified', 0)},
+            {"status": "meeting_scheduled", "label": "Meeting Scheduled", "count": counts.get('meeting_scheduled', 0)},
+            {"status": "met", "label": "Met", "count": counts.get('met', 0)},
+            {"status": "screening", "label": "Screening", "count": counts.get('screening', 0)},
+            {"status": "interview", "label": "Interview", "count": counts.get('interview', 0)},
+            {"status": "offer", "label": "Offer Extended", "count": counts.get('offer', 0)},
+            {"status": "hired", "label": "Hired", "count": counts.get('hired', 0)},
+        ]
+        terminal_label = "hired"
+        terminal_count = counts.get('hired', 0)
+    else:
+        active_statuses = ['new', 'contacted', 'qualified', 'meeting_scheduled', 'met', 'proposal_sent', 'negotiating']
+        pipeline_stages = [
             {"status": "new", "label": "New", "count": counts.get('new', 0)},
             {"status": "contacted", "label": "Contacted", "count": counts.get('contacted', 0)},
             {"status": "qualified", "label": "Qualified", "count": counts.get('qualified', 0)},
@@ -276,20 +330,90 @@ async def get_dashboard_stats(
             {"status": "negotiating", "label": "Negotiating", "count": counts.get('negotiating', 0)},
             {"status": "onboarded", "label": "Onboarded", "count": counts.get('onboarded', 0)},
         ]
+        terminal_label = "onboarded"
+        terminal_count = counts.get('onboarded', 0)
+
+    total_active = sum(counts.get(s, 0) for s in active_statuses)
+
+    return {
+        "candidate_category": candidate_category or "all",
+        "total_active": total_active,
+        "new_this_week": recent_count.count if recent_count else 0,
+        "upcoming_meetings": upcoming_meetings.count if upcoming_meetings else 0,
+        "pending_proposals": pending_proposals.count if pending_proposals else 0,
+        "onboarded_total": terminal_count,
+        "by_status": counts,
+        "pipeline_stages": pipeline_stages
     }
 
 
 @router.get("/pipeline/metrics")
 async def get_pipeline_metrics(
     days: int = Query(90, ge=7, le=365),
+    candidate_category: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get pipeline conversion metrics for current LO."""
     user_id = current_user.id
 
-    # Get conversion rates
-    funnel = db.execute(text("""
+    category_filter = ""
+    params = {"user_id": user_id, "days": days}
+    if candidate_category:
+        category_filter = "AND candidate_category = :candidate_category"
+        params["candidate_category"] = candidate_category
+
+    def calc_rate(num, denom):
+        return round((num / denom) * 100, 1) if denom > 0 else 0
+
+    if candidate_category == 'employee':
+        # Employee funnel
+        funnel = db.execute(text(f"""
+            SELECT
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE status NOT IN ('new', 'declined', 'inactive', 'withdrawn')) as contacted,
+                COUNT(*) FILTER (WHERE status IN ('qualified', 'meeting_scheduled', 'met', 'screening', 'interview', 'offer', 'hired')) as qualified,
+                COUNT(*) FILTER (WHERE status IN ('met', 'screening', 'interview', 'offer', 'hired')) as met,
+                COUNT(*) FILTER (WHERE status IN ('screening', 'interview', 'offer', 'hired')) as screening,
+                COUNT(*) FILTER (WHERE status IN ('interview', 'offer', 'hired')) as interview,
+                COUNT(*) FILTER (WHERE status IN ('offer', 'hired')) as offer,
+                COUNT(*) FILTER (WHERE status = 'hired') as hired,
+                COUNT(*) FILTER (WHERE status IN ('declined', 'withdrawn')) as declined
+            FROM partner_candidates
+            WHERE owner_id = :user_id
+              AND is_active = true
+              AND created_at >= CURRENT_DATE - :days * INTERVAL '1 day'
+              {category_filter}
+        """), params).fetchone()
+
+        return {
+            "period_days": days,
+            "candidate_category": "employee",
+            "funnel": {
+                "total": funnel.total,
+                "contacted": funnel.contacted,
+                "qualified": funnel.qualified,
+                "met": funnel.met,
+                "screening": funnel.screening,
+                "interview": funnel.interview,
+                "offer": funnel.offer,
+                "hired": funnel.hired,
+                "declined": funnel.declined
+            },
+            "conversion_rates": {
+                "contact_rate": calc_rate(funnel.contacted, funnel.total),
+                "qualify_rate": calc_rate(funnel.qualified, funnel.contacted),
+                "meeting_rate": calc_rate(funnel.met, funnel.qualified),
+                "screening_rate": calc_rate(funnel.screening, funnel.met),
+                "interview_rate": calc_rate(funnel.interview, funnel.screening),
+                "offer_rate": calc_rate(funnel.offer, funnel.interview),
+                "hire_rate": calc_rate(funnel.hired, funnel.offer),
+                "overall_conversion": calc_rate(funnel.hired, funnel.total)
+            }
+        }
+
+    # Partner funnel (default)
+    funnel = db.execute(text(f"""
         SELECT
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE status IN ('contacted', 'qualified', 'meeting_scheduled', 'met', 'proposal_sent', 'negotiating', 'onboarded')) as contacted,
@@ -302,13 +426,12 @@ async def get_pipeline_metrics(
         WHERE owner_id = :user_id
           AND is_active = true
           AND created_at >= CURRENT_DATE - :days * INTERVAL '1 day'
-    """), {"user_id": user_id, "days": days}).fetchone()
-
-    def calc_rate(num, denom):
-        return round((num / denom) * 100, 1) if denom > 0 else 0
+          {category_filter}
+    """), params).fetchone()
 
     return {
         "period_days": days,
+        "candidate_category": candidate_category or "all",
         "funnel": {
             "total": funnel.total,
             "contacted": funnel.contacted,
@@ -339,15 +462,20 @@ async def list_partner_candidates(
     partner_type: Optional[str] = None,
     source: Optional[str] = None,
     search: Optional[str] = None,
+    candidate_category: Optional[str] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List partner candidates for current LO (owner_id filtered)."""
+    """List partner/employee candidates for current LO (owner_id filtered)."""
     user_id = current_user.id
     params = {"user_id": user_id, "limit": limit, "offset": offset}
     filters = ["owner_id = :user_id", "is_active = true"]
+
+    if candidate_category:
+        filters.append("candidate_category = :candidate_category")
+        params["candidate_category"] = candidate_category
 
     if status:
         filters.append("status = :status")
@@ -368,6 +496,7 @@ async def list_partner_candidates(
             OR email ILIKE :search
             OR company_name ILIKE :search
             OR business_name ILIKE :search
+            OR current_employer ILIKE :search
         )""")
         params["search"] = f"%{search}%"
 
@@ -379,7 +508,8 @@ async def list_partner_candidates(
             partner_type, company_name, business_name, title,
             status, status_changed_at, source,
             overall_score, production_volume,
-            city, state, created_at, last_activity_at
+            city, state, created_at, last_activity_at,
+            candidate_category, employee_role, current_employer, years_experience
         FROM partner_candidates
         WHERE {where_sql}
         ORDER BY
@@ -389,9 +519,13 @@ async def list_partner_candidates(
                 WHEN 'qualified' THEN 3
                 WHEN 'meeting_scheduled' THEN 4
                 WHEN 'met' THEN 5
+                WHEN 'screening' THEN 5
                 WHEN 'proposal_sent' THEN 6
+                WHEN 'interview' THEN 6
                 WHEN 'negotiating' THEN 7
+                WHEN 'offer' THEN 7
                 WHEN 'onboarded' THEN 8
+                WHEN 'hired' THEN 8
                 ELSE 9
             END,
             created_at DESC
@@ -405,7 +539,7 @@ async def list_partner_candidates(
 
     candidates = []
     for r in results:
-        candidates.append({
+        candidate = {
             "id": r.id,
             "first_name": r.first_name,
             "last_name": r.last_name,
@@ -422,8 +556,15 @@ async def list_partner_candidates(
             "production_volume": float(r.production_volume) if r.production_volume else None,
             "location": f"{r.city}, {r.state}" if r.city and r.state else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
-            "last_activity_at": r.last_activity_at.isoformat() if r.last_activity_at else None
-        })
+            "last_activity_at": r.last_activity_at.isoformat() if r.last_activity_at else None,
+            "candidate_category": r.candidate_category or "partner",
+        }
+        # Add employee-specific fields
+        if r.candidate_category == 'employee':
+            candidate["employee_role"] = r.employee_role
+            candidate["current_employer"] = r.current_employer
+            candidate["years_experience"] = r.years_experience
+        candidates.append(candidate)
 
     return {
         "candidates": candidates,
@@ -512,6 +653,15 @@ async def get_partner_candidate(
         "onboarded_at": result.onboarded_at.isoformat() if result.onboarded_at else None,
         "referral_partner_id": result.referral_partner_id,
         "created_at": result.created_at.isoformat() if result.created_at else None,
+        # Category & employee fields
+        "candidate_category": getattr(result, 'candidate_category', 'partner') or 'partner',
+        "employee_role": getattr(result, 'employee_role', None),
+        "nmls_id": getattr(result, 'nmls_id', None),
+        "license_states": json.loads(result.license_states) if getattr(result, 'license_states', None) else [],
+        "current_employer": getattr(result, 'current_employer', None),
+        "years_experience": getattr(result, 'years_experience', None),
+        "desired_compensation": getattr(result, 'desired_compensation', None),
+        "hired_at": result.hired_at.isoformat() if getattr(result, 'hired_at', None) else None,
         "assessment": {
             "production_score": float(assessment.production_score) if assessment and assessment.production_score else None,
             "referral_potential_score": float(assessment.referral_potential_score) if assessment and assessment.referral_potential_score else None,
@@ -519,6 +669,8 @@ async def get_partner_candidate(
             "professionalism_score": float(assessment.professionalism_score) if assessment and assessment.professionalism_score else None,
             "market_presence_score": float(assessment.market_presence_score) if assessment and assessment.market_presence_score else None,
             "communication_score": float(assessment.communication_score) if assessment and assessment.communication_score else None,
+            "technical_skills_score": float(assessment.technical_skills_score) if assessment and getattr(assessment, 'technical_skills_score', None) else None,
+            "experience_score": float(assessment.experience_score) if assessment and getattr(assessment, 'experience_score', None) else None,
             "overall_score": float(assessment.overall_score) if assessment and assessment.overall_score else None,
             "overall_grade": assessment.overall_grade if assessment else None,
             "strengths": json.loads(assessment.strengths) if assessment and assessment.strengths else [],
@@ -572,7 +724,7 @@ async def create_partner_candidate(
     try:
         result = db.execute(text("""
             INSERT INTO partner_candidates (
-                owner_id, first_name, last_name, email, phone,
+                owner_id, organization_id, first_name, last_name, email, phone,
                 partner_type, license_number, license_state,
                 company_name, business_name, title, years_in_business, website,
                 street_address, city, state, zip_code,
@@ -580,7 +732,7 @@ async def create_partner_candidate(
                 preferred_contact_method, best_contact_time,
                 status, status_changed_at, created_at, updated_at
             ) VALUES (
-                :owner_id, :first_name, :last_name, :email, :phone,
+                :owner_id, :organization_id, :first_name, :last_name, :email, :phone,
                 :partner_type, :license_number, :license_state,
                 :company_name, :business_name, :title, :years_in_business, :website,
                 :street_address, :city, :state, :zip_code,
@@ -591,6 +743,7 @@ async def create_partner_candidate(
             RETURNING id
         """), {
             "owner_id": user_id,
+            "organization_id": current_user.organization_id,
             **data.model_dump()
         })
 
@@ -600,7 +753,8 @@ async def create_partner_candidate(
         log_partner_activity(
             db, partner_id, "created",
             f"Partner candidate created: {data.first_name} {data.last_name}",
-            user_id
+            user_id,
+            organization_id=current_user.organization_id
         )
 
         db.commit()
@@ -613,6 +767,138 @@ async def create_partner_candidate(
     except SQLAlchemyError as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create partner candidate")
+
+
+@router.post("/employee-candidates")
+async def create_employee_candidate(
+    data: EmployeeCandidateCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new employee recruit candidate."""
+    user_id = current_user.id
+
+    if data.employee_role not in VALID_EMPLOYEE_ROLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid employee_role. Must be one of: {VALID_EMPLOYEE_ROLES}"
+        )
+
+    # Check for duplicate email for this owner
+    existing = db.execute(text("""
+        SELECT id FROM partner_candidates
+        WHERE owner_id = :user_id AND email = :email AND is_active = true
+    """), {"user_id": user_id, "email": data.email}).fetchone()
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have a candidate with this email address"
+        )
+
+    try:
+        result = db.execute(text("""
+            INSERT INTO partner_candidates (
+                owner_id, organization_id,
+                candidate_category, partner_type,
+                employee_role, nmls_id, license_states,
+                current_employer, years_experience, desired_compensation,
+                first_name, last_name, email, phone,
+                city, state, source, notes, linkedin_url,
+                status, status_changed_at, created_at, updated_at
+            ) VALUES (
+                :owner_id, :organization_id,
+                'employee', :employee_role,
+                :employee_role, :nmls_id, :license_states,
+                :current_employer, :years_experience, :desired_compensation,
+                :first_name, :last_name, :email, :phone,
+                :city, :state, :source, :notes, :linkedin_url,
+                'new', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+            RETURNING id
+        """), {
+            "owner_id": user_id,
+            "organization_id": current_user.organization_id,
+            "employee_role": data.employee_role,
+            "nmls_id": data.nmls_id,
+            "license_states": json.dumps(data.license_states or []),
+            "current_employer": data.current_employer,
+            "years_experience": data.years_experience,
+            "desired_compensation": data.desired_compensation,
+            "first_name": data.first_name,
+            "last_name": data.last_name,
+            "email": data.email,
+            "phone": data.phone,
+            "city": data.city,
+            "state": data.state,
+            "source": data.source,
+            "notes": data.notes,
+            "linkedin_url": data.linkedin_url,
+        })
+
+        candidate_id = result.fetchone().id
+
+        log_partner_activity(
+            db, candidate_id, "created",
+            f"Employee candidate created: {data.first_name} {data.last_name} ({data.employee_role})",
+            user_id,
+            organization_id=current_user.organization_id
+        )
+
+        db.commit()
+
+        return {
+            "id": candidate_id,
+            "status": "created",
+            "candidate_category": "employee",
+            "message": f"Employee candidate {data.first_name} {data.last_name} created successfully"
+        }
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create employee candidate")
+
+
+@router.post("/candidates/{partner_id}/hire")
+async def hire_employee_candidate(
+    partner_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark an employee candidate as hired."""
+    user_id = current_user.id
+    candidate = verify_partner_ownership(partner_id, user_id, db)
+
+    category = getattr(candidate, 'candidate_category', 'partner') or 'partner'
+    if category != 'employee':
+        raise HTTPException(status_code=400, detail="This action is only valid for employee candidates")
+
+    if candidate.status == 'hired':
+        raise HTTPException(status_code=400, detail="Candidate is already hired")
+
+    db.execute(text("""
+        UPDATE partner_candidates
+        SET status = 'hired',
+            hired_at = CURRENT_TIMESTAMP,
+            status_changed_at = CURRENT_TIMESTAMP,
+            status_changed_by = :user_id,
+            last_activity_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = :partner_id
+    """), {"partner_id": partner_id, "user_id": user_id})
+
+    log_partner_activity(
+        db, partner_id, "hired",
+        "Employee candidate marked as hired",
+        user_id
+    )
+
+    db.commit()
+
+    return {
+        "partner_id": partner_id,
+        "status": "hired",
+        "message": "Employee candidate has been marked as hired"
+    }
 
 
 @router.put("/candidates/{partner_id}")
@@ -632,7 +918,10 @@ async def update_partner_candidate(
         "license_number", "license_state", "company_name", "business_name",
         "title", "years_in_business", "website", "street_address", "city",
         "state", "zip_code", "source", "source_detail", "notes", "linkedin_url",
-        "preferred_contact_method", "best_contact_time"
+        "preferred_contact_method", "best_contact_time",
+        # Employee-specific fields
+        "employee_role", "nmls_id", "current_employer",
+        "years_experience", "desired_compensation",
     }
 
     update_fields = []
@@ -701,24 +990,33 @@ async def update_partner_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update partner candidate status."""
+    """Update partner/employee candidate status."""
     user_id = current_user.id
     partner = verify_partner_ownership(partner_id, user_id, db)
     old_status = partner.status
 
-    valid_statuses = ['new', 'contacted', 'qualified', 'meeting_scheduled', 'met',
-                      'proposal_sent', 'negotiating', 'onboarded', 'declined', 'inactive']
+    # Category-aware status validation
+    category = getattr(partner, 'candidate_category', 'partner') or 'partner'
+    valid_statuses = EMPLOYEE_VALID_STATUSES if category == 'employee' else PARTNER_VALID_STATUSES
 
     if data.status not in valid_statuses:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        raise HTTPException(status_code=400, detail=f"Invalid status for {category}. Must be one of: {valid_statuses}")
 
-    db.execute(text("""
+    # Build extra SET clauses for terminal statuses
+    extra_sets = ""
+    if data.status == 'hired' and category == 'employee':
+        extra_sets = ", hired_at = CURRENT_TIMESTAMP"
+    elif data.status == 'withdrawn' and category == 'employee':
+        extra_sets = ", withdrawn_at = CURRENT_TIMESTAMP"
+
+    db.execute(text(f"""
         UPDATE partner_candidates
         SET status = :status,
             status_changed_at = CURRENT_TIMESTAMP,
             status_changed_by = :user_id,
             last_activity_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
+            {extra_sets}
         WHERE id = :partner_id
     """), {"partner_id": partner_id, "status": data.status, "user_id": user_id})
 
@@ -1537,6 +1835,8 @@ async def get_partner_assessment(
             "professionalism_score": float(result.professionalism_score) if result.professionalism_score else None,
             "market_presence_score": float(result.market_presence_score) if result.market_presence_score else None,
             "communication_score": float(result.communication_score) if result.communication_score else None,
+            "technical_skills_score": float(result.technical_skills_score) if getattr(result, 'technical_skills_score', None) else None,
+            "experience_score": float(result.experience_score) if getattr(result, 'experience_score', None) else None,
             "overall_score": float(result.overall_score) if result.overall_score else None,
             "overall_grade": result.overall_grade,
             "strengths": json.loads(result.strengths) if result.strengths else [],
@@ -1555,21 +1855,34 @@ async def update_partner_assessment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create or update assessment for a partner candidate."""
+    """Create or update assessment for a partner/employee candidate."""
     user_id = current_user.id
-    verify_partner_ownership(partner_id, user_id, db)
+    candidate = verify_partner_ownership(partner_id, user_id, db)
+
+    # Determine scoring weights based on candidate category
+    category = getattr(candidate, 'candidate_category', 'partner') or 'partner'
+
+    if category == 'employee':
+        weights = {
+            "technical_skills_score": 0.25,
+            "experience_score": 0.25,
+            "production_score": 0.20,
+            "professionalism_score": 0.15,
+            "communication_score": 0.10,
+            "relationship_score": 0.05,
+        }
+    else:
+        weights = {
+            "production_score": 0.20,
+            "referral_potential_score": 0.25,
+            "relationship_score": 0.20,
+            "professionalism_score": 0.15,
+            "market_presence_score": 0.10,
+            "communication_score": 0.10,
+        }
 
     # Calculate overall score from provided scores
     scores = []
-    weights = {
-        "production_score": 0.20,
-        "referral_potential_score": 0.25,
-        "relationship_score": 0.20,
-        "professionalism_score": 0.15,
-        "market_presence_score": 0.10,
-        "communication_score": 0.10
-    }
-
     for field, weight in weights.items():
         value = getattr(data, field, None)
         if value is not None:
@@ -1583,12 +1896,13 @@ async def update_partner_assessment(
         if overall_score:
             overall_grade = calculate_overall_grade(overall_score)
 
-    # Upsert assessment
+    # Upsert assessment (includes both partner and employee dimension columns)
     db.execute(text("""
         INSERT INTO partner_assessments (
             partner_candidate_id,
             production_score, referral_potential_score, relationship_score,
             professionalism_score, market_presence_score, communication_score,
+            technical_skills_score, experience_score,
             overall_score, overall_grade,
             strengths, concerns, talking_points, recommended_approach,
             assessed_by, assessed_at, created_at, updated_at
@@ -1596,6 +1910,7 @@ async def update_partner_assessment(
             :partner_id,
             :production_score, :referral_potential_score, :relationship_score,
             :professionalism_score, :market_presence_score, :communication_score,
+            :technical_skills_score, :experience_score,
             :overall_score, :overall_grade,
             :strengths, :concerns, :talking_points, :recommended_approach,
             :user_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -1607,6 +1922,8 @@ async def update_partner_assessment(
             professionalism_score = COALESCE(:professionalism_score, partner_assessments.professionalism_score),
             market_presence_score = COALESCE(:market_presence_score, partner_assessments.market_presence_score),
             communication_score = COALESCE(:communication_score, partner_assessments.communication_score),
+            technical_skills_score = COALESCE(:technical_skills_score, partner_assessments.technical_skills_score),
+            experience_score = COALESCE(:experience_score, partner_assessments.experience_score),
             overall_score = :overall_score,
             overall_grade = :overall_grade,
             strengths = COALESCE(:strengths, partner_assessments.strengths),
@@ -1624,6 +1941,8 @@ async def update_partner_assessment(
         "professionalism_score": data.professionalism_score,
         "market_presence_score": data.market_presence_score,
         "communication_score": data.communication_score,
+        "technical_skills_score": data.technical_skills_score,
+        "experience_score": data.experience_score,
         "overall_score": overall_score,
         "overall_grade": overall_grade,
         "strengths": json.dumps(data.strengths) if data.strengths else None,

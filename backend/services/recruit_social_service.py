@@ -723,7 +723,8 @@ class RecruitSocialService:
         content: str,
         scheduled_time: datetime,
         image_url: Optional[str] = None,
-        user_id: int = 1
+        *,
+        user_id: int
     ) -> Dict:
         """Schedule a recruiting post across multiple platforms."""
         results = {

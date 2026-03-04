@@ -711,3 +711,114 @@ async def preview_email_for_task(
             "html_content": template["html_content"],
             "plain_content": template["plain_content"]
         }
+
+
+# =============================================================================
+# STALLED PIPELINE DETECTION
+# =============================================================================
+
+
+@router.get("/stalled")
+async def get_stalled_candidates(
+    current_user: User = Depends(get_current_user),
+):
+    """Get candidates stalled beyond stage thresholds."""
+    stalled = recruiting_workflow_service.detect_stalled_candidates(
+        organization_id=current_user.organization_id
+    )
+    return {
+        "stalled_count": len(stalled),
+        "candidates": stalled,
+    }
+
+
+@router.post("/stalled/sweep")
+async def run_stall_sweep(
+    current_user: User = Depends(get_current_user),
+):
+    """Detect stalled candidates and create alerts."""
+    result = recruiting_workflow_service.create_stall_alerts(
+        organization_id=current_user.organization_id
+    )
+    return result
+
+
+# =============================================================================
+# WORKFLOW CONFIGURATION (PER-ORG CUSTOMIZATION)
+# =============================================================================
+
+
+class WorkflowTaskDef(BaseModel):
+    day: int = 0
+    title: str
+    description: str = ""
+    priority: str = "medium"
+    route_to: str = "task_list"
+
+
+class UpdateWorkflowRequest(BaseModel):
+    workflow_name: Optional[str] = None
+    tasks: List[WorkflowTaskDef]
+
+
+@router.get("/config")
+async def get_org_workflow_config(
+    current_user: User = Depends(get_current_user),
+):
+    """Get organization's workflow configurations (custom + defaults merged)."""
+    custom = recruiting_workflow_service.get_org_workflows(
+        organization_id=current_user.organization_id
+    )
+
+    custom_map = {c["disposition"]: c for c in custom if c["is_active"]}
+
+    all_dispositions = []
+    for disposition, workflow in RECRUITING_WORKFLOWS.items():
+        override = custom_map.get(disposition)
+        all_dispositions.append({
+            "disposition": disposition,
+            "name": override["workflow_name"] if override else workflow["name"],
+            "tasks": override["tasks"] if override else workflow["tasks"],
+            "is_custom": bool(override),
+            "task_count": len(override["tasks"] if override else workflow["tasks"]),
+        })
+
+    return {"workflows": all_dispositions}
+
+
+@router.put("/config/{disposition}")
+async def update_org_workflow(
+    disposition: str,
+    request: UpdateWorkflowRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Update workflow tasks for a specific disposition. Overrides system defaults."""
+    if disposition not in RECRUITING_WORKFLOWS:
+        raise HTTPException(status_code=400, detail=f"Unknown disposition: {disposition}")
+
+    tasks_dicts = [t.dict() for t in request.tasks]
+
+    try:
+        result = recruiting_workflow_service.update_org_workflow(
+            organization_id=current_user.organization_id,
+            disposition=disposition,
+            tasks=tasks_dicts,
+            workflow_name=request.workflow_name,
+            created_by=current_user.id,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/config/{disposition}")
+async def reset_org_workflow(
+    disposition: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Reset workflow for a disposition back to system defaults."""
+    result = recruiting_workflow_service.reset_org_workflow(
+        organization_id=current_user.organization_id,
+        disposition=disposition,
+    )
+    return result

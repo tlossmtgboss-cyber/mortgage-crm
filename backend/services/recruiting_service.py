@@ -14,6 +14,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+# Score gates: minimum assessment score and required quizzes to advance to each stage
+SCORE_GATES = {
+    "interview": {"min_score": 4.0, "required_quizzes": ["screening"]},
+    "assessment": {"min_score": 5.0, "required_quizzes": ["screening", "phone_screen"]},
+    "offer": {"min_score": 6.0, "required_quizzes": ["screening", "phone_screen", "interview"]},
+}
+
 
 @dataclass
 class PipelineMetrics:
@@ -56,7 +63,7 @@ class RecruitingService:
 
     async def get_pipeline_metrics(
         self,
-        organization_id: Optional[int] = None,
+        organization_id: int,
         days: int = 90
     ) -> PipelineMetrics:
         """Get recruiting pipeline metrics."""
@@ -69,7 +76,7 @@ class RecruitingService:
             FROM mm_candidates
             WHERE is_active = true
             AND applied_at >= CURRENT_DATE - :days
-            AND (:org_id IS NULL OR organization_id = :org_id)
+            AND organization_id = :org_id
             GROUP BY status
         """)
         status_results = self.db.execute(status_query, {
@@ -87,7 +94,7 @@ class RecruitingService:
             FROM mm_candidates
             WHERE hired_at IS NOT NULL
             AND applied_at >= CURRENT_DATE - :days
-            AND (:org_id IS NULL OR organization_id = :org_id)
+            AND organization_id = :org_id
         """)
         time_result = self.db.execute(time_query, {
             "days": days,
@@ -105,7 +112,7 @@ class RecruitingService:
             FROM mm_candidates
             WHERE is_active = true
             AND applied_at >= CURRENT_DATE - :days
-            AND (:org_id IS NULL OR organization_id = :org_id)
+            AND organization_id = :org_id
         """)
         funnel = self.db.execute(funnel_query, {
             "days": days,
@@ -129,7 +136,7 @@ class RecruitingService:
             FROM mm_job_postings
             WHERE is_published = true
             AND (expires_at IS NULL OR expires_at > CURRENT_DATE)
-            AND (:org_id IS NULL OR organization_id = :org_id)
+            AND organization_id = :org_id
         """)
         positions = self.db.execute(positions_query, {"org_id": organization_id}).fetchone()
 
@@ -138,7 +145,7 @@ class RecruitingService:
             SELECT COUNT(*) as count
             FROM mm_offers
             WHERE status IN ('sent', 'viewed', 'negotiating')
-            AND (:org_id IS NULL OR organization_id = :org_id)
+            AND organization_id = :org_id
         """)
         offers = self.db.execute(offers_query, {"org_id": organization_id}).fetchone()
 
@@ -157,7 +164,7 @@ class RecruitingService:
 
     async def get_candidates(
         self,
-        organization_id: Optional[int] = None,
+        organization_id: int,
         status: Optional[str] = None,
         role_id: Optional[int] = None,
         source: Optional[str] = None,
@@ -182,13 +189,13 @@ class RecruitingService:
                 c.years_experience,
                 c.has_mortgage_experience,
                 c.placement_recommendation,
-                (SELECT COUNT(*) FROM mm_interviews WHERE candidate_id = c.id) as interview_count,
-                (SELECT COUNT(*) FROM mm_offers WHERE candidate_id = c.id AND status NOT IN ('declined', 'withdrawn', 'expired')) as offer_count,
+                (SELECT COUNT(*) FROM mm_interviews WHERE candidate_id = c.id AND organization_id = :org_id) as interview_count,
+                (SELECT COUNT(*) FROM mm_offers WHERE candidate_id = c.id AND organization_id = :org_id AND status NOT IN ('declined', 'withdrawn', 'expired')) as offer_count,
                 ras.overall_score as assessment_score
             FROM mm_candidates c
             LEFT JOIN recruit_assessment_scores ras ON ras.candidate_id = c.id
             WHERE c.is_active = true
-            AND (:org_id IS NULL OR c.organization_id = :org_id)
+            AND c.organization_id = :org_id
             AND (:status IS NULL OR c.status = :status)
             AND (:role_id IS NULL OR c.target_role_id = :role_id)
             AND (:source IS NULL OR c.source = :source)
@@ -254,7 +261,7 @@ class RecruitingService:
     async def get_candidate_detail(
         self,
         candidate_id: int,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Optional[Dict[str, Any]]:
         """Get detailed candidate information."""
 
@@ -268,7 +275,7 @@ class RecruitingService:
             LEFT JOIN mm_role_definitions rd ON rd.id = c.target_role_id
             LEFT JOIN users u ON u.id = c.referrer_user_id
             WHERE c.id = :id
-            AND (:org_id IS NULL OR c.organization_id = :org_id)
+            AND c.organization_id = :org_id
         """)
 
         result = self.db.execute(query, {
@@ -287,7 +294,7 @@ class RecruitingService:
                 u.full_name as interviewer_name
             FROM mm_interviews i
             JOIN mm_candidates c ON c.id = i.candidate_id
-                AND (:org_id IS NULL OR c.organization_id = :org_id)
+                AND c.organization_id = :org_id
             LEFT JOIN users u ON u.id = i.primary_interviewer_id
             WHERE i.candidate_id = :id
             ORDER BY i.scheduled_at DESC
@@ -300,7 +307,7 @@ class RecruitingService:
                 o.status, o.sent_at, o.responded_at
             FROM mm_offers o
             JOIN mm_candidates c ON c.id = o.candidate_id
-                AND (:org_id IS NULL OR c.organization_id = :org_id)
+                AND c.organization_id = :org_id
             WHERE o.candidate_id = :id
             ORDER BY o.created_at DESC
         """), {"id": candidate_id, "org_id": organization_id}).fetchall()
@@ -312,7 +319,7 @@ class RecruitingService:
                 u.full_name as performed_by_name
             FROM mm_candidate_activities a
             JOIN mm_candidates c ON c.id = a.candidate_id
-                AND (:org_id IS NULL OR c.organization_id = :org_id)
+                AND c.organization_id = :org_id
             LEFT JOIN users u ON u.id = a.performed_by
             WHERE a.candidate_id = :id
             ORDER BY a.created_at DESC
@@ -326,7 +333,7 @@ class RecruitingService:
                 u.full_name as author_name
             FROM mm_candidate_notes n
             JOIN mm_candidates c ON c.id = n.candidate_id
-                AND (:org_id IS NULL OR c.organization_id = :org_id)
+                AND c.organization_id = :org_id
             JOIN users u ON u.id = n.created_by
             WHERE n.candidate_id = :id AND (n.is_private = false OR n.is_private IS NULL)
             ORDER BY n.created_at DESC
@@ -416,7 +423,7 @@ class RecruitingService:
         self,
         data: Dict[str, Any],
         created_by: int,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Dict[str, Any]:
         """Create a new candidate."""
 
@@ -478,22 +485,66 @@ class RecruitingService:
             "portal_url": portal_result.get("portal_url")
         }
 
+    def _check_score_gate(
+        self,
+        candidate_id: int,
+        target_status: str,
+        skip_gate: bool = False,
+    ) -> Optional[str]:
+        """Check if candidate meets score gate for target status.
+        Returns error message if blocked, None if allowed."""
+        if skip_gate:
+            return None
+
+        gate = SCORE_GATES.get(target_status)
+        if not gate:
+            return None
+
+        # Check assessment score
+        score_row = self.db.execute(text("""
+            SELECT overall_score, quiz_count
+            FROM recruit_assessment_scores
+            WHERE candidate_id = :cid
+        """), {"cid": candidate_id}).fetchone()
+
+        if not score_row or score_row.overall_score is None:
+            return f"Cannot advance to {target_status}: no assessment score on file. Complete required quizzes first."
+
+        if float(score_row.overall_score) < gate["min_score"]:
+            return (
+                f"Cannot advance to {target_status}: overall score {score_row.overall_score:.1f} "
+                f"is below minimum {gate['min_score']}"
+            )
+
+        # Check required quizzes completed
+        for required_quiz in gate["required_quizzes"]:
+            quiz_done = self.db.execute(text("""
+                SELECT COUNT(*) as cnt
+                FROM recruit_quiz_responses
+                WHERE candidate_id = :cid AND disposition = :disp
+            """), {"cid": candidate_id, "disp": required_quiz}).fetchone()
+
+            if not quiz_done or quiz_done.cnt == 0:
+                return f"Cannot advance to {target_status}: '{required_quiz}' quiz not completed"
+
+        return None
+
     async def update_candidate_status(
         self,
         candidate_id: int,
         new_status: str,
         updated_by: int,
+        *,
+        organization_id: int,
         reason: Optional[str] = None,
-        organization_id: Optional[int] = None,
-        disposition_code: Optional[str] = None
+        disposition_code: Optional[str] = None,
+        skip_score_gate: bool = False
     ) -> Dict[str, Any]:
         """Update candidate status with optional OFCCP disposition tracking."""
 
         # Get current status with org isolation
-        org_filter = "AND organization_id = :org_id" if organization_id else ""
-        params = {"id": candidate_id}
-        if organization_id:
-            params["org_id"] = organization_id
+        org_filter = "AND organization_id = :org_id"
+        params = {"id": candidate_id, "org_id": organization_id}
 
         current = self.db.execute(text(f"""
             SELECT status FROM mm_candidates WHERE id = :id {org_filter}
@@ -503,6 +554,20 @@ class RecruitingService:
             raise ValueError(f"Candidate {candidate_id} not found")
 
         old_status = current.status
+
+        # Score gate check
+        gate_error = self._check_score_gate(candidate_id, new_status, skip_score_gate)
+        if gate_error:
+            raise ValueError(gate_error)
+
+        # NMLS gate for offer/hired stages
+        if new_status in ("offer", "hired") and not skip_score_gate:
+            from services.nmls_validation_service import NMLSValidationService
+            nmls_service = NMLSValidationService(self.db)
+            nmls_result = nmls_service.check_license_status(candidate_id, organization_id)
+            if not nmls_result.is_valid:
+                issue_msgs = "; ".join(i["message"] for i in nmls_result.issues)
+                raise ValueError(f"NMLS validation failed: {issue_msgs}")
 
         # Build update query — include disposition fields when provided
         if disposition_code:
@@ -521,7 +586,7 @@ class RecruitingService:
                 "status": new_status,
                 "user_id": updated_by,
                 "disposition_code": disposition_code,
-                **({"org_id": organization_id} if organization_id else {}),
+                "org_id": organization_id,
             })
         else:
             self.db.execute(text(f"""
@@ -535,7 +600,7 @@ class RecruitingService:
                 "id": candidate_id,
                 "status": new_status,
                 "user_id": updated_by,
-                **({"org_id": organization_id} if organization_id else {}),
+                "org_id": organization_id,
             })
 
         # Log activity
@@ -588,7 +653,7 @@ class RecruitingService:
 
     async def get_job_postings(
         self,
-        organization_id: Optional[int] = None,
+        organization_id: int,
         is_published: Optional[bool] = None,
         limit: int = 50
     ) -> List[Dict[str, Any]]:
@@ -602,10 +667,10 @@ class RecruitingService:
                 jp.views, jp.applications,
                 jp.published_at, jp.expires_at, jp.created_at,
                 rd.role_name, rd.role_category,
-                (SELECT COUNT(*) FROM mm_candidates WHERE target_role_id = jp.role_definition_id AND status NOT IN ('rejected', 'withdrawn', 'hired')) as active_candidates
+                (SELECT COUNT(*) FROM mm_candidates WHERE target_role_id = jp.role_definition_id AND organization_id = :org_id AND status NOT IN ('rejected', 'withdrawn', 'hired')) as active_candidates
             FROM mm_job_postings jp
             LEFT JOIN mm_role_definitions rd ON rd.id = jp.role_definition_id
-            WHERE (:org_id IS NULL OR jp.organization_id = :org_id)
+            WHERE jp.organization_id = :org_id
             AND (:is_published IS NULL OR jp.is_published = :is_published)
             ORDER BY jp.created_at DESC
             LIMIT :limit
@@ -643,7 +708,7 @@ class RecruitingService:
         self,
         data: Dict[str, Any],
         created_by: int,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Dict[str, Any]:
         """Create a job posting."""
         import json
@@ -716,7 +781,7 @@ class RecruitingService:
         candidate_id: int,
         data: Dict[str, Any],
         created_by: int,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Dict[str, Any]:
         """Schedule an interview."""
 
@@ -763,10 +828,8 @@ class RecruitingService:
         interview_id = result.id
 
         # Update candidate status if still in early stage (org-scoped)
-        org_filter = "AND organization_id = :org_id" if organization_id else ""
-        update_params = {"id": candidate_id}
-        if organization_id:
-            update_params["org_id"] = organization_id
+        org_filter = "AND organization_id = :org_id"
+        update_params = {"id": candidate_id, "org_id": organization_id}
         self.db.execute(text(f"""
             UPDATE mm_candidates
             SET status = CASE
@@ -796,16 +859,13 @@ class RecruitingService:
         interview_id: int,
         interviewer_id: int,
         feedback: Dict[str, Any],
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Dict[str, Any]:
         """Submit feedback for an interview."""
 
         # Get current feedback with org isolation
-        org_filter = ""
-        params = {"id": interview_id}
-        if organization_id:
-            org_filter = "AND i.organization_id = :org_id"
-            params["org_id"] = organization_id
+        org_filter = "AND i.organization_id = :org_id"
+        params = {"id": interview_id, "org_id": organization_id}
 
         current = self.db.execute(text(f"""
             SELECT i.feedback, i.candidate_id FROM mm_interviews i WHERE i.id = :id {org_filter}
@@ -835,10 +895,8 @@ class RecruitingService:
             "score": overall_score,
             "recommendation": recommendation
         }
-        update_org_filter = ""
-        if organization_id:
-            update_org_filter = "AND organization_id = :org_id"
-            update_params["org_id"] = organization_id
+        update_org_filter = "AND organization_id = :org_id"
+        update_params["org_id"] = organization_id
 
         self.db.execute(text(f"""
             UPDATE mm_interviews
@@ -878,7 +936,7 @@ class RecruitingService:
         candidate_id: int,
         data: Dict[str, Any],
         created_by: int,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Dict[str, Any]:
         """Create an offer for a candidate."""
 
@@ -923,10 +981,8 @@ class RecruitingService:
         }).fetchone()
 
         # Update candidate status (org-scoped)
-        offer_org_filter = "AND organization_id = :org_id" if organization_id else ""
-        offer_update_params = {"id": candidate_id}
-        if organization_id:
-            offer_update_params["org_id"] = organization_id
+        offer_org_filter = "AND organization_id = :org_id"
+        offer_update_params = {"id": candidate_id, "org_id": organization_id}
         self.db.execute(text(f"""
             UPDATE mm_candidates
             SET status = 'offer', updated_at = CURRENT_TIMESTAMP
@@ -951,8 +1007,9 @@ class RecruitingService:
         self,
         offer_id: int,
         sent_by: int,
+        *,
         expires_in_days: int = 7,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Dict[str, Any]:
         """Send an offer to candidate."""
 
@@ -963,10 +1020,8 @@ class RecruitingService:
             "sent_by": sent_by,
             "expires_at": expires_at
         }
-        send_org_filter = ""
-        if organization_id:
-            send_org_filter = "AND organization_id = :org_id"
-            send_params["org_id"] = organization_id
+        send_org_filter = "AND organization_id = :org_id"
+        send_params["org_id"] = organization_id
 
         result = self.db.execute(text(f"""
             UPDATE mm_offers
@@ -1000,16 +1055,14 @@ class RecruitingService:
         self,
         offer_id: int,
         accepted: bool,
+        *,
         notes: Optional[str] = None,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> Dict[str, Any]:
         """Record candidate's response to offer."""
 
-        resp_org_filter = ""
-        resp_params_base = {"id": offer_id, "notes": notes}
-        if organization_id:
-            resp_org_filter = "AND organization_id = :org_id"
-            resp_params_base["org_id"] = organization_id
+        resp_org_filter = "AND organization_id = :org_id"
+        resp_params_base = {"id": offer_id, "notes": notes, "org_id": organization_id}
 
         if accepted:
             result = self.db.execute(text(f"""
@@ -1027,11 +1080,8 @@ class RecruitingService:
                 raise ValueError(f"Offer {offer_id} not found or already responded to")
 
             # Update candidate to hired (scoped via offer's candidate_id)
-            hired_params = {"id": result.candidate_id}
-            hired_org_filter = ""
-            if organization_id:
-                hired_org_filter = "AND organization_id = :org_id"
-                hired_params["org_id"] = organization_id
+            hired_params = {"id": result.candidate_id, "org_id": organization_id}
+            hired_org_filter = "AND organization_id = :org_id"
 
             self.db.execute(text(f"""
                 UPDATE mm_candidates
@@ -1040,6 +1090,19 @@ class RecruitingService:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id {hired_org_filter}
             """), hired_params)
+
+            # Bridge: create talent state for new hire
+            candidate_row = self.db.execute(text("""
+                SELECT hired_as_user_id FROM mm_candidates
+                WHERE id = :id AND organization_id = :org_id
+            """), {"id": result.candidate_id, "org_id": organization_id}).fetchone()
+
+            if candidate_row and candidate_row.hired_as_user_id:
+                await self._create_talent_state_for_hire(
+                    candidate_id=result.candidate_id,
+                    hired_as_user_id=candidate_row.hired_as_user_id,
+                    organization_id=organization_id,
+                )
 
             activity_type = "offer_accepted"
             description = f"Offer {result.offer_number} accepted"
@@ -1084,8 +1147,9 @@ class RecruitingService:
         candidate_id: int,
         activity_type: str,
         description: str,
+        *,
+        organization_id: int,
         performed_by: Optional[int] = None,
-        organization_id: Optional[int] = None,
         interview_id: Optional[int] = None,
         offer_id: Optional[int] = None,
         is_automated: bool = False
@@ -1126,15 +1190,107 @@ class RecruitingService:
             logger.warning(f"Failed to log activity for candidate {candidate_id}: {e}")
 
         # Update last activity (org-scoped)
-        activity_org_filter = "AND organization_id = :org_id" if organization_id else ""
-        activity_params = {"id": candidate_id}
-        if organization_id:
-            activity_params["org_id"] = organization_id
+        activity_org_filter = "AND organization_id = :org_id"
+        activity_params = {"id": candidate_id, "org_id": organization_id}
         self.db.execute(text(f"""
             UPDATE mm_candidates
             SET last_activity_at = CURRENT_TIMESTAMP
             WHERE id = :id {activity_org_filter}
         """), activity_params)
+
+    async def _create_talent_state_for_hire(
+        self,
+        candidate_id: int,
+        hired_as_user_id: int,
+        organization_id: int,
+    ) -> Optional[Dict]:
+        """Create mm_talent_state and mm_talent_state_history for a newly hired candidate."""
+        try:
+            # Get ramp duration from target role definition (default 90 days)
+            role_info = self.db.execute(text("""
+                SELECT rd.learning_curve_days, rd.id as role_id,
+                       rd.default_max_files, rd.default_max_leads, rd.default_max_tasks_daily
+                FROM mm_candidates c
+                LEFT JOIN mm_role_definitions rd ON rd.id = c.target_role_id
+                WHERE c.id = :cid AND c.organization_id = :org_id
+            """), {"cid": candidate_id, "org_id": organization_id}).fetchone()
+
+            ramp_days = 90
+            role_definition_id = None
+            if role_info and role_info.learning_curve_days:
+                ramp_days = role_info.learning_curve_days
+                role_definition_id = role_info.role_id
+
+            # Insert talent state (upsert)
+            self.db.execute(text("""
+                INSERT INTO mm_talent_state (
+                    organization_id, user_id, state, state_reason,
+                    state_changed_at, is_new_hire, is_in_ramp,
+                    hire_date, ramp_day, ramp_completion_date, ramp_progress_pct,
+                    created_at, updated_at
+                ) VALUES (
+                    :org_id, :user_id, 'new_hire', 'Hired from recruiting pipeline',
+                    CURRENT_TIMESTAMP, true, true,
+                    CURRENT_DATE, 0,
+                    CURRENT_DATE + make_interval(days => :ramp_days), 0.0,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT (organization_id, user_id) DO UPDATE SET
+                    state = 'new_hire',
+                    state_reason = 'Hired from recruiting pipeline',
+                    state_changed_at = CURRENT_TIMESTAMP,
+                    is_new_hire = true, is_in_ramp = true,
+                    hire_date = CURRENT_DATE, ramp_day = 0,
+                    ramp_completion_date = CURRENT_DATE + make_interval(days => :ramp_days),
+                    ramp_progress_pct = 0.0,
+                    updated_at = CURRENT_TIMESTAMP
+            """), {"org_id": organization_id, "user_id": hired_as_user_id, "ramp_days": ramp_days})
+
+            # Insert state history
+            self.db.execute(text("""
+                INSERT INTO mm_talent_state_history (
+                    organization_id, user_id, previous_state, new_state,
+                    reason, created_at
+                ) VALUES (
+                    :org_id, :user_id, NULL, 'new_hire',
+                    :reason, CURRENT_TIMESTAMP
+                )
+            """), {
+                "org_id": organization_id,
+                "user_id": hired_as_user_id,
+                "reason": f"Hired from recruiting pipeline (candidate {candidate_id})",
+            })
+
+            # Create talent capacity with role defaults
+            if role_info and role_definition_id:
+                self.db.execute(text("""
+                    INSERT INTO mm_talent_capacity (
+                        organization_id, user_id, role_definition_id,
+                        max_files_concurrent, max_leads_concurrent, max_tasks_daily,
+                        capacity_status, is_available, availability_status,
+                        created_at, updated_at
+                    ) VALUES (
+                        :org_id, :user_id, :role_id,
+                        :max_files, :max_leads, :max_tasks,
+                        'available', true, 'active',
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    ON CONFLICT (organization_id, user_id) DO NOTHING
+                """), {
+                    "org_id": organization_id,
+                    "user_id": hired_as_user_id,
+                    "role_id": role_definition_id,
+                    "max_files": role_info.default_max_files or 25,
+                    "max_leads": role_info.default_max_leads or 50,
+                    "max_tasks": role_info.default_max_tasks_daily or 30,
+                })
+
+            logger.info(f"Created talent state for hired candidate {candidate_id} -> user {hired_as_user_id}")
+            return {"user_id": hired_as_user_id, "state": "new_hire", "ramp_days": ramp_days}
+
+        except Exception as e:
+            logger.error(f"Failed to create talent state for candidate {candidate_id}: {e}")
+            return None
 
     async def _create_portal_workspace(
         self,

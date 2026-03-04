@@ -105,15 +105,14 @@ class RecruitAssessmentService:
         candidate_id: int,
         submission: QuizSubmission,
         responded_by: int,
-        organization_id: Optional[int] = None
+        organization_id: int
     ) -> AssessmentScores:
         """Submit quiz responses and update scores."""
         disposition = submission.disposition
 
         with engine.connect() as conn:
             # Verify candidate belongs to org
-            if organization_id:
-                self._verify_candidate_org(conn, candidate_id, organization_id)
+            self._verify_candidate_org(conn, candidate_id, organization_id)
 
             # Insert responses
             for response in submission.responses:
@@ -138,11 +137,10 @@ class RecruitAssessmentService:
         # Recalculate scores
         return self.calculate_and_update_scores(candidate_id, organization_id=organization_id)
 
-    def calculate_and_update_scores(self, candidate_id: int, organization_id: Optional[int] = None) -> AssessmentScores:
+    def calculate_and_update_scores(self, candidate_id: int, organization_id: int) -> AssessmentScores:
         """Calculate scores from all quiz responses and update the scores table."""
         with engine.connect() as conn:
-            if organization_id:
-                self._verify_candidate_org(conn, candidate_id, organization_id)
+            self._verify_candidate_org(conn, candidate_id, organization_id)
 
             # Get all responses with their categories and weights
             result = conn.execute(
@@ -268,11 +266,10 @@ class RecruitAssessmentService:
             last_updated=datetime.now()
         )
 
-    def get_candidate_scores(self, candidate_id: int, organization_id: Optional[int] = None) -> Optional[AssessmentScores]:
+    def get_candidate_scores(self, candidate_id: int, organization_id: int) -> Optional[AssessmentScores]:
         """Get assessment scores for a candidate."""
         with engine.connect() as conn:
-            if organization_id:
-                self._verify_candidate_org(conn, candidate_id, organization_id)
+            self._verify_candidate_org(conn, candidate_id, organization_id)
             result = conn.execute(
                 text("""
                     SELECT id, candidate_id, production_score, disc_score,
@@ -302,7 +299,7 @@ class RecruitAssessmentService:
             last_updated=row.last_updated
         )
 
-    def get_score_breakdown(self, candidate_id: int, organization_id: Optional[int] = None) -> AssessmentScoreBreakdown:
+    def get_score_breakdown(self, candidate_id: int, organization_id: int) -> AssessmentScoreBreakdown:
         """Get detailed score breakdown with quiz history."""
         scores = self.get_candidate_scores(candidate_id, organization_id=organization_id)
         if not scores:
@@ -365,11 +362,10 @@ class RecruitAssessmentService:
             recommendations=recommendations
         )
 
-    def check_quiz_completed(self, candidate_id: int, disposition: str, organization_id: Optional[int] = None) -> bool:
+    def check_quiz_completed(self, candidate_id: int, disposition: str, organization_id: int) -> bool:
         """Check if quiz has been completed for a disposition."""
         with engine.connect() as conn:
-            if organization_id:
-                self._verify_candidate_org(conn, candidate_id, organization_id)
+            self._verify_candidate_org(conn, candidate_id, organization_id)
             result = conn.execute(
                 text("""
                     SELECT COUNT(*) as count

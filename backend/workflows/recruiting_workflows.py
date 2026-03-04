@@ -9,6 +9,22 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import text
 from database import engine
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Stall thresholds: max days a candidate should stay in each stage before escalation
+STALL_THRESHOLDS = {
+    "new": 3,
+    "screening": 5,
+    "phone_screen": 7,
+    "interview": 10,
+    "assessment": 7,
+    "offer": 5,
+}
+
+TERMINAL_CANDIDATE_STATUSES = ("hired", "rejected", "withdrawn")
 
 
 # =============================================================================
@@ -239,8 +255,28 @@ class RecruitingWorkflowService:
     def __init__(self):
         pass
 
-    def get_workflow_for_disposition(self, disposition: str) -> Optional[Dict]:
-        """Get workflow definition for a disposition."""
+    def get_workflow_for_disposition(self, disposition: str, organization_id: Optional[int] = None) -> Optional[Dict]:
+        """Get workflow definition. Checks org-specific config first, then defaults."""
+        if organization_id:
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("""
+                        SELECT workflow_name, tasks
+                        FROM recruit_workflow_config
+                        WHERE organization_id = :org_id
+                            AND disposition = :disposition
+                            AND is_active = true
+                    """),
+                    {"org_id": organization_id, "disposition": disposition}
+                ).fetchone()
+
+                if row:
+                    return {
+                        "name": row.workflow_name or f"Custom: {disposition}",
+                        "trigger": f"status_change_to_{disposition}",
+                        "tasks": row.tasks,
+                    }
+
         return RECRUITING_WORKFLOWS.get(disposition)
 
     def create_tasks_for_disposition(
@@ -251,7 +287,7 @@ class RecruitingWorkflowService:
         organization_id: int
     ) -> List[Dict]:
         """Create workflow tasks when a candidate disposition changes."""
-        workflow = self.get_workflow_for_disposition(disposition)
+        workflow = self.get_workflow_for_disposition(disposition, organization_id=organization_id)
         if not workflow:
             return []
 
@@ -259,6 +295,14 @@ class RecruitingWorkflowService:
         now = datetime.now()
 
         with engine.connect() as conn:
+            # Verify candidate belongs to the given organization
+            candidate_check = conn.execute(
+                text("SELECT id FROM mm_candidates WHERE id = :id AND organization_id = :org_id"),
+                {"id": candidate_id, "org_id": organization_id}
+            ).fetchone()
+            if not candidate_check:
+                raise ValueError(f"Candidate {candidate_id} not found in organization {organization_id}")
+
             for task_def in workflow["tasks"]:
                 due_date = now + timedelta(days=task_def["day"])
 
@@ -411,6 +455,7 @@ class RecruitingWorkflowService:
                            rc.first_name, rc.last_name, rc.phone, rc.email
                     FROM recruiting_tasks rt
                     JOIN mm_candidates rc ON rc.id = rt.candidate_id
+                        AND rc.organization_id = :org_id
                     WHERE {where_sql}
                     ORDER BY rt.due_date ASC,
                              CASE rt.priority
@@ -437,6 +482,201 @@ class RecruitingWorkflowService:
             }
             for row in rows
         ]
+
+    # =========================================================================
+    # WORKFLOW CONFIGURATION (PER-ORG CUSTOMIZATION)
+    # =========================================================================
+
+    def get_org_workflows(self, organization_id: int) -> List[Dict]:
+        """Get all custom workflow configs for an organization."""
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT id, disposition, workflow_name, tasks, is_active,
+                           created_at, updated_at
+                    FROM recruit_workflow_config
+                    WHERE organization_id = :org_id
+                    ORDER BY disposition
+                """),
+                {"org_id": organization_id}
+            ).fetchall()
+
+        return [
+            {
+                "id": row.id,
+                "disposition": row.disposition,
+                "workflow_name": row.workflow_name,
+                "tasks": row.tasks,
+                "is_active": row.is_active,
+                "is_custom": True,
+            }
+            for row in rows
+        ]
+
+    def update_org_workflow(
+        self,
+        organization_id: int,
+        disposition: str,
+        tasks: List[Dict],
+        workflow_name: Optional[str] = None,
+        created_by: Optional[int] = None,
+    ) -> Dict:
+        """Create or update org-specific workflow for a disposition."""
+        VALID_ROUTE_TO = {"task_list", "dialer_queue", "email_automation"}
+        VALID_PRIORITIES = {"high", "medium", "low"}
+
+        for task in tasks:
+            if not all(k in task for k in ("day", "title", "priority")):
+                raise ValueError("Each task must have 'day', 'title', 'priority'")
+            if task.get("route_to") and task["route_to"] not in VALID_ROUTE_TO:
+                raise ValueError(f"Invalid route_to: {task['route_to']}")
+            if task["priority"] not in VALID_PRIORITIES:
+                raise ValueError(f"Invalid priority: {task['priority']}")
+
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO recruit_workflow_config
+                        (organization_id, disposition, workflow_name, tasks, created_by,
+                         created_at, updated_at)
+                    VALUES (:org_id, :disposition, :name, :tasks::jsonb, :created_by,
+                            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ON CONFLICT (organization_id, disposition)
+                    DO UPDATE SET
+                        tasks = EXCLUDED.tasks,
+                        workflow_name = EXCLUDED.workflow_name,
+                        is_active = true,
+                        updated_at = CURRENT_TIMESTAMP
+                """),
+                {
+                    "org_id": organization_id,
+                    "disposition": disposition,
+                    "name": workflow_name or RECRUITING_WORKFLOWS.get(disposition, {}).get("name", disposition),
+                    "tasks": json.dumps(tasks),
+                    "created_by": created_by,
+                }
+            )
+            conn.commit()
+
+        return {"disposition": disposition, "tasks": tasks, "status": "saved"}
+
+    def reset_org_workflow(self, organization_id: int, disposition: str) -> Dict:
+        """Reset org workflow to system defaults by deactivating override."""
+        with engine.connect() as conn:
+            result = conn.execute(
+                text("""
+                    UPDATE recruit_workflow_config
+                    SET is_active = false, updated_at = CURRENT_TIMESTAMP
+                    WHERE organization_id = :org_id AND disposition = :disposition
+                """),
+                {"org_id": organization_id, "disposition": disposition}
+            )
+            conn.commit()
+
+        return {"disposition": disposition, "reset": result.rowcount > 0}
+
+    # =========================================================================
+    # STALLED PIPELINE DETECTION
+    # =========================================================================
+
+    def detect_stalled_candidates(self, organization_id: int) -> List[Dict]:
+        """Detect candidates stalled in pipeline stages beyond thresholds."""
+        stalled = []
+
+        with engine.connect() as conn:
+            for status, threshold_days in STALL_THRESHOLDS.items():
+                rows = conn.execute(
+                    text("""
+                        SELECT c.id, c.first_name, c.last_name, c.status,
+                               c.status_changed_at, c.email,
+                               EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - c.status_changed_at)) / 86400 as days_in_stage
+                        FROM mm_candidates c
+                        WHERE c.organization_id = :org_id
+                            AND c.is_active = true
+                            AND c.status = :status
+                            AND c.status_changed_at < CURRENT_TIMESTAMP - make_interval(days => :threshold)
+                        ORDER BY c.status_changed_at ASC
+                    """),
+                    {"org_id": organization_id, "status": status, "threshold": threshold_days}
+                ).fetchall()
+
+                for row in rows:
+                    stalled.append({
+                        "candidate_id": row.id,
+                        "name": f"{row.first_name} {row.last_name}",
+                        "status": row.status,
+                        "days_in_stage": round(float(row.days_in_stage), 1),
+                        "threshold_days": threshold_days,
+                        "email": row.email,
+                        "severity": "critical" if float(row.days_in_stage) > threshold_days * 2 else "warning",
+                    })
+
+        return stalled
+
+    def create_stall_alerts(self, organization_id: int) -> Dict:
+        """Detect stalled candidates and create alerts in mm_capacity_alerts."""
+        stalled = self.detect_stalled_candidates(organization_id)
+        alerts_created = 0
+
+        with engine.connect() as conn:
+            for candidate in stalled:
+                # Check for existing open stall alert for this candidate
+                existing = conn.execute(
+                    text("""
+                        SELECT id FROM mm_capacity_alerts
+                        WHERE organization_id = :org_id
+                            AND alert_type = 'candidate_stalled'
+                            AND status = 'open'
+                            AND title LIKE :title_pattern
+                    """),
+                    {
+                        "org_id": organization_id,
+                        "title_pattern": f"%candidate {candidate['candidate_id']}%",
+                    }
+                ).fetchone()
+
+                if not existing:
+                    conn.execute(
+                        text("""
+                            INSERT INTO mm_capacity_alerts (
+                                organization_id, alert_type, severity,
+                                title, description, metrics_snapshot,
+                                recommended_actions, status, created_at
+                            ) VALUES (
+                                :org_id, 'candidate_stalled', :severity,
+                                :title, :description, :metrics::jsonb,
+                                :actions::jsonb, 'open', CURRENT_TIMESTAMP
+                            )
+                        """),
+                        {
+                            "org_id": organization_id,
+                            "severity": candidate["severity"],
+                            "title": f"Stalled candidate {candidate['candidate_id']}: {candidate['name']} in {candidate['status']}",
+                            "description": (
+                                f"{candidate['name']} has been in {candidate['status']} "
+                                f"for {candidate['days_in_stage']} days (threshold: {candidate['threshold_days']})"
+                            ),
+                            "metrics": json.dumps({
+                                "candidate_id": candidate["candidate_id"],
+                                "status": candidate["status"],
+                                "days_in_stage": candidate["days_in_stage"],
+                                "threshold_days": candidate["threshold_days"],
+                            }),
+                            "actions": json.dumps([
+                                f"Contact {candidate['name']} immediately",
+                                "Review status and decide: advance, reject, or note delay reason",
+                            ]),
+                        }
+                    )
+                    alerts_created += 1
+
+            conn.commit()
+
+        return {
+            "stalled_count": len(stalled),
+            "alerts_created": alerts_created,
+            "candidates": stalled,
+        }
 
 
 # Singleton instance

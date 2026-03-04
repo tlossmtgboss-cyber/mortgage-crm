@@ -865,7 +865,7 @@ async def list_purl_portal_workspaces(
     _require_admin(current_user)
 
     try:
-        workspaces = portal_service.list_workspaces(limit=limit, offset=offset)
+        workspaces = portal_service.list_workspaces(limit=limit, offset=offset, organization_id=current_user.organization_id)
         return {"workspaces": workspaces, "limit": limit, "offset": offset}
     except Exception as e:
         logger.error(f"Error listing workspaces: {e}")
@@ -920,7 +920,8 @@ async def create_purl_portal_token(
         token = portal_service.create_portal_token(
             workspace_id=workspace_id,
             scope=scope,
-            expires_days=expires_days
+            expires_days=expires_days,
+            organization_id=current_user.organization_id
         )
         return token
     except Exception as e:
@@ -972,7 +973,7 @@ async def list_purl_company_updates(
     _require_admin(current_user)
 
     try:
-        updates = portal_service.get_company_updates(category=category, limit=limit)
+        updates = portal_service.get_company_updates(category=category, limit=limit, organization_id=current_user.organization_id)
         return {"updates": updates}
     except Exception as e:
         logger.error(f"Error listing updates: {e}")
@@ -989,7 +990,7 @@ async def delete_purl_company_update(
     _require_admin(current_user)
 
     try:
-        portal_service.delete_company_update(update_id)
+        portal_service.delete_company_update(update_id, organization_id=current_user.organization_id)
         return {"status": "deleted", "id": update_id}
     except SQLAlchemyError as e:
         logger.error(f"Error deleting update: {e}")

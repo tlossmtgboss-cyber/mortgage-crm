@@ -1706,6 +1706,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ social oauth tables note: {e}")
 
+        # Create recruit_workflow_config table for per-org workflow customization
+        try:
+            from migrations.add_recruit_workflow_config import run_migration as run_wf_config
+            run_wf_config()
+            logger.info("  recruit_workflow_config table ready")
+        except Exception as e:
+            logger.warning(f"  recruit workflow config note: {e}")
+
         # Fix 7: Add organization_id to social_tokens for tenant isolation
         try:
             from migrations.add_social_tokens_org_id import run_migration as run_social_tokens_org

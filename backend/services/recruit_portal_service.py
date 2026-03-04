@@ -219,7 +219,7 @@ class RecruitPortalService:
             category_filter = "AND category = :category"
             params["category"] = category
         if organization_id:
-            org_filter = "AND (organization_id = :org_id OR organization_id IS NULL)"
+            org_filter = "AND organization_id = :org_id"
             params["org_id"] = organization_id
 
         with SessionLocal() as conn:
@@ -297,6 +297,12 @@ class RecruitPortalService:
         context: Optional[Dict] = None
     ) -> Dict[str, Any]:
         """Handle chat interaction with the AI assistant."""
+        # Validate message length BEFORE sending to AI
+        if not message or not message.strip():
+            return {"response": "Please enter a message."}
+        if len(message) > 5000:
+            message = message[:5000]
+
         # Get workspace and candidate context
         with SessionLocal() as conn:
             result = conn.execute(
@@ -305,7 +311,7 @@ class RecruitPortalService:
                            c.current_company, c.current_title
                     FROM recruit_portal_workspaces w
                     JOIN mm_candidates c ON c.id = w.candidate_id
-                    WHERE w.id = :workspace_id
+                    WHERE w.id = :workspace_id AND w.is_active = true
                 """),
                 {"workspace_id": workspace_id}
             )
@@ -360,10 +366,6 @@ Candidate's current status: {candidate.status}
             # Fallback to canned responses
             ai_response = self._get_fallback_response(message, candidate.status)
 
-        # Validate message length
-        if len(message) > 5000:
-            message = message[:5000]
-
         # Store the conversation
         with SessionLocal() as conn:
             conn.execute(
@@ -410,6 +412,14 @@ Candidate's current status: {candidate.status}
     def get_chat_history(self, workspace_id: int, limit: int = 50) -> List[Dict]:
         """Get chat history for a workspace."""
         with SessionLocal() as conn:
+            # Verify workspace exists and is active
+            ws = conn.execute(
+                text("SELECT id FROM recruit_portal_workspaces WHERE id = :id AND is_active = true"),
+                {"id": workspace_id}
+            ).fetchone()
+            if not ws:
+                return []
+
             result = conn.execute(
                 text("""
                     SELECT role, content, created_at
@@ -418,7 +428,7 @@ Candidate's current status: {candidate.status}
                     ORDER BY created_at ASC
                     LIMIT :limit
                 """),
-                {"workspace_id": workspace_id, "limit": limit}
+                {"workspace_id": workspace_id, "limit": min(limit, 100)}
             )
             rows = result.fetchall()
 
@@ -660,6 +670,76 @@ Candidate's current status: {candidate.status}
             earnings_increase=round(potential_earnings - current_earnings, 2),
             earnings_increase_pct=round(((potential_earnings / current_earnings) - 1) * 100, 1) if current_earnings > 0 else 0
         )
+
+
+    def list_workspaces(self, limit: int = 50, offset: int = 0, organization_id: int = None) -> List[Dict]:
+        """List portal workspaces, scoped to organization."""
+        with SessionLocal() as conn:
+            params = {"limit": limit, "offset": offset}
+            org_filter = ""
+            if organization_id:
+                org_filter = "AND c.organization_id = :org_id"
+                params["org_id"] = organization_id
+            result = conn.execute(
+                text(f"""
+                    SELECT w.id, w.slug, w.is_active, w.created_at,
+                           c.first_name, c.last_name, c.email
+                    FROM recruit_portal_workspaces w
+                    JOIN mm_candidates c ON c.id = w.candidate_id
+                    WHERE 1=1 {org_filter}
+                    ORDER BY w.created_at DESC
+                    LIMIT :limit OFFSET :offset
+                """),
+                params
+            )
+            return [dict(row._mapping) for row in result.fetchall()]
+
+    def create_portal_token(self, workspace_id: int, scope: str = "full",
+                            expires_days: Optional[int] = None, organization_id: int = None) -> Dict:
+        """Create a portal access token, verifying workspace belongs to org."""
+        with SessionLocal() as conn:
+            # Verify workspace belongs to org
+            if organization_id:
+                ws = conn.execute(
+                    text("""
+                        SELECT w.id FROM recruit_portal_workspaces w
+                        JOIN mm_candidates c ON c.id = w.candidate_id
+                        WHERE w.id = :ws_id AND c.organization_id = :org_id
+                    """),
+                    {"ws_id": workspace_id, "org_id": organization_id}
+                ).fetchone()
+                if not ws:
+                    raise HTTPException(status_code=404, detail="Workspace not found")
+
+            token = secrets.token_urlsafe(32)
+            expires_at = None
+            if expires_days:
+                expires_at = datetime.now() + timedelta(days=expires_days)
+
+            conn.execute(
+                text("""
+                    INSERT INTO recruit_portal_tokens (workspace_id, token, scope, expires_at, created_at)
+                    VALUES (:ws_id, :token, :scope, :expires_at, NOW())
+                """),
+                {"ws_id": workspace_id, "token": token, "scope": scope, "expires_at": expires_at}
+            )
+            conn.commit()
+            return {"token": token, "scope": scope, "expires_at": expires_at.isoformat() if expires_at else None}
+
+    def delete_company_update(self, update_id: int, organization_id: int = None) -> bool:
+        """Delete a company update, scoped to organization."""
+        with SessionLocal() as conn:
+            params = {"id": update_id}
+            org_filter = ""
+            if organization_id:
+                org_filter = "AND organization_id = :org_id"
+                params["org_id"] = organization_id
+            result = conn.execute(
+                text(f"DELETE FROM recruit_company_updates WHERE id = :id {org_filter}"),
+                params
+            )
+            conn.commit()
+            return result.rowcount > 0
 
 
 # Singleton instance

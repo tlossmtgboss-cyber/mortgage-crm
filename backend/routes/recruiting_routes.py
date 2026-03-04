@@ -283,6 +283,7 @@ class CandidateStatusUpdate(BaseModel):
     status: str
     reason: Optional[str] = None
     disposition_code: Optional[str] = None
+    skip_score_gate: bool = False  # Admin override for score/NMLS gates
 
 
 class JobPostingCreate(BaseModel):
@@ -547,10 +548,14 @@ async def update_candidate_status(
             updated_by=current_user.id,
             reason=data.reason,
             organization_id=current_user.organization_id,
-            disposition_code=data.disposition_code
+            disposition_code=data.disposition_code,
+            skip_score_gate=data.skip_score_gate,
         )
         return result
     except ValueError as e:
+        error_msg = str(e)
+        if "Cannot advance" in error_msg or "NMLS validation" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
         raise HTTPException(status_code=404, detail="Not found")
 
 
@@ -670,11 +675,16 @@ async def update_job_posting(
     db: Session = Depends(get_db)
 ):
     """Update a job posting."""
+    ALLOWED_FIELDS = {
+        "title", "summary", "description", "requirements", "responsibilities",
+        "benefits", "salary_min", "salary_max", "is_published", "is_remote",
+        "location", "employment_type", "expires_at"
+    }
     update_fields = []
     params = {"id": posting_id, "org_id": current_user.organization_id}
 
     for field, value in data.model_dump(exclude_unset=True).items():
-        if value is not None:
+        if value is not None and field in ALLOWED_FIELDS:
             update_fields.append(f"{field} = :{field}")
             params[field] = value
 
@@ -1273,13 +1283,14 @@ async def list_candidate_notes(
         FROM mm_candidate_notes n
         JOIN users u ON u.id = n.created_by
         WHERE n.candidate_id = :candidate_id
-        AND (:include_private = true OR n.is_private = false OR n.created_by = :user_id)
+        AND n.organization_id = :org_id
+        AND (n.is_private = false OR n.created_by = :user_id)
         ORDER BY n.created_at DESC
     """)
 
     results = db.execute(query, {
         "candidate_id": candidate_id,
-        "include_private": include_private,
+        "org_id": current_user.organization_id,
         "user_id": current_user.id
     }).fetchall()
 
@@ -1896,3 +1907,69 @@ async def get_adverse_impact_report(
         "ethnicity_analysis": analyze_groups(ethnicity_stats),
         "methodology": "4/5ths (80%) rule per EEOC Uniform Guidelines",
     }
+
+
+# =============================================================================
+# DATA RETENTION / CCPA ENDPOINTS
+# =============================================================================
+
+
+@router.post("/candidates/{candidate_id}/anonymize")
+async def anonymize_candidate(
+    candidate_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Anonymize a candidate's PII (CCPA right-to-delete). Admin only."""
+    if current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from services.recruit_retention_service import RecruitRetentionService
+    service = RecruitRetentionService(db)
+    try:
+        result = service.process_deletion_request(
+            candidate_id=candidate_id,
+            organization_id=current_user.organization_id,
+            requested_by=current_user.id,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/retention/report")
+async def get_retention_report(
+    retention_days: int = Query(365, ge=30, le=3650),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Preview candidates eligible for anonymization under retention policy."""
+    if current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from services.recruit_retention_service import RecruitRetentionService
+    service = RecruitRetentionService(db)
+    return service.enforce_candidate_retention(
+        organization_id=current_user.organization_id,
+        retention_days=retention_days,
+        dry_run=True,
+    )
+
+
+@router.post("/retention/enforce")
+async def enforce_retention(
+    retention_days: int = Query(365, ge=30, le=3650),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Execute retention enforcement — anonymize eligible candidates. Admin only."""
+    if current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    from services.recruit_retention_service import RecruitRetentionService
+    service = RecruitRetentionService(db)
+    return service.enforce_candidate_retention(
+        organization_id=current_user.organization_id,
+        retention_days=retention_days,
+        dry_run=False,
+    )
