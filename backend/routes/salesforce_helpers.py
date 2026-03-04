@@ -300,29 +300,51 @@ def refresh_and_retry_on_401(
 # =============================================================================
 
 def get_current_user_id(request: Request, db: Session = None) -> Optional[int]:
-    """Extract user ID from JWT token in request."""
+    """Extract user ID from JWT token in request.
+
+    Tries RS256 (canonical secure token) first, falls back to HS256 for
+    backward compatibility with older clients.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header[7:]
+
+    # Try RS256 canonical auth first (preferred)
     try:
-        import jwt
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            secret_key = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(
-                token,
-                secret_key,
-                algorithms=["HS256"],
-                options={"verify_aud": False, "verify_iss": False}
-            )
+        from auth.tokens import _verify_secure_token
+        payload = _verify_secure_token(token)
+        if payload:
+            user_id = payload.get("user_id")
+            if user_id:
+                return user_id
             email = payload.get("sub")
             if email and db:
-                # Look up user by email
                 result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
                 if result:
                     return result[0]
-            # Fallback: try to get user_id from payload
-            return payload.get("user_id")
-    except SQLAlchemyError as e:
-        logger.warning(f"Failed to extract user ID: {e}")
+    except Exception:
+        pass  # Fall through to HS256
+
+    # Fallback: HS256 legacy tokens
+    try:
+        import jwt
+        secret_key = os.getenv("SECRET_KEY", "")
+        payload = jwt.decode(
+            token,
+            secret_key,
+            algorithms=["HS256"],
+            options={"verify_aud": False, "verify_iss": False}
+        )
+        email = payload.get("sub")
+        if email and db:
+            result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": email}).fetchone()
+            if result:
+                return result[0]
+        return payload.get("user_id")
+    except Exception as e:
+        logger.warning(f"Failed to extract user ID from token: {e}")
     return None
 
 

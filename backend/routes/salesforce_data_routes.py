@@ -157,7 +157,7 @@ async def import_closed_loans(
 
         # Get user's organization
         user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-        org_id = user_org[0] if user_org and user_org[0] else 1
+        org_id = user_org[0] if user_org and user_org[0] else None
 
         # Field mapping - try to map common Salesforce fields to our loan fields
         field_mapping = {
@@ -316,7 +316,7 @@ async def push_loan_to_salesforce(
 
     # Get user's organization
     user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-    org_id = user_org[0] if user_org and user_org[0] else 1
+    org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
     success, action, result_data = sync_service.push_loan(
@@ -386,7 +386,7 @@ async def push_loans_batch_to_salesforce(
 
     # Get user's organization
     user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-    org_id = user_org[0] if user_org and user_org[0] else 1
+    org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
     result = sync_service.push_loans_batch(
@@ -425,7 +425,7 @@ async def get_pending_push_loans(
 
     # Get user's organization
     user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-    org_id = user_org[0] if user_org and user_org[0] else 1
+    org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
     loans = sync_service.get_pushable_loans(limit=limit)
@@ -524,7 +524,7 @@ async def pull_loan_from_salesforce(
 
     # Get user's organization
     user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-    org_id = user_org[0] if user_org and user_org[0] else 1
+    org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
     success, message, updated_data = sync_service.pull_loan(

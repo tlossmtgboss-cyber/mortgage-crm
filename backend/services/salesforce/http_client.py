@@ -95,6 +95,11 @@ async def sf_request(
                 json=json,
                 timeout=request_timeout
             )
+            # Track Salesforce API quota from Sforce-Limit-Info header
+            # Format: "api-usage=25/15000"
+            limit_info = response.headers.get('Sforce-Limit-Info', '')
+            if limit_info:
+                _track_api_usage(limit_info)
             return response
         except httpx.TimeoutException as e:
             logger.error(f"Salesforce API timeout after {request_timeout}s: {method} {url[:100]}")
@@ -102,3 +107,33 @@ async def sf_request(
         except httpx.HTTPError as e:
             logger.error(f"Salesforce API error: {method} {url[:100]} - {e}")
             raise
+
+
+# Module-level API usage tracking
+_last_api_usage = {'used': 0, 'limit': 15000}
+
+
+def _track_api_usage(limit_info: str):
+    """Parse and track Salesforce API usage from Sforce-Limit-Info header."""
+    global _last_api_usage
+    try:
+        # Format: "api-usage=25/15000"
+        parts = limit_info.split('=')
+        if len(parts) == 2:
+            usage_parts = parts[1].split('/')
+            if len(usage_parts) == 2:
+                used = int(usage_parts[0])
+                limit = int(usage_parts[1])
+                _last_api_usage = {'used': used, 'limit': limit}
+                pct = (used / limit * 100) if limit > 0 else 0
+                if pct > 80:
+                    logger.warning(f"Salesforce API quota at {pct:.1f}%: {used}/{limit}")
+                elif pct > 50:
+                    logger.info(f"Salesforce API usage: {used}/{limit} ({pct:.1f}%)")
+    except (ValueError, IndexError):
+        pass
+
+
+def get_api_usage() -> dict:
+    """Get the last known Salesforce API usage stats."""
+    return _last_api_usage.copy()

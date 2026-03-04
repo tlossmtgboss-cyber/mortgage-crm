@@ -409,7 +409,7 @@ async def admin_pull_recent_loans(
 
         # Get user's organization
         user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-        org_id = user_org[0] if user_org and user_org[0] else 1
+        org_id = user_org[0] if user_org and user_org[0] else None
 
         # Import the records using the sync service
         from services.salesforce_sync_service import get_salesforce_sync_service, DEFAULT_FIELD_MAPPING
@@ -447,8 +447,9 @@ async def admin_pull_recent_loans(
                         # Apply transforms
                         if transform == "decimal" and value:
                             try:
-                                value = float(value)
-                            except Exception as e:
+                                from decimal import Decimal as _Dec, InvalidOperation as _InvOp
+                                value = float(_Dec(str(value)))
+                            except (ValueError, TypeError, _InvOp) as e:
                                 logger.error(f"Error in _run_import_job (decimal transform): {e}")
                         elif transform == "date" and value:
                             try:
@@ -629,8 +630,9 @@ async def sync_salesforce_and_import_mum(
                                         value = record[sf_field]
                                         if transform == "decimal":
                                             try:
-                                                value = float(value)
-                                            except Exception as e:
+                                                from decimal import Decimal as _Dec, InvalidOperation as _InvOp
+                                                value = float(_Dec(str(value)))
+                                            except (ValueError, TypeError, _InvOp) as e:
                                                 logger.error(f"Error in sync_salesforce_and_import_mum (decimal transform): {e}")
                                                 continue
                                         elif transform == "date":
@@ -655,14 +657,20 @@ async def sync_salesforce_and_import_mum(
                                     loan_data['stage'] = 'FUNDED'
 
                                 if existing:
-                                    update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k != 'salesforce_id'])
+                                    # Exclude ownership fields from dynamic UPDATE to prevent tenant manipulation
+                                    _excluded_update = {'salesforce_id', 'organization_id', 'loan_officer_id'}
+                                    update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k not in _excluded_update])
                                     db.execute(text(f"""
                                         UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
                                         WHERE salesforce_id = :salesforce_id
                                     """), loan_data)
                                     results['salesforce_sync']['updated'] += 1
                                 else:
-                                    loan_data['organization_id'] = 1
+                                    # Get org_id from the authenticated user
+                                    _user_org = db.execute(text(
+                                        "SELECT organization_id FROM users WHERE id = :uid"
+                                    ), {"uid": user_id}).fetchone()
+                                    loan_data['organization_id'] = _user_org[0] if _user_org and _user_org[0] else None
                                     columns = ", ".join(loan_data.keys())
                                     placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
                                     db.execute(text(f"""
@@ -705,8 +713,9 @@ async def sync_salesforce_and_import_mum(
                     client_name = f"Client - {loan[1]}"
 
                 close_date = loan[5] or loan[6]  # funded_date or closing_date
-                loan_amount = float(loan[3]) if loan[3] else 0
-                loan_rate = float(loan[4]) if loan[4] else 0
+                from decimal import Decimal as _Dec
+                loan_amount = float(_Dec(str(loan[3]))) if loan[3] else 0
+                loan_rate = float(_Dec(str(loan[4]))) if loan[4] else 0
 
                 db.execute(text("""
                     INSERT INTO mum_clients (
@@ -847,7 +856,7 @@ async def sync_all_loans_from_salesforce(
 
     # Get user's organization
     user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
-    org_id = user_org[0] if user_org and user_org[0] else 1
+    org_id = user_org[0] if user_org and user_org[0] else None
 
     try:
         headers = {

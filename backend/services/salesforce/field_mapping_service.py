@@ -266,7 +266,7 @@ class FieldMappingService:
         if transform_type == TransformType.STAGE_MAP.value:
             return {
                 'mappings': DEFAULT_STAGE_MAPPINGS,
-                'default': 'LEAD'
+                'default': 'APPLICATION'
             }
 
         elif transform_type == TransformType.PICKLIST_MAP.value:

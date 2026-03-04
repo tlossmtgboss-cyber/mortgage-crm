@@ -40,6 +40,38 @@ from .http_client import get_sf_client, SF_TIMEOUT
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_soql_string(value: str) -> str:
+    """Escape a string value for safe interpolation into SOQL queries.
+
+    Prevents SOQL injection by escaping special characters.
+    Also validates basic format for email addresses.
+    """
+    import re
+    if not value or not isinstance(value, str):
+        return ''
+    # Strip whitespace and reject values with control characters
+    value = value.strip()
+    if re.search(r'[\x00-\x1f\x7f]', value):
+        return ''
+    # SOQL escaping: single quotes, backslashes
+    value = value.replace('\\', '\\\\')
+    value = value.replace("'", "\\'")
+    return value
+
+
+def _sanitize_soql_email(email: str) -> str:
+    """Sanitize and validate an email for SOQL interpolation."""
+    import re
+    if not email or not isinstance(email, str):
+        return ''
+    email = email.strip()
+    # Basic email format validation
+    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        logger.warning(f"Invalid email format rejected for SOQL query: {email!r}")
+        return ''
+    return _sanitize_soql_string(email)
+
+
 class SyncResult:
     """Result of a sync operation"""
     def __init__(self):
@@ -64,6 +96,11 @@ class SyncResult:
 class SalesforceSyncService:
     """Handles bidirectional data synchronization"""
 
+    # Circuit breaker: max consecutive failures before auto-disabling sync
+    MAX_CONSECUTIVE_FAILURES = 5
+    # Cooldown period after circuit opens (minutes)
+    CIRCUIT_COOLDOWN_MINUTES = 30
+
     async def sync(
         self,
         db: Session,
@@ -85,6 +122,28 @@ class SalesforceSyncService:
 
             if not profile or profile.status != 'active':
                 raise ValueError("Integration is not active")
+
+            # Circuit breaker: check consecutive failure count
+            consecutive_failures = (profile.sync_metadata or {}).get('consecutive_failures', 0)
+            last_failure_at = (profile.sync_metadata or {}).get('last_failure_at')
+            if consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
+                # Check if cooldown has elapsed
+                if last_failure_at:
+                    cooldown_until = datetime.fromisoformat(last_failure_at) + timedelta(minutes=self.CIRCUIT_COOLDOWN_MINUTES)
+                    if datetime.utcnow() < cooldown_until:
+                        logger.warning(
+                            f"Circuit breaker OPEN for profile {integration_profile_id}: "
+                            f"{consecutive_failures} consecutive failures, cooldown until {cooldown_until.isoformat()}"
+                        )
+                        result.errors.append({
+                            'error': f'Circuit breaker open: {consecutive_failures} consecutive failures',
+                            'cooldown_until': cooldown_until.isoformat(),
+                        })
+                        return result
+                    else:
+                        logger.info(f"Circuit breaker half-open for profile {integration_profile_id}: attempting retry after cooldown")
+                else:
+                    logger.info(f"Circuit breaker half-open (no timestamp): attempting retry")
 
             # Get access token
             access_token, instance_url = await salesforce_oauth.get_access_token(
@@ -146,9 +205,13 @@ class SalesforceSyncService:
                 result.records_failed += object_result.records_failed
                 result.errors.extend(object_result.errors)
 
-            # Update profile
+            # Update profile — reset circuit breaker on success
             profile.last_sync_at = datetime.utcnow()
             profile.last_error = None
+            metadata = profile.sync_metadata or {}
+            metadata['consecutive_failures'] = 0
+            metadata.pop('last_failure_at', None)
+            profile.sync_metadata = metadata
             db.commit()
 
             # Backfill organization_id for any records missing it
@@ -199,12 +262,21 @@ class SalesforceSyncService:
             )
             db.add(event)
 
-            # Update profile with error
+            # Update profile with error — increment circuit breaker counter
             profile = db.query(IntegrationProfile).filter(
                 IntegrationProfile.id == integration_profile_id
             ).first()
             if profile:
                 profile.last_error = str(e)
+                metadata = profile.sync_metadata or {}
+                metadata['consecutive_failures'] = metadata.get('consecutive_failures', 0) + 1
+                metadata['last_failure_at'] = datetime.utcnow().isoformat()
+                profile.sync_metadata = metadata
+                if metadata['consecutive_failures'] >= self.MAX_CONSECUTIVE_FAILURES:
+                    logger.error(
+                        f"Circuit breaker TRIPPED for profile {integration_profile_id}: "
+                        f"{metadata['consecutive_failures']} consecutive failures"
+                    )
             db.commit()
 
             raise
@@ -565,6 +637,12 @@ class SalesforceSyncService:
         user_id = profile.user_id
         salesforce_id = data.pop('salesforce_id', None)
 
+        # Get org_id for multi-tenant scoping
+        user_row = db.execute(sa_text(
+            "SELECT organization_id FROM users WHERE id = :uid"
+        ), {"uid": user_id}).fetchone()
+        org_id = user_row[0] if user_row else None
+
         # Extract email for cross-table lookup
         email = (
             data.get('email')
@@ -577,7 +655,7 @@ class SalesforceSyncService:
         bucket = self._classify_record_bucket(data)
 
         # --- Step 2: Find if this record already exists anywhere ---
-        existing = self._find_existing_record(db, salesforce_id, email, user_id)
+        existing = self._find_existing_record(db, salesforce_id, email, user_id, org_id)
 
         logger.info(
             f"Smart routing: sf_id={salesforce_id}, target_entity={target_entity}, "
@@ -744,14 +822,22 @@ class SalesforceSyncService:
         """), {"user_id": user_id}).fetchone()
         org_id = user_row.organization_id if user_row else None
 
-        # Check if lead exists by salesforce_id or email
+        # Check if lead exists by salesforce_id or email (org-scoped)
         existing = None
         if salesforce_id:
-            existing = db.execute(text("""
-                SELECT id FROM leads
-                WHERE salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id
-                LIMIT 1
-            """), {"sf_id": salesforce_id}).fetchone()
+            if org_id:
+                existing = db.execute(text("""
+                    SELECT id FROM leads
+                    WHERE (salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id)
+                        AND organization_id = :org_id
+                    LIMIT 1
+                """), {"sf_id": salesforce_id, "org_id": org_id}).fetchone()
+            else:
+                existing = db.execute(text("""
+                    SELECT id FROM leads
+                    WHERE salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id
+                    LIMIT 1
+                """), {"sf_id": salesforce_id}).fetchone()
 
         if not existing and data.get('email'):
             existing = db.execute(text("""
@@ -922,12 +1008,20 @@ class SalesforceSyncService:
         # If so, promote the lead to a loan instead of creating a duplicate.
         # Skipped when called from _promote_lead_to_loan to prevent recursion.
         if not existing and salesforce_id and not _skip_cross_table:
-            lead_row = db.execute(text("""
-                SELECT id FROM leads
-                WHERE salesforce_id = :sf_id
-                   OR meta_data->>'salesforce_id' = :sf_id
-                LIMIT 1
-            """), {"sf_id": salesforce_id}).fetchone()
+            if org_id:
+                lead_row = db.execute(text("""
+                    SELECT id FROM leads
+                    WHERE (salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id)
+                        AND organization_id = :org_id
+                    LIMIT 1
+                """), {"sf_id": salesforce_id, "org_id": org_id}).fetchone()
+            else:
+                lead_row = db.execute(text("""
+                    SELECT id FROM leads
+                    WHERE salesforce_id = :sf_id
+                       OR meta_data->>'salesforce_id' = :sf_id
+                    LIMIT 1
+                """), {"sf_id": salesforce_id}).fetchone()
 
             if lead_row:
                 logger.info(
@@ -956,8 +1050,15 @@ class SalesforceSyncService:
         # Map stage from Salesforce — capture raw value for audit
         if data.get('stage'):
             raw_stage = data['stage']
-            data['stage'] = self._map_salesforce_stage(raw_stage)
+            mapped = self._map_salesforce_stage(raw_stage)
             data['salesforce_raw_stage'] = raw_stage
+            if mapped:
+                data['stage'] = mapped
+            else:
+                # Unmapped stage: remove from data so existing stage is preserved on updates,
+                # or APPLICATION default applies on creates (line 1088)
+                del data['stage']
+                logger.warning(f"Unmapped Salesforce stage '{raw_stage}' — preserving existing CRM stage")
 
         # Filter to only valid loan columns, drop empty values (keep amount even if 0)
         loan_data = {}
@@ -985,6 +1086,31 @@ class SalesforceSyncService:
             old_stage = old_stage_row[0] if old_stage_row else None
             loan_number = old_stage_row[1] if old_stage_row else None
 
+            # Pre-write reconciliation: validate stage transition before writing
+            new_stage = loan_data.get('stage')
+            reconciliation_result = None
+            if new_stage and new_stage != old_stage:
+                try:
+                    from services.loan_reconciliation_service import LoanReconciliationService, ReconciliationAction
+                    recon = LoanReconciliationService(db)
+                    reconciliation_result = recon.reconcile(
+                        loan_id,
+                        old_data={"stage": old_stage, "loan_number": loan_number},
+                        new_data={"stage": new_stage, "salesforce_raw_stage": loan_data.get('salesforce_raw_stage')},
+                    )
+                    if reconciliation_result.action == ReconciliationAction.SKIP:
+                        # Idempotent or duplicate — don't overwrite stage
+                        loan_data.pop('stage', None)
+                        new_stage = None
+                        logger.info(f"Reconciliation SKIP for loan {loan_id}: {reconciliation_result.audit_metadata}")
+                    elif reconciliation_result.action == ReconciliationAction.FLAG_FOR_REVIEW:
+                        # Don't apply stage change; disposition task already created by reconciliation
+                        loan_data.pop('stage', None)
+                        new_stage = None
+                        logger.info(f"Reconciliation FLAG_FOR_REVIEW for loan {loan_id}")
+                except Exception as e:
+                    logger.warning(f"Pre-write reconciliation failed for loan {loan_id}, proceeding with write: {e}")
+
             set_parts = [f"{k} = :{k}" for k in loan_data.keys()]
             set_parts.append("salesforce_id = :salesforce_id")
             set_parts.append("organization_id = COALESCE(organization_id, :org_id)")
@@ -1001,7 +1127,6 @@ class SalesforceSyncService:
             logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
 
             # Wire to SLA tracking — detect stage changes
-            new_stage = loan_data.get('stage')
             if new_stage and new_stage != old_stage:
                 try:
                     from services.sla_tracking_service import track_loan_stage_change
@@ -1013,7 +1138,7 @@ class SalesforceSyncService:
                     logger.warning(f"SLA tracking hook failed for loan {loan_id} stage change: {e}")
 
                 # MUM promotion: if stage just changed to FUNDED, promote to MUM client
-                if new_stage == 'FUNDED':
+                if new_stage == 'FUNDED' or (reconciliation_result and reconciliation_result.should_promote_mum):
                     self._try_mum_promotion(db, loan_id, user_id)
 
             return loan_id
@@ -1062,72 +1187,14 @@ class SalesforceSyncService:
             return loan_id
 
     def _map_salesforce_stage(self, sf_stage: str) -> str:
-        """Map Salesforce Opportunity stage to CRM loan stage (UPPERCASE enum values)"""
-        stage_mapping = {
-            # Common Salesforce stages
-            'Prospecting': 'APPLICATION',
-            'Qualification': 'APPLICATION',
-            'Needs Analysis': 'APPLICATION',
-            'Value Proposition': 'PROCESSING',
-            'Id. Decision Makers': 'PROCESSING',
-            'Perception Analysis': 'PROCESSING',
-            'Proposal/Price Quote': 'SUBMITTED',
-            'Negotiation/Review': 'UNDERWRITING',
-            'Closed Won': 'FUNDED',
-            'Closed Lost': 'CANCELLED',
-            # Mortgage-specific stages
-            'Application': 'APPLICATION',
-            'Started': 'APPLICATION',
-            'File Started': 'APPLICATION',
-            'Disclosed': 'DISCLOSED',
-            'LE Sent': 'DISCLOSED',
-            'Processing': 'PROCESSING',
-            'Processed': 'PROCESSING',
-            'In Processing': 'PROCESSING',
-            'Loan in Process': 'PROCESSING',
-            'Submitted': 'SUBMITTED',
-            'Submitted to UW': 'SUBMITTED',
-            'Submitted to Underwriting': 'SUBMITTED',
-            'Underwriting': 'UNDERWRITING',
-            'In Underwriting': 'UNDERWRITING',
-            'UW Review': 'UW_RECEIVED',
-            'UW Received': 'UW_RECEIVED',
-            'Conditional Approval': 'CONDITIONAL_APPROVAL',
-            'Conditionally Approved': 'CONDITIONAL_APPROVAL',
-            'Cond. Approved': 'CONDITIONAL_APPROVAL',
-            'Approved with Conditions': 'CONDITIONAL_APPROVAL',
-            'Approved': 'APPROVED',
-            'Conditions Cleared': 'APPROVED',
-            'Clear to Close': 'CLEAR_TO_CLOSE',
-            'CTC': 'CLEAR_TO_CLOSE',
-            'Closing': 'CLOSING',
-            'Closing Scheduled': 'CLOSING',
-            'Docs Drawing': 'DOCS',
-            'Doc Preparation': 'DOCS',
-            'Docs Out': 'DOCS_OUT',
-            'Docs Signing': 'DOCS_OUT',
-            'Docs Signed': 'DOCS_OUT',
-            'Funded': 'FUNDED',
-            'Loan Funded': 'FUNDED',
-            'Closed': 'FUNDED',
-            'Closed Won': 'FUNDED',
-            'Closed - Converted': 'FUNDED',
-            'Completed': 'FUNDED',
-            'Purchased': 'FUNDED',
-            'File Complete': 'FUNDED',
-            'Post-Closing': 'FUNDED',
-            'Post-Funding': 'FUNDED',
-            'Loan Sold': 'FUNDED',
-            'Settled': 'FUNDED',
-            # Terminal
-            'Cancelled': 'CANCELLED',
-            'Withdrawn': 'WITHDRAWN',
-            'Denied': 'DENIED',
-            'Dead': 'DEAD',
-            'Inactive': 'DEAD',
-            'Suspended': 'SUSPENDED',
-        }
-        return stage_mapping.get(sf_stage, 'APPLICATION')
+        """Map Salesforce Opportunity stage to CRM loan stage (UPPERCASE enum values).
+
+        Returns None for unmapped stages so callers can handle appropriately
+        (preserve existing stage on updates, default to APPLICATION on creates).
+        Uses the canonical shared mapping from stage_mapping.py.
+        """
+        from .stage_mapping import map_salesforce_stage
+        return map_salesforce_stage(sf_stage)
 
     def _group_mappings_by_object(
         self,
@@ -1399,7 +1466,7 @@ class SalesforceSyncService:
                        Description, Website, Fax,
                        CreatedDate, LastModifiedDate
                 FROM Lead
-                WHERE Email = '{email}'
+                WHERE Email = '{_sanitize_soql_email(email)}'
                 LIMIT 1
             """
 
@@ -1430,7 +1497,7 @@ class SalesforceSyncService:
                        Description, Fax, LeadSource,
                        CreatedDate, LastModifiedDate
                 FROM Contact
-                WHERE Email = '{email}'
+                WHERE Email = '{_sanitize_soql_email(email)}'
                 LIMIT 1
             """
 
@@ -1471,7 +1538,7 @@ class SalesforceSyncService:
 
         async with get_sf_client() as client:
             # First find the Contact by email
-            contact_query = f"SELECT Id, AccountId FROM Contact WHERE Email = '{email}' LIMIT 1"
+            contact_query = f"SELECT Id, AccountId FROM Contact WHERE Email = '{_sanitize_soql_email(email)}' LIMIT 1"
 
             response = await client.get(
                 f"{instance_url}/services/data/v59.0/query",
@@ -1706,11 +1773,15 @@ class SalesforceSyncService:
 
             update_fields[crm_column] = value
 
-        # Stage mapping (special handling)
+        # Stage mapping (special handling — None means unmapped, preserve existing)
         if sf_record.get('StageName'):
             raw_stage = sf_record['StageName']
-            update_fields['stage'] = self._map_salesforce_stage(raw_stage)
+            mapped_stage = self._map_salesforce_stage(raw_stage)
             update_fields['salesforce_raw_stage'] = raw_stage
+            if mapped_stage:
+                update_fields['stage'] = mapped_stage
+            else:
+                logger.warning(f"Unmapped SF stage '{raw_stage}' for loan {loan_id} — preserving existing stage")
 
         # Always update salesforce_id
         update_fields['salesforce_id'] = sf_id
@@ -1739,12 +1810,22 @@ class SalesforceSyncService:
         # MUM promotion: if stage just changed to FUNDED, promote
         new_stage = update_fields.get('stage')
         if new_stage == 'FUNDED' and old_stage != 'FUNDED':
-            # Need user_id for MUM promotion — look it up from loan
             user_row = db.execute(text(
                 "SELECT loan_officer_id FROM loans WHERE id = :lid"
             ), {"lid": loan_id}).fetchone()
             if user_row and user_row[0]:
                 self._try_mum_promotion(db, loan_id, user_row[0])
+
+        # Compliance hook: check TRID timing when disclosure dates are synced
+        disclosure_fields = {'initial_disclosures_sent_date', 'cd_sent_to_borrower_date'}
+        if disclosure_fields & set(update_fields.keys()):
+            try:
+                from services.compliance_check_service import check_trid_timing_async
+                check_trid_timing_async(loan_id)
+            except ImportError:
+                pass  # Compliance service not available
+            except Exception as e:
+                logger.warning(f"TRID compliance check failed for loan {loan_id}: {e}")
 
         return True
 
@@ -1873,10 +1954,14 @@ class SalesforceSyncService:
         salesforce_id: Optional[str],
         email: Optional[str],
         user_id: int,
+        organization_id: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Search across leads, loans, and mum_clients for an existing record
         matching the given salesforce_id or email.
+
+        All salesforce_id lookups are scoped by organization_id when available
+        to prevent cross-tenant data leakage.
 
         Returns:
             Dict with {'table': 'leads'|'loans'|'mum_clients', 'id': int, 'stage': str}
@@ -1884,34 +1969,41 @@ class SalesforceSyncService:
         """
         from sqlalchemy import text as sa_text
 
-        # 1. Check loans by salesforce_id
+        # Build org filter clause for salesforce_id lookups
+        org_filter = "AND organization_id = :org_id" if organization_id else ""
+        params_base = {"org_id": organization_id} if organization_id else {}
+
+        # 1. Check loans by salesforce_id (org-scoped)
         if salesforce_id:
-            row = db.execute(sa_text("""
+            params = {"sf_id": salesforce_id, **params_base}
+            row = db.execute(sa_text(f"""
                 SELECT id, stage FROM loans
-                WHERE salesforce_id = :sf_id
+                WHERE salesforce_id = :sf_id {org_filter}
                 LIMIT 1
-            """), {"sf_id": salesforce_id}).fetchone()
+            """), params).fetchone()
             if row:
                 return {"table": "loans", "id": row[0], "stage": row[1]}
 
-        # 2. Check leads by salesforce_id (column or meta_data)
+        # 2. Check leads by salesforce_id (org-scoped)
         if salesforce_id:
-            row = db.execute(sa_text("""
+            params = {"sf_id": salesforce_id, **params_base}
+            row = db.execute(sa_text(f"""
                 SELECT id, stage FROM leads
-                WHERE salesforce_id = :sf_id
-                   OR meta_data->>'salesforce_id' = :sf_id
+                WHERE (salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id)
+                    {org_filter}
                 LIMIT 1
-            """), {"sf_id": salesforce_id}).fetchone()
+            """), params).fetchone()
             if row:
                 return {"table": "leads", "id": row[0], "stage": row[1]}
 
-        # 3. Check mum_clients by salesforce_id
+        # 3. Check mum_clients by salesforce_id (org-scoped)
         if salesforce_id:
-            row = db.execute(sa_text("""
+            params = {"sf_id": salesforce_id, **params_base}
+            row = db.execute(sa_text(f"""
                 SELECT id FROM mum_clients
-                WHERE salesforce_id = :sf_id
+                WHERE salesforce_id = :sf_id {org_filter}
                 LIMIT 1
-            """), {"sf_id": salesforce_id}).fetchone()
+            """), params).fetchone()
             if row:
                 return {"table": "mum_clients", "id": row[0], "stage": None}
 
@@ -2330,7 +2422,7 @@ class SalesforceSyncService:
 
                         # Auto-promote to MUM if the new loan is already funded/closed
                         sf_stage = self._map_salesforce_stage(sf_opp.get('StageName', ''))
-                        if sf_stage == 'FUNDED' or sf_opp.get('CloseDate'):
+                        if sf_stage == 'FUNDED':
                             try:
                                 sf_id_val = sf_opp.get('Id')
                                 loan_row = db.execute(text(
@@ -3044,7 +3136,7 @@ class SalesforceSyncService:
 
         async with get_sf_client() as client:
             # First, search for Lead by email
-            lead_query = f"SELECT Id, FirstName, LastName, Email, Phone FROM Lead WHERE Email = '{email}' LIMIT 1"
+            lead_query = f"SELECT Id, FirstName, LastName, Email, Phone FROM Lead WHERE Email = '{_sanitize_soql_email(email)}' LIMIT 1"
             response = await client.get(
                 f"{instance_url}/services/data/v59.0/query",
                 params={"q": lead_query},
@@ -3065,7 +3157,7 @@ class SalesforceSyncService:
                     }
 
             # If no Lead found, search for Contact
-            contact_query = f"SELECT Id, FirstName, LastName, Email, Phone, AccountId FROM Contact WHERE Email = '{email}' LIMIT 1"
+            contact_query = f"SELECT Id, FirstName, LastName, Email, Phone, AccountId FROM Contact WHERE Email = '{_sanitize_soql_email(email)}' LIMIT 1"
             response = await client.get(
                 f"{instance_url}/services/data/v59.0/query",
                 params={"q": contact_query},

@@ -39,7 +39,7 @@ async def get_field_mappings(
         SELECT organization_id FROM users WHERE id = :user_id
     """), {"user_id": user_id}).fetchone()
 
-    org_id = user[0] if user and user[0] else 1
+    org_id = user[0] if user and user[0] else None
 
     mappings = db.execute(text("""
         SELECT id, salesforce_field, crm_field, transform_type, is_active
@@ -99,7 +99,7 @@ async def create_field_mapping(
         SELECT organization_id FROM users WHERE id = :user_id
     """), {"user_id": user_id}).fetchone()
 
-    org_id = user[0] if user and user[0] else 1
+    org_id = user[0] if user and user[0] else None
 
     try:
         db.execute(text("""

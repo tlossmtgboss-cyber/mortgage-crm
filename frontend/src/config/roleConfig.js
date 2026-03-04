@@ -915,11 +915,12 @@ export const MASTER_ADMIN_NAVIGATION = [
     key: 'operations',
     label: 'Operations',
     path: '/smart-docs',
-    matchPaths: ['/smart-docs', '/closed-loans', '/ai-underwriter'],
+    matchPaths: ['/smart-docs', '/closed-loans', '/ai-underwriter', '/ops-manager'],
     children: [
       { path: '/smart-docs', label: 'Smart Docs', icon: 'fa-file-alt', badgeKey: 'smartDocs', badgeClass: 'urgent' },
       { path: '/closed-loans', label: 'Closed Loans', icon: 'fa-check-circle' },
       { path: '/ai-underwriter', label: 'AI Underwriter', icon: 'fa-robot' },
+      { path: '/ops-manager', label: 'Ops Manager', icon: 'fa-clipboard-check' },
     ]
   },
   {

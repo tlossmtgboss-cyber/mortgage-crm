@@ -970,7 +970,7 @@ async def get_unified_tasks(
                     "title": task.title,
                     "description": task.description,
                     "client_name": client_name,
-                    "ai_confidence": int((task.ai_confidence or 0.5) * 100),
+                    "ai_confidence": task.ai_confidence if task.ai_confidence is not None else 50,
                     "ai_suggested_response": ai_response,
                     "priority": task.priority or "medium",
                     "due_date": task.due_date.isoformat() if task.due_date else None,

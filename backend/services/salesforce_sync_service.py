@@ -331,83 +331,11 @@ def validate_loan_field_name(field_name: str) -> str:
     return field_name
 
 
-# Stage mapping from Salesforce values to CRM LoanStage enum
-# Covers: standard SF stages, mortgage-specific stages, and Encompass milestones
-STAGE_MAPPING = {
-    # --- Application / Early ---
-    "New": "APPLICATION",
-    "Application": "APPLICATION",
-    "Application Received": "APPLICATION",
-    "Started": "APPLICATION",
-    "File Started": "APPLICATION",
-    "Disclosed": "DISCLOSED",
-    "LE Sent": "DISCLOSED",
-    # --- Processing ---
-    "Submitted": "PROCESSING",
-    "Processing": "PROCESSING",
-    "Processed": "PROCESSING",
-    "In Processing": "PROCESSING",
-    "Contract Received": "PROCESSING",
-    "Submitted to Processing": "PROCESSING",
-    "Loan in Process": "PROCESSING",
-    "Document Collection": "PROCESSING",
-    "Documents Requested": "PROCESSING",
-    "Documents Received": "PROCESSING",
-    "Appraisal Ordered": "PROCESSING",
-    "Appraisal Received": "PROCESSING",
-    "Insurance Ordered": "PROCESSING",
-    "Insurance Received": "PROCESSING",
-    "Title Ordered": "PROCESSING",
-    "Title Received": "PROCESSING",
-    # --- Submitted to UW ---
-    "Submitted to UW": "SUBMITTED",
-    "Submitted to Underwriting": "SUBMITTED",
-    # --- Underwriting ---
-    "Underwriting": "UNDERWRITING",
-    "In Underwriting": "UNDERWRITING",
-    "UW Review": "UW_RECEIVED",
-    "Underwriting Decision": "UW_RECEIVED",
-    "UW Received": "UW_RECEIVED",
-    "Received": "UW_RECEIVED",
-    # --- Approval ---
-    "Conditionally Approved": "CONDITIONAL_APPROVAL",
-    "Conditional Approval": "CONDITIONAL_APPROVAL",
-    "Cond. Approved": "CONDITIONAL_APPROVAL",
-    "Approved with Conditions": "CONDITIONAL_APPROVAL",
-    "Conditions Cleared": "APPROVED",
-    "Approved": "APPROVED",
-    # --- Clear to Close / Closing ---
-    "Clear to Close": "CLEAR_TO_CLOSE",
-    "CTC": "CLEAR_TO_CLOSE",
-    "Closing": "CLOSING",
-    "Closing Scheduled": "CLOSING",
-    "Closing Date": "CLOSING",
-    "Docs Drawing": "DOCS",
-    "Doc Preparation": "DOCS",
-    "Closing Docs Out": "DOCS_OUT",
-    "Docs Out": "DOCS_OUT",
-    "Docs Signing": "DOCS_OUT",
-    "Docs Signed": "DOCS_OUT",
-    # --- Funded ---
-    "Funded": "FUNDED",
-    "Loan Funded": "FUNDED",
-    "Closed": "FUNDED",
-    "Closed Won": "FUNDED",
-    "Post-Closing": "FUNDED",
-    "Purchased": "FUNDED",
-    "Completed": "FUNDED",
-    "File Complete": "FUNDED",
-    # --- Terminal / Special ---
-    "Cancelled": "CANCELLED",
-    "Withdrawn": "WITHDRAWN",
-    "Denied": "DENIED",
-    "Rejected": "DENIED",
-    "Dead": "DEAD",
-    "Inactive": "DEAD",
-    "Does Not Qualify": "DOES_NOT_QUALIFY",
-    "Suspended": "SUSPENDED",
-    "Nurture": "NURTURE",
-}
+# Import the canonical stage mapping from the shared module
+from services.salesforce.stage_mapping import SALESFORCE_STAGE_MAPPING, map_salesforce_stage
+
+# Legacy alias — use the canonical shared mapping
+STAGE_MAPPING = SALESFORCE_STAGE_MAPPING
 
 # Reverse stage mapping (CRM stage -> Salesforce status)
 REVERSE_STAGE_MAPPING = {
@@ -477,7 +405,7 @@ DEFAULT_OUTBOUND_MAPPING = {
 class SalesforceSyncService:
     """Service for syncing Salesforce data to the CRM."""
 
-    def __init__(self, db: Session, user_id: Optional[int] = None, organization_id: int = 1):
+    def __init__(self, db: Session, user_id: Optional[int] = None, organization_id: Optional[int] = None):
         self.db = db
         self.user_id = user_id
         self.organization_id = organization_id
@@ -889,7 +817,7 @@ class SalesforceSyncService:
                     text("SELECT loan_officer_id FROM loans WHERE id = :loan_id"),
                     {"loan_id": loan_id}
                 ).fetchone()
-                owner_id = loan_owner[0] if loan_owner and loan_owner[0] else 1
+                owner_id = loan_owner[0] if loan_owner and loan_owner[0] else self.user_id
 
                 # Fire async task creation (non-blocking)
                 asyncio.create_task(SLATaskHookService.on_loan_updated(
@@ -1008,6 +936,41 @@ class SalesforceSyncService:
                 return result
 
         result.records_processed = len(records)
+        event_type = payload.get("event_type", "updated")
+
+        # Handle deleted records — soft-delete by marking stage as CANCELLED
+        if event_type == "deleted":
+            for sf_record in records:
+                try:
+                    sf_id = sf_record.get("Id")
+                    if not sf_id:
+                        continue
+                    # Scope by user_id when available to prevent cross-tenant deletes
+                    if self.user_id:
+                        loan_row = self.db.execute(text(
+                            "SELECT id, stage FROM loans WHERE salesforce_id = :sf_id AND loan_officer_id = :uid LIMIT 1"
+                        ), {"sf_id": sf_id, "uid": self.user_id}).fetchone()
+                    else:
+                        loan_row = self.db.execute(text(
+                            "SELECT id, stage FROM loans WHERE salesforce_id = :sf_id LIMIT 1"
+                        ), {"sf_id": sf_id}).fetchone()
+                    if loan_row and loan_row[1] not in ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD'):
+                        self.db.execute(text("""
+                            UPDATE loans SET stage = 'CANCELLED',
+                                salesforce_raw_stage = 'DELETED_IN_SF',
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :lid
+                        """), {"lid": loan_row[0]})
+                        result.records_updated += 1
+                        logger.info(f"Soft-deleted loan {loan_row[0]} (SF record {sf_id} deleted)")
+                    else:
+                        result.records_failed += 1
+                except Exception as e:
+                    result.records_failed += 1
+                    logger.error(f"Error handling SF delete for {sf_record.get('Id')}: {e}")
+            self.db.commit()
+            self.log_sync_event(result, payload)
+            return result
 
         for sf_record in records:
             try:
@@ -1663,6 +1626,6 @@ class SalesforceSyncService:
 _sync_service = None
 
 
-def get_salesforce_sync_service(db: Session, user_id: Optional[int] = None, organization_id: int = 1) -> SalesforceSyncService:
+def get_salesforce_sync_service(db: Session, user_id: Optional[int] = None, organization_id: Optional[int] = None) -> SalesforceSyncService:
     """Get or create the Salesforce sync service."""
     return SalesforceSyncService(db, user_id, organization_id)
