@@ -44,14 +44,19 @@ class RecruitPortalService:
     def create_portal_workspace(
         self,
         candidate_id: int,
-        slug: Optional[str] = None
+        slug: Optional[str] = None,
+        organization_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Create a portal workspace for a candidate."""
         with SessionLocal() as conn:
-            # Get candidate info for auto-slug generation
+            # Get candidate info for auto-slug generation (with org filter if provided)
+            org_filter = "AND organization_id = :org_id" if organization_id else ""
+            params = {"id": candidate_id}
+            if organization_id:
+                params["org_id"] = organization_id
             result = conn.execute(
-                text("SELECT first_name, last_name FROM mm_candidates WHERE id = :id"),
-                {"id": candidate_id}
+                text(f"SELECT first_name, last_name FROM mm_candidates WHERE id = :id AND is_active = true {org_filter}"),
+                params
             )
             candidate = result.fetchone()
 
@@ -110,7 +115,7 @@ class RecruitPortalService:
         }
 
     def get_portal_by_slug(self, slug: str, token: Optional[str] = None) -> Optional[PortalData]:
-        """Get portal data by slug, optionally validating token."""
+        """Get portal data by slug, validating token when provided."""
         with SessionLocal() as conn:
             # Get portal and candidate info
             result = conn.execute(
@@ -128,6 +133,19 @@ class RecruitPortalService:
 
         if not row:
             return None
+
+        # Validate token when provided
+        if token:
+            with SessionLocal() as conn:
+                token_row = conn.execute(
+                    text("""
+                        SELECT id FROM recruit_portal_tokens
+                        WHERE workspace_id = :ws_id AND token = :token
+                    """),
+                    {"ws_id": row.workspace_id, "token": token}
+                ).fetchone()
+                if not token_row:
+                    return None
 
         # Get recruiter info if referrer exists
         recruiter_name = None
@@ -189,14 +207,19 @@ class RecruitPortalService:
     def get_company_updates(
         self,
         limit: int = 10,
-        category: Optional[str] = None
+        category: Optional[str] = None,
+        organization_id: Optional[int] = None
     ) -> List[Dict]:
         """Get company updates for the portal."""
         params = {"limit": limit}
         category_filter = ""
+        org_filter = ""
         if category:
             category_filter = "AND category = :category"
             params["category"] = category
+        if organization_id:
+            org_filter = "AND (organization_id = :org_id OR organization_id IS NULL)"
+            params["org_id"] = organization_id
 
         with SessionLocal() as conn:
             result = conn.execute(
@@ -206,6 +229,7 @@ class RecruitPortalService:
                     FROM recruit_company_updates
                     WHERE published_at IS NOT NULL
                     {category_filter}
+                    {org_filter}
                     ORDER BY is_featured DESC, published_at DESC
                     LIMIT :limit
                 """),
@@ -233,15 +257,16 @@ class RecruitPortalService:
         category: str = "news",
         media_url: Optional[str] = None,
         is_featured: bool = False,
-        created_by: int = 1
+        created_by: int = 1,
+        organization_id: Optional[int] = None
     ) -> Dict:
         """Create a new company update."""
         with SessionLocal() as conn:
             result = conn.execute(
                 text("""
                     INSERT INTO recruit_company_updates
-                    (title, content, media_url, category, is_featured, published_at, created_by)
-                    VALUES (:title, :content, :media_url, :category, :is_featured, NOW(), :created_by)
+                    (title, content, media_url, category, is_featured, published_at, created_by, organization_id)
+                    VALUES (:title, :content, :media_url, :category, :is_featured, NOW(), :created_by, :org_id)
                     RETURNING id
                 """),
                 {
@@ -250,7 +275,8 @@ class RecruitPortalService:
                     "media_url": media_url,
                     "category": category,
                     "is_featured": is_featured,
-                    "created_by": created_by
+                    "created_by": created_by,
+                    "org_id": organization_id
                 }
             )
             update_id = result.fetchone().id

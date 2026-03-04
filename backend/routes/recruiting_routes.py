@@ -932,20 +932,28 @@ async def send_interview_notifications(
     # Send to candidate
     if "candidate" in data.recipients and interview.candidate_email:
         if data.send_email:
+            safe_first = html_mod.escape(str(interview.first_name or ''))
+            safe_title = html_mod.escape(str(interview_title))
+            safe_date = html_mod.escape(formatted_date)
+            safe_time = html_mod.escape(formatted_time)
+            safe_tz = html_mod.escape(str(interview.timezone or ''))
+            safe_location = html_mod.escape(str(interview.location or ''))
+            safe_link = html_mod.escape(str(interview.meeting_link or ''))
+
             subject = f"Interview Scheduled: {interview_title}"
             html_content = f"""
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #3b82f6;">Your Interview is Scheduled!</h2>
-                <p>Hello {interview.first_name},</p>
+                <p>Hello {safe_first},</p>
                 <p>Your interview has been scheduled. Here are the details:</p>
 
                 <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                    <p><strong>Interview Type:</strong> {interview_title}</p>
-                    <p><strong>Date:</strong> {formatted_date}</p>
-                    <p><strong>Time:</strong> {formatted_time} ({interview.timezone})</p>
+                    <p><strong>Interview Type:</strong> {safe_title}</p>
+                    <p><strong>Date:</strong> {safe_date}</p>
+                    <p><strong>Time:</strong> {safe_time} ({safe_tz})</p>
                     <p><strong>Duration:</strong> {interview.duration_minutes} minutes</p>
-                    {f'<p><strong>Location:</strong> {interview.location}</p>' if interview.location else ''}
-                    {f'<p><strong>Meeting Link:</strong> <a href="{interview.meeting_link}">{interview.meeting_link}</a></p>' if interview.meeting_link else ''}
+                    {f'<p><strong>Location:</strong> {safe_location}</p>' if interview.location else ''}
+                    {f'<p><strong>Meeting Link:</strong> <a href="{safe_link}">{safe_link}</a></p>' if interview.meeting_link else ''}
                 </div>
 
                 <p>Please make sure to:</p>
@@ -1813,7 +1821,10 @@ async def get_adverse_impact_report(
 
     Compares selection rates across demographic groups. A group's rate
     below 80% of the highest group's rate indicates potential adverse impact.
+    Restricted to admin/compliance roles.
     """
+    if current_user.role not in ("admin", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required for EEOC reports")
     org_id = current_user.organization_id
 
     try:

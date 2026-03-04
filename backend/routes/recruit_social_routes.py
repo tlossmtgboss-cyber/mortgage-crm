@@ -50,7 +50,7 @@ class SocialPostCreate(BaseModel):
 class OAuthCallbackRequest(BaseModel):
     code: str
     redirect_uri: str
-    state: Optional[str] = None
+    state: str  # Required: must match the state from the OAuth URL
 
 
 class LinkedInProfileEnrich(BaseModel):
@@ -97,6 +97,19 @@ async def facebook_oauth_callback(
     db: Session = Depends(get_db)
 ):
     """Exchange Facebook authorization code for access token."""
+    # Validate OAuth state to prevent CSRF
+    stored_state = db.execute(text("""
+        SELECT state FROM social_oauth_states
+        WHERE user_id = :user_id AND platform = 'facebook' AND state = :state
+          AND created_at > NOW() - INTERVAL '10 minutes'
+    """), {"user_id": current_user.id, "state": request.state}).fetchone()
+    if not stored_state:
+        logger.warning(f"OAuth state mismatch for user {current_user.id} on Facebook callback")
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    # Clean up used state
+    db.execute(text("DELETE FROM social_oauth_states WHERE user_id = :user_id AND platform = 'facebook'"),
+               {"user_id": current_user.id})
+
     try:
         token_data = await recruit_social_service.exchange_facebook_code(
             code=request.code,
@@ -139,6 +152,19 @@ async def linkedin_oauth_callback(
     db: Session = Depends(get_db)
 ):
     """Exchange LinkedIn authorization code for access token."""
+    # Validate OAuth state to prevent CSRF
+    stored_state = db.execute(text("""
+        SELECT state FROM social_oauth_states
+        WHERE user_id = :user_id AND platform = 'linkedin' AND state = :state
+          AND created_at > NOW() - INTERVAL '10 minutes'
+    """), {"user_id": current_user.id, "state": request.state}).fetchone()
+    if not stored_state:
+        logger.warning(f"OAuth state mismatch for user {current_user.id} on LinkedIn callback")
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
+    # Clean up used state
+    db.execute(text("DELETE FROM social_oauth_states WHERE user_id = :user_id AND platform = 'linkedin'"),
+               {"user_id": current_user.id})
+
     try:
         token_data = await recruit_social_service.exchange_linkedin_code(
             code=request.code,

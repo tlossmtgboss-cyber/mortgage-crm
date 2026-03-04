@@ -98,7 +98,8 @@ async def submit_quiz_responses(
         scores = recruit_assessment_service.submit_quiz_responses(
             candidate_id=candidate_id,
             submission=submission,
-            responded_by=current_user.id
+            responded_by=current_user.id,
+            organization_id=current_user.organization_id
         )
         return scores
     except Exception as e:
@@ -114,7 +115,7 @@ async def check_quiz_completed(
 ):
     """Check if a quiz has been completed for a specific disposition."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
-    completed = recruit_assessment_service.check_quiz_completed(candidate_id, disposition)
+    completed = recruit_assessment_service.check_quiz_completed(candidate_id, disposition, organization_id=current_user.organization_id)
     return {"completed": completed, "disposition": disposition}
 
 
@@ -130,7 +131,7 @@ async def get_candidate_scores(
 ):
     """Get assessment scores for a candidate."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
-    scores = recruit_assessment_service.get_candidate_scores(candidate_id)
+    scores = recruit_assessment_service.get_candidate_scores(candidate_id, organization_id=current_user.organization_id)
     if not scores:
         return AssessmentScores(candidate_id=candidate_id)
     return scores
@@ -144,7 +145,7 @@ async def get_score_breakdown(
 ):
     """Get detailed score breakdown with quiz history and recommendations."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
-    return recruit_assessment_service.get_score_breakdown(candidate_id)
+    return recruit_assessment_service.get_score_breakdown(candidate_id, organization_id=current_user.organization_id)
 
 
 @router.post("/candidates/{candidate_id}/scores/recalculate", response_model=AssessmentScores)
@@ -155,7 +156,7 @@ async def recalculate_scores(
 ):
     """Force recalculation of assessment scores from all quiz responses."""
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
-    return recruit_assessment_service.calculate_and_update_scores(candidate_id)
+    return recruit_assessment_service.calculate_and_update_scores(candidate_id, organization_id=current_user.organization_id)
 
 
 # =============================================================================
@@ -215,14 +216,17 @@ async def get_all_quiz_templates(current_user: User = Depends(get_current_user))
     _require_admin(current_user)
     from database import engine
 
+    org_id = current_user.organization_id
     with engine.connect() as conn:
         result = conn.execute(
             text("""
                 SELECT id, disposition, question_text, question_type,
                        category, weight, display_order, is_active
                 FROM recruit_quiz_templates
+                WHERE organization_id = :org_id OR organization_id IS NULL
                 ORDER BY disposition, display_order
-            """)
+            """),
+            {"org_id": org_id}
         )
         rows = result.fetchall()
 
@@ -252,8 +256,8 @@ async def create_quiz_template(template: QuizTemplateCreate, current_user: User 
         result = conn.execute(
             text("""
                 INSERT INTO recruit_quiz_templates
-                (disposition, question_text, question_type, category, weight, display_order)
-                VALUES (:disposition, :question_text, :question_type, :category, :weight, :display_order)
+                (disposition, question_text, question_type, category, weight, display_order, organization_id)
+                VALUES (:disposition, :question_text, :question_type, :category, :weight, :display_order, :org_id)
                 RETURNING id
             """),
             {
@@ -262,7 +266,8 @@ async def create_quiz_template(template: QuizTemplateCreate, current_user: User 
                 "question_type": template.question_type,
                 "category": template.category,
                 "weight": template.weight,
-                "display_order": template.display_order
+                "display_order": template.display_order,
+                "org_id": current_user.organization_id
             }
         )
         row = result.fetchone()
@@ -279,8 +284,8 @@ async def delete_quiz_template(template_id: int, current_user: User = Depends(ge
 
     with engine.connect() as conn:
         result = conn.execute(
-            text("UPDATE recruit_quiz_templates SET is_active = false WHERE id = :id"),
-            {"id": template_id}
+            text("UPDATE recruit_quiz_templates SET is_active = false WHERE id = :id AND (organization_id = :org_id OR organization_id IS NULL)"),
+            {"id": template_id, "org_id": current_user.organization_id}
         )
         conn.commit()
 

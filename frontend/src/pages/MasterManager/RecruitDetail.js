@@ -56,13 +56,13 @@ const getUserIdFromToken = () => {
       const parts = token.split('.');
       if (parts.length === 3) {
         const payload = JSON.parse(atob(parts[1]));
-        return payload.user_id || 1;
+        if (payload.user_id) return payload.user_id;
       }
     }
   } catch (e) {
-    console.error('Error parsing token:', e);
+    // Token parse failure — caller must handle null
   }
-  return 1; // Default fallback
+  return null;
 };
 
 const RecruitDetail = () => {
@@ -272,8 +272,7 @@ const RecruitDetail = () => {
             },
             body: JSON.stringify({
               disposition: pendingStatusChange,
-              assigned_to: userId,
-              organization_id: 1
+              assigned_to: userId
             })
           });
         } catch (taskErr) {

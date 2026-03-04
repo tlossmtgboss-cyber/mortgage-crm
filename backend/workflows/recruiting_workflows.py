@@ -353,31 +353,39 @@ class RecruitingWorkflowService:
             for row in rows
         ]
 
-    def complete_task(self, task_id: int, completed_by: int) -> bool:
-        """Mark a task as completed. Only pending tasks can be completed."""
+    def complete_task(self, task_id: int, completed_by: int, organization_id: Optional[int] = None) -> bool:
+        """Mark a task as completed. Only pending tasks in the caller's org can be completed."""
+        org_filter = "AND organization_id = :org_id" if organization_id else ""
+        params = {"task_id": task_id, "completed_by": completed_by}
+        if organization_id:
+            params["org_id"] = organization_id
         with engine.connect() as conn:
             result = conn.execute(
-                text("""
+                text(f"""
                     UPDATE recruiting_tasks
                     SET status = 'completed', completed_at = NOW(), completed_by = :completed_by
-                    WHERE id = :task_id AND status = 'pending'
+                    WHERE id = :task_id AND status = 'pending' {org_filter}
                 """),
-                {"task_id": task_id, "completed_by": completed_by}
+                params
             )
             conn.commit()
         return result.rowcount > 0
 
-    def skip_task(self, task_id: int, reason: str, skipped_by: int) -> bool:
-        """Skip a task with a reason. Only pending tasks can be skipped."""
+    def skip_task(self, task_id: int, reason: str, skipped_by: int, organization_id: Optional[int] = None) -> bool:
+        """Skip a task with a reason. Only pending tasks in the caller's org can be skipped."""
+        org_filter = "AND organization_id = :org_id" if organization_id else ""
+        params = {"task_id": task_id, "reason": reason, "skipped_by": skipped_by}
+        if organization_id:
+            params["org_id"] = organization_id
         with engine.connect() as conn:
             result = conn.execute(
-                text("""
+                text(f"""
                     UPDATE recruiting_tasks
                     SET status = 'skipped', skip_reason = :reason,
                         completed_at = NOW(), completed_by = :skipped_by
-                    WHERE id = :task_id AND status = 'pending'
+                    WHERE id = :task_id AND status = 'pending' {org_filter}
                 """),
-                {"task_id": task_id, "reason": reason, "skipped_by": skipped_by}
+                params
             )
             conn.commit()
         return result.rowcount > 0

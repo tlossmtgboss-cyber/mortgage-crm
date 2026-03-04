@@ -88,7 +88,7 @@ class CallNoteRequest(BaseModel):
     outcome: Optional[str] = None  # answered, voicemail, no_answer, busy, callback
     callback_requested: bool = False
     callback_date: Optional[str] = None
-    user_id: int
+    user_id: Optional[int] = None  # Deprecated: server uses current_user.id
 
 
 class CallHistoryItem(BaseModel):
@@ -591,7 +591,7 @@ async def add_call_notes(
                         "candidate_id": row.candidate_id,
                         "notes": f"Callback requested: {request.note}",
                         "due_date": request.callback_date,
-                        "user_id": request.user_id,
+                        "user_id": current_user.id,
                         "org_id": org_id
                     }
                 )

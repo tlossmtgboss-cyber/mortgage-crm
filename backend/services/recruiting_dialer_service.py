@@ -140,11 +140,12 @@ class RecruitingDialerService:
     play context whisper, then connect to candidate on confirmation.
     """
 
-    def __init__(self, db_session):
+    def __init__(self, db_session, organization_id: Optional[int] = None):
         self.db = db_session
         self.client = get_telephony_client()
         self.provider = TELEPHONY_PROVIDER
         self.from_number = get_from_number()
+        self.organization_id = organization_id
 
     def initiate_call(
         self,
@@ -177,7 +178,7 @@ class RecruitingDialerService:
             )
 
         # Get recruiter's phone number
-        recruiter_phone = self._get_user_phone(caller_user_id)
+        recruiter_phone = self._get_user_phone(caller_user_id, organization_id=self.organization_id)
         if not recruiter_phone:
             return RecruitingCallResult(
                 success=False,
@@ -253,7 +254,7 @@ class RecruitingDialerService:
 
     def generate_recruiter_twiml(self, call_id: str) -> str:
         """Generate TeXML for when recruiter answers."""
-        call_record = self._get_call_record(call_id)
+        call_record = self._get_call_record(call_id, organization_id=self.organization_id)
 
         if not call_record:
             response = VoiceResponseBuilder()
@@ -285,7 +286,7 @@ class RecruitingDialerService:
 
     def generate_recruiter_response_twiml(self, call_id: str, digits: str) -> str:
         """Handle recruiter's DTMF response."""
-        call_record = self._get_call_record(call_id)
+        call_record = self._get_call_record(call_id, organization_id=self.organization_id)
 
         if not call_record:
             response = VoiceResponseBuilder()
@@ -447,11 +448,22 @@ class RecruitingDialerService:
             logger.error(f"Error getting call record: {e}")
             return None
 
+    # Allowlist of columns that can be updated on recruiting_calls
+    _ALLOWED_UPDATE_COLUMNS = {
+        "twilio_call_sid", "status", "phone_from", "phone_to", "outcome",
+        "completed_at", "last_status", "duration_seconds", "recording_url",
+        "recording_duration",
+    }
+
     def _update_call_record(self, call_id: str, updates: Dict[str, Any]):
         """Update call record in database"""
         try:
-            set_clauses = ", ".join([f"{k} = :{k}" for k in updates.keys()])
-            params = {"call_id": call_id, **updates}
+            # Validate column names against allowlist
+            safe_updates = {k: v for k, v in updates.items() if k in self._ALLOWED_UPDATE_COLUMNS}
+            if not safe_updates:
+                return
+            set_clauses = ", ".join([f"{k} = :{k}" for k in safe_updates.keys()])
+            params = {"call_id": call_id, **safe_updates}
 
             self.db.execute(text(f"""
                 UPDATE recruiting_calls
@@ -467,13 +479,13 @@ class RecruitingDialerService:
                 pass
 
 
-def get_recruiting_dialer_service(db_session) -> RecruitingDialerService:
+def get_recruiting_dialer_service(db_session, organization_id: Optional[int] = None) -> RecruitingDialerService:
     """Factory function to create a RecruitingDialerService instance.
 
     This replaces the deleted legacy recruiting telephony service.
     The RecruitingDialerService uses Telnyx as the telephony provider.
     """
-    return RecruitingDialerService(db_session)
+    return RecruitingDialerService(db_session, organization_id=organization_id)
 
 
 # Backward-compatible alias for code that imported get_recruiting_twilio_service

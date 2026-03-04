@@ -754,16 +754,20 @@ class RecruitingService:
 
         interview_id = result.id
 
-        # Update candidate status if still in early stage
-        self.db.execute(text("""
+        # Update candidate status if still in early stage (org-scoped)
+        org_filter = "AND organization_id = :org_id" if organization_id else ""
+        update_params = {"id": candidate_id}
+        if organization_id:
+            update_params["org_id"] = organization_id
+        self.db.execute(text(f"""
             UPDATE mm_candidates
             SET status = CASE
                 WHEN status IN ('new', 'screening', 'phone_screen') THEN 'interview'
                 ELSE status
             END,
             updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        """), {"id": candidate_id})
+            WHERE id = :id {org_filter}
+        """), update_params)
 
         # Log activity
         await self._log_activity(
@@ -910,12 +914,16 @@ class RecruitingService:
             "created_by": created_by
         }).fetchone()
 
-        # Update candidate status
-        self.db.execute(text("""
+        # Update candidate status (org-scoped)
+        offer_org_filter = "AND organization_id = :org_id" if organization_id else ""
+        offer_update_params = {"id": candidate_id}
+        if organization_id:
+            offer_update_params["org_id"] = organization_id
+        self.db.execute(text(f"""
             UPDATE mm_candidates
             SET status = 'offer', updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        """), {"id": candidate_id})
+            WHERE id = :id {offer_org_filter}
+        """), offer_update_params)
 
         # Log activity
         await self._log_activity(
@@ -1109,12 +1117,16 @@ class RecruitingService:
         except Exception as e:
             logger.warning(f"Failed to log activity for candidate {candidate_id}: {e}")
 
-        # Update last activity
-        self.db.execute(text("""
+        # Update last activity (org-scoped)
+        activity_org_filter = "AND organization_id = :org_id" if organization_id else ""
+        activity_params = {"id": candidate_id}
+        if organization_id:
+            activity_params["org_id"] = organization_id
+        self.db.execute(text(f"""
             UPDATE mm_candidates
             SET last_activity_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        """), {"id": candidate_id})
+            WHERE id = :id {activity_org_filter}
+        """), activity_params)
 
     async def _create_portal_workspace(
         self,
@@ -1127,22 +1139,22 @@ class RecruitingService:
         import secrets
 
         try:
-            # Generate slug from name
+            # Generate slug from name with cryptographic random suffix
             base_slug = f"{first_name.lower()}-{last_name.lower()}" if first_name and last_name else f"candidate-{candidate_id}"
             base_slug = re.sub(r'[^a-z0-9-]', '', base_slug)
-            slug = base_slug
+            slug = f"{base_slug}-{secrets.token_hex(8)}"
 
-            # Check for uniqueness
-            count = 1
-            while True:
+            # Check for uniqueness (extremely unlikely collision)
+            attempts = 0
+            while attempts < 10:
                 result = self.db.execute(
                     text("SELECT id FROM recruit_portal_workspaces WHERE slug = :slug"),
                     {"slug": slug}
                 )
                 if not result.fetchone():
                     break
-                slug = f"{base_slug}-{count}"
-                count += 1
+                slug = f"{base_slug}-{secrets.token_hex(8)}"
+                attempts += 1
 
             # Create workspace
             result = self.db.execute(
