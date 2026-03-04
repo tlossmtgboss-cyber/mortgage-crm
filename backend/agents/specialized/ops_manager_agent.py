@@ -140,12 +140,13 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     """Check for existing open task with same title in ai_tasks, create if not found.
 
     Writes to ai_tasks table (not tasks) so tasks appear in the frontend task list.
-    Uses type='Human Needed' for open ops tasks; dedup excludes 'Completed' tasks.
+    Uses ORM to handle the tasktype enum correctly.
     Returns True if created.
     """
     from sqlalchemy import text
 
-    # Build dedup query against ai_tasks (type is a PostgreSQL enum — cast to text for safe comparison)
+    # Dedup: check for existing non-completed task with same title
+    # Cast type to text to avoid enum comparison issues
     conditions = ["title = :title", "type::text != 'Completed'"]
     params = {"title": title}
 
@@ -162,44 +163,88 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     if existing:
         return False
 
-    # Create the task in ai_tasks
-    insert_cols = ["title", "description", "priority", "type", "created_at"]
-    insert_vals = [":title", ":description", ":priority", ":task_type", "NOW()"]
-    insert_params = {"title": title, "description": description, "priority": priority, "task_type": "Human Needed"}
+    # Use ORM to create the task — this handles the tasktype enum correctly
+    # regardless of how the DB enum was created
+    try:
+        from database.models.task import AITask
+        from database.enums import TaskType
 
-    if loan_id:
-        insert_cols.append("loan_id")
-        insert_vals.append(":loan_id")
-        insert_params["loan_id"] = loan_id
-    if lead_id:
-        insert_cols.append("lead_id")
-        insert_vals.append(":lead_id")
-        insert_params["lead_id"] = lead_id
-    if owner_id:
-        insert_cols.append("assigned_to_id")
-        insert_vals.append(":assigned_to_id")
-        insert_params["assigned_to_id"] = owner_id
-    if organization_id:
-        insert_cols.append("organization_id")
-        insert_vals.append(":organization_id")
-        insert_params["organization_id"] = organization_id
-    if due_date:
-        insert_cols.append("due_date")
-        insert_vals.append(":due_date")
-        insert_params["due_date"] = due_date
-    if category:
-        insert_cols.append("category")
-        insert_vals.append(":category")
-        insert_params["category"] = category
-    if borrower_name:
-        insert_cols.append("borrower_name")
-        insert_vals.append(":borrower_name")
-        insert_params["borrower_name"] = borrower_name
+        task = AITask(
+            title=title,
+            description=description,
+            priority=priority,
+            type=TaskType.HUMAN_NEEDED,
+        )
+        if loan_id:
+            task.loan_id = loan_id
+        if lead_id:
+            task.lead_id = lead_id
+        if owner_id:
+            task.assigned_to_id = owner_id
+        if organization_id:
+            task.organization_id = organization_id
+        if due_date:
+            task.due_date = due_date
+        if category:
+            task.category = category
+        if borrower_name:
+            task.borrower_name = borrower_name
 
-    cols_sql = ", ".join(insert_cols)
-    vals_sql = ", ".join(insert_vals)
-    db.execute(text(f"INSERT INTO ai_tasks ({cols_sql}) VALUES ({vals_sql})"), insert_params)
-    return True
+        db.add(task)
+        db.flush()
+        return True
+    except Exception:
+        # Fallback: try raw SQL with column-to-text cast approach
+        # Query the first non-Completed enum value to use as the type
+        try:
+            first_type = db.execute(text(
+                "SELECT unnest(enum_range(NULL::tasktype)) as val LIMIT 1"
+            )).scalar()
+        except Exception:
+            first_type = None
+
+        insert_cols = ["title", "description", "priority", "created_at"]
+        insert_vals = [":title", ":description", ":priority", "NOW()"]
+        insert_params = {"title": title, "description": description, "priority": priority}
+
+        if first_type:
+            insert_cols.append("type")
+            insert_vals.append(":task_type::tasktype")
+            insert_params["task_type"] = first_type
+
+        if loan_id:
+            insert_cols.append("loan_id")
+            insert_vals.append(":loan_id")
+            insert_params["loan_id"] = loan_id
+        if lead_id:
+            insert_cols.append("lead_id")
+            insert_vals.append(":lead_id")
+            insert_params["lead_id"] = lead_id
+        if owner_id:
+            insert_cols.append("assigned_to_id")
+            insert_vals.append(":assigned_to_id")
+            insert_params["assigned_to_id"] = owner_id
+        if organization_id:
+            insert_cols.append("organization_id")
+            insert_vals.append(":organization_id")
+            insert_params["organization_id"] = organization_id
+        if due_date:
+            insert_cols.append("due_date")
+            insert_vals.append(":due_date")
+            insert_params["due_date"] = due_date
+        if category:
+            insert_cols.append("category")
+            insert_vals.append(":category")
+            insert_params["category"] = category
+        if borrower_name:
+            insert_cols.append("borrower_name")
+            insert_vals.append(":borrower_name")
+            insert_params["borrower_name"] = borrower_name
+
+        cols_sql = ", ".join(insert_cols)
+        vals_sql = ", ".join(insert_vals)
+        db.execute(text(f"INSERT INTO ai_tasks ({cols_sql}) VALUES ({vals_sql})"), insert_params)
+        return True
 
 
 # ============================================================================
@@ -1180,8 +1225,8 @@ class OpsManagerAgent(SpecializedAgent):
                     AND ({ops_prefixes})
                     {category_filter}
                     {org_filter}
-                GROUP BY category, t.priority
-                ORDER BY category, t.priority
+                GROUP BY 1, t.priority
+                ORDER BY 1, t.priority
             """), params).fetchall()
 
             # Pivot into category -> {priority: count}
