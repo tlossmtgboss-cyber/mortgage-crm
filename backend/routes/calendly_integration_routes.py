@@ -1,7 +1,10 @@
 """
-Calendly Integration Routes
+DEPRECATED — NOT REGISTERED IN APP.
+Active Calendly integration: routes/calendly_routes.py
+This file retained for reference only. Do NOT import or register.
 
-This module provides endpoints for Calendly calendar integration including:
+Original description:
+Calendly Integration Routes — endpoints for Calendly calendar integration including:
 - Connecting Calendly accounts via API key
 - Fetching event types from Calendly
 - Creating scheduling links for leads

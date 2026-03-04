@@ -18,11 +18,193 @@ import base64
 import html
 import logging
 import uuid as uuid_lib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+import time as _time
 
 from services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# R1: Email retry with SMS fallback
+# ============================================================================
+
+def _retry_email_send(send_fn, max_retries=2, backoff_base=1.0):
+    """
+    Retry an email send function up to max_retries times with exponential backoff.
+    send_fn: zero-arg callable returning {"success": bool, ...} or bool.
+    Returns the result dict from the last attempt.
+    """
+    last_result = {"success": False, "error": "No attempts made"}
+    for attempt in range(1 + max_retries):
+        try:
+            result = send_fn()
+            if isinstance(result, bool):
+                result = {"success": result}
+            if isinstance(result, dict) and result.get("success"):
+                return result
+            last_result = result if isinstance(result, dict) else {"success": False, "error": str(result)}
+        except Exception as e:
+            logger.warning(f"Email send attempt {attempt + 1} failed: {e}")
+            last_result = {"success": False, "error": str(e)}
+        if attempt < max_retries:
+            delay = backoff_base * (2 ** attempt)
+            logger.info(f"Retrying email in {delay}s (attempt {attempt + 2}/{max_retries + 1})")
+            _time.sleep(delay)
+    return last_result
+
+
+def send_with_sms_fallback(
+    email_send_fn,
+    sms_fallback_fn=None,
+    max_retries=2,
+    context_label="notification",
+    escalation_fn=None,
+):
+    """
+    Try sending email with retries. If all email attempts fail AND an SMS
+    fallback function is provided, invoke the SMS fallback.
+    If both fail and escalation_fn is provided, call it with the error message.
+    Returns dict: {"email_sent": bool, "sms_sent": bool, "error": str|None}
+    """
+    email_result = _retry_email_send(email_send_fn, max_retries=max_retries)
+    email_sent = email_result.get("success", False)
+    sms_sent = False
+    error = None
+
+    if not email_sent:
+        error = email_result.get("error", "Unknown email failure")
+        logger.warning(f"{context_label}: Email failed after {max_retries + 1} attempts: {error}")
+        if sms_fallback_fn:
+            try:
+                sms_result = sms_fallback_fn()
+                if isinstance(sms_result, bool):
+                    sms_sent = sms_result
+                elif isinstance(sms_result, dict):
+                    sms_sent = sms_result.get("success", False)
+                else:
+                    sms_sent = bool(sms_result)
+                if sms_sent:
+                    logger.info(f"{context_label}: SMS fallback sent successfully")
+                else:
+                    logger.warning(f"{context_label}: SMS fallback also failed")
+            except Exception as sms_err:
+                logger.error(f"{context_label}: SMS fallback exception: {sms_err}")
+
+    if not email_sent and not sms_sent and escalation_fn:
+        try:
+            escalation_fn(f"All communication channels failed for {context_label}: {error}")
+        except Exception as esc_err:
+            logger.error(f"Escalation creation failed: {esc_err}")
+
+    return {"email_sent": email_sent, "sms_sent": sms_sent, "error": error}
+
+
+# ============================================================================
+# C1: TCPA/DNC consent check before SMS
+# ============================================================================
+
+def check_sms_consent(phone: str) -> tuple:
+    """
+    Check DNC list and ChannelPreference before sending SMS.
+    Returns (can_send: bool, reason: str).
+
+    Policy:
+    - DNC list match → BLOCK
+    - ChannelPreference.do_not_sms=True → BLOCK
+    - ChannelPreference.sms_consent=False → BLOCK
+    - No lead/preference found → ALLOW (transactional SMS exemption)
+    - Consent check error → BLOCK (fail-safe)
+    """
+    if not phone:
+        return False, "No phone number provided"
+
+    try:
+        from database import SessionLocal
+        db = SessionLocal()
+        try:
+            # 1. DNC check using existing ComplianceChecker
+            try:
+                from telephony.compliance import ComplianceChecker
+                checker = ComplianceChecker(db)
+                is_dnc, dnc_reason = checker.check_dnc(phone)
+                if is_dnc:
+                    logger.warning(f"SMS blocked - DNC: {phone}")
+                    return False, f"DNC: {dnc_reason}"
+            except ImportError:
+                logger.debug("telephony.compliance not available, skipping DNC check")
+            except Exception as dnc_err:
+                logger.warning(f"DNC check failed (allowing): {dnc_err}")
+
+            # 2. ChannelPreference check
+            try:
+                from database.models.communication import ChannelPreference
+                from database.models.lead_loan import Lead
+
+                # Normalize phone to last 10 digits for matching
+                digits = ''.join(c for c in phone if c.isdigit())
+                if len(digits) == 11 and digits.startswith('1'):
+                    digits = digits[1:]
+
+                lead = db.query(Lead).filter(
+                    Lead.phone.ilike(f"%{digits[-10:]}")
+                ).first() if len(digits) >= 10 else None
+
+                if lead:
+                    pref = db.query(ChannelPreference).filter(
+                        ChannelPreference.lead_id == lead.id
+                    ).first()
+                    if pref:
+                        if getattr(pref, 'do_not_sms', False):
+                            logger.warning(f"SMS blocked - do_not_sms flag: {phone}")
+                            return False, "Contact has opted out of SMS"
+                        if hasattr(pref, 'sms_consent') and pref.sms_consent is False:
+                            logger.warning(f"SMS blocked - no sms_consent: {phone}")
+                            return False, "No SMS consent on file"
+            except ImportError:
+                logger.debug("ChannelPreference model not available, skipping consent check")
+
+            # No block found — allow transactional SMS
+            return True, "OK"
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"SMS consent check failed, defaulting to BLOCK: {e}")
+        return False, f"Consent check error: {e}"
+
+
+def generate_reschedule_url(appointment_id: int, attendee_email: str, slug: str = None) -> str:
+    """Generate a time-limited reschedule URL (valid 72 hours)."""
+    import jwt
+    secret = os.getenv("SECRET_KEY")
+    if not secret:
+        raise RuntimeError("SECRET_KEY environment variable is required for reschedule URL generation")
+    payload = {
+        "appt_id": appointment_id,
+        "email": attendee_email,
+        "action": "reschedule",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=72),
+    }
+    token = jwt.encode(payload, secret, algorithm="HS256")
+    frontend_base = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
+    book_path = f"/book/{slug}" if slug else "/reschedule"
+    return f"{frontend_base}{book_path}?token={token}&action=reschedule"
+
+
+def _ics_escape(value: str) -> str:
+    """Escape a string for safe embedding in ICS fields (RFC 5545).
+    Prevents injection of new ICS properties via newline or special chars."""
+    if not value:
+        return ""
+    # Remove any CR/LF that could inject new ICS properties
+    value = value.replace("\r\n", " ").replace("\r", " ").replace("\n", "\\n")
+    # Escape backslashes, semicolons, and commas per RFC 5545
+    value = value.replace("\\", "\\\\")
+    value = value.replace(";", "\\;")
+    value = value.replace(",", "\\,")
+    return value
 
 
 def generate_ics_content(
@@ -35,24 +217,37 @@ def generate_ics_content(
     organizer_name: str,
     description: str = "",
     location: str = "",
-    video_link: str = None
+    video_link: str = None,
+    appointment_id: int = None
 ):
-    """Generate ICS calendar file content"""
+    """Generate ICS calendar file content with proper field escaping."""
     end_datetime = start_datetime + timedelta(minutes=duration_minutes)
-    uid = str(uuid_lib.uuid4())
-    dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    # Deterministic UID: use appointment_id if available to prevent duplicate calendar events
+    if appointment_id:
+        uid = f"appt-{appointment_id}@perenniaai.com"
+    else:
+        uid = f"{uuid_lib.uuid4()}@perenniaai.com"
+    from datetime import timezone as tz
+    dtstamp = datetime.now(tz.utc).strftime("%Y%m%dT%H%M%SZ")
     dtstart = start_datetime.strftime("%Y%m%dT%H%M%SZ")
     dtend = end_datetime.strftime("%Y%m%dT%H%M%SZ")
 
-    # Add video link to description if provided
-    full_description = description
+    # Build and escape description
+    full_description = description or ""
     if video_link:
-        full_description += "\\n\\nJoin Video Call: " + video_link
+        full_description += "\\nJoin Video Call: " + video_link
         if not location:
             location = video_link
 
-    # Escape newlines for ICS format - must be done outside f-string
-    ics_description = full_description.replace("\n", "\\n")
+    # Escape all user-supplied fields to prevent ICS injection
+    safe_title = _ics_escape(appointment_title)
+    safe_description = _ics_escape(full_description)
+    safe_location = _ics_escape(location)
+    safe_organizer_name = _ics_escape(organizer_name)
+    safe_attendee_name = _ics_escape(attendee_name)
+    # Email addresses: strip any newlines/special chars
+    safe_organizer_email = organizer_email.replace("\n", "").replace("\r", "").strip() if organizer_email else ""
+    safe_attendee_email = attendee_email.replace("\n", "").replace("\r", "").strip() if attendee_email else ""
 
     ics_content = f"""BEGIN:VCALENDAR
 VERSION:2.0
@@ -64,11 +259,11 @@ UID:{uid}
 DTSTAMP:{dtstamp}
 DTSTART:{dtstart}
 DTEND:{dtend}
-SUMMARY:{appointment_title}
-DESCRIPTION:{ics_description}
-LOCATION:{location}
-ORGANIZER;CN={organizer_name}:mailto:{organizer_email}
-ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN={attendee_name}:mailto:{attendee_email}
+SUMMARY:{safe_title}
+DESCRIPTION:{safe_description}
+LOCATION:{safe_location}
+ORGANIZER;CN={safe_organizer_name}:mailto:{safe_organizer_email}
+ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN={safe_attendee_name}:mailto:{safe_attendee_email}
 STATUS:CONFIRMED
 SEQUENCE:0
 END:VEVENT
@@ -89,7 +284,8 @@ def send_appointment_confirmation_email(
     team_member_email: str = None,
     video_link: str = None,
     scheduled_start: datetime = None,
-    duration_minutes: int = 30
+    duration_minutes: int = 30,
+    reschedule_url: str = None
 ):
     """Send appointment confirmation email with calendar invite using SendGrid"""
     try:
@@ -159,9 +355,14 @@ def send_appointment_confirmation_email(
                         {video_button_section}
                         {calendar_section}
                         <p style="font-size: 14px; color: #6b7280;">
-                            We'll send you a reminder before your appointment. If you need to reschedule,
-                            please contact us as soon as possible.
+                            We'll send you a reminder before your appointment.
                         </p>
+                        {"" if not reschedule_url else f'''
+                        <div style="text-align: center; margin: 20px 0;">
+                            <a href="{html.escape(reschedule_url)}" style="display: inline-block; background: #f3f4f6; color: #374151; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; border: 1px solid #d1d5db;">
+                                Reschedule Appointment
+                            </a>
+                        </div>'''}
 
                         <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
                             Looking forward to speaking with you!
@@ -193,7 +394,7 @@ Meeting Type: {meeting_mode}
 
 A calendar invite is attached to this email.
 
-We'll send you a reminder before your appointment. If you need to reschedule, please contact us as soon as possible.
+We'll send you a reminder before your appointment.{f" To reschedule, visit: {reschedule_url}" if reschedule_url else ""}
 
 Looking forward to speaking with you!
 
@@ -262,6 +463,12 @@ def send_appointment_confirmation_sms(
 ):
     """Send appointment confirmation SMS via Telnyx"""
     try:
+        # TCPA/DNC consent check
+        can_send, reason = check_sms_consent(attendee_phone)
+        if not can_send:
+            logger.info(f"SMS consent check blocked confirmation to {attendee_phone}: {reason}")
+            return False
+
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
 
         if not from_number:
@@ -272,6 +479,9 @@ def send_appointment_confirmation_sms(
 
         team_member_text = f" with {team_member_name}" if team_member_name else ""
         message_body = f"Hi {attendee_name}! Your appointment{team_member_text} is confirmed for {appointment_date} at {appointment_time}. We'll send a reminder before your call. Reply HELP for assistance."
+
+        if len(message_body) > 160:
+            logger.warning(f"SMS body is {len(message_body)} chars (>160), will be sent as multi-segment")
 
         message = telnyx.Message.create(
             from_=from_number,
@@ -302,7 +512,8 @@ def send_appointment_update_email(
     scheduled_start: datetime = None,
     duration_minutes: int = 30,
     old_date: str = None,
-    old_time: str = None
+    old_time: str = None,
+    reschedule_url: str = None
 ):
     """Send appointment update/reschedule email with updated calendar invite using SendGrid"""
     try:
@@ -466,6 +677,12 @@ def send_appointment_update_sms(
 ):
     """Send appointment update SMS via Telnyx"""
     try:
+        # TCPA/DNC consent check
+        can_send, reason = check_sms_consent(attendee_phone)
+        if not can_send:
+            logger.info(f"SMS consent check blocked update to {attendee_phone}: {reason}")
+            return False
+
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
 
         if not from_number:
@@ -750,7 +967,7 @@ We apologize for any inconvenience.
             to_email=attendee_email,
             subject=f"Appointment Cancelled: {appointment_title}",
             html_content=html_content,
-            text_content=text_content
+            plain_content=text_content
         )
 
         if result.get("success"):
@@ -858,7 +1075,7 @@ This time slot is now available in your calendar.
             to_email=team_member_email,
             subject=f"Appointment Cancelled: {attendee_name} - {appointment_title}",
             html_content=html_content,
-            text_content=text_content
+            plain_content=text_content
         )
 
         if result.get("success"):
@@ -1035,6 +1252,12 @@ def send_appointment_reminder_sms(
 ):
     """Send appointment reminder SMS via Telnyx."""
     try:
+        # TCPA/DNC consent check
+        can_send, reason = check_sms_consent(attendee_phone)
+        if not can_send:
+            logger.info(f"SMS consent check blocked reminder to {attendee_phone}: {reason}")
+            return {"success": False, "error": f"Consent blocked: {reason}"}
+
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
         if not from_number:
             logger.warning("TELNYX_PHONE_NUMBER not configured - skipping reminder SMS")

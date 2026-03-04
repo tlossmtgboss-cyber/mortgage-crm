@@ -14,12 +14,12 @@ import json
 import hmac
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON, ForeignKey
 from pydantic import BaseModel
 from database import get_db, Base, engine
 
@@ -78,6 +78,7 @@ class CalendlyIntegration(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True, unique=True)  # References users table
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # OAuth tokens (encrypted)
     access_token_encrypted = Column(Text, nullable=True)
@@ -105,8 +106,8 @@ class CalendlyIntegration(Base):
     # Timestamps
     connected_at = Column(DateTime, nullable=True)
     last_sync_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class CalendlyBooking(Base):
@@ -116,6 +117,7 @@ class CalendlyBooking(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # Calendly event info
     calendly_event_uri = Column(String(255), unique=True, index=True)
@@ -140,8 +142,8 @@ class CalendlyBooking(Base):
     smart_scheduler_appointment_id = Column(String(50), nullable=True, index=True)
 
     # Tracking
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     canceled_at = Column(DateTime, nullable=True)
     cancellation_reason = Column(Text, nullable=True)
 
@@ -222,18 +224,32 @@ class BookingResponse(BaseModel):
 # HELPER FUNCTIONS
 # =============================================================================
 
-def get_integration(db: Session, user_id: int) -> Optional[CalendlyIntegration]:
-    """Get Calendly integration for a user"""
-    return db.query(CalendlyIntegration).filter(
+def get_integration(db: Session, user_id: int, org_id: int = None) -> Optional[CalendlyIntegration]:
+    """Get Calendly integration for a user, scoped to their organization."""
+    query = db.query(CalendlyIntegration).filter(
         CalendlyIntegration.user_id == user_id
-    ).first()
+    )
+    if org_id:
+        query = query.filter(CalendlyIntegration.organization_id == org_id)
+    return query.first()
 
 
-def get_or_create_integration(db: Session, user_id: int) -> CalendlyIntegration:
+def _get_user_org_id(db: Session, user_id: int) -> int:
+    """Look up organization_id for a user. Raises 403 if not found."""
+    from sqlalchemy import text
+    row = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": user_id}).first()
+    if not row or not row[0]:
+        raise HTTPException(status_code=403, detail="No organization context for user")
+    return row[0]
+
+
+def get_or_create_integration(db: Session, user_id: int, organization_id: int = None) -> CalendlyIntegration:
     """Get or create Calendly integration for a user"""
-    integration = get_integration(db, user_id)
+    integration = get_integration(db, user_id, org_id=organization_id)
     if not integration:
-        integration = CalendlyIntegration(user_id=user_id)
+        if organization_id is None:
+            organization_id = _get_user_org_id(db, user_id)
+        integration = CalendlyIntegration(user_id=user_id, organization_id=organization_id)
         db.add(integration)
         db.commit()
         db.refresh(integration)
@@ -250,7 +266,7 @@ async def get_valid_access_token(
         return None
 
     # Check if token is expired
-    if integration.token_expires_at and integration.token_expires_at < datetime.utcnow():
+    if integration.token_expires_at and integration.token_expires_at < datetime.now(timezone.utc):
         # Refresh the token
         if not integration.refresh_token_encrypted:
             return None
@@ -266,7 +282,7 @@ async def get_valid_access_token(
         integration.access_token_encrypted = encrypt_token(result["access_token"])
         if result.get("refresh_token"):
             integration.refresh_token_encrypted = encrypt_token(result["refresh_token"])
-        integration.token_expires_at = datetime.utcnow() + timedelta(seconds=result["expires_in"])
+        integration.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=result["expires_in"])
         db.commit()
 
         return result["access_token"]
@@ -364,13 +380,13 @@ async def calendly_oauth_callback(
 
     integration.access_token_encrypted = encrypt_token(access_token)
     integration.refresh_token_encrypted = encrypt_token(token_result["refresh_token"])
-    integration.token_expires_at = datetime.utcnow() + timedelta(seconds=token_result["expires_in"])
+    integration.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_result["expires_in"])
     integration.calendly_user_uri = user_result["uri"]
     integration.calendly_user_name = user_result["name"]
     integration.calendly_user_email = user_result["email"]
     integration.calendly_organization_uri = user_result["current_organization"]
     integration.is_connected = True
-    integration.connected_at = datetime.utcnow()
+    integration.connected_at = datetime.now(timezone.utc)
 
     db.commit()
 
@@ -390,7 +406,8 @@ async def disconnect_calendly(
 ):
     """Disconnect Calendly integration"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.is_connected:
         raise HTTPException(status_code=404, detail="No Calendly integration found")
@@ -435,7 +452,8 @@ async def get_calendly_status(
 ):
     """Get Calendly integration status for a user"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration:
         return CalendlyIntegrationResponse(
@@ -468,7 +486,8 @@ async def update_calendly_settings(
 ):
     """Update Calendly integration settings"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.is_connected:
         raise HTTPException(status_code=404, detail="No Calendly integration found")
@@ -523,7 +542,8 @@ async def get_event_types(
 ):
     """Get available Calendly event types for selection"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.is_connected:
         raise HTTPException(status_code=404, detail="Calendly not connected")
@@ -568,7 +588,8 @@ async def get_availability(
 ):
     """Get available time slots from Calendly"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.is_connected:
         raise HTTPException(status_code=404, detail="Calendly not connected")
@@ -614,7 +635,8 @@ async def get_bookings(
 ):
     """Get bookings from Calendly"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.is_connected:
         raise HTTPException(status_code=404, detail="Calendly not connected")
@@ -629,8 +651,8 @@ async def get_bookings(
     result = await service.get_scheduled_events(
         access_token,
         user_uri=integration.calendly_user_uri,
-        min_start_time=datetime.utcnow(),
-        max_start_time=datetime.utcnow() + timedelta(days=days_ahead),
+        min_start_time=datetime.now(timezone.utc),
+        max_start_time=datetime.now(timezone.utc) + timedelta(days=days_ahead),
         status=status
     )
 
@@ -641,7 +663,8 @@ async def get_bookings(
     local_bookings = {
         b.calendly_event_uri: b
         for b in db.query(CalendlyBooking).filter(
-            CalendlyBooking.user_id == user_id
+            CalendlyBooking.user_id == user_id,
+            CalendlyBooking.organization_id == getattr(current_user, 'organization_id', None)
         ).all()
     }
 
@@ -678,7 +701,8 @@ async def cancel_booking(
 ):
     """Cancel a Calendly booking"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.is_connected:
         raise HTTPException(status_code=404, detail="Calendly not connected")
@@ -695,14 +719,16 @@ async def cancel_booking(
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error"))
 
-    # Update local booking
+    # Update local booking — scoped to current user's org for tenant isolation
+    org_id = _get_user_org_id(db, user_id)
     local_booking = db.query(CalendlyBooking).filter(
-        CalendlyBooking.calendly_event_uri == event_uri
+        CalendlyBooking.calendly_event_uri == event_uri,
+        CalendlyBooking.organization_id == org_id,
     ).first()
 
     if local_booking:
         local_booking.status = "canceled"
-        local_booking.canceled_at = datetime.utcnow()
+        local_booking.canceled_at = datetime.now(timezone.utc)
         local_booking.cancellation_reason = reason
         db.commit()
 
@@ -787,6 +813,7 @@ async def process_booking_created(db: Session, payload: Dict[str, Any]):
         # Create local booking record
         booking = CalendlyBooking(
             user_id=integration.user_id,
+            organization_id=integration.organization_id,
             calendly_event_uri=event.get("uri"),
             calendly_event_type_uri=event.get("event_type"),
             event_name=event.get("name"),
@@ -804,24 +831,138 @@ async def process_booking_created(db: Session, payload: Dict[str, Any]):
 
         logger.info(f"Created booking for user {integration.user_id}: {invitee.get('name')}")
 
-        # Optionally sync to Smart Scheduler
-        if integration.sync_to_smart_scheduler:
-            # Import here to avoid circular imports
-            from services.smart_scheduler_service import get_scheduler_service
+        # === CRM Integration (Operational Intelligence) ===
+        crm_lead_id = None
 
-            scheduler = get_scheduler_service(db)
-            result = scheduler.book_appointment(
-                contact_name=invitee.get("name"),
-                contact_email=invitee.get("email"),
-                appointment_time=datetime.fromisoformat(event.get("start_time", "").replace("Z", "+00:00")),
-                appointment_type="calendly_sync",
-                notes=f"Booked via Calendly: {event.get('name')}",
+        # 1. Create/link lead if auto_create_contacts enabled
+        if integration.auto_create_contacts:
+            try:
+                from database.models.lead_loan import Lead
+
+                invitee_email = invitee.get("email")
+                invitee_name = invitee.get("name", "")
+
+                if invitee_email:
+                    existing_lead = db.query(Lead).filter(
+                        Lead.email == invitee_email,
+                        Lead.organization_id == integration.organization_id
+                    ).first()
+
+                    if existing_lead:
+                        crm_lead_id = existing_lead.id
+                        existing_lead.last_contact = datetime.now(timezone.utc)
+                    else:
+                        name_parts = invitee_name.strip().split(None, 1)
+                        new_lead = Lead(
+                            organization_id=integration.organization_id,
+                            name=invitee_name or invitee_email,
+                            first_name=name_parts[0] if name_parts else "",
+                            last_name=name_parts[1] if len(name_parts) > 1 else "",
+                            email=invitee_email,
+                            stage="New",
+                            source="calendly",
+                            owner_id=integration.user_id,
+                            last_contact=datetime.now(timezone.utc),
+                            lead_received_date=datetime.now(timezone.utc),
+                        )
+                        db.add(new_lead)
+                        db.flush()
+                        crm_lead_id = new_lead.id
+                    db.commit()
+                    logger.info(f"Calendly lead {'linked' if existing_lead else 'created'}: {crm_lead_id}")
+            except Exception as lead_err:
+                logger.warning(f"Failed to create/link lead from Calendly: {lead_err}")
+
+        # 2. Log Activity
+        try:
+            from database.models.communication import Activity
+            from database.enums import ActivityType
+            activity = Activity(
+                organization_id=integration.organization_id,
+                type=ActivityType.MEETING,
+                content=f"Calendly booking: {invitee.get('name', 'Unknown')} - {event.get('name', 'Meeting')}",
+                user_id=integration.user_id,
+                lead_id=crm_lead_id,
             )
+            db.add(activity)
+            db.commit()
+        except Exception as act_err:
+            logger.warning(f"Failed to log Calendly booking activity: {act_err}")
 
-            if result.get("success"):
-                booking.smart_scheduler_appointment_id = result["appointment_id"]
+        # 3. Create follow-up task
+        try:
+            from database.models.task import Task
+            appt_end = datetime.fromisoformat(event.get("end_time", "").replace("Z", "+00:00"))
+            task = Task(
+                organization_id=integration.organization_id,
+                title=f"Follow up: Calendly booking with {invitee.get('name', 'contact')}"[:255],
+                description=f"Booked via Calendly: {event.get('name', 'Meeting')}",
+                status="pending",
+                priority="medium",
+                due_date=appt_end + timedelta(days=1),
+                owner_id=integration.user_id,
+                lead_id=crm_lead_id,
+            )
+            db.add(task)
+            db.commit()
+        except Exception as task_err:
+            logger.warning(f"Failed to create Calendly follow-up task: {task_err}")
+
+        # 4. Notify LO
+        try:
+            from services.notification_service import notification_service as _notif
+            appt_time = datetime.fromisoformat(event.get("start_time", "").replace("Z", "+00:00"))
+            _notif.send_email(
+                to_email=getattr(integration, 'calendly_user_email', None) or '',
+                subject=f"New Calendly Booking: {invitee.get('name', 'Someone')}",
+                html_content=f"""
+                <h3>New Appointment Booked via Calendly</h3>
+                <p><strong>Client:</strong> {invitee.get('name', 'Unknown')}</p>
+                <p><strong>Email:</strong> {invitee.get('email', 'N/A')}</p>
+                <p><strong>Event:</strong> {event.get('name', 'Meeting')}</p>
+                <p><strong>Time:</strong> {appt_time.strftime('%B %d, %Y at %I:%M %p')} UTC</p>
+                """
+            )
+        except Exception as notify_err:
+            logger.warning(f"Failed to notify LO for Calendly booking: {notify_err}")
+
+        # Optionally sync to Smart Scheduler via direct ORM
+        if integration.sync_to_smart_scheduler:
+            try:
+                import uuid as _uuid
+                from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+
+                appt_time = datetime.fromisoformat(event.get("start_time", "").replace("Z", "+00:00"))
+                appt_end = datetime.fromisoformat(event.get("end_time", "").replace("Z", "+00:00"))
+                appt_id = f"APPT-{str(_uuid.uuid4())[:8].upper()}"
+
+                # Get org_id from the integration user
+                from sqlalchemy import text as _text
+                _org_row = db.execute(_text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": integration.user_id}).first()
+                _org_id = _org_row[0] if _org_row else None
+
+                sa_appointment = ScheduledAppointment(
+                    appointment_id=appt_id,
+                    organization_id=_org_id,
+                    loan_officer_id=integration.user_id,
+                    contact_name=invitee.get("name", ""),
+                    contact_email=invitee.get("email", ""),
+                    appointment_type="calendly_sync",
+                    start_time=appt_time,
+                    end_time=appt_end,
+                    duration_minutes=int((appt_end - appt_time).total_seconds() / 60),
+                    status=AppointmentStatus.SCHEDULED.value,
+                    notes=f"Booked via Calendly: {event.get('name')}",
+                    booked_via="calendly",
+                )
+                db.add(sa_appointment)
                 db.commit()
-                logger.info(f"Synced to Smart Scheduler: {result['appointment_id']}")
+
+                booking.smart_scheduler_appointment_id = appt_id
+                db.commit()
+                logger.info(f"Synced to Smart Scheduler via ORM: {appt_id}")
+            except Exception as sync_err:
+                logger.warning(f"Failed to sync Calendly booking to scheduler: {sync_err}")
 
         # Invalidate availability cache
         availability_cache.invalidate(calendly_user_uri)
@@ -844,20 +985,50 @@ async def process_booking_canceled(db: Session, payload: Dict[str, Any]):
 
         if booking:
             booking.status = "canceled"
-            booking.canceled_at = datetime.utcnow()
+            booking.canceled_at = datetime.now(timezone.utc)
             booking.cancellation_reason = cancellation.get("reason")
             db.commit()
 
-            # Cancel in Smart Scheduler if linked
+            # Cancel in Smart Scheduler via direct ORM if linked
             if booking.smart_scheduler_appointment_id:
-                from services.smart_scheduler_service import get_scheduler_service
-                scheduler = get_scheduler_service(db)
-                scheduler.cancel_appointment(
-                    booking.smart_scheduler_appointment_id,
-                    reason=f"Cancelled via Calendly: {cancellation.get('reason')}"
-                )
+                try:
+                    from services.smart_scheduler_service import ScheduledAppointment, AppointmentStatus
+
+                    cancel_query = db.query(ScheduledAppointment).filter(
+                        ScheduledAppointment.appointment_id == booking.smart_scheduler_appointment_id
+                    )
+                    # Scope to user's org for tenant isolation
+                    if hasattr(booking, 'user_id') and booking.user_id:
+                        from sqlalchemy import text as _text
+                        _org_row = db.execute(_text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": booking.user_id}).first()
+                        if _org_row and _org_row[0]:
+                            cancel_query = cancel_query.filter(ScheduledAppointment.organization_id == _org_row[0])
+                    sa_appt = cancel_query.first()
+                    if sa_appt:
+                        sa_appt.status = AppointmentStatus.CANCELLED.value
+                        sa_appt.cancelled_at = datetime.now(timezone.utc)
+                        sa_appt.internal_notes = f"Cancelled via Calendly: {cancellation.get('reason')}"
+                        db.commit()
+                        logger.info(f"Cancelled scheduler appointment {booking.smart_scheduler_appointment_id}")
+                except Exception as cancel_err:
+                    logger.warning(f"Failed to cancel scheduler appointment: {cancel_err}")
 
             logger.info(f"Booking cancelled: {event_uri}")
+
+            # CRM: Log cancellation activity
+            try:
+                from database.models.communication import Activity
+                from database.enums import ActivityType
+                activity = Activity(
+                    organization_id=getattr(booking, 'organization_id', None),
+                    type=ActivityType.NOTE,
+                    content=f"Calendly booking cancelled: {cancellation.get('reason', 'No reason given')}",
+                    user_id=booking.user_id,
+                )
+                db.add(activity)
+                db.commit()
+            except Exception as act_err:
+                logger.warning(f"Failed to log Calendly cancellation activity: {act_err}")
 
             # Invalidate availability cache
             integration = db.query(CalendlyIntegration).filter(
@@ -882,7 +1053,8 @@ async def subscribe_to_webhooks(
 ):
     """Subscribe to Calendly webhook events"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.is_connected:
         raise HTTPException(status_code=404, detail="Calendly not connected")
@@ -922,7 +1094,8 @@ async def unsubscribe_from_webhooks(
 ):
     """Unsubscribe from Calendly webhook events"""
     user_id = current_user.id
-    integration = get_integration(db, user_id)
+    org_id = getattr(current_user, 'organization_id', None)
+    integration = get_integration(db, user_id, org_id=org_id)
 
     if not integration or not integration.webhook_subscription_uri:
         raise HTTPException(status_code=404, detail="No webhook subscription found")

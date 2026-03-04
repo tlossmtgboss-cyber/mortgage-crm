@@ -5,7 +5,7 @@
  * Self-contained component with own state, loading, and API calls.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAuthHeaders } from '../utils/auth';
 import './SchedulerAnalytics.css';
 
@@ -48,13 +48,15 @@ const SchedulerAnalytics = () => {
     loadAppointments(period);
   }, [period, loadAppointments]);
 
-  const computeMetrics = () => {
+  const computeMetrics = useCallback(() => {
     const total = appointments.length;
     if (total === 0) return null;
 
-    const cancelled = appointments.filter(a => a.status === 'cancelled').length;
-    const noShow = appointments.filter(a => a.status === 'no_show').length;
-    const completed = appointments.filter(a => a.status === 'completed').length;
+    // Normalize status to lowercase to handle backend inconsistency
+    const getStatus = (a) => (a.status || 'unknown').toLowerCase();
+    const cancelled = appointments.filter(a => getStatus(a) === 'cancelled').length;
+    const noShow = appointments.filter(a => getStatus(a) === 'no_show').length;
+    const completed = appointments.filter(a => getStatus(a) === 'completed').length;
     const denominator = total - cancelled;
 
     // No-show rate
@@ -86,10 +88,10 @@ const SchedulerAnalytics = () => {
       byType[type] = (byType[type] || 0) + 1;
     });
 
-    // By status
+    // By status (normalized to lowercase)
     const byStatus = {};
     appointments.forEach(a => {
-      const status = a.status || 'unknown';
+      const status = (a.status || 'unknown').toLowerCase();
       byStatus[status] = (byStatus[status] || 0) + 1;
     });
 
@@ -112,11 +114,19 @@ const SchedulerAnalytics = () => {
       byStatus,
       byUser,
     };
-  };
+  }, [appointments]);
 
-  const metrics = computeMetrics();
-  const maxByType = metrics ? Math.max(...Object.values(metrics.byType)) : 0;
-  const maxByUser = metrics ? Math.max(...Object.values(metrics.byUser)) : 0;
+  const metrics = useMemo(() => computeMetrics(), [computeMetrics]);
+  const maxByType = useMemo(() => {
+    if (!metrics) return 0;
+    const vals = Object.values(metrics.byType);
+    return vals.length > 0 ? Math.max(...vals) : 0;
+  }, [metrics]);
+  const maxByUser = useMemo(() => {
+    if (!metrics) return 0;
+    const vals = Object.values(metrics.byUser);
+    return vals.length > 0 ? Math.max(...vals) : 0;
+  }, [metrics]);
 
   if (loading) {
     return (

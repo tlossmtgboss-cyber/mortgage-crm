@@ -1,12 +1,11 @@
 /**
- * Scheduling Service
+ * DEPRECATED — Not imported by any active component.
+ * Active scheduling uses api.js (schedulerAPI, calendarAPI).
+ * Retained for reference only. Do NOT import.
  *
- * Unified interface for booking appointments through either:
+ * Original: Unified interface for booking appointments through either:
  * - Smart Scheduler (internal)
  * - Calendly (external integration)
- *
- * This adapter allows the frontend to book appointments without
- * knowing which backend is being used.
  */
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
@@ -45,7 +44,7 @@ export async function getAvailability({ userId, startDate, endDate, provider = '
       return await response.json();
     } else {
       // Smart Scheduler - get business hours and existing appointments
-      const response = await fetch(`${API_BASE_URL}/api/v1/scheduler-setup/settings`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/scheduler/config`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -59,7 +58,7 @@ export async function getAvailability({ userId, startDate, endDate, provider = '
 
       // Also get existing appointments
       const appointmentsResponse = await fetch(
-        `${API_BASE_URL}/api/v1/scheduler-setup/appointments?days_ahead=30`,
+        `${API_BASE_URL}/api/v1/scheduler/appointments?days_ahead=30`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -78,7 +77,7 @@ export async function getAvailability({ userId, startDate, endDate, provider = '
       };
     }
   } catch (error) {
-    console.error('Error fetching availability:', error);
+    // Error handled by returning failure status
     return { success: false, error: error.message };
   }
 }
@@ -133,7 +132,7 @@ export async function getCalendlySchedulingUrl(userId) {
       userName: status.calendly_user_name
     };
   } catch (error) {
-    console.error('Error getting Calendly URL:', error);
+    // Error handled by returning failure status
     return { success: false, error: error.message };
   }
 }
@@ -166,7 +165,7 @@ export async function bookAppointment({
   try {
     // For now, always use Smart Scheduler for booking
     // Calendly bookings happen through their widget
-    const response = await fetch(`${API_BASE_URL}/api/v1/scheduler-setup/appointments`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/scheduler/appointments`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -190,7 +189,7 @@ export async function bookAppointment({
 
     return await response.json();
   } catch (error) {
-    console.error('Error booking appointment:', error);
+    // Error handled by returning failure status
     return { success: false, error: error.message };
   }
 }
@@ -211,7 +210,7 @@ export async function cancelAppointment(appointmentId, reason, provider = 'smart
     if (provider === 'calendly') {
       endpoint = `${API_BASE_URL}/api/v1/calendly/bookings/${encodeURIComponent(appointmentId)}/cancel`;
     } else {
-      endpoint = `${API_BASE_URL}/api/v1/scheduler-setup/appointments/${appointmentId}/cancel`;
+      endpoint = `${API_BASE_URL}/api/v1/scheduler/appointments/${appointmentId}/cancel`;
     }
 
     const response = await fetch(endpoint, {
@@ -230,7 +229,7 @@ export async function cancelAppointment(appointmentId, reason, provider = 'smart
 
     return { success: true };
   } catch (error) {
-    console.error('Error cancelling appointment:', error);
+    // Error handled by returning failure status
     return { success: false, error: error.message };
   }
 }
@@ -252,7 +251,7 @@ export async function getUpcomingAppointments({ daysAhead = 7, provider = 'smart
     if (provider === 'calendly' && userId) {
       endpoint = `${API_BASE_URL}/api/v1/calendly/bookings?user_id=${userId}&days_ahead=${daysAhead}`;
     } else {
-      endpoint = `${API_BASE_URL}/api/v1/scheduler-setup/appointments?days_ahead=${daysAhead}`;
+      endpoint = `${API_BASE_URL}/api/v1/scheduler/appointments?days_ahead=${daysAhead}`;
     }
 
     const response = await fetch(endpoint, {
@@ -267,7 +266,7 @@ export async function getUpcomingAppointments({ daysAhead = 7, provider = 'smart
 
     return await response.json();
   } catch (error) {
-    console.error('Error fetching appointments:', error);
+    // Error handled by returning empty array
     return [];
   }
 }
@@ -300,7 +299,7 @@ export async function getSchedulingProvider(userId) {
     }
 
     // Fall back to Smart Scheduler
-    const schedulerResponse = await fetch(`${API_BASE_URL}/api/v1/scheduler-setup/loan-officers?active_only=true`, {
+    const schedulerResponse = await fetch(`${API_BASE_URL}/api/v1/scheduler/config`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -317,7 +316,7 @@ export async function getSchedulingProvider(userId) {
 
     return { provider: null, configured: false };
   } catch (error) {
-    console.error('Error checking scheduling provider:', error);
+    // Error handled by returning failure status
     return { provider: null, configured: false, error: error.message };
   }
 }

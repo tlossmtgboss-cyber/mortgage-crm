@@ -14,7 +14,7 @@ This module extends the base scheduler with:
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Float, Date, Time, Enum as SQLEnum, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime, timedelta, time, date
+from datetime import datetime, timedelta, time, date, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
 from enum import Enum
@@ -98,6 +98,7 @@ def create_scheduler_enhancement_models(Base):
 
         id = Column(Integer, primary_key=True, index=True)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Resource info
         resource_type = Column(SQLEnum(ResourceType), default=ResourceType.LOAN_OFFICER)
@@ -112,16 +113,16 @@ def create_scheduler_enhancement_models(Base):
         calendar_email = Column(String(255))
 
         # Skills & Expertise
-        skills = Column(JSON, default=[])  # ["FHA", "VA", "Jumbo", "First-Time Buyer"]
-        product_expertise = Column(JSON, default=[])  # Product types they specialize in
-        certifications = Column(JSON, default=[])
+        skills = Column(JSON, default=list)  # ["FHA", "VA", "Jumbo", "First-Time Buyer"]
+        product_expertise = Column(JSON, default=list)  # Product types they specialize in
+        certifications = Column(JSON, default=list)
 
         # Language capabilities
-        languages = Column(JSON, default=["en"])  # ["en", "es", "zh"]
+        languages = Column(JSON, default=lambda: ["en"])  # ["en", "es", "zh"]
         primary_language = Column(String(10), default="en")
 
         # Licensing
-        licensed_states = Column(JSON, default=[])  # ["TX", "CA", "FL"]
+        licensed_states = Column(JSON, default=list)  # ["TX", "CA", "FL"]
         nmls_id = Column(String(50))
 
         # Capacity & Load
@@ -155,8 +156,8 @@ def create_scheduler_enhancement_models(Base):
         send_calendar_invites = Column(Boolean, default=True)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         user = relationship("User", backref="scheduler_resource")
@@ -175,6 +176,7 @@ def create_scheduler_enhancement_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Slot being held
         slot_start = Column(DateTime, nullable=False)
@@ -196,7 +198,7 @@ def create_scheduler_enhancement_models(Base):
         converted_to_appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id"), nullable=True)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         released_at = Column(DateTime)
         converted_at = Column(DateTime)
 
@@ -210,6 +212,7 @@ def create_scheduler_enhancement_models(Base):
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Profile info
         profile_name = Column(String(100), nullable=False)
@@ -222,7 +225,7 @@ def create_scheduler_enhancement_models(Base):
         # [{"type": "confirmation", "channel": "email", "immediate": true},
         #  {"type": "reminder_24h", "channel": "sms", "hours_before": 24},
         #  {"type": "reminder_1h", "channel": "sms", "hours_before": 1}]
-        reminder_schedule = Column(JSON, default=[])
+        reminder_schedule = Column(JSON, default=list)
 
         # Content templates
         confirmation_template = Column(Text)
@@ -240,8 +243,8 @@ def create_scheduler_enhancement_models(Base):
 
         # Status
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
     class SchedulerAnalytics(Base):
@@ -256,6 +259,7 @@ def create_scheduler_enhancement_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Period
         date = Column(Date, nullable=False)
@@ -286,23 +290,23 @@ def create_scheduler_enhancement_models(Base):
         conversion_rate = Column(Float, default=0.0)
 
         # Channel breakdown (JSON)
-        bookings_by_channel = Column(JSON, default={})
+        bookings_by_channel = Column(JSON, default=dict)
         # {"ai_voice": 10, "sms": 5, "web_link": 15, ...}
 
         # Time slot popularity (JSON)
-        popular_time_slots = Column(JSON, default={})
+        popular_time_slots = Column(JSON, default=dict)
         # {"9:00": 5, "10:00": 8, "14:00": 10, ...}
 
         # Day popularity (JSON)
-        popular_days = Column(JSON, default={})
+        popular_days = Column(JSON, default=dict)
         # {"monday": 10, "tuesday": 15, ...}
 
         # Revenue impact
         estimated_revenue = Column(Float, default=0.0)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
     class CampaignBooking(Base):
@@ -314,6 +318,7 @@ def create_scheduler_enhancement_models(Base):
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Campaign info
         campaign_id = Column(String(100))
@@ -356,8 +361,8 @@ def create_scheduler_enhancement_models(Base):
         roi = Column(Float, default=0.0)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
     class GroupSession(Base):
@@ -369,6 +374,7 @@ def create_scheduler_enhancement_models(Base):
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Session info
         title = Column(String(255), nullable=False)
@@ -389,7 +395,7 @@ def create_scheduler_enhancement_models(Base):
 
         # Host/presenter
         host_resource_id = Column(Integer, ForeignKey("scheduler_resources.id"))
-        co_host_ids = Column(JSON, default=[])
+        co_host_ids = Column(JSON, default=list)
 
         # Location
         meeting_mode = Column(String(20), default="video")  # video, in_person, hybrid
@@ -402,15 +408,15 @@ def create_scheduler_enhancement_models(Base):
         require_approval = Column(Boolean, default=False)
 
         # Attendees (JSON array of registrations)
-        attendees = Column(JSON, default=[])
-        waitlist = Column(JSON, default=[])
+        attendees = Column(JSON, default=list)
+        waitlist = Column(JSON, default=list)
 
         # Status
         status = Column(String(20), default="scheduled")  # scheduled, in_progress, completed, cancelled
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
     class SeriesSchedule(Base):
@@ -422,6 +428,7 @@ def create_scheduler_enhancement_models(Base):
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Series info
         series_name = Column(String(255), nullable=False)
@@ -431,7 +438,7 @@ def create_scheduler_enhancement_models(Base):
         # [{"order": 1, "appointment_type_id": 1, "days_after_previous": 0},
         #  {"order": 2, "appointment_type_id": 2, "days_after_previous": 3},
         #  {"order": 3, "appointment_type_id": 3, "days_after_previous": 7}]
-        steps = Column(JSON, default=[])
+        steps = Column(JSON, default=list)
 
         # Linked contact
         contact_id = Column(Integer)
@@ -440,16 +447,16 @@ def create_scheduler_enhancement_models(Base):
 
         # Progress tracking
         current_step = Column(Integer, default=1)
-        completed_steps = Column(JSON, default=[])  # List of appointment IDs
+        completed_steps = Column(JSON, default=list)  # List of appointment IDs
 
         # Status
         status = Column(String(20), default="active")  # active, paused, completed, cancelled
 
         # Timestamps
-        started_at = Column(DateTime, default=datetime.utcnow)
+        started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         completed_at = Column(DateTime)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
     class CalendarSync(Base):
@@ -461,6 +468,7 @@ def create_scheduler_enhancement_models(Base):
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # User
         user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -487,8 +495,8 @@ def create_scheduler_enhancement_models(Base):
         sync_error = Column(Text)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
     class IntakeQuestion(Base):
@@ -500,6 +508,7 @@ def create_scheduler_enhancement_models(Base):
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
         # Linked to appointment type
         appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=False)
@@ -510,7 +519,7 @@ def create_scheduler_enhancement_models(Base):
         question_type = Column(String(20), default="text")  # text, select, multi_select, date, number, boolean, phone, email
 
         # Options (for select/multi_select)
-        options = Column(JSON, default=[])
+        options = Column(JSON, default=list)
 
         # Validation
         is_required = Column(Boolean, default=False)
@@ -529,8 +538,8 @@ def create_scheduler_enhancement_models(Base):
 
         # Status
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
     return {
@@ -799,40 +808,26 @@ def parse_natural_language_time(text: str, base_date: date = None) -> Optional[d
 
 
 def generate_ics_content(appointment: dict) -> str:
-    """Generate ICS calendar file content for appointment"""
-    from uuid import uuid4
-
-    uid = str(uuid4())
-    dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    """Generate ICS content. Delegates to canonical RFC 5545 implementation."""
+    from scheduler_email_service import generate_ics_content as _canonical_ics
 
     start_dt = appointment.get('scheduled_start')
     end_dt = appointment.get('scheduled_end')
-
     if isinstance(start_dt, str):
         start_dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
     if isinstance(end_dt, str):
         end_dt = datetime.fromisoformat(end_dt.replace('Z', '+00:00'))
-
-    dtstart = start_dt.strftime("%Y%m%dT%H%M%SZ")
-    dtend = end_dt.strftime("%Y%m%dT%H%M%SZ")
-
-    summary = appointment.get('title', 'Appointment')
-    description = appointment.get('description', '')
-    location = appointment.get('location', '') or appointment.get('video_link', '')
-
-    ics = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Perennia AI//Smart Scheduler//EN
-BEGIN:VEVENT
-UID:{uid}
-DTSTAMP:{dtstamp}
-DTSTART:{dtstart}
-DTEND:{dtend}
-SUMMARY:{summary}
-DESCRIPTION:{description}
-LOCATION:{location}
-STATUS:CONFIRMED
-END:VEVENT
-END:VCALENDAR"""
-
-    return ics
+    duration_minutes = int((end_dt - start_dt).total_seconds() / 60) if end_dt and start_dt else 30
+    return _canonical_ics(
+        appointment_title=appointment.get('title', 'Appointment'),
+        start_datetime=start_dt,
+        duration_minutes=duration_minutes,
+        attendee_email=appointment.get('attendee_email', ''),
+        attendee_name=appointment.get('attendee_name', ''),
+        organizer_email=appointment.get('organizer_email', 'sarah@reply.perenniaai.com'),
+        organizer_name=appointment.get('organizer_name', 'Perennia AI'),
+        description=appointment.get('description', ''),
+        location=appointment.get('location', '') or appointment.get('video_link', ''),
+        video_link=appointment.get('video_link'),
+        appointment_id=appointment.get('id'),
+    )

@@ -17,7 +17,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 import html
@@ -25,6 +25,11 @@ import logging
 import pytz
 import os
 import uuid as uuid_lib
+
+try:
+    import nh3
+except ImportError:
+    nh3 = None
 
 from smart_scheduler_models import (
     AppointmentStatus, MeetingType, MeetingMode, RoutingStrategy,
@@ -44,6 +49,10 @@ from scheduler_email_service import (
     send_team_member_notification_email,
     send_appointment_cancellation_email,
     send_team_member_cancellation_email,
+    generate_reschedule_url,
+    send_with_sms_fallback,
+    send_appointment_reminder_email,
+    send_appointment_reminder_sms,
 )
 from services.notification_service import notification_service
 from services.microsoft_graph import create_event_via_graph, CalendarResult
@@ -57,7 +66,7 @@ router = APIRouter()
 # CROSS-SOURCE CONFLICT HELPERS
 # ============================================================================
 
-def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt):
+def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_id=None):
     """
     Gather all busy time blocks from all 3 calendar sources for a user.
     Returns a list of (start, end) tuples representing occupied time.
@@ -67,48 +76,57 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt):
     # Source 1: ScheduledAppointment (AI-booked appointments)
     try:
         from services.smart_scheduler_service import ScheduledAppointment as SAModel
-        sa_appts = db.query(SAModel).filter(
+        sa_query = db.query(SAModel).filter(
             SAModel.loan_officer_id == target_user_id,
             SAModel.status.in_(["scheduled", "confirmed"]),
             SAModel.start_time >= start_dt,
             SAModel.start_time <= end_dt
-        ).all()
+        )
+        if org_id:
+            sa_query = sa_query.filter(SAModel.organization_id == org_id)
+        sa_appts = sa_query.all()
         for a in sa_appts:
             if a.start_time and a.end_time:
                 conflicts.append((a.start_time, a.end_time))
     except Exception as e:
-        logger.debug(f"ScheduledAppointment cross-source check skipped: {e}")
+        logger.warning(f"ScheduledAppointment cross-source check unavailable: {e}")
 
     # Source 2: CalendarEvent (manual calendar entries)
     try:
         import main
         CalendarEvent = main.CalendarEvent
-        cal_events = db.query(CalendarEvent).filter(
+        cal_query = db.query(CalendarEvent).filter(
             CalendarEvent.user_id == target_user_id,
             CalendarEvent.status != "cancelled",
             CalendarEvent.start_time >= start_dt,
             CalendarEvent.start_time <= end_dt
-        ).all()
+        )
+        if org_id:
+            cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
+        cal_events = cal_query.all()
         for e in cal_events:
             if e.start_time and e.end_time:
                 conflicts.append((e.start_time, e.end_time))
     except Exception as ex:
-        logger.debug(f"CalendarEvent cross-source check skipped: {ex}")
+        logger.warning(f"CalendarEvent cross-source check unavailable: {ex}")
 
     # Source 3: CRMCalendarEvent (Salesforce-synced events)
     try:
         from models.calendar_sync_models import CRMCalendarEvent
-        crm_events = db.query(CRMCalendarEvent).filter(
+        crm_query = db.query(CRMCalendarEvent).filter(
             CRMCalendarEvent.owner_user_id == target_user_id,
             CRMCalendarEvent.status != "canceled",
             CRMCalendarEvent.start_at >= start_dt,
             CRMCalendarEvent.start_at <= end_dt
-        ).all()
+        )
+        if org_id:
+            crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
+        crm_events = crm_query.all()
         for e in crm_events:
             if e.start_at and e.end_at:
                 conflicts.append((e.start_at, e.end_at))
     except Exception as ex:
-        logger.debug(f"CRMCalendarEvent cross-source check skipped: {ex}")
+        logger.warning(f"CRMCalendarEvent cross-source check unavailable: {ex}")
 
     return conflicts
 
@@ -172,12 +190,414 @@ def _get_user_timezone(db, user_id: int) -> str:
 
 
 # ============================================================================
+# RATE LIMITING (Redis-backed, multi-process safe)
+# ============================================================================
+
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX_PUBLIC = 10  # max requests per window for public endpoints
+
+# Lazy Redis connection for rate limiting
+_rate_limit_redis = None
+_rate_limit_redis_checked = False
+
+
+def _get_rate_limit_redis():
+    """Get or create Redis connection for rate limiting. Returns None if unavailable."""
+    global _rate_limit_redis, _rate_limit_redis_checked
+    if _rate_limit_redis_checked:
+        return _rate_limit_redis
+    _rate_limit_redis_checked = True
+    try:
+        import redis as redis_lib
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        _rate_limit_redis = redis_lib.Redis.from_url(
+            redis_url, decode_responses=True, socket_connect_timeout=2
+        )
+        _rate_limit_redis.ping()
+        logger.info("Scheduler rate limiter connected to Redis")
+    except Exception as e:
+        logger.warning(f"Redis unavailable for scheduler rate limiting: {e}")
+        _rate_limit_redis = None
+    return _rate_limit_redis
+
+
+# R4: In-memory rate limiter fallback when Redis is unavailable
+import time as _time
+from collections import defaultdict, deque
+import threading
+
+_memory_rate_limits = defaultdict(deque)  # key -> deque of timestamps
+_memory_rate_lock = threading.Lock()
+
+
+def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: int = _RATE_LIMIT_WINDOW) -> bool:
+    """
+    In-memory sliding window rate limit. Returns True if allowed, False if over limit.
+    Thread-safe via lock. Not multi-process safe (single worker protection only).
+    """
+    now = _time.time()
+    with _memory_rate_lock:
+        timestamps = _memory_rate_limits[key]
+        # Evict expired timestamps
+        while timestamps and timestamps[0] < now - window_seconds:
+            timestamps.popleft()
+        if len(timestamps) >= max_requests:
+            return False
+        timestamps.append(now)
+        return True
+
+
+def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC):
+    """
+    Redis-backed rate limiter keyed by client IP + path.
+    Falls back to in-memory rate limiting if Redis is unavailable.
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+
+    key = f"sched_rl:{request.url.path}:{client_ip}"
+
+    r = _get_rate_limit_redis()
+    if r is None:
+        # Fallback: in-memory rate limiting instead of allowing all
+        if not _check_memory_rate_limit(key, max_requests):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests. Please try again later.",
+                headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+            )
+        return
+
+    try:
+        current = r.incr(key)
+        if current == 1:
+            r.expire(key, _RATE_LIMIT_WINDOW)
+        if current > max_requests:
+            ttl = r.ttl(key)
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests. Please try again later.",
+                headers={"Retry-After": str(max(ttl, 1))}
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Redis command error — fall back to in-memory
+        logger.warning(f"Rate limit Redis error, using memory fallback: {e}")
+        if not _check_memory_rate_limit(key, max_requests):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests. Please try again later.",
+                headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+            )
+
+
+def _sanitize_text(value: Optional[str]) -> Optional[str]:
+    """Sanitize user-supplied text input, stripping all HTML."""
+    if value is None:
+        return None
+    if nh3:
+        return nh3.clean(value, tags=set())
+    # Fallback: html.escape
+    return html.escape(value)
+
+
+def _mask_email(email: Optional[str]) -> str:
+    """Mask email for logging: j***@example.com"""
+    if not email or '@' not in email:
+        return '***'
+    local, domain = email.split('@', 1)
+    return f"{local[0]}***@{domain}" if local else f"***@{domain}"
+
+
+def _validate_url(value: Optional[str]) -> Optional[str]:
+    """Validate URL has safe scheme (http/https only). Returns None for unsafe URLs."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(value)
+        if parsed.scheme not in ('http', 'https'):
+            logger.warning(f"Rejected URL with unsafe scheme: {parsed.scheme}")
+            return None
+        return value
+    except Exception:
+        return None
+
+
+def _audit_log(db, org_id: int, user_id: int, action: str, entity_type: str,
+               entity_id: int = None, changes: dict = None, request: Request = None):
+    """Record an audit log entry for scheduler operations."""
+    AuditLog = _models.get('SchedulerAuditLog')
+    if not AuditLog:
+        return
+    try:
+        entry = AuditLog(
+            organization_id=org_id,
+            user_id=user_id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            changes=changes,
+            ip_address=request.client.host if request and request.client else None,
+            user_agent=str(request.headers.get('user-agent', ''))[:255] if request else None,
+        )
+        db.add(entry)
+        # Don't commit here — let the caller's commit include this
+    except Exception as e:
+        logger.warning(f"Failed to write audit log: {e}")
+
+
+def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time, org_id=None, exclude_appointment_id=None):
+    """
+    Check for overlapping appointments using SELECT FOR UPDATE to prevent double-booking.
+    Raises HTTPException 409 if a conflict is found or rows are locked by another transaction.
+    exclude_appointment_id: skip this appointment (used when rescheduling to avoid self-conflict).
+    """
+    from sqlalchemy.exc import OperationalError
+    Appointment = _models['Appointment']
+    filters = [
+        Appointment.assigned_user_id == assigned_user_id,
+        Appointment.status.notin_([AppointmentStatus.CANCELLED.value, 'no_show', 'cancelled']),
+        Appointment.scheduled_start < end_time,
+        Appointment.scheduled_end > start_time,
+    ]
+    if org_id is not None:
+        filters.append(Appointment.organization_id == org_id)
+    if exclude_appointment_id is not None:
+        filters.append(Appointment.id != exclude_appointment_id)
+
+    try:
+        conflict = db.query(Appointment).filter(and_(*filters)).with_for_update(nowait=True).first()
+    except OperationalError:
+        # Row is locked by another transaction — treat as conflict
+        raise HTTPException(
+            status_code=409,
+            detail="This time slot is being booked by another user. Please select a different time."
+        )
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail="This time slot is no longer available. Please select a different time."
+        )
+
+
+# C2: Duplicate booking detection
+def _check_duplicate_booking(db, attendee_email: str, assigned_user_id: int,
+                              start_time, org_id=None, window_minutes=30):
+    """
+    Check for an existing booking with the same attendee_email + same LO
+    within ±window_minutes of the proposed start_time.
+    Raises HTTPException 409 if a duplicate is found.
+    """
+    if not attendee_email:
+        return  # No email to check against
+
+    Appointment = _models['Appointment']
+    window_start = start_time - timedelta(minutes=window_minutes)
+    window_end = start_time + timedelta(minutes=window_minutes)
+
+    filters = [
+        Appointment.attendee_email == attendee_email,
+        Appointment.assigned_user_id == assigned_user_id,
+        Appointment.status.notin_([AppointmentStatus.CANCELLED.value, 'cancelled']),
+        Appointment.scheduled_start >= window_start,
+        Appointment.scheduled_start <= window_end,
+    ]
+    if org_id is not None:
+        filters.append(Appointment.organization_id == org_id)
+
+    duplicate = db.query(Appointment).filter(and_(*filters)).first()
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A booking for this email already exists at this time. "
+                   f"Existing appointment ID: {duplicate.id}"
+        )
+
+
+# ============================================================================
+# CRM INTEGRATION HELPERS (Module 2 + Module 8)
+# ============================================================================
+
+def _log_appointment_activity(db, org_id: int, user_id: int, lead_id: int,
+                               loan_id: int, content: str,
+                               activity_type: str = "Meeting"):
+    """Log an appointment-related activity to the CRM Activity table."""
+    try:
+        from database.models.communication import Activity
+        from database.enums import ActivityType
+
+        type_map = {
+            "Meeting": ActivityType.MEETING,
+            "Note": ActivityType.NOTE,
+            "Email": ActivityType.EMAIL,
+        }
+
+        activity = Activity(
+            organization_id=org_id,
+            type=type_map.get(activity_type, ActivityType.MEETING),
+            content=content[:2000],  # Truncate to safe length
+            lead_id=lead_id,
+            loan_id=loan_id,
+            user_id=user_id,
+        )
+        db.add(activity)
+        logger.debug(f"Activity logged: {content[:80]}")
+    except ImportError:
+        logger.debug("Activity model not available, skipping activity log")
+    except Exception as e:
+        logger.error(f"Failed to log appointment activity: {e}")
+
+
+def _ensure_lead_for_booking(db, attendee_email: str, attendee_name: str,
+                              attendee_phone: str, assigned_user_id: int,
+                              org_id: int) -> Optional[int]:
+    """
+    Find or create a Lead record for a booking attendee.
+    Dedup: Match on email + organization_id. Returns lead_id or None.
+    """
+    if not attendee_email:
+        return None
+
+    try:
+        from database.models.lead_loan import Lead
+    except ImportError:
+        logger.debug("Lead model not available, skipping lead creation")
+        return None
+
+    try:
+        existing = db.query(Lead).filter(
+            Lead.email == attendee_email,
+            Lead.organization_id == org_id
+        ).first()
+
+        if existing:
+            existing.last_contact = datetime.now(timezone.utc)
+            logger.info(f"Linked booking to existing lead {existing.id} ({_mask_email(attendee_email)})")
+            return existing.id
+
+        # Parse name into first/last
+        name_parts = (attendee_name or "").strip().split(None, 1)
+        first_name = name_parts[0] if name_parts else ""
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        new_lead = Lead(
+            organization_id=org_id,
+            name=attendee_name or attendee_email,
+            first_name=first_name,
+            last_name=last_name,
+            email=attendee_email,
+            phone=attendee_phone,
+            stage="New",
+            source="scheduler",
+            owner_id=assigned_user_id,
+            last_contact=datetime.now(timezone.utc),
+            lead_received_date=datetime.now(timezone.utc),
+        )
+        db.add(new_lead)
+        db.flush()  # Get the ID without committing
+
+        logger.info(f"Created new lead {new_lead.id} from booking ({_mask_email(attendee_email)})")
+        return new_lead.id
+
+    except Exception as e:
+        logger.error(f"Failed to ensure lead for booking: {e}")
+        return None
+
+
+def _create_followup_task(db, org_id: int, owner_id: int, lead_id: int,
+                           loan_id: int, title: str, description: str,
+                           due_date, priority: str = "medium"):
+    """Create a follow-up task linked to a lead/loan."""
+    try:
+        from database.models.task import Task
+
+        task = Task(
+            organization_id=org_id,
+            title=title[:255],
+            description=description[:2000],
+            status="pending",
+            priority=priority,
+            due_date=due_date,
+            owner_id=owner_id,
+            lead_id=lead_id,
+            loan_id=loan_id,
+        )
+        db.add(task)
+        logger.info(f"Follow-up task created: {title[:80]}")
+    except ImportError:
+        logger.debug("Task model not available, skipping task creation")
+    except Exception as e:
+        logger.error(f"Failed to create follow-up task: {e}")
+
+
+def _create_comm_failure_task(db, org_id: int, assigned_user_id: int,
+                               attendee_name: str, error_msg: str):
+    """R5: Create a high-priority task when all communication channels fail."""
+    try:
+        from database.models.task import Task
+        task = Task(
+            organization_id=org_id,
+            title=f"Communication failure: {attendee_name or 'Client'}"[:255],
+            description=f"All email/SMS attempts failed. Manual follow-up required.\nError: {error_msg}"[:2000],
+            priority="high",
+            status="pending",
+            owner_id=assigned_user_id,
+            due_date=datetime.now(timezone.utc) + timedelta(hours=4),
+        )
+        db.add(task)
+        db.commit()
+        logger.info(f"Created communication failure escalation task for {attendee_name}")
+    except Exception as e:
+        logger.error(f"Failed to create escalation task: {e}")
+
+
+def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str) -> Optional[str]:
+    """
+    C3: Soft check — verify LO has NMLS number on file.
+    Returns a warning string if concern, None if OK. Advisory only.
+    """
+    if not attendee_state:
+        return None
+
+    try:
+        from database.models.core import User
+        assigned = db.query(User).filter(User.id == assigned_user_id).first()
+        if not assigned:
+            return f"Warning: Could not verify LO licensing - user {assigned_user_id} not found"
+
+        nmls = getattr(assigned, 'nmls_number', None)
+        if not nmls:
+            name = f"{getattr(assigned, 'first_name', '')} {getattr(assigned, 'last_name', '')}".strip()
+            return (f"Warning: LO {name} has no NMLS number on file. "
+                    f"Cannot verify licensing for state {attendee_state}.")
+
+        logger.info(f"LO licensing check: NMLS#{nmls} for state {attendee_state}")
+        return None
+    except ImportError:
+        return None
+    except Exception as e:
+        logger.warning(f"LO licensing check failed: {e}")
+        return None
+
+
+# ============================================================================
 # EMAIL SERVICE STATUS ENDPOINT
 # ============================================================================
 
 @router.get("/email-service-status")
-async def get_email_service_status():
-    """Check if email service is properly configured"""
+async def get_email_service_status(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check if email service is properly configured (authenticated)"""
     sendgrid_configured = bool(os.getenv("SENDGRID_API_KEY"))
     sendgrid_from_email = os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
 
@@ -190,22 +610,32 @@ async def get_email_service_status():
 
 
 @router.post("/test-email")
-async def test_email_send(to_email: str = Query(..., description="Email address to send test to")):
-    """Test endpoint to send a test email and see actual SendGrid response"""
+async def test_email_send(
+    to_email: str = Query(..., description="Email address to send test to"),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Test endpoint to send a test email (authenticated, admin-only)"""
+    # Require admin role
+    user_role = getattr(current_user, 'role', None)
+    if user_role not in ('admin', 'platform_admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     try:
+        time_sent = datetime.now(timezone.utc).isoformat()
         result = notification_service.send_email(
             to_email=to_email,
             subject="Test Email from Perennia CRM",
-            html_content="""
+            html_content=f"""
             <html>
             <body style="font-family: Arial, sans-serif; padding: 20px;">
                 <h2>Test Email</h2>
                 <p>This is a test email from Perennia CRM to verify SendGrid is working.</p>
-                <p>Time sent: """ + datetime.now().isoformat() + """</p>
+                <p>Time sent: {html.escape(time_sent)}</p>
             </body>
             </html>
             """,
-            plain_content="Test email from Perennia CRM. Time: " + datetime.now().isoformat()
+            plain_content=f"Test email from Perennia CRM. Time: {time_sent}"
         )
 
         return {
@@ -213,12 +643,11 @@ async def test_email_send(to_email: str = Query(..., description="Email address 
             "to_email": to_email,
             "from_email": os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"),
             "sendgrid_key_present": bool(os.getenv("SENDGRID_API_KEY")),
-            "sendgrid_key_length": len(os.getenv("SENDGRID_API_KEY", "")) if os.getenv("SENDGRID_API_KEY") else 0
         }
     except Exception as e:
+        logger.exception(f"Test email failed: {e}")
         return {
-            "test_result": {"success": False, "error": "Internal server error"},
-            "exception_type": type(e).__name__,
+            "test_result": {"success": False, "error": "Email send failed"},
             "to_email": to_email
         }
 
@@ -245,6 +674,17 @@ async def get_availability(
     Appointment = _models['Appointment']
 
     target_user_id = user_id or user.id
+
+    # S1: Validate target user belongs to same organization (prevent cross-tenant IDOR)
+    if user_id and user_id != user.id:
+        User = _models.get('User')
+        if User:
+            target_user = db.query(User).filter(
+                User.id == user_id,
+                User.organization_id == org_id
+            ).first()
+            if not target_user:
+                raise HTTPException(status_code=403, detail="User not found in your organization")
 
     # Get config
     config = db.query(SchedulerConfig).filter(
@@ -378,7 +818,11 @@ async def create_availability_slot(
         try:
             priority = SlotPriority(slot_data.priority.lower())
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail=f"Invalid priority: {slot_data.priority}")
+
+    # Validate max_bookings
+    if slot_data.max_bookings is not None and slot_data.max_bookings < 1:
+        raise HTTPException(status_code=400, detail="max_bookings must be at least 1")
 
     slot = AvailabilitySlot(
         organization_id=org_id,
@@ -391,7 +835,7 @@ async def create_availability_slot(
         priority=priority,
         is_recurring=slot_data.is_recurring,
         allowed_meeting_types=slot_data.allowed_meeting_types,
-        max_bookings=slot_data.max_bookings
+        max_bookings=max(1, slot_data.max_bookings or 1)
     )
 
     db.add(slot)
@@ -445,6 +889,9 @@ async def list_appointments(
     db: Session = Depends(get_db)
 ):
     """List appointments with filters - includes both Appointment and ScheduledAppointment tables"""
+    # S11: Cap pagination bounds to prevent abuse
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
@@ -470,7 +917,7 @@ async def list_appointments(
             status_enum = AppointmentStatus(status)
             query = query.filter(Appointment.status == status_enum)
         except ValueError:
-            pass
+            raise HTTPException(status_code=400, detail=f"Invalid status filter: {status}")
 
     if lead_id:
         query = query.filter(Appointment.lead_id == lead_id)
@@ -510,8 +957,6 @@ async def list_appointments(
         ai_query = db.query(ScheduledAppointment).filter(
             ScheduledAppointment.loan_officer_id == user.id,
             ScheduledAppointment.organization_id == org_id
-        ) if hasattr(ScheduledAppointment, 'organization_id') else db.query(ScheduledAppointment).filter(
-            ScheduledAppointment.loan_officer_id == user.id
         )
 
         if start_date:
@@ -523,7 +968,7 @@ async def list_appointments(
         if status:
             ai_query = ai_query.filter(ScheduledAppointment.status == status)
 
-        ai_appointments = ai_query.order_by(ScheduledAppointment.start_time.desc()).all()
+        ai_appointments = ai_query.order_by(ScheduledAppointment.start_time.desc()).limit(limit).all()
 
         # Convert AI appointments to same response format
         for a in ai_appointments:
@@ -645,6 +1090,11 @@ async def create_appointment(
     # Calculate end time
     scheduled_end = appt_data.scheduled_start + timedelta(minutes=appt_data.duration_minutes)
 
+    # Check for conflicts before creating
+    assigned_user = appt_data.assigned_user_id or user.id
+    _check_appointment_conflict(db, assigned_user, appt_data.scheduled_start, scheduled_end, org_id=org_id)
+    _check_duplicate_booking(db, appt_data.attendee_email, assigned_user, appt_data.scheduled_start, org_id=org_id)
+
     # Parse enums
     meeting_type = MeetingType.CUSTOM
     if appt_data.meeting_type:
@@ -682,15 +1132,53 @@ async def create_appointment(
         attendee_notes=appt_data.attendee_notes,
         intake_responses=appt_data.intake_responses,
         status=AppointmentStatus.BOOKED,
+        status_changed_at=datetime.now(timezone.utc),
         booked_by_ai=appt_data.booked_by_ai,
         ai_booking_context=appt_data.ai_booking_context
     )
 
     db.add(appointment)
+    _audit_log(db, org_id, user.id, 'created', 'appointment', changes={
+        'title': appt_data.title,
+        'attendee_email': appt_data.attendee_email,
+        'scheduled_start': appt_data.scheduled_start.isoformat() if appt_data.scheduled_start else None,
+    }, request=request)
     db.commit()
     db.refresh(appointment)
+    # Backfill entity_id now that we have it
+    _audit_log(db, org_id, user.id, '_id_backfill', 'appointment', entity_id=appointment.id)
+    db.commit()
 
     logger.info(f"Appointment created: {appointment.id} by user {user.id}")
+
+    # CRM Integration: Create/link lead if not already linked
+    if not appointment.lead_id and appt_data.attendee_email:
+        lead_id = _ensure_lead_for_booking(
+            db, appt_data.attendee_email, appt_data.attendee_name,
+            appt_data.attendee_phone, appointment.assigned_user_id, org_id
+        )
+        if lead_id:
+            appointment.lead_id = lead_id
+
+    # CRM: Log activity
+    _log_appointment_activity(
+        db, org_id, user.id, appointment.lead_id, appointment.loan_id,
+        f"Appointment scheduled: {appointment.title} on "
+        f"{appointment.scheduled_start.strftime('%m/%d/%Y %I:%M %p') if appointment.scheduled_start else 'TBD'}"
+    )
+
+    # CRM: Create follow-up task
+    if appointment.scheduled_end:
+        _create_followup_task(
+            db, org_id, appointment.assigned_user_id,
+            appointment.lead_id, appointment.loan_id,
+            title=f"Follow up after: {appointment.title}"[:255],
+            description=f"Follow up with {appt_data.attendee_name or 'attendee'} after "
+                        f"meeting on {appointment.scheduled_start.strftime('%m/%d/%Y') if appointment.scheduled_start else 'TBD'}",
+            due_date=appointment.scheduled_end + timedelta(days=1),
+        )
+
+    db.commit()
 
     # Send confirmation email if attendee email is provided
     email_sent = False
@@ -706,12 +1194,13 @@ async def create_appointment(
             meeting_mode_str = "Phone Call"
             if appointment.meeting_mode:
                 mode_display = {
-                    "VIDEO": "Video Call",
-                    "PHONE": "Phone Call",
-                    "IN_PERSON": "In Person",
-                    "SCREEN_SHARE": "Screen Share"
+                    "video": "Video Call",
+                    "phone": "Phone Call",
+                    "in_person": "In Person",
+                    "screen_share": "Screen Share",
                 }
-                meeting_mode_str = mode_display.get(appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode), "Phone Call")
+                raw_mode = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode)
+                meeting_mode_str = mode_display.get(raw_mode.lower(), "Phone Call")
 
             # Get team member info
             team_member_name = None
@@ -730,8 +1219,9 @@ async def create_appointment(
             if appointment.video_link:
                 video_link = appointment.video_link
 
-            logger.info(f"Sending confirmation email to {appt_data.attendee_email}")
+            logger.info(f"Sending confirmation email to {_mask_email(appt_data.attendee_email)}")
             # Send confirmation email to attendee (borrower) with calendar invite
+            reschedule_url = generate_reschedule_url(appointment.id, appt_data.attendee_email)
             email_result = send_appointment_confirmation_email(
                 attendee_email=appt_data.attendee_email,
                 attendee_name=appt_data.attendee_name or "there",
@@ -744,7 +1234,8 @@ async def create_appointment(
                 team_member_email=team_member_email,
                 video_link=video_link,
                 scheduled_start=appointment.scheduled_start,
-                duration_minutes=appointment.duration_minutes
+                duration_minutes=appointment.duration_minutes,
+                reschedule_url=reschedule_url
             )
 
             email_sent = email_result.get("success", False)
@@ -785,7 +1276,7 @@ async def create_appointment(
                         if sf_result.get("success"):
                             email_sent = True
                             email_error = None
-                            logger.info(f"Appointment email sent via Salesforce to {appt_data.attendee_email}")
+                            logger.info(f"Appointment email sent via Salesforce to {_mask_email(appt_data.attendee_email)}")
                         else:
                             logger.warning(f"Salesforce email fallback also failed: {sf_result.get('message')}")
                     else:
@@ -853,13 +1344,13 @@ async def create_appointment(
     calendar_meeting_mode = "Phone Call"
     if appointment.meeting_mode:
         mode_display_map = {
-            "VIDEO": "Video Call",
-            "PHONE": "Phone Call",
-            "IN_PERSON": "In Person",
-            "SCREEN_SHARE": "Screen Share"
+            "video": "Video Call",
+            "phone": "Phone Call",
+            "in_person": "In Person",
+            "screen_share": "Screen Share",
         }
         mode_val = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode)
-        calendar_meeting_mode = mode_display_map.get(mode_val, "Phone Call")
+        calendar_meeting_mode = mode_display_map.get(mode_val.lower(), "Phone Call")
 
     if appointment.assigned_user_id:
         try:
@@ -939,7 +1430,7 @@ async def update_appointment(
 
     # Check permission - allow if user is admin, assigned to the appointment, or created it
     user_role = getattr(user, 'permission_role', '') or getattr(user, 'role', '') or ''
-    is_admin = user_role.lower() in ['admin', 'leadership', 'management'] or user.id == 1
+    is_admin = user_role.lower() in ['admin', 'leadership', 'management', 'site_admin', 'platform_admin']
     is_owner = (
         appointment.assigned_user_id == user.id or
         appointment.created_by_user_id == user.id
@@ -968,46 +1459,70 @@ async def update_appointment(
         try:
             new_status = AppointmentStatus(update_fields["status"])
             update_fields["status"] = new_status
-            update_fields["status_changed_at"] = datetime.utcnow()
+            update_fields["status_changed_at"] = datetime.now(timezone.utc)
             update_fields["status_changed_by"] = user.id
 
             if new_status == AppointmentStatus.COMPLETED:
-                update_fields["completed_at"] = datetime.utcnow()
+                update_fields["completed_at"] = datetime.now(timezone.utc)
             elif new_status == AppointmentStatus.NO_SHOW:
-                update_fields["no_show_at"] = datetime.utcnow()
+                update_fields["no_show_at"] = datetime.now(timezone.utc)
             elif new_status == AppointmentStatus.CANCELLED:
-                update_fields["cancelled_at"] = datetime.utcnow()
+                update_fields["cancelled_at"] = datetime.now(timezone.utc)
                 is_cancellation = True
         except ValueError:
-            del update_fields["status"]
+            raise HTTPException(status_code=400, detail=f"Invalid status: {update_fields['status']}")
 
     # Handle meeting mode
     if "meeting_mode" in update_fields:
         try:
             update_fields["meeting_mode"] = MeetingMode(update_fields["meeting_mode"])
         except ValueError:
-            del update_fields["meeting_mode"]
+            raise HTTPException(status_code=400, detail=f"Invalid meeting mode: {update_fields['meeting_mode']}")
 
     # Handle rescheduling - check if date/time changed
     if "scheduled_start" in update_fields:
         new_start = update_fields["scheduled_start"]
         # Check if scheduled_end was also provided, otherwise calculate it
         if "scheduled_end" in update_fields:
-            # Use the provided scheduled_end
-            pass
+            new_end = update_fields["scheduled_end"]
         else:
             # Calculate from duration
             duration = appt_data.duration_minutes or appointment.duration_minutes or 30
-            update_fields["scheduled_end"] = new_start + timedelta(minutes=duration)
+            new_end = new_start + timedelta(minutes=duration)
+            update_fields["scheduled_end"] = new_end
+
+        # Conflict check for rescheduled time (exclude self to avoid self-conflict)
+        _check_appointment_conflict(
+            db,
+            appointment.assigned_user_id,
+            new_start,
+            new_end,
+            org_id=org_id,
+            exclude_appointment_id=appointment.id
+        )
         update_fields["reschedule_count"] = (appointment.reschedule_count or 0) + 1
         is_reschedule = True
 
+    # S9: Validate URL scheme for user-supplied links
+    if "video_link" in update_fields:
+        update_fields["video_link"] = _validate_url(update_fields["video_link"])
+
     # Apply all updates
     _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
+    audit_changes = {}
     for field, value in update_fields.items():
         if hasattr(appointment, field) and field not in _protected:
+            old_val = getattr(appointment, field, None)
             setattr(appointment, field, value)
+            # Track changes for audit log (serialize values)
+            new_str = value.value if hasattr(value, 'value') else str(value) if value is not None else None
+            old_str = old_val.value if hasattr(old_val, 'value') else str(old_val) if old_val is not None else None
+            if new_str != old_str:
+                audit_changes[field] = {'old': old_str, 'new': new_str}
 
+    action = 'cancelled' if is_cancellation else 'rescheduled' if is_reschedule else 'updated'
+    _audit_log(db, org_id, user.id, action, 'appointment',
+               entity_id=appointment_id, changes=audit_changes, request=request)
     db.commit()
     db.refresh(appointment)
 
@@ -1017,7 +1532,14 @@ async def update_appointment(
     attendee_phone = getattr(appointment, 'attendee_phone', None)
     appointment_title = appointment.title or 'Appointment'
     duration_minutes = appointment.duration_minutes or 30
-    duration_str = f"{duration_minutes} minutes" if duration_minutes < 60 else f"{duration_minutes // 60} hour{'s' if duration_minutes >= 120 else ''}"
+    if duration_minutes < 60:
+        duration_str = f"{duration_minutes} minutes"
+    else:
+        hours = duration_minutes // 60
+        mins = duration_minutes % 60
+        duration_str = f"{hours} hour{'s' if hours >= 2 else ''}"
+        if mins:
+            duration_str += f" {mins} minutes"
     meeting_mode = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode or 'PHONE')
     video_link = getattr(appointment, 'video_link', None)
 
@@ -1079,8 +1601,8 @@ async def update_appointment(
             except Exception as e:
                 logger.error(f"Failed to send team member cancellation email: {e}")
 
-    elif send_notification and (is_reschedule or update_fields):
-        # Send update notifications for reschedule or other updates
+    elif send_notification and (is_reschedule or bool(set(audit_changes.keys()) & {'scheduled_start', 'scheduled_end', 'attendee_name', 'attendee_email', 'meeting_mode', 'status', 'duration_minutes', 'video_link', 'location'})):
+        # H15: Only send update notifications for material changes (time, attendee, mode, status)
         logger.info(f"Appointment {appointment_id} updated, sending update notifications")
 
         # Send update email to attendee
@@ -1188,14 +1710,35 @@ async def cancel_appointment(
 
     # Cancel the appointment
     appointment.status = AppointmentStatus.CANCELLED
-    appointment.cancelled_at = datetime.utcnow()
+    appointment.cancelled_at = datetime.now(timezone.utc)
     appointment.cancellation_reason = reason
     appointment.status_changed_by = user.id
-    appointment.status_changed_at = datetime.utcnow()
+    appointment.status_changed_at = datetime.now(timezone.utc)
 
+    _audit_log(db, org_id, user.id, 'cancelled', 'appointment',
+               entity_id=appointment_id, changes={'reason': reason}, request=request)
     db.commit()
 
     logger.info(f"Appointment {appointment_id} cancelled by user {user.id}")
+
+    # CRM: Log cancellation activity
+    _log_appointment_activity(
+        db, org_id, user.id, appointment.lead_id, appointment.loan_id,
+        f"Appointment cancelled: {appointment.title} - Reason: {reason or 'None given'}",
+        activity_type="Note"
+    )
+
+    # CRM: Create re-engagement task
+    _create_followup_task(
+        db, org_id, appointment.assigned_user_id or user.id,
+        appointment.lead_id, appointment.loan_id,
+        title=f"Re-engage: {appointment.attendee_name or 'cancelled booking'}"[:255],
+        description=f"Appointment '{appointment.title}' was cancelled. "
+                    f"Reason: {reason or 'None given'}. Attempt to re-engage.",
+        due_date=datetime.now(timezone.utc) + timedelta(days=1),
+        priority="high"
+    )
+    db.commit()
 
     # Send cancellation emails
     emails_sent = []
@@ -1306,6 +1849,15 @@ async def create_blocked_time(
 
     BlockedTime = _models['BlockedTime']
 
+    # H1: Only admins can set applies_to_all_users
+    applies_to_all = False
+    if block_data.applies_to_all_users:
+        user_role = getattr(user, 'permission_role', '') or getattr(user, 'role', '') or ''
+        if user_role.lower() in ('admin', 'leadership', 'management', 'site_admin', 'platform_admin'):
+            applies_to_all = True
+        else:
+            raise HTTPException(status_code=403, detail="Only admins can block time for all users")
+
     blocked = BlockedTime(
         organization_id=org_id,
         user_id=user.id,
@@ -1317,11 +1869,13 @@ async def create_blocked_time(
         all_day=block_data.all_day,
         is_recurring=block_data.is_recurring,
         recurrence_pattern=block_data.recurrence_pattern,
-        applies_to_all_users=block_data.applies_to_all_users,
+        applies_to_all_users=applies_to_all,
         created_by_id=user.id
     )
 
     db.add(blocked)
+    _audit_log(db, org_id, user.id, 'created', 'blocked_time',
+               changes={'title': block_data.title, 'applies_to_all': applies_to_all}, request=request)
     db.commit()
     db.refresh(blocked)
 
@@ -1349,6 +1903,8 @@ async def delete_blocked_time(
     if not blocked:
         raise HTTPException(status_code=404, detail="Blocked time not found")
 
+    _audit_log(db, org_id, user.id, 'deleted', 'blocked_time',
+               entity_id=block_id, changes={'title': blocked.title}, request=request)
     db.delete(blocked)
     db.commit()
 
@@ -1368,6 +1924,11 @@ async def list_all_booking_links(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
+    # H4: Require admin role to list all org booking links
+    user_role = getattr(user, 'permission_role', '') or getattr(user, 'role', '') or ''
+    if user_role.lower() not in ('admin', 'leadership', 'management', 'site_admin', 'platform_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required to list all booking links")
+
     BookingLink = _models['BookingLink']
     User = _models.get('User')
 
@@ -1375,6 +1936,13 @@ async def list_all_booking_links(
         BookingLink.is_active == True,
         BookingLink.organization_id == org_id
     ).all()
+
+    # Batch-load owners to avoid N+1 queries
+    owner_ids = [link.user_id for link in links if link.user_id]
+    owners_map = {}
+    if owner_ids and User:
+        owners = db.query(User).filter(User.id.in_(owner_ids)).all()
+        owners_map = {o.id: getattr(o, 'full_name', f"{o.first_name} {o.last_name}") for o in owners}
 
     result = []
     for link in links:
@@ -1386,13 +1954,9 @@ async def list_all_booking_links(
             "url": f"/book/{link.slug}",
             "is_public": link.is_public,
             "user_id": link.user_id,
-            "owner_name": None,
+            "owner_name": owners_map.get(link.user_id) if link.user_id else None,
             "created_at": link.created_at.isoformat() if link.created_at else None
         }
-        if link.user_id and User:
-            owner = db.query(User).filter(User.id == link.user_id).first()
-            if owner:
-                link_data["owner_name"] = owner.full_name
         result.append(link_data)
 
     return {"booking_links": result}
@@ -1446,13 +2010,13 @@ async def create_booking_link(
 
     BookingLink = _models['BookingLink']
 
-    # Check for duplicate slug within this organization
+    # Check for duplicate slug globally — public lookup is cross-org so slugs must be unique
     existing = db.query(BookingLink).filter(
         BookingLink.slug == link_data.slug,
-        BookingLink.organization_id == org_id
+        BookingLink.is_active == True
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Slug already in use")
+        raise HTTPException(status_code=400, detail="This booking link slug is already in use. Please choose a different one.")
 
     # Parse routing strategy
     routing_strategy = RoutingStrategy.RELATIONSHIP
@@ -1478,6 +2042,8 @@ async def create_booking_link(
     )
 
     db.add(link)
+    _audit_log(db, org_id, user.id, 'created', 'booking_link',
+               changes={'slug': link_data.slug, 'link_name': link_data.link_name}, request=request)
     db.commit()
     db.refresh(link)
 
@@ -1510,9 +2076,214 @@ async def delete_booking_link(
         raise HTTPException(status_code=404, detail="Booking link not found")
 
     link.is_active = False
+    _audit_log(db, org_id, user.id, 'deleted', 'booking_link',
+               entity_id=link_id, changes={'slug': link.slug}, request=request)
     db.commit()
 
     return {"message": "Booking link deactivated"}
+
+
+# ============================================================================
+# UNIFIED SLOT GENERATION ENGINE
+# ============================================================================
+
+def _generate_available_slots(
+    db: Session,
+    user_ids: list,
+    start_date: date,
+    end_date: date,
+    duration_minutes: int = 30,
+    org_id: int = None,
+    max_per_day: int = None,
+    check_cross_source: bool = True,
+    include_user_id: bool = False,
+    include_day_name: bool = False,
+    time_key_format: str = "start",  # "start"→{start,end} or "start_time"→{start_time,end_time}
+) -> list:
+    """
+    Unified slot generator used by all availability endpoints.
+
+    Computes available time slots for one or more users by checking:
+    - Working hours from SchedulerConfig
+    - Blocked times
+    - Existing appointments (with buffers)
+    - Cross-source calendar conflicts (if enabled)
+    - Lunch break (if configured)
+    - Minimum notice period
+    - Max meetings per day (if set)
+
+    Returns a sorted list of slot dicts. Key names controlled by params:
+      time_key_format="start"      → {"start": ..., "end": ...}
+      time_key_format="start_time" → {"start_time": ...Z, "end_time": ...Z}
+    """
+    SchedulerConfig = _models.get('SchedulerConfig')
+    BlockedTime = _models.get('BlockedTime')
+    Appointment = _models.get('Appointment')
+
+    if not SchedulerConfig or not BlockedTime or not Appointment:
+        logger.error("Scheduler models not available for slot generation")
+        return []
+
+    # Validate date range
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date must be before or equal to end_date")
+    if (end_date - start_date).days > 90:
+        raise HTTPException(status_code=400, detail="Date range cannot exceed 90 days")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC — consistent with datetime.combine() outputs
+    all_slots = []
+
+    for user_id in user_ids:
+        # Load user config
+        config_query = db.query(SchedulerConfig).filter(
+            SchedulerConfig.user_id == user_id
+        )
+        if org_id:
+            config_query = config_query.filter(SchedulerConfig.organization_id == org_id)
+        config = config_query.first()
+
+        working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
+        buffer_before = config.buffer_before_minutes if config else 5
+        buffer_after = config.buffer_after_minutes if config else 5
+        min_notice = config.min_notice_hours if config else 2
+        user_max_per_day = max_per_day or (config.max_meetings_per_day if config else None)
+        enforce_lunch = getattr(config, 'enforce_lunch_break', True) if config else True
+        lunch_start_time = getattr(config, 'lunch_break_start', time(12, 0)) if config else time(12, 0)
+        lunch_end_time = getattr(config, 'lunch_break_end', time(13, 0)) if config else time(13, 0)
+
+        min_booking_time = now + timedelta(hours=min_notice)
+        start_dt = datetime.combine(start_date, time.min)
+        end_dt = datetime.combine(end_date, time.max)
+
+        # Query blocked times
+        blocked_query = db.query(BlockedTime).filter(
+            BlockedTime.is_active == True,
+            or_(
+                BlockedTime.user_id == user_id,
+                BlockedTime.applies_to_all_users == True
+            ),
+            BlockedTime.start_datetime <= end_dt,
+            BlockedTime.end_datetime >= start_dt
+        )
+        if org_id:
+            blocked_query = blocked_query.filter(BlockedTime.organization_id == org_id)
+        blocked_times = blocked_query.all()
+
+        # Query existing appointments
+        appt_query = db.query(Appointment).filter(
+            Appointment.assigned_user_id == user_id,
+            Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
+            Appointment.scheduled_start >= start_dt,
+            Appointment.scheduled_start <= end_dt
+        )
+        if org_id:
+            appt_query = appt_query.filter(Appointment.organization_id == org_id)
+        existing_appts = appt_query.all()
+
+        # Cross-source conflicts
+        cross_source_busy = (
+            _get_cross_source_conflicts(db, user_id, start_dt, end_dt, org_id=org_id)
+            if check_cross_source else []
+        )
+
+        # Generate slots day by day
+        current_date = start_date
+        while current_date <= end_date:
+            day_name = current_date.strftime("%A").lower()
+            day_hours = working_hours.get(day_name, {})
+
+            if not day_hours.get("enabled", False):
+                current_date += timedelta(days=1)
+                continue
+
+            # Check max meetings per day
+            if user_max_per_day:
+                day_appts = [a for a in existing_appts
+                             if a.scheduled_start.date() == current_date]
+                day_cross = [c for c in cross_source_busy
+                             if c[0].date() == current_date]
+                if (len(day_appts) + len(day_cross)) >= user_max_per_day:
+                    current_date += timedelta(days=1)
+                    continue
+
+            # Parse working hours
+            try:
+                work_start = datetime.strptime(day_hours.get("start", "09:00"), "%H:%M").time()
+                work_end = datetime.strptime(day_hours.get("end", "17:00"), "%H:%M").time()
+            except ValueError:
+                current_date += timedelta(days=1)
+                continue
+
+            slot_start = datetime.combine(current_date, work_start)
+            day_end = datetime.combine(current_date, work_end)
+            lunch_start = datetime.combine(current_date, lunch_start_time) if enforce_lunch else None
+            lunch_end = datetime.combine(current_date, lunch_end_time) if enforce_lunch else None
+
+            while slot_start + timedelta(minutes=duration_minutes) <= day_end:
+                slot_end = slot_start + timedelta(minutes=duration_minutes)
+
+                # Skip past/too-soon slots
+                if slot_start < min_booking_time:
+                    slot_start += timedelta(minutes=30)
+                    continue
+
+                # Skip lunch break
+                if lunch_start and lunch_end and slot_start < lunch_end and slot_end > lunch_start:
+                    slot_start += timedelta(minutes=30)
+                    continue
+
+                # Check blocked times
+                is_blocked = any(
+                    slot_start < bt.end_datetime and slot_end > bt.start_datetime
+                    for bt in blocked_times
+                )
+                if is_blocked:
+                    slot_start += timedelta(minutes=30)
+                    continue
+
+                # Check appointment conflicts (with buffers)
+                has_conflict = any(
+                    slot_start < (appt.scheduled_end + timedelta(minutes=buffer_after)) and
+                    slot_end > (appt.scheduled_start - timedelta(minutes=buffer_before))
+                    for appt in existing_appts
+                )
+
+                # Check cross-source conflicts
+                if not has_conflict and cross_source_busy:
+                    has_conflict = _has_cross_source_conflict(
+                        cross_source_busy, slot_start, slot_end,
+                        buffer_before, buffer_after
+                    )
+
+                if not has_conflict:
+                    # Build slot dict based on format params
+                    if time_key_format == "start_time":
+                        slot = {
+                            "start_time": slot_start.isoformat() + "Z",
+                            "end_time": slot_end.isoformat() + "Z",
+                            "date": current_date.isoformat(),
+                        }
+                    else:
+                        slot = {
+                            "start": slot_start.isoformat(),
+                            "end": slot_end.isoformat(),
+                            "date": current_date.isoformat(),
+                        }
+                    if include_user_id:
+                        slot["user_id"] = user_id
+                    if include_day_name:
+                        slot["day"] = day_name
+                    all_slots.append(slot)
+
+                slot_start += timedelta(minutes=30)
+
+            current_date += timedelta(days=1)
+
+    # Deduplicate and sort
+    sort_key = "start_time" if time_key_format == "start_time" else "start"
+    unique_slots = list({s[sort_key]: s for s in all_slots}.values())
+    unique_slots.sort(key=lambda x: x[sort_key])
+    return unique_slots
 
 
 # ============================================================================
@@ -1527,145 +2298,24 @@ async def get_available_slots(
 ):
     """
     Get available time slots for booking.
-    This is the core slot calculation engine.
+    Delegates to the unified _generate_available_slots engine.
     """
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
-
-    SchedulerConfig = _models['SchedulerConfig']
-    BlockedTime = _models['BlockedTime']
-    Appointment = _models['Appointment']
-
-    # Determine which users to check
     user_ids = slot_request.user_ids if slot_request.user_ids else [user.id]
 
-    available_slots = []
-
-    for target_user_id in user_ids:
-        # Get user's config
-        config = db.query(SchedulerConfig).filter(
-            SchedulerConfig.user_id == target_user_id,
-            SchedulerConfig.organization_id == org_id
-        ).first()
-
-        working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
-        buffer_before = config.buffer_before_minutes if config else 5
-        buffer_after = config.buffer_after_minutes if config else 5
-        max_per_day = config.max_meetings_per_day if config else 8
-        min_notice = config.min_notice_hours if config else 2
-
-        # Get blocked times for this user
-        start_dt = datetime.combine(slot_request.start_date, time.min)
-        end_dt = datetime.combine(slot_request.end_date, time.max)
-
-        blocked_times = db.query(BlockedTime).filter(
-            BlockedTime.is_active == True,
-            BlockedTime.organization_id == org_id,
-            or_(
-                BlockedTime.user_id == target_user_id,
-                and_(BlockedTime.applies_to_all_users == True, BlockedTime.organization_id == org_id)
-            ),
-            BlockedTime.start_datetime <= end_dt,
-            BlockedTime.end_datetime >= start_dt
-        ).all()
-
-        # Get existing appointments from primary Appointment table
-        existing_appts = db.query(Appointment).filter(
-            Appointment.organization_id == org_id,
-            Appointment.assigned_user_id == target_user_id,
-            Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
-            Appointment.scheduled_start >= start_dt,
-            Appointment.scheduled_start <= end_dt
-        ).all()
-
-        # Cross-source: also check ScheduledAppointment, CalendarEvent, CRMCalendarEvent
-        cross_source_busy = _get_cross_source_conflicts(db, target_user_id, start_dt, end_dt)
-
-        # Generate slots for each day
-        current_date = slot_request.start_date
-        now = datetime.utcnow()
-        min_booking_time = now + timedelta(hours=min_notice)
-
-        while current_date <= slot_request.end_date:
-            day_name = current_date.strftime("%A").lower()
-            day_hours = working_hours.get(day_name, {})
-
-            if not day_hours.get("enabled", False):
-                current_date += timedelta(days=1)
-                continue
-
-            # Count appointments for this day (primary + cross-source)
-            day_appts = [a for a in existing_appts
-                        if a.scheduled_start.date() == current_date]
-            day_cross = [c for c in cross_source_busy
-                        if c[0].date() == current_date]
-            if (len(day_appts) + len(day_cross)) >= max_per_day:
-                current_date += timedelta(days=1)
-                continue
-
-            # Parse working hours
-            try:
-                start_time_parsed = datetime.strptime(day_hours.get("start", "09:00"), "%H:%M").time()
-                end_time_parsed = datetime.strptime(day_hours.get("end", "17:00"), "%H:%M").time()
-            except ValueError:
-                current_date += timedelta(days=1)
-                continue
-
-            # Generate slots at 30-minute intervals
-            slot_start = datetime.combine(current_date, start_time_parsed)
-            day_end = datetime.combine(current_date, end_time_parsed)
-
-            while slot_start + timedelta(minutes=slot_request.duration_minutes) <= day_end:
-                slot_end = slot_start + timedelta(minutes=slot_request.duration_minutes)
-
-                # Check if slot is in the past or within min notice
-                if slot_start < min_booking_time:
-                    slot_start += timedelta(minutes=30)
-                    continue
-
-                # Check for conflicts with blocked time
-                blocked = False
-                for bt in blocked_times:
-                    if (slot_start < bt.end_datetime and slot_end > bt.start_datetime):
-                        blocked = True
-                        break
-
-                if blocked:
-                    slot_start += timedelta(minutes=30)
-                    continue
-
-                # Check for conflicts with existing appointments (including buffers)
-                conflict = False
-                for appt in existing_appts:
-                    appt_start_with_buffer = appt.scheduled_start - timedelta(minutes=buffer_before)
-                    appt_end_with_buffer = appt.scheduled_end + timedelta(minutes=buffer_after)
-
-                    if (slot_start < appt_end_with_buffer and slot_end > appt_start_with_buffer):
-                        conflict = True
-                        break
-
-                # Check cross-source conflicts (ScheduledAppointment, CalendarEvent, CRMCalendarEvent)
-                if not conflict:
-                    conflict = _has_cross_source_conflict(
-                        cross_source_busy, slot_start, slot_end,
-                        buffer_before, buffer_after
-                    )
-
-                if not conflict:
-                    available_slots.append({
-                        "start": slot_start.isoformat(),
-                        "end": slot_end.isoformat(),
-                        "user_id": target_user_id,
-                        "date": current_date.isoformat(),
-                        "day": day_name
-                    })
-
-                slot_start += timedelta(minutes=30)
-
-            current_date += timedelta(days=1)
-
-    # Sort by datetime
-    available_slots.sort(key=lambda x: x["start"])
+    available_slots = _generate_available_slots(
+        db=db,
+        user_ids=user_ids,
+        start_date=slot_request.start_date,
+        end_date=slot_request.end_date,
+        duration_minutes=slot_request.duration_minutes,
+        org_id=org_id,
+        max_per_day=8,  # Default max per day for authenticated endpoint
+        check_cross_source=True,
+        include_user_id=True,
+        include_day_name=True,
+    )
 
     return {
         "available_slots": available_slots,
@@ -1716,7 +2366,10 @@ async def ai_recommend_slots(
         reasons = []
 
         # Parse the slot time
-        slot_dt = datetime.fromisoformat(slot["start"])
+        try:
+            slot_dt = datetime.fromisoformat(slot["start"])
+        except (ValueError, TypeError):
+            continue
         hour = slot_dt.hour
         day_name = slot["day"]
 
@@ -1743,7 +2396,7 @@ async def ai_recommend_slots(
             reasons.append("Friday afternoon may have lower engagement")
 
         # Bonus for sooner availability
-        days_from_now = (slot_dt.date() - datetime.now().date()).days
+        days_from_now = (slot_dt.date() - datetime.now(timezone.utc).date()).days
         if days_from_now <= 2:
             score += 0.2
             reasons.append("Soon availability - strike while hot")
@@ -1773,9 +2426,11 @@ async def ai_recommend_slots(
 @router.get("/public/book/{slug}")
 async def get_public_booking_page(
     slug: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Get public booking page data"""
+    _check_rate_limit(request)
     BookingLink = _models['BookingLink']
     AppointmentType = _models['AppointmentType']
     User = _models.get('User')
@@ -1795,10 +2450,15 @@ async def get_public_booking_page(
             SchedulerConfig = _models['SchedulerConfig']
 
             if User:
-                # For demo slug, use admin user
-                target_user = db.query(User).filter(User.is_admin == True).first()
+                # For demo slug, use a user who already has a scheduler config (not just any admin)
+                target_user = db.query(User).join(
+                    SchedulerConfig, SchedulerConfig.user_id == User.id
+                ).filter(
+                    SchedulerConfig.is_active == True
+                ).first()
                 if not target_user:
-                    target_user = db.query(User).first()
+                    # No user with scheduler config; demo not available
+                    raise HTTPException(status_code=404, detail="Demo booking not available. No scheduler configured.")
 
                 if target_user:
                     demo_org_id = getattr(target_user, 'organization_id', None)
@@ -1879,9 +2539,15 @@ async def get_public_booking_page(
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
 
-    # Increment view count
-    link.view_count += 1
+    # H8: Atomic view count increment to prevent lost updates under concurrency
+    BookingLink = _models['BookingLink']
+    from sqlalchemy import func
+    db.query(BookingLink).filter(BookingLink.id == link.id).update(
+        {BookingLink.view_count: func.coalesce(BookingLink.view_count, 0) + 1},
+        synchronize_session=False
+    )
     db.commit()
+    db.refresh(link)
 
     # Get available appointment types
     appointment_types = []
@@ -1935,17 +2601,14 @@ async def get_public_available_slots(
     appointment_type_id: int = Query(...),
     date: date = Query(..., description="Date to get slots for"),
     duration_minutes: int = Query(30),
+    request: Request = None,
     db: Session = Depends(get_db)
 ):
-    """Get available slots for public booking"""
-    # Use same date for start and end (single day)
-    start_date = date
-    end_date = date
-    BookingLink = _models['BookingLink']
-    SchedulerConfig = _models['SchedulerConfig']
-    BlockedTime = _models['BlockedTime']
-    Appointment = _models['Appointment']
+    """Get available slots for public booking. Delegates to unified slot engine."""
+    if request:
+        _check_rate_limit(request)
 
+    BookingLink = _models['BookingLink']
     link = db.query(BookingLink).filter(
         BookingLink.slug == slug,
         BookingLink.is_active == True,
@@ -1955,142 +2618,42 @@ async def get_public_available_slots(
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
 
-    # Get user IDs to check
     user_ids = link.assigned_users if link.assigned_users else [link.user_id]
-
-    all_slots = []
-
-    # Derive org_id from the booking link for tenant isolation
     link_org_id = getattr(link, 'organization_id', None)
 
-    for target_user_id in user_ids:
-        config_query = db.query(SchedulerConfig).filter(
-            SchedulerConfig.user_id == target_user_id
-        )
-        if link_org_id:
-            config_query = config_query.filter(SchedulerConfig.organization_id == link_org_id)
-        config = config_query.first()
+    available_slots = _generate_available_slots(
+        db=db,
+        user_ids=user_ids,
+        start_date=date,
+        end_date=date,
+        duration_minutes=duration_minutes,
+        org_id=link_org_id,
+        check_cross_source=True,
+    )
 
-        working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
-        buffer_before = config.buffer_before_minutes if config else 5
-        buffer_after = config.buffer_after_minutes if config else 5
-        min_notice = config.min_notice_hours if config else 2
-
-        # Get blocked times
-        start_dt = datetime.combine(start_date, time.min)
-        end_dt = datetime.combine(end_date, time.max)
-
-        blocked_query = db.query(BlockedTime).filter(
-            BlockedTime.is_active == True,
-            or_(
-                BlockedTime.user_id == target_user_id,
-                BlockedTime.applies_to_all_users == True
-            ),
-            BlockedTime.start_datetime <= end_dt,
-            BlockedTime.end_datetime >= start_dt
-        )
-        if link_org_id:
-            blocked_query = blocked_query.filter(BlockedTime.organization_id == link_org_id)
-        blocked_times = blocked_query.all()
-
-        # Get existing appointments from primary Appointment table
-        appt_query = db.query(Appointment).filter(
-            Appointment.assigned_user_id == target_user_id,
-            Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
-            Appointment.scheduled_start >= start_dt,
-            Appointment.scheduled_start <= end_dt
-        )
-        if link_org_id:
-            appt_query = appt_query.filter(Appointment.organization_id == link_org_id)
-        existing_appts = appt_query.all()
-
-        # Cross-source: also check ScheduledAppointment, CalendarEvent, CRMCalendarEvent
-        cross_source_busy = _get_cross_source_conflicts(db, target_user_id, start_dt, end_dt)
-
-        # Generate slots
-        current_date = start_date
-        now = datetime.utcnow()
-        min_booking_time = now + timedelta(hours=min_notice)
-
-        while current_date <= end_date:
-            day_name = current_date.strftime("%A").lower()
-            day_hours = working_hours.get(day_name, {})
-
-            if not day_hours.get("enabled", False):
-                current_date += timedelta(days=1)
-                continue
-
-            try:
-                start_time_parsed = datetime.strptime(day_hours.get("start", "09:00"), "%H:%M").time()
-                end_time_parsed = datetime.strptime(day_hours.get("end", "17:00"), "%H:%M").time()
-            except ValueError:
-                current_date += timedelta(days=1)
-                continue
-
-            slot_start = datetime.combine(current_date, start_time_parsed)
-            day_end = datetime.combine(current_date, end_time_parsed)
-
-            while slot_start + timedelta(minutes=duration_minutes) <= day_end:
-                slot_end = slot_start + timedelta(minutes=duration_minutes)
-
-                if slot_start < min_booking_time:
-                    slot_start += timedelta(minutes=30)
-                    continue
-
-                # Check conflicts with blocked time
-                blocked = any(
-                    slot_start < bt.end_datetime and slot_end > bt.start_datetime
-                    for bt in blocked_times
-                )
-
-                if not blocked:
-                    # Check primary Appointment table
-                    conflict = any(
-                        slot_start < (appt.scheduled_end + timedelta(minutes=buffer_after)) and
-                        slot_end > (appt.scheduled_start - timedelta(minutes=buffer_before))
-                        for appt in existing_appts
-                    )
-
-                    # Check cross-source conflicts
-                    if not conflict:
-                        conflict = _has_cross_source_conflict(
-                            cross_source_busy, slot_start, slot_end,
-                            buffer_before, buffer_after
-                        )
-
-                    if not conflict:
-                        all_slots.append({
-                            "start": slot_start.isoformat(),
-                            "end": slot_end.isoformat(),
-                            "date": current_date.isoformat()
-                        })
-
-                slot_start += timedelta(minutes=30)
-
-            current_date += timedelta(days=1)
-
-    # Remove duplicates and sort
-    unique_slots = list({s["start"]: s for s in all_slots}.values())
-    unique_slots.sort(key=lambda x: x["start"])
-
-    return {"available_slots": unique_slots}
+    return {"available_slots": available_slots}
 
 
 @router.post("/public/book/{slug}/confirm")
 async def confirm_public_booking(
     slug: str,
     booking_data: PublicBookingConfirmRequest,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """Confirm a public booking"""
-    # Extract data from request body
+    # Rate limit public booking endpoint
+    _check_rate_limit(request, max_requests=5)
+
+    # Extract and sanitize data from request body
     appointment_type_id = booking_data.appointment_type_id
     slot_start = booking_data.start_time
     duration_minutes = booking_data.duration_minutes
-    attendee_name = booking_data.attendee_name
-    attendee_email = booking_data.attendee_email
-    attendee_phone = booking_data.attendee_phone
-    intake_responses = {"notes": booking_data.notes} if booking_data.notes else {}
+    attendee_name = _sanitize_text(booking_data.attendee_name)
+    attendee_email = booking_data.attendee_email  # Already validated by EmailStr
+    attendee_phone = _sanitize_text(booking_data.attendee_phone)
+    notes_text = _sanitize_text(booking_data.notes)
+    intake_responses = {"notes": notes_text} if notes_text else {}
     BookingLink = _models['BookingLink']
     AppointmentType = _models['AppointmentType']
     Appointment = _models['Appointment']
@@ -2104,8 +2667,31 @@ async def confirm_public_booking(
     if not link:
         raise HTTPException(status_code=404, detail="Booking link not found")
 
+    # H5: Enforce booking link limits
+    now_utc = datetime.now(timezone.utc)
+    if link.expires_at and link.expires_at < now_utc:
+        raise HTTPException(status_code=410, detail="This booking link has expired")
+    if link.available_from and link.available_from > now_utc:
+        raise HTTPException(status_code=410, detail="This booking link is not yet active")
+    if link.available_until and link.available_until < now_utc:
+        raise HTTPException(status_code=410, detail="This booking link is no longer available")
+    if link.max_bookings is not None and (link.booking_count or 0) >= link.max_bookings:
+        raise HTTPException(status_code=410, detail="This booking link has reached its maximum number of bookings")
+
     # Derive org_id from the booking link for tenant isolation
     link_org_id = getattr(link, 'organization_id', None)
+
+    if link.max_per_person is not None:
+        max_per_query = db.query(Appointment).filter(
+            Appointment.attendee_email == booking_data.attendee_email,
+            Appointment.status.notin_(['cancelled', 'no_show']),
+            Appointment.external_source == 'booking_link'
+        )
+        if link_org_id:
+            max_per_query = max_per_query.filter(Appointment.organization_id == link_org_id)
+        existing_count = max_per_query.count()
+        if existing_count >= link.max_per_person:
+            raise HTTPException(status_code=429, detail="You have reached the maximum number of bookings allowed")
 
     appt_type = db.query(AppointmentType).filter(
         AppointmentType.id == appointment_type_id,
@@ -2115,8 +2701,26 @@ async def confirm_public_booking(
     if not appt_type:
         raise HTTPException(status_code=404, detail="Appointment type not found")
 
-    # Determine assigned user - use team_member_id if provided, otherwise link owner
-    assigned_user_id = booking_data.team_member_id or link.user_id
+    # RT1: Determine assigned user via routing strategy
+    if booking_data.team_member_id:
+        assigned_user_id = booking_data.team_member_id
+    else:
+        try:
+            from services.scheduler_routing_service import assign_loan_officer
+            strategy_str = link.routing_strategy.value if hasattr(link.routing_strategy, 'value') else str(link.routing_strategy or "direct")
+            assigned_user_id = assign_loan_officer(
+                db=db,
+                org_id=link_org_id,
+                strategy=strategy_str,
+                appointment_time=slot_start,
+                booking_link=link,
+            )
+            if not assigned_user_id:
+                assigned_user_id = link.user_id  # Final fallback
+            logger.info(f"Routing strategy '{strategy_str}' assigned user {assigned_user_id}")
+        except Exception as routing_err:
+            logger.warning(f"Routing service failed, using link owner: {routing_err}")
+            assigned_user_id = link.user_id
 
     # Determine meeting mode from request or default to VIDEO
     meeting_mode = MeetingMode.VIDEO
@@ -2126,6 +2730,11 @@ async def confirm_public_booking(
 
     # Create appointment
     slot_end = slot_start + timedelta(minutes=duration_minutes)
+
+    # C1: Prevent double-booking with SELECT FOR UPDATE conflict check
+    _check_appointment_conflict(db, assigned_user_id, slot_start, slot_end, org_id=link_org_id)
+    # C2: Prevent duplicate booking by same attendee
+    _check_duplicate_booking(db, attendee_email, assigned_user_id, slot_start, org_id=link_org_id)
 
     appointment = Appointment(
         organization_id=link_org_id,
@@ -2143,15 +2752,22 @@ async def confirm_public_booking(
         attendee_phone=attendee_phone,
         intake_responses=intake_responses,
         status=AppointmentStatus.BOOKED,
+        status_changed_at=datetime.now(timezone.utc),
         external_source="booking_link"
     )
 
     db.add(appointment)
 
-    # Update link stats
-    link.booking_count += 1
-    link.current_bookings += 1
-    link.last_booked_at = datetime.utcnow()
+    # H8: Atomic booking count increments
+    from sqlalchemy import func as sqlfunc
+    db.query(BookingLink).filter(BookingLink.id == link.id).update(
+        {
+            BookingLink.booking_count: sqlfunc.coalesce(BookingLink.booking_count, 0) + 1,
+            BookingLink.current_bookings: sqlfunc.coalesce(BookingLink.current_bookings, 0) + 1,
+            BookingLink.last_booked_at: datetime.now(timezone.utc),
+        },
+        synchronize_session=False
+    )
 
     # Create video meeting room if meeting mode is VIDEO
     video_link = None
@@ -2205,6 +2821,40 @@ async def confirm_public_booking(
 
     logger.info(f"Public booking confirmed: {appointment.id} via link {slug}")
 
+    # CRM Integration: Create/link lead
+    lead_id = _ensure_lead_for_booking(
+        db, attendee_email, attendee_name, attendee_phone,
+        assigned_user_id, link_org_id
+    )
+    if lead_id and not appointment.lead_id:
+        appointment.lead_id = lead_id
+
+    # CRM: Log activity
+    _log_appointment_activity(
+        db, link_org_id, assigned_user_id, lead_id, None,
+        f"Public booking confirmed: {appointment.title} on "
+        f"{appointment.scheduled_start.strftime('%m/%d/%Y %I:%M %p') if appointment.scheduled_start else 'TBD'}"
+    )
+
+    # CRM: Create follow-up task
+    _create_followup_task(
+        db, link_org_id, assigned_user_id, lead_id, None,
+        title=f"Follow up after: {appointment.title}"[:255],
+        description=f"Follow up with {attendee_name or 'attendee'} after "
+                    f"meeting on {appointment.scheduled_start.strftime('%m/%d/%Y') if appointment.scheduled_start else 'TBD'}",
+        due_date=appointment.scheduled_end + timedelta(days=1) if appointment.scheduled_end else datetime.now(timezone.utc) + timedelta(days=2),
+    )
+
+    # C3: Soft licensing check
+    attendee_state = None
+    if intake_responses:
+        attendee_state = intake_responses.get("state") or intake_responses.get("property_state")
+    licensing_warning = _check_lo_licensing(db, assigned_user_id, attendee_state)
+    if licensing_warning:
+        logger.warning(f"Appointment {appointment.id}: {licensing_warning}")
+
+    db.commit()
+
     # Prepare confirmation details
     appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
     appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
@@ -2242,7 +2892,8 @@ async def confirm_public_booking(
 
     if attendee_email:
         try:
-            email_sent = send_appointment_confirmation_email(
+            reschedule_url = generate_reschedule_url(appointment.id, attendee_email, slug=slug)
+            email_result = send_appointment_confirmation_email(
                 attendee_email=attendee_email,
                 attendee_name=attendee_name,
                 appointment_title=appointment.title,
@@ -2254,9 +2905,12 @@ async def confirm_public_booking(
                 team_member_email=team_member_email,
                 video_link=video_link,
                 scheduled_start=appointment.scheduled_start,
-                duration_minutes=appointment.duration_minutes
+                duration_minutes=appointment.duration_minutes,
+                reschedule_url=reschedule_url
             )
-            logger.info(f"Confirmation email sent to {attendee_email}, email_sent={email_sent}, video_link={video_link}")
+            # H9: email_result is a dict — extract boolean success
+            email_sent = email_result.get("success", False) if isinstance(email_result, dict) else bool(email_result)
+            logger.info(f"Confirmation email sent to {_mask_email(attendee_email)}, email_sent={email_sent}")
         except Exception as e:
             logger.error(f"Error sending confirmation email: {e}")
 
@@ -2369,8 +3023,10 @@ async def confirm_public_booking(
 @router.post("/public/available-slots")
 async def get_website_demo_available_slots(
     request: PublicAvailableSlotsRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
+    _check_rate_limit(http_request)
     """
     Get available slots for website demo scheduling.
 
@@ -2458,131 +3114,146 @@ async def _generate_slots_for_users(
     duration_minutes: int = 30,
     org_id: Optional[int] = None
 ) -> dict:
-    """Generate available slots for a list of users."""
-    SchedulerConfig = _models.get('SchedulerConfig') if _models else None
-    BlockedTime = _models.get('BlockedTime') if _models else None
-    Appointment = _models.get('Appointment') if _models else None
-
-    if not SchedulerConfig or not BlockedTime or not Appointment:
-        logger.error("Scheduler models not available")
-        return {"available_slots": [], "configured": True, "error": "Scheduler not initialized"}
-
-    all_slots = []
-    now = datetime.utcnow()
-    min_notice_hours = 2  # Default minimum notice
-
-    for user_id in user_ids:
-        config_query = db.query(SchedulerConfig).filter(
-            SchedulerConfig.user_id == user_id
-        )
-        if org_id:
-            config_query = config_query.filter(SchedulerConfig.organization_id == org_id)
-        config = config_query.first()
-
-        working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
-        buffer_before = config.buffer_before_minutes if config else 5
-        buffer_after = config.buffer_after_minutes if config else 5
-        if config and config.min_notice_hours:
-            min_notice_hours = config.min_notice_hours
-
-        min_booking_time = now + timedelta(hours=min_notice_hours)
-
-        # Get blocked times
-        start_dt = datetime.combine(start_date, time.min)
-        end_dt = datetime.combine(end_date, time.max)
-
-        blocked_query = db.query(BlockedTime).filter(
-            BlockedTime.is_active == True,
-            or_(
-                BlockedTime.user_id == user_id,
-                BlockedTime.applies_to_all_users == True
-            ),
-            BlockedTime.start_datetime <= end_dt,
-            BlockedTime.end_datetime >= start_dt
-        )
-        if org_id:
-            blocked_query = blocked_query.filter(BlockedTime.organization_id == org_id)
-        blocked_times = blocked_query.all()
-
-        # Get existing appointments
-        appt_query = db.query(Appointment).filter(
-            Appointment.assigned_user_id == user_id,
-            Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
-            Appointment.scheduled_start >= start_dt,
-            Appointment.scheduled_start <= end_dt
-        )
-        if org_id:
-            appt_query = appt_query.filter(Appointment.organization_id == org_id)
-        existing_appts = appt_query.all()
-
-        # Generate slots for each day
-        current_date = start_date
-        while current_date <= end_date:
-            day_name = current_date.strftime("%A").lower()
-            day_hours = working_hours.get(day_name, {})
-
-            if not day_hours.get("enabled", False):
-                current_date += timedelta(days=1)
-                continue
-
-            try:
-                work_start = datetime.strptime(day_hours.get("start", "09:00"), "%H:%M").time()
-                work_end = datetime.strptime(day_hours.get("end", "17:00"), "%H:%M").time()
-            except ValueError:
-                current_date += timedelta(days=1)
-                continue
-
-            slot_start = datetime.combine(current_date, work_start)
-            day_end = datetime.combine(current_date, work_end)
-
-            while slot_start + timedelta(minutes=duration_minutes) <= day_end:
-                slot_end = slot_start + timedelta(minutes=duration_minutes)
-
-                # Skip if too soon
-                if slot_start < min_booking_time:
-                    slot_start += timedelta(minutes=30)
-                    continue
-
-                # Check for blocked times
-                is_blocked = any(
-                    slot_start < bt.end_datetime and slot_end > bt.start_datetime
-                    for bt in blocked_times
-                )
-
-                if not is_blocked:
-                    # Check for appointment conflicts
-                    has_conflict = any(
-                        slot_start < (appt.scheduled_end + timedelta(minutes=buffer_after)) and
-                        slot_end > (appt.scheduled_start - timedelta(minutes=buffer_before))
-                        for appt in existing_appts
-                    )
-
-                    if not has_conflict:
-                        all_slots.append({
-                            "start_time": slot_start.isoformat() + "Z",
-                            "end_time": slot_end.isoformat() + "Z",
-                            "date": current_date.isoformat(),
-                            "user_id": user_id
-                        })
-
-                slot_start += timedelta(minutes=30)
-
-            current_date += timedelta(days=1)
-
-    # Remove duplicates and sort
-    unique_slots = list({s["start_time"]: s for s in all_slots}.values())
-    unique_slots.sort(key=lambda x: x["start_time"])
+    """Generate available slots for a list of users. Delegates to unified slot engine."""
+    available_slots = _generate_available_slots(
+        db=db,
+        user_ids=user_ids,
+        start_date=start_date,
+        end_date=end_date,
+        duration_minutes=duration_minutes,
+        org_id=org_id,
+        check_cross_source=False,
+        include_user_id=True,
+        time_key_format="start_time",
+    )
 
     return {
-        "available_slots": unique_slots,
+        "available_slots": available_slots,
         "configured": True,
-        "slot_count": len(unique_slots)
+        "slot_count": len(available_slots)
     }
+
+
+# ============================================================================
+# R3: AUTOMATED REMINDER PROCESSING
+# ============================================================================
+
+@router.post("/reminders/process", include_in_schema=False)
+async def process_reminders(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Internal endpoint: process pending appointment reminders.
+    Called by cron/background scheduler. Requires API key authentication.
+    """
+    api_key = request.headers.get("X-API-Key")
+    expected_key = os.getenv("INTERNAL_API_KEY")
+    if not expected_key or api_key != expected_key:
+        raise HTTPException(status_code=403, detail="Invalid API key")
+
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    Appointment = _models['Appointment']
+    AppointmentReminder = _models.get('AppointmentReminder')
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    sent_count = 0
+    error_count = 0
+
+    for hours_before in [24, 1]:
+        if hours_before == 24:
+            window_start = now + timedelta(hours=23)
+            window_end = now + timedelta(hours=25)
+        else:
+            window_start = now + timedelta(minutes=50)
+            window_end = now + timedelta(minutes=70)
+
+        # Find appointments in the reminder window
+        filters = [
+            Appointment.scheduled_start >= window_start,
+            Appointment.scheduled_start <= window_end,
+            Appointment.status == AppointmentStatus.BOOKED,
+        ]
+
+        # Exclude already-reminded appointments if model available
+        if AppointmentReminder:
+            from sqlalchemy import text
+            already_reminded_ids = [
+                r[0] for r in db.execute(text(
+                    "SELECT appointment_id FROM scheduler_reminders "
+                    "WHERE hours_before = :hb AND status IN ('sent', 'delivered')"
+                ), {"hb": hours_before}).fetchall()
+            ]
+            if already_reminded_ids:
+                filters.append(~Appointment.id.in_(already_reminded_ids))
+
+        appointments = db.query(Appointment).filter(and_(*filters)).limit(500).all()
+
+        for appt in appointments:
+            # Send email reminder
+            if appt.attendee_email:
+                try:
+                    appointment_date = appt.scheduled_start.strftime("%B %d, %Y") if appt.scheduled_start else ""
+                    appointment_time = appt.scheduled_start.strftime("%I:%M %p") if appt.scheduled_start else ""
+
+                    email_result = send_appointment_reminder_email(
+                        attendee_email=appt.attendee_email,
+                        attendee_name=appt.attendee_name or "there",
+                        appointment_title=appt.title,
+                        appointment_date=appointment_date,
+                        appointment_time=appointment_time,
+                        hours_before=hours_before,
+                        meeting_mode="Phone Call",
+                    )
+                    if email_result.get("success"):
+                        sent_count += 1
+                    else:
+                        error_count += 1
+                except Exception as e:
+                    logger.error(f"Reminder email failed for appt {appt.id}: {e}")
+                    error_count += 1
+
+            # Send SMS reminder
+            if appt.attendee_phone:
+                try:
+                    send_appointment_reminder_sms(
+                        attendee_phone=appt.attendee_phone,
+                        attendee_name=appt.attendee_name or "there",
+                        appointment_date=appt.scheduled_start.strftime("%B %d, %Y") if appt.scheduled_start else "",
+                        appointment_time=appt.scheduled_start.strftime("%I:%M %p") if appt.scheduled_start else "",
+                        hours_before=hours_before,
+                    )
+                except Exception as e:
+                    logger.error(f"Reminder SMS failed for appt {appt.id}: {e}")
+
+            # Record reminder if model available
+            if AppointmentReminder:
+                try:
+                    from smart_scheduler_models import ReminderChannel, ReminderStatus
+                    reminder = AppointmentReminder(
+                        organization_id=appt.organization_id,
+                        appointment_id=appt.id,
+                        hours_before=hours_before,
+                        scheduled_for=appt.scheduled_start - timedelta(hours=hours_before),
+                        status=ReminderStatus.SENT,
+                        channel=ReminderChannel.EMAIL,
+                        sent_at=now,
+                    )
+                    db.add(reminder)
+                except Exception:
+                    pass
+
+        db.commit()
+
+    return {"sent": sent_count, "errors": error_count, "message": f"Processed reminders: {sent_count} sent, {error_count} errors"}
 
 
 @router.post("/public/book-demo/confirm")
 async def confirm_website_demo_booking(
     request: WebsiteDemoBookingRequest,
+    http_request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
@@ -2592,6 +3263,9 @@ async def confirm_website_demo_booking(
     This endpoint creates an appointment using the calendar assignment
     for 'website_demo' purpose.
     """
+    # Rate limit public demo booking endpoint
+    _check_rate_limit(http_request, max_requests=5)
+
     from sqlalchemy import text
 
     # Look up calendar assignment for website_demo purpose
@@ -2616,9 +3290,13 @@ async def confirm_website_demo_booking(
     demo_org_id = getattr(assignment_result, 'user_org_id', None)
 
     try:
-        # Parse the start time
-        start_time_str = request.start_time.replace("Z", "+00:00")
-        start_time = datetime.fromisoformat(start_time_str)
+        # Parse the start time — handle both str and datetime
+        raw_start = request.start_time
+        if isinstance(raw_start, str):
+            start_time_str = raw_start.replace("Z", "+00:00")
+            start_time = datetime.fromisoformat(start_time_str)
+        else:
+            start_time = raw_start
         if start_time.tzinfo is None:
             start_time = start_time.replace(tzinfo=pytz.UTC)
     except Exception as e:
@@ -2631,26 +3309,30 @@ async def confirm_website_demo_booking(
     if not Appointment:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
-    appointment_id = f"demo-{uuid_lib.uuid4().hex[:8]}"
+    # Prevent double-booking
+    _check_appointment_conflict(db, assigned_user_id, start_time, end_time, org_id=demo_org_id)
+
+    # Sanitize user-supplied text
+    safe_name = _sanitize_text(request.attendee_name)
+    safe_phone = _sanitize_text(request.attendee_phone)
+    safe_notes = _sanitize_text(request.notes)
 
     new_appointment = Appointment(
         organization_id=demo_org_id,
-        appointment_id=appointment_id,
         assigned_user_id=assigned_user_id,
         scheduled_start=start_time,
         scheduled_end=end_time,
         duration_minutes=request.duration_minutes,
-        attendee_name=request.attendee_name,
+        attendee_name=safe_name,
         attendee_email=request.attendee_email,
-        attendee_phone=request.attendee_phone,
-        appointment_type="platform-demo",
-        meeting_type=MeetingType.DEMO,
+        attendee_phone=safe_phone,
+        title=f"Platform Demo with {safe_name}",
+        meeting_type=MeetingType.CUSTOM,
         meeting_mode=MeetingMode.VIDEO if request.meeting_mode == "video" else MeetingMode.PHONE,
         status=AppointmentStatus.BOOKED,
-        notes=request.notes,
-        booked_via="website",
-        lo_name=user_name,
-        lo_email=user_email
+        status_changed_at=datetime.now(timezone.utc),
+        internal_notes=safe_notes,
+        external_source="website_demo"
     )
 
     db.add(new_appointment)
@@ -2673,18 +3355,18 @@ async def confirm_website_demo_booking(
             appointment_time=start_time,
             lo_name=user_name,
             phone_number=request.attendee_phone,
-            appointment_id=appointment_id,
+            appointment_id=str(new_appointment.id),
             duration_minutes=request.duration_minutes,
             lo_email=user_email
         )
     except Exception as e:
         logger.warning(f"Failed to queue confirmation email: {e}")
 
-    logger.info(f"Website demo booked: {appointment_id} for {request.attendee_email}")
+    logger.info(f"Website demo booked: {new_appointment.id} for {_mask_email(request.attendee_email)}")
 
     return {
         "success": True,
-        "appointment_id": appointment_id,
+        "appointment_id": new_appointment.id,
         "confirmation_details": {
             "date": date_str,
             "time": time_str,

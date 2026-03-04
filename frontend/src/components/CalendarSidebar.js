@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { schedulerAPI, crmCalendarAPI } from '../services/api';
 import './CalendarSidebar.css';
 import { toast } from '../utils/toast';
 
-// v1.5 - Fixed timezone handling for appointments
-console.log('[CalendarSidebar] v1.5 loaded - fixed timezone handling');
+// v1.6 - Removed debug logs, fixed status enum, replaced window.confirm
 
 // Helper to normalize UTC date strings from backend
 // Backend returns UTC times without Z suffix, so we need to add it
@@ -19,7 +18,6 @@ const normalizeUTCDate = (dateString) => {
 };
 
 function CalendarSidebar({ leadId, loanId, children }) {
-  console.log('[CalendarSidebar] Render with leadId:', leadId, 'loanId:', loanId);
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -49,6 +47,57 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+
+  // Modal refs for focus trapping
+  const createModalRef = useRef(null);
+  const editModalRef = useRef(null);
+
+  // ESC key handler and focus trap for modals
+  useEffect(() => {
+    const activeModal = showAppointmentModal || showEditModal;
+    if (!activeModal) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (showEditModal) { setShowEditModal(false); setCancelConfirm(false); }
+        else if (showAppointmentModal) setShowAppointmentModal(false);
+      }
+      // Focus trap: Tab/Shift+Tab within modal
+      if (e.key === 'Tab') {
+        const modalRef = showEditModal ? editModalRef : createModalRef;
+        const modal = modalRef.current;
+        if (!modal) return;
+        const focusable = modal.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    // Focus first focusable element on open
+    const modalRef = showEditModal ? editModalRef : createModalRef;
+    const timer = setTimeout(() => {
+      const modal = modalRef.current;
+      if (modal) {
+        const first = modal.querySelector('button, input, select, textarea');
+        if (first) first.focus();
+      }
+    }, 50);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [showAppointmentModal, showEditModal]);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -56,11 +105,6 @@ function CalendarSidebar({ leadId, loanId, children }) {
   ];
 
   const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-  useEffect(() => {
-    loadAppointments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate, leadId, loanId]);
 
   // Helper to format date as YYYY-MM-DD for API
   const formatDateForAPI = (date) => {
@@ -70,7 +114,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
     return `${year}-${month}-${day}`;
   };
 
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     try {
       setLoading(true);
       // Get appointments for the current month
@@ -81,10 +125,6 @@ function CalendarSidebar({ leadId, loanId, children }) {
       const startDateStr = formatDateForAPI(startDate);
       const endDateStr = formatDateForAPI(endDate);
 
-      console.log('[CalendarSidebar] loadAppointments called');
-      console.log('[CalendarSidebar] Date range:', startDateStr, 'to', endDateStr);
-      console.log('[CalendarSidebar] Filters - lead_id:', leadId, 'loan_id:', loanId);
-
       // Fetch both scheduler appointments and CRM calendar events
       const [appointmentsData, crmEventsData] = await Promise.all([
         schedulerAPI.getAppointments({
@@ -92,25 +132,16 @@ function CalendarSidebar({ leadId, loanId, children }) {
           end_date: endDateStr,
           lead_id: leadId || undefined,
           loan_id: loanId || undefined,
-        }).catch(err => {
-          console.error('[CalendarSidebar] Failed to load scheduler appointments:', err);
-          return [];
-        }),
+        }).catch(() => []),
         crmCalendarAPI.getAll({
           start_date: startDate.toISOString(),
           end_date: endDate.toISOString(),
-        }).catch(err => {
-          console.error('[CalendarSidebar] Failed to load CRM events:', err);
-          return [];
-        })
+        }).catch(() => [])
       ]);
-
-      console.log('[CalendarSidebar] Appointments count:', appointmentsData?.length || 0);
-      console.log('[CalendarSidebar] CRM events count:', crmEventsData?.length || 0);
 
       // Filter out cancelled appointments and sort by date
       const filteredAppointments = (appointmentsData || [])
-        .filter(appt => appt.status !== 'CANCELLED')
+        .filter(appt => (appt.status || '').toLowerCase() !== 'cancelled')
         .sort((a, b) => new Date(normalizeUTCDate(a.scheduled_start)) - new Date(normalizeUTCDate(b.scheduled_start)));
 
       // Filter out cancelled CRM events and sort by date (API returns start_at)
@@ -120,14 +151,17 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
       setAppointments(filteredAppointments);
       setCrmEvents(filteredCrmEvents);
-    } catch (error) {
-      console.error('[CalendarSidebar] Failed to load appointments:', error);
+    } catch {
       setAppointments([]);
       setCrmEvents([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDate, leadId, loanId]);
+
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
 
   const goToPreviousMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -169,19 +203,21 @@ function CalendarSidebar({ leadId, loanId, children }) {
     return days;
   };
 
+  // Pre-compute set of date strings with events for O(1) lookup
+  const eventDateSet = useMemo(() => {
+    const dates = new Set();
+    appointments.forEach(appt => {
+      dates.add(new Date(normalizeUTCDate(appt.scheduled_start)).toDateString());
+    });
+    crmEvents.forEach(event => {
+      dates.add(new Date(event.start_at || event.start_time).toDateString());
+    });
+    return dates;
+  }, [appointments, crmEvents]);
+
   const hasAppointmentsOnDate = (date) => {
     if (!date) return false;
-    // Check scheduler appointments
-    const hasAppt = appointments.some(appt => {
-      const apptDate = new Date(normalizeUTCDate(appt.scheduled_start));
-      return apptDate.toDateString() === date.toDateString();
-    });
-    // Check CRM calendar events (API returns start_at)
-    const hasCrmEvent = crmEvents.some(event => {
-      const eventDate = new Date(event.start_at || event.start_time);
-      return eventDate.toDateString() === date.toDateString();
-    });
-    return hasAppt || hasCrmEvent;
+    return eventDateSet.has(date.toDateString());
   };
 
   const isToday = (date) => {
@@ -262,7 +298,8 @@ function CalendarSidebar({ leadId, loanId, children }) {
   };
 
   const getMeetingModeIcon = (mode) => {
-    switch (mode) {
+    const normalized = (mode || '').toUpperCase();
+    switch (normalized) {
       case 'VIDEO':
         return '📹';
       case 'PHONE':
@@ -275,7 +312,8 @@ function CalendarSidebar({ leadId, loanId, children }) {
   };
 
   const getMeetingModeColor = (mode) => {
-    switch (mode) {
+    const normalized = (mode || '').toUpperCase();
+    switch (normalized) {
       case 'VIDEO':
         return '#2563eb'; // Blue
       case 'PHONE':
@@ -338,10 +376,6 @@ function CalendarSidebar({ leadId, loanId, children }) {
     const htmlData = dataTransfer.getData('text/html');
     const uriList = dataTransfer.getData('text/uri-list');
 
-    console.log('Drag data types:', dataTransfer.types);
-    console.log('Text data:', textData);
-    console.log('HTML data:', htmlData?.substring(0, 500));
-
     if (textData) {
       // Parse text data - could be email content or subject line
       const lines = textData.split('\n').filter(l => l.trim());
@@ -399,14 +433,15 @@ function CalendarSidebar({ leadId, loanId, children }) {
                        dataTransfer.getData('text/x-moz-url') ||
                        dataTransfer.getData('application/vnd.ms-outlook');
 
-    if (outlookData) {
-      console.log('Outlook data:', outlookData);
+    if (outlookData && !emailInfo.subject) {
+      // Outlook data may contain subject or sender info as plain text
+      const lines = outlookData.split('\n').filter(l => l.trim());
+      if (lines.length > 0) emailInfo.subject = lines[0].substring(0, 100);
     }
 
     // Check for files (dragged .msg or .eml files)
     if (dataTransfer.files && dataTransfer.files.length > 0) {
       const file = dataTransfer.files[0];
-      console.log('Dropped file:', file.name, file.type);
 
       if (file.name.endsWith('.msg') || file.name.endsWith('.eml')) {
         emailInfo.subject = file.name.replace(/\.(msg|eml)$/i, '');
@@ -430,7 +465,6 @@ function CalendarSidebar({ leadId, loanId, children }) {
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('[CalendarSidebar] Drag enter - data types:', e.dataTransfer.types);
     setIsDragOver(true);
   };
 
@@ -448,12 +482,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
     e.stopPropagation();
     setIsDragOver(false);
 
-    console.log('[CalendarSidebar] Drop event received');
-    console.log('[CalendarSidebar] Data transfer types:', Array.from(e.dataTransfer.types));
-    console.log('[CalendarSidebar] Files:', e.dataTransfer.files?.length || 0);
-
     const emailInfo = parseEmailData(e.dataTransfer);
-    console.log('[CalendarSidebar] Parsed email info:', emailInfo);
 
     // Default date to selected date
     const defaultDate = selectedDate.toISOString().split('T')[0];
@@ -548,7 +577,6 @@ function CalendarSidebar({ leadId, loanId, children }) {
       // Reload appointments
       loadAppointments();
     } catch (error) {
-      console.error('Failed to create appointment:', error);
       const detail = error.response?.data?.detail;
       const msg = Array.isArray(detail)
         ? detail.map(d => d.msg || d.message || JSON.stringify(d)).join(', ')
@@ -574,7 +602,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
       duration: String(durationMins),
       meeting_mode: appt.meeting_mode || 'PHONE',
       notes: appt.attendee_notes || '',
-      status: appt.status || 'SCHEDULED',
+      status: (appt.status || 'booked').toLowerCase(),
       lead_id: appt.lead_id,
       loan_id: appt.loan_id
     });
@@ -608,27 +636,29 @@ function CalendarSidebar({ leadId, loanId, children }) {
       setEditingAppointment(null);
       loadAppointments();
     } catch (error) {
-      console.error('Failed to update appointment:', error);
       toast.error('Failed to update appointment: ' + (error.response?.data?.detail || error.message));
     } finally {
       setSaving(false);
     }
   };
 
-  // Handle cancelling appointment
+  // Handle cancelling appointment (two-step confirmation)
   const handleCancelAppointment = async () => {
-    if (!editingAppointment || !window.confirm('Are you sure you want to cancel this appointment?')) return;
+    if (!editingAppointment) return;
+    if (!cancelConfirm) {
+      setCancelConfirm(true);
+      return;
+    }
 
     setSaving(true);
     try {
-      // Use the dedicated cancel endpoint instead of update with status
       await schedulerAPI.cancelAppointment(editingAppointment.id, 'Cancelled by user');
 
+      setCancelConfirm(false);
       setShowEditModal(false);
       setEditingAppointment(null);
       loadAppointments();
     } catch (error) {
-      console.error('Failed to cancel appointment:', error);
       toast.error('Failed to cancel appointment: ' + (error.response?.data?.detail || error.message));
     } finally {
       setSaving(false);
@@ -698,6 +728,10 @@ function CalendarSidebar({ leadId, loanId, children }) {
               key={index}
               className={`calendar-day ${!item.day ? 'empty' : ''} ${isToday(item.date) ? 'today' : ''} ${isSelected(item.date) ? 'selected' : ''} ${hasAppointmentsOnDate(item.date) ? 'has-events' : ''}`}
               onClick={() => handleDateClick(item.date)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleDateClick(item.date); } }}
+              role={item.day ? "button" : undefined}
+              tabIndex={item.day ? 0 : -1}
+              aria-label={item.date ? `Select ${item.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : undefined}
             >
               {item.day && (
                 <>
@@ -732,6 +766,9 @@ function CalendarSidebar({ leadId, loanId, children }) {
                 className="appointment-item clickable"
                 style={{ borderLeftColor: getMeetingModeColor(appt.meeting_mode) }}
                 onClick={() => handleAppointmentClick(appt)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAppointmentClick(appt); } }}
+                role="button"
+                tabIndex={0}
                 title="Click to edit appointment"
               >
                 <div className="appointment-time">
@@ -770,6 +807,9 @@ function CalendarSidebar({ leadId, loanId, children }) {
                   className="appointment-item compact clickable"
                   style={{ borderLeftColor: getMeetingModeColor(appt.meeting_mode) }}
                   onClick={() => handleAppointmentClick(appt)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAppointmentClick(appt); } }}
+                  role="button"
+                  tabIndex={0}
                   title="Click to edit appointment"
                 >
                   <div className="appointment-date-time">
@@ -796,10 +836,7 @@ function CalendarSidebar({ leadId, loanId, children }) {
       <div className="calendar-footer">
         <button
           className="refresh-calendar-btn"
-          onClick={() => {
-            console.log('[CalendarSidebar] Manual refresh triggered');
-            loadAppointments();
-          }}
+          onClick={() => loadAppointments()}
           style={{ marginRight: '10px', padding: '8px 12px', fontSize: '12px', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer' }}
         >
           ↻ Refresh
@@ -814,11 +851,11 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
       {/* Appointment Creation Modal */}
       {showAppointmentModal && (
-        <div className="appointment-modal-overlay" onClick={() => setShowAppointmentModal(false)}>
-          <div className="appointment-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="appointment-modal-overlay" onClick={() => setShowAppointmentModal(false)} role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
+          <div className="appointment-modal" onClick={(e) => e.stopPropagation()} ref={createModalRef}>
             <div className="appointment-modal-header">
-              <h3>Create Appointment from Email</h3>
-              <button className="close-btn" onClick={() => setShowAppointmentModal(false)}>×</button>
+              <h3 id="create-modal-title">Create Appointment from Email</h3>
+              <button className="close-btn" onClick={() => setShowAppointmentModal(false)} aria-label="Close dialog">×</button>
             </div>
 
             <form onSubmit={handleCreateAppointment}>
@@ -928,11 +965,11 @@ function CalendarSidebar({ leadId, loanId, children }) {
 
       {/* Edit Appointment Modal */}
       {showEditModal && editingAppointment && (
-        <div className="appointment-modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="appointment-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="appointment-modal-overlay" onClick={() => setShowEditModal(false)} role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+          <div className="appointment-modal" onClick={(e) => e.stopPropagation()} ref={editModalRef}>
             <div className="appointment-modal-header">
-              <h3>Edit Appointment</h3>
-              <button className="close-btn" onClick={() => setShowEditModal(false)}>×</button>
+              <h3 id="edit-modal-title">Edit Appointment</h3>
+              <button className="close-btn" onClick={() => { setShowEditModal(false); setCancelConfirm(false); }} aria-label="Close dialog">×</button>
             </div>
 
             <form onSubmit={handleSaveAppointment}>
@@ -1023,10 +1060,10 @@ function CalendarSidebar({ leadId, loanId, children }) {
                   value={editingAppointment.status}
                   onChange={(e) => setEditingAppointment({...editingAppointment, status: e.target.value})}
                 >
-                  <option value="SCHEDULED">Scheduled</option>
-                  <option value="CONFIRMED">Confirmed</option>
-                  <option value="COMPLETED">Completed</option>
-                  <option value="NO_SHOW">No Show</option>
+                  <option value="booked">Scheduled</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="completed">Completed</option>
+                  <option value="no_show">No Show</option>
                 </select>
               </div>
 
@@ -1041,16 +1078,27 @@ function CalendarSidebar({ leadId, loanId, children }) {
               </div>
 
               <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={handleCancelAppointment}
-                  disabled={saving}
-                >
-                  Cancel Appointment
-                </button>
+                {cancelConfirm ? (
+                  <span style={{ display: 'flex', gap: '4px' }}>
+                    <button type="button" className="btn-danger" onClick={handleCancelAppointment} disabled={saving}>
+                      Confirm Cancel
+                    </button>
+                    <button type="button" className="btn-cancel" onClick={() => setCancelConfirm(false)} style={{ fontSize: '12px' }}>
+                      Nevermind
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-danger"
+                    onClick={handleCancelAppointment}
+                    disabled={saving}
+                  >
+                    Cancel Appointment
+                  </button>
+                )}
                 <div className="modal-actions-right">
-                  <button type="button" className="btn-cancel" onClick={() => setShowEditModal(false)}>
+                  <button type="button" className="btn-cancel" onClick={() => { setShowEditModal(false); setCancelConfirm(false); }}>
                     Close
                   </button>
                   <button type="submit" className="btn-create" disabled={saving}>

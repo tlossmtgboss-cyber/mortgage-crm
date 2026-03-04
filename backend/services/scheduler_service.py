@@ -43,6 +43,9 @@ def get_db_session():
     return SessionLocal()
 
 
+_reminders_table_checked = False
+
+
 class SchedulerService:
     """Service for managing scheduled background jobs."""
 
@@ -244,6 +247,7 @@ class SchedulerService:
                     OR (ba.reminder_count = 3 AND EXTRACT(EPOCH FROM (NOW() - ba.last_reminder_at)) / 3600 >= :final_interval)
                 )
                 AND ba.reminder_count < 4
+                AND ba.organization_id IS NOT NULL
                 ORDER BY ba.updated_at ASC
                 LIMIT 100
             """)
@@ -343,6 +347,7 @@ class SchedulerService:
                 AND ad.expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
                 AND ad.expiration_notified = false
                 AND ba.status NOT IN ('submitted', 'funded', 'denied', 'withdrawn')
+                LIMIT 200
             """)
 
             result = session.execute(query)
@@ -513,12 +518,14 @@ class SchedulerService:
                 LEFT JOIN users u ON u.id = sa.assigned_user_id
                 WHERE sa.scheduled_start BETWEEN NOW() + INTERVAL '23 hours' AND NOW() + INTERVAL '25 hours'
                 AND UPPER(sa.status::text) = 'BOOKED'
+                AND sa.organization_id IS NOT NULL
                 AND NOT EXISTS (
                     SELECT 1 FROM scheduler_reminders sr
                     WHERE sr.appointment_id = sa.id
                     AND sr.hours_before = 24
                     AND UPPER(sr.status::text) IN ('SENT', 'DELIVERED')
                 )
+                LIMIT 500
             """)
 
             result_24h = session.execute(query_24h)
@@ -542,12 +549,14 @@ class SchedulerService:
                 LEFT JOIN users u ON u.id = sa.assigned_user_id
                 WHERE sa.scheduled_start BETWEEN NOW() + INTERVAL '50 minutes' AND NOW() + INTERVAL '70 minutes'
                 AND UPPER(sa.status::text) = 'BOOKED'
+                AND sa.organization_id IS NOT NULL
                 AND NOT EXISTS (
                     SELECT 1 FROM scheduler_reminders sr
                     WHERE sr.appointment_id = sa.id
                     AND sr.hours_before = 1
                     AND UPPER(sr.status::text) IN ('SENT', 'DELIVERED')
                 )
+                LIMIT 500
             """)
 
             result_1h = session.execute(query_1h)
@@ -662,31 +671,34 @@ class SchedulerService:
                 logger.debug("scheduled_appointments table doesn't exist, skipping chat widget reminders")
                 return
 
-            # Check if chat_appointment_reminders table exists, create if not
-            reminders_table_check = session.execute(text("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables
-                    WHERE table_name = 'chat_appointment_reminders'
-                )
-            """))
-            if not reminders_table_check.scalar():
-                session.execute(text("""
-                    CREATE TABLE IF NOT EXISTS chat_appointment_reminders (
-                        id SERIAL PRIMARY KEY,
-                        appointment_id VARCHAR(50) NOT NULL,
-                        channel VARCHAR(20) NOT NULL,
-                        hours_before INTEGER NOT NULL,
-                        status VARCHAR(20) DEFAULT 'SENT',
-                        sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            # Ensure chat_appointment_reminders table exists (cached after first check)
+            global _reminders_table_checked
+            if not _reminders_table_checked:
+                reminders_table_check = session.execute(text("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables
+                        WHERE table_name = 'chat_appointment_reminders'
                     )
                 """))
-                session.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_chat_appt_reminders_appt_id
-                    ON chat_appointment_reminders(appointment_id)
-                """))
-                session.commit()
-                logger.info("Created chat_appointment_reminders table")
+                if not reminders_table_check.scalar():
+                    session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS chat_appointment_reminders (
+                            id SERIAL PRIMARY KEY,
+                            appointment_id VARCHAR(50) NOT NULL,
+                            channel VARCHAR(20) NOT NULL,
+                            hours_before INTEGER NOT NULL,
+                            status VARCHAR(20) DEFAULT 'SENT',
+                            sent_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    session.execute(text("""
+                        CREATE INDEX IF NOT EXISTS idx_chat_appt_reminders_appt_id
+                        ON chat_appointment_reminders(appointment_id)
+                    """))
+                    session.commit()
+                    logger.info("Created chat_appointment_reminders table")
+                _reminders_table_checked = True
 
             # 24-hour reminders for chat widget appointments
             query_24h = text("""

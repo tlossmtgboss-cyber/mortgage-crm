@@ -24,9 +24,8 @@ const PublicBooking = () => {
   const [step, setStep] = useState('datetime'); // datetime, form, confirmation, manage
   const [submitting, setSubmitting] = useState(false);
   const [confirmedAppointment, setConfirmedAppointment] = useState(null);
-  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+
+  const [cancelConfirm, setCancelConfirm] = useState(false);
 
   const [form, setForm] = useState({
     first_name: '',
@@ -134,7 +133,6 @@ const PublicBooking = () => {
 
       setError(null);
     } catch (err) {
-      console.error('Error fetching booking link:', err);
       setError('Unable to connect to the booking service.');
     } finally {
       setLoading(false);
@@ -160,19 +158,28 @@ const PublicBooking = () => {
         }));
         setAvailableSlots(slots);
 
-        // Auto-select first available time
-        if (slots.length > 0 && !selectedTime) {
+        // Auto-select first available time for the new date
+        if (slots.length > 0) {
           setSelectedTime(slots[0].start_time);
+        } else {
+          setSelectedTime('');
         }
       }
     } catch (err) {
-      console.error('Error fetching slots:', err);
+      // Slots fetch failed silently — no slots shown for this date
     }
-  }, [slug, selectedType, selectedDate, selectedTime]);
+  }, [slug, selectedType, selectedDate]);
 
   useEffect(() => {
     fetchBookingLink();
   }, [fetchBookingLink]);
+
+  // Handle action URL parameter (e.g., ?appointment=123&action=cancel)
+  useEffect(() => {
+    if (appointmentId && action === 'cancel') {
+      handleCancel(appointmentId);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (selectedType && selectedDate) {
@@ -232,8 +239,42 @@ const PublicBooking = () => {
       });
       setStep('confirmation');
     } catch (err) {
-      console.error('Error booking appointment:', err);
       setError(err.message || 'Failed to book appointment. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Cancel appointment
+  const handleCancel = async (apptId) => {
+    const idToCancel = apptId || confirmedAppointment?.id || appointmentId;
+    if (!idToCancel) return;
+
+    if (!cancelConfirm) {
+      setCancelConfirm(true);
+      return;
+    }
+    setCancelConfirm(false);
+
+    try {
+      setSubmitting(true);
+      const response = await fetch(
+        `${API_BASE}/api/v1/scheduler/appointments/${idToCancel}/cancel`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'Cancelled by attendee' })
+        }
+      );
+
+      if (response.ok) {
+        setStep('cancelled');
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setError(data.detail || 'Failed to cancel appointment.');
+      }
+    } catch (err) {
+      setError('Unable to cancel appointment. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -329,8 +370,58 @@ const PublicBooking = () => {
             </div>
           </div>
 
-          <button className="primary-button" onClick={() => window.location.href = '/'}>
-            Go to Homepage
+          <div className="confirmation-actions">
+            <button className="primary-button" onClick={() => window.location.href = '/'}>
+              Go to Homepage
+            </button>
+            {cancelConfirm ? (
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                <button
+                  className="secondary-button cancel-link"
+                  onClick={() => handleCancel()}
+                  disabled={submitting}
+                  style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                >
+                  {submitting ? 'Cancelling...' : 'Yes, Cancel'}
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={() => setCancelConfirm(false)}
+                >
+                  Nevermind
+                </button>
+              </div>
+            ) : (
+              <button
+                className="secondary-button cancel-link"
+                onClick={() => handleCancel()}
+                disabled={submitting}
+              >
+                Cancel Appointment
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Cancelled state
+  if (step === 'cancelled') {
+    return (
+      <div className="redfin-booking">
+        <div className="booking-container confirmation-container">
+          <div className="confirmation-header">
+            <div className="success-checkmark cancelled-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <h1>Appointment Cancelled</h1>
+            <p>Your appointment has been successfully cancelled. You can book a new appointment anytime.</p>
+          </div>
+          <button className="primary-button" onClick={() => { setStep('datetime'); setConfirmedAppointment(null); }}>
+            Book New Appointment
           </button>
         </div>
       </div>
@@ -350,7 +441,7 @@ const PublicBooking = () => {
           </div>
         )}
 
-        {error && <div className="error-banner">{error}</div>}
+        {error && <div className="error-banner" role="alert">{error}</div>}
 
         {step === 'datetime' && (
           <>
@@ -377,7 +468,7 @@ const PublicBooking = () => {
             <div className="date-section">
               <h2>Pick a date</h2>
               <div className="week-picker">
-                <button className="week-nav prev" onClick={prevWeek} disabled={isPast(weekDates[0])}>
+                <button className="week-nav prev" onClick={prevWeek} disabled={isPast(weekDates[0])} aria-label="Previous week">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M15 19l-7-7 7-7" />
                   </svg>
@@ -403,7 +494,7 @@ const PublicBooking = () => {
                   })}
                 </div>
 
-                <button className="week-nav next" onClick={nextWeek}>
+                <button className="week-nav next" onClick={nextWeek} aria-label="Next week">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M9 5l7 7-7 7" />
                   </svg>
@@ -485,8 +576,9 @@ const PublicBooking = () => {
             <form onSubmit={handleSubmit}>
               <div className="form-row">
                 <div className="form-group">
-                  <label>First Name *</label>
+                  <label htmlFor="pb-first-name">First Name *</label>
                   <input
+                    id="pb-first-name"
                     type="text"
                     value={form.first_name}
                     onChange={(e) => setForm({ ...form, first_name: e.target.value })}
@@ -498,8 +590,9 @@ const PublicBooking = () => {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Last Name *</label>
+                  <label htmlFor="pb-last-name">Last Name *</label>
                   <input
+                    id="pb-last-name"
                     type="text"
                     value={form.last_name}
                     onChange={(e) => setForm({ ...form, last_name: e.target.value })}
@@ -511,8 +604,9 @@ const PublicBooking = () => {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Email *</label>
+                  <label htmlFor="pb-email">Email *</label>
                   <input
+                    id="pb-email"
                     type="email"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -524,8 +618,9 @@ const PublicBooking = () => {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Phone</label>
+                  <label htmlFor="pb-phone">Phone</label>
                   <input
+                    id="pb-phone"
                     type="tel"
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -537,12 +632,14 @@ const PublicBooking = () => {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Notes (optional)</label>
+                  <label htmlFor="pb-notes">Notes (optional)</label>
                   <textarea
+                    id="pb-notes"
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                     placeholder="Are there other times that could work? Any specific topics to discuss?"
                     rows={3}
+                    maxLength={500}
                   />
                 </div>
               </div>
@@ -593,69 +690,6 @@ const PublicBooking = () => {
           </div>
         )}
 
-        {/* Reschedule Modal */}
-        {showRescheduleModal && (
-          <div className="modal-overlay" onClick={() => setShowRescheduleModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <button className="modal-close" onClick={() => setShowRescheduleModal(false)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              <h2>Request to change your appointment time</h2>
-              <p>This will cancel your existing appointment. We'll do our best to arrange the meeting during the time you are requesting.</p>
-
-              <div className="reschedule-comparison">
-                <div className="comparison-col">
-                  <h4>What you previously scheduled:</h4>
-                  <p><strong>Date</strong><br/>Sunday, December 7</p>
-                  <p><strong>Time</strong><br/>6:00-6:45 am</p>
-                </div>
-                <div className="comparison-arrow">→</div>
-                <div className="comparison-col">
-                  <h4>We'll attempt to confirm:</h4>
-                  <p><strong>Date</strong><br/>{selectedDate && formatFullDate(selectedDate)}</p>
-                  <p><strong>Time</strong><br/>{selectedTime && formatTime(selectedTime)}</p>
-                </div>
-              </div>
-
-              <div className="modal-actions">
-                <button className="secondary-button" onClick={() => setShowRescheduleModal(false)}>Cancel</button>
-                <button className="primary-button">Request</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Cancel Modal */}
-        {showCancelModal && (
-          <div className="modal-overlay" onClick={() => setShowCancelModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <button className="modal-close" onClick={() => setShowCancelModal(false)}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              <h2>Cancel your appointment?</h2>
-              <p>Our team is working hard to book your appointment.</p>
-
-              <div className="form-group">
-                <label>Please let us know why you're canceling (optional)</label>
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Your feedback helps us improve."
-                  rows={3}
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button className="secondary-button" onClick={() => setShowCancelModal(false)}>Close</button>
-                <button className="danger-button">Cancel Appointment</button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Footer */}
         <div className="booking-footer">

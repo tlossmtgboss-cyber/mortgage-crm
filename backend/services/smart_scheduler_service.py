@@ -18,7 +18,7 @@ Legacy assignment strategies (kept for reference only):
 """
 
 import logging
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 from typing import Dict, List, Optional, Any
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, JSON, Text, func
@@ -71,7 +71,7 @@ class SchedulerSettings(Base):
     buffer_between_appointments = Column(Integer, default=15)  # minutes
 
     # Business hours (JSON: {"monday": {"start": "09:00", "end": "17:00"}, ...})
-    business_hours = Column(JSON, default={
+    business_hours = Column(JSON, default=lambda: {
         "monday": {"start": "09:00", "end": "17:00", "enabled": True},
         "tuesday": {"start": "09:00", "end": "17:00", "enabled": True},
         "wednesday": {"start": "09:00", "end": "17:00", "enabled": True},
@@ -89,8 +89,8 @@ class SchedulerSettings(Base):
     last_assigned_lo_id = Column(Integer, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class LoanOfficerSchedule(Base):
@@ -118,7 +118,7 @@ class LoanOfficerSchedule(Base):
     custom_hours = Column(JSON, nullable=True)
 
     # Blocked times (JSON array of {"start": datetime, "end": datetime, "reason": str})
-    blocked_times = Column(JSON, default=[])
+    blocked_times = Column(JSON, default=list)
 
     # Stats (kept for backward compat but real-time queries are preferred)
     total_appointments = Column(Integer, default=0)
@@ -127,8 +127,8 @@ class LoanOfficerSchedule(Base):
     last_appointment_at = Column(DateTime, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class ScheduledAppointment(Base):
@@ -178,8 +178,8 @@ class ScheduledAppointment(Base):
     lo_confirmation_sent = Column(Boolean, default=False)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     confirmed_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
 
@@ -364,7 +364,7 @@ class SmartSchedulerService:
 
     def _get_real_time_appointment_count(self, lo_user_id: int, period: str = "week") -> int:
         """Get real-time appointment count from the database instead of stale counters."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if period == "today":
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             end = start + timedelta(days=1)
@@ -564,9 +564,19 @@ class SmartSchedulerService:
         """
         Book an appointment with automatic or specified LO assignment.
 
+        DEPRECATED: Use direct ORM creation of ScheduledAppointment with
+        organization_id filtering instead.
+
         Returns booking details including assigned LO and calendar info.
         """
         import uuid
+        import warnings
+        warnings.warn(
+            "SmartSchedulerService.book_appointment() is deprecated. "
+            "Use direct ORM operations with organization_id filtering instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         settings = self.get_settings()
         duration = duration_minutes or settings.default_duration_minutes
@@ -615,7 +625,7 @@ class SmartSchedulerService:
 
         # Update LO stats (legacy counters — kept for backward compat)
         lo.total_appointments = (lo.total_appointments or 0) + 1
-        lo.last_appointment_at = datetime.utcnow()
+        lo.last_appointment_at = datetime.now(timezone.utc)
 
         self.db.commit()
         self.db.refresh(appointment)
@@ -659,7 +669,7 @@ class SmartSchedulerService:
             return False
 
         appointment.status = AppointmentStatus.CANCELLED.value
-        appointment.cancelled_at = datetime.utcnow()
+        appointment.cancelled_at = datetime.now(timezone.utc)
         if reason:
             appointment.internal_notes = f"Cancelled: {reason}"
 
@@ -671,8 +681,8 @@ class SmartSchedulerService:
                                    days_ahead: int = 7) -> List[ScheduledAppointment]:
         """Get upcoming appointments"""
         query = self.db.query(ScheduledAppointment).filter(
-            ScheduledAppointment.start_time >= datetime.utcnow(),
-            ScheduledAppointment.start_time <= datetime.utcnow() + timedelta(days=days_ahead),
+            ScheduledAppointment.start_time >= datetime.now(timezone.utc),
+            ScheduledAppointment.start_time <= datetime.now(timezone.utc) + timedelta(days=days_ahead),
             ScheduledAppointment.status.in_([
                 AppointmentStatus.SCHEDULED.value,
                 AppointmentStatus.CONFIRMED.value
@@ -694,17 +704,17 @@ class SmartSchedulerService:
             try:
                 start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
             except ValueError:
-                start_dt = datetime.utcnow()
+                start_dt = datetime.now(timezone.utc)
         else:
-            start_dt = datetime.utcnow()
+            start_dt = datetime.now(timezone.utc)
 
         if end_date:
             try:
                 end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
             except ValueError:
-                end_dt = datetime.utcnow() + timedelta(days=days_ahead)
+                end_dt = datetime.now(timezone.utc) + timedelta(days=days_ahead)
         else:
-            end_dt = datetime.utcnow() + timedelta(days=days_ahead)
+            end_dt = datetime.now(timezone.utc) + timedelta(days=days_ahead)
 
         query = self.db.query(ScheduledAppointment).filter(
             ScheduledAppointment.start_time >= start_dt,
@@ -722,18 +732,19 @@ class SmartSchedulerService:
 
 
 def get_scheduler_service(db_session=None) -> SmartSchedulerService:
-    """DEPRECATED — this service has NO tenant isolation.
+    """HARD-DEPRECATED — this service has NO tenant isolation.
 
     Use scheduler_appointment_routes.py or scheduler_config_routes.py instead.
-    Always creates a new instance to avoid stale session bugs.
-    If no db_session is provided, creates one from SessionLocal (for backward compat).
+    Raises RuntimeError to prevent accidental use of unscoped queries.
     """
     import traceback
     caller = traceback.extract_stack(limit=3)[0]
-    logger.warning(
-        f"DEPRECATED get_scheduler_service() called from {caller.filename}:{caller.lineno} "
-        f"— this service has NO tenant isolation. Migrate to scheduler_appointment_routes."
+    logger.error(
+        f"BLOCKED get_scheduler_service() called from {caller.filename}:{caller.lineno} "
+        f"— this service has NO tenant isolation. Use scheduler_appointment_routes instead."
     )
-    if db_session is None:
-        db_session = SessionLocal()
-    return SmartSchedulerService(db_session)
+    raise RuntimeError(
+        "smart_scheduler_service.get_scheduler_service() is permanently deprecated. "
+        "This service has ZERO multi-tenant isolation. "
+        "Use scheduler_appointment_routes.py with organization_id filtering instead."
+    )

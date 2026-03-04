@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './AppointmentModal.css';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
@@ -72,13 +72,20 @@ function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
 
       toast.success('Appointment scheduled successfully!');
       onClose();
-    } catch (err) {
-      console.error('Error creating appointment:', err);
+    } catch {
       setError('Failed to schedule appointment. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Close on ESC key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -89,7 +96,7 @@ function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content appointment-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content appointment-modal-content" role="dialog" aria-modal="true" aria-label="Schedule appointment" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Schedule Appointment</h2>
           <button className="close-button" onClick={onClose}>×</button>

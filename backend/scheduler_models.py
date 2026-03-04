@@ -117,8 +117,8 @@ class AvailabilitySlotUpdate(BaseModel):
 
 class AppointmentCreate(BaseModel):
     appointment_type_id: Optional[int] = None
-    title: str
-    description: Optional[str] = None
+    title: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = Field(None, max_length=5000)
     meeting_type: Optional[str] = "custom"
     meeting_mode: str = "video"
     scheduled_start: datetime
@@ -159,9 +159,9 @@ class AppointmentUpdate(BaseModel):
     internal_notes: Optional[str] = None
     meeting_notes: Optional[str] = None
     attendee_name: Optional[str] = None
-    attendee_email: Optional[str] = None
-    attendee_phone: Optional[str] = None
-    attendee_notes: Optional[str] = None
+    attendee_email: Optional[EmailStr] = None
+    attendee_phone: Optional[str] = Field(None, max_length=20)
+    attendee_notes: Optional[str] = Field(None, max_length=2000)
     send_notification: Optional[bool] = True  # Send email/SMS on update
 
 
@@ -178,9 +178,9 @@ class BlockedTimeCreate(BaseModel):
 
 
 class BookingLinkCreate(BaseModel):
-    slug: str
-    link_name: str
-    description: Optional[str] = None
+    slug: str = Field(..., min_length=2, max_length=100, pattern=r'^[a-zA-Z0-9][a-zA-Z0-9\-_]*$')
+    link_name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=1000)
     appointment_type_ids: List[int] = []
     single_appointment_type_id: Optional[int] = None
     is_public: bool = True
@@ -197,6 +197,13 @@ class AvailableSlotsRequest(BaseModel):
     start_date: date
     end_date: date
     timezone: str = "America/Chicago"
+    user_ids: Optional[List[int]] = None  # Filter to specific users
+
+    @validator('end_date')
+    def end_date_after_start(cls, v, values):
+        if 'start_date' in values and v < values['start_date']:
+            raise ValueError('end_date must be on or after start_date')
+        return v
 
 
 class PublicBookingConfirmRequest(BaseModel):
@@ -238,10 +245,10 @@ class CancelAppointmentRequest(BaseModel):
 
 class WebsiteDemoBookingRequest(BaseModel):
     """Request model for website demo booking confirmation"""
-    start_time: str  # ISO datetime
+    start_time: datetime  # ISO datetime
     duration_minutes: int = Field(30, ge=15, le=480)
     attendee_name: str = Field(..., min_length=1, max_length=200)
     attendee_email: EmailStr
     attendee_phone: Optional[str] = Field(None, max_length=20)
-    notes: Optional[str] = Field(None, max_length=2000)
+    notes: Optional[str] = Field(None, max_length=500)
     meeting_mode: str = Field("video", max_length=20)

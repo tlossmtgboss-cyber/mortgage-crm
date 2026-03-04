@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { calendarAPI, schedulerAPI, unifiedCalendarAPI, teamAPI } from '../services/api';
 import './Calendar.css';
 
@@ -52,7 +52,6 @@ const isSameDay = (d1, d2) =>
 function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
-  const [events, setEvents] = useState([]);
   const [allEvents, setAllEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -70,11 +69,18 @@ function Calendar() {
   // Team members for appointment assignment
   const [teamMembers, setTeamMembers] = useState([]);
 
+  // Inline confirmation dialog state
+  const [confirmAction, setConfirmAction] = useState(null);
+
   useEffect(() => {
     loadEvents();
-    loadAllEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
+
+  useEffect(() => {
+    loadAllEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     teamAPI.getMembers().then(members => setTeamMembers(members)).catch(() => {});
@@ -91,16 +97,11 @@ function Calendar() {
         end_date: endDate.toISOString().split('T')[0],
       });
 
-      if (response.warnings && response.warnings.length > 0) {
-        console.warn('Calendar load warnings:', response.warnings);
-      }
-
-      setEvents(mapUnifiedEvents(response.events));
+      setAllEvents(mapUnifiedEvents(response.events));
       setError(null);
-    } catch (err) {
-      console.error('Failed to load events:', err);
+    } catch {
       setError('Unable to load calendar events. Please try again.');
-      setEvents([]);
+      setAllEvents([]);
     } finally {
       setLoading(false);
     }
@@ -118,14 +119,9 @@ function Calendar() {
         end_date: endDate.toISOString().split('T')[0],
       });
 
-      if (response.warnings && response.warnings.length > 0) {
-        console.warn('Calendar load warnings:', response.warnings);
-      }
-
       setAllEvents(mapUnifiedEvents(response.events));
       setError(null);
-    } catch (err) {
-      console.error('Failed to load all events:', err);
+    } catch {
       setError('Unable to load calendar events. Please try again.');
       setAllEvents([]);
     }
@@ -137,8 +133,7 @@ function Calendar() {
       loadEvents();
       loadAllEvents();
       setShowAddModal(false);
-    } catch (err) {
-      console.error('Failed to create event:', err);
+    } catch {
       setError('Failed to create event. Please try again.');
     }
   };
@@ -149,32 +144,33 @@ function Calendar() {
       loadEvents();
       loadAllEvents();
       setShowAddModal(false);
-    } catch (err) {
-      console.error('Failed to create appointment:', err);
+    } catch {
       setError('Failed to create appointment. Please try again.');
     }
   };
 
-  const handleDeleteEvent = async (event) => {
-    try {
-      if (event.isAppointment && event.appointmentId) {
-        if (!window.confirm('Are you sure you want to cancel this appointment? The attendee will be notified.')) {
-          return;
+  const handleDeleteEvent = (event) => {
+    const message = event.isAppointment && event.appointmentId
+      ? 'Are you sure you want to cancel this appointment? The attendee will be notified.'
+      : 'Are you sure you want to delete this event?';
+    setConfirmAction({
+      message,
+      onConfirm: async () => {
+        setConfirmAction(null);
+        try {
+          if (event.isAppointment && event.appointmentId) {
+            await schedulerAPI.cancelAppointment(event.appointmentId, 'Cancelled by user');
+          } else {
+            const eventId = event.calendarEventId || event.id.replace('event-', '');
+            await calendarAPI.delete(eventId);
+          }
+          loadEvents();
+          loadAllEvents();
+        } catch (err) {
+          setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
         }
-        await schedulerAPI.cancelAppointment(event.appointmentId, 'Cancelled by user');
-      } else {
-        if (!window.confirm('Are you sure you want to delete this event?')) {
-          return;
-        }
-        const eventId = event.calendarEventId || event.id.replace('event-', '');
-        await calendarAPI.delete(eventId);
-      }
-      loadEvents();
-      loadAllEvents();
-    } catch (err) {
-      console.error('Failed to delete/cancel event:', err);
-      setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
-    }
+      },
+    });
   };
 
   const handleEditAppointment = (event) => {
@@ -230,31 +226,32 @@ function Calendar() {
       loadEvents();
       loadAllEvents();
     } catch (err) {
-      console.error('Failed to update appointment:', err);
       setError('Failed to reschedule: ' + (err.response?.data?.detail || err.message));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancelFromModal = async () => {
-    if (!editingAppointment || !window.confirm('Are you sure you want to cancel this appointment? The attendee will be notified.')) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await schedulerAPI.cancelAppointment(editingAppointment.id, 'Cancelled by user');
-      setShowEditModal(false);
-      setEditingAppointment(null);
-      loadEvents();
-      loadAllEvents();
-    } catch (err) {
-      console.error('Failed to cancel appointment:', err);
-      setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
-    } finally {
-      setSaving(false);
-    }
+  const handleCancelFromModal = () => {
+    if (!editingAppointment) return;
+    setConfirmAction({
+      message: 'Are you sure you want to cancel this appointment? The attendee will be notified.',
+      onConfirm: async () => {
+        setConfirmAction(null);
+        setSaving(true);
+        try {
+          await schedulerAPI.cancelAppointment(editingAppointment.id, 'Cancelled by user');
+          setShowEditModal(false);
+          setEditingAppointment(null);
+          loadEvents();
+          loadAllEvents();
+        } catch (err) {
+          setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   // Filter events by active tab
@@ -264,8 +261,8 @@ function Calendar() {
     return eventList.filter(event => event.event_type === tab.filterType);
   };
 
-  // Sort and group events by date, with search filter
-  const getSortedEvents = () => {
+  // Sort and group events by date, with search filter (memoized)
+  const sortedEvents = useMemo(() => {
     const filtered = getFilteredEvents(allEvents).filter(event => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
@@ -274,7 +271,7 @@ function Calendar() {
         || (event.location || '').toLowerCase().includes(q);
     });
     return [...filtered].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-  };
+  }, [allEvents, activeTab, searchQuery]);
 
   const formatEventTime = (startTime, endTime) => {
     const start = new Date(startTime);
@@ -719,15 +716,14 @@ function Calendar() {
             />
           </div>
           <div className="appointments-list">
-            {getSortedEvents().length === 0 ? (
+            {sortedEvents.length === 0 ? (
               <div className="empty-appointments">
                 <p>{searchQuery ? 'No matching events' : 'No appointments scheduled'}</p>
               </div>
             ) : (
-              getSortedEvents().map((event, index) => {
+              sortedEvents.map((event, index) => {
                 const { startStr, duration } = formatEventTime(event.start_time, event.end_time);
                 const dateLabel = formatEventDate(event.start_time);
-                const sortedEvents = getSortedEvents();
                 const showDateHeader = index === 0 || formatEventDate(sortedEvents[index - 1].start_time) !== dateLabel;
 
                 return (
@@ -792,8 +788,8 @@ function Calendar() {
       )}
 
       {showEditModal && editingAppointment && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal-content edit-appointment-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)} onKeyDown={(e) => { if (e.key === 'Escape') setShowEditModal(false); }}>
+          <div className="modal-content edit-appointment-modal" role="dialog" aria-modal="true" aria-label="Edit appointment" onClick={(e) => e.stopPropagation()}>
             <h3>Edit Appointment</h3>
             <form onSubmit={handleSaveAppointment}>
               <div className="form-group">
@@ -928,6 +924,18 @@ function Calendar() {
           </div>
         </div>
       )}
+
+      {confirmAction && (
+        <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
+          <div className="modal-content confirm-dialog" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Confirm action">
+            <p>{confirmAction.message}</p>
+            <div className="modal-actions">
+              <button type="button" onClick={() => setConfirmAction(null)}>No, go back</button>
+              <button type="button" className="btn-danger" onClick={confirmAction.onConfirm}>Yes, confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -941,6 +949,13 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppoin
   const defaultEnd = new Date(defaultStart.getTime() + 3600000);
 
   const [mode, setMode] = useState('event');
+
+  // Close on ESC key
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -985,7 +1000,7 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppoin
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" role="dialog" aria-modal="true" aria-label="Add event" onClick={(e) => e.stopPropagation()}>
         <div className="modal-mode-toggle">
           <button
             type="button"

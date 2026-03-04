@@ -131,7 +131,13 @@ async def get_unified_calendar(
         # Get unified events
         from services.unified_calendar_service import get_unified_calendar_service
 
-        service = get_unified_calendar_service(db, current_user.id)
+        org_id = getattr(current_user, 'organization_id', None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="No organization context")
+        service = get_unified_calendar_service(
+            db, current_user.id,
+            organization_id=org_id,
+        )
         result = service.get_unified_events(
             start_date=start_dt,
             end_date=end_dt,

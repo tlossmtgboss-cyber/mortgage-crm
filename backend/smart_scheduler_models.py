@@ -15,9 +15,9 @@ Tables:
 - AppointmentReminder: Multi-channel reminder tracking
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Enum as SQLEnum, Float, Time, Date, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Enum as SQLEnum, Float, Numeric, Time, Date, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 import enum
 
 
@@ -117,7 +117,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null = team-level config
         team_id = Column(Integer, nullable=True)  # For team-level settings
 
@@ -152,10 +152,10 @@ def create_smart_scheduler_models(Base):
 
         # Working hours (JSON for flexibility)
         # Format: {"monday": {"start": "09:00", "end": "17:00", "enabled": true}, ...}
-        working_hours = Column(JSON, default={})
+        working_hours = Column(JSON, default=dict)
 
         # Meeting preferences
-        preferred_meeting_modes = Column(JSON, default=["video", "phone"])
+        preferred_meeting_modes = Column(JSON, default=lambda: ["video", "phone"])
         default_meeting_mode = Column(SQLEnum(MeetingMode), default=MeetingMode.VIDEO)
 
         # Video conferencing
@@ -175,12 +175,12 @@ def create_smart_scheduler_models(Base):
         smart_reminders_enabled = Column(Boolean, default=True)
 
         # Landing page customization settings (JSON)
-        landing_page_settings = Column(JSON, default={})
+        landing_page_settings = Column(JSON, default=dict)
 
         # Status
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         user = relationship("User", backref="scheduler_config")
@@ -201,7 +201,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
         config_id = Column(Integer, ForeignKey("scheduler_configs.id"), nullable=False)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
@@ -216,8 +216,8 @@ def create_smart_scheduler_models(Base):
         is_recurring = Column(Boolean, default=True)
 
         # Meeting type restrictions
-        allowed_meeting_types = Column(JSON, default=[])  # Empty = all types allowed
-        excluded_meeting_types = Column(JSON, default=[])
+        allowed_meeting_types = Column(JSON, default=list)  # Empty = all types allowed
+        excluded_meeting_types = Column(JSON, default=list)
 
         # Capacity
         max_bookings = Column(Integer, default=1)  # For group sessions
@@ -228,8 +228,8 @@ def create_smart_scheduler_models(Base):
 
         # Status
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         config = relationship("SchedulerConfig", back_populates="availability_slots")
@@ -249,7 +249,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
         config_id = Column(Integer, ForeignKey("scheduler_configs.id"), nullable=False)
 
         # Type identification
@@ -260,10 +260,10 @@ def create_smart_scheduler_models(Base):
         # Meeting settings
         meeting_type = Column(SQLEnum(MeetingType), default=MeetingType.CUSTOM)
         default_duration_minutes = Column(Integer, default=30)
-        allowed_durations = Column(JSON, default=[15, 30, 45, 60])  # Minutes
+        allowed_durations = Column(JSON, default=lambda: [15, 30, 45, 60])  # Minutes
 
         # Meeting modes
-        allowed_modes = Column(JSON, default=["video", "phone"])
+        allowed_modes = Column(JSON, default=lambda: ["video", "phone"])
         default_mode = Column(SQLEnum(MeetingMode), default=MeetingMode.VIDEO)
 
         # Booking rules
@@ -278,14 +278,14 @@ def create_smart_scheduler_models(Base):
         requires_contact_info = Column(Boolean, default=True)
 
         # Intake questions (JSON array)
-        intake_questions = Column(JSON, default=[])
+        intake_questions = Column(JSON, default=list)
 
         # Confirmation/reminder settings
         send_confirmation = Column(Boolean, default=True)
-        reminder_schedule = Column(JSON, default=[24, 1])  # Hours before: 24h and 1h
+        reminder_schedule = Column(JSON, default=lambda: [24, 1])  # Hours before: 24h and 1h
 
         # Routing
-        assigned_users = Column(JSON, default=[])  # Specific users who can take this type
+        assigned_users = Column(JSON, default=list)  # Specific users who can take this type
         routing_strategy = Column(SQLEnum(RoutingStrategy), nullable=True)  # Override
 
         # Display
@@ -299,8 +299,8 @@ def create_smart_scheduler_models(Base):
 
         # Status
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         config = relationship("SchedulerConfig", back_populates="appointment_types")
@@ -322,7 +322,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
         # Reference IDs
         appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
@@ -363,7 +363,7 @@ def create_smart_scheduler_models(Base):
         attendee_notes = Column(Text)
 
         # Intake responses
-        intake_responses = Column(JSON, default={})
+        intake_responses = Column(JSON, default=dict)
 
         # Status tracking
         status = Column(SQLEnum(AppointmentStatus), default=AppointmentStatus.BOOKED)
@@ -395,8 +395,8 @@ def create_smart_scheduler_models(Base):
         meeting_notes = Column(Text)  # Post-meeting notes
 
         # Metadata
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         appointment_type = relationship("AppointmentType", back_populates="appointments")
@@ -419,7 +419,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
         # Rule identification
         rule_name = Column(String(100), nullable=False)
@@ -428,26 +428,26 @@ def create_smart_scheduler_models(Base):
 
         # Conditions (JSON for flexibility)
         # Format: {"field": "meeting_type", "operator": "equals", "value": "discovery_call"}
-        conditions = Column(JSON, default=[])
+        conditions = Column(JSON, default=list)
 
         # Matching criteria
         appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
-        meeting_types = Column(JSON, default=[])  # List of MeetingType values
-        lead_sources = Column(JSON, default=[])  # Route by lead source
-        loan_amounts_min = Column(Float, nullable=True)
-        loan_amounts_max = Column(Float, nullable=True)
+        meeting_types = Column(JSON, default=list)  # List of MeetingType values
+        lead_sources = Column(JSON, default=list)  # Route by lead source
+        loan_amounts_min = Column(Numeric(18, 2), nullable=True)
+        loan_amounts_max = Column(Numeric(18, 2), nullable=True)
 
         # Assignment
         routing_strategy = Column(SQLEnum(RoutingStrategy), default=RoutingStrategy.ROUND_ROBIN)
-        assigned_users = Column(JSON, default=[])  # User IDs to route to
-        fallback_users = Column(JSON, default=[])  # If primary unavailable
+        assigned_users = Column(JSON, default=list)  # User IDs to route to
+        fallback_users = Column(JSON, default=list)  # If primary unavailable
 
         # Expertise matching
-        required_expertise = Column(JSON, default=[])  # Skills/certifications needed
-        preferred_expertise = Column(JSON, default=[])  # Nice to have
+        required_expertise = Column(JSON, default=list)  # Skills/certifications needed
+        preferred_expertise = Column(JSON, default=list)  # Nice to have
 
         # Time-based rules
-        active_days = Column(JSON, default=[])  # Days this rule applies
+        active_days = Column(JSON, default=list)  # Days this rule applies
         active_hours_start = Column(Time, nullable=True)
         active_hours_end = Column(Time, nullable=True)
 
@@ -458,8 +458,8 @@ def create_smart_scheduler_models(Base):
 
         # Status
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         appointment_type = relationship("AppointmentType")
@@ -477,7 +477,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null = company-wide
 
         # Block details
@@ -497,12 +497,12 @@ def create_smart_scheduler_models(Base):
 
         # Scope
         applies_to_all_users = Column(Boolean, default=False)  # Company holiday
-        applies_to_teams = Column(JSON, default=[])  # Team IDs
+        applies_to_teams = Column(JSON, default=list)  # Team IDs
 
         # Status
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
         # Relationships
@@ -523,7 +523,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Owner
 
         # Link identification
@@ -532,7 +532,7 @@ def create_smart_scheduler_models(Base):
         description = Column(Text)
 
         # What can be booked
-        appointment_type_ids = Column(JSON, default=[])  # Allowed types
+        appointment_type_ids = Column(JSON, default=list)  # Allowed types
         single_appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
 
         # Link settings
@@ -558,7 +558,7 @@ def create_smart_scheduler_models(Base):
 
         # Routing
         routing_strategy = Column(SQLEnum(RoutingStrategy), default=RoutingStrategy.RELATIONSHIP)
-        assigned_users = Column(JSON, default=[])  # Route to specific users
+        assigned_users = Column(JSON, default=list)  # Route to specific users
 
         # Tracking
         view_count = Column(Integer, default=0)
@@ -573,8 +573,8 @@ def create_smart_scheduler_models(Base):
         # Status
         is_active = Column(Boolean, default=True)
         expires_at = Column(DateTime, nullable=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         user = relationship("User", backref="booking_links")
@@ -592,7 +592,7 @@ def create_smart_scheduler_models(Base):
         )
 
         id = Column(Integer, primary_key=True, index=True)
-        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
         appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id"), nullable=False)
 
         # Reminder settings
@@ -619,11 +619,34 @@ def create_smart_scheduler_models(Base):
         external_message_id = Column(String(255))  # SMS/Email provider ID
 
         # Metadata
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         appointment = relationship("Appointment", back_populates="reminders")
+
+
+    # ====================================================================
+    # AUDIT LOG
+    # ====================================================================
+    class SchedulerAuditLog(Base):
+        __tablename__ = 'scheduler_audit_log'
+        __table_args__ = (
+            Index('idx_scheduler_audit_org_ts', 'organization_id', 'created_at'),
+            Index('idx_scheduler_audit_entity', 'entity_type', 'entity_id'),
+            {'extend_existing': True}
+        )
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+        user_id = Column(Integer, nullable=True)
+        action = Column(String(50), nullable=False)  # created, updated, cancelled, deleted, settings_changed
+        entity_type = Column(String(50), nullable=False)  # appointment, booking_link, blocked_time, settings, appointment_type
+        entity_id = Column(Integer, nullable=True)
+        changes = Column(JSON, nullable=True)  # {field: {old: x, new: y}}
+        ip_address = Column(String(45), nullable=True)
+        user_agent = Column(String(255), nullable=True)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 
     return {
@@ -634,7 +657,8 @@ def create_smart_scheduler_models(Base):
         'RoutingRule': RoutingRule,
         'BlockedTime': BlockedTime,
         'BookingLink': BookingLink,
-        'AppointmentReminder': AppointmentReminder
+        'AppointmentReminder': AppointmentReminder,
+        'SchedulerAuditLog': SchedulerAuditLog,
     }
 
 

@@ -21,9 +21,12 @@ logger = logging.getLogger(__name__)
 class UnifiedCalendarService:
     """Service for fetching and merging calendar events from multiple sources."""
 
-    def __init__(self, db: Session, user_id: int):
+    def __init__(self, db: Session, user_id: int, organization_id: int):
         self.db = db
         self.user_id = user_id
+        if not organization_id:
+            raise ValueError("organization_id is required for tenant isolation")
+        self.organization_id = organization_id
 
     def get_unified_events(
         self,
@@ -77,11 +80,17 @@ class UnifiedCalendarService:
         # Sort by start_time
         events.sort(key=lambda e: e.get("start_time") or "")
 
+        # RT3: Detect scheduling conflicts
+        conflicts = self._detect_conflicts(events)
+
         return {
             "events": events,
             "total_count": len(events),
             "warnings": warnings,
             "sources_queried": sources_queried,
+            "conflicts": conflicts,
+            "conflict_count": len(conflicts),
+            "has_hard_conflicts": any(c["type"] == "hard" for c in conflicts),
         }
 
     def _fetch_calendar_events(
@@ -99,6 +108,8 @@ class UnifiedCalendarService:
                 CalendarEvent.start_time <= end_date,
             )
 
+            query = query.filter(CalendarEvent.organization_id == self.organization_id)
+
             if not include_cancelled:
                 query = query.filter(CalendarEvent.status != "cancelled")
 
@@ -113,14 +124,19 @@ class UnifiedCalendarService:
     def _fetch_appointments(
         self, start_date: datetime, end_date: datetime, include_cancelled: bool
     ) -> tuple[List[Dict], Optional[str]]:
-        """Fetch events from ScheduledAppointment table."""
+        """Fetch events from ScheduledAppointment table with tenant isolation."""
         try:
+            # Import model only (service is deprecated but model defines the table)
             from services.smart_scheduler_service import ScheduledAppointment
 
             query = self.db.query(ScheduledAppointment).filter(
                 ScheduledAppointment.loan_officer_id == self.user_id,
                 ScheduledAppointment.start_time >= start_date,
                 ScheduledAppointment.start_time <= end_date,
+            )
+
+            query = query.filter(
+                ScheduledAppointment.organization_id == self.organization_id
             )
 
             if not include_cancelled:
@@ -146,6 +162,8 @@ class UnifiedCalendarService:
                 CRMCalendarEvent.start_at >= start_date,
                 CRMCalendarEvent.start_at <= end_date,
             )
+
+            query = query.filter(CRMCalendarEvent.organization_id == self.organization_id)
 
             if not include_cancelled:
                 query = query.filter(CRMCalendarEvent.status != "canceled")
@@ -260,6 +278,59 @@ class UnifiedCalendarService:
         }
 
 
-def get_unified_calendar_service(db: Session, user_id: int) -> UnifiedCalendarService:
+    def _detect_conflicts(self, events: List[Dict]) -> List[Dict]:
+        """
+        Scan sorted events for time overlaps and flag conflicts.
+        - "hard": Two events overlap (double-booked)
+        - "soft": Two events are back-to-back with < 5 min gap
+        """
+        conflicts = []
+        BACK_TO_BACK_THRESHOLD_MINUTES = 5
+
+        for i in range(len(events) - 1):
+            curr = events[i]
+            next_ev = events[i + 1]
+
+            curr_end = curr.get("end_time")
+            next_start = next_ev.get("start_time")
+
+            if not curr_end or not next_start:
+                continue
+
+            try:
+                c_end = datetime.fromisoformat(curr_end.replace("Z", "+00:00"))
+                n_start = datetime.fromisoformat(next_start.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                continue
+
+            if c_end > n_start:
+                # Hard conflict: overlap
+                conflicts.append({
+                    "type": "hard",
+                    "severity": "double_booked",
+                    "event_a_id": curr.get("id"),
+                    "event_a_title": curr.get("title"),
+                    "event_b_id": next_ev.get("id"),
+                    "event_b_title": next_ev.get("title"),
+                    "overlap_start": next_start,
+                    "overlap_end": curr_end,
+                })
+            else:
+                gap_minutes = (n_start - c_end).total_seconds() / 60
+                if gap_minutes < BACK_TO_BACK_THRESHOLD_MINUTES:
+                    conflicts.append({
+                        "type": "soft",
+                        "severity": "back_to_back",
+                        "event_a_id": curr.get("id"),
+                        "event_a_title": curr.get("title"),
+                        "event_b_id": next_ev.get("id"),
+                        "event_b_title": next_ev.get("title"),
+                        "gap_minutes": round(gap_minutes, 1),
+                    })
+
+        return conflicts
+
+
+def get_unified_calendar_service(db: Session, user_id: int, organization_id: int) -> UnifiedCalendarService:
     """Factory function to create UnifiedCalendarService instance."""
-    return UnifiedCalendarService(db, user_id)
+    return UnifiedCalendarService(db, user_id, organization_id=organization_id)

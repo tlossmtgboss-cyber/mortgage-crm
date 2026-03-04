@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.7 - Fixed date picker to show today fully visible - build 20251216b
-// Fixed: First date card was being cut off due to overflow styling
-console.log('[ScheduleAppointmentModal] v3.7 loaded - build 20251216b');
+// v3.8 - Removed console.logs, added a11y, fixed build 20260303
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -99,8 +97,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
           work_days: data.work_days || ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
         });
       }
-    } catch (error) {
-      console.error('Error fetching team member work hours:', error);
+    } catch {
       // Keep default work hours
     }
   }, []);
@@ -131,16 +128,20 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
             fetchTeamMemberWorkHours(firstMemberId);
           }
         }
-      } else {
-        console.warn('Failed to fetch team members:', allMembersResponse.status);
-        // Don't set error - modal can still work without team members list
       }
-    } catch (error) {
-      console.error('Error fetching team members:', error);
-      // Don't set error for network issues - the modal can still function
-      // User can manually enter appointment details
+      // If response not ok, silently continue — modal works without team members list
+    } catch {
+      // Network issues don't block the modal — user can still enter details manually
     }
   }, [borrower?.id, fetchTeamMemberWorkHours]);
+
+  // Close on ESC key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isOpen, onClose]);
 
   // Reset calendar to today whenever modal opens
   // This is a separate effect to ensure it always runs when isOpen changes
@@ -294,16 +295,6 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       'Team Member';
 
     try {
-      // First verify API is reachable with a health check
-      console.log('[ScheduleAppointmentModal] Checking API health at:', API_BASE);
-      try {
-        const healthCheck = await fetch(`${API_BASE}/health`, { method: 'GET' });
-        console.log('[ScheduleAppointmentModal] Health check status:', healthCheck.status);
-      } catch (healthErr) {
-        console.error('[ScheduleAppointmentModal] Health check failed:', healthErr);
-        // Continue anyway - health endpoint might not exist
-      }
-
       // Use authenticated endpoint to ensure appointment is linked to current user
       const attendeeName = borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim();
       const appointmentUrl = `${API_BASE}/api/v1/scheduler/appointments`;
@@ -330,8 +321,6 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         assigned_user_id: parseInt(selectedTeamMember) || null
       };
 
-      console.log('[ScheduleAppointmentModal] Request body:', JSON.stringify(requestBody, null, 2));
-
       const response = await fetch(appointmentUrl, {
         method: 'POST',
         headers: {
@@ -341,26 +330,18 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         body: JSON.stringify(requestBody)
       });
 
-      console.log('[ScheduleAppointmentModal] Response status:', response.status);
-      console.log('[ScheduleAppointmentModal] Response ok:', response.ok);
-
-      // Try to parse response - might fail if response is not JSON
+      // Try to parse response
       let result;
       try {
         const responseText = await response.text();
-        console.log('[ScheduleAppointmentModal] Response text:', responseText.substring(0, 500));
         result = JSON.parse(responseText);
       } catch (parseErr) {
-        console.error('[ScheduleAppointmentModal] Failed to parse response:', parseErr);
         throw new Error(`Server returned invalid response (status ${response.status})`);
       }
 
       if (!response.ok) {
         throw new Error(result.detail || `Server error: ${response.status}`);
       }
-
-      console.log('[ScheduleAppointmentModal] Appointment created:', result);
-      console.log('[ScheduleAppointmentModal] email_sent:', result.email_sent, 'email_error:', result.email_error);
 
       setSuccess(true);
       setEmailSent(result.email_sent === true);
@@ -376,10 +357,6 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         onClose();
       }, 3000);
     } catch (err) {
-      console.error('[ScheduleAppointmentModal] Error scheduling appointment:', err);
-      console.error('[ScheduleAppointmentModal] Error name:', err.name);
-      console.error('[ScheduleAppointmentModal] Error message:', err.message);
-
       // Provide more specific error messages
       let errorMessage = 'Failed to schedule appointment. Please try again.';
       if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
@@ -398,7 +375,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
 
   return (
     <div className="schedule-modal-overlay" onClick={onClose}>
-      <div className="schedule-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="schedule-modal" role="dialog" aria-modal="true" aria-label="Schedule appointment" onClick={(e) => e.stopPropagation()}>
         <button className="schedule-modal-close" onClick={onClose}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 18L18 6M6 6l12 12" />

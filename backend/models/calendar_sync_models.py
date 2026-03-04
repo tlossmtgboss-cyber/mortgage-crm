@@ -4,7 +4,7 @@ Database models for CRM ↔ Salesforce ↔ Outlook calendar synchronization
 """
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, JSON, Boolean,
@@ -79,6 +79,7 @@ class CRMCalendarEvent(Base):
 
     # Ownership
     owner_user_id = Column(Integer, nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # Attendees as JSON array: [{"email": "...", "name": "...", "status": "..."}]
     attendees = Column(JSON, default=list)
@@ -93,7 +94,7 @@ class CRMCalendarEvent(Base):
     # Source tracking
     source_system = Column(String(20), default=SourceSystem.CRM.value)
     last_modified_by_system = Column(String(20), default=SourceSystem.CRM.value)
-    last_modified_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_modified_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Sync tracking
     last_synced_at = Column(DateTime, nullable=True)
@@ -104,8 +105,8 @@ class CRMCalendarEvent(Base):
     fingerprint_hash = Column(String(64), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationship to sync mapping
     sync_mapping = relationship("CalendarEventSyncMap", back_populates="crm_event", uselist=False, cascade="all, delete-orphan")
@@ -176,7 +177,7 @@ class CRMCalendarEvent(Base):
             "Location": self.location,
             "Description": self.notes,
             "CRM_Event_ID__c": self.id,
-            "CRM_Last_Pushed_At__c": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
+            "CRM_Last_Pushed_At__c": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
             "CRM_Fingerprint__c": self.fingerprint_hash,
             "CRM_Source__c": "crm",
             "CRM_Sync_Version__c": 1,
@@ -200,6 +201,7 @@ class CalendarEventSyncMap(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
 
     # CRM event reference (unique)
     crm_event_id = Column(String(36), ForeignKey('crm_calendar_events.id'), unique=True, nullable=False)
@@ -220,8 +222,8 @@ class CalendarEventSyncMap(Base):
     lock_token = Column(String(50), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationship
     crm_event = relationship("CRMCalendarEvent", back_populates="sync_mapping")
@@ -255,6 +257,7 @@ class CalendarSyncLog(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
 
     # Event references
     crm_event_id = Column(String(36), nullable=True)
@@ -277,7 +280,7 @@ class CalendarSyncLog(Base):
     duration_ms = Column(Integer, nullable=True)
 
     # Timestamp
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
@@ -306,6 +309,7 @@ class CalendarSyncSettings(Base):
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, index=True)
 
     # Scope: null = global, user_id = per-user settings
     user_id = Column(Integer, nullable=True, unique=True, index=True)
@@ -344,8 +348,8 @@ class CalendarSyncSettings(Base):
     last_poll_watermark = Column(DateTime, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""

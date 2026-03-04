@@ -28,7 +28,7 @@ Settings:
 """
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
@@ -157,40 +157,18 @@ class SyncSettingsRequest(BaseModel):
 # Helper Functions
 # ============================================================================
 
-def get_current_user_id(request: Request, db: Session) -> Optional[int]:
-    """Extract user ID from JWT token in request."""
-    try:
-        import jwt
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            secret_key = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(
-                token,
-                secret_key,
-                algorithms=["HS256"],
-                options={"verify_aud": False, "verify_iss": False}
-            )
-            email = payload.get("sub")
-            if email:
-                result = db.execute(
-                    text("SELECT id FROM users WHERE email = :email"),
-                    {"email": email}
-                ).fetchone()
-                if result:
-                    return result[0]
-            return payload.get("user_id")
-    except SQLAlchemyError as e:
-        logger.warning(f"Failed to extract user ID: {e}")
-    return None
+def _get_current_user_dep():
+    """Get centralized auth dependency at runtime to avoid circular imports."""
+    import main
+    return main.get_current_user
 
 
-def require_user(request: Request, db: Session = Depends(get_db)) -> int:
-    """Dependency that requires authenticated user."""
-    user_id = get_current_user_id(request, db)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return user_id
+def _get_org_id(user) -> int:
+    """Extract and validate organization_id from authenticated user."""
+    org_id = getattr(user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
 
 
 # ============================================================================
@@ -199,46 +177,44 @@ def require_user(request: Request, db: Session = Depends(get_db)) -> int:
 
 @router.get("/events", response_model=List[EventResponse])
 async def list_events(
-    request: Request,
     start_date: Optional[datetime] = Query(None, description="Filter by start date >="),
     end_date: Optional[datetime] = Query(None, description="Filter by start date <="),
     status: Optional[str] = Query(None, description="Filter by status"),
     sync_status: Optional[str] = Query(None, description="Filter by sync status"),
     limit: int = Query(100, ge=1, le=500),
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
-    List calendar events for the current user.
-
-    Supports filtering by date range, status, and sync status.
+    List calendar events for the current user, scoped to their organization.
     """
     try:
-        user_id = require_user(request, db)
+        org_id = _get_org_id(current_user)
         service = get_calendar_sync_service(db)
 
         events = service.get_events(
-            user_id=user_id,
+            user_id=current_user.id,
             start_date=start_date,
             end_date=end_date,
             status=status,
             sync_status=sync_status,
-            limit=limit
+            limit=limit,
+            organization_id=org_id
         )
 
         return [_event_to_response(e) for e in events]
     except HTTPException:
-        raise  # Re-raise HTTP exceptions (like 401)
+        raise
     except Exception as e:
         logger.warning(f"Error fetching calendar events: {e}")
-        # Return empty list instead of 500 error
         return []
 
 
 @router.post("/events", response_model=EventResponse, status_code=201)
 async def create_event(
-    request: Request,
     event_data: EventCreateRequest,
     background_tasks: BackgroundTasks,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -247,7 +223,7 @@ async def create_event(
     The event will be automatically synced to Salesforce/Outlook.
     Returns immediately with sync_status = "pending".
     """
-    user_id = require_user(request, db)
+    org_id = _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     # Validate dates
@@ -258,7 +234,7 @@ async def create_event(
         )
 
     event = service.create_event(
-        user_id=user_id,
+        user_id=current_user.id,
         title=event_data.title,
         start_at=event_data.start_at,
         end_at=event_data.end_at,
@@ -283,14 +259,14 @@ async def create_event(
 @router.get("/events/{event_id}", response_model=EventResponse)
 async def get_event(
     event_id: str,
-    request: Request,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Get a single calendar event by ID."""
-    user_id = require_user(request, db)
+    org_id = _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
-    event = service.get_event(event_id, user_id)
+    event = service.get_event(event_id, current_user.id, organization_id=org_id)
 
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -301,9 +277,9 @@ async def get_event(
 @router.put("/events/{event_id}", response_model=EventResponse)
 async def update_event(
     event_id: str,
-    request: Request,
     updates: EventUpdateRequest,
     background_tasks: BackgroundTasks,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -311,7 +287,7 @@ async def update_event(
 
     Changes will be synced to Salesforce/Outlook.
     """
-    user_id = require_user(request, db)
+    org_id = _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     # Build update dict (exclude None values)
@@ -331,7 +307,7 @@ async def update_event(
                 detail="End time must be after start time"
             )
 
-    event = service.update_event(event_id, user_id, update_dict, auto_sync=True)
+    event = service.update_event(event_id, current_user.id, update_dict, auto_sync=True, organization_id=org_id)
 
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -346,9 +322,9 @@ async def update_event(
 @router.delete("/events/{event_id}")
 async def delete_event(
     event_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
     hard_delete: bool = Query(False, description="Hard delete instead of cancel"),
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -357,12 +333,12 @@ async def delete_event(
     By default, events are soft-cancelled (status = "canceled").
     Use hard_delete=true to permanently remove.
     """
-    user_id = require_user(request, db)
+    org_id = _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     if hard_delete:
         # Hard delete
-        event = service.get_event(event_id, user_id)
+        event = service.get_event(event_id, current_user.id, organization_id=org_id)
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
 
@@ -373,7 +349,7 @@ async def delete_event(
         return {"status": "deleted", "event_id": event_id}
     else:
         # Soft cancel
-        event = service.cancel_event(event_id, user_id, auto_sync=True)
+        event = service.cancel_event(event_id, current_user.id, auto_sync=True, organization_id=org_id)
 
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
@@ -387,8 +363,8 @@ async def delete_event(
 @router.post("/events/{event_id}/resync")
 async def resync_event(
     event_id: str,
-    request: Request,
     background_tasks: BackgroundTasks,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -396,10 +372,10 @@ async def resync_event(
 
     Recreates the Salesforce event if the mapping is missing.
     """
-    user_id = require_user(request, db)
+    org_id = _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
-    event = service.get_event(event_id, user_id)
+    event = service.get_event(event_id, current_user.id, organization_id=org_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -424,21 +400,21 @@ async def resync_event(
 
 @router.get("/sync/status", response_model=SyncStatusResponse)
 async def get_sync_status(
-    request: Request,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Get calendar sync status for the current user."""
-    user_id = require_user(request, db)
+    _get_org_id(current_user)  # validate org context
     service = get_calendar_sync_service(db)
 
-    status = service.get_sync_status(user_id)
+    status = service.get_sync_status(current_user.id)
     return SyncStatusResponse(**status)
 
 
 @router.post("/sync/trigger")
 async def trigger_sync(
-    request: Request,
     background_tasks: BackgroundTasks,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -446,11 +422,11 @@ async def trigger_sync(
 
     Returns immediately; sync happens in background.
     """
-    user_id = require_user(request, db)
+    org_id = _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     # Get pending events for this user
-    pending = service.get_events(user_id=user_id, sync_status=SyncStatus.PENDING.value)
+    pending = service.get_events(user_id=current_user.id, sync_status=SyncStatus.PENDING.value, organization_id=org_id)
 
     if not pending:
         return {
@@ -471,28 +447,28 @@ async def trigger_sync(
 
 @router.get("/sync/history")
 async def get_sync_history(
-    request: Request,
     limit: int = Query(50, ge=1, le=200),
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Get sync history for the current user."""
-    user_id = require_user(request, db)
+    _get_org_id(current_user)  # validate org context
     service = get_calendar_sync_service(db)
 
-    history = service.get_sync_history(user_id, limit)
+    history = service.get_sync_history(current_user.id, limit)
     return {"history": history}
 
 
 @router.get("/sync/failures")
 async def get_sync_failures(
-    request: Request,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Get events that failed to sync."""
-    user_id = require_user(request, db)
+    _get_org_id(current_user)  # validate org context
     service = get_calendar_sync_service(db)
 
-    failed = service.get_failed_events(user_id)
+    failed = service.get_failed_events(current_user.id)
     return {
         "count": len(failed),
         "events": [_event_to_response(e) for e in failed]
@@ -501,7 +477,7 @@ async def get_sync_failures(
 
 @router.get("/sync/health")
 async def get_sync_health(
-    request: Request,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -509,7 +485,7 @@ async def get_sync_health(
 
     Returns health status, metrics, and any alerts.
     """
-    require_user(request, db)  # Auth check
+    _get_org_id(current_user)  # Auth + org check
 
     import asyncio
     health = asyncio.run(check_sync_health())
@@ -535,9 +511,9 @@ class CDCWebhookPayload(BaseModel):
 
 @router.post("/sync/pull")
 async def pull_events_from_salesforce(
-    request: Request,
     pull_request: Optional[PullRequest] = None,
     background_tasks: BackgroundTasks = None,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -545,15 +521,8 @@ async def pull_events_from_salesforce(
 
     Fetches events from Salesforce and creates/updates corresponding CRM events.
     Uses fingerprint matching to prevent sync loops.
-
-    Args:
-        since: Only pull events modified after this datetime
-        limit: Maximum events to pull (default 200)
-
-    Returns:
-        Summary of pull operation with counts
     """
-    user_id = require_user(request, db)
+    _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     since = pull_request.since if pull_request else None
@@ -561,12 +530,11 @@ async def pull_events_from_salesforce(
 
     # If no since provided, use last poll watermark
     if not since:
-        settings = service.get_settings(user_id)
+        settings = service.get_settings(current_user.id)
         since = settings.last_poll_watermark
 
-    import asyncio
     result = await service.pull_events_from_salesforce(
-        user_id=user_id,
+        user_id=current_user.id,
         since=since,
         limit=limit
     )
@@ -585,25 +553,15 @@ async def pull_events_from_salesforce(
 @router.post("/sync/pull/{salesforce_event_id}")
 async def pull_single_event(
     salesforce_event_id: str,
-    request: Request,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
-    """
-    Pull a single event from Salesforce by ID.
-
-    Useful for manually syncing specific events or handling webhook notifications.
-
-    Args:
-        salesforce_event_id: The Salesforce Event ID (18-char)
-
-    Returns:
-        Pull result with action taken
-    """
-    user_id = require_user(request, db)
+    """Pull a single event from Salesforce by ID."""
+    _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     result = await service.pull_single_event(
-        user_id=user_id,
+        user_id=current_user.id,
         salesforce_event_id=salesforce_event_id
     )
 
@@ -694,8 +652,8 @@ async def salesforce_cdc_webhook(
 
 @router.post("/sync/full")
 async def trigger_full_sync(
-    request: Request,
     background_tasks: BackgroundTasks,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """
@@ -706,13 +664,13 @@ async def trigger_full_sync(
 
     Use with caution - may be slow for large calendars.
     """
-    user_id = require_user(request, db)
+    _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     # Queue full sync in background
     background_tasks.add_task(
         _full_sync_background,
-        user_id,
+        current_user.id,
         db
     )
 
@@ -728,25 +686,25 @@ async def trigger_full_sync(
 
 @router.get("/settings")
 async def get_settings(
-    request: Request,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Get calendar sync settings for the current user."""
-    user_id = require_user(request, db)
+    _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
-    settings = service.get_settings(user_id)
+    settings = service.get_settings(current_user.id)
     return settings.to_dict()
 
 
 @router.put("/settings")
 async def update_settings(
-    request: Request,
     settings_update: SyncSettingsRequest,
+    current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(get_db)
 ):
     """Update calendar sync settings for the current user."""
-    user_id = require_user(request, db)
+    _get_org_id(current_user)
     service = get_calendar_sync_service(db)
 
     update_dict = {
@@ -754,7 +712,7 @@ async def update_settings(
         if v is not None
     }
 
-    settings = service.update_settings(user_id, update_dict)
+    settings = service.update_settings(current_user.id, update_dict)
     return settings.to_dict()
 
 
@@ -877,7 +835,7 @@ async def _full_sync_background(user_id: int, db: Session):
 
         # Step 2: Pull all events from Salesforce (last 30 days)
         logger.info(f"Full sync: pulling events from Salesforce for user {user_id}")
-        since = datetime.utcnow() - timedelta(days=30)
+        since = datetime.now(timezone.utc) - timedelta(days=30)
         await service.pull_events_from_salesforce(
             user_id=user_id,
             since=since,

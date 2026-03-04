@@ -16,7 +16,7 @@ Provides endpoints for:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
 import logging
@@ -67,6 +67,14 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     return await _get_current_user(token=token, request=request, db=db)
 
 
+def _get_org_id(user) -> int:
+    """Extract organization_id from the authenticated user. Raises 403 if absent."""
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="No organization context")
+    return org_id
+
+
 # ============================================================================
 # RESOURCE MANAGEMENT ENDPOINTS
 # ============================================================================
@@ -83,28 +91,35 @@ async def list_resources(
 ):
     """List all scheduling resources with filters"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     SchedulerResource = _enhanced_models['SchedulerResource']
 
-    query = db.query(SchedulerResource)
+    query = db.query(SchedulerResource).filter(SchedulerResource.organization_id == org_id)
 
     # Apply filters
     if resource_type:
         try:
             rt = ResourceType(resource_type)
-            query = query.filter(SchedulerResource.resource_type == rt)
         except ValueError:
-            pass
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid resource_type: '{resource_type}'. Valid values: {[e.value for e in ResourceType]}"
+            )
+        query = query.filter(SchedulerResource.resource_type == rt)
 
     if status:
         try:
             st = ResourceStatus(status)
-            query = query.filter(SchedulerResource.status == st)
         except ValueError:
-            pass
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status: '{status}'. Valid values: {[e.value for e in ResourceStatus]}"
+            )
+        query = query.filter(SchedulerResource.status == st)
 
     if skill:
         query = query.filter(SchedulerResource.skills.contains([skill]))
@@ -150,15 +165,17 @@ async def create_resource(
 ):
     """Create a new scheduling resource"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     SchedulerResource = _enhanced_models['SchedulerResource']
 
-    # Check if resource already exists for this user
+    # Check if resource already exists for this user within this org
     existing = db.query(SchedulerResource).filter(
-        SchedulerResource.user_id == resource_data.user_id
+        SchedulerResource.user_id == resource_data.user_id,
+        SchedulerResource.organization_id == org_id
     ).first()
 
     if existing:
@@ -173,6 +190,7 @@ async def create_resource(
 
     resource = SchedulerResource(
         user_id=resource_data.user_id,
+        organization_id=org_id,
         resource_type=resource_type,
         display_name=resource_data.display_name,
         title=resource_data.title,
@@ -203,6 +221,7 @@ async def get_resource(
 ):
     """Get resource details"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
@@ -210,7 +229,8 @@ async def get_resource(
     SchedulerResource = _enhanced_models['SchedulerResource']
 
     resource = db.query(SchedulerResource).filter(
-        SchedulerResource.id == resource_id
+        SchedulerResource.id == resource_id,
+        SchedulerResource.organization_id == org_id
     ).first()
 
     if not resource:
@@ -268,6 +288,7 @@ async def update_resource(
 ):
     """Update a resource"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
@@ -275,13 +296,14 @@ async def update_resource(
     SchedulerResource = _enhanced_models['SchedulerResource']
 
     resource = db.query(SchedulerResource).filter(
-        SchedulerResource.id == resource_id
+        SchedulerResource.id == resource_id,
+        SchedulerResource.organization_id == org_id
     ).first()
 
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
 
-    update_fields = resource_data.dict(exclude_unset=True)
+    update_fields = resource_data.model_dump(exclude_unset=True)
 
     # Handle status enum
     if "status" in update_fields:
@@ -311,6 +333,7 @@ async def update_resource_status(
 ):
     """Update resource status (active, vacation, etc.)"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
@@ -318,7 +341,8 @@ async def update_resource_status(
     SchedulerResource = _enhanced_models['SchedulerResource']
 
     resource = db.query(SchedulerResource).filter(
-        SchedulerResource.id == resource_id
+        SchedulerResource.id == resource_id,
+        SchedulerResource.organization_id == org_id
     ).first()
 
     if not resource:
@@ -352,24 +376,26 @@ async def create_soft_hold(
     Prevents double-booking while AI works with a client.
     """
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     SoftHold = _enhanced_models['SoftHold']
 
-    # Check if slot is already held
+    # Check if slot is already held within this org
     existing = db.query(SoftHold).filter(
         SoftHold.slot_start == hold_data.slot_start,
+        SoftHold.organization_id == org_id,
         SoftHold.status == SoftHoldStatus.ACTIVE,
-        SoftHold.expires_at > datetime.utcnow()
+        SoftHold.expires_at > datetime.now(timezone.utc).replace(tzinfo=None)
     ).first()
 
     if existing:
         raise HTTPException(status_code=409, detail="Slot already has an active hold")
 
     # Calculate expiration
-    expires_at = datetime.utcnow() + timedelta(minutes=hold_data.hold_duration_minutes)
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=hold_data.hold_duration_minutes)
 
     # Parse channel
     channel = BookingChannel.AI_VOICE
@@ -382,6 +408,7 @@ async def create_soft_hold(
         slot_start=hold_data.slot_start,
         slot_end=hold_data.slot_end,
         resource_id=hold_data.resource_id,
+        organization_id=org_id,
         hold_duration_minutes=hold_data.hold_duration_minutes,
         expires_at=expires_at,
         channel=channel,
@@ -413,19 +440,20 @@ async def release_soft_hold(
 ):
     """Release a soft hold (slot becomes available again)"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     SoftHold = _enhanced_models['SoftHold']
 
-    hold = db.query(SoftHold).filter(SoftHold.id == hold_id).first()
+    hold = db.query(SoftHold).filter(SoftHold.id == hold_id, SoftHold.organization_id == org_id).first()
 
     if not hold:
         raise HTTPException(status_code=404, detail="Soft hold not found")
 
     hold.status = SoftHoldStatus.RELEASED
-    hold.released_at = datetime.utcnow()
+    hold.released_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     db.commit()
 
@@ -443,19 +471,20 @@ async def convert_soft_hold(
 ):
     """Convert a soft hold to a confirmed appointment"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     SoftHold = _enhanced_models['SoftHold']
 
-    hold = db.query(SoftHold).filter(SoftHold.id == hold_id).first()
+    hold = db.query(SoftHold).filter(SoftHold.id == hold_id, SoftHold.organization_id == org_id).first()
 
     if not hold:
         raise HTTPException(status_code=404, detail="Soft hold not found")
 
     hold.status = SoftHoldStatus.CONVERTED
-    hold.converted_at = datetime.utcnow()
+    hold.converted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     hold.converted_to_appointment_id = appointment_id
 
     db.commit()
@@ -472,14 +501,16 @@ async def list_active_soft_holds(
 ):
     """List all active soft holds"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     SoftHold = _enhanced_models['SoftHold']
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     holds = db.query(SoftHold).filter(
+        SoftHold.organization_id == org_id,
         SoftHold.status == SoftHoldStatus.ACTIVE,
         SoftHold.expires_at > now
     ).all()
@@ -509,14 +540,16 @@ async def cleanup_expired_holds(
 ):
     """Clean up expired soft holds (background job endpoint)"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     SoftHold = _enhanced_models['SoftHold']
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = db.query(SoftHold).filter(
+        SoftHold.organization_id == org_id,
         SoftHold.status == SoftHoldStatus.ACTIVE,
         SoftHold.expires_at <= now
     ).all()
@@ -544,6 +577,7 @@ async def get_sla_dashboard(
 ):
     """Get SLA and load balancing dashboard"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
@@ -551,6 +585,7 @@ async def get_sla_dashboard(
     SchedulerResource = _enhanced_models['SchedulerResource']
 
     resources = db.query(SchedulerResource).filter(
+        SchedulerResource.organization_id == org_id,
         SchedulerResource.status == ResourceStatus.ACTIVE
     ).all()
 
@@ -584,6 +619,54 @@ async def get_sla_dashboard(
     total_load = sum(r.current_daily_load for r in resources)
     team_utilization = (total_load / total_capacity * 100) if total_capacity > 0 else 0
 
+    # RT4: Booking-to-confirmation SLA tracking
+    confirmation_sla = {}
+    try:
+        if _models:
+            Appointment = _models['Appointment']
+            from smart_scheduler_models import AppointmentStatus as _ApptStatus
+
+            recent_window = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+            recent_appts = db.query(Appointment).filter(
+                Appointment.organization_id == org_id,
+                Appointment.created_at >= recent_window,
+                Appointment.status != _ApptStatus.CANCELLED,
+                Appointment.status_changed_at.isnot(None),
+                Appointment.created_at.isnot(None),
+            ).all()
+
+            response_hours_list = []
+            for appt in recent_appts:
+                if appt.created_at and appt.status_changed_at:
+                    delta = (appt.status_changed_at - appt.created_at).total_seconds() / 3600.0
+                    if delta >= 0:
+                        response_hours_list.append(delta)
+
+            if response_hours_list:
+                sorted_hours = sorted(response_hours_list)
+                avg_hours = sum(sorted_hours) / len(sorted_hours)
+                p50_idx = len(sorted_hours) // 2
+                p90_idx = min(int(len(sorted_hours) * 0.9), len(sorted_hours) - 1)
+
+                # Count SLA breaches (response > 24h default or resource sla_target_hours)
+                default_sla = 24.0
+                breach_count = sum(1 for h in sorted_hours if h > default_sla)
+
+                confirmation_sla = {
+                    "period_days": 30,
+                    "total_tracked": len(sorted_hours),
+                    "avg_response_hours": round(avg_hours, 2),
+                    "p50_response_hours": round(sorted_hours[p50_idx], 2),
+                    "p90_response_hours": round(sorted_hours[p90_idx], 2),
+                    "sla_breaches": breach_count,
+                    "breach_rate_pct": round(breach_count / len(sorted_hours) * 100, 1),
+                }
+            else:
+                confirmation_sla = {"period_days": 30, "total_tracked": 0}
+    except Exception as sla_err:
+        logger.warning(f"Failed to compute confirmation SLA: {sla_err}")
+        confirmation_sla = {"error": str(sla_err)}
+
     return {
         "team_summary": {
             "total_resources": len(resources),
@@ -593,7 +676,8 @@ async def get_sla_dashboard(
             "resources_at_capacity": len([r for r in resource_stats if r['is_at_capacity']]),
             "resources_need_attention": len([r for r in resource_stats if r['needs_attention']])
         },
-        "resources": resource_stats
+        "resources": resource_stats,
+        "confirmation_sla": confirmation_sla,
     }
 
 
@@ -607,6 +691,7 @@ async def rebalance_load(
     Returns recommendations for redistributing appointments.
     """
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
@@ -614,6 +699,7 @@ async def rebalance_load(
     SchedulerResource = _enhanced_models['SchedulerResource']
 
     resources = db.query(SchedulerResource).filter(
+        SchedulerResource.organization_id == org_id,
         SchedulerResource.status == ResourceStatus.ACTIVE
     ).all()
 
@@ -680,6 +766,7 @@ async def detect_no_shows(
     Marks appointments as no-show 15 minutes after scheduled end.
     """
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
@@ -688,9 +775,10 @@ async def detect_no_shows(
     from smart_scheduler_models import AppointmentStatus
 
     # Find appointments that ended > 15 minutes ago and are still "booked"
-    cutoff = datetime.utcnow() - timedelta(minutes=15)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=15)
 
     no_show_candidates = db.query(Appointment).filter(
+        Appointment.organization_id == org_id,
         Appointment.status == AppointmentStatus.BOOKED,
         Appointment.scheduled_end < cutoff
     ).all()
@@ -698,7 +786,7 @@ async def detect_no_shows(
     marked_count = 0
     for appt in no_show_candidates:
         appt.status = AppointmentStatus.NO_SHOW
-        appt.no_show_at = datetime.utcnow()
+        appt.no_show_at = datetime.now(timezone.utc).replace(tzinfo=None)
         marked_count += 1
 
         # Update resource metrics
@@ -732,6 +820,7 @@ async def recover_no_show(
     Sends reschedule offer to the attendee.
     """
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
@@ -741,6 +830,7 @@ async def recover_no_show(
 
     appt = db.query(Appointment).filter(
         Appointment.id == appointment_id,
+        Appointment.organization_id == org_id,
         Appointment.status == AppointmentStatus.NO_SHOW
     ).first()
 
@@ -749,25 +839,103 @@ async def recover_no_show(
 
     recovery_actions = []
 
+    # Generate reschedule URL
+    reschedule_url = None
+    try:
+        from scheduler_email_service import generate_reschedule_url
+        # Try to find booking link slug for this org
+        slug = None
+        BookingLink = _models.get('BookingLink')
+        if BookingLink:
+            link = db.query(BookingLink).filter(
+                BookingLink.organization_id == org_id,
+                BookingLink.is_active == True
+            ).first()
+            if link:
+                slug = link.slug
+        reschedule_url = generate_reschedule_url(appt.id, appt.attendee_email or "", slug=slug)
+    except Exception as url_err:
+        logger.warning(f"Could not generate reschedule URL: {url_err}")
+
+    # Send recovery email
     if send_reschedule_offer and appt.attendee_email:
+        try:
+            from scheduler_email_service import send_appointment_reminder_email
+            email_result = send_appointment_reminder_email(
+                attendee_email=appt.attendee_email,
+                attendee_name=appt.attendee_name or "there",
+                appointment_title=f"Missed: {appt.title}",
+                appointment_date=appt.scheduled_start.strftime("%B %d, %Y") if appt.scheduled_start else "",
+                appointment_time=appt.scheduled_start.strftime("%I:%M %p") if appt.scheduled_start else "",
+                hours_before=0,
+                meeting_mode="Phone Call",
+            )
+            action_status = "sent" if email_result.get("success") else "failed"
+        except Exception as e:
+            logger.error(f"No-show recovery email failed: {e}")
+            action_status = "failed"
+
         recovery_actions.append({
             "action": "reschedule_email",
             "recipient": appt.attendee_email,
-            "status": "queued"
+            "status": action_status,
+            "reschedule_url": reschedule_url,
         })
 
+    # Send recovery SMS
     if send_reschedule_offer and appt.attendee_phone:
+        try:
+            from scheduler_email_service import send_appointment_reminder_sms
+            sms_result = send_appointment_reminder_sms(
+                attendee_phone=appt.attendee_phone,
+                attendee_name=appt.attendee_name or "there",
+                appointment_date=appt.scheduled_start.strftime("%B %d, %Y") if appt.scheduled_start else "",
+                appointment_time=appt.scheduled_start.strftime("%I:%M %p") if appt.scheduled_start else "",
+                hours_before=0,
+            )
+            sms_status = "sent" if (isinstance(sms_result, dict) and sms_result.get("success")) else "failed"
+        except Exception as e:
+            logger.error(f"No-show recovery SMS failed: {e}")
+            sms_status = "failed"
+
         recovery_actions.append({
             "action": "reschedule_sms",
             "recipient": appt.attendee_phone,
-            "status": "queued"
+            "status": sms_status,
         })
+
+    # Create CRM follow-up task
+    task_created = False
+    try:
+        from database.models.task import Task
+        follow_up_task = Task(
+            organization_id=org_id,
+            title=f"No-show follow-up: {appt.attendee_name or 'Client'}"[:255],
+            description=(
+                f"Appointment '{appt.title}' on "
+                f"{appt.scheduled_start.strftime('%B %d at %I:%M %p') if appt.scheduled_start else 'unknown'} "
+                f"was a no-show. Recovery email/SMS {'sent' if recovery_actions else 'not sent'}. "
+                f"Please reach out to re-engage."
+            ),
+            priority="high",
+            status="pending",
+            owner_id=appt.assigned_user_id,
+            lead_id=getattr(appt, 'lead_id', None),
+            due_date=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1),
+        )
+        db.add(follow_up_task)
+        db.commit()
+        task_created = True
+    except Exception as task_err:
+        logger.error(f"Failed to create no-show follow-up task: {task_err}")
 
     return {
         "message": "No-show recovery initiated",
         "appointment_id": appointment_id,
         "attendee_name": appt.attendee_name,
-        "recovery_actions": recovery_actions
+        "recovery_actions": recovery_actions,
+        "reschedule_url": reschedule_url,
+        "follow_up_task_created": task_created,
     }
 
 
@@ -785,6 +953,7 @@ async def get_analytics_overview(
 ):
     """Get comprehensive analytics overview"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
@@ -796,6 +965,7 @@ async def get_analytics_overview(
     end_dt = datetime.combine(end_date, time.max)
 
     query = db.query(Appointment).filter(
+        Appointment.organization_id == org_id,
         Appointment.scheduled_start >= start_dt,
         Appointment.scheduled_start <= end_dt
     )
@@ -882,6 +1052,7 @@ async def get_best_booking_times(
 ):
     """Analyze best times to offer appointments based on show rates"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
@@ -889,9 +1060,10 @@ async def get_best_booking_times(
     Appointment = _models['Appointment']
     from smart_scheduler_models import AppointmentStatus
 
-    start_dt = datetime.utcnow() - timedelta(days=days_back)
+    start_dt = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days_back)
 
     appointments = db.query(Appointment).filter(
+        Appointment.organization_id == org_id,
         Appointment.scheduled_start >= start_dt,
         Appointment.status.in_([AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW])
     ).all()
@@ -969,6 +1141,7 @@ async def create_group_session(
 ):
     """Create a group session/workshop"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
@@ -984,7 +1157,8 @@ async def create_group_session(
         max_attendees=session_data.max_attendees,
         host_resource_id=session_data.host_resource_id,
         meeting_mode=session_data.meeting_mode,
-        location=session_data.location
+        location=session_data.location,
+        organization_id=org_id
     )
 
     db.add(session)
@@ -1005,16 +1179,17 @@ async def list_group_sessions(
 ):
     """List group sessions"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     GroupSession = _enhanced_models['GroupSession']
 
-    query = db.query(GroupSession)
+    query = db.query(GroupSession).filter(GroupSession.organization_id == org_id)
 
     if upcoming_only:
-        query = query.filter(GroupSession.scheduled_start > datetime.utcnow())
+        query = query.filter(GroupSession.scheduled_start > datetime.now(timezone.utc).replace(tzinfo=None))
 
     sessions = query.order_by(GroupSession.scheduled_start).all()
 
@@ -1049,13 +1224,14 @@ async def register_for_group_session(
 ):
     """Register for a group session"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     GroupSession = _enhanced_models['GroupSession']
 
-    session = db.query(GroupSession).filter(GroupSession.id == session_id).first()
+    session = db.query(GroupSession).filter(GroupSession.id == session_id, GroupSession.organization_id == org_id).first()
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -1067,7 +1243,7 @@ async def register_for_group_session(
         "name": attendee_name,
         "email": attendee_email,
         "phone": attendee_phone,
-        "registered_at": datetime.utcnow().isoformat()
+        "registered_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     }
 
     if session.current_attendees < session.max_attendees:
@@ -1114,6 +1290,7 @@ async def track_campaign_booking(
 ):
     """Track a booking from a campaign"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
@@ -1132,13 +1309,14 @@ async def track_campaign_booking(
         campaign_name=campaign_data.campaign_name,
         campaign_type=campaign_data.campaign_type,
         channel=channel,
+        organization_id=org_id,
         contact_phone=campaign_data.contact_phone,
         contact_email=campaign_data.contact_email,
         contact_name=campaign_data.contact_name,
         partner_id=campaign_data.partner_id,
         partner_type=campaign_data.partner_type,
         partner_name=campaign_data.partner_name,
-        booking_started_at=datetime.utcnow()
+        booking_started_at=datetime.now(timezone.utc).replace(tzinfo=None)
     )
 
     db.add(tracking)
@@ -1161,13 +1339,14 @@ async def get_campaign_analytics(
 ):
     """Get campaign booking analytics"""
     user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
 
     if _enhanced_models is None:
         raise HTTPException(status_code=500, detail="Enhanced models not initialized")
 
     CampaignBooking = _enhanced_models['CampaignBooking']
 
-    query = db.query(CampaignBooking)
+    query = db.query(CampaignBooking).filter(CampaignBooking.organization_id == org_id)
 
     if campaign_id:
         query = query.filter(CampaignBooking.campaign_id == campaign_id)

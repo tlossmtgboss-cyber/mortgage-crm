@@ -2,7 +2,7 @@
 Perennia AI - Smart Scheduler Tools
 ===================================
 Tools for the Smart Scheduler Agent handling appointments and calendar management.
-8 tools for scheduling, availability, reminders, and calendar optimization.
+12 tools for scheduling, availability, reminders, calendar optimization, and analytics.
 """
 
 from datetime import datetime, timedelta, date
@@ -799,4 +799,375 @@ def optimize_schedule(
     return ToolResult.success(
         data=data,
         message=f"Schedule efficiency: {efficiency:.0%}, {len(suggestions)} optimizations suggested",
+    )
+
+
+# =============================================================================
+# Smart Scheduler Analytics Tools (4 tools)
+# =============================================================================
+
+@mortgage_tool(
+    name="get_scheduler_metrics",
+    description="Get scheduling metrics: total bookings, show rate, no-show rate, cancellation rate for an LO or organization",
+    agent_roles=["pipeline_analyst", "team_coach", "smart_scheduler"],
+    risk_level="LOW",
+    parameters={
+        "lo_id": "Loan officer user ID (optional)",
+        "organization_id": "Organization ID (optional)",
+        "days": "Number of days to analyze (default 30)",
+    },
+)
+def get_scheduler_metrics(
+    lo_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    days: int = 30,
+) -> ToolResult:
+    """Get scheduling performance metrics from scheduler_appointments."""
+    params: Dict[str, Any] = {"days": days}
+    filters = ["sa.scheduled_start >= CURRENT_DATE - :days"]
+
+    if lo_id:
+        filters.append("sa.assigned_user_id = :lo_id")
+        params["lo_id"] = lo_id
+    if organization_id:
+        filters.append("sa.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
+    where_sql = " AND ".join(filters)
+
+    result = execute_single(f"""
+        SELECT
+            COUNT(*) as total_bookings,
+            COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) as completed,
+            COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) as no_shows,
+            COUNT(CASE WHEN sa.status = 'cancelled' THEN 1 END) as cancelled,
+            COUNT(CASE WHEN sa.status = 'booked' THEN 1 END) as upcoming,
+            COUNT(CASE WHEN sa.status = 'rescheduled' THEN 1 END) as rescheduled
+        FROM scheduler_appointments sa
+        WHERE {where_sql}
+    """, params)
+
+    total = result["total_bookings"] or 0
+    completed = result["completed"] or 0
+    no_shows = result["no_shows"] or 0
+    cancelled = result["cancelled"] or 0
+    attended = completed  # completed = showed up
+
+    def pct(num, denom):
+        return round((num / denom) * 100, 1) if denom > 0 else 0.0
+
+    # Show rate = completed / (completed + no_shows) — excludes cancelled & upcoming
+    resolved = completed + no_shows
+    show_rate = pct(completed, resolved)
+    no_show_rate = pct(no_shows, resolved)
+    cancellation_rate = pct(cancelled, total)
+
+    data = {
+        "period_days": days,
+        "total_bookings": total,
+        "completed": completed,
+        "no_shows": no_shows,
+        "cancelled": cancelled,
+        "upcoming": result["upcoming"] or 0,
+        "rescheduled": result["rescheduled"] or 0,
+        "show_rate_pct": show_rate,
+        "no_show_rate_pct": no_show_rate,
+        "cancellation_rate_pct": cancellation_rate,
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=f"{total} bookings, {show_rate}% show rate, {no_show_rate}% no-show rate",
+    )
+
+
+@mortgage_tool(
+    name="get_appointment_history",
+    description="Get recent appointment history for a specific lead or loan officer",
+    agent_roles=["pipeline_analyst", "team_coach", "smart_scheduler"],
+    risk_level="LOW",
+    parameters={
+        "lead_id": "Lead/contact ID (optional)",
+        "lo_id": "Loan officer user ID (optional)",
+        "organization_id": "Organization ID (optional)",
+        "limit": "Max results to return (default 20)",
+    },
+)
+def get_appointment_history(
+    lead_id: Optional[str] = None,
+    lo_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+    limit: int = 20,
+) -> ToolResult:
+    """Get appointment history for a lead or LO from scheduler_appointments."""
+    params: Dict[str, Any] = {"limit": limit}
+    filters = []
+
+    if lead_id:
+        filters.append("sa.contact_id = :lead_id")
+        params["lead_id"] = lead_id
+    if lo_id:
+        filters.append("sa.assigned_user_id = :lo_id")
+        params["lo_id"] = lo_id
+    if organization_id:
+        filters.append("sa.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+
+    if not filters:
+        return ToolResult.error("At least one of lead_id, lo_id, or organization_id is required")
+
+    where_sql = " AND ".join(filters)
+
+    appointments = execute_query(f"""
+        SELECT
+            sa.id, sa.appointment_id, sa.contact_name, sa.contact_email,
+            sa.scheduled_start, sa.scheduled_end, sa.duration_minutes,
+            sa.status, sa.appointment_type, sa.booked_via, sa.notes,
+            sa.created_at,
+            CONCAT(u.first_name, ' ', u.last_name) as lo_name
+        FROM scheduler_appointments sa
+        LEFT JOIN users u ON u.id = sa.assigned_user_id
+        WHERE {where_sql}
+        ORDER BY sa.scheduled_start DESC
+        LIMIT :limit
+    """, params)
+
+    if not appointments:
+        return ToolResult.no_data("No appointment history found")
+
+    data = {
+        "total_returned": len(appointments),
+        "appointments": [
+            {
+                "id": a["id"],
+                "appointment_id": a["appointment_id"],
+                "contact_name": a["contact_name"],
+                "contact_email": a["contact_email"],
+                "start_time": format_date(a["scheduled_start"]),
+                "end_time": format_date(a["scheduled_end"]),
+                "duration_minutes": a["duration_minutes"],
+                "status": a["status"],
+                "type": a["appointment_type"],
+                "booked_via": a["booked_via"],
+                "lo_name": a["lo_name"],
+                "notes": (a["notes"] or "")[:200],
+            }
+            for a in appointments
+        ],
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=f"{len(appointments)} appointments found",
+    )
+
+
+@mortgage_tool(
+    name="get_best_booking_times",
+    description="Analyze which time slots have the highest show/completion rate to optimize scheduling",
+    agent_roles=["pipeline_analyst", "team_coach", "smart_scheduler"],
+    risk_level="LOW",
+    parameters={
+        "organization_id": "Organization ID (optional)",
+        "lo_id": "Loan officer user ID (optional)",
+        "days": "Number of days to analyze (default 90)",
+    },
+)
+def get_best_booking_times(
+    organization_id: Optional[str] = None,
+    lo_id: Optional[str] = None,
+    days: int = 90,
+) -> ToolResult:
+    """Aggregate which time slots convert best (highest show rate)."""
+    params: Dict[str, Any] = {"days": days}
+    filters = [
+        "sa.scheduled_start >= CURRENT_DATE - :days",
+        "sa.status IN ('completed', 'no_show')",
+    ]
+
+    if organization_id:
+        filters.append("sa.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+    if lo_id:
+        filters.append("sa.assigned_user_id = :lo_id")
+        params["lo_id"] = lo_id
+
+    where_sql = " AND ".join(filters)
+
+    by_hour = execute_query(f"""
+        SELECT
+            EXTRACT(HOUR FROM sa.scheduled_start) as hour,
+            COUNT(*) as total,
+            COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) as showed,
+            COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) as no_showed
+        FROM scheduler_appointments sa
+        WHERE {where_sql}
+        GROUP BY EXTRACT(HOUR FROM sa.scheduled_start)
+        ORDER BY hour
+    """, params)
+
+    by_day = execute_query(f"""
+        SELECT
+            EXTRACT(DOW FROM sa.scheduled_start) as day_of_week,
+            COUNT(*) as total,
+            COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) as showed,
+            COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) as no_showed
+        FROM scheduler_appointments sa
+        WHERE {where_sql}
+        GROUP BY EXTRACT(DOW FROM sa.scheduled_start)
+        ORDER BY day_of_week
+    """, params)
+
+    day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+    def show_rate(showed, total):
+        return round((showed / total) * 100, 1) if total > 0 else 0.0
+
+    hour_data = [
+        {
+            "hour": int(h["hour"]),
+            "display": f"{int(h['hour']):02d}:00",
+            "total": h["total"],
+            "showed": h["showed"],
+            "show_rate_pct": show_rate(h["showed"], h["total"]),
+        }
+        for h in by_hour
+    ]
+
+    day_data = [
+        {
+            "day_of_week": int(d["day_of_week"]),
+            "day_name": day_names[int(d["day_of_week"])],
+            "total": d["total"],
+            "showed": d["showed"],
+            "show_rate_pct": show_rate(d["showed"], d["total"]),
+        }
+        for d in by_day
+    ]
+
+    # Find best slots
+    best_hour = max(hour_data, key=lambda x: x["show_rate_pct"]) if hour_data else None
+    best_day = max(day_data, key=lambda x: x["show_rate_pct"]) if day_data else None
+
+    data = {
+        "period_days": days,
+        "by_hour": hour_data,
+        "by_day": day_data,
+        "best_hour": best_hour,
+        "best_day": best_day,
+        "recommendation": (
+            f"Best time: {best_day['day_name']}s at {best_hour['display']} "
+            f"({best_hour['show_rate_pct']}% show rate)"
+            if best_hour and best_day else "Not enough data"
+        ),
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=data["recommendation"],
+    )
+
+
+@mortgage_tool(
+    name="get_no_show_analysis",
+    description="Analyze no-show patterns by LO, time of day, and day of week to identify improvement areas",
+    agent_roles=["pipeline_analyst", "team_coach", "smart_scheduler"],
+    risk_level="LOW",
+    parameters={
+        "organization_id": "Organization ID (optional)",
+        "lo_id": "Loan officer user ID (optional)",
+        "days": "Number of days to analyze (default 90)",
+    },
+)
+def get_no_show_analysis(
+    organization_id: Optional[str] = None,
+    lo_id: Optional[str] = None,
+    days: int = 90,
+) -> ToolResult:
+    """Analyze no-show patterns by LO, time, and day."""
+    params: Dict[str, Any] = {"days": days}
+    filters = [
+        "sa.scheduled_start >= CURRENT_DATE - :days",
+        "sa.status IN ('completed', 'no_show')",
+    ]
+
+    if organization_id:
+        filters.append("sa.organization_id = :organization_id")
+        params["organization_id"] = organization_id
+    if lo_id:
+        filters.append("sa.assigned_user_id = :lo_id")
+        params["lo_id"] = lo_id
+
+    where_sql = " AND ".join(filters)
+
+    # No-show rate by LO
+    by_lo = execute_query(f"""
+        SELECT
+            sa.assigned_user_id as lo_id,
+            CONCAT(u.first_name, ' ', u.last_name) as lo_name,
+            COUNT(*) as total,
+            COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) as no_shows
+        FROM scheduler_appointments sa
+        LEFT JOIN users u ON u.id = sa.assigned_user_id
+        WHERE {where_sql}
+        GROUP BY sa.assigned_user_id, u.first_name, u.last_name
+        ORDER BY no_shows DESC
+    """, params)
+
+    # No-show rate by booking source
+    by_source = execute_query(f"""
+        SELECT
+            COALESCE(sa.booked_via, 'unknown') as source,
+            COUNT(*) as total,
+            COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) as no_shows
+        FROM scheduler_appointments sa
+        WHERE {where_sql}
+        GROUP BY sa.booked_via
+        ORDER BY no_shows DESC
+    """, params)
+
+    # Overall no-show count
+    overall = execute_single(f"""
+        SELECT
+            COUNT(*) as total,
+            COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) as no_shows
+        FROM scheduler_appointments sa
+        WHERE {where_sql}
+    """, params)
+
+    def ns_rate(no_shows, total):
+        return round((no_shows / total) * 100, 1) if total > 0 else 0.0
+
+    total_appts = overall["total"] or 0
+    total_no_shows = overall["no_shows"] or 0
+
+    data = {
+        "period_days": days,
+        "total_appointments": total_appts,
+        "total_no_shows": total_no_shows,
+        "overall_no_show_rate_pct": ns_rate(total_no_shows, total_appts),
+        "by_lo": [
+            {
+                "lo_id": lo["lo_id"],
+                "lo_name": lo["lo_name"],
+                "total": lo["total"],
+                "no_shows": lo["no_shows"],
+                "no_show_rate_pct": ns_rate(lo["no_shows"], lo["total"]),
+            }
+            for lo in by_lo
+        ],
+        "by_source": [
+            {
+                "source": s["source"],
+                "total": s["total"],
+                "no_shows": s["no_shows"],
+                "no_show_rate_pct": ns_rate(s["no_shows"], s["total"]),
+            }
+            for s in by_source
+        ],
+    }
+
+    return ToolResult.success(
+        data=data,
+        message=f"{total_no_shows}/{total_appts} no-shows ({data['overall_no_show_rate_pct']}%)",
     )
