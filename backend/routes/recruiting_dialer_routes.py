@@ -79,7 +79,7 @@ router = APIRouter(prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"
 # =============================================================================
 
 class InitiateCallRequest(BaseModel):
-    caller_id: int  # User making the call
+    caller_id: Optional[int] = None  # Deprecated: uses authenticated user
     whisper_context: Optional[str] = None
 
 
@@ -185,7 +185,7 @@ async def initiate_candidate_call(
             {
                 "id": call_id,
                 "candidate_id": candidate_id,
-                "caller_id": request.caller_id,
+                "caller_id": current_user.id,
                 "whisper": whisper_context,
                 "phone_to": row.phone,
             }
@@ -201,7 +201,7 @@ async def initiate_candidate_call(
             result = service.initiate_call(
                 call_id=call_id,
                 candidate_id=candidate_id,
-                caller_user_id=request.caller_id,
+                caller_user_id=current_user.id,
                 candidate_phone=row.phone,
                 candidate_name=f"{row.first_name} {row.last_name}",
                 whisper_context=whisper_context,

@@ -313,14 +313,14 @@ class RecruitingService:
             LIMIT 20
         """), {"id": candidate_id}).fetchall()
 
-        # Get notes
+        # Get notes (exclude private notes — private notes are internal-only)
         notes = self.db.execute(text("""
             SELECT
                 n.id, n.note_type, n.content, n.is_private, n.created_at,
                 u.full_name as author_name
             FROM mm_candidate_notes n
             JOIN users u ON u.id = n.created_by
-            WHERE n.candidate_id = :id
+            WHERE n.candidate_id = :id AND (n.is_private = false OR n.is_private IS NULL)
             ORDER BY n.created_at DESC
         """), {"id": candidate_id}).fetchall()
 
@@ -481,10 +481,15 @@ class RecruitingService:
     ) -> Dict[str, Any]:
         """Update candidate status with optional OFCCP disposition tracking."""
 
-        # Get current status
-        current = self.db.execute(text("""
-            SELECT status FROM mm_candidates WHERE id = :id
-        """), {"id": candidate_id}).fetchone()
+        # Get current status with org isolation
+        org_filter = "AND organization_id = :org_id" if organization_id else ""
+        params = {"id": candidate_id}
+        if organization_id:
+            params["org_id"] = organization_id
+
+        current = self.db.execute(text(f"""
+            SELECT status FROM mm_candidates WHERE id = :id {org_filter}
+        """), params).fetchone()
 
         if not current:
             raise ValueError(f"Candidate {candidate_id} not found")
@@ -493,7 +498,7 @@ class RecruitingService:
 
         # Build update query — include disposition fields when provided
         if disposition_code:
-            self.db.execute(text("""
+            self.db.execute(text(f"""
                 UPDATE mm_candidates
                 SET status = :status,
                     status_changed_at = CURRENT_TIMESTAMP,
@@ -502,25 +507,27 @@ class RecruitingService:
                     disposition_date = CURRENT_TIMESTAMP,
                     disposition_by = :user_id,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
+                WHERE id = :id {org_filter}
             """), {
                 "id": candidate_id,
                 "status": new_status,
                 "user_id": updated_by,
                 "disposition_code": disposition_code,
+                **({"org_id": organization_id} if organization_id else {}),
             })
         else:
-            self.db.execute(text("""
+            self.db.execute(text(f"""
                 UPDATE mm_candidates
                 SET status = :status,
                     status_changed_at = CURRENT_TIMESTAMP,
                     status_changed_by = :user_id,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
+                WHERE id = :id {org_filter}
             """), {
                 "id": candidate_id,
                 "status": new_status,
                 "user_id": updated_by,
+                **({"org_id": organization_id} if organization_id else {}),
             })
 
         # Log activity
@@ -781,10 +788,16 @@ class RecruitingService:
     ) -> Dict[str, Any]:
         """Submit feedback for an interview."""
 
-        # Get current feedback
-        current = self.db.execute(text("""
-            SELECT feedback, candidate_id FROM mm_interviews WHERE id = :id
-        """), {"id": interview_id}).fetchone()
+        # Get current feedback with org isolation
+        org_filter = ""
+        params = {"id": interview_id}
+        if organization_id:
+            org_filter = "AND i.organization_id = :org_id"
+            params["org_id"] = organization_id
+
+        current = self.db.execute(text(f"""
+            SELECT i.feedback, i.candidate_id FROM mm_interviews i WHERE i.id = :id {org_filter}
+        """), params).fetchone()
 
         if not current:
             raise ValueError(f"Interview {interview_id} not found")
@@ -804,7 +817,18 @@ class RecruitingService:
         recommendation = "hire" if hire_votes > no_hire_votes else "no_hire" if no_hire_votes > hire_votes else "undecided"
 
         # Update interview - convert feedback dict to JSON string for JSONB column
-        self.db.execute(text("""
+        update_params = {
+            "id": interview_id,
+            "feedback": json.dumps(all_feedback),
+            "score": overall_score,
+            "recommendation": recommendation
+        }
+        update_org_filter = ""
+        if organization_id:
+            update_org_filter = "AND organization_id = :org_id"
+            update_params["org_id"] = organization_id
+
+        self.db.execute(text(f"""
             UPDATE mm_interviews
             SET feedback = :feedback,
                 overall_score = :score,
@@ -812,13 +836,8 @@ class RecruitingService:
                 completed_at = CURRENT_TIMESTAMP,
                 status = 'completed',
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        """), {
-            "id": interview_id,
-            "feedback": json.dumps(all_feedback),
-            "score": overall_score,
-            "recommendation": recommendation
-        })
+            WHERE id = :id {update_org_filter}
+        """), update_params)
 
         # Log activity
         await self._log_activity(
@@ -923,20 +942,26 @@ class RecruitingService:
 
         expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
-        result = self.db.execute(text("""
+        send_params = {
+            "id": offer_id,
+            "sent_by": sent_by,
+            "expires_at": expires_at
+        }
+        send_org_filter = ""
+        if organization_id:
+            send_org_filter = "AND organization_id = :org_id"
+            send_params["org_id"] = organization_id
+
+        result = self.db.execute(text(f"""
             UPDATE mm_offers
             SET status = 'sent',
                 sent_at = CURRENT_TIMESTAMP,
                 sent_by = :sent_by,
                 expires_at = :expires_at,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
+            WHERE id = :id {send_org_filter}
             RETURNING candidate_id, offer_number
-        """), {
-            "id": offer_id,
-            "sent_by": sent_by,
-            "expires_at": expires_at
-        }).fetchone()
+        """), send_params).fetchone()
 
         if not result:
             raise ValueError(f"Offer {offer_id} not found")
@@ -964,40 +989,58 @@ class RecruitingService:
     ) -> Dict[str, Any]:
         """Record candidate's response to offer."""
 
+        resp_org_filter = ""
+        resp_params_base = {"id": offer_id, "notes": notes}
+        if organization_id:
+            resp_org_filter = "AND organization_id = :org_id"
+            resp_params_base["org_id"] = organization_id
+
         if accepted:
-            result = self.db.execute(text("""
+            result = self.db.execute(text(f"""
                 UPDATE mm_offers
                 SET status = 'accepted',
                     accepted_at = CURRENT_TIMESTAMP,
                     responded_at = CURRENT_TIMESTAMP,
                     response_notes = :notes,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
+                WHERE id = :id {resp_org_filter}
                 RETURNING candidate_id, offer_number
-            """), {"id": offer_id, "notes": notes}).fetchone()
+            """), resp_params_base).fetchone()
 
-            # Update candidate to hired
-            self.db.execute(text("""
+            if not result:
+                raise ValueError(f"Offer {offer_id} not found")
+
+            # Update candidate to hired (scoped via offer's candidate_id)
+            hired_params = {"id": result.candidate_id}
+            hired_org_filter = ""
+            if organization_id:
+                hired_org_filter = "AND organization_id = :org_id"
+                hired_params["org_id"] = organization_id
+
+            self.db.execute(text(f"""
                 UPDATE mm_candidates
                 SET status = 'hired',
                     hired_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-            """), {"id": result.candidate_id})
+                WHERE id = :id {hired_org_filter}
+            """), hired_params)
 
             activity_type = "offer_accepted"
             description = f"Offer {result.offer_number} accepted"
         else:
-            result = self.db.execute(text("""
+            result = self.db.execute(text(f"""
                 UPDATE mm_offers
                 SET status = 'declined',
                     declined_at = CURRENT_TIMESTAMP,
                     responded_at = CURRENT_TIMESTAMP,
                     declined_notes = :notes,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
+                WHERE id = :id {resp_org_filter}
                 RETURNING candidate_id, offer_number
-            """), {"id": offer_id, "notes": notes}).fetchone()
+            """), resp_params_base).fetchone()
+
+            if not result:
+                raise ValueError(f"Offer {offer_id} not found")
 
             activity_type = "offer_declined"
             description = f"Offer {result.offer_number} declined"

@@ -3,6 +3,7 @@ Recruiting Routes
 API endpoints for Master Manager Platform Phase 2 - Recruiting Engine.
 """
 
+import html as html_mod
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -988,26 +989,31 @@ async def send_interview_notifications(
 
         if interviewer_ids:
             interviewers = db.execute(text("""
-                SELECT id, email, full_name FROM users WHERE id = ANY(:ids)
-            """), {"ids": interviewer_ids}).fetchall()
+                SELECT id, email, full_name FROM users WHERE id = ANY(:ids) AND organization_id = :org_id
+            """), {"ids": interviewer_ids, "org_id": current_user.organization_id}).fetchall()
 
             for interviewer in interviewers:
                 if data.send_email and interviewer.email:
+                    safe_cand = html_mod.escape(f"{interview.first_name} {interview.last_name}")
+                    safe_interviewer = html_mod.escape(interviewer.full_name or 'Team Member')
+                    safe_title = html_mod.escape(interview_title)
+                    safe_location = html_mod.escape(interview.location) if interview.location else ""
+                    safe_link = html_mod.escape(interview.meeting_link) if interview.meeting_link else ""
                     subject = f"Interview Scheduled: {interview.first_name} {interview.last_name}"
                     html_content = f"""
                     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                         <h2 style="color: #3b82f6;">Interview Scheduled</h2>
-                        <p>Hello {interviewer.full_name or 'Team Member'},</p>
+                        <p>Hello {safe_interviewer},</p>
                         <p>You have an upcoming interview scheduled:</p>
 
                         <div style="background: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                            <p><strong>Candidate:</strong> {interview.first_name} {interview.last_name}</p>
-                            <p><strong>Interview Type:</strong> {interview_title}</p>
+                            <p><strong>Candidate:</strong> {safe_cand}</p>
+                            <p><strong>Interview Type:</strong> {safe_title}</p>
                             <p><strong>Date:</strong> {formatted_date}</p>
-                            <p><strong>Time:</strong> {formatted_time} ({interview.timezone})</p>
+                            <p><strong>Time:</strong> {formatted_time} ({html_mod.escape(interview.timezone or '')})</p>
                             <p><strong>Duration:</strong> {interview.duration_minutes} minutes</p>
-                            {f'<p><strong>Location:</strong> {interview.location}</p>' if interview.location else ''}
-                            {f'<p><strong>Meeting Link:</strong> <a href="{interview.meeting_link}">{interview.meeting_link}</a></p>' if interview.meeting_link else ''}
+                            {f'<p><strong>Location:</strong> {safe_location}</p>' if interview.location else ''}
+                            {f'<p><strong>Meeting Link:</strong> <a href="{safe_link}">{safe_link}</a></p>' if interview.meeting_link else ''}
                         </div>
 
                         <p style="color: #64748b; font-size: 12px; margin-top: 30px;">
@@ -1509,23 +1515,25 @@ async def get_candidate_full_profile(
     if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    # Get interview history
+    # Get interview history (org-scoped)
     interviews = db.execute(text("""
         SELECT id, interview_type, interview_round, scheduled_at, status, overall_score
-        FROM mm_interviews WHERE candidate_id = :id ORDER BY scheduled_at DESC
-    """), {"id": candidate_id}).fetchall()
+        FROM mm_interviews WHERE candidate_id = :id AND organization_id = :org_id ORDER BY scheduled_at DESC
+    """), {"id": candidate_id, "org_id": current_user.organization_id}).fetchall()
 
-    # Get notes
+    # Get notes (org-scoped, exclude private notes)
     notes = db.execute(text("""
         SELECT id, content, note_type, created_at
-        FROM mm_candidate_notes WHERE candidate_id = :id ORDER BY created_at DESC LIMIT 10
-    """), {"id": candidate_id}).fetchall()
+        FROM mm_candidate_notes WHERE candidate_id = :id AND organization_id = :org_id
+        AND (is_private = false OR is_private IS NULL)
+        ORDER BY created_at DESC LIMIT 10
+    """), {"id": candidate_id, "org_id": current_user.organization_id}).fetchall()
 
-    # Get activity timeline
+    # Get activity timeline (org-scoped)
     activities = db.execute(text("""
         SELECT id, activity_type, description, created_at
-        FROM mm_candidate_activities WHERE candidate_id = :id ORDER BY created_at DESC LIMIT 20
-    """), {"id": candidate_id}).fetchall()
+        FROM mm_candidate_activities WHERE candidate_id = :id AND organization_id = :org_id ORDER BY created_at DESC LIMIT 20
+    """), {"id": candidate_id, "org_id": current_user.organization_id}).fetchall()
 
     # Get portal workspace info
     portal_workspace = db.execute(text("""

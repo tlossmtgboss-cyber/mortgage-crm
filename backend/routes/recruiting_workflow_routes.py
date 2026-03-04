@@ -121,6 +121,15 @@ async def create_tasks_for_candidate(
     This is typically called automatically when a candidate status is updated.
     """
     _verify_candidate_org(db, candidate_id, current_user.organization_id)
+
+    # Validate assigned_to user belongs to same org
+    if request.assigned_to:
+        assignee = db.execute(text("""
+            SELECT id FROM users WHERE id = :uid AND organization_id = :org_id
+        """), {"uid": request.assigned_to, "org_id": current_user.organization_id}).fetchone()
+        if not assignee:
+            raise HTTPException(status_code=400, detail="Assigned user not found in your organization")
+
     workflow = recruiting_workflow_service.get_workflow_for_disposition(request.disposition)
     if not workflow:
         return {
@@ -546,19 +555,19 @@ async def process_all_pending_emails(
             results["processed"] += 1
 
             try:
-                result = email_service.process_workflow_email_task(task.id, conn)
+                result = email_service.process_workflow_email_task(task.id, conn, organization_id=current_user.organization_id)
 
                 if result.success:
-                    # Mark as completed
+                    # Mark as completed (org-scoped)
                     conn.execute(
                         text("""
                             UPDATE recruiting_tasks
                             SET status = 'completed',
                                 completed_at = NOW(),
                                 completed_by = :user_id
-                            WHERE id = :task_id
+                            WHERE id = :task_id AND organization_id = :org_id
                         """),
-                        {"task_id": task.id, "user_id": current_user.id}
+                        {"task_id": task.id, "user_id": current_user.id, "org_id": current_user.organization_id}
                     )
                     results["succeeded"] += 1
                     results["details"].append({

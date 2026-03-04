@@ -167,7 +167,8 @@ const RecruitPortal = () => {
 
   const markVideoViewed = async (videoId) => {
     try {
-      await fetch(`${API_URL}/api/v1/recruiting/video/mark-viewed/${videoId}`, {
+      if (!token) return;
+      await fetch(`${API_URL}/api/v1/recruiting/video/mark-viewed/${videoId}?token=${encodeURIComponent(token)}`, {
         method: 'POST'
       });
       setVideos(prev => prev.map(v =>

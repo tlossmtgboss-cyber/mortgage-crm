@@ -12,6 +12,7 @@ tasks with route_to='email_automation'.
 """
 
 import os
+import html
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -58,8 +59,12 @@ class RecruitingEmailTemplates:
     ) -> Dict[str, str]:
         """Template for post-phone screen follow-up email"""
 
-        phone_html = f"<br>{recruiter_phone}" if recruiter_phone else ""
+        safe_candidate = html.escape(candidate_name)
+        safe_recruiter = html.escape(recruiter_name)
+        safe_email = html.escape(recruiter_email)
+        phone_html = f"<br>{html.escape(recruiter_phone)}" if recruiter_phone else ""
         next_steps_text = next_steps or "We'll be reviewing your qualifications and will be in touch soon about next steps."
+        safe_next_steps = html.escape(next_steps_text)
 
         subject = f"Thank You for Speaking With Us - {COMPANY_NAME}"
 
@@ -82,7 +87,7 @@ class RecruitingEmailTemplates:
             </div>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                Hi {candidate_name},
+                Hi {safe_candidate},
             </p>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -90,14 +95,14 @@ class RecruitingEmailTemplates:
             </p>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                {next_steps_text}
+                {safe_next_steps}
             </p>
 
             <div style="background: #f3f4f6; border-radius: 12px; padding: 24px; margin: 24px 0;">
                 <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">Questions? Contact me directly:</p>
-                <p style="margin: 0; color: #111827; font-size: 16px; font-weight: 600;">{recruiter_name}</p>
+                <p style="margin: 0; color: #111827; font-size: 16px; font-weight: 600;">{safe_recruiter}</p>
                 <p style="margin: 4px 0 0; color: #218D8D;">
-                    <a href="mailto:{recruiter_email}" style="color: #218D8D; text-decoration: none;">{recruiter_email}</a>
+                    <a href="mailto:{safe_email}" style="color: #218D8D; text-decoration: none;">{safe_email}</a>
                     {phone_html}
                 </p>
             </div>
@@ -148,6 +153,10 @@ We appreciate your interest in joining our team!
         """Template for candidate portal invitation email"""
 
         company_text = company_info or f"Learn more about what makes {COMPANY_NAME} a great place to build your career."
+        safe_candidate = html.escape(candidate_name)
+        safe_recruiter = html.escape(recruiter_name)
+        safe_portal_url = html.escape(portal_url)
+        safe_company_text = html.escape(company_text)
 
         subject = f"Your Candidate Portal Access - {COMPANY_NAME}"
 
@@ -170,7 +179,7 @@ We appreciate your interest in joining our team!
             </div>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                Hi {candidate_name},
+                Hi {safe_candidate},
             </p>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -187,18 +196,18 @@ We appreciate your interest in joining our team!
             </div>
 
             <div style="text-align: center; margin: 32px 0;">
-                <a href="{portal_url}" style="display: inline-block; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); color: white; text-decoration: none; padding: 16px 48px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                <a href="{safe_portal_url}" style="display: inline-block; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); color: white; text-decoration: none; padding: 16px 48px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                     Access Your Portal
                 </a>
             </div>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                {company_text}
+                {safe_company_text}
             </p>
 
             <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">
                 Best regards,<br>
-                <strong>{recruiter_name}</strong>
+                <strong>{safe_recruiter}</strong>
             </p>
 
         </div>
@@ -251,8 +260,13 @@ Best regards,
 The assessment consists of questions about mortgage lending, sales strategies, and customer service scenarios.
 Please complete it in one sitting - it typically takes 20-30 minutes.
 """
+        safe_candidate = html.escape(candidate_name)
+        safe_recruiter = html.escape(recruiter_name)
+        safe_assessment_url = html.escape(assessment_url)
+        safe_assessment_type = html.escape(assessment_type)
+        safe_instructions = html.escape(instructions_text)
 
-        subject = f"Complete Your {assessment_type} - {COMPANY_NAME}"
+        subject = f"Complete Your {html.escape(assessment_type)} - {COMPANY_NAME}"
 
         html_content = f"""
 <!DOCTYPE html>
@@ -269,15 +283,15 @@ Please complete it in one sitting - it typically takes 20-30 minutes.
                 <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
                     <span style="color: white; font-size: 28px;">&#128221;</span>
                 </div>
-                <h1 style="margin: 0; color: #111827; font-size: 24px;">{assessment_type}</h1>
+                <h1 style="margin: 0; color: #111827; font-size: 24px;">{safe_assessment_type}</h1>
             </div>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                Hi {candidate_name},
+                Hi {safe_candidate},
             </p>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                Congratulations on making it to the assessment phase! As the next step in our process, we'd like you to complete a brief {assessment_type.lower()}.
+                Congratulations on making it to the assessment phase! As the next step in our process, we'd like you to complete a brief {safe_assessment_type.lower()}.
             </p>
 
             <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0;">
@@ -289,12 +303,12 @@ Please complete it in one sitting - it typically takes 20-30 minutes.
             <div style="background: #f3f4f6; border-radius: 12px; padding: 24px; margin: 24px 0;">
                 <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px; font-weight: 600;">Instructions:</p>
                 <p style="margin: 0; color: #374151; font-size: 14px; line-height: 1.6;">
-                    {instructions_text}
+                    {safe_instructions}
                 </p>
             </div>
 
             <div style="text-align: center; margin: 32px 0;">
-                <a href="{assessment_url}" style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; text-decoration: none; padding: 16px 48px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                <a href="{safe_assessment_url}" style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; text-decoration: none; padding: 16px 48px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                     Start Assessment
                 </a>
             </div>
@@ -305,7 +319,7 @@ Please complete it in one sitting - it typically takes 20-30 minutes.
 
             <p style="color: #6b7280; font-size: 14px;">
                 Best regards,<br>
-                <strong>{recruiter_name}</strong>
+                <strong>{safe_recruiter}</strong>
             </p>
 
         </div>
@@ -353,12 +367,16 @@ Best regards,
     ) -> Dict[str, str]:
         """Template for offer acceptance/welcome email"""
 
+        safe_candidate = html.escape(candidate_name)
+        safe_recruiter = html.escape(recruiter_name)
+
         start_date_html = ""
         if start_date:
+            safe_start_date = html.escape(start_date)
             start_date_html = f"""
             <div style="background: #dcfce7; border-radius: 12px; padding: 20px; margin: 24px 0; text-align: center;">
                 <p style="margin: 0 0 4px; color: #166534; font-size: 14px;">Your Start Date</p>
-                <p style="margin: 0; color: #166534; font-size: 24px; font-weight: 700;">{start_date}</p>
+                <p style="margin: 0; color: #166534; font-size: 24px; font-weight: 700;">{safe_start_date}</p>
             </div>
             """
 
@@ -369,13 +387,14 @@ Best regards,
             "Set up your equipment and accounts",
         ]
 
-        steps_html = "".join([f'<li style="margin-bottom: 8px;">{step}</li>' for step in steps])
+        steps_html = "".join([f'<li style="margin-bottom: 8px;">{html.escape(step)}</li>' for step in steps])
 
         onboarding_button = ""
         if onboarding_url:
+            safe_onboarding_url = html.escape(onboarding_url)
             onboarding_button = f"""
             <div style="text-align: center; margin: 32px 0;">
-                <a href="{onboarding_url}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; padding: 16px 48px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                <a href="{safe_onboarding_url}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; padding: 16px 48px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                     Start Onboarding
                 </a>
             </div>
@@ -400,7 +419,7 @@ Best regards,
             </div>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                Hi {candidate_name},
+                Hi {safe_candidate},
             </p>
 
             <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -424,7 +443,7 @@ Best regards,
 
             <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">
                 Welcome aboard!<br>
-                <strong>{recruiter_name}</strong><br>
+                <strong>{safe_recruiter}</strong><br>
                 {COMPANY_NAME} Recruiting Team
             </p>
 
@@ -655,24 +674,31 @@ class RecruitingEmailService:
         self,
         task_id: int,
         db_session,
+        organization_id: Optional[int] = None,
     ) -> RecruitingEmailResult:
         """
         Process an email automation task from the recruiting workflow.
 
         Determines email type from task title and sends appropriate email.
         """
-        # Get task details
+        # Get task details with org isolation
+        org_filter = ""
+        params = {"task_id": task_id}
+        if organization_id:
+            org_filter = "AND rt.organization_id = :org_id"
+            params["org_id"] = organization_id
+
         task = db_session.execute(
-            text("""
+            text(f"""
                 SELECT rt.id, rt.candidate_id, rt.title, rt.description,
                        rt.assigned_to, rt.organization_id,
                        rc.first_name, rc.last_name, rc.email as candidate_email,
                        rc.phone as candidate_phone
                 FROM recruiting_tasks rt
                 JOIN mm_candidates rc ON rc.id = rt.candidate_id
-                WHERE rt.id = :task_id
+                WHERE rt.id = :task_id {org_filter}
             """),
-            {"task_id": task_id}
+            params
         ).fetchone()
 
         if not task:

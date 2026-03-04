@@ -410,7 +410,7 @@ class RecruitAssessmentService:
                      comp_percentage, updated_at)
                     VALUES (:org_id, :lead_lift, :deal_lift, :speed, :efficiency,
                             :marketing, :comp, NOW())
-                    ON CONFLICT (id) WHERE organization_id = :org_id
+                    ON CONFLICT (organization_id)
                     DO UPDATE SET
                         lead_conversion_lift = EXCLUDED.lead_conversion_lift,
                         avg_deal_size_lift = EXCLUDED.avg_deal_size_lift,
