@@ -12,6 +12,7 @@ Specialized agent for loan and branch profitability analysis with 8 tools:
 8. identify_profit_opportunities - Find profit improvement opportunities
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -25,6 +26,8 @@ from .base import (
     ToolResult,
     AgentRegistry
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -173,6 +176,7 @@ class ProfitabilityAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
@@ -182,9 +186,10 @@ class ProfitabilityAgent(SpecializedAgent):
                     l.status, l.funded_at
                 FROM loans l
                 WHERE l.id = :loan_id
+                AND l.organization_id = :org_id
             """)
 
-            result = db.execute(query, {"loan_id": input_data["loan_id"]}).fetchone()
+            result = db.execute(query, {"loan_id": input_data["loan_id"], "org_id": org_id}).fetchone()
 
             if not result:
                 return ToolResult(success=False, error="Loan not found")
@@ -249,9 +254,10 @@ class ProfitabilityAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            params = {"days": input_data.get("period_days", 30)}
+            params = {"days": input_data.get("period_days", 30), "org_id": org_id}
             branch_filter = ""
 
             if input_data.get("branch_id"):
@@ -267,6 +273,7 @@ class ProfitabilityAgent(SpecializedAgent):
                     COUNT(DISTINCT loan_officer_id) as lo_count
                 FROM loans l
                 WHERE l.funded_at >= CURRENT_DATE - :days
+                AND l.organization_id = :org_id
                 {branch_filter}
             """)
 
@@ -313,6 +320,7 @@ class ProfitabilityAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
@@ -322,11 +330,13 @@ class ProfitabilityAgent(SpecializedAgent):
                 FROM loans l
                 WHERE l.loan_officer_id = :lo_id
                 AND l.funded_at >= CURRENT_DATE - :days
+                AND l.organization_id = :org_id
             """)
 
             results = db.execute(query, {
                 "lo_id": input_data["lo_id"],
-                "days": input_data.get("period_days", 30)
+                "days": input_data.get("period_days", 30),
+                "org_id": org_id
             }).fetchall()
 
             total_volume = 0
@@ -375,6 +385,7 @@ class ProfitabilityAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
@@ -386,11 +397,12 @@ class ProfitabilityAgent(SpecializedAgent):
                     AVG(origination_fee) as avg_orig_fee
                 FROM loans
                 WHERE funded_at >= CURRENT_DATE - :days
+                AND organization_id = :org_id
                 GROUP BY loan_type
                 ORDER BY total_volume DESC
             """)
 
-            results = db.execute(query, {"days": input_data.get("period_days", 90)}).fetchall()
+            results = db.execute(query, {"days": input_data.get("period_days", 90), "org_id": org_id}).fetchall()
 
             comparisons = []
             for r in results:
@@ -423,6 +435,7 @@ class ProfitabilityAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
@@ -433,11 +446,12 @@ class ProfitabilityAgent(SpecializedAgent):
                     COUNT(*) as loan_count
                 FROM loans
                 WHERE funded_at >= CURRENT_DATE - :days
+                AND organization_id = :org_id
                 GROUP BY DATE_TRUNC('week', funded_at)
                 ORDER BY week DESC
             """)
 
-            results = db.execute(query, {"days": input_data.get("period_days", 180)}).fetchall()
+            results = db.execute(query, {"days": input_data.get("period_days", 180), "org_id": org_id}).fetchall()
 
             trends = [
                 {
@@ -494,6 +508,7 @@ class ProfitabilityAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             # Get historical average
@@ -508,11 +523,12 @@ class ProfitabilityAgent(SpecializedAgent):
                         SUM(origination_fee) as monthly_revenue
                     FROM loans
                     WHERE funded_at >= CURRENT_DATE - 180
+                    AND organization_id = :org_id
                     GROUP BY DATE_TRUNC('month', funded_at)
                 ) monthly
             """)
 
-            hist = db.execute(hist_query).fetchone()
+            hist = db.execute(hist_query, {"org_id": org_id}).fetchone()
             avg_monthly_revenue = float(hist.avg_revenue or 0)
 
             # Get pipeline value
@@ -520,9 +536,10 @@ class ProfitabilityAgent(SpecializedAgent):
                 SELECT SUM(loan_amount) as pipeline_value
                 FROM loans
                 WHERE status NOT IN ('funded', 'cancelled', 'denied')
+                AND organization_id = :org_id
             """)
 
-            pipeline = db.execute(pipeline_query).fetchone()
+            pipeline = db.execute(pipeline_query, {"org_id": org_id}).fetchone()
             pipeline_value = float(pipeline.pipeline_value or 0)
 
             months = input_data.get("period_months", 3)

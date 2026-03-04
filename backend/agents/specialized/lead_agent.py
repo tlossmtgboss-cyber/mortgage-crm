@@ -12,10 +12,13 @@ Specialized agent for lead lifecycle management with 8 tools:
 8. analyze_lead_pipeline - Pipeline analytics and bottlenecks
 """
 
+import logging
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -220,9 +223,16 @@ class LeadManagementAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
+
             # Build dynamic query based on filters
             conditions = ["1=1"]
             params = {"limit": input_data.get("limit", 20)}
+
+            # Tenant isolation
+            if org_id:
+                conditions.append("organization_id = :org_id")
+                params["org_id"] = org_id
 
             if input_data.get("stage"):
                 conditions.append("stage = :stage")
@@ -286,14 +296,22 @@ class LeadManagementAgent(SpecializedAgent):
                     "updated_at": row.updated_at.isoformat() if row.updated_at else None
                 })
 
-            # Get stage counts for context
-            stage_query = text("""
+            # Get stage counts for context (also filtered by org)
+            org_clause = "WHERE organization_id = :org_id" if org_id else ""
+            stage_query = text(f"""
                 SELECT stage, COUNT(*) as count
                 FROM leads
+                {org_clause}
                 GROUP BY stage
             """)
-            stage_results = db.execute(stage_query).fetchall()
+            stage_params = {"org_id": org_id} if org_id else {}
+            stage_results = db.execute(stage_query, stage_params).fetchall()
             stage_counts = {row.stage: row.count for row in stage_results}
+
+            self.audit_log("search_leads", "lead", details={
+                "filters": {k: v for k, v in input_data.items() if v is not None},
+                "result_count": len(leads),
+            })
 
             return ToolResult(
                 success=True,
@@ -306,6 +324,7 @@ class LeadManagementAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("search_leads failed")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -319,12 +338,18 @@ class LeadManagementAgent(SpecializedAgent):
         from database import SessionLocal
 
         lead_id = input_data["lead_id"]
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
 
         try:
-            # Get lead info
-            query = text("SELECT * FROM leads WHERE id = :lead_id")
-            result = db.execute(query, {"lead_id": lead_id}).fetchone()
+            # Get lead info with tenant isolation
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            params = {"lead_id": lead_id}
+            if org_id:
+                params["org_id"] = org_id
+
+            query = text(f"SELECT * FROM leads WHERE id = :lead_id {org_clause}")
+            result = db.execute(query, params).fetchone()
 
             if not result:
                 return ToolResult(success=False, error=f"Lead {lead_id} not found")
@@ -370,9 +395,12 @@ class LeadManagementAgent(SpecializedAgent):
                     for c in comms
                 ]
 
+            self.audit_log("get_lead_details", "lead", entity_id=lead_id)
+
             return ToolResult(success=True, data={"lead": lead_data})
 
         except Exception as e:
+            logger.exception(f"get_lead_details failed for lead {lead_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -388,6 +416,7 @@ class LeadManagementAgent(SpecializedAgent):
         lead_id = input_data["lead_id"]
         new_stage = input_data["new_stage"]
         reason = input_data.get("reason", "AI agent update")
+        org_id = self.context.get("organization_id")
 
         valid_stages = ["new", "contacted", "qualified", "prospect", "application", "lost"]
         if new_stage not in valid_stages:
@@ -398,26 +427,31 @@ class LeadManagementAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
-            # Get current stage
-            current_query = text("SELECT stage FROM leads WHERE id = :lead_id")
-            current = db.execute(current_query, {"lead_id": lead_id}).fetchone()
+            # Get current stage with tenant isolation
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            params = {"lead_id": lead_id}
+            if org_id:
+                params["org_id"] = org_id
+
+            current_query = text(f"SELECT stage FROM leads WHERE id = :lead_id {org_clause}")
+            current = db.execute(current_query, params).fetchone()
 
             if not current:
                 return ToolResult(success=False, error=f"Lead {lead_id} not found")
 
             old_stage = current.stage
 
-            # Update stage
-            update_query = text("""
+            # Update stage with tenant isolation
+            update_query = text(f"""
                 UPDATE leads
                 SET stage = :new_stage, updated_at = CURRENT_TIMESTAMP
-                WHERE id = :lead_id
+                WHERE id = :lead_id {org_clause}
                 RETURNING id, name, first_name, last_name, stage
             """)
-            result = db.execute(update_query, {
-                "lead_id": lead_id,
-                "new_stage": new_stage
-            }).fetchone()
+            update_params = {"lead_id": lead_id, "new_stage": new_stage}
+            if org_id:
+                update_params["org_id"] = org_id
+            result = db.execute(update_query, update_params).fetchone()
 
             # Record stage history
             history_query = text("""
@@ -437,6 +471,12 @@ class LeadManagementAgent(SpecializedAgent):
 
             lead_name = result.name or f"{result.first_name or ''} {result.last_name or ''}".strip()
 
+            self.audit_log("update_lead_stage", "lead", entity_id=lead_id, details={
+                "old_stage": old_stage,
+                "new_stage": new_stage,
+                "reason": reason,
+            })
+
             return ToolResult(
                 success=True,
                 data={"lead_id": lead_id, "old_stage": old_stage, "new_stage": new_stage},
@@ -445,6 +485,7 @@ class LeadManagementAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"update_lead_stage failed for lead {lead_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -458,16 +499,22 @@ class LeadManagementAgent(SpecializedAgent):
         from database import SessionLocal
 
         lead_id = input_data["lead_id"]
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
 
         try:
-            query = text("""
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            params = {"lead_id": lead_id}
+            if org_id:
+                params["org_id"] = org_id
+
+            query = text(f"""
                 SELECT
                     id, credit_score, loan_amount, property_value,
                     dti, down_payment, employment_status, email, phone
-                FROM leads WHERE id = :lead_id
+                FROM leads WHERE id = :lead_id {org_clause}
             """)
-            result = db.execute(query, {"lead_id": lead_id}).fetchone()
+            result = db.execute(query, params).fetchone()
 
             if not result:
                 return ToolResult(success=False, error=f"Lead {lead_id} not found")
@@ -544,6 +591,11 @@ class LeadManagementAgent(SpecializedAgent):
                 quality = "unqualified"
                 recommendation = "May need additional qualification"
 
+            self.audit_log("score_lead_quality", "lead", entity_id=lead_id, details={
+                "score": score,
+                "quality": quality,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -558,6 +610,7 @@ class LeadManagementAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"score_lead_quality failed for lead {lead_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -572,19 +625,22 @@ class LeadManagementAgent(SpecializedAgent):
 
         lead_id = input_data["lead_id"]
         user_id = input_data["user_id"]
+        org_id = self.context.get("organization_id")
 
         db = SessionLocal()
         try:
-            query = text("""
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            params = {"lead_id": lead_id, "user_id": user_id}
+            if org_id:
+                params["org_id"] = org_id
+
+            query = text(f"""
                 UPDATE leads
                 SET assigned_to = :user_id, updated_at = CURRENT_TIMESTAMP
-                WHERE id = :lead_id
+                WHERE id = :lead_id {org_clause}
                 RETURNING id, name, first_name, last_name
             """)
-            result = db.execute(query, {
-                "lead_id": lead_id,
-                "user_id": user_id
-            }).fetchone()
+            result = db.execute(query, params).fetchone()
 
             if not result:
                 return ToolResult(success=False, error=f"Lead {lead_id} not found")
@@ -592,6 +648,10 @@ class LeadManagementAgent(SpecializedAgent):
             db.commit()
 
             lead_name = result.name or f"{result.first_name or ''} {result.last_name or ''}".strip()
+
+            self.audit_log("assign_lead", "lead", entity_id=lead_id, details={
+                "assigned_to_user_id": user_id,
+            })
 
             return ToolResult(
                 success=True,
@@ -601,6 +661,7 @@ class LeadManagementAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"assign_lead failed for lead {lead_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -615,9 +676,19 @@ class LeadManagementAgent(SpecializedAgent):
 
         lead_id = input_data["lead_id"]
         limit = input_data.get("limit", 20)
+        org_id = self.context.get("organization_id")
 
         db = SessionLocal()
         try:
+            # Verify lead belongs to org before fetching activities
+            if org_id:
+                lead_check = db.execute(
+                    text("SELECT id FROM leads WHERE id = :lead_id AND organization_id = :org_id"),
+                    {"lead_id": lead_id, "org_id": org_id}
+                ).fetchone()
+                if not lead_check:
+                    return ToolResult(success=False, error=f"Lead {lead_id} not found")
+
             query = text("""
                 SELECT
                     activity_type, description, created_at, created_by
@@ -641,12 +712,15 @@ class LeadManagementAgent(SpecializedAgent):
                 for r in results
             ]
 
+            self.audit_log("get_lead_activity", "lead", entity_id=lead_id)
+
             return ToolResult(
                 success=True,
                 data={"lead_id": lead_id, "activities": activities, "count": len(activities)}
             )
 
         except Exception as e:
+            logger.exception(f"get_lead_activity failed for lead {lead_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -659,39 +733,66 @@ class LeadManagementAgent(SpecializedAgent):
         """Create a task for a lead"""
         from database import SessionLocal
 
+        lead_id = input_data["lead_id"]
+        org_id = self.context.get("organization_id")
+
         db = SessionLocal()
         try:
-            query = text("""
+            # Verify lead belongs to org before creating task
+            if org_id:
+                lead_check = db.execute(
+                    text("SELECT id FROM leads WHERE id = :lead_id AND organization_id = :org_id"),
+                    {"lead_id": lead_id, "org_id": org_id}
+                ).fetchone()
+                if not lead_check:
+                    return ToolResult(success=False, error=f"Lead {lead_id} not found")
+
+            task_params = {
+                "title": input_data["title"],
+                "description": input_data.get("description", ""),
+                "lead_id": lead_id,
+                "due_date": input_data.get("due_date"),
+                "priority": input_data.get("priority", "normal"),
+                "task_type": input_data.get("task_type", "follow_up"),
+                "created_by": context.get("user_id", 1),
+            }
+
+            # Include organization_id on task if available
+            org_col = ", organization_id" if org_id else ""
+            org_val = ", :org_id" if org_id else ""
+            if org_id:
+                task_params["org_id"] = org_id
+
+            query = text(f"""
                 INSERT INTO tasks (
                     title, description, entity_type, entity_id,
-                    due_date, priority, task_type, status, created_by
+                    due_date, priority, task_type, status, created_by{org_col}
                 ) VALUES (
                     :title, :description, 'lead', :lead_id,
-                    :due_date, :priority, :task_type, 'pending', :created_by
+                    :due_date, :priority, :task_type, 'pending', :created_by{org_val}
                 )
                 RETURNING id, title
             """)
 
-            result = db.execute(query, {
-                "title": input_data["title"],
-                "description": input_data.get("description", ""),
-                "lead_id": input_data["lead_id"],
-                "due_date": input_data.get("due_date"),
-                "priority": input_data.get("priority", "normal"),
-                "task_type": input_data.get("task_type", "follow_up"),
-                "created_by": context.get("user_id", 1)
-            }).fetchone()
+            result = db.execute(query, task_params).fetchone()
 
             db.commit()
+
+            self.audit_log("create_lead_task", "task", entity_id=result.id, details={
+                "lead_id": lead_id,
+                "title": input_data["title"],
+                "priority": input_data.get("priority", "normal"),
+            })
 
             return ToolResult(
                 success=True,
                 data={"task_id": result.id, "title": result.title},
-                message=f"Task '{result.title}' created for lead {input_data['lead_id']}"
+                message=f"Task '{result.title}' created for lead {lead_id}"
             )
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"create_lead_task failed for lead {lead_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -705,21 +806,28 @@ class LeadManagementAgent(SpecializedAgent):
         from database import SessionLocal
 
         days = input_data.get("days", 30)
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
 
         try:
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            params = {"days": days}
+            if org_id:
+                params["org_id"] = org_id
+
             # Stage distribution
-            stage_query = text("""
+            stage_query = text(f"""
                 SELECT
                     stage,
                     COUNT(*) as count,
                     AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at)) / 86400) as avg_days
                 FROM leads
                 WHERE created_at > CURRENT_TIMESTAMP - INTERVAL ':days days'
+                    {org_clause}
                 GROUP BY stage
                 ORDER BY count DESC
             """)
-            stage_results = db.execute(stage_query, {"days": days}).fetchall()
+            stage_results = db.execute(stage_query, params).fetchall()
 
             stages = [
                 {
@@ -729,18 +837,6 @@ class LeadManagementAgent(SpecializedAgent):
                 }
                 for r in stage_results
             ]
-
-            # Conversion rates (simplified)
-            conversion_query = text("""
-                WITH stage_counts AS (
-                    SELECT
-                        stage, COUNT(*) as count
-                    FROM leads
-                    WHERE created_at > CURRENT_TIMESTAMP - INTERVAL ':days days'
-                    GROUP BY stage
-                )
-                SELECT * FROM stage_counts
-            """)
 
             # Bottleneck detection
             bottlenecks = []
@@ -753,17 +849,18 @@ class LeadManagementAgent(SpecializedAgent):
                     })
 
             # Source effectiveness
-            source_query = text("""
+            source_query = text(f"""
                 SELECT
                     source,
                     COUNT(*) as total,
                     SUM(CASE WHEN stage IN ('qualified', 'prospect', 'application') THEN 1 ELSE 0 END) as qualified
                 FROM leads
                 WHERE created_at > CURRENT_TIMESTAMP - INTERVAL ':days days'
+                    {org_clause}
                 GROUP BY source
                 ORDER BY total DESC
             """)
-            source_results = db.execute(source_query, {"days": days}).fetchall()
+            source_results = db.execute(source_query, params).fetchall()
 
             sources = [
                 {
@@ -776,6 +873,12 @@ class LeadManagementAgent(SpecializedAgent):
             ]
 
             total_leads = sum(s["count"] for s in stages)
+
+            self.audit_log("analyze_lead_pipeline", details={
+                "period_days": days,
+                "total_leads": total_leads,
+                "bottleneck_count": len(bottlenecks),
+            })
 
             return ToolResult(
                 success=True,
@@ -791,6 +894,7 @@ class LeadManagementAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("analyze_lead_pipeline failed")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()

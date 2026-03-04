@@ -12,9 +12,12 @@ Specialized agent for intelligent scheduling with 8 tools:
 8. sync_calendar - Sync with external calendar
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -179,25 +182,67 @@ class SchedulerAgent(SpecializedAgent):
         ))
 
     async def _find_available_slots(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Find available time slots"""
+        """Find available time slots by checking existing appointments in DB."""
         duration = input_data.get("duration_minutes", 30)
         days_ahead = input_data.get("days_ahead", 7)
+        user_id = input_data.get("user_id") or self.context.get("user_id")
 
-        # Generate available slots (simulated)
+        # Get existing appointments from DB to find gaps
+        booked_slots = set()
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                org_id = self.context.get("organization_id")
+                params: dict = {
+                    "start": datetime.now(),
+                    "end": datetime.now() + timedelta(days=days_ahead),
+                }
+                user_filter = ""
+                org_filter = ""
+                if user_id:
+                    user_filter = "AND (user_id = :user_id OR organizer_id = :user_id)"
+                    params["user_id"] = user_id
+                if org_id:
+                    org_filter = "AND organization_id = :org_id"
+                    params["org_id"] = org_id
+
+                rows = db.execute(text(f"""
+                    SELECT start_time, end_time FROM appointments
+                    WHERE start_time >= :start AND start_time < :end
+                    AND status != 'cancelled'
+                    {user_filter} {org_filter}
+                    ORDER BY start_time
+                """), params).fetchall()
+
+                for row in rows:
+                    # Mark each hour slot as booked
+                    st = row.start_time
+                    if isinstance(st, datetime):
+                        booked_slots.add((st.date(), st.hour))
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Could not query appointments, using open schedule: {e}")
+
+        # Generate available slots excluding booked ones
         slots = []
         base_date = datetime.now()
 
         for day in range(days_ahead):
-            date = base_date + timedelta(days=day)
-            if date.weekday() < 5:  # Weekdays only
-                for hour in [9, 10, 11, 14, 15, 16]:  # Business hours
-                    slot_time = date.replace(hour=hour, minute=0, second=0)
-                    if slot_time > datetime.now():
+            check_date = base_date + timedelta(days=day)
+            if check_date.weekday() < 5:  # Weekdays only
+                for hour in [9, 10, 11, 13, 14, 15, 16]:  # Business hours with lunch gap
+                    slot_time = check_date.replace(hour=hour, minute=0, second=0, microsecond=0)
+                    if slot_time > datetime.now() and (check_date.date(), hour) not in booked_slots:
                         slots.append({
                             "start": slot_time.isoformat(),
                             "end": (slot_time + timedelta(minutes=duration)).isoformat(),
                             "duration_minutes": duration
                         })
+
+        self.audit_log("slots_searched", details={"days_ahead": days_ahead, "found": len(slots)})
 
         return ToolResult(
             success=True,
@@ -206,18 +251,57 @@ class SchedulerAgent(SpecializedAgent):
         )
 
     async def _schedule_meeting(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Schedule a meeting"""
+        """Schedule a meeting — persists to appointments table."""
         import uuid
 
         meeting_id = str(uuid.uuid4())[:8].upper()
         start_time = datetime.fromisoformat(input_data["start_time"].replace('Z', '+00:00'))
         duration = input_data.get("duration_minutes", 30)
+        end_time = start_time + timedelta(minutes=duration)
+
+        # Persist to DB
+        db_id = None
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                org_id = self.context.get("organization_id")
+                user_id = self.context.get("user_id")
+
+                result = db.execute(text("""
+                    INSERT INTO appointments (
+                        title, start_time, end_time, appointment_type,
+                        description, organizer_id, organization_id,
+                        status, created_at
+                    ) VALUES (
+                        :title, :start_time, :end_time, :appt_type,
+                        :description, :organizer_id, :org_id,
+                        'scheduled', CURRENT_TIMESTAMP
+                    )
+                    RETURNING id
+                """), {
+                    "title": input_data["title"],
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "appt_type": input_data.get("meeting_type", "call"),
+                    "description": input_data.get("description"),
+                    "organizer_id": user_id,
+                    "org_id": org_id,
+                }).fetchone()
+                db.commit()
+                db_id = result.id if result else None
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Could not persist appointment to DB: {e}")
 
         meeting = {
             "meeting_id": meeting_id,
+            "db_id": db_id,
             "title": input_data["title"],
             "start_time": start_time.isoformat(),
-            "end_time": (start_time + timedelta(minutes=duration)).isoformat(),
+            "end_time": end_time.isoformat(),
             "duration_minutes": duration,
             "attendees": input_data["attendees"],
             "meeting_type": input_data.get("meeting_type", "call"),
@@ -228,6 +312,9 @@ class SchedulerAgent(SpecializedAgent):
 
         if input_data.get("meeting_type") == "video":
             meeting["video_link"] = f"https://meet.perennia.ai/{meeting_id}"
+
+        self.audit_log("meeting_scheduled", entity_type="appointment",
+                        entity_id=str(db_id or meeting_id), details={"title": input_data["title"]})
 
         return ToolResult(
             success=True,
@@ -262,33 +349,66 @@ class SchedulerAgent(SpecializedAgent):
         )
 
     async def _get_calendar_summary(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Get calendar summary"""
-        # Simulated calendar data
+        """Get calendar summary from appointments table."""
+        target_date = input_data.get("date") or datetime.now().strftime("%Y-%m-%d")
+        days = input_data.get("days", 1)
+        user_id = input_data.get("user_id") or self.context.get("user_id")
+
+        meetings = []
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                org_id = self.context.get("organization_id")
+                params: dict = {"start_date": target_date, "days": days}
+                user_filter = ""
+                org_filter = ""
+                if user_id:
+                    user_filter = "AND (organizer_id = :user_id)"
+                    params["user_id"] = user_id
+                if org_id:
+                    org_filter = "AND organization_id = :org_id"
+                    params["org_id"] = org_id
+
+                rows = db.execute(text(f"""
+                    SELECT id, title, start_time, end_time, appointment_type, status
+                    FROM appointments
+                    WHERE DATE(start_time) >= :start_date::date
+                    AND DATE(start_time) < :start_date::date + :days
+                    AND status != 'cancelled'
+                    {user_filter} {org_filter}
+                    ORDER BY start_time
+                """), params).fetchall()
+
+                for r in rows:
+                    duration = 30
+                    if r.start_time and r.end_time:
+                        duration = int((r.end_time - r.start_time).total_seconds() / 60)
+                    meetings.append({
+                        "id": r.id,
+                        "title": r.title,
+                        "start": r.start_time.strftime("%H:%M") if r.start_time else None,
+                        "end": r.end_time.strftime("%H:%M") if r.end_time else None,
+                        "type": r.appointment_type,
+                        "duration_minutes": duration
+                    })
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Could not query calendar, returning empty: {e}")
+
+        total_minutes = sum(m.get("duration_minutes", 30) for m in meetings)
+        total_hours = round(total_minutes / 60, 1)
+        available_hours = round(8 * days - total_hours, 1)
+
         summary = {
-            "date": input_data.get("date") or datetime.now().strftime("%Y-%m-%d"),
-            "total_meetings": 5,
-            "total_hours": 3.5,
-            "meetings": [
-                {
-                    "title": "Pipeline Review",
-                    "start": "09:00",
-                    "end": "09:30",
-                    "attendees": 3
-                },
-                {
-                    "title": "Client Call - Smith",
-                    "start": "10:00",
-                    "end": "10:30",
-                    "attendees": 2
-                },
-                {
-                    "title": "Team Standup",
-                    "start": "14:00",
-                    "end": "14:15",
-                    "attendees": 8
-                }
-            ],
-            "available_hours": 4.5
+            "date": target_date,
+            "days": days,
+            "total_meetings": len(meetings),
+            "total_hours": total_hours,
+            "meetings": meetings,
+            "available_hours": max(0, available_hours)
         }
 
         return ToolResult(

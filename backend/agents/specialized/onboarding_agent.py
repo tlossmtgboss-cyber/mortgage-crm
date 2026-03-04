@@ -12,9 +12,12 @@ Specialized agent for new user onboarding with 8 tools:
 8. get_team_introduction - Get team member introductions
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -168,29 +171,72 @@ class OnboardingAgent(SpecializedAgent):
         ))
 
     async def _get_onboarding_status(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Get onboarding status"""
+        """Get onboarding status — attempts DB lookup, falls back to defaults"""
         user_id = input_data.get("user_id") or context.get("user_id")
+        org_id = self.context.get("organization_id")
 
-        # Simulated onboarding status
+        # Define standard onboarding steps
+        default_steps = [
+            {"id": "profile", "name": "Complete Profile", "status": "pending"},
+            {"id": "email", "name": "Connect Email", "status": "pending"},
+            {"id": "calendar", "name": "Connect Calendar", "status": "pending"},
+            {"id": "tour", "name": "Platform Tour", "status": "pending"},
+            {"id": "first_lead", "name": "Add First Lead", "status": "pending"},
+            {"id": "training", "name": "Complete Training", "status": "pending"}
+        ]
+
+        # Try to derive status from real user data
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                user = db.execute(text("""
+                    SELECT id, created_at, email, full_name,
+                           google_calendar_token IS NOT NULL as has_calendar,
+                           microsoft_token IS NOT NULL as has_email
+                    FROM users
+                    WHERE id = :user_id AND (:org_id IS NULL OR organization_id = :org_id)
+                """), {"user_id": user_id, "org_id": org_id}).fetchone()
+
+                if user:
+                    # Derive completion from real data
+                    if user.full_name:
+                        default_steps[0]["status"] = "completed"
+                    if user.has_email:
+                        default_steps[1]["status"] = "completed"
+                    if user.has_calendar:
+                        default_steps[2]["status"] = "completed"
+
+                    # Check if they have any leads
+                    lead_count = db.execute(text("""
+                        SELECT COUNT(*) as cnt FROM leads
+                        WHERE owner_id = :user_id
+                        AND (:org_id IS NULL OR organization_id = :org_id)
+                        LIMIT 1
+                    """), {"user_id": user_id, "org_id": org_id}).fetchone()
+                    if lead_count and lead_count.cnt > 0:
+                        default_steps[4]["status"] = "completed"
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Could not load onboarding data from DB: {e}")
+
+        completed = sum(1 for s in default_steps if s["status"] == "completed")
+        pct = round((completed / len(default_steps)) * 100)
+
         status = {
             "user_id": user_id,
             "started_at": (datetime.now() - timedelta(days=3)).isoformat(),
-            "completion_percent": 65,
-            "steps": [
-                {"id": "profile", "name": "Complete Profile", "status": "completed"},
-                {"id": "email", "name": "Connect Email", "status": "completed"},
-                {"id": "calendar", "name": "Connect Calendar", "status": "completed"},
-                {"id": "tour", "name": "Platform Tour", "status": "in_progress"},
-                {"id": "first_lead", "name": "Add First Lead", "status": "pending"},
-                {"id": "training", "name": "Complete Training", "status": "pending"}
-            ],
-            "estimated_completion": "2 days"
+            "completion_percent": pct,
+            "steps": default_steps,
+            "estimated_completion": "1 day" if pct >= 80 else "2 days" if pct >= 50 else "3 days"
         }
 
         return ToolResult(
             success=True,
             data=status,
-            message=f"Onboarding {status['completion_percent']}% complete"
+            message=f"Onboarding {pct}% complete"
         )
 
     async def _get_next_steps(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
@@ -309,32 +355,41 @@ class OnboardingAgent(SpecializedAgent):
         )
 
     async def _assign_mentor(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Assign mentor to new user"""
+        """Assign mentor to new user — tenant-isolated"""
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             mentor_id = input_data.get("mentor_id")
 
             if not mentor_id:
-                # Auto-assign based on availability
+                # Auto-assign based on availability — scoped to organization
                 query = text("""
                     SELECT id, full_name FROM users
                     WHERE permission_role IN ('leadership', 'management')
                     AND is_active = true
+                    AND (:org_id IS NULL OR organization_id = :org_id)
                     LIMIT 1
                 """)
-                result = db.execute(query).fetchone()
+                result = db.execute(query, {"org_id": org_id}).fetchone()
                 if result:
                     mentor_id = result.id
                     mentor_name = result.full_name
                 else:
                     return ToolResult(success=False, error="No available mentors found")
             else:
-                query = text("SELECT full_name FROM users WHERE id = :id")
-                result = db.execute(query, {"id": mentor_id}).fetchone()
+                query = text("""
+                    SELECT full_name FROM users
+                    WHERE id = :id AND (:org_id IS NULL OR organization_id = :org_id)
+                """)
+                result = db.execute(query, {"id": mentor_id, "org_id": org_id}).fetchone()
                 mentor_name = result.full_name if result else "Unknown"
+
+            self.audit_log("mentor_assigned", entity_type="user",
+                          entity_id=str(input_data["new_user_id"]),
+                          details={"mentor_id": mentor_id})
 
             return ToolResult(
                 success=True,
@@ -347,26 +402,29 @@ class OnboardingAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"Error assigning mentor: {e}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
 
     async def _get_team_introduction(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Get team introductions"""
+        """Get team introductions — tenant-isolated"""
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
                 SELECT id, full_name, email, permission_role, role
                 FROM users
                 WHERE is_active = true
+                AND (:org_id IS NULL OR organization_id = :org_id)
                 ORDER BY permission_role, full_name
                 LIMIT 20
             """)
 
-            results = db.execute(query).fetchall()
+            results = db.execute(query, {"org_id": org_id}).fetchall()
 
             team = [
                 {
@@ -379,6 +437,9 @@ class OnboardingAgent(SpecializedAgent):
                 for r in results
             ]
 
+            self.audit_log("team_introduction_viewed", entity_type="organization",
+                          entity_id=str(org_id), details={"count": len(team)})
+
             return ToolResult(
                 success=True,
                 data={"team_members": team, "count": len(team)},
@@ -386,6 +447,7 @@ class OnboardingAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"Error getting team introduction: {e}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()

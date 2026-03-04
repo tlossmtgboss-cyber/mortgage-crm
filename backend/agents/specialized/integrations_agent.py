@@ -12,9 +12,12 @@ Specialized agent for third-party integration management with 8 tools:
 8. configure_integration - Configure integration settings
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -171,55 +174,81 @@ class IntegrationsAgent(SpecializedAgent):
         ))
 
     async def _list_integrations(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """List integrations"""
-        integrations = [
-            {
-                "id": "microsoft_365",
-                "name": "Microsoft 365",
-                "category": "email",
-                "status": "connected",
-                "features": ["email", "calendar", "contacts"]
-            },
-            {
-                "id": "google_workspace",
-                "name": "Google Workspace",
-                "category": "email",
-                "status": "available",
-                "features": ["email", "calendar", "contacts", "drive"]
-            },
-            {
-                "id": "encompass",
-                "name": "Encompass LOS",
-                "category": "los",
-                "status": "available",
-                "features": ["loan_sync", "document_upload", "milestone_tracking"]
-            },
-            {
-                "id": "sendgrid",
-                "name": "SendGrid",
-                "category": "email",
-                "status": "connected",
-                "features": ["transactional_email", "marketing_email"]
-            },
-            {
-                "id": "telnyx",
-                "name": "Telnyx",
-                "category": "sms",
-                "status": "connected",
-                "features": ["sms", "voice"]
-            },
-            {
-                "id": "zillow",
-                "name": "Zillow",
-                "category": "lead_source",
-                "status": "available",
-                "features": ["lead_import"]
-            }
+        """List integrations — checks DB for connected integrations, merges with available catalog."""
+
+        # Static catalog of available integrations
+        catalog = [
+            {"id": "microsoft_365", "name": "Microsoft 365", "category": "email", "features": ["email", "calendar", "contacts"]},
+            {"id": "google_workspace", "name": "Google Workspace", "category": "email", "features": ["email", "calendar", "contacts", "drive"]},
+            {"id": "encompass", "name": "Encompass LOS", "category": "los", "features": ["loan_sync", "document_upload", "milestone_tracking"]},
+            {"id": "salesforce", "name": "Salesforce CRM", "category": "crm", "features": ["lead_sync", "loan_sync", "contact_sync"]},
+            {"id": "sendgrid", "name": "SendGrid", "category": "email", "features": ["transactional_email", "marketing_email"]},
+            {"id": "telnyx", "name": "Telnyx", "category": "telephony", "features": ["sms", "voice", "click_to_call"]},
+            {"id": "twilio", "name": "Twilio", "category": "telephony", "features": ["sms", "voice", "vapi_ai"]},
+            {"id": "calendly", "name": "Calendly", "category": "calendar", "features": ["scheduling", "availability"]},
         ]
+
+        # Check DB for connected integrations
+        connected_ids = set()
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                org_id = self.context.get("organization_id")
+                params: dict = {}
+                org_filter = ""
+                if org_id:
+                    org_filter = "WHERE organization_id = :org_id"
+                    params["org_id"] = org_id
+
+                # Check encompass_configs
+                ec = db.execute(text(f"""
+                    SELECT id FROM encompass_configs {org_filter} AND is_active = true LIMIT 1
+                """.replace("WHERE organization_id", "WHERE is_active = true AND organization_id") if org_id else
+                    "SELECT id FROM encompass_configs WHERE is_active = true LIMIT 1"
+                ), params).fetchone()
+                if ec:
+                    connected_ids.add("encompass")
+
+                # Check salesforce via oauth_tokens
+                sf = db.execute(text("""
+                    SELECT id FROM oauth_tokens
+                    WHERE provider = 'salesforce' AND revoked_at IS NULL
+                    LIMIT 1
+                """)).fetchone()
+                if sf:
+                    connected_ids.add("salesforce")
+
+                # Check for Microsoft OAuth
+                ms = db.execute(text("""
+                    SELECT id FROM oauth_tokens
+                    WHERE provider IN ('microsoft', 'microsoft_365') AND revoked_at IS NULL
+                    LIMIT 1
+                """)).fetchone()
+                if ms:
+                    connected_ids.add("microsoft_365")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Could not check integration status from DB: {e}")
+
+        # Also mark known-connected services based on env vars
+        import os
+        if os.getenv("SENDGRID_API_KEY"):
+            connected_ids.add("sendgrid")
+        if os.getenv("TELNYX_API_KEY"):
+            connected_ids.add("telnyx")
+        if os.getenv("TWILIO_AUTH_TOKEN"):
+            connected_ids.add("twilio")
+
+        integrations = []
+        for item in catalog:
+            item["status"] = "connected" if item["id"] in connected_ids else "available"
+            integrations.append(item)
 
         category = input_data.get("category")
         status = input_data.get("status")
-
         if category:
             integrations = [i for i in integrations if i["category"] == category]
         if status:
@@ -232,7 +261,7 @@ class IntegrationsAgent(SpecializedAgent):
                 "total": len(integrations),
                 "connected": len([i for i in integrations if i["status"] == "connected"])
             },
-            message=f"Found {len(integrations)} integrations"
+            message=f"Found {len(integrations)} integrations ({len(connected_ids)} connected)"
         )
 
     async def _get_integration_status(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:

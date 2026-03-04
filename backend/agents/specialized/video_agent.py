@@ -12,9 +12,12 @@ Specialized agent for video communication with 8 tools:
 8. analyze_meeting_metrics - Analyze meeting engagement metrics
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -170,13 +173,47 @@ class VideoAgent(SpecializedAgent):
         ))
 
     async def _create_video_room(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Create video room"""
+        """Create video room — persists to video_meetings table if available."""
         import uuid
 
         room_id = str(uuid.uuid4())[:8].upper()
 
+        # Try to persist to DB
+        db_id = None
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                org_id = self.context.get("organization_id")
+                user_id = self.context.get("user_id")
+                result = db.execute(text("""
+                    INSERT INTO video_meetings (
+                        room_id, title, host_user_id, organization_id,
+                        scheduled_start, duration_minutes, status, created_at
+                    ) VALUES (
+                        :room_id, :title, :host_id, :org_id,
+                        :scheduled_start, :duration, 'created', CURRENT_TIMESTAMP
+                    )
+                    RETURNING id
+                """), {
+                    "room_id": room_id,
+                    "title": input_data["title"],
+                    "host_id": user_id,
+                    "org_id": org_id,
+                    "scheduled_start": input_data.get("scheduled_start"),
+                    "duration": input_data.get("duration_minutes", 30),
+                }).fetchone()
+                db.commit()
+                db_id = result.id if result else None
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Could not persist video room to DB: {e}")
+
         room = {
             "room_id": room_id,
+            "db_id": db_id,
             "title": input_data["title"],
             "join_url": f"https://video.perennia.ai/room/{room_id}",
             "host_url": f"https://video.perennia.ai/room/{room_id}?host=true",
@@ -187,6 +224,9 @@ class VideoAgent(SpecializedAgent):
             "created_at": datetime.now().isoformat(),
             "status": "created"
         }
+
+        self.audit_log("video_room_created", entity_type="video_meeting",
+                        entity_id=str(db_id or room_id), details={"title": input_data["title"]})
 
         return ToolResult(
             success=True,

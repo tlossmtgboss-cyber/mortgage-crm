@@ -16,6 +16,9 @@ from typing import Any, Dict, Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -218,11 +221,13 @@ class AnalyticsAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.require_org_id()
             date_range = input_data.get("date_range_days", 30)
             lo_id = input_data.get("lo_id")
 
-            params = {"date_range": date_range}
+            params = {"date_range": date_range, "org_id": org_id}
             lo_filter = ""
+            org_filter = "AND organization_id = :org_id"
             if lo_id:
                 lo_filter = "AND assigned_lo = :lo_id"
                 params["lo_id"] = lo_id
@@ -241,6 +246,7 @@ class AnalyticsAgent(SpecializedAgent):
                 WHERE stage NOT IN ('Funded')
                     AND created_at >= CURRENT_DATE - :date_range
                     {lo_filter}
+                    {org_filter}
             """)
 
             summary = db.execute(summary_query, params).fetchone()
@@ -256,6 +262,7 @@ class AnalyticsAgent(SpecializedAgent):
                 FROM loans
                 WHERE stage NOT IN ('Funded')
                     {lo_filter}
+                    {org_filter}
                 GROUP BY stage
                 ORDER BY
                     CASE stage
@@ -294,6 +301,7 @@ class AnalyticsAgent(SpecializedAgent):
                 WHERE stage = 'Funded'
                     AND updated_at >= CURRENT_DATE - :date_range
                     {lo_filter}
+                    {org_filter}
             """)
 
             funded = db.execute(funded_query, params).fetchone()
@@ -352,10 +360,11 @@ class AnalyticsAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.require_org_id()
             start_date = input_data.get("start_date", (date.today() - timedelta(days=90)).isoformat())
             end_date = input_data.get("end_date", date.today().isoformat())
 
-            params = {"start_date": start_date, "end_date": end_date}
+            params = {"start_date": start_date, "end_date": end_date, "org_id": org_id}
 
             source_filter = ""
             if input_data.get("source"):
@@ -367,6 +376,8 @@ class AnalyticsAgent(SpecializedAgent):
                 lo_filter = "AND assigned_to = :lo_id"
                 params["lo_id"] = input_data["lo_id"]
 
+            org_filter = "AND organization_id = :org_id"
+
             # Lead stage funnel
             funnel_query = text(f"""
                 SELECT
@@ -376,6 +387,7 @@ class AnalyticsAgent(SpecializedAgent):
                 WHERE created_at BETWEEN :start_date AND :end_date
                     {source_filter}
                     {lo_filter}
+                    {org_filter}
                 GROUP BY stage
             """)
 
@@ -411,6 +423,7 @@ class AnalyticsAgent(SpecializedAgent):
                 FROM loans
                 WHERE lead_id IS NOT NULL
                     AND created_at BETWEEN :start_date AND :end_date
+                    {org_filter}
             """)
 
             converted = db.execute(lead_to_loan_query, params).fetchone()
@@ -448,16 +461,19 @@ class AnalyticsAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.require_org_id()
             period = input_data.get("period", "month")
             period_days = {"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30)
 
             lo_id = input_data.get("lo_id")
 
-            params = {"period_days": period_days}
+            params = {"period_days": period_days, "org_id": org_id}
+
+            org_filter = "AND l.organization_id = :org_id"
 
             if lo_id:
                 # Single LO metrics
-                query = text("""
+                query = text(f"""
                     SELECT
                         u.id, u.name,
                         COUNT(DISTINCT l.id) as total_loans,
@@ -469,9 +485,11 @@ class AnalyticsAgent(SpecializedAgent):
                     FROM users u
                     LEFT JOIN loans l ON l.assigned_lo = u.id
                         AND l.created_at >= CURRENT_DATE - :period_days
+                        {org_filter}
                     LEFT JOIN leads ld ON ld.assigned_to = u.id
                         AND ld.created_at >= CURRENT_DATE - :period_days
                     WHERE u.id = :lo_id
+                        AND u.organization_id = :org_id
                     GROUP BY u.id, u.name
                 """)
                 params["lo_id"] = lo_id
@@ -496,7 +514,7 @@ class AnalyticsAgent(SpecializedAgent):
 
                 # Get ranking if requested
                 if input_data.get("include_ranking", True):
-                    rank_query = text("""
+                    rank_query = text(f"""
                         SELECT
                             u.id,
                             COALESCE(SUM(l.amount), 0) as volume
@@ -504,7 +522,9 @@ class AnalyticsAgent(SpecializedAgent):
                         LEFT JOIN loans l ON l.assigned_lo = u.id
                             AND l.stage = 'Funded'
                             AND l.updated_at >= CURRENT_DATE - :period_days
+                            {org_filter}
                         WHERE u.role = 'loan_officer'
+                            AND u.organization_id = :org_id
                         GROUP BY u.id
                         ORDER BY volume DESC
                     """)
@@ -525,7 +545,7 @@ class AnalyticsAgent(SpecializedAgent):
 
             else:
                 # Team metrics
-                query = text("""
+                query = text(f"""
                     SELECT
                         u.id, u.name,
                         COUNT(DISTINCT l.id) as total_loans,
@@ -535,7 +555,9 @@ class AnalyticsAgent(SpecializedAgent):
                     FROM users u
                     LEFT JOIN loans l ON l.assigned_lo = u.id
                         AND l.created_at >= CURRENT_DATE - :period_days
+                        {org_filter}
                     WHERE u.role = 'loan_officer'
+                        AND u.organization_id = :org_id
                     GROUP BY u.id, u.name
                     ORDER BY funded_volume DESC
                 """)
@@ -587,11 +609,13 @@ class AnalyticsAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.require_org_id()
             months_ahead = input_data.get("months_ahead", 3)
             lo_id = input_data.get("lo_id")
 
-            params = {}
+            params = {"org_id": org_id}
             lo_filter = ""
+            org_filter = "AND organization_id = :org_id"
             if lo_id:
                 lo_filter = "AND assigned_lo = :lo_id"
                 params["lo_id"] = lo_id
@@ -608,6 +632,7 @@ class AnalyticsAgent(SpecializedAgent):
                     AND expected_close_date IS NOT NULL
                     AND expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + :days
                     {lo_filter}
+                    {org_filter}
                 GROUP BY DATE_TRUNC('month', expected_close_date)
                 ORDER BY close_month
             """)
@@ -623,6 +648,7 @@ class AnalyticsAgent(SpecializedAgent):
                 FROM loans
                 WHERE created_at >= CURRENT_DATE - 180
                     {lo_filter}
+                    {org_filter}
             """)
 
             pull_through = db.execute(pull_through_query, params).fetchone()
@@ -690,11 +716,15 @@ class AnalyticsAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.require_org_id()
             start_date = input_data.get("start_date", (date.today() - timedelta(days=90)).isoformat())
             end_date = input_data.get("end_date", date.today().isoformat())
             min_leads = input_data.get("min_leads", 5)
 
-            query = text("""
+            org_filter = "AND organization_id = :org_id"
+            extra_params = {"org_id": org_id}
+
+            query = text(f"""
                 WITH source_stats AS (
                     SELECT
                         source,
@@ -705,6 +735,7 @@ class AnalyticsAgent(SpecializedAgent):
                     FROM leads
                     WHERE created_at BETWEEN :start_date AND :end_date
                         AND source IS NOT NULL
+                        {org_filter}
                     GROUP BY source
                     HAVING COUNT(*) >= :min_leads
                 )
@@ -723,7 +754,8 @@ class AnalyticsAgent(SpecializedAgent):
             results = db.execute(query, {
                 "start_date": start_date,
                 "end_date": end_date,
-                "min_leads": min_leads
+                "min_leads": min_leads,
+                **extra_params
             }).fetchall()
 
             sources = []
@@ -785,15 +817,20 @@ class AnalyticsAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             start_date = input_data.get("start_date", (date.today() - timedelta(days=90)).isoformat())
             end_date = input_data.get("end_date", date.today().isoformat())
 
             params = {"start_date": start_date, "end_date": end_date}
 
             loan_type_filter = ""
+            org_filter = ""
             if input_data.get("loan_type"):
                 loan_type_filter = "AND program ILIKE :loan_type"
                 params["loan_type"] = f"%{input_data['loan_type']}%"
+            if org_id:
+                org_filter = "AND organization_id = :org_id"
+                params["org_id"] = org_id
 
             # Stage duration analysis
             stage_query = text(f"""
@@ -808,6 +845,7 @@ class AnalyticsAgent(SpecializedAgent):
                 WHERE created_at BETWEEN :start_date AND :end_date
                     AND stage NOT IN ('Funded')
                     {loan_type_filter}
+                    {org_filter}
                 GROUP BY stage
             """)
 
@@ -857,6 +895,7 @@ class AnalyticsAgent(SpecializedAgent):
                 WHERE stage = 'Funded'
                     AND updated_at BETWEEN :start_date AND :end_date
                     {loan_type_filter}
+                    {org_filter}
             """)
 
             overall = db.execute(overall_query, params).fetchone()
@@ -891,6 +930,7 @@ class AnalyticsAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             comparison_type = input_data["comparison_type"]
 
             if comparison_type == "period_over_period":
@@ -900,17 +940,24 @@ class AnalyticsAgent(SpecializedAgent):
                 p2_start = input_data.get("period_2_start", (date.today() - timedelta(days=30)).isoformat())
                 p2_end = input_data.get("period_2_end", date.today().isoformat())
 
-                period_query = text("""
+                org_clause = ""
+                org_params = {}
+                if org_id:
+                    org_clause = "AND organization_id = :org_id"
+                    org_params["org_id"] = org_id
+
+                period_query = text(f"""
                     SELECT
                         COUNT(*) as loans,
                         COALESCE(SUM(amount), 0) as volume,
                         COUNT(CASE WHEN stage = 'Funded' THEN 1 END) as funded
                     FROM loans
                     WHERE created_at BETWEEN :start AND :end
+                        {org_clause}
                 """)
 
-                p1 = db.execute(period_query, {"start": p1_start, "end": p1_end}).fetchone()
-                p2 = db.execute(period_query, {"start": p2_start, "end": p2_end}).fetchone()
+                p1 = db.execute(period_query, {"start": p1_start, "end": p1_end, **org_params}).fetchone()
+                p2 = db.execute(period_query, {"start": p2_start, "end": p2_end, **org_params}).fetchone()
 
                 def calc_change(old, new):
                     if old == 0:
@@ -952,7 +999,13 @@ class AnalyticsAgent(SpecializedAgent):
                 if not lo_ids or len(lo_ids) < 2:
                     return ToolResult(success=False, error="Need at least 2 LO IDs to compare")
 
-                query = text("""
+                lo_org_clause = ""
+                lo_org_params = {}
+                if org_id:
+                    lo_org_clause = "AND l.organization_id = :org_id"
+                    lo_org_params["org_id"] = org_id
+
+                query = text(f"""
                     SELECT
                         u.id, u.name,
                         COUNT(l.id) as loans,
@@ -961,12 +1014,13 @@ class AnalyticsAgent(SpecializedAgent):
                     FROM users u
                     LEFT JOIN loans l ON l.assigned_lo = u.id
                         AND l.created_at >= CURRENT_DATE - 30
+                        {lo_org_clause}
                     WHERE u.id = ANY(:lo_ids)
                     GROUP BY u.id, u.name
                     ORDER BY volume DESC
                 """)
 
-                results = db.execute(query, {"lo_ids": lo_ids}).fetchall()
+                results = db.execute(query, {"lo_ids": lo_ids, **lo_org_params}).fetchall()
 
                 los = [
                     {

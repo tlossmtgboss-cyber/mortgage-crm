@@ -12,10 +12,13 @@ Specialized agent for task and calendar management with 8 tools:
 8. get_overdue - Get overdue items needing attention
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -234,8 +237,13 @@ class TaskCalendarAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             conditions = ["1=1"]
             params = {"limit": input_data.get("limit", 50)}
+
+            if org_id:
+                conditions.append("organization_id = :org_id")
+                params["org_id"] = org_id
 
             if input_data.get("status"):
                 conditions.append("status = :status")
@@ -309,12 +317,14 @@ class TaskCalendarAgent(SpecializedAgent):
                 })
 
             # Get status counts
-            count_query = text("""
+            org_clause = "WHERE organization_id = :org_id" if org_id else ""
+            count_query = text(f"""
                 SELECT status, COUNT(*) as count
                 FROM tasks
+                {org_clause}
                 GROUP BY status
             """)
-            counts = db.execute(count_query).fetchall()
+            counts = db.execute(count_query, {"org_id": org_id} if org_id else {}).fetchall()
             status_counts = {c.status: c.count for c in counts}
 
             return ToolResult(
@@ -343,15 +353,17 @@ class TaskCalendarAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
+
             query = text("""
                 INSERT INTO tasks (
                     title, description, entity_type, entity_id,
                     due_date, priority, task_type, status,
-                    assigned_to, created_by, created_at
+                    assigned_to, created_by, organization_id, created_at
                 ) VALUES (
                     :title, :description, :entity_type, :entity_id,
                     :due_date, :priority, :task_type, 'pending',
-                    :assigned_to, :created_by, CURRENT_TIMESTAMP
+                    :assigned_to, :created_by, :organization_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, title, due_date
             """)
@@ -372,10 +384,18 @@ class TaskCalendarAgent(SpecializedAgent):
                 "priority": input_data.get("priority", "normal"),
                 "task_type": input_data.get("task_type", "follow_up"),
                 "assigned_to": input_data.get("assigned_to", context.get("user_id")),
-                "created_by": context.get("user_id", 1)
+                "created_by": context.get("user_id", 1),
+                "organization_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "create_task",
+                entity_type="task",
+                entity_id=result.id,
+                details={"title": input_data["title"], "priority": input_data.get("priority", "normal")}
+            )
 
             return ToolResult(
                 success=True,
@@ -405,10 +425,16 @@ class TaskCalendarAgent(SpecializedAgent):
         db = SessionLocal()
 
         try:
+            org_id = self.context.get("organization_id")
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            task_params = {"task_id": task_id}
+            if org_id:
+                task_params["org_id"] = org_id
+
             # Get current task
             current = db.execute(
-                text("SELECT * FROM tasks WHERE id = :task_id"),
-                {"task_id": task_id}
+                text(f"SELECT * FROM tasks WHERE id = :task_id {org_clause}"),
+                task_params
             ).fetchone()
 
             if not current:
@@ -417,6 +443,8 @@ class TaskCalendarAgent(SpecializedAgent):
             # Build update
             updates = ["updated_at = CURRENT_TIMESTAMP"]
             params = {"task_id": task_id}
+            if org_id:
+                params["org_id"] = org_id
 
             if input_data.get("status"):
                 updates.append("status = :status")
@@ -439,12 +467,19 @@ class TaskCalendarAgent(SpecializedAgent):
             query = text(f"""
                 UPDATE tasks
                 SET {', '.join(updates)}
-                WHERE id = :task_id
+                WHERE id = :task_id {org_clause}
                 RETURNING id, title, status, priority, due_date
             """)
 
             result = db.execute(query, params).fetchone()
             db.commit()
+
+            self.audit_log(
+                "update_task",
+                entity_type="task",
+                entity_id=task_id,
+                details={"status": input_data.get("status"), "priority": input_data.get("priority")}
+            )
 
             return ToolResult(
                 success=True,
@@ -474,14 +509,20 @@ class TaskCalendarAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             start_date = input_data.get("start_date", date.today().isoformat())
             end_date = input_data.get("end_date", (date.today() + timedelta(days=7)).isoformat())
+
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            base_params = {"start_date": start_date, "end_date": end_date}
+            if org_id:
+                base_params["org_id"] = org_id
 
             calendar_items = []
 
             # Get tasks with due dates
             if input_data.get("include_tasks", True):
-                tasks_query = text("""
+                tasks_query = text(f"""
                     SELECT
                         'task' as item_type,
                         id, title, due_date as start_time, NULL as end_time,
@@ -489,12 +530,10 @@ class TaskCalendarAgent(SpecializedAgent):
                     FROM tasks
                     WHERE due_date BETWEEN :start_date AND :end_date
                         AND status != 'cancelled'
+                        {org_clause}
                     ORDER BY due_date
                 """)
-                tasks = db.execute(tasks_query, {
-                    "start_date": start_date,
-                    "end_date": end_date
-                }).fetchall()
+                tasks = db.execute(tasks_query, base_params).fetchall()
 
                 for t in tasks:
                     calendar_items.append({
@@ -511,7 +550,7 @@ class TaskCalendarAgent(SpecializedAgent):
 
             # Get appointments
             if input_data.get("include_appointments", True):
-                appt_query = text("""
+                appt_query = text(f"""
                     SELECT
                         'appointment' as item_type,
                         id, title, start_time, end_time,
@@ -519,12 +558,10 @@ class TaskCalendarAgent(SpecializedAgent):
                     FROM appointments
                     WHERE start_time BETWEEN :start_date AND :end_date
                         AND status != 'cancelled'
+                        {org_clause}
                     ORDER BY start_time
                 """)
-                appointments = db.execute(appt_query, {
-                    "start_date": start_date,
-                    "end_date": end_date
-                }).fetchall()
+                appointments = db.execute(appt_query, base_params).fetchall()
 
                 for a in appointments:
                     calendar_items.append({
@@ -578,6 +615,7 @@ class TaskCalendarAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             start_time = datetime.fromisoformat(input_data["start_time"])
 
             if input_data.get("end_time"):
@@ -589,10 +627,10 @@ class TaskCalendarAgent(SpecializedAgent):
             query = text("""
                 INSERT INTO appointments (
                     title, start_time, end_time, entity_type, entity_id,
-                    location, notes, status, created_by, created_at
+                    location, notes, status, created_by, organization_id, created_at
                 ) VALUES (
                     :title, :start_time, :end_time, :entity_type, :entity_id,
-                    :location, :notes, 'scheduled', :created_by, CURRENT_TIMESTAMP
+                    :location, :notes, 'scheduled', :created_by, :organization_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, title, start_time, end_time
             """)
@@ -605,10 +643,18 @@ class TaskCalendarAgent(SpecializedAgent):
                 "entity_id": input_data.get("entity_id"),
                 "location": input_data.get("location"),
                 "notes": input_data.get("notes"),
-                "created_by": context.get("user_id", 1)
+                "created_by": context.get("user_id", 1),
+                "organization_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "schedule_appointment",
+                entity_type="appointment",
+                entity_id=result.id,
+                details={"title": input_data["title"], "start_time": start_time.isoformat()}
+            )
 
             return ToolResult(
                 success=True,
@@ -637,14 +683,19 @@ class TaskCalendarAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             user_id = input_data.get("user_id", context.get("user_id"))
             include_overdue = input_data.get("include_overdue", True)
 
             params = {}
             user_filter = ""
+            org_filter = ""
             if user_id:
                 user_filter = "AND assigned_to = :user_id"
                 params["user_id"] = user_id
+            if org_id:
+                org_filter = "AND organization_id = :org_id"
+                params["org_id"] = org_id
 
             # Get tasks due today
             if include_overdue:
@@ -661,6 +712,7 @@ class TaskCalendarAgent(SpecializedAgent):
                 WHERE {date_condition}
                     AND status NOT IN ('completed', 'cancelled')
                     {user_filter}
+                    {org_filter}
                 ORDER BY
                     is_overdue DESC,
                     CASE priority
@@ -675,6 +727,12 @@ class TaskCalendarAgent(SpecializedAgent):
             tasks = db.execute(tasks_query, params).fetchall()
 
             # Get appointments today
+            appt_params = {}
+            appt_org_filter = ""
+            if org_id:
+                appt_org_filter = "AND organization_id = :org_id"
+                appt_params["org_id"] = org_id
+
             appt_query = text(f"""
                 SELECT
                     id, title, start_time, end_time, location,
@@ -682,10 +740,11 @@ class TaskCalendarAgent(SpecializedAgent):
                 FROM appointments
                 WHERE DATE(start_time) = CURRENT_DATE
                     AND status != 'cancelled'
+                    {appt_org_filter}
                 ORDER BY start_time
             """)
 
-            appointments = db.execute(appt_query).fetchall()
+            appointments = db.execute(appt_query, appt_params).fetchall()
 
             task_list = []
             overdue_count = 0
@@ -750,31 +809,45 @@ class TaskCalendarAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+
             if item_type == "task":
                 # Reschedule task
                 new_due = new_date
                 if new_time:
                     new_due = f"{new_date}T{new_time}:00"
 
-                query = text("""
+                task_params = {
+                    "item_id": item_id,
+                    "new_due": new_due,
+                    "reschedule_note": f"\n[{datetime.now().isoformat()}] Rescheduled: {reason}"
+                }
+                if org_id:
+                    task_params["org_id"] = org_id
+
+                query = text(f"""
                     UPDATE tasks
                     SET due_date = :new_due,
                         notes = COALESCE(notes, '') || :reschedule_note,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :item_id
+                    WHERE id = :item_id {org_clause}
                     RETURNING id, title, due_date
                 """)
 
-                result = db.execute(query, {
-                    "item_id": item_id,
-                    "new_due": new_due,
-                    "reschedule_note": f"\n[{datetime.now().isoformat()}] Rescheduled: {reason}"
-                }).fetchone()
+                result = db.execute(query, task_params).fetchone()
 
                 if not result:
                     return ToolResult(success=False, error=f"Task {item_id} not found")
 
                 db.commit()
+
+                self.audit_log(
+                    "reschedule_task",
+                    entity_type="task",
+                    entity_id=item_id,
+                    details={"new_date": new_date, "reason": reason}
+                )
 
                 return ToolResult(
                     success=True,
@@ -789,9 +862,12 @@ class TaskCalendarAgent(SpecializedAgent):
 
             elif item_type == "appointment":
                 # Get current appointment for duration
+                appt_params = {"item_id": item_id}
+                if org_id:
+                    appt_params["org_id"] = org_id
                 current = db.execute(
-                    text("SELECT start_time, end_time FROM appointments WHERE id = :item_id"),
-                    {"item_id": item_id}
+                    text(f"SELECT start_time, end_time FROM appointments WHERE id = :item_id {org_clause}"),
+                    appt_params
                 ).fetchone()
 
                 if not current:
@@ -810,24 +886,35 @@ class TaskCalendarAgent(SpecializedAgent):
                 else:
                     new_end = new_start + timedelta(minutes=30)
 
-                query = text("""
+                appt_update_params = {
+                    "item_id": item_id,
+                    "new_start": new_start,
+                    "new_end": new_end,
+                    "reschedule_note": f"\n[{datetime.now().isoformat()}] Rescheduled: {reason}"
+                }
+                if org_id:
+                    appt_update_params["org_id"] = org_id
+
+                query = text(f"""
                     UPDATE appointments
                     SET start_time = :new_start,
                         end_time = :new_end,
                         notes = COALESCE(notes, '') || :reschedule_note,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :item_id
+                    WHERE id = :item_id {org_clause}
                     RETURNING id, title, start_time, end_time
                 """)
 
-                result = db.execute(query, {
-                    "item_id": item_id,
-                    "new_start": new_start,
-                    "new_end": new_end,
-                    "reschedule_note": f"\n[{datetime.now().isoformat()}] Rescheduled: {reason}"
-                }).fetchone()
+                result = db.execute(query, appt_update_params).fetchone()
 
                 db.commit()
+
+                self.audit_log(
+                    "reschedule_appointment",
+                    entity_type="appointment",
+                    entity_id=item_id,
+                    details={"new_start": new_start.isoformat(), "reason": reason}
+                )
 
                 return ToolResult(
                     success=True,
@@ -860,12 +947,17 @@ class TaskCalendarAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             limit = input_data.get("limit", 50)
             user_id = input_data.get("user_id")
             entity_type = input_data.get("entity_type")
 
             params = {"limit": limit}
             conditions = ["due_date < CURRENT_DATE", "status NOT IN ('completed', 'cancelled')"]
+
+            if org_id:
+                conditions.append("organization_id = :org_id")
+                params["org_id"] = org_id
 
             if user_id:
                 conditions.append("assigned_to = :user_id")

@@ -12,9 +12,12 @@ Specialized agent for voice/chat receptionist with 8 tools:
 8. escalate_to_human - Transfer to human agent
 """
 
+import logging
 from typing import Any, Dict, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -214,34 +217,41 @@ class ReceptionistAgent(SpecializedAgent):
         )
 
     async def _lookup_caller(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Look up caller in CRM"""
+        """Look up caller in CRM with tenant isolation"""
         from database import SessionLocal
         from sqlalchemy import text
 
         db = SessionLocal()
         try:
-            conditions = []
-            params = {}
+            search_conditions = []
+            params: dict = {}
 
             if input_data.get("phone"):
-                conditions.append("phone LIKE :phone")
+                search_conditions.append("(phone LIKE :phone)")
                 params["phone"] = f"%{input_data['phone'][-10:]}%"
 
             if input_data.get("email"):
-                conditions.append("email ILIKE :email")
+                search_conditions.append("(email ILIKE :email)")
                 params["email"] = input_data["email"]
 
             if input_data.get("name"):
-                conditions.append("(name ILIKE :name OR first_name ILIKE :name OR last_name ILIKE :name)")
+                search_conditions.append("(first_name ILIKE :name OR last_name ILIKE :name)")
                 params["name"] = f"%{input_data['name']}%"
 
-            if not conditions:
+            if not search_conditions:
                 return ToolResult(success=False, error="No search criteria provided")
 
+            # Tenant isolation
+            org_id = self.context.get("organization_id")
+            org_clause = ""
+            if org_id:
+                org_clause = "AND organization_id = :org_id"
+                params["org_id"] = org_id
+
             query = text(f"""
-                SELECT id, name, first_name, last_name, email, phone, stage, assigned_to
+                SELECT id, first_name, last_name, email, phone, stage, owner_id
                 FROM leads
-                WHERE {' OR '.join(conditions)}
+                WHERE ({' OR '.join(search_conditions)}) {org_clause}
                 LIMIT 5
             """)
 
@@ -249,7 +259,7 @@ class ReceptionistAgent(SpecializedAgent):
 
             matches = []
             for r in results:
-                name = r.name or f"{r.first_name or ''} {r.last_name or ''}".strip()
+                name = f"{r.first_name or ''} {r.last_name or ''}".strip()
                 matches.append({
                     "id": r.id,
                     "name": name,
@@ -259,6 +269,8 @@ class ReceptionistAgent(SpecializedAgent):
                     "type": "lead"
                 })
 
+            self.audit_log("caller_lookup", details={"matches": len(matches)})
+
             return ToolResult(
                 success=True,
                 data={"matches": matches, "count": len(matches)},
@@ -266,6 +278,7 @@ class ReceptionistAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("Error in lookup_caller")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -295,15 +308,23 @@ class ReceptionistAgent(SpecializedAgent):
         )
 
     async def _capture_lead_info(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Capture new lead information"""
+        """Capture new lead information with tenant isolation"""
         from database import SessionLocal
         from sqlalchemy import text
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
+
             query = text("""
-                INSERT INTO leads (first_name, last_name, phone, email, loan_purpose, notes, source, stage, created_at)
-                VALUES (:first_name, :last_name, :phone, :email, :loan_purpose, :notes, 'inbound_call', 'new', CURRENT_TIMESTAMP)
+                INSERT INTO leads (
+                    first_name, last_name, phone, email, loan_purpose,
+                    notes, source, stage, organization_id, created_at
+                )
+                VALUES (
+                    :first_name, :last_name, :phone, :email, :loan_purpose,
+                    :notes, 'inbound_call', 'New', :org_id, CURRENT_TIMESTAMP
+                )
                 RETURNING id
             """)
 
@@ -313,10 +334,18 @@ class ReceptionistAgent(SpecializedAgent):
                 "phone": input_data["phone"],
                 "email": input_data.get("email"),
                 "loan_purpose": input_data.get("loan_purpose"),
-                "notes": input_data.get("notes")
+                "notes": input_data.get("notes"),
+                "org_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "lead_captured",
+                entity_type="lead",
+                entity_id=str(result.id),
+                details={"source": "inbound_call"}
+            )
 
             return ToolResult(
                 success=True,
@@ -326,6 +355,7 @@ class ReceptionistAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception("Error in capture_lead_info")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -366,14 +396,33 @@ class ReceptionistAgent(SpecializedAgent):
             db.close()
 
     async def _provide_loan_status(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Provide loan status to verified caller"""
+        """Provide loan status to verified caller.
+
+        SECURITY: Requires last_four_ssn for identity verification before
+        disclosing ANY loan information (PII protection / GLBA compliance).
+        """
         from database import SessionLocal
         from sqlalchemy import text
 
+        # --- Identity verification gate ---
+        last_four_ssn = input_data.get("last_four_ssn")
+        if not last_four_ssn or len(str(last_four_ssn)) != 4:
+            self.audit_log("loan_status_denied", details={"reason": "missing_identity_verification"})
+            return ToolResult(
+                success=False,
+                error="identity_verification_required",
+                message="For your security, I need the last 4 digits of the borrower's SSN to look up loan status."
+            )
+
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             conditions = []
-            params = {}
+            params: dict = {}
+
+            if org_id:
+                conditions.append("l.organization_id = :org_id")
+                params["org_id"] = org_id
 
             if input_data.get("loan_id"):
                 conditions.append("l.id = :loan_id")
@@ -384,40 +433,59 @@ class ReceptionistAgent(SpecializedAgent):
             else:
                 return ToolResult(success=False, error="No loan identifier provided")
 
+            # Verify SSN match (last 4 stored on borrower profile or loan)
+            conditions.append("RIGHT(COALESCE(l.borrower_ssn, ''), 4) = :ssn_last4")
+            params["ssn_last4"] = str(last_four_ssn)
+
+            where_sql = " AND ".join(conditions)
+
             query = text(f"""
-                SELECT l.id, l.loan_number, l.status, l.borrower_name, l.loan_amount, l.expected_close_date
+                SELECT l.id, l.loan_number, l.stage, l.borrower_name, l.loan_amount, l.closing_date
                 FROM loans l
-                WHERE {' AND '.join(conditions)}
+                WHERE {where_sql}
                 LIMIT 1
             """)
 
             result = db.execute(query, params).fetchone()
 
             if not result:
-                return ToolResult(success=False, error="Loan not found")
+                self.audit_log("loan_status_denied", details={"reason": "no_match_or_ssn_mismatch"})
+                return ToolResult(
+                    success=False,
+                    error="Unable to verify identity. Please check the information and try again."
+                )
 
             status_messages = {
-                "processing": "Your loan is currently being processed",
-                "underwriting": "Your loan is in underwriting review",
-                "approved": "Great news! Your loan has been approved",
-                "clear_to_close": "Your loan is cleared to close",
-                "funded": "Your loan has been funded"
+                "PROCESSING": "Your loan is currently being processed",
+                "UNDERWRITING": "Your loan is in underwriting review",
+                "APPROVED": "Great news! Your loan has been approved",
+                "CLEAR_TO_CLOSE": "Your loan is cleared to close",
+                "CTC": "Your loan is cleared to close",
+                "FUNDED": "Your loan has been funded"
             }
 
-            message = status_messages.get(result.status, f"Your loan status is: {result.status}")
+            message = status_messages.get(result.stage, f"Your loan status is: {result.stage}")
+
+            self.audit_log(
+                "loan_status_provided",
+                entity_type="loan",
+                entity_id=str(result.id),
+                details={"verified": True}
+            )
 
             return ToolResult(
                 success=True,
                 data={
                     "loan_number": result.loan_number,
-                    "status": result.status,
+                    "status": result.stage,
                     "borrower": result.borrower_name,
-                    "expected_close": result.expected_close_date.isoformat() if result.expected_close_date else None
+                    "expected_close": result.closing_date.isoformat() if result.closing_date else None
                 },
                 message=message
             )
 
         except Exception as e:
+            logger.exception("Error in provide_loan_status")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()

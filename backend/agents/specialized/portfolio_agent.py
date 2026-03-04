@@ -216,6 +216,7 @@ class PortfolioAgent(SpecializedAgent):
             lo_id = input_data.get("lo_id")
             funded_after = input_data.get("funded_after")
 
+            org_id = self.context.get("organization_id")
             params = {}
             conditions = ["stage = 'Funded'"]
 
@@ -226,6 +227,10 @@ class PortfolioAgent(SpecializedAgent):
             if funded_after:
                 conditions.append("funded_date >= :funded_after")
                 params["funded_after"] = funded_after
+
+            if org_id:
+                conditions.append("organization_id = :org_id")
+                params["org_id"] = org_id
 
             where_clause = " AND ".join(conditions)
 
@@ -326,8 +331,15 @@ class PortfolioAgent(SpecializedAgent):
         db = SessionLocal()
 
         try:
+            org_id = self.context.get("organization_id")
+            org_clause = ""
+            params = {"loan_id": loan_id}
+            if org_id:
+                org_clause = "AND l.organization_id = :org_id"
+                params["org_id"] = org_id
+
             # Get loan details
-            loan_query = text("""
+            loan_query = text(f"""
                 SELECT
                     l.*,
                     u.name as lo_name,
@@ -335,9 +347,10 @@ class PortfolioAgent(SpecializedAgent):
                 FROM loans l
                 LEFT JOIN users u ON l.assigned_lo = u.id
                 WHERE l.id = :loan_id AND l.stage = 'Funded'
+                    {org_clause}
             """)
 
-            loan = db.execute(loan_query, {"loan_id": loan_id}).fetchone()
+            loan = db.execute(loan_query, params).fetchone()
 
             if not loan:
                 return ToolResult(success=False, error=f"Funded loan {loan_id} not found")
@@ -417,6 +430,7 @@ class PortfolioAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             rate_threshold = input_data.get("rate_drop_threshold", 0.5)
             min_equity = input_data.get("min_equity_percent", 20)
             min_months = input_data.get("min_months_since_close", 6)
@@ -424,7 +438,13 @@ class PortfolioAgent(SpecializedAgent):
             # Current market rate (would come from rate service in production)
             current_market_rate = 6.5
 
-            query = text("""
+            org_clause = ""
+            extra_params = {}
+            if org_id:
+                org_clause = "AND l.organization_id = :org_id"
+                extra_params["org_id"] = org_id
+
+            query = text(f"""
                 SELECT
                     l.id, l.loan_number, l.borrower_name, l.borrower_email,
                     l.amount, l.rate, l.property_value, l.program,
@@ -434,12 +454,14 @@ class PortfolioAgent(SpecializedAgent):
                 WHERE l.stage = 'Funded'
                     AND l.rate > :target_rate
                     AND l.funded_date <= CURRENT_DATE - INTERVAL ':min_months months'
+                    {org_clause}
                 ORDER BY l.rate DESC
             """)
 
             results = db.execute(query, {
                 "target_rate": current_market_rate + rate_threshold,
-                "min_months": min_months
+                "min_months": min_months,
+                **extra_params
             }).fetchall()
 
             candidates = []
@@ -506,14 +528,21 @@ class PortfolioAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             days_ahead = input_data.get("days_ahead", 30)
             anniversary_type = input_data.get("anniversary_type", "all")
+
+            org_clause = ""
+            org_params = {}
+            if org_id:
+                org_clause = "AND organization_id = :org_id"
+                org_params["org_id"] = org_id
 
             clients = []
 
             if anniversary_type in ["funding", "all"]:
                 # Loan funding anniversaries
-                funding_query = text("""
+                funding_query = text(f"""
                     SELECT
                         id, loan_number, borrower_name, borrower_email,
                         funded_date,
@@ -525,6 +554,7 @@ class PortfolioAgent(SpecializedAgent):
                     FROM loans
                     WHERE stage = 'Funded'
                         AND funded_date IS NOT NULL
+                        {org_clause}
                         AND (
                             (EXTRACT(MONTH FROM funded_date) = EXTRACT(MONTH FROM CURRENT_DATE)
                              AND EXTRACT(DAY FROM funded_date) BETWEEN EXTRACT(DAY FROM CURRENT_DATE)
@@ -536,7 +566,7 @@ class PortfolioAgent(SpecializedAgent):
                     ORDER BY days_until
                 """)
 
-                funding_results = db.execute(funding_query, {"days": days_ahead}).fetchall()
+                funding_results = db.execute(funding_query, {"days": days_ahead, **org_params}).fetchall()
 
                 for r in funding_results:
                     clients.append({
@@ -620,6 +650,7 @@ class PortfolioAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             loan_ids = input_data.get("loan_ids")
             appreciation_rate = input_data.get("appreciation_rate", 5.0)
 
@@ -631,6 +662,11 @@ class PortfolioAgent(SpecializedAgent):
             else:
                 id_filter = ""
 
+            org_clause = ""
+            if org_id:
+                org_clause = "AND organization_id = :org_id"
+                params["org_id"] = org_id
+
             query = text(f"""
                 SELECT
                     id, loan_number, borrower_name,
@@ -641,6 +677,7 @@ class PortfolioAgent(SpecializedAgent):
                     AND property_value IS NOT NULL
                     AND amount IS NOT NULL
                     {id_filter}
+                    {org_clause}
                 ORDER BY funded_date
             """)
 
@@ -719,8 +756,15 @@ class PortfolioAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             risk_threshold = input_data.get("risk_threshold", "medium")
             limit = input_data.get("limit", 50)
+
+            org_clause = ""
+            extra_params = {}
+            if org_id:
+                org_clause = "AND l.organization_id = :org_id"
+                extra_params["org_id"] = org_id
 
             # Risk factors:
             # - High rate compared to market
@@ -728,7 +772,7 @@ class PortfolioAgent(SpecializedAgent):
             # - High equity (refi target)
             # - Near rate adjustment date (for ARMs)
 
-            query = text("""
+            query = text(f"""
                 SELECT
                     l.id, l.loan_number, l.borrower_name, l.borrower_email,
                     l.amount, l.rate, l.property_value, l.program,
@@ -741,11 +785,12 @@ class PortfolioAgent(SpecializedAgent):
                     ) as last_contact
                 FROM loans l
                 WHERE l.stage = 'Funded'
+                    {org_clause}
                 ORDER BY l.rate DESC
                 LIMIT :limit
             """)
 
-            results = db.execute(query, {"limit": limit * 2}).fetchall()
+            results = db.execute(query, {"limit": limit * 2, **extra_params}).fetchall()
 
             # Current market rate
             market_rate = 6.5
@@ -844,13 +889,15 @@ class PortfolioAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
+
             query = text("""
                 INSERT INTO client_touchpoints (
                     loan_id, touchpoint_type, notes,
-                    next_touchpoint_date, created_by, created_at
+                    next_touchpoint_date, created_by, organization_id, created_at
                 ) VALUES (
                     :loan_id, :touchpoint_type, :notes,
-                    :next_date, :created_by, CURRENT_TIMESTAMP
+                    :next_date, :created_by, :org_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, touchpoint_type, created_at
             """)
@@ -860,10 +907,21 @@ class PortfolioAgent(SpecializedAgent):
                 "touchpoint_type": input_data["touchpoint_type"],
                 "notes": input_data["notes"],
                 "next_date": input_data.get("next_touchpoint_date"),
-                "created_by": context.get("user_id", 1)
+                "created_by": context.get("user_id", 1),
+                "org_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "create_touchpoint",
+                entity_type="client_touchpoint",
+                entity_id=str(result.id),
+                details={
+                    "loan_id": input_data["loan_id"],
+                    "touchpoint_type": input_data["touchpoint_type"]
+                }
+            )
 
             return ToolResult(
                 success=True,
@@ -892,13 +950,20 @@ class PortfolioAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             min_satisfaction = input_data.get("min_satisfaction_score", 8)
             min_months = input_data.get("min_months_since_close", 3)
+
+            org_clause = ""
+            extra_params = {}
+            if org_id:
+                org_clause = "AND l.organization_id = :org_id"
+                extra_params["org_id"] = org_id
 
             # In production, this would check NPS scores, review history, etc.
             # For now, base on engagement and loan success
 
-            query = text("""
+            query = text(f"""
                 SELECT
                     l.id, l.loan_number, l.borrower_name, l.borrower_email,
                     l.funded_date, l.program,
@@ -916,10 +981,11 @@ class PortfolioAgent(SpecializedAgent):
                 FROM loans l
                 WHERE l.stage = 'Funded'
                     AND l.funded_date <= CURRENT_DATE - INTERVAL ':min_months months'
+                    {org_clause}
                 ORDER BY l.funded_date DESC
             """)
 
-            results = db.execute(query, {"min_months": min_months}).fetchall()
+            results = db.execute(query, {"min_months": min_months, **extra_params}).fetchall()
 
             opportunities = []
             for r in results:

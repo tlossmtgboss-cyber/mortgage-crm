@@ -12,10 +12,13 @@ Specialized agent for loan pipeline management with 8 tools:
 8. get_stale_loans - Find stuck/stale loans
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -212,9 +215,10 @@ class LoanPipelineAgent(SpecializedAgent):
         try:
             date_range = input_data.get("date_range", 30)
             lo_id = input_data.get("lo_id")
+            org_id = self.require_org_id()
 
             lo_filter = "AND assigned_lo = :lo_id" if lo_id else ""
-            params = {"date_range": date_range}
+            params = {"date_range": date_range, "org_id": org_id}
             if lo_id:
                 params["lo_id"] = lo_id
 
@@ -236,6 +240,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     COUNT(CASE WHEN expected_close_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30 THEN 1 END) as closing_this_month
                 FROM loans
                 WHERE stage NOT IN ('Funded')
+                    AND organization_id = :org_id
                     AND created_at >= CURRENT_DATE - :date_range
                     {lo_filter}
             """)
@@ -259,6 +264,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     AVG(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as avg_days
                 FROM loans
                 WHERE stage NOT IN ('Funded')
+                    AND organization_id = :org_id
                     {lo_filter}
                 GROUP BY stage
             """)
@@ -273,6 +279,11 @@ class LoanPipelineAgent(SpecializedAgent):
                     "volume": float(s.stage_volume) if s.stage_volume else 0,
                     "avg_days": round(float(s.avg_days or 0), 1)
                 })
+
+            self.audit_log("get_pipeline_metrics", details={
+                "total_loans": result.total_loans,
+                "date_range": date_range,
+            })
 
             return ToolResult(
                 success=True,
@@ -301,6 +312,7 @@ class LoanPipelineAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("get_pipeline_metrics failed")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -317,6 +329,7 @@ class LoanPipelineAgent(SpecializedAgent):
         limit = input_data.get("limit", 50)
         lo_id = input_data.get("lo_id")
         sort_by = input_data.get("sort_by", "days_in_stage")
+        org_id = self.require_org_id()
 
         sort_mapping = {
             "days_in_stage": "days_in_stage DESC",
@@ -327,7 +340,7 @@ class LoanPipelineAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
-            params = {"status": status, "limit": limit}
+            params = {"status": status, "limit": limit, "org_id": org_id}
             lo_filter = ""
             if lo_id:
                 lo_filter = "AND assigned_lo = :lo_id"
@@ -341,6 +354,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     updated_at
                 FROM loans
                 WHERE stage = :status
+                    AND organization_id = :org_id
                     {lo_filter}
                 ORDER BY {order_by}
                 LIMIT :limit
@@ -375,6 +389,12 @@ class LoanPipelineAgent(SpecializedAgent):
 
             aging_count = sum(1 for l in loans if l["is_aging"])
 
+            self.audit_log("get_loans_by_status", "loan", details={
+                "status": status,
+                "result_count": len(loans),
+                "aging_count": aging_count,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -388,6 +408,7 @@ class LoanPipelineAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"get_loans_by_status failed for status {status}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -401,11 +422,14 @@ class LoanPipelineAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
+        org_id = self.require_org_id()
         db = SessionLocal()
 
         try:
-            query = text("SELECT * FROM loans WHERE id = :loan_id")
-            result = db.execute(query, {"loan_id": loan_id}).fetchone()
+            params = {"loan_id": loan_id, "org_id": org_id}
+
+            query = text("SELECT * FROM loans WHERE id = :loan_id AND organization_id = :org_id")
+            result = db.execute(query, params).fetchone()
 
             if not result:
                 return ToolResult(success=False, error=f"Loan {loan_id} not found")
@@ -415,12 +439,13 @@ class LoanPipelineAgent(SpecializedAgent):
             # Get conditions if requested
             if input_data.get("include_conditions", True):
                 cond_query = text("""
-                    SELECT condition_type, description, status, due_date, cleared_date
-                    FROM loan_conditions
-                    WHERE loan_id = :loan_id
-                    ORDER BY status, due_date
+                    SELECT lc.condition_type, lc.description, lc.status, lc.due_date, lc.cleared_date
+                    FROM loan_conditions lc
+                    JOIN loans l ON l.id = lc.loan_id AND l.organization_id = :org_id
+                    WHERE lc.loan_id = :loan_id
+                    ORDER BY lc.status, lc.due_date
                 """)
-                conditions = db.execute(cond_query, {"loan_id": loan_id}).fetchall()
+                conditions = db.execute(cond_query, {"loan_id": loan_id, "org_id": org_id}).fetchall()
                 loan_data["conditions"] = [
                     {
                         "type": c.condition_type,
@@ -436,13 +461,14 @@ class LoanPipelineAgent(SpecializedAgent):
             # Get timeline if requested
             if input_data.get("include_timeline", True):
                 timeline_query = text("""
-                    SELECT from_stage, to_stage, changed_at, changed_by, reason
-                    FROM loan_stage_history
-                    WHERE loan_id = :loan_id
-                    ORDER BY changed_at DESC
+                    SELECT lsh.from_stage, lsh.to_stage, lsh.changed_at, lsh.changed_by, lsh.reason
+                    FROM loan_stage_history lsh
+                    JOIN loans l ON l.id = lsh.loan_id AND l.organization_id = :org_id
+                    WHERE lsh.loan_id = :loan_id
+                    ORDER BY lsh.changed_at DESC
                     LIMIT 20
                 """)
-                timeline = db.execute(timeline_query, {"loan_id": loan_id}).fetchall()
+                timeline = db.execute(timeline_query, {"loan_id": loan_id, "org_id": org_id}).fetchall()
                 loan_data["stage_timeline"] = [
                     {
                         "from_stage": t.from_stage,
@@ -453,6 +479,8 @@ class LoanPipelineAgent(SpecializedAgent):
                     for t in timeline
                 ]
 
+            self.audit_log("get_loan_details", "loan", entity_id=loan_id)
+
             return ToolResult(
                 success=True,
                 data={"loan": loan_data},
@@ -460,6 +488,7 @@ class LoanPipelineAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"get_loan_details failed for loan {loan_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -475,6 +504,7 @@ class LoanPipelineAgent(SpecializedAgent):
         loan_id = input_data["loan_id"]
         new_status = input_data["new_status"]
         reason = input_data.get("reason", "AI agent update")
+        org_id = self.require_org_id()
 
         valid_statuses = ["application", "processing", "underwriting", "conditional",
                          "clear_to_close", "closing", "funded", "denied", "cancelled"]
@@ -486,10 +516,12 @@ class LoanPipelineAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
-            # Get current status
+            # Get current status with tenant isolation
+            params = {"loan_id": loan_id, "org_id": org_id}
+
             current = db.execute(
-                text("SELECT stage, borrower_name FROM loans WHERE id = :loan_id"),
-                {"loan_id": loan_id}
+                text("SELECT stage, borrower_name FROM loans WHERE id = :loan_id AND organization_id = :org_id"),
+                params
             ).fetchone()
 
             if not current:
@@ -497,14 +529,14 @@ class LoanPipelineAgent(SpecializedAgent):
 
             old_status = current.stage
 
-            # Update status
+            # Update status with tenant isolation
             db.execute(
                 text("""
                     UPDATE loans
                     SET stage = :new_status, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :loan_id
+                    WHERE id = :loan_id AND organization_id = :org_id
                 """),
-                {"loan_id": loan_id, "new_status": new_status}
+                {"loan_id": loan_id, "new_status": new_status, "org_id": org_id}
             )
 
             # Record history
@@ -525,6 +557,12 @@ class LoanPipelineAgent(SpecializedAgent):
 
             db.commit()
 
+            self.audit_log("update_loan_status", "loan", entity_id=loan_id, details={
+                "old_status": old_status,
+                "new_status": new_status,
+                "reason": reason,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -538,6 +576,7 @@ class LoanPipelineAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"update_loan_status failed for loan {loan_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -553,7 +592,8 @@ class LoanPipelineAgent(SpecializedAgent):
         db = SessionLocal()
         try:
             lo_id = input_data.get("lo_id")
-            params = {}
+            org_id = self.require_org_id()
+            params = {"org_id": org_id}
             lo_filter = ""
             if lo_id:
                 lo_filter = "AND assigned_lo = :lo_id"
@@ -572,6 +612,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     COUNT(CASE WHEN EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at) > 14 THEN 1 END) as bucket_14_plus
                 FROM loans
                 WHERE stage NOT IN ('Funded')
+                    AND organization_id = :org_id
                     {lo_filter}
                 GROUP BY stage
             """)
@@ -627,6 +668,11 @@ class LoanPipelineAgent(SpecializedAgent):
             # Find worst bottleneck
             bottleneck = max(stages, key=lambda s: s["avg_days"]) if stages else None
 
+            self.audit_log("get_loan_aging", "loan", details={
+                "total_at_risk": total_at_risk,
+                "total_critical": total_critical,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -642,6 +688,7 @@ class LoanPipelineAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("get_loan_aging failed")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -657,7 +704,8 @@ class LoanPipelineAgent(SpecializedAgent):
         db = SessionLocal()
         try:
             branch_id = input_data.get("branch_id")
-            params = {}
+            org_id = self.require_org_id()
+            params = {"org_id": org_id}
             branch_filter = ""
             if branch_id:
                 branch_filter = "AND branch_id = :branch_id"
@@ -672,6 +720,7 @@ class LoanPipelineAgent(SpecializedAgent):
                     MAX(EXTRACT(DAY FROM CURRENT_TIMESTAMP - updated_at)) as max_days
                 FROM loans
                 WHERE stage NOT IN ('Funded')
+                    AND organization_id = :org_id
                     {branch_filter}
                 GROUP BY stage
             """)
@@ -729,6 +778,11 @@ class LoanPipelineAgent(SpecializedAgent):
 
             primary = bottlenecks[0] if bottlenecks else None
 
+            self.audit_log("find_bottlenecks", "loan", details={
+                "bottleneck_count": len(bottlenecks),
+                "primary_bottleneck": primary["stage"] if primary else None,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -744,6 +798,7 @@ class LoanPipelineAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("find_bottlenecks failed")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -760,6 +815,7 @@ class LoanPipelineAgent(SpecializedAgent):
         try:
             loan_id = input_data.get("loan_id")
             lo_id = input_data.get("lo_id")
+            org_id = self.require_org_id()
 
             # Historical average days per stage
             historical_durations = {
@@ -775,14 +831,16 @@ class LoanPipelineAgent(SpecializedAgent):
                           "conditional", "clear_to_close", "closing", "funded"]
 
             if loan_id:
-                # Single loan prediction
+                # Single loan prediction with tenant isolation
+                params = {"loan_id": loan_id, "org_id": org_id}
+
                 loan = db.execute(
                     text("""
                         SELECT id, loan_number, borrower_name, stage,
                                updated_at, expected_close_date, amount
-                        FROM loans WHERE id = :loan_id
+                        FROM loans WHERE id = :loan_id AND organization_id = :org_id
                     """),
-                    {"loan_id": loan_id}
+                    params
                 ).fetchone()
 
                 if not loan:
@@ -824,11 +882,11 @@ class LoanPipelineAgent(SpecializedAgent):
                 )
 
             # Pipeline prediction
-            params = {}
+            pipeline_params = {"org_id": org_id}
             lo_filter = ""
             if lo_id:
                 lo_filter = "AND assigned_lo = :lo_id"
-                params["lo_id"] = lo_id
+                pipeline_params["lo_id"] = lo_id
 
             loans = db.execute(
                 text(f"""
@@ -836,11 +894,12 @@ class LoanPipelineAgent(SpecializedAgent):
                            expected_close_date, amount
                     FROM loans
                     WHERE stage NOT IN ('Funded')
+                        AND organization_id = :org_id
                         {lo_filter}
                     ORDER BY expected_close_date ASC NULLS LAST
                     LIMIT 100
                 """),
-                params
+                pipeline_params
             ).fetchall()
 
             if not loans:
@@ -883,6 +942,12 @@ class LoanPipelineAgent(SpecializedAgent):
             on_track_count = sum(1 for p in predictions if p["on_track"])
             at_risk_count = len(predictions) - on_track_count
 
+            self.audit_log("predict_closing", "loan", details={
+                "total_predictions": len(predictions),
+                "on_track": on_track_count,
+                "at_risk": at_risk_count,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -897,6 +962,7 @@ class LoanPipelineAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("predict_closing failed")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -911,9 +977,12 @@ class LoanPipelineAgent(SpecializedAgent):
 
         threshold_days = input_data.get("threshold_days", 7)
         limit = input_data.get("limit", 50)
+        org_id = self.require_org_id()
 
         db = SessionLocal()
         try:
+            params = {"days": threshold_days, "limit": limit, "org_id": org_id}
+
             query = text("""
                 SELECT
                     id, loan_number, borrower_name, stage, amount,
@@ -921,12 +990,13 @@ class LoanPipelineAgent(SpecializedAgent):
                     updated_at
                 FROM loans
                 WHERE stage NOT IN ('Funded')
+                    AND organization_id = :org_id
                     AND updated_at < CURRENT_TIMESTAMP - INTERVAL ':days days'
                 ORDER BY updated_at ASC
                 LIMIT :limit
             """)
 
-            results = db.execute(query, {"days": threshold_days, "limit": limit}).fetchall()
+            results = db.execute(query, params).fetchall()
 
             stale_loans = []
             total_volume = 0
@@ -944,6 +1014,12 @@ class LoanPipelineAgent(SpecializedAgent):
                     "last_activity": r.updated_at.isoformat() if r.updated_at else None
                 })
 
+            self.audit_log("get_stale_loans", "loan", details={
+                "threshold_days": threshold_days,
+                "stale_count": len(stale_loans),
+                "volume_at_risk": total_volume,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -956,6 +1032,7 @@ class LoanPipelineAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception("get_stale_loans failed")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()

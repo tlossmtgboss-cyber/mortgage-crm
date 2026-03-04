@@ -15,6 +15,7 @@ Specialized agent for SaaS subscription and billing management with 8 tools:
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+import logging
 
 from .base import (
     SpecializedAgent,
@@ -25,6 +26,8 @@ from .base import (
     ToolResult,
     AgentRegistry
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -173,8 +176,11 @@ class SubscriptionAgent(SpecializedAgent):
 
     async def _get_subscription_status(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Get current subscription status"""
-        # Simulated subscription data (would come from billing system)
+        org_id = self.require_org_id()
+
+        # Simulated subscription data (would come from billing system scoped to org)
         subscription = {
+            "organization_id": org_id,
             "plan": "professional",
             "status": "active",
             "billing_cycle": "monthly",
@@ -210,6 +216,8 @@ class SubscriptionAgent(SpecializedAgent):
 
     async def _list_available_plans(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """List available plans"""
+        org_id = self.require_org_id()
+
         plans = [
             {
                 "id": "starter",
@@ -255,13 +263,21 @@ class SubscriptionAgent(SpecializedAgent):
 
     async def _upgrade_subscription(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Upgrade subscription"""
+        org_id = self.require_org_id()
         new_plan = input_data["new_plan"]
         billing_cycle = input_data.get("billing_cycle", "monthly")
+
+        self.audit_log(
+            action="upgrade_subscription",
+            entity_type="subscription",
+            details={"new_plan": new_plan, "billing_cycle": billing_cycle, "organization_id": org_id}
+        )
 
         return ToolResult(
             success=True,
             data={
                 "action": "upgrade",
+                "organization_id": org_id,
                 "new_plan": new_plan,
                 "billing_cycle": billing_cycle,
                 "effective_immediately": True,
@@ -272,10 +288,19 @@ class SubscriptionAgent(SpecializedAgent):
 
     async def _downgrade_subscription(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Downgrade subscription"""
+        org_id = self.require_org_id()
+
+        self.audit_log(
+            action="downgrade_subscription",
+            entity_type="subscription",
+            details={"new_plan": input_data["new_plan"], "organization_id": org_id}
+        )
+
         return ToolResult(
             success=True,
             data={
                 "action": "downgrade",
+                "organization_id": org_id,
                 "new_plan": input_data["new_plan"],
                 "effective_date": input_data.get("effective_date") or "end_of_period"
             },
@@ -284,7 +309,9 @@ class SubscriptionAgent(SpecializedAgent):
 
     async def _get_billing_history(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Get billing history"""
-        # Simulated billing history
+        org_id = self.require_org_id()
+
+        # Simulated billing history (would query billing records scoped to org)
         history = []
         for i in range(min(input_data.get("limit", 12), 12)):
             date = datetime.now() - timedelta(days=30 * i)
@@ -298,15 +325,24 @@ class SubscriptionAgent(SpecializedAgent):
 
         return ToolResult(
             success=True,
-            data={"history": history, "total_records": len(history)},
+            data={"organization_id": org_id, "history": history, "total_records": len(history)},
             message=f"Retrieved {len(history)} billing records"
         )
 
     async def _update_payment_method(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Update payment method"""
+        org_id = self.require_org_id()
+
+        self.audit_log(
+            action="update_payment_method",
+            entity_type="payment_method",
+            details={"payment_type": input_data["payment_type"], "organization_id": org_id}
+        )
+
         return ToolResult(
             success=True,
             data={
+                "organization_id": org_id,
                 "payment_type": input_data["payment_type"],
                 "updated": True,
                 "verified": True
@@ -316,6 +352,8 @@ class SubscriptionAgent(SpecializedAgent):
 
     async def _calculate_proration(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Calculate proration for plan change"""
+        org_id = self.require_org_id()
+
         plan_prices = {"starter": 99, "professional": 299, "team": 599}
 
         from_price = plan_prices.get(input_data["from_plan"], 0)
@@ -332,6 +370,7 @@ class SubscriptionAgent(SpecializedAgent):
         return ToolResult(
             success=True,
             data={
+                "organization_id": org_id,
                 "from_plan": input_data["from_plan"],
                 "to_plan": input_data["to_plan"],
                 "days_remaining": days_remaining,
@@ -344,10 +383,23 @@ class SubscriptionAgent(SpecializedAgent):
 
     async def _cancel_subscription(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Cancel subscription"""
+        org_id = self.require_org_id()
+
+        self.audit_log(
+            action="cancel_subscription",
+            entity_type="subscription",
+            details={
+                "reason": input_data["reason"],
+                "immediate": input_data.get("immediate", False),
+                "organization_id": org_id,
+            }
+        )
+
         return ToolResult(
             success=True,
             data={
                 "action": "cancel",
+                "organization_id": org_id,
                 "reason": input_data["reason"],
                 "feedback": input_data.get("feedback"),
                 "effective": "immediate" if input_data.get("immediate") else "end_of_period",

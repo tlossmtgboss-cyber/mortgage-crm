@@ -12,6 +12,7 @@ Specialized agent for SLA monitoring and milestone tracking with 8 tools:
 8. generate_sla_report - Generate SLA compliance report
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
@@ -25,6 +26,8 @@ from .base import (
     ToolResult,
     AgentRegistry
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -174,6 +177,7 @@ class SLAAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             if input_data.get("loan_id"):
@@ -185,8 +189,9 @@ class SLAAgent(SpecializedAgent):
                         l.clear_to_close_at, l.expected_close_date
                     FROM loans l
                     WHERE l.id = :loan_id
+                    AND l.organization_id = :org_id
                 """)
-                result = db.execute(query, {"loan_id": input_data["loan_id"]}).fetchone()
+                result = db.execute(query, {"loan_id": input_data["loan_id"], "org_id": org_id}).fetchone()
 
                 if not result:
                     return ToolResult(success=False, error="Loan not found")
@@ -218,9 +223,10 @@ class SLAAgent(SpecializedAgent):
                         COUNT(CASE WHEN expected_close_date < CURRENT_DATE THEN 1 END) as past_due
                     FROM loans
                     WHERE status NOT IN ('funded', 'cancelled', 'denied')
+                    AND organization_id = :org_id
                     GROUP BY status
                 """)
-                results = db.execute(query).fetchall()
+                results = db.execute(query, {"org_id": org_id}).fetchall()
 
                 status_data = {
                     "by_status": [
@@ -251,12 +257,13 @@ class SLAAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
-                SELECT * FROM loans WHERE id = :loan_id
+                SELECT * FROM loans WHERE id = :loan_id AND organization_id = :org_id
             """)
-            result = db.execute(query, {"loan_id": input_data["loan_id"]}).fetchone()
+            result = db.execute(query, {"loan_id": input_data["loan_id"], "org_id": org_id}).fetchone()
 
             if not result:
                 return ToolResult(success=False, error="Loan not found")
@@ -306,9 +313,10 @@ class SLAAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            params = {"limit": input_data.get("limit", 20)}
+            params = {"limit": input_data.get("limit", 20), "org_id": org_id}
 
             lo_filter = ""
             if input_data.get("lo_id"):
@@ -323,6 +331,7 @@ class SLAAgent(SpecializedAgent):
                 FROM loans l
                 LEFT JOIN users u ON u.id = l.loan_officer_id
                 WHERE l.status NOT IN ('funded', 'cancelled', 'denied')
+                AND l.organization_id = :org_id
                 {lo_filter}
                 AND l.status_changed_at < CURRENT_TIMESTAMP - INTERVAL '3 days'
                 ORDER BY l.status_changed_at ASC
@@ -360,6 +369,7 @@ class SLAAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
@@ -371,9 +381,10 @@ class SLAAgent(SpecializedAgent):
                 FROM loans
                 WHERE created_at >= CURRENT_DATE - :days
                 AND status = 'funded'
+                AND organization_id = :org_id
             """)
 
-            result = db.execute(query, {"days": input_data.get("period_days", 30)}).fetchone()
+            result = db.execute(query, {"days": input_data.get("period_days", 30), "org_id": org_id}).fetchone()
 
             metrics = {
                 "period_days": input_data.get("period_days", 30),
@@ -442,10 +453,11 @@ class SLAAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
-            query = text("SELECT status, created_at FROM loans WHERE id = :loan_id")
-            result = db.execute(query, {"loan_id": input_data["loan_id"]}).fetchone()
+            query = text("SELECT status, created_at FROM loans WHERE id = :loan_id AND organization_id = :org_id")
+            result = db.execute(query, {"loan_id": input_data["loan_id"], "org_id": org_id}).fetchone()
 
             if not result:
                 return ToolResult(success=False, error="Loan not found")

@@ -12,10 +12,13 @@ Specialized agent for document processing and management with 8 tools:
 8. expire_document - Mark document as expired (needs renewal)
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -301,9 +304,23 @@ class DocumentAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            entity_type = input_data["entity_type"]
+            entity_id = input_data["entity_id"]
+            org_id = self.context.get("organization_id")
+
+            # Verify entity belongs to org
+            if org_id:
+                table = "leads" if entity_type == "lead" else "loans"
+                owner_check = db.execute(
+                    text(f"SELECT id FROM {table} WHERE id = :entity_id AND organization_id = :org_id"),
+                    {"entity_id": entity_id, "org_id": org_id}
+                ).fetchone()
+                if not owner_check:
+                    return ToolResult(success=False, error=f"{entity_type.title()} {entity_id} not found")
+
             params = {
-                "entity_type": input_data["entity_type"],
-                "entity_id": input_data["entity_id"]
+                "entity_type": entity_type,
+                "entity_id": entity_id
             }
 
             category_filter = ""
@@ -365,11 +382,17 @@ class DocumentAgent(SpecializedAgent):
                     by_category[cat] = []
                 by_category[cat].append(doc)
 
+            self.audit_log("get_document_status", "document", details={
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "document_count": len(documents),
+            })
+
             return ToolResult(
                 success=True,
                 data={
-                    "entity_type": input_data["entity_type"],
-                    "entity_id": input_data["entity_id"],
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
                     "documents": documents,
                     "by_category": by_category,
                     "status_counts": status_counts,
@@ -379,6 +402,7 @@ class DocumentAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"get_document_status failed for {entity_type} {entity_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -393,6 +417,20 @@ class DocumentAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            entity_type = input_data["entity_type"]
+            entity_id = input_data["entity_id"]
+            org_id = self.context.get("organization_id")
+
+            # Verify entity belongs to org
+            if org_id:
+                table = "leads" if entity_type == "lead" else "loans"
+                owner_check = db.execute(
+                    text(f"SELECT id FROM {table} WHERE id = :entity_id AND organization_id = :org_id"),
+                    {"entity_id": entity_id, "org_id": org_id}
+                ).fetchone()
+                if not owner_check:
+                    return ToolResult(success=False, error=f"{entity_type.title()} {entity_id} not found")
+
             due_date = input_data.get("due_date")
             if not due_date:
                 due_date = (date.today() + timedelta(days=7)).isoformat()
@@ -414,8 +452,8 @@ class DocumentAgent(SpecializedAgent):
                 """)
 
                 result = db.execute(query, {
-                    "entity_type": input_data["entity_type"],
-                    "entity_id": input_data["entity_id"],
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
                     "document_type": doc_type,
                     "due_date": due_date,
                     "message": input_data.get("message"),
@@ -444,8 +482,8 @@ class DocumentAgent(SpecializedAgent):
 
                 doc_list = ", ".join(input_data["document_types"])
                 db.execute(comm_query, {
-                    "entity_type": input_data["entity_type"],
-                    "entity_id": input_data["entity_id"],
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
                     "subject": "Document Request",
                     "content": f"Documents requested: {doc_list}. Due by: {due_date}",
                     "created_by": context.get("user_id", 1)
@@ -453,6 +491,14 @@ class DocumentAgent(SpecializedAgent):
                 email_sent = True
 
             db.commit()
+
+            self.audit_log("request_document", "document", details={
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "document_types": input_data["document_types"],
+                "due_date": due_date,
+                "email_sent": email_sent,
+            })
 
             return ToolResult(
                 success=True,
@@ -467,6 +513,7 @@ class DocumentAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"request_document failed for {entity_type} {entity_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -481,6 +528,20 @@ class DocumentAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            entity_type = input_data["entity_type"]
+            entity_id = input_data["entity_id"]
+            org_id = self.context.get("organization_id")
+
+            # Verify entity belongs to org
+            if org_id:
+                table = "leads" if entity_type == "lead" else "loans"
+                owner_check = db.execute(
+                    text(f"SELECT id FROM {table} WHERE id = :entity_id AND organization_id = :org_id"),
+                    {"entity_id": entity_id, "org_id": org_id}
+                ).fetchone()
+                if not owner_check:
+                    return ToolResult(success=False, error=f"{entity_type.title()} {entity_id} not found")
+
             # Determine category from document type
             doc_type = input_data["document_type"].lower()
             category = input_data.get("category")
@@ -520,8 +581,8 @@ class DocumentAgent(SpecializedAgent):
             """)
 
             result = db.execute(query, {
-                "entity_type": input_data["entity_type"],
-                "entity_id": input_data["entity_id"],
+                "entity_type": entity_type,
+                "entity_id": entity_id,
                 "document_type": input_data["document_type"],
                 "category": category,
                 "file_name": input_data["file_name"],
@@ -541,13 +602,20 @@ class DocumentAgent(SpecializedAgent):
                         AND status = 'pending'
                 """),
                 {
-                    "entity_type": input_data["entity_type"],
-                    "entity_id": input_data["entity_id"],
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
                     "document_type": input_data["document_type"]
                 }
             )
 
             db.commit()
+
+            self.audit_log("upload_document", "document", entity_id=result.id, details={
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "document_type": input_data["document_type"],
+                "file_name": input_data["file_name"],
+            })
 
             return ToolResult(
                 success=True,
@@ -564,6 +632,7 @@ class DocumentAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"upload_document failed for {entity_type} {entity_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -581,11 +650,17 @@ class DocumentAgent(SpecializedAgent):
             # Get loan type to determine requirements
             entity_type = input_data["entity_type"]
             entity_id = input_data["entity_id"]
+            org_id = self.context.get("organization_id")
 
             if entity_type == "loan":
+                org_clause = "AND organization_id = :org_id" if org_id else ""
+                params = {"id": entity_id}
+                if org_id:
+                    params["org_id"] = org_id
+
                 loan = db.execute(
-                    text("SELECT program, employment_type FROM loans WHERE id = :id"),
-                    {"id": entity_id}
+                    text(f"SELECT program, employment_type FROM loans WHERE id = :id {org_clause}"),
+                    params
                 ).fetchone()
 
                 if not loan:
@@ -602,6 +677,14 @@ class DocumentAgent(SpecializedAgent):
 
                 employment_type = loan.employment_type or "w2"
             else:
+                # For leads, verify org ownership
+                if org_id:
+                    lead_check = db.execute(
+                        text("SELECT id FROM leads WHERE id = :id AND organization_id = :org_id"),
+                        {"id": entity_id, "org_id": org_id}
+                    ).fetchone()
+                    if not lead_check:
+                        return ToolResult(success=False, error=f"Lead {entity_id} not found")
                 loan_type = "conventional"
                 employment_type = "w2"
 
@@ -679,6 +762,13 @@ class DocumentAgent(SpecializedAgent):
                     for e in expired_results
                 ]
 
+            self.audit_log("get_missing_documents", "document", details={
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "missing_count": len(missing),
+                "expired_count": len(expired),
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -693,6 +783,7 @@ class DocumentAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"get_missing_documents failed for {entity_type} {entity_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -707,7 +798,9 @@ class DocumentAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            document_id = input_data["document_id"]
             status = input_data["status"]
+            org_id = self.context.get("organization_id")
             valid_statuses = ["approved", "rejected", "needs_review"]
 
             if status not in valid_statuses:
@@ -715,6 +808,22 @@ class DocumentAgent(SpecializedAgent):
                     success=False,
                     error=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
                 )
+
+            # Verify document's parent entity belongs to org
+            if org_id:
+                doc_check = db.execute(
+                    text("SELECT entity_type, entity_id FROM documents WHERE id = :doc_id"),
+                    {"doc_id": document_id}
+                ).fetchone()
+                if not doc_check:
+                    return ToolResult(success=False, error=f"Document {document_id} not found")
+                table = "leads" if doc_check.entity_type == "lead" else "loans"
+                owner_check = db.execute(
+                    text(f"SELECT id FROM {table} WHERE id = :entity_id AND organization_id = :org_id"),
+                    {"entity_id": doc_check.entity_id, "org_id": org_id}
+                ).fetchone()
+                if not owner_check:
+                    return ToolResult(success=False, error=f"Document {document_id} not found")
 
             query = text("""
                 UPDATE documents
@@ -728,7 +837,7 @@ class DocumentAgent(SpecializedAgent):
             """)
 
             result = db.execute(query, {
-                "document_id": input_data["document_id"],
+                "document_id": document_id,
                 "status": status,
                 "notes": input_data.get("notes"),
                 "rejection_reason": input_data.get("rejection_reason") if status == "rejected" else None,
@@ -736,9 +845,15 @@ class DocumentAgent(SpecializedAgent):
             }).fetchone()
 
             if not result:
-                return ToolResult(success=False, error=f"Document {input_data['document_id']} not found")
+                return ToolResult(success=False, error=f"Document {document_id} not found")
 
             db.commit()
+
+            self.audit_log("verify_document", "document", entity_id=document_id, details={
+                "verification_status": status,
+                "entity_type": result.entity_type,
+                "entity_id": result.entity_id,
+            })
 
             return ToolResult(
                 success=True,
@@ -754,6 +869,7 @@ class DocumentAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"verify_document failed for document {document_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -768,6 +884,20 @@ class DocumentAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            entity_type = input_data["entity_type"]
+            entity_id = input_data["entity_id"]
+            org_id = self.context.get("organization_id")
+
+            # Verify entity belongs to org
+            if org_id:
+                table = "leads" if entity_type == "lead" else "loans"
+                owner_check = db.execute(
+                    text(f"SELECT id FROM {table} WHERE id = :entity_id AND organization_id = :org_id"),
+                    {"entity_id": entity_id, "org_id": org_id}
+                ).fetchone()
+                if not owner_check:
+                    return ToolResult(success=False, error=f"{entity_type.title()} {entity_id} not found")
+
             # Get uploads
             uploads_query = text("""
                 SELECT
@@ -782,8 +912,8 @@ class DocumentAgent(SpecializedAgent):
             """)
 
             uploads = db.execute(uploads_query, {
-                "entity_type": input_data["entity_type"],
-                "entity_id": input_data["entity_id"],
+                "entity_type": entity_type,
+                "entity_id": entity_id,
                 "limit": input_data.get("limit", 50)
             }).fetchall()
 
@@ -801,8 +931,8 @@ class DocumentAgent(SpecializedAgent):
             """)
 
             requests = db.execute(requests_query, {
-                "entity_type": input_data["entity_type"],
-                "entity_id": input_data["entity_id"],
+                "entity_type": entity_type,
+                "entity_id": entity_id,
                 "limit": input_data.get("limit", 50)
             }).fetchall()
 
@@ -833,11 +963,18 @@ class DocumentAgent(SpecializedAgent):
             # Sort by date descending
             history.sort(key=lambda x: x["date"] or "", reverse=True)
 
+            self.audit_log("get_document_history", "document", details={
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "upload_count": len(uploads),
+                "request_count": len(requests),
+            })
+
             return ToolResult(
                 success=True,
                 data={
-                    "entity_type": input_data["entity_type"],
-                    "entity_id": input_data["entity_id"],
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
                     "history": history[:input_data.get("limit", 50)],
                     "upload_count": len(uploads),
                     "request_count": len(requests)
@@ -846,6 +983,7 @@ class DocumentAgent(SpecializedAgent):
             )
 
         except Exception as e:
+            logger.exception(f"get_document_history failed for {entity_type} {entity_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()
@@ -858,16 +996,29 @@ class DocumentAgent(SpecializedAgent):
         """Mark document as expired"""
         from database import SessionLocal
 
+        document_id = input_data["document_id"]
+        org_id = self.context.get("organization_id")
+
         db = SessionLocal()
         try:
             # Get document info
             doc = db.execute(
                 text("SELECT * FROM documents WHERE id = :id"),
-                {"id": input_data["document_id"]}
+                {"id": document_id}
             ).fetchone()
 
             if not doc:
-                return ToolResult(success=False, error=f"Document {input_data['document_id']} not found")
+                return ToolResult(success=False, error=f"Document {document_id} not found")
+
+            # Verify document's parent entity belongs to org
+            if org_id:
+                table = "leads" if doc.entity_type == "lead" else "loans"
+                owner_check = db.execute(
+                    text(f"SELECT id FROM {table} WHERE id = :entity_id AND organization_id = :org_id"),
+                    {"entity_id": doc.entity_id, "org_id": org_id}
+                ).fetchone()
+                if not owner_check:
+                    return ToolResult(success=False, error=f"Document {document_id} not found")
 
             # Update document status
             query = text("""
@@ -880,7 +1031,7 @@ class DocumentAgent(SpecializedAgent):
             """)
 
             result = db.execute(query, {
-                "document_id": input_data["document_id"],
+                "document_id": document_id,
                 "note": f"\n[{datetime.now().isoformat()}] Expired: {input_data['reason']}"
             }).fetchone()
 
@@ -909,6 +1060,14 @@ class DocumentAgent(SpecializedAgent):
 
             db.commit()
 
+            self.audit_log("expire_document", "document", entity_id=document_id, details={
+                "reason": input_data["reason"],
+                "replacement_requested": replacement_requested,
+                "document_type": result.document_type,
+                "entity_type": result.entity_type,
+                "entity_id": result.entity_id,
+            })
+
             return ToolResult(
                 success=True,
                 data={
@@ -922,6 +1081,7 @@ class DocumentAgent(SpecializedAgent):
 
         except Exception as e:
             db.rollback()
+            logger.exception(f"expire_document failed for document {document_id}")
             return ToolResult(success=False, error=str(e))
         finally:
             db.close()

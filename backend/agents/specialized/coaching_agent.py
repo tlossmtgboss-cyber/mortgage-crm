@@ -12,6 +12,7 @@ Specialized agent for LO performance coaching with 8 tools:
 8. generate_performance_report - Generate performance report
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
@@ -25,6 +26,8 @@ from .base import (
     ToolResult,
     AgentRegistry
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -176,6 +179,7 @@ class CoachingAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             query = text("""
@@ -187,11 +191,13 @@ class CoachingAgent(SpecializedAgent):
                 FROM loans
                 WHERE loan_officer_id = :lo_id
                 AND created_at >= CURRENT_DATE - :days
+                AND organization_id = :org_id
             """)
 
             result = db.execute(query, {
                 "lo_id": input_data["lo_id"],
-                "days": input_data.get("period_days", 30)
+                "days": input_data.get("period_days", 30),
+                "org_id": org_id
             }).fetchone()
 
             performance = {
@@ -222,6 +228,7 @@ class CoachingAgent(SpecializedAgent):
         from database import SessionLocal
         from sqlalchemy import text
 
+        org_id = self.context.get("organization_id")
         db = SessionLocal()
         try:
             # Get LO's metrics
@@ -232,8 +239,9 @@ class CoachingAgent(SpecializedAgent):
                 FROM loans
                 WHERE loan_officer_id = :lo_id
                 AND created_at >= CURRENT_DATE - 30
+                AND organization_id = :org_id
             """)
-            lo_result = db.execute(lo_query, {"lo_id": input_data["lo_id"]}).fetchone()
+            lo_result = db.execute(lo_query, {"lo_id": input_data["lo_id"], "org_id": org_id}).fetchone()
 
             # Get peer average
             peer_query = text("""
@@ -247,10 +255,11 @@ class CoachingAgent(SpecializedAgent):
                         SUM(loan_amount) as volume
                     FROM loans
                     WHERE created_at >= CURRENT_DATE - 30
+                    AND organization_id = :org_id
                     GROUP BY loan_officer_id
                 ) lo_stats
             """)
-            peer_result = db.execute(peer_query).fetchone()
+            peer_result = db.execute(peer_query, {"org_id": org_id}).fetchone()
 
             lo_loans = lo_result.loans or 0
             lo_volume = float(lo_result.volume or 0)

@@ -139,6 +139,7 @@ class AgentContext(TypedDict, total=False):
     user_id: str
     user_email: str
     user_role: str
+    organization_id: str
     db_session: Any
     current_time: datetime
     conversation_id: Optional[str]
@@ -216,6 +217,67 @@ class SpecializedAgent(ABC):
             t for t in self._tools.values()
             if t.risk_level == RiskLevel.LOW and not t.requires_confirmation
         ]
+
+    # =========================================================================
+    # TENANT ISOLATION HELPERS
+    # =========================================================================
+
+    def require_org_id(self) -> str:
+        """Get organization_id from context, raising if missing.
+
+        Every data-access tool MUST call this to enforce tenant isolation.
+        """
+        org_id = self.context.get("organization_id")
+        if not org_id:
+            raise ValueError(
+                f"Agent '{self.name}' requires organization_id in context for tenant isolation"
+            )
+        return org_id
+
+    def org_filter_sql(self, table_alias: str = "") -> str:
+        """Return a SQL WHERE fragment for tenant isolation.
+
+        Usage: f"SELECT ... WHERE {self.org_filter_sql('l')} AND ..."
+        """
+        prefix = f"{table_alias}." if table_alias else ""
+        return f"{prefix}organization_id = :org_id"
+
+    def org_filter_params(self, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Return params dict with org_id set, merged with extras."""
+        params: Dict[str, Any] = {"org_id": self.require_org_id()}
+        if extra:
+            params.update(extra)
+        return params
+
+    # =========================================================================
+    # AUDIT LOGGING
+    # =========================================================================
+
+    def audit_log(
+        self,
+        action: str,
+        entity_type: Optional[str] = None,
+        entity_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ):
+        """Log an auditable action performed by this agent.
+
+        Writes to the standard Python logger at INFO level with structured
+        metadata so log aggregators can index it.  A future enhancement can
+        persist to the DB audit table.
+        """
+        log_entry = {
+            "agent": self.name,
+            "action": action,
+            "user_id": self.context.get("user_id"),
+            "organization_id": self.context.get("organization_id"),
+            "entity_type": entity_type,
+            "entity_id": str(entity_id) if entity_id else None,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        if details:
+            log_entry["details"] = details
+        logger.info(f"AGENT_AUDIT: {log_entry}")
 
     async def execute_tool(
         self,

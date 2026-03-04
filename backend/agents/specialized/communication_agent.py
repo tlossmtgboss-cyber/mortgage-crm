@@ -532,15 +532,17 @@ class CommunicationAgent(SpecializedAgent):
                 send_error = str(e)
 
             # Log the communication to database regardless of send status
+            org_id = self.context.get("organization_id")
+
             query = text("""
                 INSERT INTO communications (
                     type, direction, entity_type, entity_id,
                     to_address, subject, content, status,
-                    created_by, created_at
+                    created_by, organization_id, created_at
                 ) VALUES (
                     'email', 'outbound', :entity_type, :entity_id,
                     :to_email, :subject, :body, :status,
-                    :created_by, CURRENT_TIMESTAMP
+                    :created_by, :organization_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, subject, to_address
             """)
@@ -552,10 +554,18 @@ class CommunicationAgent(SpecializedAgent):
                 "subject": subject,
                 "body": body,
                 "status": send_status,
-                "created_by": user_id
+                "created_by": user_id,
+                "organization_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "send_email",
+                entity_type="communication",
+                entity_id=result.id,
+                details={"to": to_email, "subject": subject, "status": send_status}
+            )
 
             # Build response based on status
             response_data = {
@@ -604,6 +614,7 @@ class CommunicationAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             message = input_data["message"]
             segments = (len(message) + 159) // 160  # Calculate SMS segments
 
@@ -611,11 +622,11 @@ class CommunicationAgent(SpecializedAgent):
                 INSERT INTO communications (
                     type, direction, entity_type, entity_id,
                     to_address, content, status,
-                    created_by, created_at
+                    created_by, organization_id, created_at
                 ) VALUES (
                     'sms', 'outbound', :entity_type, :entity_id,
                     :to_phone, :message, 'sent',
-                    :created_by, CURRENT_TIMESTAMP
+                    :created_by, :organization_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, to_address
             """)
@@ -625,10 +636,18 @@ class CommunicationAgent(SpecializedAgent):
                 "entity_id": input_data.get("entity_id"),
                 "to_phone": input_data["to_phone"],
                 "message": message,
-                "created_by": context.get("user_id", 1)
+                "created_by": context.get("user_id", 1),
+                "organization_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "send_sms",
+                entity_type="communication",
+                entity_id=result.id,
+                details={"to": input_data["to_phone"], "segments": segments}
+            )
 
             return ToolResult(
                 success=True,
@@ -658,6 +677,7 @@ class CommunicationAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             params = {
                 "entity_type": input_data["entity_type"],
                 "entity_id": input_data["entity_id"],
@@ -665,9 +685,13 @@ class CommunicationAgent(SpecializedAgent):
             }
 
             type_filter = ""
+            org_filter = ""
             if input_data.get("comm_type"):
                 type_filter = "AND type = :comm_type"
                 params["comm_type"] = input_data["comm_type"]
+            if org_id:
+                org_filter = "AND organization_id = :org_id"
+                params["org_id"] = org_id
 
             query = text(f"""
                 SELECT
@@ -677,6 +701,7 @@ class CommunicationAgent(SpecializedAgent):
                 WHERE entity_type = :entity_type
                     AND entity_id = :entity_id
                     {type_filter}
+                    {org_filter}
                 ORDER BY created_at DESC
                 LIMIT :limit
             """)
@@ -738,17 +763,19 @@ class CommunicationAgent(SpecializedAgent):
                     error="Scheduled time must be in the future"
                 )
 
+            org_id = self.context.get("organization_id")
+
             query = text("""
                 INSERT INTO scheduled_communications (
                     comm_type, entity_type, entity_id,
                     subject, body, template_id,
                     scheduled_time, status,
-                    created_by, created_at
+                    created_by, organization_id, created_at
                 ) VALUES (
                     :comm_type, :entity_type, :entity_id,
                     :subject, :body, :template_id,
                     :scheduled_time, 'pending',
-                    :created_by, CURRENT_TIMESTAMP
+                    :created_by, :organization_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, comm_type, scheduled_time
             """)
@@ -761,10 +788,18 @@ class CommunicationAgent(SpecializedAgent):
                 "body": input_data["body"],
                 "template_id": input_data.get("template_id"),
                 "scheduled_time": scheduled_time,
-                "created_by": context.get("user_id", 1)
+                "created_by": context.get("user_id", 1),
+                "organization_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "schedule_communication",
+                entity_type="scheduled_communication",
+                entity_id=result.id,
+                details={"comm_type": input_data["comm_type"], "scheduled_time": scheduled_time.isoformat()}
+            )
 
             return ToolResult(
                 success=True,
@@ -792,8 +827,13 @@ class CommunicationAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             conditions = ["is_active = true"]
             params = {}
+
+            if org_id:
+                conditions.append("organization_id = :org_id")
+                params["org_id"] = org_id
 
             if input_data.get("template_type"):
                 conditions.append("template_type = :template_type")
@@ -870,15 +910,17 @@ class CommunicationAgent(SpecializedAgent):
             import re
             merge_fields = list(set(re.findall(r'\{\{(\w+)\}\}', input_data["body"])))
 
+            org_id = self.context.get("organization_id")
+
             query = text("""
                 INSERT INTO message_templates (
                     name, template_type, category,
                     subject, body, merge_fields,
-                    is_active, created_by, created_at
+                    is_active, created_by, organization_id, created_at
                 ) VALUES (
                     :name, :template_type, :category,
                     :subject, :body, :merge_fields,
-                    true, :created_by, CURRENT_TIMESTAMP
+                    true, :created_by, :organization_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, name
             """)
@@ -890,10 +932,18 @@ class CommunicationAgent(SpecializedAgent):
                 "subject": input_data.get("subject"),
                 "body": input_data["body"],
                 "merge_fields": ",".join(merge_fields),
-                "created_by": context.get("user_id", 1)
+                "created_by": context.get("user_id", 1),
+                "organization_id": org_id
             }).fetchone()
 
             db.commit()
+
+            self.audit_log(
+                "create_template",
+                entity_type="message_template",
+                entity_id=result.id,
+                details={"name": result.name, "merge_fields": merge_fields}
+            )
 
             return ToolResult(
                 success=True,
@@ -921,12 +971,17 @@ class CommunicationAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
             params = {"limit": input_data.get("limit", 50)}
             type_filter = ""
+            org_filter = ""
 
             if input_data.get("message_type"):
-                type_filter = "AND type = :message_type"
+                type_filter = "AND c.type = :message_type"
                 params["message_type"] = input_data["message_type"]
+            if org_id:
+                org_filter = "AND c.organization_id = :org_id"
+                params["org_id"] = org_id
 
             query = text(f"""
                 SELECT
@@ -944,6 +999,7 @@ class CommunicationAgent(SpecializedAgent):
                 WHERE c.direction = 'inbound'
                     AND c.is_read = false
                     {type_filter}
+                    {org_filter}
                 ORDER BY c.created_at DESC
                 LIMIT :limit
             """)
@@ -989,15 +1045,17 @@ class CommunicationAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
+            org_id = self.context.get("organization_id")
+
             query = text("""
                 INSERT INTO communications (
                     type, direction, entity_type, entity_id,
                     subject, content, duration_minutes, outcome,
-                    status, created_by, created_at
+                    status, created_by, organization_id, created_at
                 ) VALUES (
                     :comm_type, :direction, :entity_type, :entity_id,
                     :subject, :content, :duration, :outcome,
-                    'logged', :created_by, CURRENT_TIMESTAMP
+                    'logged', :created_by, :organization_id, CURRENT_TIMESTAMP
                 )
                 RETURNING id, type, entity_type, entity_id
             """)
@@ -1011,7 +1069,8 @@ class CommunicationAgent(SpecializedAgent):
                 "content": input_data["content"],
                 "duration": input_data.get("duration_minutes"),
                 "outcome": input_data.get("outcome"),
-                "created_by": context.get("user_id", 1)
+                "created_by": context.get("user_id", 1),
+                "organization_id": org_id
             }).fetchone()
 
             # Update entity's last contact timestamp
@@ -1027,6 +1086,13 @@ class CommunicationAgent(SpecializedAgent):
                 )
 
             db.commit()
+
+            self.audit_log(
+                "log_communication",
+                entity_type="communication",
+                entity_id=result.id,
+                details={"comm_type": input_data["comm_type"], "direction": input_data["direction"], "entity_type": input_data["entity_type"], "entity_id": input_data["entity_id"]}
+            )
 
             return ToolResult(
                 success=True,

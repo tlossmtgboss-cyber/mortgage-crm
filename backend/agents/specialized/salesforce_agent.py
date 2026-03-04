@@ -219,6 +219,7 @@ class SalesforceAgent(SpecializedAgent):
         try:
             db = self._get_db_session()
             user_id = self._get_user_id(input_data.get("user_id"))
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(
@@ -232,7 +233,8 @@ class SalesforceAgent(SpecializedAgent):
             profile = db.query(IntegrationProfile).filter(
                 and_(
                     IntegrationProfile.user_id == user_id,
-                    IntegrationProfile.provider == "salesforce"
+                    IntegrationProfile.provider == "salesforce",
+                    IntegrationProfile.organization_id == org_id
                 )
             ).first()
 
@@ -313,6 +315,7 @@ class SalesforceAgent(SpecializedAgent):
         try:
             db = self._get_db_session()
             user_id = self._get_user_id()
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(success=False, error="Database session not available")
@@ -325,7 +328,8 @@ class SalesforceAgent(SpecializedAgent):
                 and_(
                     IntegrationProfile.user_id == user_id,
                     IntegrationProfile.provider == "salesforce",
-                    IntegrationProfile.status.in_(["connected", "active"])
+                    IntegrationProfile.status.in_(["connected", "active"]),
+                    IntegrationProfile.organization_id == org_id
                 )
             ).first()
 
@@ -379,6 +383,7 @@ class SalesforceAgent(SpecializedAgent):
         try:
             db = self._get_db_session()
             user_id = self._get_user_id()
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(success=False, error="Database session not available")
@@ -391,7 +396,8 @@ class SalesforceAgent(SpecializedAgent):
                 and_(
                     IntegrationProfile.user_id == user_id,
                     IntegrationProfile.provider == "salesforce",
-                    IntegrationProfile.status.in_(["connected", "active"])
+                    IntegrationProfile.status.in_(["connected", "active"]),
+                    IntegrationProfile.organization_id == org_id
                 )
             ).first()
 
@@ -430,6 +436,7 @@ class SalesforceAgent(SpecializedAgent):
         try:
             db = self._get_db_session()
             user_id = self._get_user_id()
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(success=False, error="Database session not available")
@@ -442,7 +449,8 @@ class SalesforceAgent(SpecializedAgent):
                 and_(
                     IntegrationProfile.user_id == user_id,
                     IntegrationProfile.provider == "salesforce",
-                    IntegrationProfile.status.in_(["connected", "active"])
+                    IntegrationProfile.status.in_(["connected", "active"]),
+                    IntegrationProfile.organization_id == org_id
                 )
             ).first()
 
@@ -486,6 +494,7 @@ class SalesforceAgent(SpecializedAgent):
         try:
             db = self._get_db_session()
             user_id = self._get_user_id()
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(success=False, error="Database session not available")
@@ -497,7 +506,8 @@ class SalesforceAgent(SpecializedAgent):
             profile = db.query(IntegrationProfile).filter(
                 and_(
                     IntegrationProfile.user_id == user_id,
-                    IntegrationProfile.provider == "salesforce"
+                    IntegrationProfile.provider == "salesforce",
+                    IntegrationProfile.organization_id == org_id
                 )
             ).first()
 
@@ -556,6 +566,7 @@ class SalesforceAgent(SpecializedAgent):
         try:
             db = self._get_db_session()
             user_id = self._get_user_id()
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(success=False, error="Database session not available")
@@ -570,7 +581,8 @@ class SalesforceAgent(SpecializedAgent):
             profile = db.query(IntegrationProfile).filter(
                 and_(
                     IntegrationProfile.user_id == user_id,
-                    IntegrationProfile.provider == "salesforce"
+                    IntegrationProfile.provider == "salesforce",
+                    IntegrationProfile.organization_id == org_id
                 )
             ).first()
 
@@ -770,12 +782,26 @@ class SalesforceAgent(SpecializedAgent):
 
     async def _update_field_mapping(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Update a field mapping (inbound direction only)"""
+        org_id = self.require_org_id()
+
+        self.audit_log(
+            action="update_field_mapping",
+            entity_type="field_mapping",
+            details={
+                "entity_type": input_data["entity_type"],
+                "crm_field": input_data["crm_field"],
+                "salesforce_field": input_data["salesforce_field"],
+                "organization_id": org_id,
+            }
+        )
+
         return ToolResult(
             success=True,
             data={
                 "entity_type": input_data["entity_type"],
                 "crm_field": input_data["crm_field"],
                 "salesforce_field": input_data["salesforce_field"],
+                "organization_id": org_id,
                 "sync_direction": "Salesforce → CRM",
                 "updated_at": datetime.utcnow().isoformat()
             },
@@ -787,6 +813,7 @@ class SalesforceAgent(SpecializedAgent):
         try:
             db = self._get_db_session()
             user_id = self._get_user_id()
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(success=False, error="Database session not available")
@@ -797,7 +824,8 @@ class SalesforceAgent(SpecializedAgent):
             profile = db.query(IntegrationProfile).filter(
                 and_(
                     IntegrationProfile.user_id == user_id,
-                    IntegrationProfile.provider == "salesforce"
+                    IntegrationProfile.provider == "salesforce",
+                    IntegrationProfile.organization_id == org_id
                 )
             ).first()
 
@@ -860,6 +888,7 @@ class SalesforceAgent(SpecializedAgent):
         """Get CRM records linked to Salesforce"""
         try:
             db = self._get_db_session()
+            org_id = self.require_org_id()
 
             if not db:
                 return ToolResult(success=False, error="Database session not available")
@@ -874,7 +903,7 @@ class SalesforceAgent(SpecializedAgent):
             if not entity_type or entity_type == "loan":
                 from models.loan import Loan
 
-                query = db.query(Loan)
+                query = db.query(Loan).filter(Loan.organization_id == org_id)
                 if only_linked:
                     query = query.filter(Loan.salesforce_id.isnot(None))
 
@@ -895,7 +924,7 @@ class SalesforceAgent(SpecializedAgent):
             if not entity_type or entity_type == "lead":
                 from models.lead import Lead
 
-                query = db.query(Lead)
+                query = db.query(Lead).filter(Lead.organization_id == org_id)
                 if only_linked:
                     query = query.filter(Lead.salesforce_id.isnot(None))
 

@@ -19,6 +19,7 @@ Specialized agent for email parsing and intelligence with 12 tools:
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field
+import logging
 
 from .base import (
     SpecializedAgent,
@@ -29,6 +30,8 @@ from .base import (
     ToolResult,
     AgentRegistry
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -396,9 +399,11 @@ class EmailIntelAgent(SpecializedAgent):
 
     async def _get_email_thread(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Get email thread"""
-        # Placeholder - would query email system
+        org_id = self.require_org_id()
+        # Placeholder - would query email system scoped to organization
         thread = {
             "email_id": input_data["email_id"],
+            "organization_id": org_id,
             "messages": [
                 {"from": "borrower", "date": datetime.now().isoformat(), "preview": "Initial inquiry..."}
             ],
@@ -415,12 +420,20 @@ class EmailIntelAgent(SpecializedAgent):
     async def _create_follow_up_task(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Create follow-up task"""
         from datetime import timedelta
+        org_id = self.require_org_id()
+
+        self.audit_log(
+            action="create_follow_up_task",
+            entity_type="task",
+            details={"email_id": input_data["email_id"], "organization_id": org_id}
+        )
 
         return ToolResult(
             success=True,
             data={
                 "task_created": True,
                 "email_id": input_data["email_id"],
+                "organization_id": org_id,
                 "task_type": input_data.get("task_type", "follow_up"),
                 "due_date": (datetime.now() + timedelta(days=input_data.get("due_days", 1))).isoformat()
             },
@@ -429,12 +442,22 @@ class EmailIntelAgent(SpecializedAgent):
 
     async def _link_email_to_lead(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Link email to entity"""
+        org_id = self.require_org_id()
+
+        self.audit_log(
+            action="link_email_to_entity",
+            entity_type=input_data["entity_type"],
+            entity_id=str(input_data["entity_id"]),
+            details={"email_id": input_data["email_id"], "organization_id": org_id}
+        )
+
         return ToolResult(
             success=True,
             data={
                 "email_id": input_data["email_id"],
                 "entity_type": input_data["entity_type"],
                 "entity_id": input_data["entity_id"],
+                "organization_id": org_id,
                 "linked": True
             },
             message=f"Email linked to {input_data['entity_type']} {input_data['entity_id']}"
@@ -442,7 +465,11 @@ class EmailIntelAgent(SpecializedAgent):
 
     async def _get_email_analytics(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Get email analytics"""
+        org_id = self.require_org_id()
+
+        # Placeholder - would query email analytics scoped to organization
         analytics = {
+            "organization_id": org_id,
             "period_days": input_data.get("period_days", 30),
             "metrics": {
                 "total_received": 250,
@@ -466,10 +493,19 @@ class EmailIntelAgent(SpecializedAgent):
 
     async def _train_response_pattern(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Train response pattern"""
+        org_id = self.require_org_id()
+
+        self.audit_log(
+            action="train_response_pattern",
+            entity_type="response_pattern",
+            details={"pattern_name": input_data["pattern_name"], "organization_id": org_id}
+        )
+
         return ToolResult(
             success=True,
             data={
                 "pattern_name": input_data["pattern_name"],
+                "organization_id": org_id,
                 "examples_count": len(input_data["example_emails"]),
                 "trained": True,
                 "created_at": datetime.now().isoformat()
@@ -479,6 +515,9 @@ class EmailIntelAgent(SpecializedAgent):
 
     async def _get_response_templates(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Get response templates"""
+        org_id = self.require_org_id()
+
+        # Placeholder - would query org-specific templates from DB
         templates = {
             "status_update": [
                 {"name": "Processing Update", "preview": "Your loan is currently in processing..."},
@@ -502,6 +541,6 @@ class EmailIntelAgent(SpecializedAgent):
 
         return ToolResult(
             success=True,
-            data={"templates": filtered},
+            data={"templates": filtered, "organization_id": org_id},
             message="Response templates retrieved"
         )

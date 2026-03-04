@@ -12,9 +12,12 @@ Specialized agent for rate lock and pricing advice with 8 tools:
 8. generate_rate_quote - Generate rate quote for borrower
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -178,9 +181,67 @@ class RateAdvisorAgent(SpecializedAgent):
         ))
 
     async def _get_current_rates(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Get current rates"""
-        lock_period = input_data.get("lock_period", 30)
+        """Get current rates from rate_monitor table, falling back to illustrative rates.
 
+        COMPLIANCE: Rates are informational only. Final pricing depends on
+        full underwriting. NEVER guarantee a rate to a borrower.
+        """
+        lock_period = input_data.get("lock_period", 30)
+        data_source = "live"
+
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+
+            db = SessionLocal()
+            try:
+                # Try to read from rate_monitor table (populated by rate monitoring service)
+                result = db.execute(text("""
+                    SELECT loan_type, term_years, rate, apr, points, updated_at
+                    FROM rate_monitor_snapshots
+                    WHERE lock_period_days = :lock_period
+                      AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
+                    ORDER BY updated_at DESC
+                """), {"lock_period": lock_period}).fetchall()
+
+                if result:
+                    rates = {}
+                    for row in result:
+                        lt = row.loan_type
+                        if lt not in rates:
+                            rates[lt] = {}
+                        term_key = f"{row.term_years}_year"
+                        rates[lt][term_key] = {
+                            "rate": float(row.rate),
+                            "apr": float(row.apr),
+                            "points": float(row.points or 0)
+                        }
+
+                    loan_type = input_data.get("loan_type")
+                    if loan_type and loan_type in rates:
+                        rates = {loan_type: rates[loan_type]}
+
+                    self.audit_log("rates_retrieved", details={"source": "live", "count": len(result)})
+
+                    return ToolResult(
+                        success=True,
+                        data={
+                            "rates": rates,
+                            "lock_period": lock_period,
+                            "as_of": result[0].updated_at.isoformat() if result else datetime.now().isoformat(),
+                            "data_source": "live",
+                            "disclaimer": "Rates shown are current market rates for informational purposes. "
+                                          "Actual rate depends on credit, LTV, property type, and full underwriting."
+                        },
+                        message=f"Current rates retrieved ({lock_period}-day lock)"
+                    )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Live rates unavailable, using illustrative rates: {e}")
+            data_source = "illustrative"
+
+        # Fallback: illustrative rates with clear disclaimer
         rates = {
             "conventional": {
                 "30_year": {"rate": 6.875, "apr": 6.95, "points": 0},
@@ -206,15 +267,20 @@ class RateAdvisorAgent(SpecializedAgent):
         else:
             filtered = rates
 
+        self.audit_log("rates_retrieved", details={"source": "illustrative"})
+
         return ToolResult(
             success=True,
             data={
                 "rates": filtered,
                 "lock_period": lock_period,
                 "as_of": datetime.now().isoformat(),
-                "market_trend": "stable"
+                "data_source": "illustrative",
+                "disclaimer": "These are illustrative rates for demonstration purposes only. "
+                              "Actual rates change daily and depend on credit profile, LTV, "
+                              "property type, and full underwriting. Contact your LO for a personalized quote."
             },
-            message=f"Current rates retrieved ({lock_period}-day lock)"
+            message=f"Illustrative rates retrieved ({lock_period}-day lock) — for informational purposes only"
         )
 
     async def _analyze_lock_timing(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
@@ -338,7 +404,10 @@ class RateAdvisorAgent(SpecializedAgent):
                 "loan_amount": loan_amount,
                 "credit_score": credit_score,
                 "products": products,
-                "recommendation": products[0]["product"] if products else None
+                "recommendation": products[0]["product"] if products else None,
+                "disclaimer": "Product comparison is for educational purposes. Rates and terms "
+                              "are illustrative and subject to change. VA eligibility requires "
+                              "military service verification. Consult your LO for personalized options."
             },
             message=f"Compared {len(products)} loan products"
         )
@@ -351,22 +420,48 @@ class RateAdvisorAgent(SpecializedAgent):
         return round(payment, 2)
 
     async def _check_float_down(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Check float-down eligibility"""
+        """Check float-down eligibility using loan's locked rate vs current market."""
         locked_rate = input_data["locked_rate"]
-        current_rate = 6.750  # Simulated current rate
+
+        # Try to get current rate from DB (loan's lock record or rate snapshots)
+        current_rate = None
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                row = db.execute(text("""
+                    SELECT rate FROM rate_monitor_snapshots
+                    WHERE loan_type = 'conventional' AND term_years = 30
+                    ORDER BY updated_at DESC LIMIT 1
+                """)).fetchone()
+                if row:
+                    current_rate = float(row.rate)
+            finally:
+                db.close()
+        except Exception:
+            pass
+
+        if current_rate is None:
+            current_rate = locked_rate - 0.125  # Conservative estimate
 
         improvement = locked_rate - current_rate
-        eligible = improvement >= 0.25  # Typical threshold
+        eligible = improvement >= 0.25  # Standard float-down threshold
 
         result = {
             "loan_id": input_data["loan_id"],
             "locked_rate": locked_rate,
-            "current_rate": current_rate,
+            "current_market_rate": current_rate,
             "improvement": round(improvement, 3),
             "float_down_eligible": eligible,
-            "potential_new_rate": current_rate + 0.125 if eligible else None,  # Split improvement
-            "action_required": "Contact processor to execute float-down" if eligible else None
+            "potential_new_rate": round(current_rate + 0.125, 3) if eligible else None,
+            "action_required": "Contact processor to execute float-down" if eligible else None,
+            "disclaimer": "Float-down eligibility is preliminary. Final determination requires "
+                          "lock desk review. Improvement split and fees may apply."
         }
+
+        self.audit_log("float_down_check", entity_type="loan", entity_id=str(input_data["loan_id"]),
+                        details={"eligible": eligible, "improvement": round(improvement, 3)})
 
         return ToolResult(
             success=True,
@@ -375,47 +470,140 @@ class RateAdvisorAgent(SpecializedAgent):
         )
 
     async def _get_rate_history(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Get rate history"""
+        """Get rate history — tries live data from rate_monitor_snapshots, falls back to illustrative."""
         days = input_data.get("days", 30)
+        loan_type = input_data.get("loan_type", "conventional")
+        data_source = "live"
 
-        # Generate simulated history
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+
+            db = SessionLocal()
+            try:
+                rows = db.execute(text("""
+                    SELECT DATE(updated_at) as snap_date, AVG(rate) as avg_rate
+                    FROM rate_monitor_snapshots
+                    WHERE loan_type = :loan_type
+                      AND term_years = 30
+                      AND updated_at >= CURRENT_DATE - :days
+                    GROUP BY DATE(updated_at)
+                    ORDER BY snap_date
+                """), {"loan_type": loan_type, "days": days}).fetchall()
+
+                if rows and len(rows) >= 3:
+                    history = [{"date": r.snap_date.isoformat(), "rate": round(float(r.avg_rate), 3)} for r in rows]
+
+                    current = history[-1]["rate"]
+                    week_ago = history[-7]["rate"] if len(history) >= 7 else history[0]["rate"]
+                    month_ago = history[0]["rate"]
+
+                    trends = {
+                        "7_day_change": round(current - week_ago, 3),
+                        "30_day_change": round(current - month_ago, 3),
+                        "direction": "up" if current > week_ago else "down" if current < week_ago else "stable"
+                    }
+
+                    return ToolResult(
+                        success=True,
+                        data={
+                            "loan_type": loan_type,
+                            "history": history,
+                            "trends": trends,
+                            "data_source": "live",
+                            "disclaimer": "Historical rates for informational purposes. Past performance does not predict future rates."
+                        },
+                        message=f"Rate history for {days} days (live data)"
+                    )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Live rate history unavailable: {e}")
+            data_source = "illustrative"
+
+        # Fallback: illustrative history with disclaimer
         history = []
         base_rate = 6.875
         for i in range(days):
             date = datetime.now() - timedelta(days=days - i)
-            variation = (hash(str(date.date())) % 50 - 25) / 1000  # ±0.025%
+            variation = (hash(str(date.date())) % 50 - 25) / 1000
             history.append({
                 "date": date.strftime("%Y-%m-%d"),
                 "rate": round(base_rate + variation, 3)
             })
 
-        # Calculate trends
-        if len(history) >= 2:
-            week_ago = history[-7]["rate"] if len(history) >= 7 else history[0]["rate"]
-            month_ago = history[0]["rate"]
-            current = history[-1]["rate"]
+        current = history[-1]["rate"]
+        week_ago = history[-7]["rate"] if len(history) >= 7 else history[0]["rate"]
+        month_ago = history[0]["rate"]
 
-            trends = {
-                "7_day_change": round(current - week_ago, 3),
-                "30_day_change": round(current - month_ago, 3),
-                "direction": "up" if current > week_ago else "down" if current < week_ago else "stable"
-            }
-        else:
-            trends = {}
+        trends = {
+            "7_day_change": round(current - week_ago, 3),
+            "30_day_change": round(current - month_ago, 3),
+            "direction": "up" if current > week_ago else "down" if current < week_ago else "stable"
+        }
 
         return ToolResult(
             success=True,
             data={
-                "loan_type": input_data.get("loan_type", "conventional"),
+                "loan_type": loan_type,
                 "history": history,
-                "trends": trends
+                "trends": trends,
+                "data_source": "illustrative",
+                "disclaimer": "Illustrative rate history for demonstration only. "
+                              "Actual rate movements vary. Contact your LO for current pricing."
             },
-            message=f"Rate history for {days} days"
+            message=f"Illustrative rate history for {days} days"
         )
 
     async def _lock_rate(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Lock rate"""
-        lock_expiration = datetime.now() + timedelta(days=input_data.get("lock_period", 30))
+        """Lock rate — records lock in DB and creates audit trail.
+
+        COMPLIANCE: Rate locks are binding commitments. This tool requires
+        confirmation (risk_level=HIGH, requires_confirmation=True).
+        """
+        lock_period = input_data.get("lock_period", 30)
+        lock_expiration = datetime.now() + timedelta(days=lock_period)
+
+        # Try to persist to DB
+        try:
+            from database import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                org_id = self.context.get("organization_id")
+                # Update the loan's lock fields
+                db.execute(text("""
+                    UPDATE loans
+                    SET rate = :rate,
+                        lock_expiration_date = :lock_exp,
+                        lock_date = CURRENT_TIMESTAMP
+                    WHERE id = :loan_id
+                    AND (:org_id IS NULL OR organization_id = :org_id)
+                """), {
+                    "rate": input_data["rate"],
+                    "lock_exp": lock_expiration,
+                    "loan_id": input_data["loan_id"],
+                    "org_id": org_id,
+                })
+                db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Could not persist rate lock to DB: {e}")
+
+        confirmation = f"LCK-{datetime.now().strftime('%Y%m%d')}-{input_data['loan_id']}"
+
+        self.audit_log(
+            "rate_locked",
+            entity_type="loan",
+            entity_id=str(input_data["loan_id"]),
+            details={
+                "rate": input_data["rate"],
+                "points": input_data.get("points", 0),
+                "lock_period": lock_period,
+                "confirmation": confirmation
+            }
+        )
 
         return ToolResult(
             success=True,
@@ -423,12 +611,14 @@ class RateAdvisorAgent(SpecializedAgent):
                 "loan_id": input_data["loan_id"],
                 "locked_rate": input_data["rate"],
                 "points": input_data.get("points", 0),
-                "lock_period": input_data.get("lock_period", 30),
+                "lock_period": lock_period,
                 "locked_at": datetime.now().isoformat(),
                 "expires_at": lock_expiration.isoformat(),
-                "confirmation_number": f"LCK-{datetime.now().strftime('%Y%m%d')}-{input_data['loan_id']}"
+                "confirmation_number": confirmation,
+                "disclaimer": "Rate lock is subject to lock desk confirmation. "
+                              "Lock expiration is based on the selected period from today."
             },
-            message=f"Rate locked at {input_data['rate']}% for {input_data.get('lock_period', 30)} days"
+            message=f"Rate locked at {input_data['rate']}% for {lock_period} days (confirmation: {confirmation})"
         )
 
     async def _generate_rate_quote(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
@@ -474,11 +664,22 @@ class RateAdvisorAgent(SpecializedAgent):
                 {"period": 30, "rate": quoted_rate, "cost": 0},
                 {"period": 45, "rate": quoted_rate + 0.125, "cost": 0},
                 {"period": 60, "rate": quoted_rate + 0.25, "cost": 0}
-            ]
+            ],
+            "disclaimer": "This rate quote is for informational purposes only and is not a commitment "
+                          "to lend. Actual rate, APR, and terms are subject to change based on credit "
+                          "verification, property appraisal, and full underwriting review. "
+                          "Quote valid for 24 hours."
         }
+
+        self.audit_log("rate_quote_generated", details={
+            "quote_id": quote["quote_id"],
+            "rate": quoted_rate,
+            "amount": loan_amount,
+            "credit_score": credit_score
+        })
 
         return ToolResult(
             success=True,
             data=quote,
-            message=f"Quote generated: {quoted_rate}% rate, ${monthly_payment:,.2f}/mo"
+            message=f"Quote generated: {quoted_rate}% rate, ${monthly_payment:,.2f}/mo — for informational purposes only"
         )

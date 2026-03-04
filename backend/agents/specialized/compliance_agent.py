@@ -12,10 +12,13 @@ Specialized agent for regulatory compliance monitoring with 8 tools:
 8. get_compliance_report - Generate compliance report
 """
 
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import datetime, date, timedelta
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     SpecializedAgent,
@@ -204,6 +207,45 @@ class ComplianceAgent(SpecializedAgent):
         ))
 
     # ========================================================================
+    # HELPERS
+    # ========================================================================
+
+    @staticmethod
+    def _add_business_days(start_date, num_days: int):
+        """Add business days (Mon-Fri) to a date. Negative num_days subtracts."""
+        if start_date is None:
+            return None
+        if isinstance(start_date, datetime):
+            start_date = start_date.date()
+        current = start_date
+        step = 1 if num_days >= 0 else -1
+        remaining = abs(num_days)
+        while remaining > 0:
+            current += timedelta(days=step)
+            if current.weekday() < 5:  # Mon-Fri
+                remaining -= 1
+        return current
+
+    @staticmethod
+    def _business_days_between(start, end) -> int:
+        """Count business days between two dates (exclusive of start, inclusive of end)."""
+        if start is None or end is None:
+            return 0
+        if isinstance(start, datetime):
+            start = start.date()
+        if isinstance(end, datetime):
+            end = end.date()
+        if end <= start:
+            return 0
+        count = 0
+        current = start
+        while current < end:
+            current += timedelta(days=1)
+            if current.weekday() < 5:
+                count += 1
+        return count
+
+    # ========================================================================
     # TOOL IMPLEMENTATIONS
     # ========================================================================
 
@@ -220,16 +262,22 @@ class ComplianceAgent(SpecializedAgent):
 
         db = SessionLocal()
         try:
-            # Get loan info
+            # Get loan info with tenant isolation
+            org_id = self.context.get("organization_id")
+            org_clause = "AND organization_id = :org_id" if org_id else ""
+            loan_params: dict = {"loan_id": loan_id}
+            if org_id:
+                loan_params["org_id"] = org_id
+
             loan = db.execute(
-                text("""
+                text(f"""
                     SELECT
                         id, loan_number, borrower_name, amount,
                         application_date, lock_date, closing_date,
                         created_at
-                    FROM loans WHERE id = :loan_id
+                    FROM loans WHERE id = :loan_id {org_clause}
                 """),
-                {"loan_id": loan_id}
+                loan_params
             ).fetchone()
 
             if not loan:
@@ -257,8 +305,8 @@ class ComplianceAgent(SpecializedAgent):
             if check_type in ["le", "all"]:
                 initial_le = disclosure_map.get("initial_le")
 
-                # Initial LE must be delivered within 3 business days of application
-                le_deadline = app_date + timedelta(days=3) if app_date else None
+                # Initial LE must be delivered within 3 BUSINESS days of application
+                le_deadline = self._add_business_days(app_date, 3) if app_date else None
 
                 if initial_le:
                     le_delivered = initial_le.delivery_date
@@ -300,8 +348,8 @@ class ComplianceAgent(SpecializedAgent):
                 closing = loan.closing_date
 
                 if closing:
-                    # Initial CD must be delivered at least 3 business days before closing
-                    cd_deadline = closing - timedelta(days=3)
+                    # Initial CD must be delivered at least 3 BUSINESS days before closing
+                    cd_deadline = self._add_business_days(closing, -3)
 
                     if initial_cd:
                         cd_delivered = initial_cd.delivery_date
@@ -337,13 +385,61 @@ class ComplianceAgent(SpecializedAgent):
                             "actual": None
                         })
 
-            # Tolerance checks would compare LE to CD for fee changes
-            # Simplified version here
-            compliance_checks.append({
-                "check": "Fee tolerance",
-                "status": "not_checked",
-                "note": "Requires LE/CD fee comparison"
-            })
+            # Fee tolerance check — compare LE to CD amounts from loan_fees table
+            try:
+                fees = db.execute(
+                    text("""
+                        SELECT fee_name, tolerance_category, le_amount, cd_amount
+                        FROM loan_fees
+                        WHERE loan_id = :loan_id
+                    """),
+                    {"loan_id": loan_id}
+                ).fetchall()
+
+                if fees:
+                    zero_tolerance_violations = []
+                    ten_pct_le_total = 0.0
+                    ten_pct_cd_total = 0.0
+
+                    for fee in fees:
+                        le_amt = float(fee.le_amount or 0)
+                        cd_amt = float(fee.cd_amount or 0)
+
+                        if fee.tolerance_category == "zero" and cd_amt > le_amt:
+                            zero_tolerance_violations.append(fee.fee_name)
+                        elif fee.tolerance_category == "ten_percent":
+                            ten_pct_le_total += le_amt
+                            ten_pct_cd_total += cd_amt
+
+                    ten_pct_over = ten_pct_cd_total > ten_pct_le_total * 1.10
+
+                    if zero_tolerance_violations or ten_pct_over:
+                        issues.append({
+                            "type": "tolerance",
+                            "severity": "high",
+                            "description": f"Fee tolerance violations: {len(zero_tolerance_violations)} zero-tolerance, "
+                                           f"10% category {'OVER' if ten_pct_over else 'OK'}"
+                        })
+                        compliance_checks.append({
+                            "check": "Fee tolerance",
+                            "status": "failed",
+                            "zero_tolerance_violations": zero_tolerance_violations,
+                            "ten_pct_over": ten_pct_over
+                        })
+                    else:
+                        compliance_checks.append({"check": "Fee tolerance", "status": "passed"})
+                else:
+                    compliance_checks.append({
+                        "check": "Fee tolerance",
+                        "status": "not_applicable",
+                        "note": "No fee data on file yet"
+                    })
+            except Exception:
+                compliance_checks.append({
+                    "check": "Fee tolerance",
+                    "status": "not_checked",
+                    "note": "Fee data not available"
+                })
 
             overall_status = "compliant"
             if any(i["severity"] == "critical" for i in issues):
@@ -664,18 +760,19 @@ class ComplianceAgent(SpecializedAgent):
             if isinstance(app_date, datetime):
                 app_date = app_date.date()
 
-            # Check Initial LE timing (3 business days from application)
+            # Check Initial LE timing (3 BUSINESS days from application)
             le_date = disclosure_dates.get("initial_le")
             if le_date and app_date:
-                days_to_le = (le_date - app_date).days
-                le_compliant = days_to_le <= 3
+                biz_days_to_le = self._business_days_between(app_date, le_date)
+                le_deadline = self._add_business_days(app_date, 3)
+                le_compliant = biz_days_to_le <= 3
 
                 timeline_checks.append({
                     "requirement": "Initial LE within 3 business days",
-                    "deadline": (app_date + timedelta(days=3)).isoformat(),
+                    "deadline": le_deadline.isoformat() if le_deadline else None,
                     "actual": le_date.isoformat() if le_date else None,
                     "compliant": le_compliant,
-                    "days_used": days_to_le
+                    "business_days_used": biz_days_to_le
                 })
 
                 if not le_compliant:
@@ -684,20 +781,21 @@ class ComplianceAgent(SpecializedAgent):
                         "description": f"Initial LE delivered {days_to_le} days after application (max 3)"
                     })
 
-            # Check CD timing (3 business days before closing)
+            # Check CD timing (3 BUSINESS days before closing)
             cd_date = disclosure_dates.get("initial_cd")
             closing_date = loan.closing_date
 
             if closing_date and cd_date:
-                days_before_closing = (closing_date - cd_date).days
-                cd_compliant = days_before_closing >= 3
+                biz_days_before = self._business_days_between(cd_date, closing_date)
+                cd_deadline = self._add_business_days(closing_date, -3)
+                cd_compliant = biz_days_before >= 3
 
                 timeline_checks.append({
                     "requirement": "Initial CD 3+ business days before closing",
-                    "deadline": (closing_date - timedelta(days=3)).isoformat(),
+                    "deadline": cd_deadline.isoformat() if cd_deadline else None,
                     "actual": cd_date.isoformat() if cd_date else None,
                     "compliant": cd_compliant,
-                    "days_before_closing": days_before_closing
+                    "business_days_before_closing": biz_days_before
                 })
 
                 if not cd_compliant:
@@ -757,94 +855,69 @@ class ComplianceAgent(SpecializedAgent):
         state = input_data["state"].upper()
         loan_type = input_data.get("loan_type")
 
-        # State requirements database (simplified - in production use actual database)
+        # Comprehensive state requirements database (all 50 states + DC)
         state_requirements = {
-            "CA": {
-                "name": "California",
-                "licensing": "DBO/DRE License required",
-                "disclosures": [
-                    "California Mortgage Disclosure Statement",
-                    "MLDS if > $250,000",
-                    "Fair Lending Notice"
-                ],
-                "restrictions": [
-                    "Prepayment penalty restrictions",
-                    "Balloon payment restrictions for consumer loans",
-                    "Higher-priced mortgage loan protections"
-                ],
-                "waiting_periods": {
-                    "rescission": "3 business days for refinances"
-                },
-                "special_requirements": [
-                    "Licensed per DBO Financial Code",
-                    "Unique endorsement for each loan officer"
-                ]
-            },
-            "TX": {
-                "name": "Texas",
-                "licensing": "NMLS License required",
-                "disclosures": [
-                    "Texas Consumer Notice",
-                    "Home Equity Acknowledgment (if applicable)"
-                ],
-                "restrictions": [
-                    "Home equity loans limited to 80% LTV",
-                    "No prepayment penalties on home equity",
-                    "12-day cooling off period for home equity"
-                ],
-                "waiting_periods": {
-                    "home_equity": "12 days from application to closing"
-                },
-                "special_requirements": [
-                    "Home equity specific closing requirements",
-                    "Attorney review may be required"
-                ]
-            },
-            "NY": {
-                "name": "New York",
-                "licensing": "DFS License required",
-                "disclosures": [
-                    "NY Mortgage Disclosure Form",
-                    "Good Faith Estimate"
-                ],
-                "restrictions": [
-                    "Interest rate caps on certain loans",
-                    "Strict high-cost mortgage regulations"
-                ],
-                "waiting_periods": {
-                    "rescission": "3 business days"
-                },
-                "special_requirements": [
-                    "CEMA transactions common",
-                    "Mortgage recording tax"
-                ]
-            },
-            "FL": {
-                "name": "Florida",
-                "licensing": "OFR License required",
-                "disclosures": [
-                    "Florida Mortgage Disclosure"
-                ],
-                "restrictions": [
-                    "Documentary stamp tax",
-                    "Intangible tax on new mortgages"
-                ],
-                "waiting_periods": {},
-                "special_requirements": [
-                    "Title insurance required",
-                    "Survey may be required"
-                ]
-            }
+            "AL": {"name": "Alabama", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": ["No state-specific restrictions beyond federal"], "waiting_periods": {"rescission": "3 business days for refis"}, "special_requirements": ["Title insurance customary"]},
+            "AK": {"name": "Alaska", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": ["No state-specific restrictions"], "waiting_periods": {"rescission": "3 business days"}, "special_requirements": ["FHFA high-cost area limits apply statewide"]},
+            "AZ": {"name": "Arizona", "licensing": "NMLS License required", "disclosures": ["Standard federal", "AZ Deed of Trust Disclosure"], "restrictions": ["Anti-deficiency protections on purchase money loans"], "waiting_periods": {}, "special_requirements": ["Deed of trust state (non-judicial foreclosure)"]},
+            "AR": {"name": "Arkansas", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": ["Usury limits (17% constitutional cap)"], "waiting_periods": {}, "special_requirements": ["Mortgage tax applies"]},
+            "CA": {"name": "California", "licensing": "DFPI (DBO) License required", "disclosures": ["California Mortgage Disclosure Statement (MLDS)", "Fair Lending Notice", "Broker Fee Agreement"], "restrictions": ["Prepayment penalty restrictions", "Balloon payment restrictions", "Higher-priced mortgage loan protections"], "waiting_periods": {"rescission": "3 business days for refis"}, "special_requirements": ["Licensed per DFPI Financial Code", "Unique endorsement per MLO", "Covered loan protections (CFL)"]},
+            "CO": {"name": "Colorado", "licensing": "NMLS License required", "disclosures": ["CO Mortgage Broker Disclosure", "Standard federal"], "restrictions": ["Foreclosure mediation program"], "waiting_periods": {}, "special_requirements": ["Public trustee foreclosure process"]},
+            "CT": {"name": "Connecticut", "licensing": "NMLS License required", "disclosures": ["CT Fair Lending Notice"], "restrictions": ["CT high-cost loan thresholds"], "waiting_periods": {}, "special_requirements": ["Attorney state — attorney must be present at closing"]},
+            "DE": {"name": "Delaware", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Attorney state"]},
+            "DC": {"name": "District of Columbia", "licensing": "NMLS License required", "disclosures": ["DC Mortgage Disclosure"], "restrictions": ["High-cost area limits"], "waiting_periods": {}, "special_requirements": ["Recordation tax", "FHFA high-cost limits apply"]},
+            "FL": {"name": "Florida", "licensing": "OFR License required", "disclosures": ["Standard federal"], "restrictions": ["Documentary stamp tax", "Intangible tax on new mortgages"], "waiting_periods": {}, "special_requirements": ["Title insurance required", "Survey may be required", "Homestead exemption considerations"]},
+            "GA": {"name": "Georgia", "licensing": "NMLS License required", "disclosures": ["GA Fair Lending Notice"], "restrictions": ["GA Fair Lending Act (high-cost thresholds)"], "waiting_periods": {}, "special_requirements": ["Security deed state", "Intangible recording tax"]},
+            "HI": {"name": "Hawaii", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["FHFA high-cost area limits", "Leasehold properties common"]},
+            "ID": {"name": "Idaho", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Deed of trust state"]},
+            "IL": {"name": "Illinois", "licensing": "IDFPR License required", "disclosures": ["IL Mortgage Disclosures", "Standard federal"], "restrictions": ["IL high-risk home loan restrictions"], "waiting_periods": {}, "special_requirements": ["Transfer tax applies", "Survey requirement in some counties"]},
+            "IN": {"name": "Indiana", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Mortgage tax applies"]},
+            "IA": {"name": "Iowa", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Abstract of title common"]},
+            "KS": {"name": "Kansas", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Mortgage registration tax"]},
+            "KY": {"name": "Kentucky", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Mortgage recording tax"]},
+            "LA": {"name": "Louisiana", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Notarial act required", "Community property state"]},
+            "ME": {"name": "Maine", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Attorney state"]},
+            "MD": {"name": "Maryland", "licensing": "NMLS License required", "disclosures": ["MD Mortgage Disclosure", "Standard federal"], "restrictions": ["MD Mortgage Assistance Relief Services"], "waiting_periods": {}, "special_requirements": ["Transfer and recordation tax", "Ground rent properties in Baltimore"]},
+            "MA": {"name": "Massachusetts", "licensing": "NMLS License required", "disclosures": ["MA Predatory Lending Disclosure"], "restrictions": ["MA predatory lending law (ch. 183C)"], "waiting_periods": {}, "special_requirements": ["Attorney state", "Mortgage excise tax"]},
+            "MI": {"name": "Michigan", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Transfer tax applies"]},
+            "MN": {"name": "Minnesota", "licensing": "NMLS License required", "disclosures": ["MN Mortgage Disclosure"], "restrictions": ["MN predatory lending restrictions"], "waiting_periods": {}, "special_requirements": ["Mortgage registration tax", "Torrens/registered land system"]},
+            "MS": {"name": "Mississippi", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Deed of trust state"]},
+            "MO": {"name": "Missouri", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Deed of trust state"]},
+            "MT": {"name": "Montana", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": []},
+            "NE": {"name": "Nebraska", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Documentary stamp tax"]},
+            "NV": {"name": "Nevada", "licensing": "NMLS License required", "disclosures": ["NV Mortgage Disclosure"], "restrictions": ["NV Homeowner Bill of Rights"], "waiting_periods": {}, "special_requirements": ["Community property state", "Deed of trust state"]},
+            "NH": {"name": "New Hampshire", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": []},
+            "NJ": {"name": "New Jersey", "licensing": "NMLS License required", "disclosures": ["NJ Mortgage Disclosure"], "restrictions": ["NJ Home Ownership Security Act"], "waiting_periods": {}, "special_requirements": ["Attorney state", "Realty transfer fee"]},
+            "NM": {"name": "New Mexico", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Community property state"]},
+            "NY": {"name": "New York", "licensing": "DFS License required", "disclosures": ["NY Mortgage Disclosure Form", "Subprime Home Loan Notice"], "restrictions": ["Interest rate caps on certain loans", "NY high-cost mortgage regulations", "Banking Dept regulation of non-bank lenders"], "waiting_periods": {"rescission": "3 business days"}, "special_requirements": ["CEMA transactions common", "Mortgage recording tax", "Attorney state for closing", "Mansion tax on loans > $1M"]},
+            "NC": {"name": "North Carolina", "licensing": "NMLS License required", "disclosures": ["NC Predatory Lending Disclosure"], "restrictions": ["NC Anti-Predatory Lending Act"], "waiting_periods": {}, "special_requirements": ["Deed of trust state", "Revenue stamps"]},
+            "ND": {"name": "North Dakota", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": []},
+            "OH": {"name": "Ohio", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Transfer tax applies"]},
+            "OK": {"name": "Oklahoma", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Documentary stamp tax"]},
+            "OR": {"name": "Oregon", "licensing": "NMLS License required", "disclosures": ["OR Mortgage Lending Disclosure"], "restrictions": ["OR predatory lending restrictions"], "waiting_periods": {}, "special_requirements": ["Trust deed state"]},
+            "PA": {"name": "Pennsylvania", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Transfer tax", "Realty transfer tax"]},
+            "RI": {"name": "Rhode Island", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Attorney state"]},
+            "SC": {"name": "South Carolina", "licensing": "NMLS License required", "disclosures": ["SC Mortgage Disclosure"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Attorney state", "Recording fees"]},
+            "SD": {"name": "South Dakota", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": []},
+            "TN": {"name": "Tennessee", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Deed of trust state", "Transfer tax"]},
+            "TX": {"name": "Texas", "licensing": "NMLS License required", "disclosures": ["Texas Consumer Notice", "Home Equity Acknowledgment (if applicable)", "Texas Section 50(a)(6) requirements"], "restrictions": ["Home equity loans limited to 80% LTV", "No prepayment penalties on home equity", "12-day cooling off for home equity", "Cash-out refi seasoning requirements"], "waiting_periods": {"home_equity": "12 days from application to closing"}, "special_requirements": ["Home equity specific closing requirements (must close at title office)", "Attorney review may be required", "Unique constitutional protections (Art. XVI §50)"]},
+            "UT": {"name": "Utah", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Trust deed state"]},
+            "VT": {"name": "Vermont", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Attorney state"]},
+            "VA": {"name": "Virginia", "licensing": "NMLS License required", "disclosures": ["VA Mortgage Disclosure"], "restrictions": ["VA high-cost mortgage protections"], "waiting_periods": {}, "special_requirements": ["Deed of trust state", "Grantor tax and recordation tax"]},
+            "WA": {"name": "Washington", "licensing": "NMLS License required", "disclosures": ["WA Mortgage Broker Disclosure"], "restrictions": ["WA Mortgage Lending Fraud Prosecution Act"], "waiting_periods": {}, "special_requirements": ["Community property state", "Deed of trust state", "Excise tax"]},
+            "WV": {"name": "West Virginia", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Deed of trust state"]},
+            "WI": {"name": "Wisconsin", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": ["Community property state", "Transfer fee"]},
+            "WY": {"name": "Wyoming", "licensing": "NMLS License required", "disclosures": ["Standard federal"], "restrictions": [], "waiting_periods": {}, "special_requirements": []},
         }
 
-        # Default for states not in database
+        # Default for territories or unrecognized codes
         default_requirements = {
             "name": state,
             "licensing": "NMLS License required",
             "disclosures": ["Standard federal disclosures apply"],
             "restrictions": ["Follow federal regulations"],
             "waiting_periods": {"rescission": "3 business days for refinances"},
-            "special_requirements": ["Verify specific state requirements"]
+            "special_requirements": ["Verify specific jurisdiction requirements with compliance department"]
         }
 
         requirements = state_requirements.get(state, default_requirements)
