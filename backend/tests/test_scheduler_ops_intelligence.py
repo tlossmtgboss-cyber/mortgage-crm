@@ -386,6 +386,140 @@ class TestRT4_SLADashboardEnhancement:
 
 
 # ---------------------------------------------------------------------------
+# Enterprise Readiness: Critical Fixes Verification
+# ---------------------------------------------------------------------------
+
+class TestCF1_SMSConsentOrgIsolation:
+    """CF-1: check_sms_consent must accept organization_id for tenant isolation."""
+
+    def test_check_sms_consent_has_organization_id_param(self):
+        tree = _parse_file("scheduler_email_service.py")
+        func = _find_functions(tree)["check_sms_consent"]
+        param_names = [a.arg for a in func.args.args]
+        assert "organization_id" in param_names, (
+            "check_sms_consent must accept 'organization_id' parameter"
+        )
+
+    def test_sms_functions_pass_organization_id(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_email_service.py")) as f:
+            source = f.read()
+        assert "organization_id=organization_id" in source, (
+            "SMS functions must pass organization_id to check_sms_consent"
+        )
+
+    def test_lead_query_scoped_by_org(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_email_service.py")) as f:
+            source = f.read()
+        assert "Lead.organization_id" in source, (
+            "Lead query in check_sms_consent must filter by organization_id"
+        )
+
+
+class TestCF2_UserTimezoneOrgIsolation:
+    """CF-2: _get_user_timezone must scope by org_id."""
+
+    def test_get_user_timezone_has_org_id_param(self):
+        tree = _parse_file("scheduler_appointment_routes.py")
+        func = _find_functions(tree)["_get_user_timezone"]
+        param_names = [a.arg for a in func.args.args]
+        assert "org_id" in param_names, (
+            "_get_user_timezone must accept 'org_id' parameter"
+        )
+
+    def test_timezone_query_filters_by_org(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_appointment_routes.py")) as f:
+            source = f.read()
+        assert "SchedulerConfig.organization_id" in source, (
+            "_get_user_timezone must filter SchedulerConfig by organization_id"
+        )
+
+    def test_call_sites_pass_org_id(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_appointment_routes.py")) as f:
+            source = f.read()
+        # All _get_user_timezone calls must pass org_id
+        import re
+        calls = re.findall(r'_get_user_timezone\(db,[^)]+\)', source)
+        for call in calls:
+            if 'def _get_user_timezone' not in call:
+                assert 'org_id' in call, f"Call missing org_id: {call}"
+
+
+class TestCF3_AppointmentTypeOrgIsolation:
+    """CF-3: AppointmentType queries must filter by organization_id."""
+
+    def test_appointment_type_queries_have_org_filter(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_appointment_routes.py")) as f:
+            source = f.read()
+        assert "AppointmentType.organization_id" in source, (
+            "AppointmentType queries must include organization_id filter"
+        )
+
+
+class TestCF4_LOLicensingOrgIsolation:
+    """CF-4: _check_lo_licensing must scope User query by org_id."""
+
+    def test_check_lo_licensing_has_org_id_param(self):
+        tree = _parse_file("scheduler_appointment_routes.py")
+        func = _find_functions(tree)["_check_lo_licensing"]
+        param_names = [a.arg for a in func.args.args]
+        assert "org_id" in param_names, (
+            "_check_lo_licensing must accept 'org_id' parameter"
+        )
+
+    def test_user_query_filters_by_org(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_appointment_routes.py")) as f:
+            source = f.read()
+        assert "User.organization_id" in source, (
+            "_check_lo_licensing must filter User query by organization_id"
+        )
+
+
+class TestCF6_DNCFailClosed:
+    """CF-6: DNC check exception must block SMS (fail-closed)."""
+
+    def test_dnc_exception_blocks_sms(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_email_service.py")) as f:
+            source = f.read()
+        # Must NOT contain the old fail-open pattern
+        assert 'DNC check failed (allowing)' not in source, (
+            "DNC exception must NOT allow SMS (fail-open is a TCPA violation)"
+        )
+        # Must contain fail-closed pattern
+        assert 'blocking SMS for safety' in source or 'DNC check unavailable' in source, (
+            "DNC exception must block SMS (fail-closed)"
+        )
+
+
+class TestCF7_ContactHoursCheck:
+    """CF-7: TCPA time-of-day check must exist."""
+
+    def test_check_contact_hours_function_exists(self):
+        tree = _parse_file("scheduler_email_service.py")
+        funcs = _find_functions(tree)
+        assert "_check_contact_hours" in funcs, (
+            "_check_contact_hours function must exist for TCPA compliance"
+        )
+
+    def test_contact_hours_called_in_consent_check(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_email_service.py")) as f:
+            source = f.read()
+        assert "_check_contact_hours" in source, (
+            "_check_contact_hours must be called in check_sms_consent"
+        )
+
+    def test_contact_hours_checks_8am_9pm(self):
+        with open(os.path.join(BACKEND_DIR, "scheduler_email_service.py")) as f:
+            source = f.read()
+        # Must check for hour < 8 or hour >= 21 (8am-9pm)
+        assert "< 8" in source or "<= 7" in source, (
+            "Contact hours must check for before 8am"
+        )
+        assert ">= 21" in source or "> 20" in source, (
+            "Contact hours must check for after 9pm"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Cross-cutting: All files parse cleanly
 # ---------------------------------------------------------------------------
 

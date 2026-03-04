@@ -66,10 +66,11 @@ router = APIRouter()
 # CROSS-SOURCE CONFLICT HELPERS
 # ============================================================================
 
-def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_id=None):
+def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_id: int = None):
     """
     Gather all busy time blocks from all 3 calendar sources for a user.
     Returns a list of (start, end) tuples representing occupied time.
+    org_id filtering is ALWAYS applied when provided (mandatory for tenant isolation).
     """
     conflicts = []
 
@@ -179,11 +180,15 @@ def _get_org_id(user) -> int:
     return org_id
 
 
-def _get_user_timezone(db, user_id: int) -> str:
-    """Get user's configured timezone from SchedulerConfig, defaulting to America/Chicago."""
+def _get_user_timezone(db, user_id: int, org_id: int = None) -> str:
+    """Get user's configured timezone from SchedulerConfig, defaulting to America/Chicago.
+    Scoped by org_id to prevent cross-tenant config exposure."""
     SchedulerConfig = _models.get('SchedulerConfig')
     if SchedulerConfig and user_id:
-        config = db.query(SchedulerConfig).filter(SchedulerConfig.user_id == user_id).first()
+        tz_query = db.query(SchedulerConfig).filter(SchedulerConfig.user_id == user_id)
+        if org_id:
+            tz_query = tz_query.filter(SchedulerConfig.organization_id == org_id)
+        config = tz_query.first()
         if config and getattr(config, 'timezone', None):
             return config.timezone
     return 'America/Chicago'
@@ -354,11 +359,12 @@ def _audit_log(db, org_id: int, user_id: int, action: str, entity_type: str,
         logger.warning(f"Failed to write audit log: {e}")
 
 
-def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time, org_id=None, exclude_appointment_id=None):
+def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time, org_id: int = None, exclude_appointment_id=None):
     """
     Check for overlapping appointments using SELECT FOR UPDATE to prevent double-booking.
     Raises HTTPException 409 if a conflict is found or rows are locked by another transaction.
     exclude_appointment_id: skip this appointment (used when rescheduling to avoid self-conflict).
+    org_id: ALWAYS applied when provided for tenant isolation.
     """
     from sqlalchemy.exc import OperationalError
     Appointment = _models['Appointment']
@@ -368,6 +374,7 @@ def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time,
         Appointment.scheduled_start < end_time,
         Appointment.scheduled_end > start_time,
     ]
+    # Always scope by org_id when available (mandatory for tenant isolation)
     if org_id is not None:
         filters.append(Appointment.organization_id == org_id)
     if exclude_appointment_id is not None:
@@ -390,11 +397,12 @@ def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time,
 
 # C2: Duplicate booking detection
 def _check_duplicate_booking(db, attendee_email: str, assigned_user_id: int,
-                              start_time, org_id=None, window_minutes=30):
+                              start_time, org_id: int = None, window_minutes=30):
     """
     Check for an existing booking with the same attendee_email + same LO
     within ±window_minutes of the proposed start_time.
     Raises HTTPException 409 if a duplicate is found.
+    org_id: ALWAYS applied when provided for tenant isolation.
     """
     if not attendee_email:
         return  # No email to check against
@@ -410,6 +418,7 @@ def _check_duplicate_booking(db, attendee_email: str, assigned_user_id: int,
         Appointment.scheduled_start >= window_start,
         Appointment.scheduled_start <= window_end,
     ]
+    # Always scope by org_id when available (mandatory for tenant isolation)
     if org_id is not None:
         filters.append(Appointment.organization_id == org_id)
 
@@ -559,17 +568,21 @@ def _create_comm_failure_task(db, org_id: int, assigned_user_id: int,
         logger.error(f"Failed to create escalation task: {e}")
 
 
-def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str) -> Optional[str]:
+def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: int = None) -> Optional[str]:
     """
     C3: Soft check — verify LO has NMLS number on file.
     Returns a warning string if concern, None if OK. Advisory only.
+    Scoped by org_id to prevent cross-tenant user enumeration.
     """
     if not attendee_state:
         return None
 
     try:
         from database.models.core import User
-        assigned = db.query(User).filter(User.id == assigned_user_id).first()
+        lo_query = db.query(User).filter(User.id == assigned_user_id)
+        if org_id:
+            lo_query = lo_query.filter(User.organization_id == org_id)
+        assigned = lo_query.first()
         if not assigned:
             return f"Warning: Could not verify LO licensing - user {assigned_user_id} not found"
 
@@ -1448,7 +1461,7 @@ async def update_appointment(
     # Store OLD date/time before any updates for comparison
     old_date = None
     old_time = None
-    tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id))
+    tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id, org_id=org_id))
     if appointment.scheduled_start:
         old_local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
         old_date = old_local_start.strftime('%B %d, %Y')
@@ -1690,7 +1703,7 @@ async def cancel_appointment(
 
     # Format date and time for emails
     if appointment.scheduled_start:
-        tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id))
+        tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id, org_id=org_id))
         local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
         appointment_date = local_start.strftime('%B %d, %Y')
         appointment_time = local_start.strftime('%I:%M %p %Z')
@@ -2489,10 +2502,13 @@ async def get_public_booking_page(
                         db.flush()
 
                     # Get or create appointment type for this user
-                    user_type = db.query(AppointmentType).filter(
+                    demo_type_query = db.query(AppointmentType).filter(
                         AppointmentType.config_id == user_config.id,
                         AppointmentType.is_active == True
-                    ).first()
+                    )
+                    if demo_org_id:
+                        demo_type_query = demo_type_query.filter(AppointmentType.organization_id == demo_org_id)
+                    user_type = demo_type_query.first()
 
                     if not user_type:
                         user_type = AppointmentType(
@@ -2549,13 +2565,17 @@ async def get_public_booking_page(
     db.commit()
     db.refresh(link)
 
-    # Get available appointment types
+    # Get available appointment types (scoped by org to prevent cross-tenant enumeration)
+    link_type_org_id = getattr(link, 'organization_id', None)
     appointment_types = []
     if link.single_appointment_type_id:
-        appt_type = db.query(AppointmentType).filter(
+        type_query = db.query(AppointmentType).filter(
             AppointmentType.id == link.single_appointment_type_id,
             AppointmentType.is_active == True
-        ).first()
+        )
+        if link_type_org_id:
+            type_query = type_query.filter(AppointmentType.organization_id == link_type_org_id)
+        appt_type = type_query.first()
         if appt_type:
             appointment_types.append({
                 "id": appt_type.id,
@@ -2568,10 +2588,13 @@ async def get_public_booking_page(
                 "color": appt_type.color
             })
     elif link.appointment_type_ids:
-        types = db.query(AppointmentType).filter(
+        types_query = db.query(AppointmentType).filter(
             AppointmentType.id.in_(link.appointment_type_ids),
             AppointmentType.is_active == True
-        ).all()
+        )
+        if link_type_org_id:
+            types_query = types_query.filter(AppointmentType.organization_id == link_type_org_id)
+        types = types_query.all()
         for t in types:
             appointment_types.append({
                 "id": t.id,
@@ -2693,10 +2716,13 @@ async def confirm_public_booking(
         if existing_count >= link.max_per_person:
             raise HTTPException(status_code=429, detail="You have reached the maximum number of bookings allowed")
 
-    appt_type = db.query(AppointmentType).filter(
+    appt_type_query = db.query(AppointmentType).filter(
         AppointmentType.id == appointment_type_id,
         AppointmentType.is_active == True
-    ).first()
+    )
+    if link_org_id:
+        appt_type_query = appt_type_query.filter(AppointmentType.organization_id == link_org_id)
+    appt_type = appt_type_query.first()
 
     if not appt_type:
         raise HTTPException(status_code=404, detail="Appointment type not found")
@@ -2849,7 +2875,7 @@ async def confirm_public_booking(
     attendee_state = None
     if intake_responses:
         attendee_state = intake_responses.get("state") or intake_responses.get("property_state")
-    licensing_warning = _check_lo_licensing(db, assigned_user_id, attendee_state)
+    licensing_warning = _check_lo_licensing(db, assigned_user_id, attendee_state, org_id=link_org_id)
     if licensing_warning:
         logger.warning(f"Appointment {appointment.id}: {licensing_warning}")
 
@@ -3340,7 +3366,7 @@ async def confirm_website_demo_booking(
     db.refresh(new_appointment)
 
     # Format confirmation details
-    local_tz = pytz.timezone(_get_user_timezone(db, assigned_user_id))
+    local_tz = pytz.timezone(_get_user_timezone(db, assigned_user_id, org_id=demo_org_id))
     local_start = start_time.astimezone(local_tz)
     date_str = local_start.strftime("%A, %B %d, %Y")
     time_str = local_start.strftime("%-I:%M %p %Z")
