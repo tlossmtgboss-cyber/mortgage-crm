@@ -539,6 +539,8 @@ class SalesforceSyncService:
 
     def transform_value(self, value: Any, transform_type: Optional[str]) -> Any:
         """Transform a Salesforce value to CRM format."""
+        from decimal import Decimal as _Decimal, InvalidOperation
+
         if value is None:
             return None
 
@@ -547,8 +549,8 @@ class SalesforceSyncService:
 
         if transform_type == "decimal":
             try:
-                return float(value) if value else None
-            except (ValueError, TypeError):
+                return float(_Decimal(str(value))) if value else None
+            except (ValueError, TypeError, InvalidOperation):
                 return None
 
         if transform_type == "integer":
@@ -645,11 +647,19 @@ class SalesforceSyncService:
 
         try:
             # Check if loan exists and get current data for comparison
-            existing = self.db.execute(text("""
-                SELECT id, closing_date, lock_date, lock_expiration_date,
-                       application_date, contract_received_date, stage, funded_date
-                FROM loans WHERE salesforce_id = :sf_id
-            """), {"sf_id": salesforce_id}).fetchone()
+            # Scoped to loan_officer_id for multi-tenant isolation
+            if self.user_id:
+                existing = self.db.execute(text("""
+                    SELECT id, closing_date, lock_date, lock_expiration_date,
+                           application_date, contract_received_date, stage, funded_date
+                    FROM loans WHERE salesforce_id = :sf_id AND loan_officer_id = :user_id
+                """), {"sf_id": salesforce_id, "user_id": self.user_id}).fetchone()
+            else:
+                existing = self.db.execute(text("""
+                    SELECT id, closing_date, lock_date, lock_expiration_date,
+                           application_date, contract_received_date, stage, funded_date
+                    FROM loans WHERE salesforce_id = :sf_id
+                """), {"sf_id": salesforce_id}).fetchone()
 
             old_data = {}
 

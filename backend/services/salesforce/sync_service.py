@@ -879,6 +879,8 @@ class SalesforceSyncService:
         'present_housing_expense', 'proposed_housing_expense',
         # Additional
         'down_payment', 'credit_score', 'lock_date', 'lender',
+        # Audit / sync metadata
+        'salesforce_raw_stage',
     }
 
     async def _upsert_loan(
@@ -899,14 +901,22 @@ class SalesforceSyncService:
         """), {"user_id": user_id}).fetchone()
         org_id = user_row.organization_id if user_row else None
 
-        # Check if loan exists by salesforce_id
+        # Check if loan exists by salesforce_id (scoped to org for multi-tenant isolation)
         existing = None
         if salesforce_id:
-            existing = db.execute(text("""
-                SELECT id FROM loans
-                WHERE salesforce_id = :sf_id
-                LIMIT 1
-            """), {"sf_id": salesforce_id}).fetchone()
+            if org_id:
+                existing = db.execute(text("""
+                    SELECT id FROM loans
+                    WHERE salesforce_id = :sf_id AND organization_id = :org_id
+                    LIMIT 1
+                """), {"sf_id": salesforce_id, "org_id": org_id}).fetchone()
+            else:
+                # Legacy fallback: no org assigned yet
+                existing = db.execute(text("""
+                    SELECT id FROM loans
+                    WHERE salesforce_id = :sf_id
+                    LIMIT 1
+                """), {"sf_id": salesforce_id}).fetchone()
 
         # Cross-table check: if not found in loans, check if it exists as a lead.
         # If so, promote the lead to a loan instead of creating a duplicate.
@@ -943,9 +953,11 @@ class SalesforceSyncService:
             except (TypeError, ValueError):
                 data['amount'] = 0
 
-        # Map stage from Salesforce
+        # Map stage from Salesforce — capture raw value for audit
         if data.get('stage'):
-            data['stage'] = self._map_salesforce_stage(data['stage'])
+            raw_stage = data['stage']
+            data['stage'] = self._map_salesforce_stage(raw_stage)
+            data['salesforce_raw_stage'] = raw_stage
 
         # Filter to only valid loan columns, drop empty values (keep amount even if 0)
         loan_data = {}
@@ -1000,6 +1012,10 @@ class SalesforceSyncService:
                 except Exception as e:
                     logger.warning(f"SLA tracking hook failed for loan {loan_id} stage change: {e}")
 
+                # MUM promotion: if stage just changed to FUNDED, promote to MUM client
+                if new_stage == 'FUNDED':
+                    self._try_mum_promotion(db, loan_id, user_id)
+
             return loan_id
         else:
             # Use loan_number from Salesforce if provided, else generate one
@@ -1038,6 +1054,10 @@ class SalesforceSyncService:
                 )
             except Exception as e:
                 logger.warning(f"SLA tracking hook failed for new loan {loan_id}: {e}")
+
+            # MUM promotion: if new loan is created with FUNDED stage, promote immediately
+            if loan_data.get('stage') == 'FUNDED':
+                self._try_mum_promotion(db, loan_id, user_id)
 
             return loan_id
 
@@ -1090,10 +1110,15 @@ class SalesforceSyncService:
             'Funded': 'FUNDED',
             'Loan Funded': 'FUNDED',
             'Closed': 'FUNDED',
+            'Closed Won': 'FUNDED',
+            'Closed - Converted': 'FUNDED',
             'Completed': 'FUNDED',
             'Purchased': 'FUNDED',
             'File Complete': 'FUNDED',
             'Post-Closing': 'FUNDED',
+            'Post-Funding': 'FUNDED',
+            'Loan Sold': 'FUNDED',
+            'Settled': 'FUNDED',
             # Terminal
             'Cancelled': 'CANCELLED',
             'Withdrawn': 'WITHDRAWN',
@@ -1585,6 +1610,65 @@ class SalesforceSyncService:
         logger.info(f"Updated lead {lead_id} with {len(update_fields)} fields from Salesforce {sf_type} {sf_id}")
         return True
 
+    # Comprehensive SF Opportunity field → CRM loan column mapping
+    SF_OPPORTUNITY_FIELD_MAP = {
+        # Borrower info
+        'Name': 'borrower_name',
+        'Contact_Email__c': 'borrower_email',
+        'Contact_Phone__c': 'borrower_phone',
+        # Core loan details
+        'Amount': 'amount',
+        'Interest_Rate__c': 'rate',
+        'Type': 'loan_type',
+        'Loan_Purpose__c': 'loan_purpose',
+        'Loan_Program__c': 'program',
+        'Loan_Number__c': 'loan_number',
+        'LTV__c': 'ltv',
+        'Loan_Term__c': 'term',
+        # Property info
+        'Property_Address__c': 'property_address',
+        'Property_City__c': 'property_city',
+        'Property_State__c': 'property_state',
+        'Property_Zip__c': 'property_zip',
+        'Property_Type__c': 'property_type',
+        'Property_Value__c': 'property_value',
+        'Occupancy_Type__c': 'occupancy_type',
+        'Appraisal_Value__c': 'appraisal_value',
+        'Purchase_Price__c': 'purchase_price',
+        # Dates
+        'CloseDate': 'closing_date',
+        'Funded_Date__c': 'funded_date',
+        'Application_Date__c': 'application_date',
+        'Lock_Expiration__c': 'lock_expiration_date',
+        'Lock_Date__c': 'lock_date',
+        # Financial details
+        'Monthly_Payment__c': 'monthly_payment',
+        'Down_Payment__c': 'down_payment',
+        'Credit_Score__c': 'credit_score',
+        'DTI__c': 'dti',
+        'APR__c': 'apr',
+        'CLTV__c': 'cltv',
+        'Points__c': 'points',
+        'Origination_Fee__c': 'origination_fee',
+        # Jungo / MtgPlanner custom fields (override standard if present)
+        'MtgPlanner_CRM__Loan_Number__c': 'loan_number',
+        'MtgPlanner_CRM__Loan_Amount__c': 'amount',
+        'MtgPlanner_CRM__Interest_Rate__c': 'rate',
+        'MtgPlanner_CRM__Property_Address__c': 'property_address',
+        'MtgPlanner_CRM__Property_City__c': 'property_city',
+        'MtgPlanner_CRM__Property_State__c': 'property_state',
+        'MtgPlanner_CRM__Property_Zip__c': 'property_zip',
+        'MtgPlanner_CRM__Close_Date__c': 'closing_date',
+        'MtgPlanner_CRM__Credit_Score__c': 'credit_score',
+    }
+
+    # Numeric CRM columns that should be coerced from SF string values
+    _NUMERIC_LOAN_COLUMNS = {
+        'amount', 'rate', 'ltv', 'property_value', 'appraisal_value',
+        'purchase_price', 'monthly_payment', 'down_payment', 'credit_score',
+        'dti', 'apr', 'cltv', 'points', 'origination_fee', 'term',
+    }
+
     async def _update_loan_from_salesforce(
         self,
         db: Session,
@@ -1595,36 +1679,50 @@ class SalesforceSyncService:
         """
         Update a CRM loan with ALL fields from Salesforce Opportunity.
 
-        Maps all text, number, and date fields from Salesforce to CRM.
+        Maps all text, number, and date fields from Salesforce to CRM
+        using SF_OPPORTUNITY_FIELD_MAP. Only writes columns that exist
+        in VALID_LOAN_COLUMNS.
         """
         from sqlalchemy import text
+        from decimal import Decimal, InvalidOperation
 
-        # Build update data from Salesforce Opportunity
         update_fields = {}
 
-        # Text fields
-        if sf_record.get('Name'):
-            update_fields['borrower_name'] = sf_record['Name']
-        if sf_record.get('Type'):
-            update_fields['loan_type'] = sf_record['Type']
+        # Map all known SF fields to CRM columns
+        for sf_field, crm_column in self.SF_OPPORTUNITY_FIELD_MAP.items():
+            value = sf_record.get(sf_field)
+            if value is None or value == '':
+                continue
+            if crm_column not in self.VALID_LOAN_COLUMNS:
+                continue
 
-        # Number fields
-        if sf_record.get('Amount'):
-            update_fields['amount'] = float(sf_record['Amount'])
+            # Coerce numeric columns
+            if crm_column in self._NUMERIC_LOAN_COLUMNS:
+                try:
+                    value = float(Decimal(str(value)))
+                except (InvalidOperation, TypeError, ValueError):
+                    logger.warning(f"SF→Loan sync: invalid numeric value for {sf_field}={value!r}")
+                    continue
 
-        # Date fields
-        if sf_record.get('CloseDate'):
-            update_fields['closing_date'] = sf_record['CloseDate']
+            update_fields[crm_column] = value
 
-        # Stage mapping
+        # Stage mapping (special handling)
         if sf_record.get('StageName'):
-            update_fields['stage'] = self._map_salesforce_stage(sf_record['StageName'])
+            raw_stage = sf_record['StageName']
+            update_fields['stage'] = self._map_salesforce_stage(raw_stage)
+            update_fields['salesforce_raw_stage'] = raw_stage
 
         # Always update salesforce_id
         update_fields['salesforce_id'] = sf_id
 
-        if not update_fields:
+        if len(update_fields) <= 1:  # Only salesforce_id, no real data
             return False
+
+        # Capture old stage for MUM promotion check
+        old_stage_row = db.execute(text(
+            "SELECT stage::text FROM loans WHERE id = :lid"
+        ), {"lid": loan_id}).fetchone()
+        old_stage = old_stage_row[0] if old_stage_row else None
 
         # Build dynamic UPDATE query
         set_clauses = ", ".join([f"{k} = :{k}" for k in update_fields.keys()])
@@ -1636,7 +1734,18 @@ class SalesforceSyncService:
             WHERE id = :loan_id
         """), update_fields)
 
-        logger.info(f"Updated loan {loan_id} with {len(update_fields)} fields from Salesforce Opportunity {sf_id}")
+        logger.info(f"Updated loan {loan_id} with {len(update_fields) - 1} fields from Salesforce Opportunity {sf_id}")
+
+        # MUM promotion: if stage just changed to FUNDED, promote
+        new_stage = update_fields.get('stage')
+        if new_stage == 'FUNDED' and old_stage != 'FUNDED':
+            # Need user_id for MUM promotion — look it up from loan
+            user_row = db.execute(text(
+                "SELECT loan_officer_id FROM loans WHERE id = :lid"
+            ), {"lid": loan_id}).fetchone()
+            if user_row and user_row[0]:
+                self._try_mum_promotion(db, loan_id, user_row[0])
+
         return True
 
     def _map_sf_lead_status_to_crm(self, sf_status: str) -> str:
@@ -1709,6 +1818,8 @@ class SalesforceSyncService:
     # SF statuses that indicate a funded/closed loan (MUM candidate)
     FUNDED_STATUSES = {
         'Funded', 'Closed', 'Closed Won', 'Closed - Converted',
+        'Loan Funded', 'Completed', 'Purchased', 'File Complete',
+        'Post-Closing', 'Post-Funding', 'Loan Sold', 'Settled',
     }
 
     def _classify_record_bucket(self, data: Dict[str, Any]) -> str:
