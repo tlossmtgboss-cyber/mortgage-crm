@@ -133,6 +133,64 @@ class SweepHistoryInput(BaseModel):
 # HELPER FUNCTIONS
 # ============================================================================
 
+# Cache the resolved tasktype enum value so we only query it once per process
+_RESOLVED_TASK_TYPE = None
+
+
+def _get_task_type_value(db):
+    """Resolve the correct tasktype enum value for 'Human Needed' / first available type.
+
+    The PostgreSQL tasktype enum may store values differently from the Python enum
+    (e.g. 'HUMAN_NEEDED' vs 'Human Needed'). This queries the actual DB enum values
+    once and caches the result.
+    """
+    global _RESOLVED_TASK_TYPE
+    if _RESOLVED_TASK_TYPE is not None:
+        return _RESOLVED_TASK_TYPE
+
+    from sqlalchemy import text
+    try:
+        rows = db.execute(text(
+            "SELECT unnest(enum_range(NULL::tasktype)) as val"
+        )).fetchall()
+        enum_vals = [r[0] for r in rows]
+        logger.info(f"Resolved tasktype enum values: {enum_vals}")
+
+        # Prefer a value that looks like "Human Needed" or "HUMAN_NEEDED"
+        for val in enum_vals:
+            if val.lower().replace("_", " ") == "human needed":
+                _RESOLVED_TASK_TYPE = val
+                return val
+        # Fallback: use first non-completed value
+        for val in enum_vals:
+            if "complete" not in val.lower():
+                _RESOLVED_TASK_TYPE = val
+                return val
+        # Last resort: first value
+        if enum_vals:
+            _RESOLVED_TASK_TYPE = enum_vals[0]
+            return enum_vals[0]
+    except Exception as e:
+        logger.warning(f"Could not resolve tasktype enum: {e}")
+
+    return None
+
+
+def _get_completed_type_value(db):
+    """Resolve the correct tasktype enum value for 'Completed'."""
+    from sqlalchemy import text
+    try:
+        rows = db.execute(text(
+            "SELECT unnest(enum_range(NULL::tasktype)) as val"
+        )).fetchall()
+        for r in rows:
+            if "complete" in r[0].lower():
+                return r[0]
+    except Exception:
+        pass
+    return None
+
+
 def _dedup_and_create_task(db, title: str, description: str, priority: str,
                            loan_id=None, lead_id=None, owner_id=None,
                            organization_id=None, due_date=None,
@@ -140,14 +198,14 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     """Check for existing open task with same title in ai_tasks, create if not found.
 
     Writes to ai_tasks table (not tasks) so tasks appear in the frontend task list.
-    Uses ORM to handle the tasktype enum correctly.
+    Dynamically resolves the tasktype enum values to handle DB/Python mismatches.
     Returns True if created.
     """
     from sqlalchemy import text
 
     # Dedup: check for existing non-completed task with same title
     # Cast type to text to avoid enum comparison issues
-    conditions = ["title = :title", "type::text != 'Completed'"]
+    conditions = ["title = :title", "type::text NOT ILIKE '%completed%'"]
     params = {"title": title}
 
     if loan_id:
@@ -163,88 +221,51 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
     if existing:
         return False
 
-    # Use ORM to create the task — this handles the tasktype enum correctly
-    # regardless of how the DB enum was created
-    try:
-        from database.models.task import AITask
-        from database.enums import TaskType
+    # Resolve the actual DB enum value for the type column
+    task_type = _get_task_type_value(db)
 
-        task = AITask(
-            title=title,
-            description=description,
-            priority=priority,
-            type=TaskType.HUMAN_NEEDED,
-        )
-        if loan_id:
-            task.loan_id = loan_id
-        if lead_id:
-            task.lead_id = lead_id
-        if owner_id:
-            task.assigned_to_id = owner_id
-        if organization_id:
-            task.organization_id = organization_id
-        if due_date:
-            task.due_date = due_date
-        if category:
-            task.category = category
-        if borrower_name:
-            task.borrower_name = borrower_name
+    insert_cols = ["title", "description", "priority", "created_at"]
+    insert_vals = [":title", ":description", ":priority", "NOW()"]
+    insert_params = {"title": title, "description": description, "priority": priority}
 
-        db.add(task)
-        db.flush()
-        return True
-    except Exception:
-        # Fallback: try raw SQL with column-to-text cast approach
-        # Query the first non-Completed enum value to use as the type
-        try:
-            first_type = db.execute(text(
-                "SELECT unnest(enum_range(NULL::tasktype)) as val LIMIT 1"
-            )).scalar()
-        except Exception:
-            first_type = None
+    if task_type:
+        insert_cols.append("type")
+        insert_vals.append(":task_type::tasktype")
+        insert_params["task_type"] = task_type
 
-        insert_cols = ["title", "description", "priority", "created_at"]
-        insert_vals = [":title", ":description", ":priority", "NOW()"]
-        insert_params = {"title": title, "description": description, "priority": priority}
+    if loan_id:
+        insert_cols.append("loan_id")
+        insert_vals.append(":loan_id")
+        insert_params["loan_id"] = loan_id
+    if lead_id:
+        insert_cols.append("lead_id")
+        insert_vals.append(":lead_id")
+        insert_params["lead_id"] = lead_id
+    if owner_id:
+        insert_cols.append("assigned_to_id")
+        insert_vals.append(":assigned_to_id")
+        insert_params["assigned_to_id"] = owner_id
+    if organization_id:
+        insert_cols.append("organization_id")
+        insert_vals.append(":organization_id")
+        insert_params["organization_id"] = organization_id
+    if due_date:
+        insert_cols.append("due_date")
+        insert_vals.append(":due_date")
+        insert_params["due_date"] = due_date
+    if category:
+        insert_cols.append("category")
+        insert_vals.append(":category")
+        insert_params["category"] = category
+    if borrower_name:
+        insert_cols.append("borrower_name")
+        insert_vals.append(":borrower_name")
+        insert_params["borrower_name"] = borrower_name
 
-        if first_type:
-            insert_cols.append("type")
-            insert_vals.append(":task_type::tasktype")
-            insert_params["task_type"] = first_type
-
-        if loan_id:
-            insert_cols.append("loan_id")
-            insert_vals.append(":loan_id")
-            insert_params["loan_id"] = loan_id
-        if lead_id:
-            insert_cols.append("lead_id")
-            insert_vals.append(":lead_id")
-            insert_params["lead_id"] = lead_id
-        if owner_id:
-            insert_cols.append("assigned_to_id")
-            insert_vals.append(":assigned_to_id")
-            insert_params["assigned_to_id"] = owner_id
-        if organization_id:
-            insert_cols.append("organization_id")
-            insert_vals.append(":organization_id")
-            insert_params["organization_id"] = organization_id
-        if due_date:
-            insert_cols.append("due_date")
-            insert_vals.append(":due_date")
-            insert_params["due_date"] = due_date
-        if category:
-            insert_cols.append("category")
-            insert_vals.append(":category")
-            insert_params["category"] = category
-        if borrower_name:
-            insert_cols.append("borrower_name")
-            insert_vals.append(":borrower_name")
-            insert_params["borrower_name"] = borrower_name
-
-        cols_sql = ", ".join(insert_cols)
-        vals_sql = ", ".join(insert_vals)
-        db.execute(text(f"INSERT INTO ai_tasks ({cols_sql}) VALUES ({vals_sql})"), insert_params)
-        return True
+    cols_sql = ", ".join(insert_cols)
+    vals_sql = ", ".join(insert_vals)
+    db.execute(text(f"INSERT INTO ai_tasks ({cols_sql}) VALUES ({vals_sql})"), insert_params)
+    return True
 
 
 # ============================================================================
@@ -1221,7 +1242,7 @@ class OpsManagerAgent(SpecializedAgent):
                     t.priority,
                     COUNT(*) as count
                 FROM ai_tasks t
-                WHERE t.type::text != 'Completed'
+                WHERE t.type::text NOT ILIKE '%%completed%%'
                     AND ({ops_prefixes})
                     {category_filter}
                     {org_filter}
