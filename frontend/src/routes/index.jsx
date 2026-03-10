@@ -114,6 +114,7 @@ const YearOverYear = lazyRetry(() => import('../pages/YearOverYear'));
 const RateMonitor = lazyRetry(() => import('../pages/RateMonitor'));
 const Tasks = lazyRetry(() => import('../pages/Tasks'));
 const Calendar = lazyRetry(() => import('../pages/Calendar'));
+const CalendarSettings = lazyRetry(() => import('../pages/CalendarSettings'));
 const Scorecard = lazyRetry(() => import('../pages/Scorecard'));
 const Assistant = lazyRetry(() => import('../pages/Assistant'));
 const ClientProfile = lazyRetry(() => import('../pages/ClientProfile'));
@@ -417,6 +418,8 @@ export function getRoutes(layoutProps) {
     <Route key="/accept-invite" path="/accept-invite" element={<LazyPage><AcceptInvite /></LazyPage>} />,
     <Route key="/activate" path="/activate" element={<LazyPage><ActivateAccount /></LazyPage>} />,
     <Route key="/meeting/:roomCode" path="/meeting/:roomCode" element={<LazyPage><MeetingRoom /></LazyPage>} />,
+    <Route key="/book/org/:orgSlug/lo/:loSlug" path="/book/org/:orgSlug/lo/:loSlug" element={<LazyPage><PublicBooking /></LazyPage>} />,
+    <Route key="/book/org/:orgSlug" path="/book/org/:orgSlug" element={<LazyPage><PublicBooking /></LazyPage>} />,
     <Route key="/book/:slug" path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />,
     <Route key="/portal-test" path="/portal-test" element={<LazyPage><PortalTest /></LazyPage>} />,
 
@@ -520,6 +523,7 @@ export function getRoutes(layoutProps) {
     // Tasks & Calendar
     <Route key="/tasks" path="/tasks" element={withMainLayout(Tasks)} />,
     <Route key="/calendar" path="/calendar" element={withMainLayout(Calendar)} />,
+    <Route key="/calendar-settings" path="/calendar-settings" element={withMainLayout(CalendarSettings)} />,
 
     // Marketing
     <Route key="/marketing" path="/marketing" element={withMainLayout(Marketing)} />,

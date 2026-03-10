@@ -29,6 +29,9 @@ class AppointmentStatus(str, enum.Enum):
     AVAILABLE = "available"
     TENTATIVE = "tentative"
     BOOKED = "booked"
+    CONFIRMED = "confirmed"
+    REMINDED = "reminded"
+    CHECKED_IN = "checked_in"
     COMPLETED = "completed"
     NO_SHOW = "no_show"
     CANCELLED = "cancelled"
@@ -176,6 +179,10 @@ def create_smart_scheduler_models(Base):
 
         # Landing page customization settings (JSON)
         landing_page_settings = Column(JSON, default=dict)
+
+        # Notification preferences (JSON)
+        # Format: {"email_reminder_24h": true, "sms_reminder_2h": true, "quiet_hours_enabled": false, ...}
+        notification_settings = Column(JSON, default=dict)
 
         # Status
         is_active = Column(Boolean, default=True)
@@ -405,6 +412,7 @@ def create_smart_scheduler_models(Base):
         status_changed_by_user = relationship("User", foreign_keys=[status_changed_by])
         rescheduled_from = relationship("Appointment", remote_side=[id])
         reminders = relationship("AppointmentReminder", back_populates="appointment", cascade="all, delete-orphan")
+        status_history = relationship("AppointmentStatusHistory", back_populates="appointment", cascade="all, delete-orphan", order_by="AppointmentStatusHistory.changed_at")
 
 
     class RoutingRule(Base):
@@ -627,6 +635,46 @@ def create_smart_scheduler_models(Base):
 
 
     # ====================================================================
+    # STATUS HISTORY
+    # ====================================================================
+    class AppointmentStatusHistory(Base):
+        """
+        Tracks every status change for an appointment, providing a full
+        audit trail used by the timeline widget on the frontend.
+        """
+        __tablename__ = "appointment_status_history"
+        __table_args__ = (
+            Index('ix_appt_status_history_appt', 'appointment_id', 'changed_at'),
+            Index('ix_appt_status_history_org', 'organization_id'),
+            {'extend_existing': True}
+        )
+
+        id = Column(Integer, primary_key=True, index=True)
+        organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+        appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id", ondelete="CASCADE"), nullable=False)
+
+        # Status transition
+        previous_status = Column(String(30), nullable=True)  # Null for initial creation
+        new_status = Column(String(30), nullable=False)
+
+        # Who made the change
+        changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+        changed_by_name = Column(String(255), nullable=True)  # Denormalized for display
+        change_source = Column(String(50), default="manual")  # manual, ai, system, reminder, public
+
+        # Notes and context
+        notes = Column(Text, nullable=True)
+        metadata = Column(JSON, default=dict)  # Extra context (e.g., cancellation_reason, reschedule_from)
+
+        # Timestamps
+        changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+        # Relationships
+        appointment = relationship("Appointment", back_populates="status_history")
+        changed_by = relationship("User", foreign_keys=[changed_by_user_id])
+
+
+    # ====================================================================
     # AUDIT LOG
     # ====================================================================
     class SchedulerAuditLog(Base):
@@ -658,6 +706,7 @@ def create_smart_scheduler_models(Base):
         'BlockedTime': BlockedTime,
         'BookingLink': BookingLink,
         'AppointmentReminder': AppointmentReminder,
+        'AppointmentStatusHistory': AppointmentStatusHistory,
         'SchedulerAuditLog': SchedulerAuditLog,
     }
 

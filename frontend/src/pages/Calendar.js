@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { calendarAPI, schedulerAPI, unifiedCalendarAPI, teamAPI } from '../services/api';
 import './Calendar.css';
 
@@ -49,7 +50,16 @@ const isSameDay = (d1, d2) =>
   d1.getMonth() === d2.getMonth() &&
   d1.getDate() === d2.getDate();
 
+// Keyboard handler: triggers onClick on Enter or Space for interactive non-button elements
+const handleInteractiveKeyDown = (e, onClick) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    onClick(e);
+  }
+};
+
 function Calendar() {
+  const navigate = useNavigate();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
   const [allEvents, setAllEvents] = useState([]);
@@ -436,7 +446,11 @@ function Calendar() {
                 <div className="hour-label">{formatHour(hour)}</div>
                 <div
                   className="hour-slot"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Add event at ${formatHour(hour)}`}
                   onClick={() => handleTimeSlotClick(currentDate, hour)}
+                  onKeyDown={(e) => handleInteractiveKeyDown(e, () => handleTimeSlotClick(currentDate, hour))}
                 >
                   {hourEvents.map(event => {
                     const { startStr, duration } = formatEventTime(event.start_time, event.end_time);
@@ -444,10 +458,14 @@ function Calendar() {
                       <div
                         key={event.id}
                         className={`day-event ${getEventColorClass(event.event_type)} ${event.isAppointment ? 'clickable' : ''}`}
+                        role={event.isAppointment ? 'button' : undefined}
+                        tabIndex={event.isAppointment ? 0 : undefined}
+                        aria-label={event.isAppointment ? `Edit appointment: ${event.title}` : undefined}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (event.isAppointment) handleEditAppointment(event);
                         }}
+                        onKeyDown={event.isAppointment ? (e) => handleInteractiveKeyDown(e, () => handleEditAppointment(event)) : undefined}
                         title={event.title}
                       >
                         <div className="day-event-time">{startStr} ({duration}m)</div>
@@ -488,10 +506,17 @@ function Calendar() {
             <div
               key={i}
               className={`week-day-col-header ${isSameDay(day, today) ? 'today' : ''}`}
+              role="button"
+              tabIndex={0}
+              aria-label={`View ${dayNames[day.getDay()]}, ${monthNames[day.getMonth()]} ${day.getDate()}`}
               onClick={() => {
                 setCurrentDate(new Date(day));
                 setView('day');
               }}
+              onKeyDown={(e) => handleInteractiveKeyDown(e, () => {
+                setCurrentDate(new Date(day));
+                setView('day');
+              })}
               style={{ cursor: 'pointer' }}
             >
               <span className="week-day-name">{dayAbbreviations[day.getDay()]}</span>
@@ -509,16 +534,24 @@ function Calendar() {
                   <div
                     key={i}
                     className="week-cell"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Add event on ${dayAbbreviations[day.getDay()]} at ${formatHour(hour)}`}
                     onClick={() => handleTimeSlotClick(day, hour)}
+                    onKeyDown={(e) => handleInteractiveKeyDown(e, () => handleTimeSlotClick(day, hour))}
                   >
                     {cellEvents.map(event => (
                       <div
                         key={event.id}
                         className={`week-event ${getEventColorClass(event.event_type)} ${event.isAppointment ? 'clickable' : ''}`}
+                        role={event.isAppointment ? 'button' : undefined}
+                        tabIndex={event.isAppointment ? 0 : undefined}
+                        aria-label={event.isAppointment ? `Edit appointment: ${event.title}` : undefined}
                         onClick={(e) => {
                           e.stopPropagation();
                           if (event.isAppointment) handleEditAppointment(event);
                         }}
+                        onKeyDown={event.isAppointment ? (e) => handleInteractiveKeyDown(e, () => handleEditAppointment(event)) : undefined}
                         title={event.title}
                       >
                         {event.title}
@@ -565,7 +598,11 @@ function Calendar() {
               <div
                 key={day}
                 className={`mini-calendar-day ${isToday ? 'today' : ''} ${dayEvents.length > 0 ? 'has-events' : ''}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`${monthNames[month]} ${day}, ${year}${dayEvents.length > 0 ? `, ${dayEvents.length} event${dayEvents.length > 1 ? 's' : ''}` : ''}`}
                 onClick={() => handleDayClick(day, year, month)}
+                onKeyDown={(e) => handleInteractiveKeyDown(e, () => handleDayClick(day, year, month))}
               >
                 <div className="mini-day-number">{day}</div>
                 {dayEvents.length > 0 && (
@@ -610,6 +647,7 @@ function Calendar() {
           className="calendar-scroll-btn scroll-up"
           onClick={handleScrollUp}
           title="Previous month"
+          aria-label="Previous month"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="18 15 12 9 6 15"></polyline>
@@ -625,6 +663,7 @@ function Calendar() {
           className="calendar-scroll-btn scroll-down"
           onClick={handleScrollDown}
           title="Next month"
+          aria-label="Next month"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <polyline points="6 9 12 15 18 9"></polyline>
@@ -642,20 +681,26 @@ function Calendar() {
           <p>{getHeaderSubtitle()}</p>
         </div>
         <div className="calendar-controls">
-          <div className="view-switcher">
+          <div className="view-switcher" role="tablist" aria-label="Calendar view">
             <button
+              role="tab"
+              aria-selected={view === 'day'}
               className={view === 'day' ? 'active' : ''}
               onClick={() => setView('day')}
             >
               Day
             </button>
             <button
+              role="tab"
+              aria-selected={view === 'week'}
               className={view === 'week' ? 'active' : ''}
               onClick={() => setView('week')}
             >
               Week
             </button>
             <button
+              role="tab"
+              aria-selected={view === 'month'}
               className={view === 'month' ? 'active' : ''}
               onClick={() => setView('month')}
             >
@@ -663,18 +708,21 @@ function Calendar() {
             </button>
           </div>
           <div className="month-navigation">
-            <button onClick={handlePrev}>&larr;</button>
+            <button onClick={handlePrev} aria-label={`Previous ${view}`}>&larr;</button>
             <button onClick={handleToday}>Today</button>
-            <button onClick={handleNext}>&rarr;</button>
+            <button onClick={handleNext} aria-label={`Next ${view}`}>&rarr;</button>
             <button className="btn-add-event" onClick={() => { setSelectedDate(new Date()); setSelectedTime(null); setShowAddModal(true); }}>
               + Add Event
+            </button>
+            <button className="btn-calendar-settings" onClick={() => navigate('/calendar-settings')} title="Calendar Settings" aria-label="Calendar Settings">
+              <i className="fas fa-cog"></i>
             </button>
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="calendar-error-banner">
+        <div className="calendar-error-banner" role="alert">
           <span>{error}</span>
           <button onClick={() => { setError(null); loadEvents(); loadAllEvents(); }}>
             Retry
@@ -695,10 +743,12 @@ function Calendar() {
               + Add
             </button>
           </div>
-          <div className="calendar-tabs">
+          <div className="calendar-tabs" role="tablist" aria-label="Appointment filters">
             {TAB_CONFIG.map(tab => (
               <button
                 key={tab.key}
+                role="tab"
+                aria-selected={activeTab === tab.key}
                 className={`calendar-tab ${activeTab === tab.key ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.key)}
               >
@@ -707,7 +757,9 @@ function Calendar() {
             ))}
           </div>
           <div className="search-container">
+            <label htmlFor="calendar-search" className="sr-only">Search events</label>
             <input
+              id="calendar-search"
               type="text"
               className="search-input"
               placeholder="Search events..."
@@ -733,7 +785,11 @@ function Calendar() {
                     )}
                     <div
                       className={`appointment-item appointment-${event.event_type || 'meeting'} ${event.isAppointment ? 'clickable' : ''}`}
+                      role={event.isAppointment ? 'button' : undefined}
+                      tabIndex={event.isAppointment ? 0 : undefined}
+                      aria-label={event.isAppointment ? `Edit appointment: ${event.title}` : undefined}
                       onClick={() => event.isAppointment && handleEditAppointment(event)}
+                      onKeyDown={event.isAppointment ? (e) => handleInteractiveKeyDown(e, () => handleEditAppointment(event)) : undefined}
                       style={{ cursor: event.isAppointment ? 'pointer' : 'default' }}
                     >
                       <div className="appointment-time">
@@ -759,6 +815,7 @@ function Calendar() {
                         className="delete-appointment"
                         onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event); }}
                         title={event.isAppointment ? "Cancel appointment" : "Delete event"}
+                        aria-label={event.isAppointment ? `Cancel appointment: ${event.title}` : `Delete event: ${event.title}`}
                       >
                         &times;
                       </button>
@@ -1001,9 +1058,11 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppoin
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" role="dialog" aria-modal="true" aria-label="Add event" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-mode-toggle">
+        <div className="modal-mode-toggle" role="tablist" aria-label="Event type">
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'event'}
             className={mode === 'event' ? 'active' : ''}
             onClick={() => setMode('event')}
           >
@@ -1011,6 +1070,8 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppoin
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'appointment'}
             className={mode === 'appointment' ? 'active' : ''}
             onClick={() => setMode('appointment')}
           >

@@ -828,6 +828,106 @@ export const schedulerAPI = {
     const response = await api.post(`/api/v1/scheduler/appointments/${id}/cancel`, { reason });
     return response.data;
   },
+  getAppointmentTimeline: async (id) => {
+    const response = await api.get(`/api/v1/scheduler/appointments/${id}/timeline`);
+    return response.data;
+  },
+};
+
+// Team Calendar API (manager/admin multi-LO schedule view)
+export const teamCalendarAPI = {
+  getTeamCalendar: async (startDate, endDate, loIds = null) => {
+    const params = { start_date: startDate, end_date: endDate };
+    if (loIds) params.lo_ids = loIds;
+    const response = await api.get('/api/v1/calendar/team', { params });
+    return response.data;
+  },
+  getCapacity: async (startDate, endDate, loIds = null) => {
+    const params = { start_date: startDate, end_date: endDate };
+    if (loIds) params.lo_ids = loIds;
+    const response = await api.get('/api/v1/calendar/team/capacity', { params });
+    return response.data;
+  },
+  reassignAppointment: async (appointmentId, newLoId, reason = null) => {
+    const response = await api.post('/api/v1/calendar/team/reassign', {
+      appointment_id: appointmentId,
+      new_lo_id: newLoId,
+      reason,
+    });
+    return response.data;
+  },
+  getAvailabilityMatrix: async (targetDate, durationMinutes = 30, loIds = null) => {
+    const params = { target_date: targetDate, duration_minutes: durationMinutes };
+    if (loIds) params.lo_ids = loIds;
+    const response = await api.get('/api/v1/calendar/team/availability-matrix', { params });
+    return response.data;
+  },
+};
+
+// Calendar Settings API (availability, appointment types, notifications, booking page, integrations, team)
+export const calendarSettingsAPI = {
+  // Availability
+  getAvailability: async () => {
+    const response = await api.get('/api/v1/calendar-settings/availability');
+    return response.data;
+  },
+  updateAvailability: async (data) => {
+    const response = await api.put('/api/v1/calendar-settings/availability', data);
+    return response.data;
+  },
+  // Appointment Types
+  getAppointmentTypes: async () => {
+    const response = await api.get('/api/v1/calendar-settings/appointment-types');
+    return response.data;
+  },
+  createAppointmentType: async (data) => {
+    const response = await api.post('/api/v1/calendar-settings/appointment-types', data);
+    return response.data;
+  },
+  updateAppointmentType: async (id, data) => {
+    const response = await api.put(`/api/v1/calendar-settings/appointment-types/${id}`, data);
+    return response.data;
+  },
+  deleteAppointmentType: async (id) => {
+    const response = await api.delete(`/api/v1/calendar-settings/appointment-types/${id}`);
+    return response.data;
+  },
+  reorderAppointmentTypes: async (typeIds) => {
+    const response = await api.put('/api/v1/calendar-settings/appointment-types/reorder', { type_ids: typeIds });
+    return response.data;
+  },
+  // Notifications
+  getNotifications: async () => {
+    const response = await api.get('/api/v1/calendar-settings/notifications');
+    return response.data;
+  },
+  updateNotifications: async (data) => {
+    const response = await api.put('/api/v1/calendar-settings/notifications', data);
+    return response.data;
+  },
+  // Booking Page
+  getBookingPage: async () => {
+    const response = await api.get('/api/v1/calendar-settings/booking-page');
+    return response.data;
+  },
+  updateBookingPage: async (data) => {
+    const response = await api.put('/api/v1/calendar-settings/booking-page', data);
+    return response.data;
+  },
+  // Integrations
+  getIntegrations: async () => {
+    const response = await api.get('/api/v1/calendar-settings/integrations');
+    return response.data;
+  },
+  // Team
+  getTeam: async () => {
+    const response = await api.get('/api/v1/calendar-settings/team');
+    return response.data;
+  },
+  updateTeam: async (data) => {
+    const response = await api.put('/api/v1/calendar-settings/team', data);
+    return response.data;
+  },
 };
 
 // Process Templates API

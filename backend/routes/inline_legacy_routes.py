@@ -1192,8 +1192,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Could not load Master Manager routes: {e}")
 
     # Include Smart Scheduler routes (AI-native appointment scheduling)
+    smart_scheduler_models = {}  # default; populated on success for downstream consumers (team calendar, etc.)
     try:
-        from smart_scheduler_models import create_smart_scheduler_models
+        from smart_scheduler_models import (
+            SchedulerConfig, AvailabilitySlot, AppointmentType as SchedAppointmentType,
+            Appointment, RoutingRule, BlockedTime, BookingLink,
+            AppointmentReminder, SchedulerAuditLog,
+        )
         from smart_scheduler_routes import router as smart_scheduler_router, set_dependencies as set_scheduler_deps
 
         # Ensure the simple scheduler tables exist (with organization_id column)
@@ -1210,8 +1215,18 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         except Exception as mig_err:
             logger.warning(f"Scheduler tenant migration: {mig_err}")
 
-        # Create smart scheduler models using our Base
-        smart_scheduler_models = create_smart_scheduler_models(Base)
+        # Build models dict from direct imports (backward-compatible with set_dependencies API)
+        smart_scheduler_models = {
+            'SchedulerConfig': SchedulerConfig,
+            'AvailabilitySlot': AvailabilitySlot,
+            'AppointmentType': SchedAppointmentType,
+            'Appointment': Appointment,
+            'RoutingRule': RoutingRule,
+            'BlockedTime': BlockedTime,
+            'BookingLink': BookingLink,
+            'AppointmentReminder': AppointmentReminder,
+            'SchedulerAuditLog': SchedulerAuditLog,
+        }
 
         # Add User model so scheduler can lookup users by slug
         smart_scheduler_models['User'] = User
@@ -1314,23 +1329,37 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Could not load AI Scheduler Setup routes: {e}")
         logger.warning(f"Traceback: {traceback.format_exc()}")
 
-    # Include Enhanced Scheduler routes (Advanced features)
+    # Set Enhanced Scheduler dependencies (routes now consolidated into scheduler_appointment_routes)
+    # The enhanced router is included via smart_scheduler_routes aggregator, so no separate include needed.
     try:
         from scheduler_enhancements import create_scheduler_enhancement_models
-        from scheduler_enhanced_routes import router as scheduler_enhanced_router, set_enhanced_dependencies
+        from routes.scheduler_appointment_routes import set_enhanced_dependencies
 
-        # Create enhanced scheduler models using our Base
+        # Create enhanced scheduler models (factory still used here; scheduler_enhancements
+        # is a separate refactoring target)
         scheduler_enhanced_models = create_scheduler_enhancement_models(Base)
 
-        # Set dependencies for the enhanced routes
+        # Set dependencies for the enhanced routes (router already included via aggregator)
         set_enhanced_dependencies(get_db, get_current_user, smart_scheduler_models, scheduler_enhanced_models)
 
-        # Include the enhanced router
-        app.include_router(scheduler_enhanced_router, tags=["Smart Scheduler Enhanced"])
-        logger.info("✅ Enhanced Scheduler routes loaded (Resources, SLA, Analytics, Group Sessions)")
+        logger.info("✅ Enhanced Scheduler dependencies set (Resources, SLA, Analytics, Group Sessions)")
     except Exception as e:
         import traceback
-        logger.warning(f"⚠️ Could not load Enhanced Scheduler routes: {e}")
+        logger.warning(f"⚠️ Could not set Enhanced Scheduler dependencies: {e}")
+        logger.warning(f"Traceback: {traceback.format_exc()}")
+
+    # Include Team Calendar routes (multi-LO side-by-side schedule view)
+    try:
+        from routes.team_calendar_routes import register_team_calendar_routes
+        register_team_calendar_routes(
+            app=app,
+            get_current_user=get_current_user,
+            models_dict=smart_scheduler_models,
+        )
+        logger.info("✅ Team Calendar routes loaded (team view, capacity, reassign, availability matrix)")
+    except Exception as e:
+        import traceback
+        logger.warning(f"⚠️ Could not load Team Calendar routes: {e}")
         logger.warning(f"Traceback: {traceback.format_exc()}")
 
     # Include Calendly Integration routes
@@ -2127,6 +2156,15 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         except Exception as e:
             logger.warning(f"⚠️ Workflow engine job not registered: {e}")
 
+    # Register ops manager jobs (daily sweep, auto-resolve stale tasks)
+    if scheduler:
+        try:
+            from tasks.ops_manager_tasks import setup_ops_manager_scheduler
+            setup_ops_manager_scheduler(scheduler)
+            logger.info("✅ Ops Manager scheduler jobs registered")
+        except Exception as e:
+            logger.warning(f"⚠️ Ops Manager scheduler jobs not registered: {e}")
+
     # Ensure scheduler is started after all jobs registered
     if scheduler and not scheduler.running:
         try:
@@ -2135,7 +2173,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         except Exception as e:
             logger.warning(f"⚠️ APScheduler failed to start: {e}")
 
-    # Calendar Sync routes (CRM ↔ Salesforce ↔ Outlook calendar synchronization)
+    # Calendar routes (consolidated: Salesforce sync, CalendarEvent CRUD, unified view)
+    # All calendar sub-routers are now in routes/calendar_sync_routes.py
     try:
         from models.calendar_sync_models import CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings
         for model in [CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings]:
@@ -2145,25 +2184,9 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 logger.error(f"Error creating calendar sync table {model.__tablename__}: {e}")
         from routes.calendar_sync_routes import router as calendar_sync_router
         app.include_router(calendar_sync_router, tags=["Calendar Sync"])
-        logger.info("✅ Calendar sync routes loaded")
+        logger.info("✅ Calendar routes loaded (sync, events, unified view)")
     except Exception as e:
-        logger.warning(f"⚠️ Calendar sync routes not loaded: {e}")
-
-    # Calendar Events routes (CRUD for user calendar events)
-    try:
-        from routes.calendar_routes import router as calendar_events_router
-        app.include_router(calendar_events_router, tags=["Calendar Events"])
-        logger.info("✅ Calendar events routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Calendar events routes not loaded: {e}")
-
-    # Unified Calendar routes (merges calendar, scheduler, and CRM events)
-    try:
-        from routes.unified_calendar_routes import router as unified_calendar_router
-        app.include_router(unified_calendar_router, tags=["Unified Calendar"])
-        logger.info("✅ Unified calendar routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Unified calendar routes not loaded: {e}")
+        logger.warning(f"⚠️ Calendar routes not loaded: {e}")
 
     # HubSpot Integration routes (OAuth, CRM Sync)
     try:
@@ -2185,14 +2208,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Follow Up Boss routes not loaded: {e}")
 
-    # Google Calendar Integration routes (OAuth, Calendar Sync)
+    # Google Calendar dependencies (routes now included via consolidated calendar_sync_routes)
     try:
-        from routes.google_calendar_routes import router as google_calendar_router, set_dependencies as set_google_calendar_deps
+        from routes.calendar_sync_routes import set_dependencies as set_google_calendar_deps
         set_google_calendar_deps(get_db, get_current_user)
-        app.include_router(google_calendar_router, tags=["Google Calendar Integration"])
-        logger.info("✅ Google Calendar routes loaded")
+        logger.info("✅ Google Calendar dependencies set (routes loaded via calendar_sync_routes)")
     except Exception as e:
-        logger.warning(f"⚠️ Google Calendar routes not loaded: {e}")
+        logger.warning(f"⚠️ Google Calendar dependencies not set: {e}")
 
     # Zoom Integration routes (OAuth, Meetings)
     try:
@@ -2297,14 +2319,25 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     # Page Permissions routes (Role-based page access control)
     # Note: Page Permissions routes already loaded above (line ~5068)
 
-    # Smart Scheduler Settings routes (Comprehensive error handling pattern)
+    # Smart Scheduler Settings (now consolidated into routes/scheduler_routes.py, loaded via aggregator)
+    # The old /api/v1/smart-scheduler-settings/ prefix routes are now at /api/v1/scheduler/settings
+    # Keeping this block for backward compat logging; thin wrapper has an empty router.
     try:
         from routes.smart_scheduler_settings_routes import router as smart_scheduler_settings_router, set_dependencies as set_scheduler_settings_deps
         set_scheduler_settings_deps(get_current_user)
         app.include_router(smart_scheduler_settings_router, tags=["Smart Scheduler Settings"])
-        logger.info("✅ Smart Scheduler Settings routes loaded")
+        logger.info("✅ Smart Scheduler Settings routes loaded (consolidated into scheduler routes)")
     except Exception as e:
         logger.warning(f"⚠️ Smart Scheduler Settings routes not loaded: {e}")
+
+    # Calendar Settings routes (availability, appointment types, notifications, booking page, integrations, team)
+    try:
+        from routes.calendar_settings_routes import router as calendar_settings_router, set_dependencies as set_cal_settings_deps
+        set_cal_settings_deps(get_current_user)
+        app.include_router(calendar_settings_router, tags=["Calendar Settings"])
+        logger.info("✅ Calendar Settings routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Calendar Settings routes not loaded: {e}")
 
     # Email Integration Settings routes (Comprehensive error handling pattern)
     try:

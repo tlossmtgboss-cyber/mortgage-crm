@@ -1,0 +1,1114 @@
+/**
+ * Calendar Settings Styles
+ * Follows SmartSchedulerSettings.css patterns with Perennia brand colors.
+ */
+
+/* ============================================================================
+   Page Layout
+   ============================================================================ */
+
+.cal-settings-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px;
+  padding-bottom: 100px; /* Space for sticky save bar */
+}
+
+/* Loading */
+.cal-settings-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  text-align: center;
+  color: #64748b;
+}
+
+.cal-settings-loading .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #218D8D;
+  border-radius: 50%;
+  animation: cal-spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes cal-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.cal-settings-page .settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.cal-settings-page .header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.cal-settings-page .back-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.cal-settings-page .back-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.cal-settings-page .settings-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.cal-settings-page .subtitle {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.cal-settings-page .header-actions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Buttons
+   ============================================================================ */
+
+.cal-settings-page .btn-primary,
+.cal-settings-page .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.cal-settings-page .btn-sm {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.cal-settings-page .btn-primary {
+  background: #218D8D;
+  color: white;
+}
+
+.cal-settings-page .btn-primary:hover:not(:disabled) {
+  background: #1a7a7a;
+}
+
+.cal-settings-page .btn-primary:disabled {
+  background: #7cc5c5;
+  cursor: not-allowed;
+}
+
+.cal-settings-page .btn-secondary {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.cal-settings-page .btn-secondary:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.cal-settings-page .btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Tabs
+   ============================================================================ */
+
+.cal-settings-page .settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.cal-settings-page .tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cal-settings-page .tab-btn:hover {
+  color: #218D8D;
+}
+
+.cal-settings-page .tab-btn.active {
+  color: #218D8D;
+  border-bottom-color: #218D8D;
+}
+
+.cal-settings-page .tab-btn i {
+  font-size: 15px;
+}
+
+/* ============================================================================
+   Settings Section Card
+   ============================================================================ */
+
+.cal-settings-section {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 28px;
+  margin-bottom: 24px;
+}
+
+.cal-settings-section h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.cal-settings-section .section-description {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+
+.cal-settings-section .subsection-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+  margin: 28px 0 12px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.section-header-row h2 {
+  margin-bottom: 4px;
+}
+
+/* ============================================================================
+   Business Hours Grid
+   ============================================================================ */
+
+.cal-settings-page .business-hours-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cal-settings-page .day-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.cal-settings-page .day-row.disabled {
+  background: #f1f5f9;
+  opacity: 0.6;
+}
+
+.cal-settings-page .day-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  cursor: pointer;
+}
+
+.cal-settings-page .day-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #218D8D;
+}
+
+.cal-settings-page .day-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.cal-settings-page .time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.cal-settings-page .time-inputs input[type="time"] {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.cal-settings-page .time-inputs input[type="time"]:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.cal-settings-page .time-separator {
+  color: #64748b;
+  font-size: 14px;
+  padding: 0 2px;
+}
+
+/* Lunch break row */
+.lunch-break-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #fefce8;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+
+.quiet-hours-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+/* ============================================================================
+   Form Grid
+   ============================================================================ */
+
+.cal-settings-page .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.cal-settings-page .form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.cal-settings-page .form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.cal-settings-page .form-field label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.cal-settings-page .form-field input[type="text"],
+.cal-settings-page .form-field input[type="url"],
+.cal-settings-page .form-field input[type="number"],
+.cal-settings-page .form-field select,
+.cal-settings-page .form-field textarea {
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.cal-settings-page .form-field input:focus,
+.cal-settings-page .form-field select:focus,
+.cal-settings-page .form-field textarea:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.cal-settings-page .field-hint {
+  display: block;
+  color: #64748b;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+   Appointment Types
+   ============================================================================ */
+
+.type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.type-card {
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+
+.type-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.type-color-bar {
+  width: 5px;
+  flex-shrink: 0;
+}
+
+.type-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  padding: 14px 16px;
+  gap: 12px;
+}
+
+.type-info h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.type-meta {
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.type-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-public {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.type-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  background: none;
+  border: 1px solid transparent;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  font-size: 13px;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.icon-btn.danger:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.type-form-card,
+.edit-type-form {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.type-form-card h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+/* Color Picker */
+.color-picker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.15s;
+  padding: 0;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch.selected {
+  border-color: #1e293b;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #1e293b;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400 !important;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #218D8D;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+}
+
+.empty-state i {
+  font-size: 40px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.empty-state p {
+  font-size: 14px;
+}
+
+.empty-hint {
+  color: #94a3b8;
+  font-size: 14px;
+  text-align: center;
+  padding: 16px;
+}
+
+/* ============================================================================
+   Notifications
+   ============================================================================ */
+
+.notification-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.notif-column {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.notif-column h3 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notif-column h3 i {
+  color: #218D8D;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: #475569;
+}
+
+.toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #218D8D;
+}
+
+.event-notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ============================================================================
+   Booking Page
+   ============================================================================ */
+
+.color-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-input-row input[type="color"] {
+  width: 40px;
+  height: 40px;
+  padding: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+}
+
+.color-text-input {
+  flex: 1;
+}
+
+/* Booking Preview */
+.booking-preview {
+  border: 2px solid;
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  transition: all 0.3s;
+}
+
+.booking-preview .preview-logo {
+  max-height: 48px;
+  margin-bottom: 12px;
+}
+
+.booking-preview h4 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.booking-preview p {
+  margin: 0 0 20px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.preview-cta {
+  padding: 12px 28px;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: default;
+}
+
+/* Booking Links */
+.booking-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.booking-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  gap: 12px;
+}
+
+.link-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.link-info strong {
+  display: block;
+  font-size: 14px;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.link-info code {
+  font-size: 12px;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.link-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Integrations
+   ============================================================================ */
+
+.integration-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.integration-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  transition: border-color 0.15s;
+}
+
+.integration-card.connected {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.integration-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.integration-icon.google {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.integration-icon.outlook {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.integration-info {
+  flex: 1;
+}
+
+.integration-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.connected-text {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #16a34a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.disconnected-text {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.sync-time {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.integration-action {
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Team
+   ============================================================================ */
+
+.strategy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.strategy-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.strategy-option:hover {
+  border-color: #cbd5e1;
+}
+
+.strategy-option.selected {
+  border-color: #218D8D;
+  background: #e6f5f5;
+}
+
+.strategy-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: #218D8D;
+}
+
+.strategy-content {
+  flex: 1;
+}
+
+.strategy-content strong {
+  display: block;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.strategy-content span {
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Team table */
+.team-table-wrap {
+  overflow-x: auto;
+}
+
+.team-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.team-table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 2px solid #e2e8f0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.team-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+
+.team-table tr:hover td {
+  background: #f8fafc;
+}
+
+.member-name {
+  font-weight: 500;
+}
+
+.member-email {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.capacity-input {
+  width: 64px;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.capacity-input:focus {
+  outline: none;
+  border-color: #218D8D;
+}
+
+.upcoming-count {
+  text-align: center;
+  font-weight: 500;
+}
+
+.empty-row {
+  text-align: center;
+  color: #94a3b8;
+  padding: 32px 12px !important;
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e1;
+  border-radius: 24px;
+  transition: 0.2s;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #218D8D;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* ============================================================================
+   Sticky Save Bar
+   ============================================================================ */
+
+.cal-settings-page .sticky-save-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  padding: 16px 24px;
+  z-index: 100;
+}
+
+.cal-settings-page .save-bar-content {
+  max-width: 920px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cal-settings-page .save-bar-content span {
+  font-weight: 500;
+  color: #475569;
+}
+
+.cal-settings-page .save-bar-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .cal-settings-page {
+    padding: 16px;
+    padding-bottom: 100px;
+  }
+
+  .cal-settings-page .settings-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .cal-settings-page .header-actions {
+    width: 100%;
+  }
+
+  .cal-settings-page .header-actions button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .cal-settings-page .settings-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cal-settings-page .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-settings-page .form-field.full-width {
+    grid-column: 1;
+  }
+
+  .cal-settings-page .day-row {
+    flex-wrap: wrap;
+  }
+
+  .cal-settings-page .day-toggle {
+    min-width: 100%;
+  }
+
+  .cal-settings-page .time-inputs {
+    width: 100%;
+  }
+
+  .notification-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lunch-break-row,
+  .quiet-hours-row {
+    flex-wrap: wrap;
+  }
+
+  .type-content {
+    flex-wrap: wrap;
+  }
+
+  .integration-card {
+    flex-wrap: wrap;
+  }
+
+  .booking-link-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .link-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .team-table {
+    font-size: 13px;
+  }
+
+  .cal-settings-page .save-bar-content {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .cal-settings-page .save-bar-actions {
+    width: 100%;
+  }
+
+  .cal-settings-page .save-bar-actions button {
+    flex: 1;
+  }
+}

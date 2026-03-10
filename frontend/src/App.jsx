@@ -71,6 +71,8 @@ const YearOverYear = lazyRetry(() => import('./pages/YearOverYear'));
 const RateMonitor = lazyRetry(() => import('./pages/RateMonitor'));
 const Tasks = lazyRetry(() => import('./pages/Tasks'));
 const Calendar = lazyRetry(() => import('./pages/Calendar'));
+const CalendarSettings = lazyRetry(() => import('./pages/CalendarSettings'));
+const TeamCalendar = lazyRetry(() => import('./pages/TeamCalendar'));
 const Scorecard = lazyRetry(() => import('./pages/Scorecard'));
 const Assistant = lazyRetry(() => import('./pages/Assistant'));
 const ClientProfile = lazyRetry(() => import('./pages/ClientProfile'));
@@ -1449,6 +1451,50 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Calendar /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/calendar-settings"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><CalendarSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/team-calendar"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><TeamCalendar /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
