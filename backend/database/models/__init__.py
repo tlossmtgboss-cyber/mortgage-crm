@@ -252,6 +252,19 @@ from .refinance_intelligence import (
     PortfolioMonitoringRun,
 )
 
+# Credit bureau monitoring models
+from .credit_monitoring import (
+    CreditMonitoringSubscription,
+    CreditAlert,
+    CreditInquiryAlert,
+    MonitoringStatus,
+    CreditBureauProvider,
+    ContactType,
+    AlertType,
+    InquiryType,
+    NotificationChannel,
+)
+
 # Rate lock & market data models
 from .rate_lock import (
     RateLock,
@@ -301,6 +314,80 @@ from .webhook import (
     WebhookDeliveryLog,
     WebhookEventCatalog,
 )
+
+# Content library models (pre-built and custom marketing templates)
+from .content_library import (
+    ContentLibraryItem,
+    ContentUsageLog,
+    ContentType,
+    ContentCategory,
+)
+
+# AI Document Intelligence models
+from .document_intelligence import (
+    AIDocumentClassification,
+    DocumentRequirementRule,
+    POSDocumentMapping,
+    CallIntelDocumentNeed,
+    DocumentRuleCategory,
+    DocumentRulePriority,
+    DocumentRuleAppliesTo,
+    CallIntelDocNeedStatus,
+)
+
+# Document follow-up & scheduling models
+from .document_followup import (
+    FollowupCampaign,
+    FollowupEvent,
+    DocumentAppointment,
+    FollowupTemplate,
+    CampaignType,
+    CampaignStatus,
+    CampaignTriggerSource,
+    FollowupEventType,
+    DeliveryStatus,
+    AppointmentType,
+    AppointmentStatus,
+    LocationType,
+)
+
+# E-Signature models (envelopes, recipients, fields, audit, templates)
+from .esignature import (
+    ESignatureEnvelope,
+    ESignatureRecipient,
+    ESignatureField,
+    ESignatureAuditEvent,
+    ESignatureTemplate,
+    EnvelopeStatus,
+    RecipientType,
+    RecipientStatus,
+    RecipientAuthMethod,
+    SignatureFieldType,
+    AuditEventType,
+)
+
+# Document security & audit models
+from .document_security import (
+    DocumentAccessLog,
+    DocumentEncryptionRecord,
+    DocumentIntegrityCheck,
+    DocumentRetentionPolicy,
+    DocumentWatermarkLog,
+    AccessType,
+    EncryptionStatus,
+    IntegrityCheckType,
+    RetentionAction,
+    WatermarkType,
+)
+
+# Scheduling analytics & continuous learning models
+from .scheduling_analytics import (
+    SchedulingInsight,
+    AppointmentOutcome,
+)
+
+# Calendar event mapping (provider-agnostic sync)
+from .calendar_event_map import CalendarEventMap
 
 
 __all__ = [
@@ -587,4 +674,80 @@ __all__ = [
     "WebhookSubscription",
     "WebhookDeliveryLog",
     "WebhookEventCatalog",
+
+    # =====================
+    # Content Library
+    # =====================
+    "ContentLibraryItem",
+    "ContentUsageLog",
+    "ContentType",
+    "ContentCategory",
+
+    # =====================
+    # AI Document Intelligence
+    # =====================
+    "AIDocumentClassification",
+    "DocumentRequirementRule",
+    "POSDocumentMapping",
+    "CallIntelDocumentNeed",
+    "DocumentRuleCategory",
+    "DocumentRulePriority",
+    "DocumentRuleAppliesTo",
+    "CallIntelDocNeedStatus",
+
+    # =====================
+    # Document Follow-Up
+    # =====================
+    "FollowupCampaign",
+    "FollowupEvent",
+    "DocumentAppointment",
+    "FollowupTemplate",
+    "CampaignType",
+    "CampaignStatus",
+    "CampaignTriggerSource",
+    "FollowupEventType",
+    "DeliveryStatus",
+    "AppointmentType",
+    "AppointmentStatus",
+    "LocationType",
+
+    # =====================
+    # E-Signature
+    # =====================
+    "ESignatureEnvelope",
+    "ESignatureRecipient",
+    "ESignatureField",
+    "ESignatureAuditEvent",
+    "ESignatureTemplate",
+    "EnvelopeStatus",
+    "RecipientType",
+    "RecipientStatus",
+    "RecipientAuthMethod",
+    "SignatureFieldType",
+    "AuditEventType",
+
+    # =====================
+    # Document Security
+    # =====================
+    "DocumentAccessLog",
+    "DocumentEncryptionRecord",
+    "DocumentIntegrityCheck",
+    "DocumentRetentionPolicy",
+    "DocumentWatermarkLog",
+    "AccessType",
+    "EncryptionStatus",
+    "IntegrityCheckType",
+    "RetentionAction",
+    "WatermarkType",
+
+    # =====================
+    # Scheduling Analytics
+    # =====================
+    "SchedulingInsight",
+    "AppointmentOutcome",
+
+    # =====================
+    # Calendar Event Map
+    # =====================
+    "CalendarEventMap",
 ]
