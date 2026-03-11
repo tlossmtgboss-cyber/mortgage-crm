@@ -9,6 +9,7 @@ Provides:
 - Impersonation Enforcement: Read-only mode for impersonation
 - Rate Limiting: Per-user/IP rate limiting
 - Structured Logging: JSON logging for production
+- Idempotency: Prevent duplicate webhook operations via X-Idempotency-Key
 """
 
 from .ai_usage_middleware import (
@@ -29,6 +30,8 @@ from .stack import (
 
 from .pii_log_filter import PIIRedactionFilter, install_pii_filter
 
+from .idempotency import IdempotencyMiddleware, IdempotencyStore, CachedResponse
+
 __all__ = [
     # AI Usage
     "AIUsageTracker",
@@ -45,4 +48,8 @@ __all__ = [
     # PII Log Filter
     "PIIRedactionFilter",
     "install_pii_filter",
+    # Idempotency
+    "IdempotencyMiddleware",
+    "IdempotencyStore",
+    "CachedResponse",
 ]

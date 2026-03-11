@@ -14,7 +14,8 @@ Order of execution (outer to inner):
 7. Security Logging - Log security events
 8. Impersonation Enforcement - Block writes during impersonation
 9. Tenant Context - Set tenant/user context for multi-tenancy
-10. Performance Monitoring - Track response times
+10. Idempotency - Prevent duplicate webhook operations (POST/PUT/PATCH)
+11. Performance Monitoring - Track response times
 
 Usage:
     from middleware.stack import configure_middleware
@@ -71,6 +72,26 @@ def configure_middleware(
         logger.info("Performance monitoring middleware enabled")
     except Exception as e:
         logger.warning(f"Performance monitoring middleware not loaded: {e}")
+
+    # =========================================================================
+    # Idempotency (prevent duplicate webhook/appointment operations)
+    # =========================================================================
+    try:
+        import os as _os_idem
+        from middleware.idempotency import IdempotencyMiddleware
+        app.add_middleware(
+            IdempotencyMiddleware,
+            redis_url=_os_idem.getenv("REDIS_URL"),
+            ttl_seconds=300,
+            paths=[
+                "/api/v1/vapi/",
+                "/api/vapi/",
+                "/api/v1/scheduler/appointments",
+            ],
+        )
+        logger.info("Idempotency middleware enabled (webhook dedup)")
+    except Exception as e:
+        logger.warning(f"Idempotency middleware not loaded: {e}")
 
     # =========================================================================
     # Tenant Context (multi-tenant isolation)
