@@ -27,23 +27,16 @@ router = APIRouter(prefix="/api/v1/portal/documents", tags=["Portal Documents"])
 # DEPENDENCY INJECTION
 # =============================================================================
 
-_get_db = None
+from db import get_db
+
 _s3_client = None
 
 
 def set_dependencies(get_db_func, s3_client=None):
     """Set dependencies from main.py."""
-    global _get_db, _s3_client
-    _get_db = get_db_func
+    global _s3_client
     _s3_client = s3_client
     logger.info("Portal Document routes dependencies set")
-
-
-def get_db():
-    """Get database session."""
-    if _get_db is None:
-        raise RuntimeError("Portal Document routes not initialized")
-    yield from _get_db()
 
 
 def get_s3_client():

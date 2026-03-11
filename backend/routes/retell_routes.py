@@ -44,22 +44,15 @@ router = APIRouter(prefix="/api/v1/retell", tags=["Retell AI"])
 # Dependency injection placeholders
 User = None
 _get_current_user = None
-_get_db = None
+
+from db import get_db
 
 
 def set_dependencies(user_model, current_user_func, db_func):
     """Set dependencies for this router."""
-    global User, _get_current_user, _get_db
+    global User, _get_current_user
     User = user_model
     _get_current_user = current_user_func
-    _get_db = db_func
-
-
-def get_db():
-    """Get database session."""
-    if _get_db is None:
-        raise HTTPException(status_code=500, detail="Database dependency not configured")
-    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):

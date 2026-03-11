@@ -253,16 +253,20 @@ class TestR1_RetryWithFallback:
 
     def test_retry_succeeds_on_first_attempt(self):
         """Should return success immediately if first attempt works."""
+        import asyncio
         from scheduler_email_service import _retry_email_send
 
         def success_fn():
             return {"success": True, "message_id": "abc123"}
 
-        result = _retry_email_send(success_fn, max_retries=2, backoff_base=0.01)
+        result = asyncio.get_event_loop().run_until_complete(
+            _retry_email_send(success_fn, max_retries=2, backoff_base=0.01)
+        )
         assert result["success"] is True
 
     def test_retry_succeeds_on_second_attempt(self):
         """Should retry and succeed on second attempt."""
+        import asyncio
         from scheduler_email_service import _retry_email_send
 
         call_count = {"n": 0}
@@ -272,23 +276,29 @@ class TestR1_RetryWithFallback:
                 return {"success": False, "error": "temporary failure"}
             return {"success": True, "message_id": "def456"}
 
-        result = _retry_email_send(fail_then_succeed, max_retries=2, backoff_base=0.01)
+        result = asyncio.get_event_loop().run_until_complete(
+            _retry_email_send(fail_then_succeed, max_retries=2, backoff_base=0.01)
+        )
         assert result["success"] is True
         assert call_count["n"] == 2
 
     def test_retry_exhausts_and_returns_last_error(self):
         """Should return error after all retries exhausted."""
+        import asyncio
         from scheduler_email_service import _retry_email_send
 
         def always_fail():
             return {"success": False, "error": "permanent failure"}
 
-        result = _retry_email_send(always_fail, max_retries=2, backoff_base=0.01)
+        result = asyncio.get_event_loop().run_until_complete(
+            _retry_email_send(always_fail, max_retries=2, backoff_base=0.01)
+        )
         assert result["success"] is False
         assert "permanent failure" in result.get("error", "")
 
     def test_send_with_sms_fallback_email_success(self):
         """Should not attempt SMS if email succeeds."""
+        import asyncio
         from scheduler_email_service import send_with_sms_fallback
 
         sms_called = {"called": False}
@@ -298,14 +308,17 @@ class TestR1_RetryWithFallback:
             sms_called["called"] = True
             return {"success": True}
 
-        result = send_with_sms_fallback(
-            email_fn, sms_fn, max_retries=0, context_label="test"
+        result = asyncio.get_event_loop().run_until_complete(
+            send_with_sms_fallback(
+                email_fn, sms_fn, max_retries=0, context_label="test"
+            )
         )
         assert result["email_sent"] is True
         assert sms_called["called"] is False
 
     def test_send_with_sms_fallback_falls_back_to_sms(self):
         """Should try SMS when email fails."""
+        import asyncio
         from scheduler_email_service import send_with_sms_fallback
 
         def email_fn():
@@ -313,14 +326,17 @@ class TestR1_RetryWithFallback:
         def sms_fn():
             return {"success": True}
 
-        result = send_with_sms_fallback(
-            email_fn, sms_fn, max_retries=0, context_label="test"
+        result = asyncio.get_event_loop().run_until_complete(
+            send_with_sms_fallback(
+                email_fn, sms_fn, max_retries=0, context_label="test"
+            )
         )
         assert result["email_sent"] is False
         assert result["sms_sent"] is True
 
     def test_send_with_sms_fallback_escalates_on_total_failure(self):
         """Should call escalation_fn when both email and SMS fail."""
+        import asyncio
         from scheduler_email_service import send_with_sms_fallback
 
         escalated = {"called": False}
@@ -332,9 +348,11 @@ class TestR1_RetryWithFallback:
             escalated["called"] = True
             escalated["error"] = error_msg
 
-        result = send_with_sms_fallback(
-            email_fn, sms_fn, max_retries=0, context_label="test",
-            escalation_fn=escalation_fn,
+        result = asyncio.get_event_loop().run_until_complete(
+            send_with_sms_fallback(
+                email_fn, sms_fn, max_retries=0, context_label="test",
+                escalation_fn=escalation_fn,
+            )
         )
         assert result["email_sent"] is False
         assert result["sms_sent"] is False

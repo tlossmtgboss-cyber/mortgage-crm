@@ -22,6 +22,7 @@ import os
 import ipaddress
 from typing import Dict, Tuple, Optional, Set, List
 import time
+import redis
 
 logger = logging.getLogger(__name__)
 
@@ -419,19 +420,76 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     - Endpoint-specific rate limits (AI endpoints get lower limits)
     - Mobile app detection with adjusted limits
     - Burst protection for expensive endpoints
+    - Redis-backed counters for cross-worker consistency (falls back to
+      in-memory if Redis is unavailable)
     """
 
     def __init__(self, app, requests_per_minute: int = 60, requests_per_hour: int = 1000):
         super().__init__(app)
         self.base_requests_per_minute = requests_per_minute
         self.base_requests_per_hour = requests_per_hour
-        # Use shared state for dashboard access
+        # Use shared state for dashboard access (used by in-memory fallback path)
         self.request_history = security_stats.request_history
         # Cache user roles to avoid repeated JWT decoding: {user_id: (role, expiry_time)}
         self.user_role_cache: Dict[int, Tuple[str, float]] = {}
         self.role_cache_ttl = 300  # Cache roles for 5 minutes
         # Track burst windows for expensive endpoints: {key: [(timestamp, endpoint_category), ...]}
         self.burst_history: Dict[str, list] = defaultdict(list)
+        # Redis client — None means fall back to in-memory counters
+        self._redis: Optional[redis.Redis] = None
+        self._redis_available: bool = False
+        self._connect_redis()
+
+    def _connect_redis(self) -> None:
+        """Attempt to connect to Redis; log a warning and fall back to in-memory on failure."""
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        try:
+            client = redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+            client.ping()
+            self._redis = client
+            self._redis_available = True
+            logger.info("RateLimitMiddleware: Redis connected — using Redis-backed counters")
+        except Exception as e:
+            self._redis = None
+            self._redis_available = False
+            logger.warning(
+                f"RateLimitMiddleware: Redis unavailable ({e}); "
+                "falling back to in-memory rate limit counters (not shared across workers)"
+            )
+
+    def _redis_check_and_increment(
+        self,
+        rate_limit_key: str,
+        per_minute_limit: int,
+        per_hour_limit: int,
+        current_time: float,
+    ) -> Tuple[int, int, bool, bool]:
+        """
+        Use Redis INCR+EXPIRE to atomically count requests within each window.
+
+        Returns (requests_last_minute, requests_last_hour, minute_exceeded, hour_exceeded).
+        Raises redis.RedisError on failure so the caller can fall back to in-memory.
+        """
+        minute_window = int(current_time // 60)
+        hour_window = int(current_time // 3600)
+
+        minute_redis_key = f"ratelimit:{rate_limit_key}:{minute_window}"
+        hour_redis_key = f"ratelimit:{rate_limit_key}:{hour_window}"
+
+        pipe = self._redis.pipeline()
+        pipe.incr(minute_redis_key)
+        pipe.expire(minute_redis_key, 120)   # 2-minute TTL — keeps one extra window for safety
+        pipe.incr(hour_redis_key)
+        pipe.expire(hour_redis_key, 7200)    # 2-hour TTL
+        results = pipe.execute()
+
+        requests_last_minute = int(results[0])
+        requests_last_hour = int(results[2])
+
+        minute_exceeded = requests_last_minute > per_minute_limit
+        hour_exceeded = requests_last_hour > per_hour_limit
+
+        return requests_last_minute, requests_last_hour, minute_exceeded, hour_exceeded
 
     async def dispatch(self, request: Request, call_next):
         path = str(request.url.path)
@@ -492,20 +550,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         current_time = time.time()
 
-        # Clean old entries
-        self.request_history[rate_limit_key] = [
-            (ts, p) for ts, p in self.request_history[rate_limit_key]
-            if current_time - ts < 3600
-        ]
-
-        # Get request counts
-        recent_requests = self.request_history[rate_limit_key]
-        minute_ago = current_time - 60
-        hour_ago = current_time - 3600
-
-        requests_last_minute = sum(1 for ts, _ in recent_requests if ts > minute_ago)
-        requests_last_hour = len(recent_requests)
-
         # CORS headers for 429 responses
         origin = request.headers.get("origin", "*")
         cors_headers = {
@@ -515,7 +559,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Requested-With",
         }
 
-        # Check burst limit for expensive endpoints
+        # Check burst limit for expensive endpoints (always in-memory — 10-second window)
         if endpoint_config and endpoint_config.get("burst_allowed"):
             burst_key = f"{rate_limit_key}:{path.split('/')[3] if len(path.split('/')) > 3 else 'api'}"
             self.burst_history[burst_key] = [
@@ -535,10 +579,47 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
             self.burst_history[burst_key].append(current_time)
 
+        # ------------------------------------------------------------------ #
+        # Per-minute / per-hour counters — Redis-backed with in-memory fallback
+        # ------------------------------------------------------------------ #
+        use_redis = self._redis_available and self._redis is not None
+
+        if use_redis:
+            try:
+                requests_last_minute, requests_last_hour, minute_exceeded, hour_exceeded = (
+                    self._redis_check_and_increment(
+                        rate_limit_key, per_minute_limit, per_hour_limit, current_time
+                    )
+                )
+            except redis.RedisError as exc:
+                logger.warning(
+                    f"RateLimitMiddleware: Redis error during rate check ({exc}); "
+                    "falling back to in-memory for this request"
+                )
+                use_redis = False
+
+        if not use_redis:
+            # In-memory fallback: clean old entries, then count
+            self.request_history[rate_limit_key] = [
+                (ts, p) for ts, p in self.request_history[rate_limit_key]
+                if current_time - ts < 3600
+            ]
+            recent_requests = self.request_history[rate_limit_key]
+            minute_ago = current_time - 60
+
+            requests_last_minute = sum(1 for ts, _ in recent_requests if ts > minute_ago)
+            requests_last_hour = len(recent_requests)
+
+            minute_exceeded = requests_last_minute >= per_minute_limit
+            hour_exceeded = requests_last_hour >= per_hour_limit
+
         # Check per-minute limit
-        if requests_last_minute >= per_minute_limit:
+        if minute_exceeded:
             log_identifier = f"user {user_id}" if user_id else f"IP {self._get_client_ip(request)}"
-            logger.warning(f"Rate limit exceeded for {log_identifier}: {requests_last_minute}/{per_minute_limit} requests/min")
+            logger.warning(
+                f"Rate limit exceeded for {log_identifier}: "
+                f"{requests_last_minute}/{per_minute_limit} requests/min"
+            )
             return JSONResponse(
                 status_code=429,
                 content={
@@ -552,9 +633,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         # Check per-hour limit
-        if requests_last_hour >= per_hour_limit:
+        if hour_exceeded:
             log_identifier = f"user {user_id}" if user_id else f"IP {self._get_client_ip(request)}"
-            logger.warning(f"Hourly rate limit exceeded for {log_identifier}: {requests_last_hour}/{per_hour_limit} requests/hour")
+            logger.warning(
+                f"Hourly rate limit exceeded for {log_identifier}: "
+                f"{requests_last_hour}/{per_hour_limit} requests/hour"
+            )
             return JSONResponse(
                 status_code=429,
                 content={
@@ -567,8 +651,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 headers=cors_headers
             )
 
-        # Record this request
-        self.request_history[rate_limit_key].append((current_time, path))
+        # Record this request in the in-memory history (only for the fallback path;
+        # the Redis path uses atomic INCR so no separate write is needed)
+        if not use_redis:
+            self.request_history[rate_limit_key].append((current_time, path))
 
         # Add rate limit headers to response
         response = await call_next(request)
@@ -666,24 +752,60 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def get_rate_limit_stats(self, rate_limit_key: str) -> Dict:
         """Get current rate limit stats for a key (for debugging/monitoring)."""
         current_time = time.time()
-        history = self.request_history.get(rate_limit_key, [])
 
+        if self._redis_available and self._redis is not None:
+            try:
+                minute_window = int(current_time // 60)
+                hour_window = int(current_time // 3600)
+                minute_redis_key = f"ratelimit:{rate_limit_key}:{minute_window}"
+                hour_redis_key = f"ratelimit:{rate_limit_key}:{hour_window}"
+                pipe = self._redis.pipeline()
+                pipe.get(minute_redis_key)
+                pipe.get(hour_redis_key)
+                results = pipe.execute()
+                return {
+                    "key": rate_limit_key,
+                    "requests_last_minute": int(results[0] or 0),
+                    "requests_last_hour": int(results[1] or 0),
+                    "backend": "redis",
+                }
+            except redis.RedisError as exc:
+                logger.warning(f"RateLimitMiddleware: Redis error in get_rate_limit_stats ({exc})")
+
+        # Fallback to in-memory history
+        history = self.request_history.get(rate_limit_key, [])
         minute_ago = current_time - 60
         hour_ago = current_time - 3600
-
         return {
             "key": rate_limit_key,
             "requests_last_minute": sum(1 for ts, _ in history if ts > minute_ago),
             "requests_last_hour": sum(1 for ts, _ in history if ts > hour_ago),
             "total_tracked": len(history),
+            "backend": "memory",
         }
 
     def clear_rate_limit(self, rate_limit_key: str) -> bool:
         """Clear rate limit for a specific key (admin function)."""
+        cleared = False
+
+        if self._redis_available and self._redis is not None:
+            try:
+                current_time = time.time()
+                minute_window = int(current_time // 60)
+                hour_window = int(current_time // 3600)
+                deleted = self._redis.delete(
+                    f"ratelimit:{rate_limit_key}:{minute_window}",
+                    f"ratelimit:{rate_limit_key}:{hour_window}",
+                )
+                cleared = deleted > 0
+            except redis.RedisError as exc:
+                logger.warning(f"RateLimitMiddleware: Redis error in clear_rate_limit ({exc})")
+
         if rate_limit_key in self.request_history:
             del self.request_history[rate_limit_key]
-            return True
-        return False
+            cleared = True
+
+        return cleared
 
 
 # ============================================================================

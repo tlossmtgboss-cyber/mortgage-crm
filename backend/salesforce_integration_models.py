@@ -2,10 +2,15 @@
 Salesforce Integration - Database Models
 Per-user Salesforce integration with OAuth, schema discovery, field mappings, and sync
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Boolean, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from database import Base
+
+
+def _utc_now():
+    """Return current UTC time (timezone-aware)."""
+    return datetime.now(timezone.utc)
 
 
 class IntegrationProfile(Base):
@@ -28,6 +33,9 @@ class IntegrationProfile(Base):
     sf_user_id = Column(String(100))
     sf_username = Column(String(255))
 
+    # Per-org CDC webhook secret (overrides global SALESFORCE_CDC_WEBHOOK_SECRET)
+    cdc_webhook_secret = Column(String(255), nullable=True)
+
     # Metadata
     connected_at = Column(DateTime)
     last_sync_at = Column(DateTime)
@@ -40,8 +48,8 @@ class IntegrationProfile(Base):
     sync_direction = Column(String(20), default='bidirectional')  # inbound, outbound, bidirectional
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     schemas = relationship("SfUserSchema", back_populates="profile", cascade="all, delete-orphan")
@@ -52,8 +60,10 @@ class IntegrationProfile(Base):
 
     __table_args__ = (
         UniqueConstraint('user_id', 'provider', name='uq_user_provider'),
-        {'extend_existing': True}
     )
+
+    def __repr__(self):
+        return f"<IntegrationProfile(id={self.id}, user_id={self.user_id}, provider={self.provider}, status={self.status})>"
 
 
 class SfUserSchema(Base):
@@ -73,20 +83,22 @@ class SfUserSchema(Base):
     enabled = Column(Boolean, default=True)
 
     # Metadata
-    discovered_at = Column(DateTime, default=datetime.utcnow)
+    discovered_at = Column(DateTime, default=_utc_now)
     last_validated_at = Column(DateTime)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationship
     profile = relationship("IntegrationProfile", back_populates="schemas")
 
     __table_args__ = (
         UniqueConstraint('integration_profile_id', 'object_name', name='uq_profile_object'),
-        {'extend_existing': True}
     )
+
+    def __repr__(self):
+        return f"<SfUserSchema(id={self.id}, profile_id={self.integration_profile_id}, object={self.object_name})>"
 
 
 class FieldMapping(Base):
@@ -125,16 +137,18 @@ class FieldMapping(Base):
     validation_message = Column(Text)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationship
     profile = relationship("IntegrationProfile", back_populates="field_mappings")
 
     __table_args__ = (
         UniqueConstraint('integration_profile_id', 'source_object', 'source_field', name='uq_profile_source'),
-        {'extend_existing': True}
     )
+
+    def __repr__(self):
+        return f"<FieldMapping(id={self.id}, {self.source_object}.{self.source_field} -> {self.target_entity}.{self.target_field})>"
 
 
 class IntegrationEvent(Base):
@@ -169,13 +183,18 @@ class IntegrationEvent(Base):
     # Full Event Data
     event_data = Column(JSON)
 
-    # Timestamp
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # Timestamp — indexed for frequent ORDER BY created_at DESC queries
+    created_at = Column(DateTime, default=_utc_now, index=True)
 
     # Relationship
     profile = relationship("IntegrationProfile", back_populates="events")
 
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        Index('ix_integration_events_profile_created', 'integration_profile_id', 'created_at'),
+    )
+
+    def __repr__(self):
+        return f"<IntegrationEvent(id={self.id}, type={self.event_type}, status={self.status})>"
 
 
 class SyncQueueItem(Base):
@@ -193,13 +212,13 @@ class SyncQueueItem(Base):
     source_record_id = Column(String(100))
     priority = Column(Integer, default=5)  # 1-10, higher = more urgent
 
-    # Status
-    status = Column(String(50), default='pending')  # pending, processing, completed, failed, retry
+    # Status — indexed for queue polling queries
+    status = Column(String(50), default='pending', index=True)  # pending, processing, completed, failed, retry
     attempts = Column(Integer, default=0)
     max_attempts = Column(Integer, default=3)
 
-    # Timing
-    scheduled_for = Column(DateTime, default=datetime.utcnow)
+    # Timing — scheduled_for indexed for queue polling
+    scheduled_for = Column(DateTime, default=_utc_now, index=True)
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
 
@@ -208,13 +227,18 @@ class SyncQueueItem(Base):
     error_message = Column(Text)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationship
     profile = relationship("IntegrationProfile", back_populates="sync_queue_items")
 
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = (
+        Index('ix_sync_queue_status_scheduled', 'status', 'scheduled_for'),
+    )
+
+    def __repr__(self):
+        return f"<SyncQueueItem(id={self.id}, op={self.operation}, status={self.status}, attempts={self.attempts})>"
 
 
 class OAuthState(Base):
@@ -227,13 +251,16 @@ class OAuthState(Base):
     provider = Column(String(50), nullable=False)
 
     # Security
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
     expires_at = Column(DateTime, nullable=False)
     used = Column(Boolean, default=False)
 
     # Context
     return_url = Column(Text)
     state_metadata = Column(JSON)
+
+    def __repr__(self):
+        return f"<OAuthState(id={self.id}, provider={self.provider}, used={self.used})>"
 
 
 class IntegrationRecordTracking(Base):
@@ -257,13 +284,15 @@ class IntegrationRecordTracking(Base):
     sync_status = Column(String(50), default='synced')  # synced, pending, conflict, error
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utc_now)
+    updated_at = Column(DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationship
     profile = relationship("IntegrationProfile", back_populates="record_tracking")
 
     __table_args__ = (
         UniqueConstraint('integration_profile_id', 'source_object', 'source_record_id', name='uq_profile_source_record'),
-        {'extend_existing': True}
     )
+
+    def __repr__(self):
+        return f"<IntegrationRecordTracking(id={self.id}, {self.source_object}/{self.source_record_id} -> {self.target_entity}/{self.target_record_id})>"

@@ -13,6 +13,7 @@ Usage:
     system_prompt = smart_get_prompt("Show me my pipeline")  # Returns pipeline prompt
 """
 
+import os
 import re
 import logging
 from typing import Callable, Optional, Dict, Any
@@ -297,7 +298,7 @@ def handle_chat_request(
     user_message: str,
     client,  # Anthropic client
     user_context: Optional[Dict[str, Any]] = None,
-    model: str = "claude-sonnet-4-20250514",
+    model: Optional[str] = None,
     max_tokens: int = 2048,
     log_stats: bool = True
 ):
@@ -308,13 +309,16 @@ def handle_chat_request(
         user_message: The user's input
         client: Anthropic client instance
         user_context: Optional user context
-        model: Model to use
+        model: Model to use (defaults to ANTHROPIC_MODEL env var or claude-sonnet-4-20250514)
         max_tokens: Max response tokens
         log_stats: Whether to log routing stats
 
     Returns:
         Anthropic API response
     """
+    if model is None:
+        model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+
     # Route to optimal prompt
     prompt_getter = route_to_optimal_prompt(user_message, user_context)
     system_prompt = prompt_getter()

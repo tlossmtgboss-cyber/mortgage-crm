@@ -13,6 +13,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
+import os
 import uuid
 from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,7 +82,7 @@ class PerformanceTracker:
             "completion_tokens": data.get("completion_tokens", 0),
             "total_tokens": data.get("prompt_tokens", 0) + data.get("completion_tokens", 0),
             "latency_ms": data.get("latency_ms", 0),
-            "model_used": data.get("model_used", "claude-sonnet-4-20250514"),
+            "model_used": data.get("model_used", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")),
             "response_text": data.get("response"),
             "metadata": data.get("metadata", {}),
             "executed_at": datetime.utcnow(),
@@ -439,8 +440,8 @@ class PerformanceTracker:
         """Calculate estimated cost for executions"""
         total_cost = 0.0
         for e in executions:
-            model = e.get("model_used", "claude-sonnet-4-20250514")
-            costs = self.TOKEN_COSTS.get(model, self.TOKEN_COSTS["claude-sonnet-4-20250514"])
+            model = e.get("model_used", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"))
+            costs = self.TOKEN_COSTS.get(model, self.TOKEN_COSTS.get(os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"), self.TOKEN_COSTS["claude-sonnet-4-20250514"]))
 
             input_cost = (e.get("prompt_tokens", 0) / 1000) * costs["input"]
             output_cost = (e.get("completion_tokens", 0) / 1000) * costs["output"]

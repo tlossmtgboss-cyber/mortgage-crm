@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ScheduleAppointmentModal.css';
-// v3.8 - Removed console.logs, added a11y, fixed build 20260303
+import useFocusTrap from '../hooks/useFocusTrap';
+// v4.0 - Server-side availability, focus trap, phone validation, improved UX 20260309
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
   : 'https://api.perenniaai.com';
+
+// Phone validation: accepts formats like (555) 123-4567, 555-123-4567, +15551234567, etc.
+const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
+const validatePhone = (phone) => {
+  if (!phone) return true; // phone is optional
+  return PHONE_REGEX.test(phone.trim());
+};
 
 const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   // Initialize weekStart to null - will be set to today when modal opens
@@ -17,21 +25,32 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   const [selectedTime, setSelectedTime] = useState('');
   const [meetingMode, setMeetingMode] = useState('phone');
   const [availableSlots, setAvailableSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [emailSent, setEmailSent] = useState(null); // Track if email was actually sent
   const [emailError, setEmailError] = useState(null); // Store email error message
   const [teamMembers, setTeamMembers] = useState([]);
+  const [teamMembersError, setTeamMembersError] = useState(null);
   const [selectedTeamMember, setSelectedTeamMember] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState(30);
   const [teamMemberWorkHours, setTeamMemberWorkHours] = useState({
     work_hours_start: '09:00',
     work_hours_end: '17:00',
     work_days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
   });
 
+  const modalHeadingId = 'schedule-modal-heading';
+
   // Ref for scrolling to today's date
   const weekDatesRef = useRef(null);
+
+  // Focus trap: traps Tab/Shift+Tab within the modal, Escape to close
+  useFocusTrap(isOpen, {
+    modalSelector: '.schedule-modal',
+    onEscape: onClose,
+  });
 
   // Generate week dates starting from weekStart
   const getWeekDates = useCallback(() => {
@@ -106,6 +125,8 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
   const fetchTeamMembers = useCallback(async () => {
     if (!borrower?.id) return;
 
+    setTeamMembersError(null);
+
     try {
       // Fetch all team members directly (more reliable)
       const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
@@ -128,20 +149,15 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
             fetchTeamMemberWorkHours(firstMemberId);
           }
         }
+      } else {
+        setTeamMembersError('Could not load team members. Please select manually or try again.');
       }
-      // If response not ok, silently continue — modal works without team members list
     } catch {
-      // Network issues don't block the modal — user can still enter details manually
+      setTeamMembersError('Failed to connect to server. Team member list unavailable.');
     }
   }, [borrower?.id, fetchTeamMemberWorkHours]);
 
-  // Close on ESC key
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [isOpen, onClose]);
+  // Note: Escape key handling is now provided by useFocusTrap above.
 
   // Reset calendar to today whenever modal opens
   // This is a separate effect to ensure it always runs when isOpen changes
@@ -163,6 +179,34 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     }
   }, [isOpen]);
 
+  // Get day name from date
+  const getDayName = (date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  };
+
+  // Fetch appointment types to get duration_minutes
+  const fetchAppointmentTypes = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const types = data.appointment_types || [];
+        // Use the first active appointment type's duration, or default to 30
+        if (types.length > 0) {
+          const firstType = types[0];
+          const duration = firstType.default_duration_minutes || 30;
+          setDurationMinutes(duration);
+        }
+      }
+    } catch {
+      // Keep default duration
+    }
+  }, []);
+
   // Initialize other state and fetch team members when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -171,22 +215,21 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       setError(null);
       setSuccess(false);
       setEmailSent(null);
+      setTeamMembersError(null);
+      setDurationMinutes(30);
 
-      // Fetch team members
+      // Fetch team members and appointment types
       fetchTeamMembers();
+      fetchAppointmentTypes();
     }
-  }, [isOpen, fetchTeamMembers]);
+  }, [isOpen, fetchTeamMembers, fetchAppointmentTypes]);
 
-  // Get day name from date
-  const getDayName = (date) => {
-    return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-  };
-
-  // Generate slots based on team member's work hours
-  const generateSlotsFromWorkHours = useCallback(() => {
+  // Client-side fallback: generate slots from work hours (used only when API fails)
+  const generateSlotsFromWorkHours = useCallback((duration) => {
     if (!selectedDate) return;
 
     const dayName = getDayName(selectedDate);
+    const slotDuration = duration || durationMinutes;
 
     // Check if this day is a work day
     if (!teamMemberWorkHours.work_days.includes(dayName)) {
@@ -200,17 +243,28 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
 
     // Parse work hours (format: "09:00", "17:00")
     const startHour = parseInt(teamMemberWorkHours.work_hours_start.split(':')[0], 10);
+    const startMin = parseInt(teamMemberWorkHours.work_hours_start.split(':')[1] || '0', 10);
     const endHour = parseInt(teamMemberWorkHours.work_hours_end.split(':')[0], 10);
+    const endMin = parseInt(teamMemberWorkHours.work_hours_end.split(':')[1] || '0', 10);
 
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (let min = 0; min < 60; min += 30) {
-        const slotDate = new Date(baseDate);
-        slotDate.setHours(hour, min, 0, 0);
+    let currentMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+
+    while (currentMinutes + slotDuration <= endMinutes) {
+      const hour = Math.floor(currentMinutes / 60);
+      const min = currentMinutes % 60;
+      const slotDate = new Date(baseDate);
+      slotDate.setHours(hour, min, 0, 0);
+
+      // Skip slots in the past
+      if (slotDate > new Date()) {
         slots.push({
           start_time: slotDate.toISOString(),
           display: slotDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
         });
       }
+
+      currentMinutes += 30; // Advance by 30 min intervals for selection granularity
     }
 
     setAvailableSlots(slots);
@@ -219,28 +273,67 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     } else {
       setSelectedTime('');
     }
-  }, [selectedDate, teamMemberWorkHours]);
+  }, [selectedDate, teamMemberWorkHours, durationMinutes]);
 
-  // Fetch available slots when date changes
-  const fetchSlots = useCallback(async () => {
+  // Fetch available slots from server (checks existing appointments, blocked times, PTO)
+  const fetchSlotsFromServer = useCallback(async () => {
     if (!selectedDate) return;
 
-    // Always generate slots from work hours - more reliable than API
-    generateSlotsFromWorkHours();
-  }, [selectedDate, generateSlotsFromWorkHours]);
+    setLoadingSlots(true);
 
+    try {
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      const userIds = selectedTeamMember ? [parseInt(selectedTeamMember)] : [];
+
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/available-slots`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          start_date: dateStr,
+          end_date: dateStr,
+          duration_minutes: durationMinutes,
+          user_ids: userIds.length > 0 ? userIds : undefined,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const serverSlots = (data.available_slots || []).map((slot) => {
+          const startStr = slot.start || slot.start_time;
+          const slotDate = new Date(startStr);
+          return {
+            start_time: slotDate.toISOString(),
+            display: slotDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+          };
+        });
+
+        setAvailableSlots(serverSlots);
+        if (serverSlots.length > 0) {
+          setSelectedTime(serverSlots[0].start_time);
+        } else {
+          setSelectedTime('');
+        }
+      } else {
+        // API returned error - fall back to client-side generation
+        generateSlotsFromWorkHours();
+      }
+    } catch {
+      // Network error - fall back to client-side generation
+      generateSlotsFromWorkHours();
+    } finally {
+      setLoadingSlots(false);
+    }
+  }, [selectedDate, selectedTeamMember, durationMinutes, generateSlotsFromWorkHours]);
+
+  // Re-fetch slots when date or team member changes
   useEffect(() => {
     if (selectedDate) {
-      fetchSlots();
+      fetchSlotsFromServer();
     }
-  }, [selectedDate, fetchSlots]);
-
-  // Regenerate slots when team member work hours change
-  useEffect(() => {
-    if (selectedDate && selectedTeamMember) {
-      generateSlotsFromWorkHours();
-    }
-  }, [teamMemberWorkHours, selectedDate, selectedTeamMember, generateSlotsFromWorkHours]);
+  }, [selectedDate, selectedTeamMember, fetchSlotsFromServer]);
 
   // Fetch work hours when team member selection changes
   useEffect(() => {
@@ -283,6 +376,13 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       return;
     }
 
+    // Validate phone number if present
+    const attendeePhone = borrower.phone || borrower.borrower_phone || '';
+    if (attendeePhone && !validatePhone(attendeePhone)) {
+      setError('Borrower phone number format is invalid. Expected format: (555) 123-4567 or similar.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -311,11 +411,11 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         title: `${meetingMode === 'video' ? 'Video Call' : 'Phone Call'} with ${attendeeName}`,
         description: `Appointment with: ${teamMemberName}`,
         scheduled_start: selectedTime,
-        duration_minutes: 30,
+        duration_minutes: durationMinutes,
         meeting_mode: meetingMode,
         attendee_name: attendeeName,
         attendee_email: borrower.email || borrower.borrower_email,
-        attendee_phone: borrower.phone || borrower.borrower_phone || '',
+        attendee_phone: attendeePhone,
         lead_id: leadId,
         loan_id: loanId,
         assigned_user_id: parseInt(selectedTeamMember) || null
@@ -352,10 +452,10 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         onSuccess();
       }
 
-      // Close modal after 3 seconds (longer to show email status)
+      // Close modal after 5 seconds (gives user time to read email status)
       setTimeout(() => {
         onClose();
-      }, 3000);
+      }, 5000);
     } catch (err) {
       // Provide more specific error messages
       let errorMessage = 'Failed to schedule appointment. Please try again.';
@@ -375,8 +475,8 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
 
   return (
     <div className="schedule-modal-overlay" onClick={onClose}>
-      <div className="schedule-modal" role="dialog" aria-modal="true" aria-label="Schedule appointment" onClick={(e) => e.stopPropagation()}>
-        <button className="schedule-modal-close" onClick={onClose}>
+      <div className="schedule-modal" role="dialog" aria-modal="true" aria-labelledby={modalHeadingId} onClick={(e) => e.stopPropagation()}>
+        <button className="schedule-modal-close" onClick={onClose} aria-label="Close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -389,7 +489,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
                 <path d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2>Appointment Scheduled!</h2>
+            <h2 id={modalHeadingId}>Appointment Scheduled!</h2>
             {emailSent ? (
               <p style={{ color: '#10b981' }}>A confirmation email has been sent to {borrower?.email || borrower?.borrower_email}</p>
             ) : (
@@ -399,10 +499,17 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
                 <p style={{ marginTop: '8px' }}>Please manually notify the contact at {borrower?.email || borrower?.borrower_email}</p>
               </div>
             )}
+            <button
+              className="schedule-submit-btn"
+              onClick={onClose}
+              style={{ marginTop: '16px' }}
+            >
+              Close
+            </button>
           </div>
         ) : (
           <>
-            <h2>Pick a date</h2>
+            <h2 id={modalHeadingId}>Pick a date</h2>
 
             {error && <div className="schedule-error">{error}</div>}
 
@@ -451,15 +558,22 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
             {/* Time Picker */}
             <div className="schedule-time-section">
               <h3>Pick a time</h3>
-              <p className="schedule-time-hint">Choose your preferred time. Reschedule anytime.</p>
+              <p className="schedule-time-hint">
+                {durationMinutes !== 30
+                  ? `${durationMinutes}-minute slots. Choose your preferred time. Reschedule anytime.`
+                  : 'Choose your preferred time. Reschedule anytime.'}
+              </p>
 
               <div className="schedule-time-dropdown-wrapper">
                 <select
                   className="schedule-time-dropdown"
                   value={selectedTime}
                   onChange={(e) => setSelectedTime(e.target.value)}
+                  disabled={loadingSlots}
                 >
-                  {availableSlots.length === 0 ? (
+                  {loadingSlots ? (
+                    <option value="">Loading available times...</option>
+                  ) : availableSlots.length === 0 ? (
                     <option value="">No times available</option>
                   ) : (
                     availableSlots.map((slot, idx) => (
@@ -501,6 +615,11 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
             {/* Team Member Selection */}
             <div className="schedule-team-section">
               <h3>Appointment with</h3>
+              {teamMembersError && (
+                <div className="schedule-error" style={{ marginBottom: '8px', fontSize: '13px' }}>
+                  {teamMembersError}
+                </div>
+              )}
               <div className="schedule-team-dropdown-wrapper">
                 <select
                   className="schedule-team-dropdown"

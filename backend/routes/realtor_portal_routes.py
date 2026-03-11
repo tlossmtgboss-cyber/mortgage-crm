@@ -49,23 +49,16 @@ def format_date(val):
 # DEPENDENCY INJECTION
 # =============================================================================
 
-_get_db = None
+from db import get_db
+
 _anthropic_client = None
 
 
 def set_dependencies(get_db_func, anthropic_client=None):
     """Set dependencies from main.py."""
-    global _get_db, _anthropic_client
-    _get_db = get_db_func
+    global _anthropic_client
     _anthropic_client = anthropic_client
     logger.info("Realtor Portal routes dependencies set")
-
-
-def get_db():
-    """Get database session."""
-    if _get_db is None:
-        raise RuntimeError("Realtor Portal routes not initialized")
-    yield from _get_db()
 
 
 # =============================================================================

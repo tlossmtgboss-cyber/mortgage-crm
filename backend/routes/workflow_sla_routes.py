@@ -39,6 +39,9 @@ _get_current_user: Callable = None
 _User: Any = None
 
 
+from db import get_db
+
+
 def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, user_model: Any):
     """Set dependencies from main.py to avoid circular imports."""
     global _get_db, _get_current_user, _User
@@ -46,13 +49,6 @@ def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, use
     _get_current_user = get_current_user_func
     _User = user_model
     logger.info("Workflow SLA routes dependencies set")
-
-
-def get_db():
-    """Get database session dependency - wrapper for injected dependency."""
-    if _get_db is None:
-        raise RuntimeError("Workflow SLA routes not initialized. Call set_dependencies first.")
-    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):

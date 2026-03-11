@@ -27,6 +27,7 @@ Usage:
     loan = await client.pull_loan("some-guid-here")
 """
 
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
@@ -278,58 +279,89 @@ class EncompassClient(BaseLOSClient):
         path: str,
         json_data: Optional[Dict] = None,
         params: Optional[Dict] = None,
+        _retry_on_401: bool = True,
     ) -> Dict[str, Any]:
         """Make an authenticated API request with error handling.
 
         Handles token refresh, retries, and error classification.
+        On a 401 response the token is cleared and authentication is retried
+        exactly once to handle mid-session expiry.
         """
         await self.ensure_authenticated()
 
         url = f"{self.base_url}{path}"
-        headers = self._get_headers()
 
-        async def _do_request():
-            if HAS_HTTPX:
-                async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
-                    response = await client.request(
+        def _parse_response(response_text: str) -> Dict[str, Any]:
+            """Parse JSON response body; return empty dict on parse failure."""
+            if not response_text:
+                return {}
+            try:
+                return json.loads(response_text)
+            except (json.JSONDecodeError, ValueError):
+                return {}
+
+        async def _do_request() -> tuple:
+            """Execute the HTTP request, wrapping connection/timeout errors as retryable."""
+            current_headers = self._get_headers()
+            try:
+                if HAS_HTTPX:
+                    async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
+                        response = await client.request(
+                            method=method,
+                            url=url,
+                            headers=current_headers,
+                            json=json_data,
+                            params=params,
+                        )
+                        return response.status_code, response.text, _parse_response(response.text)
+                elif HAS_REQUESTS:
+                    # Synchronous fallback — runs in calling thread
+                    response = sync_requests.request(
                         method=method,
                         url=url,
-                        headers=headers,
+                        headers=current_headers,
                         json=json_data,
                         params=params,
+                        timeout=self.config.timeout_seconds,
                     )
-                    return response.status_code, response.text, response.json() if response.text else {}
-            elif HAS_REQUESTS:
-                # Synchronous fallback
-                response = sync_requests.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    json=json_data,
-                    params=params,
-                    timeout=self.config.timeout_seconds,
-                )
-                return response.status_code, response.text, response.json() if response.text else {}
-            else:
-                raise LOSError(
-                    "No HTTP client available. Install httpx or requests.",
-                    code="NO_HTTP_CLIENT",
-                )
+                    return response.status_code, response.text, _parse_response(response.text)
+                else:
+                    raise LOSError(
+                        "No HTTP client available. Install httpx or requests.",
+                        code="NO_HTTP_CLIENT",
+                    )
+            except LOSError:
+                raise
+            except Exception as exc:
+                # Network/timeout errors are retryable
+                raise LOSRetryableError(
+                    f"Request to {url} failed: {exc}",
+                    code="NETWORK_ERROR",
+                ) from exc
 
         status_code, response_text, response_data = await self.error_handler.execute_with_retry(
             _do_request
         )
 
-        # Handle HTTP errors
-        if status_code == 401:
-            # Token expired - re-authenticate and retry once
+        # Token expired mid-session — re-authenticate and retry exactly once
+        if status_code == 401 and _retry_on_401:
+            logger.warning(
+                f"Encompass returned 401 for {method} {path}; "
+                "re-authenticating and retrying once"
+            )
             self._authenticated = False
+            self._token = None
             await self.ensure_authenticated()
-            headers = self._get_headers()
-            status_code, response_text, response_data = await _do_request()
+            # Recursive call with retry disabled to prevent infinite loops
+            return await self._request(
+                method, path, json_data=json_data, params=params, _retry_on_401=False
+            )
 
         if status_code >= 400:
-            error_msg = response_data.get("summary", response_data.get("message", response_text[:200]))
+            error_msg = response_data.get(
+                "summary",
+                response_data.get("message", (response_text or "")[:200]),
+            )
             if status_code == 404:
                 raise LOSError(f"Resource not found: {error_msg}", code="NOT_FOUND")
             elif status_code == 409:
@@ -337,7 +369,9 @@ class EncompassClient(BaseLOSClient):
             elif status_code == 429:
                 raise LOSRetryableError(f"Rate limited: {error_msg}", code="RATE_LIMITED")
             elif status_code >= 500:
-                raise LOSRetryableError(f"Server error ({status_code}): {error_msg}", code="SERVER_ERROR")
+                raise LOSRetryableError(
+                    f"Server error ({status_code}): {error_msg}", code="SERVER_ERROR"
+                )
             else:
                 raise LOSError(f"API error ({status_code}): {error_msg}", code="API_ERROR")
 
@@ -356,21 +390,24 @@ class EncompassClient(BaseLOSClient):
             - scope: lp (Loan Pipeline)
             - instance_id in the request body
 
+        Tokens expire after ~30 minutes and are not refreshable; a new
+        client_credentials grant must be obtained each time.
+
         Returns:
             True if authentication succeeded
         """
+        auth_data = {
+            "grant_type": "client_credentials",
+            "client_id": self.config.client_id,
+            "client_secret": self.config.client_secret,
+            "scope": "lp",
+        }
+
+        # Encompass requires instance_id to be included in the token request
+        if self.config.instance_id:
+            auth_data["instance_id"] = self.config.instance_id
+
         try:
-            auth_data = {
-                "grant_type": "client_credentials",
-                "client_id": self.config.client_id,
-                "client_secret": self.config.client_secret,
-                "scope": "lp",
-            }
-
-            # Encompass requires instance_id
-            if self.config.instance_id:
-                auth_data["instance_id"] = self.config.instance_id
-
             if HAS_HTTPX:
                 async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
                     response = await client.post(
@@ -378,7 +415,10 @@ class EncompassClient(BaseLOSClient):
                         data=auth_data,
                         headers={"Content-Type": "application/x-www-form-urlencoded"},
                     )
-                    response_data = response.json()
+                    try:
+                        response_data = response.json()
+                    except (json.JSONDecodeError, ValueError):
+                        response_data = {}
                     status_code = response.status_code
             elif HAS_REQUESTS:
                 response = sync_requests.post(
@@ -387,27 +427,61 @@ class EncompassClient(BaseLOSClient):
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                     timeout=self.config.timeout_seconds,
                 )
-                response_data = response.json()
+                try:
+                    response_data = response.json()
+                except (json.JSONDecodeError, ValueError):
+                    response_data = {}
                 status_code = response.status_code
             else:
-                raise LOSError("No HTTP client available", code="NO_HTTP_CLIENT")
+                raise LOSError("No HTTP client available. Install httpx or requests.", code="NO_HTTP_CLIENT")
 
             if status_code != 200:
-                error_msg = response_data.get("error_description", response_data.get("error", "Unknown"))
-                logger.error(f"Encompass auth failed ({status_code}): {error_msg}")
+                error_msg = response_data.get(
+                    "error_description",
+                    response_data.get("error", f"HTTP {status_code}"),
+                )
+                logger.error(
+                    f"Encompass auth failed (instance={self.config.instance_id}, "
+                    f"status={status_code}): {error_msg}"
+                )
                 self._authenticated = False
                 return False
 
-            self._token = response_data["access_token"]
-            expires_in = response_data.get("expires_in", 3600)
-            self._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in - 60)
+            access_token = response_data.get("access_token")
+            if not access_token:
+                logger.error(
+                    f"Encompass auth response missing 'access_token' field "
+                    f"(instance={self.config.instance_id})"
+                )
+                self._authenticated = False
+                return False
+
+            self._token = access_token
+            expires_in = int(response_data.get("expires_in", 1800))
+            # Subtract 90 seconds from the expiry so we re-auth before the token
+            # actually expires (Encompass tokens are typically ~30 min / 1800s)
+            buffer_seconds = min(90, expires_in // 4)
+            self._token_expires_at = datetime.now(timezone.utc) + timedelta(
+                seconds=expires_in - buffer_seconds
+            )
             self._authenticated = True
 
-            logger.info(f"Encompass authenticated (instance={self.config.instance_id}, expires_in={expires_in}s)")
+            logger.info(
+                f"Encompass authenticated successfully "
+                f"(instance={self.config.instance_id}, "
+                f"expires_in={expires_in}s, "
+                f"valid_until={self._token_expires_at.isoformat()})"
+            )
             return True
 
-        except Exception as e:
-            logger.error(f"Encompass authentication error: {e}")
+        except LOSError:
+            raise
+        except Exception as exc:
+            logger.error(
+                f"Encompass authentication raised an unexpected error "
+                f"(instance={self.config.instance_id}): {exc}",
+                exc_info=True,
+            )
             self._authenticated = False
             return False
 
@@ -439,34 +513,56 @@ class EncompassClient(BaseLOSClient):
         try:
             # Map CRM fields to Encompass field format
             encompass_fields = {}
+            unmapped_fields = []
             for crm_field, value in loan_data.items():
                 if crm_field in ("loan_id", "los_loan_id"):
                     continue
                 los_field = ENCOMPASS_FIELD_MAP.get(crm_field)
                 if los_field and value is not None:
-                    # Convert datetime objects to ISO strings
+                    # Convert datetime/date objects to ISO strings
                     if isinstance(value, datetime):
                         value = value.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    elif hasattr(value, "isoformat"):
+                        # date objects
+                        value = value.isoformat()
                     encompass_fields[los_field] = str(value)
                     result.fields_synced += 1
+                elif los_field is None:
+                    unmapped_fields.append(crm_field)
+                    result.fields_skipped += 1
                 else:
+                    # Field mapped but value is None
                     result.fields_skipped += 1
 
+            if unmapped_fields:
+                logger.debug(
+                    f"Encompass push for loan {result.loan_id}: "
+                    f"{len(unmapped_fields)} unmapped CRM fields skipped: {unmapped_fields}"
+                )
+
             if not encompass_fields:
+                logger.warning(
+                    f"Encompass push for loan {result.loan_id}: "
+                    "no mappable fields with non-null values found; skipping"
+                )
                 result.status = LOSSyncStatus.SKIPPED
-                result.errors.append("No mappable fields found")
+                result.errors.append("No mappable fields with non-null values found")
+                result.completed_at = datetime.now(timezone.utc)
                 return result
 
             payload = {"fields": encompass_fields}
 
             if result.los_loan_id:
                 # Update existing loan
-                response = await self._request(
+                await self._request(
                     "PATCH",
                     f"/loans/{result.los_loan_id}",
                     json_data=payload,
                 )
-                logger.info(f"Updated Encompass loan {result.los_loan_id}")
+                logger.info(
+                    f"Updated Encompass loan {result.los_loan_id} "
+                    f"({result.fields_synced} fields pushed)"
+                )
             else:
                 # Create new loan
                 response = await self._request(
@@ -474,9 +570,18 @@ class EncompassClient(BaseLOSClient):
                     "/loans",
                     json_data=payload,
                 )
-                # Encompass returns the loan GUID in response
+                # Encompass returns the loan GUID in the response body
                 result.los_loan_id = response.get("encompassId") or response.get("id")
-                logger.info(f"Created Encompass loan {result.los_loan_id}")
+                if not result.los_loan_id:
+                    logger.warning(
+                        f"Encompass create response did not include a loan GUID "
+                        f"for CRM loan {result.loan_id}; response keys: {list(response.keys())}"
+                    )
+                logger.info(
+                    f"Created Encompass loan {result.los_loan_id} "
+                    f"for CRM loan {result.loan_id} "
+                    f"({result.fields_synced} fields pushed)"
+                )
 
             result.status = LOSSyncStatus.SUCCESS
             result.completed_at = datetime.now(timezone.utc)
@@ -486,7 +591,19 @@ class EncompassClient(BaseLOSClient):
             result.status = LOSSyncStatus.FAILED
             result.errors.append(str(e))
             result.completed_at = datetime.now(timezone.utc)
-            logger.error(f"Push to Encompass failed for loan {result.loan_id}: {e}")
+            logger.error(
+                f"Push to Encompass failed for CRM loan {result.loan_id} "
+                f"(los_loan_id={result.los_loan_id}): [{e.code}] {e}",
+                exc_info=True,
+            )
+        except Exception as exc:
+            result.status = LOSSyncStatus.FAILED
+            result.errors.append(str(exc))
+            result.completed_at = datetime.now(timezone.utc)
+            logger.error(
+                f"Unexpected error pushing CRM loan {result.loan_id} to Encompass: {exc}",
+                exc_info=True,
+            )
 
         return result
 
@@ -494,25 +611,52 @@ class EncompassClient(BaseLOSClient):
         """Pull loan data from Encompass.
 
         Fetches the full loan object and extracts fields we care about.
+        All field extraction is null-safe; missing fields produce None values
+        rather than raising KeyError.
 
         Args:
             los_loan_id: Encompass loan GUID
 
         Returns:
             LOSLoanData with normalized fields
+
+        Raises:
+            LOSError: If the loan is not found or the API request fails.
         """
+        if not los_loan_id:
+            raise LOSError("los_loan_id must not be empty", code="INVALID_PARAM")
+
+        logger.debug(f"Pulling Encompass loan {los_loan_id}")
         response = await self._request("GET", f"/loans/{los_loan_id}")
 
-        # Extract fields from Encompass response
-        fields = response.get("fields", response)
+        # Extract fields from Encompass response.
+        # The API may nest fields under a "fields" key or return them at the top level.
+        raw_fields = response.get("fields") or {}
+        # Merge top-level response keys for convenience
+        combined = {**response, **raw_fields}
 
         def get_field(field_id: str) -> Optional[str]:
-            """Get a field value by Encompass canonical ID."""
-            return fields.get(field_id) or fields.get(field_id.replace("Fields/", ""))
+            """Null-safe field extraction by Encompass canonical ID.
 
-        # Map Encompass milestone to CRM stage
-        milestone = response.get("currentMilestone") or response.get("Fields/2015")
+            Tries the full field path (e.g. "Fields/364") and the bare
+            numeric ID (e.g. "364") to accommodate both response formats.
+            """
+            value = combined.get(field_id)
+            if value is None:
+                bare_id = field_id.replace("Fields/", "")
+                value = combined.get(bare_id)
+            if value == "" or value == "0" and field_id in ("Fields/1109", "Fields/3"):
+                return None
+            return value if value is not None else None
+
+        # Map Encompass milestone to CRM stage; fall back to PROCESSING if unknown
+        milestone = response.get("currentMilestone") or get_field("Fields/2015")
         crm_stage = ENCOMPASS_STAGE_MAP.get(milestone, "PROCESSING")
+        if milestone and crm_stage == "PROCESSING" and milestone != "Processing":
+            logger.debug(
+                f"Encompass loan {los_loan_id}: unmapped milestone '{milestone}'; "
+                "defaulting to PROCESSING"
+            )
 
         loan_data = LOSLoanData(
             los_loan_id=los_loan_id,
@@ -531,7 +675,12 @@ class EncompassClient(BaseLOSClient):
             raw_data=response,
         )
 
-        logger.info(f"Pulled Encompass loan {los_loan_id}: {loan_data.loan_number}")
+        logger.info(
+            f"Pulled Encompass loan {los_loan_id}: "
+            f"loan_number={loan_data.loan_number}, "
+            f"borrower={loan_data.borrower_name}, "
+            f"stage={crm_stage} (milestone='{milestone}')"
+        )
         return loan_data
 
     async def get_loan_status(self, los_loan_id: str) -> Dict[str, Any]:

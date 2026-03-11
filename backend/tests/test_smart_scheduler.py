@@ -362,67 +362,15 @@ class TestCrossSourceConflicts:
 # =============================================================================
 
 class TestBookAppointment:
-    def test_successful_booking(self, scheduler_service, mock_lo_list, default_settings):
-        scheduler_service.assign_loan_officer = MagicMock(return_value=mock_lo_list[0])
-
+    def test_book_appointment_raises_runtime_error(self, scheduler_service):
+        """book_appointment is permanently disabled — no tenant isolation."""
         appt_time = datetime.utcnow() + timedelta(days=1)
-        result = scheduler_service.book_appointment(
-            contact_name="Test User",
-            contact_email="test@example.com",
-            appointment_time=appt_time,
-            contact_phone="555-1234",
-            appointment_type="consultation",
-        )
-
-        assert result["success"] is True
-        assert result["appointment_id"].startswith("APPT-")
-        assert result["loan_officer"]["name"] == "Alice Smith"
-        assert result["contact"]["name"] == "Test User"
-        assert result["appointment"]["duration_minutes"] == 30
-
-    def test_booking_with_specified_lo(self, scheduler_service, mock_lo_list, mock_db):
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_lo_list[1]
-
-        appt_time = datetime.utcnow() + timedelta(days=1)
-        result = scheduler_service.book_appointment(
-            contact_name="Test User",
-            contact_email="test@example.com",
-            appointment_time=appt_time,
-            loan_officer_id=2,
-        )
-
-        assert result["success"] is True
-        assert result["loan_officer"]["name"] == "Bob Jones"
-
-    def test_booking_fails_when_no_lo_available(self, scheduler_service):
-        scheduler_service.assign_loan_officer = MagicMock(return_value=None)
-
-        appt_time = datetime.utcnow() + timedelta(days=1)
-        result = scheduler_service.book_appointment(
-            contact_name="Test User",
-            contact_email="test@example.com",
-            appointment_time=appt_time,
-        )
-
-        assert result["success"] is False
-        assert "No loan officers available" in result["error"]
-
-    def test_booking_sets_organization_id(self, scheduler_service, mock_lo_list, default_settings):
-        scheduler_service.assign_loan_officer = MagicMock(return_value=mock_lo_list[0])
-
-        appt_time = datetime.utcnow() + timedelta(days=1)
-        result = scheduler_service.book_appointment(
-            contact_name="Test User",
-            contact_email="test@example.com",
-            appointment_time=appt_time,
-            organization_id=42,
-        )
-
-        assert result["success"] is True
-        # Verify the appointment was added to the session with org_id
-        add_call = scheduler_service.db.add.call_args
-        appointment_obj = add_call[0][0]
-        assert appointment_obj.organization_id == 42
+        with pytest.raises(RuntimeError, match="permanently disabled"):
+            scheduler_service.book_appointment(
+                contact_name="Test User",
+                contact_email="test@example.com",
+                appointment_time=appt_time,
+            )
 
 
 # =============================================================================
@@ -430,22 +378,10 @@ class TestBookAppointment:
 # =============================================================================
 
 class TestCancelAppointment:
-    def test_cancel_existing_appointment(self, scheduler_service, mock_db):
-        from services.smart_scheduler_service import AppointmentStatus
-        mock_appt = MagicMock()
-        mock_appt.status = AppointmentStatus.SCHEDULED.value
-        mock_appt.loan_officer_id = 1
-        scheduler_service.get_appointment = MagicMock(return_value=mock_appt)
-
-        result = scheduler_service.cancel_appointment("APPT-12345678", "Client requested")
-        assert result is True
-        assert mock_appt.status == AppointmentStatus.CANCELLED.value
-        assert mock_appt.cancelled_at is not None
-
-    def test_cancel_nonexistent_returns_false(self, scheduler_service):
-        scheduler_service.get_appointment = MagicMock(return_value=None)
-        result = scheduler_service.cancel_appointment("APPT-NOTFOUND")
-        assert result is False
+    def test_cancel_appointment_raises_runtime_error(self, scheduler_service):
+        """cancel_appointment is permanently disabled — no tenant isolation."""
+        with pytest.raises(RuntimeError, match="permanently disabled"):
+            scheduler_service.cancel_appointment("APPT-12345678", "Client requested")
 
 
 # =============================================================================
@@ -453,37 +389,10 @@ class TestCancelAppointment:
 # =============================================================================
 
 class TestAssignLoanOfficerDispatch:
-    def test_dispatches_to_direct(self, scheduler_service, default_settings, mock_lo_list):
-        from services.smart_scheduler_service import SchedulingMethod
-        default_settings.scheduling_method = SchedulingMethod.DIRECT.value
-        scheduler_service.get_active_loan_officers = MagicMock(return_value=mock_lo_list)
-        scheduler_service._assign_direct = MagicMock(return_value=mock_lo_list[0])
-
-        result = scheduler_service.assign_loan_officer()
-        scheduler_service._assign_direct.assert_called_once()
-
-    def test_dispatches_to_round_robin(self, scheduler_service, default_settings, mock_lo_list):
-        from services.smart_scheduler_service import SchedulingMethod
-        default_settings.scheduling_method = SchedulingMethod.ROUND_ROBIN.value
-        scheduler_service.get_active_loan_officers = MagicMock(return_value=mock_lo_list)
-        scheduler_service._assign_round_robin = MagicMock(return_value=mock_lo_list[0])
-
-        result = scheduler_service.assign_loan_officer()
-        scheduler_service._assign_round_robin.assert_called_once()
-
-    def test_dispatches_to_load_balanced(self, scheduler_service, default_settings, mock_lo_list):
-        from services.smart_scheduler_service import SchedulingMethod
-        default_settings.scheduling_method = SchedulingMethod.LOAD_BALANCED.value
-        scheduler_service.get_active_loan_officers = MagicMock(return_value=mock_lo_list)
-        scheduler_service._assign_load_balanced = MagicMock(return_value=mock_lo_list[0])
-
-        result = scheduler_service.assign_loan_officer()
-        scheduler_service._assign_load_balanced.assert_called_once()
-
-    def test_returns_none_when_no_active_los(self, scheduler_service, default_settings):
-        scheduler_service.get_active_loan_officers = MagicMock(return_value=[])
-        result = scheduler_service.assign_loan_officer()
-        assert result is None
+    def test_assign_loan_officer_raises_runtime_error(self, scheduler_service):
+        """assign_loan_officer is permanently disabled — no tenant isolation."""
+        with pytest.raises(RuntimeError, match="permanently disabled"):
+            scheduler_service.assign_loan_officer()
 
 
 # =============================================================================
@@ -491,19 +400,11 @@ class TestAssignLoanOfficerDispatch:
 # =============================================================================
 
 class TestGetSchedulerService:
-    def test_creates_fresh_instance_each_time(self):
+    def test_get_scheduler_service_raises_runtime_error(self):
+        """get_scheduler_service is permanently disabled — no tenant isolation."""
         from services.smart_scheduler_service import get_scheduler_service
-        mock_db1 = MagicMock(spec=Session)
-        mock_db2 = MagicMock(spec=Session)
-
-        with patch('services.smart_scheduler_service.SmartSchedulerService._ensure_default_settings'):
-            svc1 = get_scheduler_service(mock_db1)
-            svc2 = get_scheduler_service(mock_db2)
-
-        # Should be different instances (no singleton caching)
-        assert svc1 is not svc2
-        assert svc1.db is mock_db1
-        assert svc2.db is mock_db2
+        with pytest.raises(RuntimeError, match="permanently deprecated"):
+            get_scheduler_service(MagicMock(spec=Session))
 
 
 # =============================================================================

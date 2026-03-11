@@ -10,9 +10,11 @@ Data flows ONE WAY: Salesforce → CRM
 
 Sync runs automatically every 5 minutes via APScheduler.
 """
+import functools
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote
@@ -29,6 +31,7 @@ from salesforce_integration_models import (
     SyncQueueItem
 )
 from .oauth_service import salesforce_oauth
+from .stage_mapping import map_salesforce_stage, map_salesforce_lead_stage, SALESFORCE_STAGE_MAPPING
 
 
 class SalesforceTokenExpiredError(Exception):
@@ -38,6 +41,47 @@ from .field_mapping_service import field_mapping
 from .http_client import get_sf_client, SF_TIMEOUT
 
 logger = logging.getLogger(__name__)
+
+# Consistent Salesforce REST API version across all requests (Fix 7)
+SF_API_VERSION = "v60.0"
+
+# Regex for validating SOQL identifiers (object names, field names).
+# Allows standard and custom fields like MyField__c, Account, etc.
+SAFE_SOQL_IDENTIFIER = re.compile(r'^[A-Za-z][A-Za-z0-9_]*(__[a-zA-Z])?$')
+
+
+def _validate_soql_identifier(value: str, context: str = "identifier") -> str:
+    """Validate that a value is a safe SOQL identifier (object name or field name).
+
+    Raises ValueError if the value contains characters that could enable SOQL injection.
+    """
+    if not value or not SAFE_SOQL_IDENTIFIER.match(value):
+        raise ValueError(f"Invalid SOQL {context}: {value!r}")
+    return value
+
+
+def _get_org_id_for_user(db: Session, user_id: int, _cache: dict = {}) -> Optional[int]:
+    """Get organization_id for a user, cached per (user_id, session) to avoid repeated queries.
+
+    Fix 8: The same SELECT organization_id FROM users WHERE id = :user_id query
+    was running for every single record. This caches the result for the lifetime
+    of the sync operation (keyed by session identity so it doesn't leak across requests).
+    """
+    cache_key = (user_id, id(db))
+    if cache_key in _cache:
+        return _cache[cache_key]
+
+    row = db.execute(text(
+        "SELECT organization_id FROM users WHERE id = :uid"
+    ), {"uid": user_id}).fetchone()
+    org_id = row[0] if row else None
+    _cache[cache_key] = org_id
+
+    # Limit cache size to prevent memory leaks in long-running processes
+    if len(_cache) > 1000:
+        _cache.clear()
+
+    return org_id
 
 
 def _sanitize_soql_string(value: str) -> str:
@@ -67,7 +111,7 @@ def _sanitize_soql_email(email: str) -> str:
     email = email.strip()
     # Basic email format validation
     if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
-        logger.warning(f"Invalid email format rejected for SOQL query: {email!r}")
+        logger.warning("Invalid email format rejected for SOQL query")
         return ''
     return _sanitize_soql_string(email)
 
@@ -305,8 +349,10 @@ class SalesforceSyncService:
             # Query Salesforce
             records = await self._query_records(access_token, instance_url, soql)
 
-            # Transform and upsert each record
+            # Transform and upsert each record using savepoints for per-record
+            # error isolation (Fix 5). The outer transaction in sync() commits once.
             for record in records:
+                savepoint = db.begin_nested()  # Creates a SAVEPOINT
                 try:
                     await self._process_record(
                         db=db,
@@ -315,8 +361,10 @@ class SalesforceSyncService:
                         record=record,
                         mappings=mappings
                     )
+                    savepoint.commit()  # Release savepoint (doesn't commit outer txn)
                     result.records_succeeded += 1
                 except Exception as e:
+                    savepoint.rollback()  # Rollback just this record's changes
                     result.records_failed += 1
                     result.errors.append({
                         'record_id': record.get('Id', 'N/A'),
@@ -343,10 +391,23 @@ class SalesforceSyncService:
         full_sync: bool,
         batch_size: int
     ) -> str:
-        """Build SOQL query based on field mappings"""
-        # Get all source fields to query
+        """Build SOQL query based on field mappings.
+
+        Fix 1a: Validates object_name and all field names as safe SOQL identifiers
+        to prevent SOQL injection via user-configurable FieldMapping values.
+        """
+        # Validate object name (Fix 1a)
+        _validate_soql_identifier(object_name, "object name")
+
+        # Get all source fields to query, validating each one (Fix 1a)
         fields = ['Id']
-        fields.extend(set(m.source_field for m in mappings))
+        for m in mappings:
+            _validate_soql_identifier(m.source_field, "field name")
+            fields.append(m.source_field)
+        fields = list(dict.fromkeys(fields))  # deduplicate while preserving order
+
+        # Validate batch_size is a reasonable integer
+        batch_size = max(1, min(int(batch_size), 2000))
 
         # Base query
         soql = f"SELECT {', '.join(fields)} FROM {object_name}"
@@ -399,7 +460,7 @@ class SalesforceSyncService:
         async with get_sf_client() as client:
             # Initial query
             response = await client.get(
-                f"{instance_url}/services/data/v60.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={'q': soql},
                 headers=headers,
             )
@@ -421,7 +482,7 @@ class SalesforceSyncService:
 
             while next_url and len(all_records) < max_records:
                 page_count += 1
-                # nextRecordsUrl is a relative path like /services/data/v60.0/query/01gXXX-2000
+                # nextRecordsUrl is a relative path like /services/data/vXX.0/query/01gXXX-2000
                 full_url = f"{instance_url}{next_url}"
 
                 response = await client.get(full_url, headers=headers)
@@ -508,7 +569,7 @@ class SalesforceSyncService:
                 data=transformed_data
             )
 
-            # Log sync event
+            # Log sync event (no per-record commit — Fix 5: outer txn commits)
             event = IntegrationEvent(
                 integration_profile_id=integration_profile_id,
                 event_type='record_synced',
@@ -522,7 +583,6 @@ class SalesforceSyncService:
                 }
             )
             db.add(event)
-            db.commit()
 
     def _transform_record(
         self,
@@ -562,34 +622,28 @@ class SalesforceSyncService:
         source_record_id: str,
         data: Dict[str, Any]
     ):
-        """Upsert record into CRM and track for change detection"""
+        """Upsert record into CRM and track for change detection.
+
+        Fix 3a: Uses INSERT ... ON CONFLICT to eliminate race conditions
+        between concurrent sync operations. No per-record commit (Fix 5).
+        """
         # Generate sync hash for change detection
         sync_hash = self._generate_sync_hash(data)
 
-        # Check for existing tracking record
-        tracking = db.query(IntegrationRecordTracking).filter(
-            IntegrationRecordTracking.integration_profile_id == integration_profile_id,
-            IntegrationRecordTracking.source_object == source_object,
-            IntegrationRecordTracking.source_record_id == source_record_id
-        ).first()
+        # Check if data changed (quick read before expensive CRM upsert)
+        existing_hash = db.execute(text("""
+            SELECT sync_hash FROM integration_record_tracking
+            WHERE integration_profile_id = :profile_id
+              AND source_object = :source_object
+              AND source_record_id = :source_record_id
+        """), {
+            "profile_id": integration_profile_id,
+            "source_object": source_object,
+            "source_record_id": source_record_id,
+        }).scalar()
 
-        if tracking:
-            # Check if data actually changed
-            if tracking.sync_hash == sync_hash:
-                return  # No change, skip upsert
-
-            tracking.last_synced_at = datetime.utcnow()
-            tracking.sync_hash = sync_hash
-        else:
-            tracking = IntegrationRecordTracking(
-                integration_profile_id=integration_profile_id,
-                source_object=source_object,
-                source_record_id=source_record_id,
-                target_entity=target_entity,
-                last_synced_at=datetime.utcnow(),
-                sync_hash=sync_hash
-            )
-            db.add(tracking)
+        if existing_hash == sync_hash:
+            return  # No change, skip upsert
 
         # Upsert into appropriate CRM table based on entity
         target_record_id = await self._upsert_to_crm(
@@ -597,13 +651,37 @@ class SalesforceSyncService:
             integration_profile_id=integration_profile_id,
             target_entity=target_entity,
             data=data,
-            tracking_id=tracking.id if tracking.id else None
+            tracking_id=None
         )
 
-        if target_record_id:
-            tracking.target_record_id = target_record_id
-
-        db.commit()
+        # Atomic upsert of tracking record (Fix 3a: INSERT ... ON CONFLICT)
+        # NOTE: Requires unique constraint on (integration_profile_id, source_object, source_record_id).
+        # Migration needed: CREATE UNIQUE INDEX IF NOT EXISTS
+        #   idx_irt_profile_object_record ON integration_record_tracking
+        #   (integration_profile_id, source_object, source_record_id);
+        db.execute(text("""
+            INSERT INTO integration_record_tracking
+                (integration_profile_id, source_object, source_record_id,
+                 target_entity, target_record_id, last_synced_at, sync_hash, sync_status)
+            VALUES
+                (:profile_id, :source_object, :source_record_id,
+                 :target_entity, :target_record_id, :synced_at, :hash, 'synced')
+            ON CONFLICT (integration_profile_id, source_object, source_record_id)
+            DO UPDATE SET
+                target_record_id = EXCLUDED.target_record_id,
+                last_synced_at = EXCLUDED.last_synced_at,
+                sync_hash = EXCLUDED.sync_hash,
+                sync_status = 'synced',
+                updated_at = NOW()
+        """), {
+            "profile_id": integration_profile_id,
+            "source_object": source_object,
+            "source_record_id": source_record_id,
+            "target_entity": target_entity,
+            "target_record_id": str(target_record_id) if target_record_id else None,
+            "synced_at": datetime.utcnow(),
+            "hash": sync_hash,
+        })
 
     async def _upsert_to_crm(
         self,
@@ -637,11 +715,8 @@ class SalesforceSyncService:
         user_id = profile.user_id
         salesforce_id = data.pop('salesforce_id', None)
 
-        # Get org_id for multi-tenant scoping
-        user_row = db.execute(sa_text(
-            "SELECT organization_id FROM users WHERE id = :uid"
-        ), {"uid": user_id}).fetchone()
-        org_id = user_row[0] if user_row else None
+        # Get org_id for multi-tenant scoping (Fix 8: cached lookup)
+        org_id = _get_org_id_for_user(db, user_id)
 
         # Extract email for cross-table lookup
         email = (
@@ -816,11 +891,8 @@ class SalesforceSyncService:
         from sqlalchemy import text
         from datetime import datetime, timezone
 
-        # Get user's organization_id for multi-tenant isolation
-        user_row = db.execute(text("""
-            SELECT organization_id FROM users WHERE id = :user_id
-        """), {"user_id": user_id}).fetchone()
-        org_id = user_row.organization_id if user_row else None
+        # Get user's organization_id for multi-tenant isolation (Fix 8: cached)
+        org_id = _get_org_id_for_user(db, user_id)
 
         # Check if lead exists by salesforce_id or email (org-scoped)
         existing = None
@@ -909,7 +981,12 @@ class SalesforceSyncService:
 
             return lead_id
         else:
-            # Create new lead
+            # Create new lead — use INSERT ... ON CONFLICT to guard against race conditions
+            # where two concurrent sync requests both pass the SELECT check above and
+            # attempt to INSERT a lead with the same salesforce_id. (Fix 3b)
+            # NOTE: Requires unique partial index on salesforce_id:
+            #   CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_salesforce_id
+            #   ON leads(salesforce_id) WHERE salesforce_id IS NOT NULL;
             lead_data['owner_id'] = user_id
             lead_data['salesforce_id'] = salesforce_id
             if not lead_data.get('stage'):
@@ -919,21 +996,40 @@ class SalesforceSyncService:
             columns = ", ".join(lead_data.keys())
             placeholders = ", ".join([f":{k}" for k in lead_data.keys()])
 
+            # Build SET clause for the ON CONFLICT update path — update all mapped
+            # fields except owner_id and organization_id (preserve originals)
+            conflict_set_parts = []
+            for k in lead_data.keys():
+                if k not in ('owner_id', 'organization_id', 'salesforce_id'):
+                    conflict_set_parts.append(f"{k} = EXCLUDED.{k}")
+            conflict_set_parts.append("updated_at = CURRENT_TIMESTAMP")
+            conflict_set_clause = ", ".join(conflict_set_parts)
+
             result = db.execute(text(f"""
                 INSERT INTO leads ({columns}, created_at, updated_at)
                 VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                RETURNING id
+                ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL
+                DO UPDATE SET {conflict_set_clause}
+                RETURNING id, (xmax = 0) AS was_inserted
             """), lead_data)
 
-            lead_id = result.fetchone()[0]
-            logger.info(f"Created lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
+            row = result.fetchone()
+            lead_id = row[0]
+            was_inserted = row[1] if len(row) > 1 else True
 
-            # Wire to SLA tracking — create initial milestone for new lead
-            try:
-                from services.sla_tracking_service import track_lead_created
-                track_lead_created(db, lead_id, organization_id=org_id)
-            except Exception as e:
-                logger.warning(f"SLA tracking hook failed for new lead {lead_id}: {e}")
+            if was_inserted:
+                logger.info(f"Created lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
+                # Wire to SLA tracking — create initial milestone for new lead
+                try:
+                    from services.sla_tracking_service import track_lead_created
+                    track_lead_created(db, lead_id, organization_id=org_id)
+                except Exception as e:
+                    logger.warning(f"SLA tracking hook failed for new lead {lead_id}: {e}")
+            else:
+                logger.info(
+                    f"Lead {lead_id} already existed (race condition resolved via ON CONFLICT) "
+                    f"from Salesforce {salesforce_id}"
+                )
 
             return lead_id
 
@@ -981,11 +1077,8 @@ class SalesforceSyncService:
         from sqlalchemy import text
         import uuid
 
-        # Get user's organization_id for multi-tenant isolation
-        user_row = db.execute(text("""
-            SELECT organization_id FROM users WHERE id = :user_id
-        """), {"user_id": user_id}).fetchone()
-        org_id = user_row.organization_id if user_row else None
+        # Get user's organization_id for multi-tenant isolation (Fix 8: cached)
+        org_id = _get_org_id_for_user(db, user_id)
 
         # Check if loan exists by salesforce_id (scoped to org for multi-tenant isolation)
         existing = None
@@ -1143,6 +1236,13 @@ class SalesforceSyncService:
 
             return loan_id
         else:
+            # Create new loan — use INSERT ... ON CONFLICT to guard against race conditions
+            # where two concurrent sync requests both pass the SELECT check above and
+            # attempt to INSERT a loan with the same salesforce_id. (Fix 3b)
+            # NOTE: Requires unique partial index on salesforce_id:
+            #   CREATE UNIQUE INDEX IF NOT EXISTS idx_loans_salesforce_id
+            #   ON loans(salesforce_id) WHERE salesforce_id IS NOT NULL;
+
             # Use loan_number from Salesforce if provided, else generate one
             if not loan_data.get('loan_number'):
                 loan_data['loan_number'] = f"SF-{str(uuid.uuid4())[:8].upper()}"
@@ -1162,27 +1262,47 @@ class SalesforceSyncService:
             columns = ", ".join(loan_data.keys())
             placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
 
+            # Build SET clause for the ON CONFLICT update path — update all mapped
+            # fields except loan_officer_id and organization_id (preserve originals)
+            conflict_set_parts = []
+            for k in loan_data.keys():
+                if k not in ('loan_officer_id', 'organization_id', 'salesforce_id', 'loan_number'):
+                    conflict_set_parts.append(f"{k} = EXCLUDED.{k}")
+            conflict_set_parts.append("updated_at = CURRENT_TIMESTAMP")
+            conflict_set_clause = ", ".join(conflict_set_parts)
+
             result = db.execute(text(f"""
                 INSERT INTO loans ({columns}, created_at, updated_at)
                 VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                RETURNING id
+                ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL
+                DO UPDATE SET {conflict_set_clause}
+                RETURNING id, (xmax = 0) AS was_inserted
             """), loan_data)
 
-            loan_id = result.fetchone()[0]
-            logger.info(f"Created loan {loan_id} ({loan_data['loan_number']}) from Salesforce {salesforce_id}")
+            row = result.fetchone()
+            loan_id = row[0]
+            was_inserted = row[1] if len(row) > 1 else True
 
-            # Wire to SLA tracking — create initial milestone for new loan
-            try:
-                from services.sla_tracking_service import track_loan_created
-                track_loan_created(
-                    db, loan_id, loan_data['loan_number'], organization_id=org_id
+            if was_inserted:
+                logger.info(f"Created loan {loan_id} ({loan_data['loan_number']}) from Salesforce {salesforce_id}")
+
+                # Wire to SLA tracking — create initial milestone for new loan
+                try:
+                    from services.sla_tracking_service import track_loan_created
+                    track_loan_created(
+                        db, loan_id, loan_data['loan_number'], organization_id=org_id
+                    )
+                except Exception as e:
+                    logger.warning(f"SLA tracking hook failed for new loan {loan_id}: {e}")
+
+                # MUM promotion: if new loan is created with FUNDED stage, promote immediately
+                if loan_data.get('stage') == 'FUNDED':
+                    self._try_mum_promotion(db, loan_id, user_id)
+            else:
+                logger.info(
+                    f"Loan {loan_id} already existed (race condition resolved via ON CONFLICT) "
+                    f"from Salesforce {salesforce_id}"
                 )
-            except Exception as e:
-                logger.warning(f"SLA tracking hook failed for new loan {loan_id}: {e}")
-
-            # MUM promotion: if new loan is created with FUNDED stage, promote immediately
-            if loan_data.get('stage') == 'FUNDED':
-                self._try_mum_promotion(db, loan_id, user_id)
 
             return loan_id
 
@@ -1471,7 +1591,7 @@ class SalesforceSyncService:
             """
 
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": lead_query},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -1481,7 +1601,7 @@ class SalesforceSyncService:
                 data = response.json()
                 if data.get('totalSize', 0) > 0:
                     record = data['records'][0]
-                    logger.info(f"Found Salesforce Lead {record['Id']} for email {email}")
+                    logger.info(f"Found Salesforce Lead {record['Id']} for CRM record lookup")
                     return {
                         "found": True,
                         "type": "Lead",
@@ -1502,7 +1622,7 @@ class SalesforceSyncService:
             """
 
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": contact_query},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -1512,7 +1632,7 @@ class SalesforceSyncService:
                 data = response.json()
                 if data.get('totalSize', 0) > 0:
                     record = data['records'][0]
-                    logger.info(f"Found Salesforce Contact {record['Id']} for email {email}")
+                    logger.info(f"Found Salesforce Contact {record['Id']} for CRM record lookup")
                     return {
                         "found": True,
                         "type": "Contact",
@@ -1541,7 +1661,7 @@ class SalesforceSyncService:
             contact_query = f"SELECT Id, AccountId FROM Contact WHERE Email = '{_sanitize_soql_email(email)}' LIMIT 1"
 
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": contact_query},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -1561,19 +1681,21 @@ class SalesforceSyncService:
                 return {"found": False}
 
             # Query Opportunity by AccountId with ALL fields
+            # Fix 1c: Sanitize account_id before SOQL interpolation
+            safe_acct_id = _sanitize_soql_string(account_id)
             opp_query = f"""
                 SELECT Id, Name, Amount, StageName, CloseDate, Probability,
                        Type, LeadSource, NextStep, Description,
                        ExpectedRevenue, TotalOpportunityQuantity,
                        CreatedDate, LastModifiedDate, IsClosed, IsWon
                 FROM Opportunity
-                WHERE AccountId = '{account_id}'
+                WHERE AccountId = '{safe_acct_id}'
                 ORDER BY LastModifiedDate DESC
                 LIMIT 1
             """
 
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": opp_query},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -1583,7 +1705,7 @@ class SalesforceSyncService:
                 data = response.json()
                 if data.get('totalSize', 0) > 0:
                     record = data['records'][0]
-                    logger.info(f"Found Salesforce Opportunity {record['Id']} for email {email}")
+                    logger.info(f"Found Salesforce Opportunity {record['Id']} for CRM record lookup")
                     return {
                         "found": True,
                         "type": "Opportunity",
@@ -1832,58 +1954,10 @@ class SalesforceSyncService:
     def _map_sf_lead_status_to_crm(self, sf_status: str) -> str:
         """Map Salesforce Lead/Contact status to CRM stage (matches LeadStage enum values).
 
-        Handles both standard SF Lead Status values and MtgPlanner_CRM__Status__c values
-        (Jungo/Encompass pipeline stages). For statuses that indicate an active loan
-        (Started, Processing, etc.), maps to 'Application' or 'Disclosed' so the record
-        is recognized as loan-stage.
+        Fix 2: Delegates to the canonical map_salesforce_lead_stage() in stage_mapping.py
+        to prevent divergence between inline dictionaries and the single source of truth.
         """
-        if not sf_status:
-            return 'New'
-
-        status_mapping = {
-            # Standard SF Lead statuses
-            'Open - Not Contacted': 'New',
-            'Working - Contacted': 'Attempted Contact',
-            'Prospecting': 'Prospect',
-            'Qualification': 'Prospect',
-            'Needs Analysis': 'Prospect',
-            'Qualified': 'Pre-Qualified',
-            'Pre-Qualified': 'Pre-Qualified',
-            'Pre-Approved': 'Pre-Approved',
-            'Nurture': 'Long-Term Nurture',
-            'Long-Term Nurture': 'Long-Term Nurture',
-            'Closed - Converted': 'Disclosed',
-            'Closed - Not Converted': 'Withdrawn',
-            # Encompass/Jungo/MtgPlanner pipeline statuses (MtgPlanner_CRM__Status__c)
-            'Started': 'Application',
-            'File Started': 'Application',
-            'Application': 'Application',
-            'Disclosed': 'Disclosed',
-            'Processing': 'Disclosed',
-            'In Processing': 'Disclosed',
-            'Submitted': 'Disclosed',
-            'Underwriting': 'Disclosed',
-            'Conditional Approval': 'Disclosed',
-            'Approved': 'Disclosed',
-            'Suspended': 'Disclosed',
-            'CTC': 'Disclosed',
-            'Clear to Close': 'Disclosed',
-            'Closing': 'Disclosed',
-            'Docs': 'Disclosed',
-            'Docs Out': 'Disclosed',
-            'Funded': 'Closed',
-            'Shipped': 'Closed',
-            'File Complete': 'Closed',
-            'Complete': 'Closed',
-            'Closed Won': 'Closed',
-            'Closed': 'Closed',
-            'Closed Lost': 'Withdrawn',
-            'Cancelled': 'Withdrawn',
-            'Denied': 'Does Not Qualify',
-            'Dead': 'Withdrawn',
-            'Withdrawn': 'Withdrawn',
-        }
-        return status_mapping.get(sf_status, 'New')
+        return map_salesforce_lead_stage(sf_status)
 
     # =========================================================================
     # SMART ROUTING: Classify records by SF status and route to correct table
@@ -2030,42 +2104,12 @@ class SalesforceSyncService:
         return None
 
     def _map_sf_status_to_lead_stage(self, sf_status: str) -> str:
+        """Map a Salesforce status to a valid LeadStage enum string.
+
+        Fix 2: Delegates to the canonical map_salesforce_lead_stage() in stage_mapping.py
+        to prevent divergence between inline dictionaries and the single source of truth.
         """
-        Map a Salesforce status to a valid LeadStage enum string.
-        Values must EXACTLY match LeadStage enum (e.g., 'New' not 'NEW').
-        """
-        mapping = {
-            # SF Lead statuses
-            'New': 'New',
-            'Open - Not Contacted': 'New',
-            'Working - Contacted': 'Attempted Contact',
-            'Prospecting': 'Prospect',
-            'Qualification': 'Prospect',
-            'Needs Analysis': 'Prospect',
-            'Pre-Qualified': 'Pre-Qualified',
-            'Pre-Approved': 'Pre-Approved',
-            'Nurture': 'Long-Term Nurture',
-            'Long-Term Nurture': 'Long-Term Nurture',
-            'Closed - Not Converted': 'Withdrawn',
-            'Closed - Converted': 'Disclosed',
-            # Encompass/loan statuses that may appear on SF records
-            'Started': 'Application',
-            'File Started': 'Application',
-            'Application': 'Application',
-            'Disclosed': 'Disclosed',
-            'Processing': 'Disclosed',
-            'In Processing': 'Disclosed',
-            'Loan in Process': 'Disclosed',
-            # Terminal / Funded
-            'Funded': 'Closed',
-            'Closed Won': 'Closed',
-            'Closed': 'Closed',
-            'Completed': 'Closed',
-            'Closed Lost': 'Withdrawn',
-            'Cancelled': 'Withdrawn',
-            'Denied': 'Does Not Qualify',
-        }
-        return mapping.get(sf_status, 'New')
+        return map_salesforce_lead_stage(sf_status)
 
     def _remap_loan_fields_for_lead(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -2492,7 +2536,7 @@ class SalesforceSyncService:
 
         async with get_sf_client() as client:
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": soql},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -2521,7 +2565,7 @@ class SalesforceSyncService:
                     LIMIT {limit}
                 """
                 response2 = await client.get(
-                    f"{instance_url}/services/data/v59.0/query",
+                    f"{instance_url}/services/data/{SF_API_VERSION}/query",
                     params={"q": soql_fallback},
                     headers={"Authorization": f"Bearer {access_token}"},
                     timeout=30.0
@@ -2560,7 +2604,7 @@ class SalesforceSyncService:
 
         async with get_sf_client() as client:
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": soql},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -2599,7 +2643,7 @@ class SalesforceSyncService:
 
         async with get_sf_client() as client:
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": soql},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -2693,7 +2737,7 @@ class SalesforceSyncService:
             if existing_loan_by_email:
                 logger.info(
                     f"Skipping lead creation for SF {sf_type} {sf_id}: "
-                    f"loan {existing_loan_by_email[0]} already exists with email {email}"
+                    f"loan {existing_loan_by_email[0]} already exists with matching email"
                 )
                 return False
 
@@ -2721,11 +2765,8 @@ class SalesforceSyncService:
         industry = sf_record.get('Industry') or ''
         notes = sf_record.get('Description') or ''
 
-        # Get user's organization_id for multi-tenant isolation
-        user_row = db.execute(text("""
-            SELECT organization_id FROM users WHERE id = :user_id
-        """), {"user_id": user_id}).fetchone()
-        org_id = user_row.organization_id if user_row else None
+        # Get user's organization_id for multi-tenant isolation (Fix 8: cached)
+        org_id = _get_org_id_for_user(db, user_id)
 
         result = db.execute(text("""
             INSERT INTO leads (
@@ -2765,7 +2806,7 @@ class SalesforceSyncService:
         })
 
         lead_id = result.fetchone()[0]
-        logger.info(f"Created CRM lead from Salesforce {sf_type} {sf_id}: {first_name} {last_name} ({email})")
+        logger.info(f"Created CRM lead {lead_id} from Salesforce {sf_type} {sf_id}")
 
         # Wire to SLA tracking — create initial milestone for new lead
         try:
@@ -2813,16 +2854,14 @@ class SalesforceSyncService:
             LIMIT 1
         """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
 
-        # Get user's organization_id for multi-tenant isolation
-        user_row = db.execute(text("""
-            SELECT organization_id FROM users WHERE id = :user_id
-        """), {"user_id": user_id}).fetchone()
-        org_id = user_row.organization_id if user_row else None
+        # Get user's organization_id for multi-tenant isolation (Fix 8: cached)
+        org_id = _get_org_id_for_user(db, user_id)
 
         # Build new loan record from Opportunity
         name = sf_opp.get('Name') or 'Salesforce Opportunity'
         amount = float(sf_opp.get('Amount') or 0)
-        stage = self._map_salesforce_stage(sf_opp.get('StageName', ''))
+        # Fix 6: Default to APPLICATION when map_salesforce_stage returns None
+        stage = self._map_salesforce_stage(sf_opp.get('StageName', '')) or 'APPLICATION'
         close_date = sf_opp.get('CloseDate')
         loan_type = sf_opp.get('Type') or ''
 
@@ -2885,7 +2924,9 @@ class SalesforceSyncService:
             LIMIT 1
         """), {"sf_id": sf_id, "user_id": user_id}).fetchone()
 
-        logger.info(f"Created CRM loan from Salesforce Opportunity {sf_id}: {borrower_name} (${amount:,.0f}, stage={stage})")
+        # Fix 4: removed PII (borrower_name, amount) from info log
+        new_loan_id = new_loan_row[0] if new_loan_row else "unknown"
+        logger.info(f"Created CRM loan {new_loan_id} from Salesforce Opportunity {sf_id} (stage={stage})")
 
         # Wire to SLA tracking — create initial milestone for new loan
         if new_loan_row:
@@ -2938,11 +2979,13 @@ class SalesforceSyncService:
             """), {"user_id": user_id}).fetchone().id
         )
 
-        soql = f"SELECT FirstName, LastName, Email, Phone, MobilePhone FROM Contact WHERE AccountId = '{account_id}' AND Email != null ORDER BY LastModifiedDate DESC LIMIT 1"
+        # Fix 1b: Sanitize account_id before SOQL interpolation
+        safe_account_id = _sanitize_soql_string(account_id)
+        soql = f"SELECT FirstName, LastName, Email, Phone, MobilePhone FROM Contact WHERE AccountId = '{safe_account_id}' AND Email != null ORDER BY LastModifiedDate DESC LIMIT 1"
 
         async with get_sf_client() as client:
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": soql},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=15.0
@@ -3039,7 +3082,7 @@ class SalesforceSyncService:
             if salesforce_id:
                 # UPDATE existing Opportunity
                 response = await client.patch(
-                    f"{instance_url}/services/data/v59.0/sobjects/Opportunity/{salesforce_id}",
+                    f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/Opportunity/{salesforce_id}",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"
@@ -3075,7 +3118,7 @@ class SalesforceSyncService:
             else:
                 # CREATE new Opportunity
                 response = await client.post(
-                    f"{instance_url}/services/data/v59.0/sobjects/Opportunity",
+                    f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/Opportunity",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"
@@ -3138,7 +3181,7 @@ class SalesforceSyncService:
             # First, search for Lead by email
             lead_query = f"SELECT Id, FirstName, LastName, Email, Phone FROM Lead WHERE Email = '{_sanitize_soql_email(email)}' LIMIT 1"
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": lead_query},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -3148,7 +3191,7 @@ class SalesforceSyncService:
                 data = response.json()
                 if data.get('totalSize', 0) > 0:
                     record = data['records'][0]
-                    logger.info(f"Found existing Salesforce Lead {record['Id']} for email {email}")
+                    logger.info(f"Found existing Salesforce Lead {record['Id']} for CRM record lookup")
                     return {
                         "found": True,
                         "type": "Lead",
@@ -3159,7 +3202,7 @@ class SalesforceSyncService:
             # If no Lead found, search for Contact
             contact_query = f"SELECT Id, FirstName, LastName, Email, Phone, AccountId FROM Contact WHERE Email = '{_sanitize_soql_email(email)}' LIMIT 1"
             response = await client.get(
-                f"{instance_url}/services/data/v59.0/query",
+                f"{instance_url}/services/data/{SF_API_VERSION}/query",
                 params={"q": contact_query},
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=30.0
@@ -3169,7 +3212,7 @@ class SalesforceSyncService:
                 data = response.json()
                 if data.get('totalSize', 0) > 0:
                     record = data['records'][0]
-                    logger.info(f"Found existing Salesforce Contact {record['Id']} for email {email}")
+                    logger.info(f"Found existing Salesforce Contact {record['Id']} for CRM record lookup")
                     return {
                         "found": True,
                         "type": "Contact",
@@ -3383,7 +3426,7 @@ class SalesforceSyncService:
                 all_fields = {**lead_data, **custom_fields}
 
                 response = await client.patch(
-                    f"{instance_url}/services/data/v59.0/sobjects/{sf_object_type}/{salesforce_id}",
+                    f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/{sf_object_type}/{salesforce_id}",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"
@@ -3399,7 +3442,7 @@ class SalesforceSyncService:
                     # Custom fields don't exist - retry with standard fields only
                     logger.warning(f"Custom fields failed, retrying with standard fields only")
                     response = await client.patch(
-                        f"{instance_url}/services/data/v59.0/sobjects/{sf_object_type}/{salesforce_id}",
+                        f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/{sf_object_type}/{salesforce_id}",
                         headers={
                             "Authorization": f"Bearer {access_token}",
                             "Content-Type": "application/json"
@@ -3442,7 +3485,7 @@ class SalesforceSyncService:
                 all_fields = {**lead_data, **custom_fields}
 
                 response = await client.post(
-                    f"{instance_url}/services/data/v59.0/sobjects/Lead",
+                    f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/Lead",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"
@@ -3459,7 +3502,7 @@ class SalesforceSyncService:
                     # Custom fields don't exist - retry with standard fields only
                     logger.warning(f"Custom fields failed on create, retrying with standard fields")
                     response = await client.post(
-                        f"{instance_url}/services/data/v59.0/sobjects/Lead",
+                        f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/Lead",
                         headers={
                             "Authorization": f"Bearer {access_token}",
                             "Content-Type": "application/json"
@@ -3555,7 +3598,7 @@ class SalesforceSyncService:
 
         async with get_sf_client() as client:
             response = await client.post(
-                f"{instance_url}/services/data/v59.0/sobjects/Task",
+                f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/Task",
                 headers={
                     "Authorization": f"Bearer {access_token}",
                     "Content-Type": "application/json"
@@ -3662,7 +3705,7 @@ class SalesforceSyncService:
             if salesforce_id:
                 # UPDATE existing Event
                 response = await client.patch(
-                    f"{instance_url}/services/data/v59.0/sobjects/Event/{salesforce_id}",
+                    f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/Event/{salesforce_id}",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"
@@ -3685,7 +3728,7 @@ class SalesforceSyncService:
             else:
                 # CREATE new Event
                 response = await client.post(
-                    f"{instance_url}/services/data/v59.0/sobjects/Event",
+                    f"{instance_url}/services/data/{SF_API_VERSION}/sobjects/Event",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"

@@ -2,11 +2,12 @@
 Google Calendar OAuth Integration
 Handles OAuth authentication and calendar operations for Google Calendar
 """
+import asyncio
 import os
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
-import requests
+from datetime import datetime, timedelta, timezone
+import httpx
 from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,12 @@ CALENDAR_SCOPES = [
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
 ]
+
+# Transient HTTP status codes worth retrying
+_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
+_MAX_RETRIES = 1
+_RETRY_DELAY_SECONDS = 2.0
+_REQUEST_TIMEOUT = 30.0
 
 
 class GoogleCalendarClient:
@@ -59,7 +66,48 @@ class GoogleCalendarClient:
 
         return f"{self.auth_url}?{urlencode(params)}"
 
-    def exchange_code_for_token(self, code: str) -> Optional[Dict[str, Any]]:
+    async def _request_with_retry(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        url: str,
+        **kwargs,
+    ) -> httpx.Response:
+        """Execute an HTTP request with retry logic for transient failures.
+
+        Retries up to _MAX_RETRIES times on 5xx status codes and timeouts.
+        """
+        last_exception: Optional[Exception] = None
+
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                response = await client.request(method, url, **kwargs)
+
+                if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES:
+                    logger.warning(
+                        "Google Calendar API returned %d on attempt %d, retrying in %.1fs",
+                        response.status_code, attempt + 1, _RETRY_DELAY_SECONDS,
+                    )
+                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
+                    continue
+
+                return response
+
+            except (httpx.TimeoutException, httpx.ConnectError) as exc:
+                last_exception = exc
+                if attempt < _MAX_RETRIES:
+                    logger.warning(
+                        "Google Calendar API %s on attempt %d, retrying in %.1fs",
+                        type(exc).__name__, attempt + 1, _RETRY_DELAY_SECONDS,
+                    )
+                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
+                    continue
+                raise
+
+        # Should not reach here, but satisfy type checker
+        raise last_exception  # type: ignore[misc]
+
+    async def exchange_code_for_token(self, code: str) -> Optional[Dict[str, Any]]:
         """Exchange authorization code for access token"""
         if not self.enabled:
             return None
@@ -73,19 +121,22 @@ class GoogleCalendarClient:
                 "grant_type": "authorization_code"
             }
 
-            response = requests.post(
-                self.token_url,
-                data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
+                response = await self._request_with_retry(
+                    client,
+                    "POST",
+                    self.token_url,
+                    data=data,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                response.raise_for_status()
 
             token_data = response.json()
             logger.info("Successfully exchanged code for Google Calendar access token")
 
             # Calculate expiration time
             expires_in = token_data.get("expires_in", 3600)
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             return {
                 "access_token": token_data.get("access_token"),
@@ -96,14 +147,14 @@ class GoogleCalendarClient:
                 "scope": token_data.get("scope"),
             }
 
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             logger.error(f"Google Calendar token exchange HTTP error: {e.response.text}")
             return None
         except Exception as e:
             logger.error(f"Error exchanging code for token: {e}")
             return None
 
-    def refresh_access_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
+    async def refresh_access_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
         """Refresh an expired access token"""
         if not self.enabled:
             return None
@@ -116,18 +167,21 @@ class GoogleCalendarClient:
                 "grant_type": "refresh_token"
             }
 
-            response = requests.post(
-                self.token_url,
-                data=data,
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
+                response = await self._request_with_retry(
+                    client,
+                    "POST",
+                    self.token_url,
+                    data=data,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+                response.raise_for_status()
 
             token_data = response.json()
             logger.info("Successfully refreshed Google Calendar access token")
 
             expires_in = token_data.get("expires_in", 3600)
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             return {
                 "access_token": token_data.get("access_token"),
@@ -141,20 +195,23 @@ class GoogleCalendarClient:
             logger.error(f"Error refreshing Google Calendar access token: {e}")
             return None
 
-    def get_user_info(self, access_token: str) -> Optional[Dict[str, Any]]:
+    async def get_user_info(self, access_token: str) -> Optional[Dict[str, Any]]:
         """Get user info from Google"""
         try:
-            response = requests.get(
-                self.userinfo_url,
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
+                response = await self._request_with_retry(
+                    client,
+                    "GET",
+                    self.userinfo_url,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                response.raise_for_status()
             return response.json()
         except Exception as e:
             logger.error(f"Error getting user info: {e}")
             return None
 
-    def _make_request(
+    async def _make_request(
         self,
         method: str,
         endpoint: str,
@@ -171,18 +228,20 @@ class GoogleCalendarClient:
 
             url = f"{self.api_base_url}{endpoint}"
 
-            response = requests.request(
-                method=method,
-                url=url,
-                headers=headers,
-                json=data,
-                params=params
-            )
-            response.raise_for_status()
+            async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
+                response = await self._request_with_retry(
+                    client,
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    params=params,
+                )
+                response.raise_for_status()
 
             return response.json() if response.text else {}
 
-        except requests.exceptions.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             logger.error(f"Google Calendar API error: {e.response.text}")
             return None
         except Exception as e:
@@ -190,15 +249,15 @@ class GoogleCalendarClient:
             return None
 
     # Calendar operations
-    def list_calendars(self, access_token: str) -> Optional[Dict[str, Any]]:
+    async def list_calendars(self, access_token: str) -> Optional[Dict[str, Any]]:
         """List all calendars for the user"""
-        return self._make_request("GET", "/users/me/calendarList", access_token)
+        return await self._make_request("GET", "/users/me/calendarList", access_token)
 
-    def get_calendar(self, access_token: str, calendar_id: str = "primary") -> Optional[Dict[str, Any]]:
+    async def get_calendar(self, access_token: str, calendar_id: str = "primary") -> Optional[Dict[str, Any]]:
         """Get a specific calendar"""
-        return self._make_request("GET", f"/calendars/{calendar_id}", access_token)
+        return await self._make_request("GET", f"/calendars/{calendar_id}", access_token)
 
-    def list_events(
+    async def list_events(
         self,
         access_token: str,
         calendar_id: str = "primary",
@@ -218,14 +277,14 @@ class GoogleCalendarClient:
         if time_max:
             params["timeMax"] = time_max.isoformat() + "Z"
 
-        return self._make_request(
+        return await self._make_request(
             "GET",
             f"/calendars/{calendar_id}/events",
             access_token,
             params=params
         )
 
-    def create_event(
+    async def create_event(
         self,
         access_token: str,
         summary: str,
@@ -256,14 +315,14 @@ class GoogleCalendarClient:
         if attendees:
             event_data["attendees"] = [{"email": email} for email in attendees]
 
-        return self._make_request(
+        return await self._make_request(
             "POST",
             f"/calendars/{calendar_id}/events",
             access_token,
             data=event_data
         )
 
-    def update_event(
+    async def update_event(
         self,
         access_token: str,
         event_id: str,
@@ -271,14 +330,14 @@ class GoogleCalendarClient:
         calendar_id: str = "primary"
     ) -> Optional[Dict[str, Any]]:
         """Update an existing event"""
-        return self._make_request(
+        return await self._make_request(
             "PATCH",
             f"/calendars/{calendar_id}/events/{event_id}",
             access_token,
             data=updates
         )
 
-    def delete_event(
+    async def delete_event(
         self,
         access_token: str,
         event_id: str,
@@ -286,10 +345,16 @@ class GoogleCalendarClient:
     ) -> bool:
         """Delete an event"""
         try:
-            response = requests.delete(
-                f"{self.api_base_url}/calendars/{calendar_id}/events/{event_id}",
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
+            headers = {"Authorization": f"Bearer {access_token}"}
+            url = f"{self.api_base_url}/calendars/{calendar_id}/events/{event_id}"
+
+            async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
+                response = await self._request_with_retry(
+                    client,
+                    "DELETE",
+                    url,
+                    headers=headers,
+                )
             return response.status_code == 204
         except Exception as e:
             logger.error(f"Error deleting event: {e}")

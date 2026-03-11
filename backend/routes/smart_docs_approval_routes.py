@@ -666,6 +666,15 @@ async def apply_extracted_fields(
     from models.document_extraction import SmartDocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING, ReviewStatus
     from sqlalchemy import text
 
+    # Validate profile_type against whitelist to prevent SQL injection
+    ALLOWED_PROFILE_TYPES = {"lead": "leads", "loan": "loans"}
+    if body.profile_type not in ALLOWED_PROFILE_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid profile_type '{body.profile_type}'. Must be 'lead' or 'loan'."
+        )
+    table = ALLOWED_PROFILE_TYPES[body.profile_type]
+
     # Get extraction
     extraction = db.query(SmartDocumentExtraction).filter(
         SmartDocumentExtraction.document_id == document_id
@@ -676,6 +685,9 @@ async def apply_extracted_fields(
 
     extracted_fields = extraction.extracted_fields or {}
     field_mapping = FIELD_TO_LEAD_MAPPING if body.profile_type == "lead" else FIELD_TO_LOAN_MAPPING
+
+    # Build whitelist of allowed DB column names from the mapping values
+    allowed_columns = set(field_mapping.values())
 
     applied = []
     skipped = []
@@ -690,13 +702,19 @@ async def apply_extracted_fields(
             skipped.append(field_req.field_name)
             continue
 
+        # Validate profile_field is in the allowed column whitelist
+        if profile_field not in allowed_columns:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Field '{field_req.field_name}' maps to disallowed column."
+            )
+
         value = field_req.value or extracted_fields.get(field_req.field_name)
         if value is None:
             skipped.append(field_req.field_name)
             continue
 
-        # Update profile
-        table = "leads" if body.profile_type == "lead" else "loans"
+        # Update profile using whitelisted table and column names
         try:
             db.execute(text(f"""
                 UPDATE {table} SET {profile_field} = :value WHERE id = :id
@@ -817,8 +835,20 @@ async def approve_document_with_review(
         from models.document_extraction import FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING
         from sqlalchemy import text
 
+        # Validate profile_type against whitelist to prevent SQL injection
+        ALLOWED_PROFILE_TYPES = {"lead": "leads", "loan": "loans"}
+        if body.apply_fields.profile_type not in ALLOWED_PROFILE_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid profile_type '{body.apply_fields.profile_type}'. Must be 'lead' or 'loan'."
+            )
+        apply_table = ALLOWED_PROFILE_TYPES[body.apply_fields.profile_type]
+
         extracted_fields = extraction.extracted_fields or {} if extraction else {}
         field_mapping = FIELD_TO_LEAD_MAPPING if body.apply_fields.profile_type == "lead" else FIELD_TO_LOAN_MAPPING
+
+        # Build whitelist of allowed DB column names from the mapping values
+        allowed_columns = set(field_mapping.values())
 
         applied = []
         for field_req in body.apply_fields.fields_to_apply:
@@ -829,14 +859,20 @@ async def approve_document_with_review(
             if not profile_field:
                 continue
 
+            # Validate profile_field is in the allowed column whitelist
+            if profile_field not in allowed_columns:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Field '{field_req.field_name}' maps to disallowed column."
+                )
+
             value = field_req.value or extracted_fields.get(field_req.field_name)
             if value is None:
                 continue
 
-            table = "leads" if body.apply_fields.profile_type == "lead" else "loans"
             try:
                 db.execute(text(f"""
-                    UPDATE {table} SET {profile_field} = :value WHERE id = :id
+                    UPDATE {apply_table} SET {profile_field} = :value WHERE id = :id
                 """), {"value": str(value), "id": body.apply_fields.profile_id})
                 applied.append(field_req.field_name)
             except SQLAlchemyError as e:

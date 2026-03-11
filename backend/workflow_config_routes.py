@@ -120,18 +120,15 @@ _get_current_user = None
 _models = None
 
 
+from db import get_db
+
+
 def set_dependencies(db_dep, user_dep, models):
     """Set dependencies from main app"""
     global _get_db, _get_current_user, _models
     _get_db = db_dep
     _get_current_user = user_dep
     _models = models
-
-
-def get_db():
-    if _get_db is None:
-        raise RuntimeError("Dependencies not set")
-    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):

@@ -50,6 +50,7 @@ class DeletePolicy(str, Enum):
     """Delete policy enumeration"""
     SOFT_CANCEL = "soft_cancel"
     HARD_DELETE = "hard_delete"
+    IGNORE = "ignore"
 
 
 class CRMCalendarEvent(Base):

@@ -2284,8 +2284,11 @@ async def health_check():
 
 
 @router.get("/diagnostic/rubrics")
-async def diagnostic_rubrics(db: Session = Depends(get_db)):
-    """Diagnostic endpoint to check rubrics data - no auth required."""
+async def diagnostic_rubrics(
+    current_user: Any = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Diagnostic endpoint to check rubrics data."""
     try:
         result = db.execute(text("""
             SELECT COUNT(*) as count FROM ci_qa_rubrics WHERE is_active = true

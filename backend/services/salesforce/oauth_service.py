@@ -7,10 +7,13 @@ import secrets
 import logging
 import hashlib
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Tuple
 import httpx
 
+from urllib.parse import urlencode
+
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from encryption_utils import encrypt_value, decrypt_value
@@ -139,7 +142,7 @@ class SalesforceOAuthService:
                 state_token=state_token,
                 user_id=user_id,
                 provider='salesforce',
-                expires_at=datetime.utcnow() + timedelta(minutes=15),
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
                 return_url=return_url,
                 state_metadata={
                     'created_from': 'user_settings',
@@ -170,7 +173,7 @@ class SalesforceOAuthService:
             'code_challenge_method': 'S256'
         }
 
-        query_string = '&'.join(f"{k}={v}" for k, v in params.items())
+        query_string = urlencode(params)
         return f"{self.config.base_url}/services/oauth2/authorize?{query_string}"
 
     async def handle_callback(
@@ -194,12 +197,8 @@ class SalesforceOAuthService:
         if oauth_state.used:
             raise ValueError("State token already used")
 
-        if datetime.utcnow() > oauth_state.expires_at:
+        if datetime.now(timezone.utc) > oauth_state.expires_at:
             raise ValueError("State token expired")
-
-        # Mark state as used
-        oauth_state.used = True
-        db.commit()
 
         # Get code_verifier from state metadata for PKCE
         code_verifier = None
@@ -208,6 +207,10 @@ class SalesforceOAuthService:
 
         # Exchange code for tokens
         tokens = await self._exchange_code_for_tokens(code, code_verifier)
+
+        # Mark state as used AFTER successful token exchange
+        oauth_state.used = True
+        db.commit()
 
         # Get user identity from Salesforce
         identity = await self._get_user_identity(tokens['access_token'], tokens['id'])
@@ -280,11 +283,14 @@ class SalesforceOAuthService:
         identity: Dict[str, Any]
     ) -> IntegrationProfile:
         """Create or update integration profile with tokens"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Encrypt tokens
         access_token_encrypted = encrypt_value(tokens['access_token'])
         refresh_token_encrypted = encrypt_value(tokens['refresh_token'])
+
+        # Salesforce access tokens typically expire in ~2 hours
+        token_expires_at = (now + timedelta(hours=2)).isoformat()
 
         # Check for existing profile
         profile = db.query(IntegrationProfile).filter(
@@ -303,6 +309,10 @@ class SalesforceOAuthService:
             profile.sf_username = identity.get('username')
             profile.connected_at = now
             profile.last_error = None
+            # Store token expiry in sync_metadata
+            metadata = profile.sync_metadata or {}
+            metadata['token_expires_at'] = token_expires_at
+            profile.sync_metadata = metadata
         else:
             # Create new
             profile = IntegrationProfile(
@@ -318,7 +328,8 @@ class SalesforceOAuthService:
                 connected_at=now,
                 sync_enabled=True,
                 sync_interval_minutes=15,
-                sync_direction='bidirectional'
+                sync_direction='bidirectional',
+                sync_metadata={'token_expires_at': token_expires_at}
             )
             db.add(profile)
 
@@ -372,57 +383,105 @@ class SalesforceOAuthService:
         db.commit()
 
     async def refresh_access_token(self, db: Session, integration_profile_id: int) -> str:
-        """Refresh access token using refresh token"""
-        profile = db.query(IntegrationProfile).filter(
-            IntegrationProfile.id == integration_profile_id
-        ).first()
+        """Refresh access token using refresh token with advisory lock to prevent concurrent refreshes."""
+        # Use advisory lock to prevent concurrent refresh attempts
+        lock_id = hash(f"sf_refresh_{integration_profile_id}") % (2**31)
+        lock_acquired = db.execute(
+            text("SELECT pg_try_advisory_lock(:lock_id)"),
+            {"lock_id": lock_id}
+        ).scalar()
 
-        if not profile or not profile.refresh_token_encrypted:
-            raise ValueError("Integration profile not found or no refresh token")
+        if not lock_acquired:
+            # Another process is refreshing — wait briefly and read the new token
+            import asyncio
+            await asyncio.sleep(2)
+            profile = db.query(IntegrationProfile).filter(
+                IntegrationProfile.id == integration_profile_id
+            ).first()
+            if profile and profile.access_token_encrypted:
+                return decrypt_value(profile.access_token_encrypted)
+            raise ValueError("Token refresh in progress by another process and no token available")
 
-        refresh_token = decrypt_value(profile.refresh_token_encrypted)
+        try:
+            profile = db.query(IntegrationProfile).filter(
+                IntegrationProfile.id == integration_profile_id
+            ).first()
 
-        async with get_sf_client() as client:
-            response = await client.post(
-                f"{self.config.base_url}/services/oauth2/token",
-                data={
-                    'grant_type': 'refresh_token',
-                    'refresh_token': refresh_token,
-                    'client_id': self.config.client_id,
-                    'client_secret': self.config.client_secret
-                },
-                headers={'Content-Type': 'application/x-www-form-urlencoded'}
+            if not profile or not profile.refresh_token_encrypted:
+                raise ValueError("Integration profile not found or no refresh token")
+
+            refresh_token = decrypt_value(profile.refresh_token_encrypted)
+
+            async with get_sf_client() as client:
+                response = await client.post(
+                    f"{self.config.base_url}/services/oauth2/token",
+                    data={
+                        'grant_type': 'refresh_token',
+                        'refresh_token': refresh_token,
+                        'client_id': self.config.client_id,
+                        'client_secret': self.config.client_secret
+                    },
+                    headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                )
+
+                if response.status_code != 200:
+                    error = response.text
+
+                    # If refresh token is invalid, mark profile as disconnected
+                    if response.status_code == 400:
+                        profile.status = 'error'
+                        profile.last_error = 'Refresh token invalid - user needs to reconnect'
+                        db.commit()
+
+                    raise ValueError(f"Token refresh failed: {error}")
+
+                tokens = response.json()
+
+            # Update stored tokens and expiry
+            profile.access_token_encrypted = encrypt_value(tokens['access_token'])
+            profile.instance_url = tokens['instance_url']
+            profile.last_error = None
+            # Track token expiry (Salesforce tokens typically expire in ~2 hours)
+            token_expires_at = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+            metadata = profile.sync_metadata or {}
+            metadata['token_expires_at'] = token_expires_at
+            profile.sync_metadata = metadata
+            db.commit()
+
+            return tokens['access_token']
+        finally:
+            # Release advisory lock
+            db.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": lock_id}
             )
 
-            if response.status_code != 200:
-                error = response.text
-
-                # If refresh token is invalid, mark profile as disconnected
-                if response.status_code == 400:
-                    profile.status = 'error'
-                    profile.last_error = 'Refresh token invalid - user needs to reconnect'
-                    db.commit()
-
-                raise ValueError(f"Token refresh failed: {error}")
-
-            tokens = response.json()
-
-        # Update stored tokens
-        profile.access_token_encrypted = encrypt_value(tokens['access_token'])
-        profile.instance_url = tokens['instance_url']
-        profile.last_error = None
-        db.commit()
-
-        return tokens['access_token']
-
     async def get_access_token(self, db: Session, integration_profile_id: int) -> Tuple[str, str]:
-        """Get valid access token (refresh if needed)"""
+        """Get valid access token, proactively refreshing if expired or about to expire"""
         profile = db.query(IntegrationProfile).filter(
             IntegrationProfile.id == integration_profile_id
         ).first()
 
         if not profile or not profile.access_token_encrypted:
             raise ValueError("Integration profile not found or not connected")
+
+        # Check if token is about to expire (within 5 minutes)
+        metadata = profile.sync_metadata or {}
+        token_expires_at = metadata.get('token_expires_at')
+        if token_expires_at:
+            try:
+                expires = datetime.fromisoformat(token_expires_at)
+                # Ensure timezone-aware comparison
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) >= expires - timedelta(minutes=5):
+                    logger.info(f"Token for profile {integration_profile_id} expires at {token_expires_at}, proactively refreshing")
+                    refreshed = await self.refresh_access_token(db, integration_profile_id)
+                    # Re-read profile to get updated instance_url
+                    db.refresh(profile)
+                    return refreshed, profile.instance_url
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Could not parse token_expires_at '{token_expires_at}': {e}")
 
         try:
             # Try to use existing token
@@ -447,14 +506,46 @@ class SalesforceOAuthService:
         instance_url = profile.instance_url if profile else ""
         return access_token, instance_url
 
-    def disconnect(self, db: Session, integration_profile_id: int):
-        """Disconnect Salesforce integration"""
+    async def _revoke_salesforce_token(self, token: str, instance_url: str) -> None:
+        """Revoke a token on Salesforce's side."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{instance_url}/services/oauth2/revoke",
+                    data={"token": token},
+                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                )
+                if response.status_code == 200:
+                    logger.info("Salesforce token revoked successfully")
+                else:
+                    logger.warning(f"Salesforce token revocation returned status {response.status_code}")
+        except Exception as e:
+            logger.warning(f"Failed to revoke Salesforce token: {e}")
+            # Continue with local cleanup even if revocation fails
+
+    async def disconnect(self, db: Session, integration_profile_id: int):
+        """Disconnect Salesforce integration, revoking tokens on Salesforce's side"""
         profile = db.query(IntegrationProfile).filter(
             IntegrationProfile.id == integration_profile_id
         ).first()
 
         if not profile:
             raise ValueError("Integration profile not found")
+
+        # Revoke tokens on Salesforce's side before clearing locally
+        instance_url = profile.instance_url or ''
+        if profile.access_token_encrypted and instance_url:
+            try:
+                access_token = decrypt_value(profile.access_token_encrypted)
+                await self._revoke_salesforce_token(access_token, instance_url)
+            except Exception as e:
+                logger.warning(f"Could not revoke access token: {e}")
+        if profile.refresh_token_encrypted and instance_url:
+            try:
+                refresh_token = decrypt_value(profile.refresh_token_encrypted)
+                await self._revoke_salesforce_token(refresh_token, instance_url)
+            except Exception as e:
+                logger.warning(f"Could not revoke refresh token: {e}")
 
         # Update profile status
         profile.status = 'disconnected'
@@ -477,6 +568,24 @@ class SalesforceOAuthService:
         )
         db.add(event)
         db.commit()
+
+    async def cleanup_expired_states(self, db: Session) -> int:
+        """Clean up expired and used OAuth state records. Returns count deleted."""
+        result = db.execute(
+            text("""
+                DELETE FROM oauth_states
+                WHERE expires_at < :now OR (used = true AND created_at < :cutoff)
+            """),
+            {
+                "now": datetime.now(timezone.utc),
+                "cutoff": datetime.now(timezone.utc) - timedelta(hours=24)
+            }
+        )
+        db.commit()
+        deleted = result.rowcount
+        if deleted > 0:
+            logger.info(f"Cleaned up {deleted} expired OAuth state records")
+        return deleted
 
     def get_profile(self, db: Session, user_id: int) -> Optional[IntegrationProfile]:
         """Get integration profile for a user"""

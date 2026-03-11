@@ -6,7 +6,6 @@ loan-ID mismatch analysis/fix, admin endpoints, and diagnostic endpoints.
 """
 
 import logging
-import os
 from datetime import datetime
 from typing import Optional
 
@@ -36,7 +35,6 @@ from routes.smart_docs_models import (
 )
 
 logger = logging.getLogger(__name__)
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
 router = APIRouter(
     tags=["Smart Documents"],
@@ -326,6 +324,7 @@ async def send_to_portal_for_signature(
 @router.get("/portal/loan-id-mismatches")
 async def analyze_loan_id_mismatches(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Analyze loan ID mismatches between Smart Docs and PURL system.
@@ -333,6 +332,9 @@ async def analyze_loan_id_mismatches(
     This helps identify document requests that won't show in the client portal
     because of incorrect loan_id linkage.
     """
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     from sqlalchemy import text
     from models.purl import PURLLoan, PURLWorkspace
 
@@ -436,6 +438,7 @@ async def analyze_loan_id_mismatches(
 async def fix_loan_id_mismatches(
     dry_run: bool = Query(True, description="If true, only report what would be fixed without making changes"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Fix loan ID mismatches between Smart Docs and PURL system.
@@ -446,6 +449,9 @@ async def fix_loan_id_mismatches(
 
     Set dry_run=false to actually apply the fixes.
     """
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     from models.purl import PURLLoan
 
     fixes_applied = []
@@ -598,15 +604,15 @@ async def fix_loan_id_mismatches(
 
 @router.get("/admin/s3-test")
 async def s3_test(
-    admin_key: str = Query(...),
+    current_user = Depends(get_current_user),
 ):
     """Direct S3 test without any middleware."""
     import boto3
     import os
     from datetime import datetime
 
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     results = {}
 
@@ -649,14 +655,14 @@ async def s3_test(
 
 @router.get("/admin/upload-diagnostic")
 async def upload_diagnostic(
-    admin_key: str = Query(...),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Diagnostic endpoint to test upload capabilities."""
     from sqlalchemy import text
 
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     results = {
         "database": "unknown",
@@ -670,28 +676,32 @@ async def upload_diagnostic(
         db.execute(text("SELECT 1")).fetchone()
         results["database"] = "connected"
     except SQLAlchemyError as e:
-        results["database"] = f"error: {str(e)}"
+        logger.error(f"Upload diagnostic - database error: {e}")
+        results["database"] = "error"
 
     # Test smart_documents table
     try:
         count = db.execute(text("SELECT COUNT(*) FROM smart_documents")).fetchone()[0]
         results["smart_document_table"] = f"ok ({count} documents)"
     except SQLAlchemyError as e:
-        results["smart_document_table"] = f"error: {str(e)}"
+        logger.error(f"Upload diagnostic - smart_documents table error: {e}")
+        results["smart_document_table"] = "error"
 
     # Test S3 service
     try:
         s3_service = get_smart_docs_s3_service()
         results["s3"] = f"available: {s3_service.is_available}, bucket: {s3_service.bucket_name}"
-    except SQLAlchemyError as e:
-        results["s3"] = f"error: {str(e)}"
+    except Exception as e:
+        logger.error(f"Upload diagnostic - S3 error: {e}")
+        results["s3"] = "error"
 
     # Test pipeline import
     try:
         pipeline = DocumentReviewPipeline(db)
         results["pipeline_import"] = "ok"
     except Exception as e:
-        results["pipeline_import"] = f"error: {str(e)}"
+        logger.error(f"Upload diagnostic - pipeline import error: {e}")
+        results["pipeline_import"] = "error"
 
     return results
 
@@ -701,14 +711,14 @@ async def test_upload(
     file: UploadFile = File(...),
     loan_id: int = Form(146),
     borrower_id: int = Form(574),
-    admin_key: str = Query(...),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Test upload endpoint with detailed error logging."""
     from sqlalchemy import text
 
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     steps = {}
 
@@ -807,14 +817,14 @@ async def test_upload(
 
 @router.post("/admin/create-test-loan")
 async def create_test_loan(
-    admin_key: str = Query(...),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Create a test loan for Smart Docs testing."""
     from sqlalchemy import text
 
-    if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-        raise HTTPException(status_code=403, detail="Invalid admin key")
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
     # Check if test loan already exists
     existing = db.execute(text(
@@ -862,8 +872,13 @@ async def create_test_loan(
 # =============================================================================
 
 @router.get("/diagnostic/storage-health")
-async def check_storage_health():
+async def check_storage_health(
+    current_user = Depends(get_current_user),
+):
     """Check S3 storage health and configuration."""
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     s3_service = get_smart_docs_s3_service()
 
     return {
@@ -878,11 +893,16 @@ async def check_storage_health():
 async def check_loan_documents_storage(
     loan_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Check storage status for all documents in a loan.
     Returns which documents have valid S3 files and which are missing.
     """
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    _verify_loan_tenant(db, loan_id, current_user)
     s3_service = get_smart_docs_s3_service()
 
     documents = db.query(SmartDocument).filter(
@@ -933,6 +953,7 @@ async def check_loan_documents_storage(
 async def cleanup_orphan_documents(
     loan_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Clean up orphan documents (those with missing S3 files).
@@ -943,6 +964,10 @@ async def cleanup_orphan_documents(
 
     Returns summary of cleaned up documents.
     """
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    _verify_loan_tenant(db, loan_id, current_user)
     s3_service = get_smart_docs_s3_service()
 
     documents = db.query(SmartDocument).filter(
@@ -1005,11 +1030,15 @@ async def cleanup_orphan_documents(
 @router.get("/diagnostic/all-storage-errors")
 async def check_all_storage_errors(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Scan all documents across all loans for storage errors.
     Returns summary by loan and list of missing files.
     """
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     from sqlalchemy import func
 
     s3_service = get_smart_docs_s3_service()
@@ -1078,10 +1107,14 @@ async def check_all_storage_errors(
 @router.post("/diagnostic/cleanup-all-orphans")
 async def cleanup_all_orphan_documents(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Clean up all orphan documents across all loans.
     """
+    if getattr(current_user, 'permission_role', '') not in ('admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     s3_service = get_smart_docs_s3_service()
 
     documents = db.query(SmartDocument).filter(

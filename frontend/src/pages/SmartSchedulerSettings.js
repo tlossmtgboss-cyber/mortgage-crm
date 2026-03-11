@@ -16,6 +16,7 @@ import { useAsyncOperation, useFormSubmit } from '../hooks/useAsyncOperation';
 import { APIError } from '../utils/api/errors';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
+import { setUserTimezone } from '../utils/timezone';
 import CalendarManagement from '../components/CalendarManagement';
 import AppointmentTypesManager from '../components/AppointmentTypesManager';
 import BookingLinksManager from '../components/BookingLinksManager';

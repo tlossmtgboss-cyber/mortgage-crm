@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, time, date, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
 from enum import Enum
+from encryption_utils import EncryptedString
 import logging
 
 logger = logging.getLogger(__name__)
@@ -463,6 +464,11 @@ def create_scheduler_enhancement_models(Base):
         """
         External calendar synchronization tracking.
         Google Calendar, Outlook integration.
+
+        Security: access_token and refresh_token are encrypted at rest using
+        Fernet symmetric encryption (via EncryptedString TypeDecorator).
+        Encryption/decryption is transparent to application code -- reading
+        these columns returns plaintext, writing stores ciphertext.
         """
         __tablename__ = "scheduler_calendar_sync"
         __table_args__ = {'extend_existing': True}
@@ -479,9 +485,9 @@ def create_scheduler_enhancement_models(Base):
         calendar_id = Column(String(255))
         calendar_name = Column(String(255))
 
-        # Auth
-        access_token = Column(Text)
-        refresh_token = Column(Text)
+        # Auth — encrypted at rest via Fernet (EncryptedString TypeDecorator)
+        access_token = Column(EncryptedString, nullable=True)
+        refresh_token = Column(EncryptedString, nullable=True)
         token_expires_at = Column(DateTime)
 
         # Sync settings
@@ -497,6 +503,25 @@ def create_scheduler_enhancement_models(Base):
         # Timestamps
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+        @property
+        def is_token_expired(self) -> bool:
+            """Check if the access token has expired."""
+            if self.token_expires_at is None:
+                return True
+            now = datetime.now(timezone.utc)
+            expires = self.token_expires_at
+            if expires.tzinfo is None:
+                from datetime import timezone as _tz
+                expires = expires.replace(tzinfo=_tz.utc)
+            return now >= expires
+
+        @property
+        def has_valid_credentials(self) -> bool:
+            """Check if this sync entry has usable OAuth credentials."""
+            return bool(self.access_token) and (
+                not self.is_token_expired or bool(self.refresh_token)
+            )
 
 
     class IntakeQuestion(Base):

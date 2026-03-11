@@ -125,6 +125,7 @@ class CalendarSyncService:
     def create_event(
         self,
         user_id: int,
+        organization_id: int,
         title: str,
         start_at: datetime,
         end_at: datetime,
@@ -142,6 +143,7 @@ class CalendarSyncService:
 
         Args:
             user_id: Owner user ID
+            organization_id: Tenant organization ID
             title: Event subject/title
             start_at: Start datetime (UTC)
             end_at: End datetime (UTC)
@@ -166,6 +168,7 @@ class CalendarSyncService:
             location=location,
             notes=notes,
             owner_user_id=user_id,
+            organization_id=organization_id,
             attendees=attendees or [],
             related_entity_type=related_entity_type,
             related_entity_id=related_entity_id,
@@ -190,6 +193,7 @@ class CalendarSyncService:
         self,
         event_id: str,
         user_id: int,
+        organization_id: int,
         updates: Dict[str, Any],
         auto_sync: bool = True
     ) -> Optional[CRMCalendarEvent]:
@@ -199,6 +203,7 @@ class CalendarSyncService:
         Args:
             event_id: CRM event ID
             user_id: User making the update (for authorization)
+            organization_id: Tenant organization ID
             updates: Dictionary of field updates
             auto_sync: Whether to queue sync to Salesforce
 
@@ -207,7 +212,8 @@ class CalendarSyncService:
         """
         event = self.db.query(CRMCalendarEvent).filter(
             CRMCalendarEvent.id == event_id,
-            CRMCalendarEvent.owner_user_id == user_id
+            CRMCalendarEvent.owner_user_id == user_id,
+            CRMCalendarEvent.organization_id == organization_id
         ).first()
 
         if not event:
@@ -247,6 +253,7 @@ class CalendarSyncService:
         self,
         event_id: str,
         user_id: int,
+        organization_id: int,
         auto_sync: bool = True
     ) -> Optional[CRMCalendarEvent]:
         """
@@ -255,6 +262,7 @@ class CalendarSyncService:
         Args:
             event_id: CRM event ID
             user_id: User making the cancellation
+            organization_id: Tenant organization ID
             auto_sync: Whether to queue sync to Salesforce
 
         Returns:
@@ -262,7 +270,8 @@ class CalendarSyncService:
         """
         event = self.db.query(CRMCalendarEvent).filter(
             CRMCalendarEvent.id == event_id,
-            CRMCalendarEvent.owner_user_id == user_id
+            CRMCalendarEvent.owner_user_id == user_id,
+            CRMCalendarEvent.organization_id == organization_id
         ).first()
 
         if not event:
@@ -282,9 +291,11 @@ class CalendarSyncService:
 
         return event
 
-    def get_event(self, event_id: str, user_id: int = None) -> Optional[CRMCalendarEvent]:
-        """Get a single event by ID"""
+    def get_event(self, event_id: str, user_id: int = None, organization_id: int = None) -> Optional[CRMCalendarEvent]:
+        """Get a single event by ID, scoped to organization"""
         query = self.db.query(CRMCalendarEvent).filter(CRMCalendarEvent.id == event_id)
+        if organization_id:
+            query = query.filter(CRMCalendarEvent.organization_id == organization_id)
         if user_id:
             query = query.filter(CRMCalendarEvent.owner_user_id == user_id)
         return query.first()
@@ -292,6 +303,7 @@ class CalendarSyncService:
     def get_events(
         self,
         user_id: int,
+        organization_id: int,
         start_date: datetime = None,
         end_date: datetime = None,
         status: str = None,
@@ -303,6 +315,7 @@ class CalendarSyncService:
 
         Args:
             user_id: Owner user ID
+            organization_id: Tenant organization ID
             start_date: Filter by start date >= this
             end_date: Filter by start date <= this
             status: Filter by event status
@@ -313,7 +326,8 @@ class CalendarSyncService:
             List of CRMCalendarEvent
         """
         query = self.db.query(CRMCalendarEvent).filter(
-            CRMCalendarEvent.owner_user_id == user_id
+            CRMCalendarEvent.owner_user_id == user_id,
+            CRMCalendarEvent.organization_id == organization_id
         )
 
         if start_date:
@@ -364,7 +378,7 @@ class CalendarSyncService:
 
             if not event:
                 result.error = f"Event not found: {crm_event_id}"
-                self._log_sync("push", "update", crm_event_id, None, event.owner_user_id if event else None,
+                self._log_sync("push", "update", crm_event_id, None, None,
                               None, None, "failed", result.error, start_time)
                 return result
 
@@ -379,7 +393,8 @@ class CalendarSyncService:
                 event.sync_error = result.error
                 self.db.commit()
                 self._log_sync("push", "update", crm_event_id, None, event.owner_user_id,
-                              event.fingerprint_hash, None, "failed", result.error, start_time)
+                              event.fingerprint_hash, None, "failed", result.error, start_time,
+                              organization_id=event.organization_id)
                 return result
 
             # Get access token
@@ -427,6 +442,7 @@ class CalendarSyncService:
                     sync_map = CalendarEventSyncMap(
                         crm_event_id=event.id,
                         salesforce_event_id=sf_event_id,
+                        organization_id=event.organization_id,
                         fingerprint_hash=event.fingerprint_hash,
                         last_pushed_at=datetime.utcnow(),
                         sync_version=1
@@ -460,7 +476,8 @@ class CalendarSyncService:
             self._log_sync(
                 "push", result.operation, crm_event_id, result.salesforce_event_id,
                 event.owner_user_id, event.fingerprint_hash, event.fingerprint_hash,
-                "success" if result.success else "failed", result.error, start_time
+                "success" if result.success else "failed", result.error, start_time,
+                organization_id=event.organization_id
             )
 
         except SQLAlchemyError as e:
@@ -619,7 +636,8 @@ class CalendarSyncService:
         fingerprint_after: str,
         result: str,
         error: str,
-        start_time: float
+        start_time: float,
+        organization_id: int = None
     ):
         """Log a sync operation"""
         try:
@@ -629,6 +647,7 @@ class CalendarSyncService:
                 crm_event_id=crm_event_id,
                 salesforce_event_id=sf_event_id,
                 user_id=user_id,
+                organization_id=organization_id or 0,
                 direction=direction,
                 operation=operation,
                 fingerprint_before=fingerprint_before,
@@ -650,7 +669,8 @@ class CalendarSyncService:
         self,
         user_id: int,
         since: datetime = None,
-        limit: int = 200
+        limit: int = 200,
+        organization_id: int = None
     ) -> Dict[str, Any]:
         """
         Pull events from Salesforce for a user.
@@ -659,6 +679,7 @@ class CalendarSyncService:
             user_id: CRM user ID
             since: Only pull events modified after this time
             limit: Maximum events to pull
+            organization_id: Tenant organization ID
 
         Returns:
             Summary of pull operation
@@ -716,7 +737,7 @@ class CalendarSyncService:
             for sf_event in sf_events:
                 try:
                     pull_result = await self._process_inbound_event(
-                        user_id, sf_event, settings
+                        user_id, sf_event, settings, organization_id=organization_id
                     )
 
                     results["pulled"] += 1
@@ -749,7 +770,8 @@ class CalendarSyncService:
     async def pull_single_event(
         self,
         user_id: int,
-        salesforce_event_id: str
+        salesforce_event_id: str,
+        organization_id: int = None
     ) -> CalendarSyncResult:
         """
         Pull a single event from Salesforce by ID.
@@ -757,6 +779,7 @@ class CalendarSyncService:
         Args:
             user_id: CRM user ID
             salesforce_event_id: Salesforce Event ID
+            organization_id: Tenant organization ID
 
         Returns:
             CalendarSyncResult
@@ -794,7 +817,7 @@ class CalendarSyncService:
 
             # Process the event
             settings = self.get_settings(user_id)
-            pull_result = await self._process_inbound_event(user_id, sf_event, settings)
+            pull_result = await self._process_inbound_event(user_id, sf_event, settings, organization_id=organization_id)
 
             result.success = True
             result.operation = pull_result["action"]
@@ -802,7 +825,8 @@ class CalendarSyncService:
 
             self._log_sync(
                 "pull", result.operation, result.crm_event_id, salesforce_event_id,
-                user_id, None, None, "success", None, start_time
+                user_id, None, None, "success", None, start_time,
+                organization_id=organization_id
             )
 
         except Exception as e:
@@ -810,7 +834,8 @@ class CalendarSyncService:
             result.error = str(e)
             self._log_sync(
                 "pull", "unknown", None, salesforce_event_id,
-                user_id, None, None, "failed", str(e), start_time
+                user_id, None, None, "failed", str(e), start_time,
+                organization_id=organization_id
             )
 
         result.duration_ms = int((time.time() - start_time) * 1000)
@@ -820,7 +845,8 @@ class CalendarSyncService:
         self,
         user_id: int,
         sf_event: Dict[str, Any],
-        settings: CalendarSyncSettings
+        settings: CalendarSyncSettings,
+        organization_id: int = None
     ) -> Dict[str, Any]:
         """
         Process an inbound Salesforce event.
@@ -834,6 +860,7 @@ class CalendarSyncService:
             user_id: CRM user ID
             sf_event: Salesforce event data
             settings: Sync settings
+            organization_id: Tenant organization ID
 
         Returns:
             Dict with action taken and event details
@@ -904,12 +931,13 @@ class CalendarSyncService:
 
         else:
             # Create new CRM event from Salesforce
-            crm_event = self._create_crm_event_from_salesforce(user_id, sf_event)
+            crm_event = self._create_crm_event_from_salesforce(user_id, sf_event, organization_id=organization_id)
 
             # Create sync mapping
             sync_map = CalendarEventSyncMap(
                 crm_event_id=crm_event.id,
                 salesforce_event_id=sf_event_id,
+                organization_id=crm_event.organization_id,
                 fingerprint_hash=crm_event.fingerprint_hash,
                 last_pulled_at=datetime.utcnow(),
                 last_seen_sf_modified_at=self._parse_sf_datetime(sf_last_modified),
@@ -1128,7 +1156,8 @@ class CalendarSyncService:
     def _create_crm_event_from_salesforce(
         self,
         user_id: int,
-        sf_event: Dict[str, Any]
+        sf_event: Dict[str, Any],
+        organization_id: int = None
     ) -> CRMCalendarEvent:
         """
         Create a new CRM event from Salesforce data.
@@ -1136,6 +1165,7 @@ class CalendarSyncService:
         Args:
             user_id: CRM user ID (owner)
             sf_event: Salesforce event data
+            organization_id: Tenant organization ID
 
         Returns:
             Created CRMCalendarEvent
@@ -1169,6 +1199,7 @@ class CalendarSyncService:
             location=sf_event.get("Location"),
             notes=sf_event.get("Description"),
             owner_user_id=user_id,
+            organization_id=organization_id,
             attendees=self._parse_sf_attendees(sf_event, sf_event.get("_event_relations")),
             status=status,
             source_system=SourceSystem.SALESFORCE.value,
@@ -1370,7 +1401,8 @@ class CalendarSyncService:
     async def process_cdc_event(
         self,
         user_id: int,
-        cdc_payload: Dict[str, Any]
+        cdc_payload: Dict[str, Any],
+        organization_id: int = None
     ) -> Dict[str, Any]:
         """
         Process a Salesforce CDC (Change Data Capture) event.
@@ -1380,6 +1412,7 @@ class CalendarSyncService:
         Args:
             user_id: CRM user ID
             cdc_payload: CDC event payload from Salesforce
+            organization_id: Tenant organization ID
 
         Returns:
             Processing result
@@ -1431,7 +1464,7 @@ class CalendarSyncService:
                                 sf_event["_event_relations"] = event_relations_map[record_id]
 
                             process_result = await self._process_inbound_event(
-                                user_id, sf_event, settings
+                                user_id, sf_event, settings, organization_id=organization_id
                             )
                             results["processed"] += 1
                             if process_result["action"] == "created":

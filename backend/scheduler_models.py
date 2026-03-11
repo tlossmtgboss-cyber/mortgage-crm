@@ -4,8 +4,23 @@ Extracted from smart_scheduler_routes.py
 """
 
 from datetime import datetime, date
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 from pydantic import BaseModel, EmailStr, Field, validator
+
+
+class IntakeQuestion(BaseModel):
+    """Schema for a single intake question on an appointment type."""
+    key: str = Field(..., min_length=1, max_length=100)
+    question: str = Field(..., min_length=1, max_length=500)
+    type: str = Field(..., min_length=1, max_length=50)  # text, select, boolean, date
+    options: Optional[List[str]] = None  # Required when type is 'select'
+    required: bool = False
+
+    @validator('options')
+    def options_required_for_select(cls, v, values):
+        if values.get('type') == 'select' and not v:
+            raise ValueError("options must be provided when question type is 'select'")
+        return v
 
 
 class WorkingHoursDay(BaseModel):
@@ -15,10 +30,10 @@ class WorkingHoursDay(BaseModel):
 
 
 class SchedulerConfigCreate(BaseModel):
-    config_name: str
-    description: Optional[str] = None
+    config_name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
     timezone: str = "America/Chicago"
-    default_duration_minutes: int = 30
+    default_duration_minutes: int = Field(30, ge=5, le=480)
     buffer_before_minutes: int = 5
     buffer_after_minutes: int = 5
     min_notice_hours: int = 2
@@ -30,10 +45,10 @@ class SchedulerConfigCreate(BaseModel):
 
 
 class SchedulerConfigUpdate(BaseModel):
-    config_name: Optional[str] = None
-    description: Optional[str] = None
+    config_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
     timezone: Optional[str] = None
-    default_duration_minutes: Optional[int] = None
+    default_duration_minutes: Optional[int] = Field(None, ge=5, le=480)
     buffer_before_minutes: Optional[int] = None
     buffer_after_minutes: Optional[int] = None
     min_notice_hours: Optional[int] = None
@@ -68,32 +83,44 @@ class LandingPageSettings(BaseModel):
 
 
 class AppointmentTypeCreate(BaseModel):
-    type_key: str
-    type_name: str
-    description: Optional[str] = None
+    type_key: str = Field(..., min_length=1, max_length=100)
+    type_name: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
     meeting_type: Optional[str] = "custom"
-    default_duration_minutes: int = 30
+    default_duration_minutes: int = Field(30, ge=5, le=480)
     allowed_durations: List[int] = [15, 30, 45, 60]
     allowed_modes: List[str] = ["video", "phone"]
     requires_loan_id: bool = False
     requires_lead_id: bool = False
-    intake_questions: List[Dict] = []
+    intake_questions: List[IntakeQuestion] = []
     color: str = "#3b82f6"
     icon: str = "calendar"
     is_public: bool = True
     public_slug: Optional[str] = None
 
+    @validator('intake_questions', each_item=False)
+    def serialize_intake_questions(cls, v):
+        """Convert IntakeQuestion models to dicts for JSON column compatibility."""
+        return [q.model_dump(exclude_none=True) if isinstance(q, IntakeQuestion) else q for q in v]
+
 
 class AppointmentTypeUpdate(BaseModel):
-    type_name: Optional[str] = None
-    description: Optional[str] = None
-    default_duration_minutes: Optional[int] = None
+    type_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    default_duration_minutes: Optional[int] = Field(None, ge=5, le=480)
     allowed_durations: Optional[List[int]] = None
     allowed_modes: Optional[List[str]] = None
-    intake_questions: Optional[List[Dict]] = None
+    intake_questions: Optional[List[IntakeQuestion]] = None
     color: Optional[str] = None
     is_active: Optional[bool] = None
     is_public: Optional[bool] = None
+
+    @validator('intake_questions', pre=False)
+    def serialize_intake_questions(cls, v):
+        """Convert IntakeQuestion models to dicts for JSON column compatibility."""
+        if v is None:
+            return v
+        return [q.model_dump(exclude_none=True) if isinstance(q, IntakeQuestion) else q for q in v]
 
 
 class AvailabilitySlotCreate(BaseModel):
@@ -122,14 +149,14 @@ class AppointmentCreate(BaseModel):
     meeting_type: Optional[str] = "custom"
     meeting_mode: str = "video"
     scheduled_start: datetime
-    duration_minutes: int = 30
+    duration_minutes: int = Field(30, ge=5, le=480)
     timezone: str = "America/Chicago"
 
     # Attendee info (for external bookings)
-    attendee_name: Optional[str] = None
+    attendee_name: Optional[str] = Field(None, min_length=1, max_length=200)
     attendee_email: Optional[EmailStr] = None
-    attendee_phone: Optional[str] = None
-    attendee_notes: Optional[str] = None
+    attendee_phone: Optional[str] = Field(None, max_length=20)
+    attendee_notes: Optional[str] = Field(None, max_length=2000)
 
     # Related entities
     lead_id: Optional[int] = None
@@ -146,19 +173,19 @@ class AppointmentCreate(BaseModel):
 
 
 class AppointmentUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
+    title: Optional[str] = Field(None, min_length=1, max_length=500)
+    description: Optional[str] = Field(None, max_length=5000)
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
-    duration_minutes: Optional[int] = None
+    duration_minutes: Optional[int] = Field(None, ge=5, le=480)
     meeting_mode: Optional[str] = None
-    location: Optional[str] = None
-    video_link: Optional[str] = None
+    location: Optional[str] = Field(None, max_length=500)
+    video_link: Optional[str] = Field(None, max_length=2000)
     status: Optional[str] = None
-    cancellation_reason: Optional[str] = None
-    internal_notes: Optional[str] = None
-    meeting_notes: Optional[str] = None
-    attendee_name: Optional[str] = None
+    cancellation_reason: Optional[str] = Field(None, max_length=2000)
+    internal_notes: Optional[str] = Field(None, max_length=5000)
+    meeting_notes: Optional[str] = Field(None, max_length=5000)
+    attendee_name: Optional[str] = Field(None, min_length=1, max_length=200)
     attendee_email: Optional[EmailStr] = None
     attendee_phone: Optional[str] = Field(None, max_length=20)
     attendee_notes: Optional[str] = Field(None, max_length=2000)
@@ -166,8 +193,8 @@ class AppointmentUpdate(BaseModel):
 
 
 class BlockedTimeCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
+    title: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
     block_type: str = "custom"
     start_datetime: datetime
     end_datetime: datetime
@@ -176,24 +203,36 @@ class BlockedTimeCreate(BaseModel):
     recurrence_pattern: Optional[Dict] = None
     applies_to_all_users: bool = False
 
+    @validator('end_datetime')
+    def end_after_start(cls, v, values):
+        if 'start_datetime' in values and v <= values['start_datetime']:
+            raise ValueError('end_datetime must be after start_datetime')
+        return v
+
 
 class BookingLinkCreate(BaseModel):
-    slug: str = Field(..., min_length=2, max_length=100, pattern=r'^[a-zA-Z0-9][a-zA-Z0-9\-_]*$')
+    slug: str = Field(..., min_length=2, max_length=100, pattern=r'^[a-z0-9][a-z0-9\-_]*$')
     link_name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
     appointment_type_ids: List[int] = []
     single_appointment_type_id: Optional[int] = None
     is_public: bool = True
-    custom_title: Optional[str] = None
-    custom_description: Optional[str] = None
+    custom_title: Optional[str] = Field(None, max_length=200)
+    custom_description: Optional[str] = Field(None, max_length=2000)
     routing_strategy: str = "relationship"
     assigned_users: List[int] = []
+
+    @validator('slug', pre=True)
+    def lowercase_slug(cls, v):
+        if isinstance(v, str):
+            return v.lower()
+        return v
 
 
 class AvailableSlotsRequest(BaseModel):
     appointment_type_id: Optional[int] = None
     meeting_type: Optional[str] = None
-    duration_minutes: int = Field(30, ge=15, le=480)
+    duration_minutes: int = Field(30, ge=5, le=480)
     start_date: date
     end_date: date
     timezone: str = "America/Chicago"
@@ -209,7 +248,7 @@ class AvailableSlotsRequest(BaseModel):
 class PublicBookingConfirmRequest(BaseModel):
     appointment_type_id: int
     start_time: datetime
-    duration_minutes: int = Field(30, ge=15, le=480)
+    duration_minutes: int = Field(30, ge=5, le=480)
     attendee_name: str = Field(..., min_length=1, max_length=200)
     attendee_email: EmailStr
     attendee_phone: Optional[str] = Field(None, max_length=20)
@@ -220,14 +259,21 @@ class PublicBookingConfirmRequest(BaseModel):
     meeting_mode: Optional[str] = None  # video, phone, in_person
     team_member_id: Optional[int] = None
     team_member_name: Optional[str] = Field(None, max_length=200)
+    cf_turnstile_token: Optional[str] = Field(None, max_length=4096)  # Cloudflare Turnstile bot protection
 
 
 class PublicAvailableSlotsRequest(BaseModel):
     """Request model for website demo scheduler"""
-    start_date: str  # YYYY-MM-DD
-    end_date: str    # YYYY-MM-DD
-    duration_minutes: int = Field(30, ge=15, le=480)
+    start_date: date
+    end_date: date
+    duration_minutes: int = Field(30, ge=5, le=480)
     appointment_type: str = Field("platform-demo", max_length=100)
+
+    @validator('end_date')
+    def end_date_after_start(cls, v, values):
+        if 'start_date' in values and v < values['start_date']:
+            raise ValueError('end_date must be on or after start_date')
+        return v
 
 
 class SlotRecommendation(BaseModel):
@@ -240,13 +286,13 @@ class SlotRecommendation(BaseModel):
 
 
 class CancelAppointmentRequest(BaseModel):
-    reason: Optional[str] = None
+    reason: Optional[str] = Field(None, max_length=2000)
 
 
 class WebsiteDemoBookingRequest(BaseModel):
     """Request model for website demo booking confirmation"""
     start_time: datetime  # ISO datetime
-    duration_minutes: int = Field(30, ge=15, le=480)
+    duration_minutes: int = Field(30, ge=5, le=480)
     attendee_name: str = Field(..., min_length=1, max_length=200)
     attendee_email: EmailStr
     attendee_phone: Optional[str] = Field(None, max_length=20)

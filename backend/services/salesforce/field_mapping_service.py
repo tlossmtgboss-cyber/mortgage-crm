@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from salesforce_integration_models import (
@@ -17,6 +18,7 @@ from salesforce_integration_models import (
     IntegrationEvent
 )
 from .schema_service import salesforce_schema
+from .stage_mapping import SALESFORCE_STAGE_MAPPING
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +75,77 @@ DEFAULT_STAGE_MAPPINGS = {
     'Closed Lost': 'CANCELLED',
 }
 
+# Valid stages from the canonical stage mapping (single source of truth)
+VALID_STAGES = set(SALESFORCE_STAGE_MAPPING.values())
+
+# Whitelist of fields that can be updated via update_mapping
+UPDATEABLE_FIELDS = {
+    'source_field', 'target_entity', 'target_field', 'transform_type',
+    'transform_config', 'mapping_category', 'data_type', 'required',
+    'default_value', 'sync_direction', 'enabled', 'validation_status',
+    'validation_message'
+}
+
+# Valid target entities for field mappings
+VALID_TARGET_ENTITIES = {'lead', 'loan', 'borrower', 'contact', 'application'}
+
+# Valid target field pattern (lowercase snake_case identifiers only)
+VALID_TARGET_FIELD_PATTERN = re.compile(r'^[a-z][a-z0-9_]*$')
+
+# Whitelist of allowed target fields per entity
+VALID_TARGET_FIELDS = {
+    'lead': {
+        'first_name', 'last_name', 'email', 'phone', 'stage', 'source',
+        'loan_amount', 'loan_purpose', 'property_type', 'credit_score',
+        'property_address', 'property_city', 'property_state', 'property_zip',
+        'occupancy_type', 'property_county', 'rate_type', 'monthly_payment',
+        'property_tax', 'hazard_insurance', 'mortgage_insurance', 'hoa_amount',
+        'origination_fee', 'estimated_prepaid_interest', 'index_rate', 'margin',
+        'file_state', 'second_loan_amount', 'second_loan_rate', 'second_loan_payment',
+        'present_housing_expense', 'proposed_housing_expense', 'cltv',
+        'present_monthly_payment', 'proposed_monthly_payment', 'preapproval_amount',
+        'notes', 'meta_data',
+    },
+    'loan': {
+        'borrower_name', 'borrower_email', 'borrower_phone', 'stage', 'loan_type',
+        'amount', 'purchase_price', 'down_payment', 'rate', 'term', 'ltv', 'cltv', 'dti',
+        'property_address', 'property_city', 'property_state', 'property_zip',
+        'property_type', 'occupancy_type', 'property_county', 'rate_type',
+        'monthly_payment', 'property_tax', 'hazard_insurance', 'mortgage_insurance',
+        'hoa_amount', 'origination_fee', 'estimated_prepaid_interest', 'points',
+        'index_rate', 'margin', 'loan_purpose', 'file_state',
+        'second_loan_amount', 'second_loan_rate', 'second_loan_payment',
+        'present_housing_expense', 'proposed_housing_expense',
+        'present_monthly_payment', 'proposed_monthly_payment',
+        'realtor_agent', 'title_company', 'lender', 'program',
+        'notes', 'user_metadata',
+    },
+}
+
 
 class FieldMappingService:
     """Manages field mappings between Salesforce and CRM"""
+
+    def _verify_profile_ownership(self, db: Session, integration_profile_id: int, user_id: int) -> None:
+        """Verify that the user owns the integration profile."""
+        profile = db.execute(
+            text("SELECT user_id FROM integration_profiles WHERE id = :profile_id"),
+            {"profile_id": integration_profile_id}
+        ).fetchone()
+        if not profile:
+            raise ValueError("Integration profile not found")
+        if profile.user_id != user_id:
+            raise PermissionError("Not authorized to access this integration profile")
+
+    def _validate_target_field(self, target_entity: str, target_field: str) -> None:
+        """Validate that target_entity and target_field are allowed values."""
+        if target_entity not in VALID_TARGET_ENTITIES:
+            raise ValueError(f"Invalid target entity: {target_entity}")
+        if not VALID_TARGET_FIELD_PATTERN.match(target_field):
+            raise ValueError(f"Invalid target field format: {target_field}")
+        if target_entity in VALID_TARGET_FIELDS:
+            if target_field not in VALID_TARGET_FIELDS[target_entity]:
+                raise ValueError(f"Invalid target field '{target_field}' for entity '{target_entity}'")
 
     def create_mapping(
         self,
@@ -91,9 +161,17 @@ class FieldMappingService:
         required: bool = False,
         default_value: Optional[str] = None,
         sync_direction: str = 'bidirectional',
-        enabled: bool = True
+        enabled: bool = True,
+        user_id: Optional[int] = None
     ) -> FieldMapping:
         """Create a new field mapping"""
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, integration_profile_id, user_id)
+
+        # Validate target entity and field
+        self._validate_target_field(target_entity, target_field)
+
         # Build mapping data
         mapping_data = {
             'integration_profile_id': integration_profile_id,
@@ -128,6 +206,7 @@ class FieldMappingService:
         self,
         db: Session,
         mapping_id: int,
+        user_id: Optional[int] = None,
         **updates
     ) -> FieldMapping:
         """Update an existing field mapping"""
@@ -136,10 +215,22 @@ class FieldMappingService:
         if not mapping:
             raise ValueError("Field mapping not found")
 
-        # Apply updates
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, mapping.integration_profile_id, user_id)
+
+        # Validate target fields if being updated
+        new_target_entity = updates.get('target_entity', mapping.target_entity)
+        new_target_field = updates.get('target_field', mapping.target_field)
+        if 'target_entity' in updates or 'target_field' in updates:
+            self._validate_target_field(new_target_entity, new_target_field)
+
+        # Apply updates using explicit whitelist only
         for key, value in updates.items():
-            if hasattr(mapping, key):
+            if key in UPDATEABLE_FIELDS:
                 setattr(mapping, key, value)
+            else:
+                logger.warning(f"Attempted to update non-updateable field: {key}")
 
         # Re-validate
         mapping_data = {
@@ -163,12 +254,19 @@ class FieldMappingService:
         db.refresh(mapping)
         return mapping
 
-    def delete_mapping(self, db: Session, mapping_id: int):
+    def delete_mapping(self, db: Session, mapping_id: int, user_id: Optional[int] = None) -> bool:
         """Delete a field mapping"""
         mapping = db.query(FieldMapping).filter(FieldMapping.id == mapping_id).first()
-        if mapping:
-            db.delete(mapping)
-            db.commit()
+        if not mapping:
+            raise ValueError(f"Field mapping {mapping_id} not found")
+
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, mapping.integration_profile_id, user_id)
+
+        db.delete(mapping)
+        db.commit()
+        return True
 
     def get_mappings(
         self,
@@ -176,9 +274,14 @@ class FieldMappingService:
         integration_profile_id: int,
         source_object: Optional[str] = None,
         target_entity: Optional[str] = None,
-        enabled: Optional[bool] = None
+        enabled: Optional[bool] = None,
+        user_id: Optional[int] = None
     ) -> List[FieldMapping]:
         """Get all mappings for an integration profile"""
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, integration_profile_id, user_id)
+
         query = db.query(FieldMapping).filter(
             FieldMapping.integration_profile_id == integration_profile_id
         )
@@ -192,14 +295,36 @@ class FieldMappingService:
 
         return query.order_by(FieldMapping.source_object, FieldMapping.source_field).all()
 
+    def get_mapping_by_id(
+        self,
+        db: Session,
+        mapping_id: int,
+        user_id: Optional[int] = None
+    ) -> Optional[FieldMapping]:
+        """Get a single mapping by ID"""
+        mapping = db.query(FieldMapping).filter(FieldMapping.id == mapping_id).first()
+        if not mapping:
+            return None
+
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, mapping.integration_profile_id, user_id)
+
+        return mapping
+
     def create_from_suggestions(
         self,
         db: Session,
         integration_profile_id: int,
         source_object: str,
-        accepted_suggestions: List[Dict[str, str]]
+        accepted_suggestions: List[Dict[str, str]],
+        user_id: Optional[int] = None
     ) -> List[FieldMapping]:
         """Bulk create mappings from suggestions"""
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, integration_profile_id, user_id)
+
         schema = salesforce_schema.get_object_schema(db, integration_profile_id, source_object)
         if not schema:
             raise ValueError("Schema not found for object")
@@ -230,7 +355,8 @@ class FieldMappingService:
                 data_type=field.get('type'),
                 required=field.get('required', False),
                 sync_direction='bidirectional',
-                enabled=True
+                enabled=True,
+                user_id=user_id
             )
             mappings.append(mapping)
 
@@ -359,9 +485,14 @@ class FieldMappingService:
     def get_mapping_stats(
         self,
         db: Session,
-        integration_profile_id: int
+        integration_profile_id: int,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Get mapping statistics for a user"""
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, integration_profile_id, user_id)
+
         mappings = self.get_mappings(db, integration_profile_id)
 
         stats = {
@@ -402,8 +533,12 @@ class FieldMappingService:
 
         return stats
 
-    def activate_integration(self, db: Session, integration_profile_id: int):
+    def activate_integration(self, db: Session, integration_profile_id: int, user_id: Optional[int] = None):
         """Activate integration (mark as ready for syncing)"""
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, integration_profile_id, user_id)
+
         stats = self.get_mapping_stats(db, integration_profile_id)
 
         if not stats['ready_to_activate']:
@@ -436,13 +571,18 @@ class FieldMappingService:
         self,
         db: Session,
         mapping_id: int,
-        test_value: Any
+        test_value: Any,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """Test a field mapping transformation"""
         mapping = db.query(FieldMapping).filter(FieldMapping.id == mapping_id).first()
 
         if not mapping:
             raise ValueError("Mapping not found")
+
+        # Verify ownership if user_id provided
+        if user_id is not None:
+            self._verify_profile_ownership(db, mapping.integration_profile_id, user_id)
 
         try:
             transformed = self.transform_value(
@@ -474,7 +614,16 @@ class FieldMappingService:
         if transform_type == TransformType.DIRECT.value:
             return value
 
-        elif transform_type in (TransformType.STAGE_MAP.value, TransformType.PICKLIST_MAP.value):
+        elif transform_type == TransformType.STAGE_MAP.value:
+            mappings = config.get('mappings', {}) if config else {}
+            mapped_value = mappings.get(value, config.get('default', value) if config else value)
+            # Validate that stage_map outputs are valid CRM stages
+            if mapped_value and mapped_value not in VALID_STAGES:
+                logger.warning(f"Stage map produced invalid stage: {mapped_value}")
+                return None
+            return mapped_value
+
+        elif transform_type == TransformType.PICKLIST_MAP.value:
             mappings = config.get('mappings', {}) if config else {}
             return mappings.get(value, config.get('default', value) if config else value)
 

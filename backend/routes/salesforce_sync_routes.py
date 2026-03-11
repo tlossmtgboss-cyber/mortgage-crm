@@ -4,10 +4,11 @@ Salesforce Integration - Sync Routes
 Webhook handling, full sync, sync history, sync-all-loans,
 sync-and-import-mum, admin migration, and admin pull-recent endpoints.
 """
+import asyncio
 import os
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
@@ -26,6 +27,57 @@ from .salesforce_helpers import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Concurrency guard for sync operations
+_sync_lock = asyncio.Lock()
+
+# Column whitelist for dynamic SQL construction
+ALLOWED_LOAN_COLUMNS = {
+    'borrower_name', 'borrower_email', 'borrower_phone', 'coborrower_name',
+    'stage', 'loan_type', 'amount', 'purchase_price', 'down_payment',
+    'rate', 'interest_rate', 'term', 'ltv', 'cltv', 'dti',
+    'property_address', 'property_city', 'property_state', 'property_zip',
+    'salesforce_id', 'loan_number', 'program', 'property_type', 'occupancy_type',
+    'property_county', 'rate_type', 'monthly_payment', 'property_tax',
+    'hazard_insurance', 'mortgage_insurance', 'hoa_amount', 'origination_fee',
+    'points', 'index_rate', 'margin', 'loan_purpose', 'file_state',
+    'loan_officer_id', 'user_id', 'organization_id', 'created_by_user_id',
+    'notes', 'user_metadata', 'closing_date', 'lock_date',
+    'lock_expiration_date', 'funded_date', 'clear_to_close_date',
+    'uw_received_date', 'loan_approved_date', 'application_date',
+    'appraisal_ordered_date', 'appraisal_received_date',
+    'cd_sent_to_borrower_date', 'scheduled_closing_date', 'first_payment_date',
+    'salesforce_last_synced_at', 'salesforce_sync_status',
+}
+
+# Regex for validating column names
+_SAFE_COLUMN_RE = re.compile(r'^[a-z][a-z0-9_]*$')
+
+
+def _validate_and_filter_loan_data(loan_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate column names against whitelist and regex, returning only safe keys."""
+    safe_data = {}
+    filtered_keys = []
+    for k, v in loan_data.items():
+        if k not in ALLOWED_LOAN_COLUMNS:
+            filtered_keys.append(k)
+            continue
+        if not _SAFE_COLUMN_RE.match(k):
+            filtered_keys.append(k)
+            continue
+        safe_data[k] = v
+    if filtered_keys:
+        logger.warning(f"Filtered out non-whitelisted columns: {filtered_keys}")
+    return safe_data
+
+
+def _safe_parse_xml(xml_string: bytes) -> "xml.etree.ElementTree.Element":
+    """Parse XML with XXE protection."""
+    xml_text = xml_string.decode("utf-8", errors="replace") if isinstance(xml_string, bytes) else xml_string
+    if '<!DOCTYPE' in xml_text or '<!ENTITY' in xml_text:
+        raise ValueError("XML contains prohibited DTD/ENTITY declarations")
+    import xml.etree.ElementTree as ET
+    return ET.fromstring(xml_string)
 
 
 # ============ Webhook Endpoint ============
@@ -49,27 +101,45 @@ async def salesforce_webhook(
     # Get raw body for signature verification
     body = await request.body()
 
-    # Verify webhook signature if configured
-    signature = request.headers.get("X-Salesforce-Signature", "")
-    sync_service = get_salesforce_sync_service(db)
+    # Verify webhook signature - enforce when secret is configured
+    webhook_secret = os.getenv("SALESFORCE_WEBHOOK_SECRET")
+    if webhook_secret:
+        signature = request.headers.get("X-Salesforce-Signature")
+        if not signature:
+            logger.warning("Missing webhook signature header")
+            raise HTTPException(status_code=401, detail="Missing webhook signature")
+        sync_service = get_salesforce_sync_service(db)
+        if not sync_service.verify_webhook_signature(body, signature):
+            logger.warning("Invalid webhook signature")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    else:
+        logger.warning("SALESFORCE_WEBHOOK_SECRET not configured - webhook verification disabled")
+        sync_service = get_salesforce_sync_service(db)
 
-    if not sync_service.verify_webhook_signature(body, signature):
-        logger.warning("Invalid webhook signature")
-        raise HTTPException(status_code=401, detail="Invalid signature")
-
-    # Parse payload
-    try:
-        import json
-        payload = json.loads(body)
-    except Exception as e:
-        logger.error(f"Invalid JSON payload: {e}")
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
-
-    # Handle Salesforce Outbound Message (SOAP XML format)
+    # Parse payload - check content type first
     content_type = request.headers.get("Content-Type", "")
     if "xml" in content_type.lower():
-        # Parse XML payload (Outbound Messages)
+        # Parse XML payload (Outbound Messages) with XXE protection
         payload = _parse_outbound_message(body)
+    else:
+        try:
+            import json
+            payload = json.loads(body)
+        except Exception as e:
+            logger.error(f"Invalid JSON payload: {e}")
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # Tenant isolation: determine user/org context from webhook payload
+    webhook_user_id = payload.get("user_id")
+    org_id = None
+    if webhook_user_id:
+        org_row = db.execute(
+            text("SELECT organization_id FROM users WHERE id = :user_id"),
+            {"user_id": webhook_user_id}
+        ).fetchone()
+        if org_row:
+            org_id = org_row[0]
+        payload["_organization_id"] = org_id
 
     # Process webhook
     result = sync_service.process_webhook(payload)
@@ -86,11 +156,9 @@ async def salesforce_webhook(
 
 
 def _parse_outbound_message(xml_body: bytes) -> Dict[str, Any]:
-    """Parse Salesforce Outbound Message XML format."""
+    """Parse Salesforce Outbound Message XML format with XXE protection."""
     try:
-        import xml.etree.ElementTree as ET
-
-        root = ET.fromstring(xml_body)
+        root = _safe_parse_xml(xml_body)
 
         # Salesforce Outbound Message structure
         # <soapenv:Envelope><soapenv:Body><notifications>
@@ -116,6 +184,9 @@ def _parse_outbound_message(xml_body: bytes) -> Dict[str, Any]:
 
         return {"records": records, "event_type": "outbound_message"}
 
+    except ValueError as e:
+        logger.error(f"Rejected XML with prohibited content: {e}")
+        return {"records": [], "event_type": "outbound_message", "error": str(e)}
     except Exception as e:
         logger.error(f"Failed to parse Outbound Message XML: {e}")
         return {"records": [], "event_type": "outbound_message"}
@@ -437,7 +508,7 @@ async def admin_pull_recent_loans(
                     'organization_id': org_id,
                     'created_by_user_id': user_id,
                     'salesforce_sync_status': 'synced',
-                    'salesforce_last_synced_at': datetime.utcnow(),
+                    'salesforce_last_synced_at': datetime.now(timezone.utc),
                 }
 
                 for sf_field, (crm_field, transform) in DEFAULT_FIELD_MAPPING.items():
@@ -463,6 +534,9 @@ async def admin_pull_recent_loans(
                 # Generate loan number if missing
                 if not loan_data.get('loan_number'):
                     loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
+
+                # Validate column names against whitelist
+                loan_data = _validate_and_filter_loan_data(loan_data)
 
                 if existing:
                     # Update existing loan - use safe SQL builder to prevent injection
@@ -546,6 +620,20 @@ async def sync_salesforce_and_import_mum(
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Prevent concurrent sync operations
+    if _sync_lock.locked():
+        raise HTTPException(status_code=429, detail="Sync operation already in progress")
+
+    async with _sync_lock:
+        return await _sync_salesforce_and_import_mum_inner(request, db, user_id)
+
+
+async def _sync_salesforce_and_import_mum_inner(
+    request: Request,
+    db: Session,
+    user_id: int,
+):
 
     results = {
         'salesforce_sync': {'created': 0, 'updated': 0, 'errors': []},
@@ -649,17 +737,23 @@ async def sync_salesforce_and_import_mum(
                                             value = STAGE_MAPPING.get(str(value), "FUNDED")
                                         loan_data[crm_field] = value
 
-                                loan_data['salesforce_last_synced_at'] = datetime.utcnow()
+                                loan_data['salesforce_last_synced_at'] = datetime.now(timezone.utc)
                                 loan_data['salesforce_sync_status'] = 'synced'
                                 if not loan_data.get('loan_number'):
                                     loan_data['loan_number'] = f"SF-{sf_id[-8:]}"
                                 if not loan_data.get('stage'):
                                     loan_data['stage'] = 'FUNDED'
 
+                                # Validate column names against whitelist
+                                loan_data = _validate_and_filter_loan_data(loan_data)
+
                                 if existing:
                                     # Exclude ownership fields from dynamic UPDATE to prevent tenant manipulation
                                     _excluded_update = {'salesforce_id', 'organization_id', 'loan_officer_id'}
                                     update_fields = ", ".join([f"{k} = :{k}" for k in loan_data.keys() if k not in _excluded_update])
+                                    if not update_fields:
+                                        results['salesforce_sync']['errors'].append(f"No valid fields to update for {sf_id}")
+                                        continue
                                     db.execute(text(f"""
                                         UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
                                         WHERE salesforce_id = :salesforce_id
@@ -793,6 +887,22 @@ async def sync_all_loans_from_salesforce(
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
+
+    # Prevent concurrent sync operations
+    if _sync_lock.locked():
+        raise HTTPException(status_code=429, detail="Sync operation already in progress")
+
+    async with _sync_lock:
+        return await _sync_all_loans_inner(request, db, user_id)
+
+
+async def _sync_all_loans_inner(
+    request: Request,
+    db: Session,
+    user_id: int,
+):
+    """Inner implementation for sync-all-loans, called under _sync_lock."""
+    import requests as requests_lib
 
     results = {
         'linked': 0,
@@ -1096,12 +1206,15 @@ async def sync_all_loans_from_salesforce(
                     "cd_sent_to_borrower_date": parse_date(sf_record.get("MtgPlanner_CRM__CD_Sent_To_Borrower_Date__c")),
                     "scheduled_closing_date": parse_date(sf_record.get("MtgPlanner_CRM__Scheduled_Closing_Date__c")),
                     "first_payment_date": parse_date(sf_record.get("MtgPlanner_CRM__First_Payment_Date__c")),
-                    "salesforce_last_synced_at": datetime.utcnow(),
+                    "salesforce_last_synced_at": datetime.now(timezone.utc),
                     "salesforce_sync_status": "synced",
                 }
 
                 # Remove None values to avoid overwriting with nulls
                 loan_data = {k: v for k, v in loan_data.items() if v is not None}
+
+                # Validate column names against whitelist
+                loan_data = _validate_and_filter_loan_data(loan_data)
 
                 if existing_loan:
                     # Update existing loan
@@ -1110,6 +1223,9 @@ async def sync_all_loans_from_salesforce(
 
                     # Build UPDATE statement
                     update_parts = [f"{k} = :{k}" for k in loan_data.keys()]
+                    if not update_parts:
+                        results['skipped'] += 1
+                        continue
                     update_sql = f"UPDATE loans SET {', '.join(update_parts)}, updated_at = CURRENT_TIMESTAMP WHERE id = :loan_id"
                     loan_data["loan_id"] = loan_id
 

@@ -1173,10 +1173,10 @@ async def send_survey_email(
 ):
     """Send survey invitation email (placeholder for actual email service)."""
     # TODO: Integrate with email service (SendGrid, AWS SES, etc.)
-    print(f"Sending survey email to {email}")
-    print(f"Template: {template_name}")
-    print(f"URL: {survey_url}")
-    print(f"Message: {intro_message}")
+    logger.info(f"Sending survey email to {email}")
+    logger.info(f"Template: {template_name}")
+    logger.info(f"URL: {survey_url}")
+    logger.info(f"Message: {intro_message}")
 
 
 def analyze_sentiment(text: str) -> float:

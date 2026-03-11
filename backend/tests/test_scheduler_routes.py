@@ -1045,21 +1045,25 @@ class TestSchedulerModels:
 
     def test_all_models_have_non_nullable_org_id(self):
         """Verify all scheduler models have nullable=False on organization_id."""
-        from smart_scheduler_models import create_smart_scheduler_models
+        from smart_scheduler_models import (
+            SchedulerConfig, AvailabilitySlot, AppointmentType,
+            Appointment, RoutingRule, BlockedTime, BookingLink,
+            AppointmentReminder, SchedulerAuditLog,
+        )
 
-        models = create_smart_scheduler_models(MagicMock())
+        models_to_check = {
+            'SchedulerConfig': SchedulerConfig,
+            'AvailabilitySlot': AvailabilitySlot,
+            'AppointmentType': AppointmentType,
+            'Appointment': Appointment,
+            'RoutingRule': RoutingRule,
+            'BlockedTime': BlockedTime,
+            'BookingLink': BookingLink,
+            'AppointmentReminder': AppointmentReminder,
+            'SchedulerAuditLog': SchedulerAuditLog,
+        }
 
-        # Check each model's organization_id column
-        models_to_check = [
-            'SchedulerConfig', 'AvailabilitySlot', 'AppointmentType',
-            'Appointment', 'RoutingRule', 'BlockedTime', 'BookingLink',
-            'AppointmentReminder', 'SchedulerAuditLog',
-        ]
-
-        for model_name in models_to_check:
-            model_class = models.get(model_name)
-            if model_class is None:
-                continue
+        for model_name, model_class in models_to_check.items():
             col = getattr(model_class, 'organization_id', None)
             if col is not None and hasattr(col, 'property'):
                 for c in col.property.columns:
@@ -1157,6 +1161,8 @@ class TestMultiTenantIsolation:
             'routes/calendar_sync_routes.py',
             'routes/calendly_routes.py',
             'routes/unified_calendar_routes.py',
+            'routes/scheduler_routes.py',
+            'routes/scheduler_appointment_routes.py',
             'models/calendar_sync_models.py',
             'smart_scheduler_models.py',
             'scheduler_appointment_routes.py',
@@ -1175,18 +1181,16 @@ class TestMultiTenantIsolation:
                     f"{relpath} still uses deprecated datetime.utcnow()"
 
     def test_enhanced_routes_have_org_id_helper(self):
-        """scheduler_enhanced_routes must have _get_org_id helper."""
-        import scheduler_enhanced_routes as ser
-        source = Path(ser.__file__).read_text()
+        """Consolidated scheduler appointment routes must have _get_org_id helper."""
+        import routes.scheduler_appointment_routes as sar
+        source = Path(sar.__file__).read_text()
         assert "_get_org_id" in source, \
-            "scheduler_enhanced_routes should have _get_org_id helper"
+            "scheduler_appointment_routes (consolidated) should have _get_org_id helper"
 
     def test_scheduler_audit_log_has_foreign_key(self):
         """SchedulerAuditLog.organization_id must have ForeignKey."""
-        from smart_scheduler_models import create_smart_scheduler_models
-        from database import Base
-        models = create_smart_scheduler_models(Base)
-        AuditLog = models['SchedulerAuditLog']
+        from smart_scheduler_models import SchedulerAuditLog
+        AuditLog = SchedulerAuditLog
         cols = AuditLog.__table__.columns
         org_col = cols.get('organization_id')
         assert org_col is not None

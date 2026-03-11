@@ -32,23 +32,16 @@ router = APIRouter(prefix="/api/v1/auth/portal", tags=["Portal Authentication"])
 # DEPENDENCY INJECTION
 # =============================================================================
 
-_get_db = None
+from db import get_db
+
 _email_service = None
 
 
 def set_dependencies(get_db_func, email_service=None):
     """Set dependencies from main.py."""
-    global _get_db, _email_service
-    _get_db = get_db_func
+    global _email_service
     _email_service = email_service
     logger.info("Portal Auth routes dependencies set")
-
-
-def get_db():
-    """Get database session."""
-    if _get_db is None:
-        raise RuntimeError("Portal Auth routes not initialized")
-    yield from _get_db()
 
 
 # =============================================================================

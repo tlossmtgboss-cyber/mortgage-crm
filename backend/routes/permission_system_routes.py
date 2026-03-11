@@ -29,7 +29,8 @@ router = APIRouter(prefix="/api/v1", tags=["Permission System"])
 # DEPENDENCY INJECTION STORAGE
 # ============================================================================
 
-_get_db: Callable = None
+from db import get_db
+
 _get_current_user: Callable = None
 _User: Any = None
 _AuditLog: Any = None
@@ -48,8 +49,7 @@ def set_dependencies(
     has_permission_func: Callable = None
 ):
     """Set dependencies from main.py to avoid circular imports."""
-    global _get_db, _get_current_user, _User, _AuditLog, _ImpersonationSession, _UserSession, _has_permission
-    _get_db = get_db_func
+    global _get_current_user, _User, _AuditLog, _ImpersonationSession, _UserSession, _has_permission
     _get_current_user = get_current_user_func
     _User = user_model
     _AuditLog = audit_log_model
@@ -57,13 +57,6 @@ def set_dependencies(
     _UserSession = user_session_model
     _has_permission = has_permission_func
     logger.info("Permission system routes dependencies set")
-
-
-def get_db():
-    """Get database session dependency - wrapper for injected dependency."""
-    if _get_db is None:
-        raise RuntimeError("Permission system routes not initialized. Call set_dependencies first.")
-    yield from _get_db()
 
 
 async def get_current_user(db: Session = Depends(get_db)):

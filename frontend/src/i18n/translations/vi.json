@@ -1,0 +1,78 @@
+{
+  "booking": {
+    "loading": "\u0110ang t\u1ea3i...",
+    "unavailable": "Kh\u00f4ng th\u1ec3 \u0111\u1eb7t l\u1ecbch",
+    "poweredBy": "Cung c\u1ea5p b\u1edfi",
+    "scheduleAppointment": "\u0110\u1eb7t l\u1ecbch h\u1eb9n",
+    "errorSelectDateTime": "Vui l\u00f2ng ch\u1ecdn ng\u00e0y v\u00e0 gi\u1edd.",
+    "errorRequiredFields": "Vui l\u00f2ng \u0111i\u1ec1n \u0111\u1ea7y \u0111\u1ee7 c\u00e1c tr\u01b0\u1eddng b\u1eaft bu\u1ed9c.",
+    "errorVerification": "Vui l\u00f2ng ho\u00e0n th\u00e0nh x\u00e1c minh.",
+    "errorBookingFailed": "Kh\u00f4ng th\u1ec3 ho\u00e0n t\u1ea5t \u0111\u1eb7t l\u1ecbch. Vui l\u00f2ng th\u1eed l\u1ea1i ho\u1eb7c li\u00ean h\u1ec7 v\u1edbi ch\u00fang t\u00f4i \u0111\u1ec3 \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3.",
+    "errorCancelFailed": "Kh\u00f4ng th\u1ec3 h\u1ee7y l\u1ecbch h\u1eb9n. Vui l\u00f2ng th\u1eed l\u1ea1i ho\u1eb7c li\u00ean h\u1ec7 v\u1edbi ch\u00fang t\u00f4i \u0111\u1ec3 \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3.",
+    "errorCancelRetry": "Kh\u00f4ng th\u1ec3 h\u1ee7y l\u1ecbch h\u1eb9n. Vui l\u00f2ng th\u1eed l\u1ea1i.",
+    "errorLinkNotAvailable": "Li\u00ean k\u1ebft \u0111\u1eb7t l\u1ecbch n\u00e0y kh\u00f4ng kh\u1ea3 d\u1ee5ng.",
+    "errorLoadFailed": "Kh\u00f4ng th\u1ec3 t\u1ea3i trang \u0111\u1eb7t l\u1ecbch.",
+    "errorConnectFailed": "Kh\u00f4ng th\u1ec3 k\u1ebft n\u1ed1i v\u1edbi d\u1ecbch v\u1ee5 \u0111\u1eb7t l\u1ecbch.",
+    "errorPhoneInvalid": "Vui l\u00f2ng nh\u1eadp s\u1ed1 \u0111i\u1ec7n tho\u1ea1i M\u1ef9 h\u1ee3p l\u1ec7, v\u00ed d\u1ee5 (555) 123-4567"
+  },
+  "datetime": {
+    "pickDate": "Ch\u1ecdn ng\u00e0y",
+    "pickTime": "Ch\u1ecdn gi\u1edd",
+    "timeSubtitle": "Ch\u1ecdn th\u1eddi gian b\u1ea1n mong mu\u1ed1n. C\u00f3 th\u1ec3 \u0111\u1ed5i l\u1ecbch b\u1ea5t c\u1ee9 l\u00fac n\u00e0o.",
+    "noTimes": "Kh\u00f4ng c\u00f3 th\u1eddi gian kh\u1ea3 d\u1ee5ng",
+    "previousWeek": "Tu\u1ea7n tr\u01b0\u1edbc",
+    "nextWeek": "Tu\u1ea7n sau",
+    "selectType": "Ch\u1ecdn lo\u1ea1i cu\u1ed9c h\u1eb9n",
+    "next": "Ti\u1ebfp theo",
+    "phoneCall": "G\u1ecdi \u0111i\u1ec7n",
+    "videoCall": "G\u1ecdi video",
+    "min": "ph\u00fat"
+  },
+  "form": {
+    "back": "Quay l\u1ea1i",
+    "title": "H\u00e3y cho ch\u00fang t\u00f4i bi\u1ebft v\u1ec1 b\u1ea1n",
+    "firstName": "T\u00ean",
+    "lastName": "H\u1ecd",
+    "email": "Email",
+    "phone": "\u0110i\u1ec7n tho\u1ea1i",
+    "phonePlaceholder": "(   )    -",
+    "phoneHint": "Ch\u00fang t\u00f4i c\u00f3 th\u1ec3 g\u1ecdi/nh\u1eafn tin cho b\u1ea1n v\u1ec1 cu\u1ed9c h\u1eb9n.",
+    "notes": "Ghi ch\u00fa (t\u00f9y ch\u1ecdn)",
+    "notesPlaceholder": "C\u00f3 th\u1eddi gian n\u00e0o kh\u00e1c ph\u00f9 h\u1ee3p kh\u00f4ng? C\u00f3 ch\u1ee7 \u0111\u1ec1 c\u1ee5 th\u1ec3 n\u00e0o mu\u1ed1n th\u1ea3o lu\u1eadn kh\u00f4ng?",
+    "workingWithLO": "B\u1ea1n c\u00f3 \u0111ang l\u00e0m vi\u1ec7c v\u1edbi nh\u00e2n vi\u00ean t\u00edn d\u1ee5ng kh\u00f4ng?",
+    "yes": "C\u00f3",
+    "no": "Kh\u00f4ng",
+    "scheduling": "\u0110ang \u0111\u1eb7t l\u1ecbch...",
+    "scheduleAppointment": "\u0110\u1eb7t l\u1ecbch h\u1eb9n",
+    "required": "*"
+  },
+  "confirmation": {
+    "title": "Y\u00eau c\u1ea7u c\u1ee7a b\u1ea1n \u0111\u00e3 \u0111\u01b0\u1ee3c g\u1eedi",
+    "subtitle": "Ch\u00fang t\u00f4i s\u1ebd c\u1ed1 g\u1eafng s\u1eafp x\u1ebfp l\u1ecbch h\u1eb9n cho b\u1ea1n. B\u1ea1n s\u1ebd nh\u1eadn \u0111\u01b0\u1ee3c email khi th\u1eddi gian \u0111\u01b0\u1ee3c x\u00e1c nh\u1eadn.",
+    "details": "Chi ti\u1ebft cu\u1ed9c h\u1eb9n",
+    "date": "Ng\u00e0y:",
+    "time": "Gi\u1edd:",
+    "type": "Lo\u1ea1i:",
+    "format": "\u0110\u1ecbnh d\u1ea1ng:",
+    "videoCall": "G\u1ecdi video",
+    "phoneCall": "G\u1ecdi \u0111i\u1ec7n",
+    "goHome": "V\u1ec1 trang ch\u1ee7",
+    "cancelAppointment": "H\u1ee7y l\u1ecbch h\u1eb9n",
+    "yesCancel": "V\u00e2ng, h\u1ee7y",
+    "cancelling": "\u0110ang h\u1ee7y...",
+    "nevermind": "Kh\u00f4ng sao"
+  },
+  "cancelled": {
+    "title": "L\u1ecbch h\u1eb9n \u0111\u00e3 h\u1ee7y",
+    "subtitle": "L\u1ecbch h\u1eb9n c\u1ee7a b\u1ea1n \u0111\u00e3 \u0111\u01b0\u1ee3c h\u1ee7y th\u00e0nh c\u00f4ng. B\u1ea1n c\u00f3 th\u1ec3 \u0111\u1eb7t l\u1ecbch h\u1eb9n m\u1edbi b\u1ea5t c\u1ee9 l\u00fac n\u00e0o.",
+    "bookNew": "\u0110\u1eb7t l\u1ecbch h\u1eb9n m\u1edbi"
+  },
+  "language": {
+    "label": "Ng\u00f4n ng\u1eef",
+    "en": "English",
+    "es": "Espa\u00f1ol",
+    "zh": "\u4e2d\u6587",
+    "vi": "Ti\u1ebfng Vi\u1ec7t",
+    "ko": "\ud55c\uad6d\uc5b4"
+  }
+}

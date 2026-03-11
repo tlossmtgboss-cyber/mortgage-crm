@@ -8,7 +8,9 @@ Debug/diagnostic endpoints are in salesforce_debug_routes.py.
 """
 import os
 import logging
-from datetime import datetime
+import re
+import time
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response, BackgroundTasks
@@ -28,8 +30,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# In-memory tracking of import jobs (for background task status)
+# In-memory tracking of import jobs (for background task status).
+# Each job entry includes 'user_id' for access control and 'completed_at' for cleanup.
 _import_jobs: Dict[str, Dict[str, Any]] = {}
+
+# Maximum age for completed jobs (1 hour)
+_IMPORT_JOB_MAX_AGE_SECONDS = 3600
+
+
+def _cleanup_stale_import_jobs():
+    """Remove completed import jobs older than 1 hour."""
+    global _import_jobs
+    now = time.time()
+    _import_jobs = {
+        k: v for k, v in _import_jobs.items()
+        if v.get("completed_at", now) > now - _IMPORT_JOB_MAX_AGE_SECONDS
+    }
 
 
 # ============ Import Closed Loans Endpoint ============
@@ -136,6 +152,11 @@ async def import_closed_loans(
                 }
 
         # Build WHERE clause for closed loans
+        # SECURITY: status_field and closed_values are hardcoded above, not user-controlled.
+        # Defense-in-depth: validate status_field is a valid SOQL identifier to prevent
+        # injection if this code is ever refactored to accept user input.
+        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*(__c)?$', status_field):
+            raise HTTPException(status_code=400, detail="Invalid status field name")
         status_conditions = " OR ".join([f"{status_field} = '{val}'" for val in closed_values])
 
         # Query closed loans
@@ -193,7 +214,7 @@ async def import_closed_loans(
                     'loan_officer_id': user_id,
                     'stage': 'FUNDED',
                     'salesforce_sync_status': 'synced',
-                    'salesforce_last_synced_at': datetime.utcnow(),
+                    'salesforce_last_synced_at': datetime.now(timezone.utc),
                 }
 
                 # Try to map all available fields
@@ -384,13 +405,30 @@ async def push_loans_batch_to_salesforce(
 
     from services.salesforce_sync_service import get_salesforce_sync_service
 
+    # SECURITY: Verify all loans belong to the authenticated user
+    loan_ids = batch_request.loan_ids
+    if loan_ids:
+        owned_count = db.execute(
+            text("""
+                SELECT COUNT(*) FROM loans
+                WHERE id = ANY(:loan_ids) AND loan_officer_id = :user_id
+            """),
+            {"loan_ids": loan_ids, "user_id": user_id}
+        ).scalar()
+
+        if owned_count != len(loan_ids):
+            raise HTTPException(
+                status_code=403,
+                detail="You can only push loans assigned to you"
+            )
+
     # Get user's organization
     user_org = db.execute(text("SELECT organization_id FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
     org_id = user_org[0] if user_org and user_org[0] else None
 
     sync_service = get_salesforce_sync_service(db, user_id=user_id, organization_id=org_id)
     result = sync_service.push_loans_batch(
-        batch_request.loan_ids,
+        loan_ids,
         access_token,
         instance_url,
         batch_request.sf_object
@@ -557,7 +595,9 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
     import uuid
 
     try:
-        _import_jobs[job_id] = {'status': 'running', 'progress': 'Connecting to Salesforce...'}
+        # SECURITY: Track user_id for access control on job status checks
+        _import_jobs[job_id] = {'status': 'running', 'progress': 'Connecting to Salesforce...', 'user_id': user_id}
+        _cleanup_stale_import_jobs()
         logger.info(f"Starting background import job {job_id} for user {user_id}")
 
         from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
@@ -576,9 +616,27 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
         if also_import_to_mum:
             db = SessionLocal()
             try:
+                # SECURITY: Set RLS context and scope query to user's organization
+                org_id = db.execute(
+                    text("SELECT organization_id FROM users WHERE id = :user_id"),
+                    {"user_id": user_id}
+                ).scalar()
+                if org_id:
+                    try:
+                        db.execute(text(f"SET app.current_organization_id = '{org_id}'"))
+                    except Exception as rls_err:
+                        logger.warning(f"Could not set RLS context for background job: {rls_err}")
+
                 # Use atomic INSERT...SELECT to avoid rollback bug where per-row
-                # db.rollback() destroys ALL previous uncommitted inserts
-                mum_result = db.execute(text("""
+                # db.rollback() destroys ALL previous uncommitted inserts.
+                # SECURITY: Scoped to user's organization via l.organization_id filter.
+                mum_params = {'user_id': user_id}
+                org_filter = ""
+                if org_id:
+                    org_filter = "AND l.organization_id = :org_id"
+                    mum_params['org_id'] = org_id
+
+                mum_result = db.execute(text(f"""
                     INSERT INTO mum_clients (
                         client_name, loan_number, original_close_date,
                         original_rate, loan_balance,
@@ -620,11 +678,12 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                            OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                            OR l.funded_date IS NOT NULL)
                     AND l.loan_number IS NOT NULL
+                    {org_filter}
                     AND NOT EXISTS (
                         SELECT 1 FROM mum_clients m
                         WHERE m.loan_number = l.loan_number
                     )
-                """), {'user_id': user_id})
+                """), mum_params)
 
                 mum_results['imported'] = mum_result.rowcount
                 db.commit()
@@ -643,6 +702,8 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
         # Update job status with results
         _import_jobs[job_id] = {
             'status': 'completed',
+            'user_id': user_id,
+            'completed_at': time.time(),
             'results': {
                 "status": "success" if results['success'] else "partial",
                 "message": f"Import complete: {results['imported']} new loans, {results['updated']} updated, {mum_results['imported']} added to MUM clients",
@@ -658,7 +719,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
 
     except Exception as e:
         logger.error(f"Import job {job_id} failed: {e}")
-        _import_jobs[job_id] = {'status': 'failed', 'error': str(e)}
+        _import_jobs[job_id] = {'status': 'failed', 'error': str(e), 'user_id': user_id, 'completed_at': time.time()}
 
 
 @router.post("/import-closed-loans")
@@ -713,9 +774,14 @@ async def get_import_job_status(job_id: str, request: Request, db: Session = Dep
 
     job = _import_jobs.get(job_id)
     if not job:
-        return {"status": "not_found", "message": "Job not found or expired"}
+        raise HTTPException(status_code=404, detail="Job not found or expired")
 
-    return job
+    # SECURITY: Only the user who created the job can check its status
+    if job.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this job")
+
+    # Return job data without internal fields (user_id, completed_at)
+    return {k: v for k, v in job.items() if k not in ("user_id", "completed_at")}
 
 
 @router.post("/import-closed-loans/test-one")
@@ -821,17 +887,19 @@ async def check_imported_loans(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     try:
-        # Get all loans with salesforce_id
+        # SECURITY: Scope all queries to the authenticated user's loans
+        # Get all loans with salesforce_id belonging to this user
         sf_loans = db.execute(text("""
             SELECT id, loan_number, borrower_name, stage,
                    salesforce_id, funded_date, closing_date, amount
             FROM loans
             WHERE salesforce_id IS NOT NULL
+            AND loan_officer_id = :user_id
             ORDER BY created_at DESC
             LIMIT 50
-        """)).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
-        # Get funded loans that should be in MUM (flexible matching)
+        # Get funded loans that should be in MUM (flexible matching), scoped to user
         should_be_in_mum = db.execute(text("""
             SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date
             FROM loans l
@@ -840,14 +908,17 @@ async def check_imported_loans(
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
                    OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                    OR l.funded_date IS NOT NULL)
+            AND l.loan_officer_id = :user_id
             AND NOT EXISTS (
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number
             )
-        """)).fetchall()
+        """), {"user_id": user_id}).fetchall()
 
-        # Get count in MUM
-        mum_count = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar()
+        # Get count in MUM for this user
+        mum_count = db.execute(text(
+            "SELECT COUNT(*) FROM mum_clients WHERE user_id = :user_id"
+        ), {"user_id": user_id}).scalar()
 
         return {
             "salesforce_loans": [
@@ -968,20 +1039,34 @@ async def fix_mum_client_user_ids(
 ):
     """
     Fix MUM clients that were created without user_id.
-    Sets user_id to current user for any records missing it.
+    Sets user_id to current user for orphaned records within the user's organization.
+    Requires admin role.
     """
     user_id = get_current_user_id(request, db)
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
+    # SECURITY: Require admin role to claim orphaned records
+    user = db.execute(
+        text("SELECT role, organization_id FROM users WHERE id = :user_id"),
+        {"user_id": user_id}
+    ).fetchone()
+
+    if not user or user[0] not in ('admin', 'platform_admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    org_id = user[1]
+    if not org_id:
+        raise HTTPException(status_code=400, detail="User has no organization")
+
     try:
-        # Update all MUM clients without user_id to belong to current user
+        # SECURITY: Only update MUM clients within the user's organization
         result = db.execute(text("""
             UPDATE mum_clients
             SET user_id = :user_id
-            WHERE user_id IS NULL
+            WHERE user_id IS NULL AND organization_id = :org_id
             RETURNING id, client_name, loan_number
-        """), {'user_id': user_id})
+        """), {'user_id': user_id, 'org_id': org_id})
 
         updated = result.fetchall()
         db.commit()

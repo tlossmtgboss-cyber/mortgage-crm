@@ -1,0 +1,78 @@
+{
+  "booking": {
+    "loading": "Loading...",
+    "unavailable": "Booking Unavailable",
+    "poweredBy": "Powered by",
+    "scheduleAppointment": "Schedule an Appointment",
+    "errorSelectDateTime": "Please select a date and time.",
+    "errorRequiredFields": "Please fill in all required fields.",
+    "errorVerification": "Please complete the verification challenge.",
+    "errorBookingFailed": "Unable to complete your booking. Please try again or contact us for assistance.",
+    "errorCancelFailed": "Unable to cancel appointment. Please try again or contact us for assistance.",
+    "errorCancelRetry": "Unable to cancel appointment. Please try again.",
+    "errorLinkNotAvailable": "This booking link is not available.",
+    "errorLoadFailed": "Failed to load booking page.",
+    "errorConnectFailed": "Unable to connect to the booking service.",
+    "errorPhoneInvalid": "Please enter a valid US phone number, e.g. (555) 123-4567"
+  },
+  "datetime": {
+    "pickDate": "Pick a date",
+    "pickTime": "Pick a time",
+    "timeSubtitle": "Choose your preferred time. Reschedule anytime.",
+    "noTimes": "No times available",
+    "previousWeek": "Previous week",
+    "nextWeek": "Next week",
+    "selectType": "Select Appointment Type",
+    "next": "Next",
+    "phoneCall": "Phone call",
+    "videoCall": "Video call",
+    "min": "min"
+  },
+  "form": {
+    "back": "Back",
+    "title": "Tell us a little about yourself",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "email": "Email",
+    "phone": "Phone",
+    "phonePlaceholder": "(   )    -",
+    "phoneHint": "We may call/text you about your appointment.",
+    "notes": "Notes (optional)",
+    "notesPlaceholder": "Are there other times that could work? Any specific topics to discuss?",
+    "workingWithLO": "Are you currently working with a loan officer?",
+    "yes": "Yes",
+    "no": "No",
+    "scheduling": "Scheduling...",
+    "scheduleAppointment": "Schedule Appointment",
+    "required": "*"
+  },
+  "confirmation": {
+    "title": "Your request has been made",
+    "subtitle": "We will attempt to schedule your appointment. You will receive an email once the time has been confirmed.",
+    "details": "Appointment Details",
+    "date": "Date:",
+    "time": "Time:",
+    "type": "Type:",
+    "format": "Format:",
+    "videoCall": "Video Call",
+    "phoneCall": "Phone Call",
+    "goHome": "Go to Homepage",
+    "cancelAppointment": "Cancel Appointment",
+    "yesCancel": "Yes, Cancel",
+    "cancelling": "Cancelling...",
+    "nevermind": "Nevermind"
+  },
+  "cancelled": {
+    "title": "Appointment Cancelled",
+    "subtitle": "Your appointment has been successfully cancelled. You can book a new appointment anytime.",
+    "bookNew": "Book New Appointment"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "es": "Espa\u00f1ol",
+    "zh": "\u4e2d\u6587",
+    "vi": "Ti\u1ebfng Vi\u1ec7t",
+    "ko": "\ud55c\uad6d\uc5b4"
+  }
+}

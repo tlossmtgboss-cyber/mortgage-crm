@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, ForeignKey, Index
+    Column, Integer, String, Boolean, DateTime, ForeignKey, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -38,10 +38,19 @@ class EncompassConfig(Base):
     in production. The current implementation stores them as plain strings;
     a production deployment should use application-level encryption (e.g.,
     Fernet or AWS KMS) before persisting.
+
+    Health tracking:
+        last_failed_at and consecutive_auth_failures track authentication
+        failures so the health endpoint can report degraded state even when
+        the service is currently recovering.
     """
     __tablename__ = "encompass_configs"
     __table_args__ = (
-        Index('ix_encompass_configs_org_id', 'organization_id'),
+        # Composite index on org_id + is_active for the common query pattern
+        Index("ix_encompass_configs_org_active", "organization_id", "is_active"),
+        # Explicit unique constraint (the Column-level unique=True also creates one,
+        # but naming it makes it easier to reference in migrations)
+        UniqueConstraint("organization_id", name="uq_encompass_configs_org_id"),
     )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -61,12 +70,15 @@ class EncompassConfig(Base):
     webhook_secret = Column(String, nullable=True)     # HMAC secret for webhook signature verification
 
     # Sync behavior
-    auto_pull_on_webhook = Column(Boolean, default=True)       # Auto-pull loan data when webhook received
-    auto_push_on_stage_change = Column(Boolean, default=False) # Auto-push when CRM stage changes
-    sync_frequency_minutes = Column(Integer, default=60)       # Scheduled sync interval
+    auto_pull_on_webhook = Column(Boolean, default=True)        # Auto-pull loan data when webhook received
+    auto_push_on_stage_change = Column(Boolean, default=False)  # Auto-push when CRM stage changes
+    sync_frequency_minutes = Column(Integer, default=60)        # Scheduled sync interval
 
     # Status tracking
-    last_sync_at = Column(DateTime, nullable=True)
+    last_sync_at = Column(DateTime, nullable=True)             # Timestamp of the last successful sync
+    last_failed_at = Column(DateTime, nullable=True)           # Timestamp of the last auth/sync failure
+    consecutive_auth_failures = Column(Integer, default=0)     # Count of consecutive auth failures;
+                                                                # reset to 0 on successful auth
     is_active = Column(Boolean, default=True)
 
     # Timestamps
@@ -79,6 +91,27 @@ class EncompassConfig(Base):
 
     # Relationships
     organization = relationship("Organization", backref="encompass_config")
+
+    @property
+    def is_healthy(self) -> bool:
+        """True when the config is active and has not had excessive auth failures.
+
+        More than 5 consecutive auth failures indicates the credentials may have
+        been revoked. The health endpoint uses this to report degraded state.
+        """
+        return self.is_active and (self.consecutive_auth_failures or 0) < 5
+
+    @property
+    def health_status(self) -> str:
+        """Return a human-readable health status string."""
+        if not self.is_active:
+            return "inactive"
+        failures = self.consecutive_auth_failures or 0
+        if failures >= 5:
+            return "degraded"
+        if failures > 0:
+            return "warning"
+        return "healthy"
 
 
 __all__ = [

@@ -50,6 +50,18 @@ class Organization(Base):
     # Status
     is_active = Column(Boolean, default=True)
 
+    # Booking page branding
+    booking_slug = Column(String, unique=True, index=True, nullable=True)  # URL-safe slug for public booking pages
+    booking_logo_url = Column(Text, nullable=True)  # Org logo shown on booking page
+    booking_primary_color = Column(String(7), default="#1a73e8")  # Hex color for primary elements
+    booking_accent_color = Column(String(7), default="#34a853")  # Hex color for accent elements
+    booking_tagline = Column(String(200), nullable=True)  # Short tagline on booking page
+    booking_welcome_message = Column(Text, nullable=True)  # Custom welcome text
+    booking_custom_css = Column(Text, nullable=True)  # Optional sanitized custom CSS
+    booking_cover_image_url = Column(Text, nullable=True)  # Background/cover image
+    booking_show_testimonials = Column(Boolean, default=False)
+    booking_testimonials = Column(JSON, default=list)  # Array of {name, text, role} objects
+
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

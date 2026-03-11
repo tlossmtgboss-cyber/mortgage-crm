@@ -7,11 +7,12 @@ import logging
 from typing import Optional, List
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body, Header
 from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+import re
 
 from database import get_db
 from salesforce_integration_models import (
@@ -34,10 +35,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/integrations/salesforce", tags=["Salesforce Integration"])
 
 
-def _require_admin_key(admin_key: str = Query(..., description="Admin API key")):
-    """Dependency that requires ADMIN_API_KEY for debug/diagnostic endpoints."""
+def _require_admin_key(x_api_key: str = Header(None, alias="X-API-Key")):
+    """Dependency that requires ADMIN_API_KEY via X-API-Key header for debug/diagnostic endpoints."""
     _key = os.getenv("ADMIN_API_KEY")
-    if not _key or admin_key != _key:
+    if not _key or not x_api_key or x_api_key != _key:
         raise HTTPException(status_code=403, detail="Forbidden")
     return True
 
@@ -942,16 +943,26 @@ class SchemaObject(BaseModel):
     field_count: int
 
 
+_FIELD_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.]+$')
+
+
 class FieldMappingCreate(BaseModel):
     source_object: str
-    source_field: str
+    source_field: str = Field(..., max_length=255)
     target_entity: str
-    target_field: str
+    target_field: str = Field(..., max_length=255)
     transform_type: str = 'direct'
     transform_config: Optional[dict] = None
     required: bool = False
     default_value: Optional[str] = None
     sync_direction: str = 'bidirectional'
+
+    @field_validator('source_field', 'target_field')
+    @classmethod
+    def validate_field_names(cls, v: str) -> str:
+        if not _FIELD_NAME_PATTERN.match(v):
+            raise ValueError('Field names must contain only alphanumeric characters, underscores, and dots')
+        return v
 
 
 class FieldMappingUpdate(BaseModel):
@@ -978,7 +989,7 @@ class SyncOptions(BaseModel):
     direction: str = 'bidirectional'
     objects: Optional[List[str]] = None
     full_sync: bool = False
-    batch_size: int = 200
+    batch_size: int = Field(default=200, ge=1, le=500)
 
 
 class TestMappingRequest(BaseModel):
@@ -990,7 +1001,9 @@ class TestMappingRequest(BaseModel):
 def get_current_user_id(request: Request, db: Session) -> Optional[int]:
     """Extract user ID from JWT token in request.
 
-    Supports both HS256 (legacy) and RS256 (main auth) tokens.
+    Uses RS256 token verification with blacklist check only.
+    HS256 fallback has been removed for security (no blacklist check,
+    disabled audience/issuer verification).
     """
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -998,7 +1011,6 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
 
     token = auth_header[7:]
 
-    # Try RS256 first (main auth system)
     try:
         from auth.tokens import verify_token, TokenType
         token_data = verify_token(token, expected_type=TokenType.ACCESS)
@@ -1015,29 +1027,7 @@ def get_current_user_id(request: Request, db: Session) -> Optional[int]:
                 if result:
                     return result[0]
     except Exception as e:
-        logger.debug(f"RS256 token decode failed, trying HS256: {e}")
-
-    # Fall back to HS256 (legacy Salesforce auth)
-    try:
-        import jwt
-        secret_key = os.getenv("SECRET_KEY", "")
-        payload = jwt.decode(
-            token,
-            secret_key,
-            algorithms=["HS256"],
-            options={"verify_aud": False, "verify_iss": False}
-        )
-        email = payload.get("sub")
-        if email:
-            result = db.execute(
-                text("SELECT id FROM users WHERE email = :email"),
-                {"email": email}
-            ).fetchone()
-            if result:
-                return result[0]
-        return payload.get("user_id")
-    except Exception as e:
-        logger.debug(f"HS256 token decode also failed: {e}")
+        logger.debug(f"RS256 token verification failed: {e}")
 
     return None
 
@@ -1078,56 +1068,18 @@ def is_profile_active(profile: Optional[IntegrationProfile]) -> bool:
 async def connect_salesforce(
     request: Request,
     return_url: Optional[str] = Query(None, description="URL to redirect after auth"),
-    token: Optional[str] = Query(None, description="JWT token for auth when redirecting"),
     db: Session = Depends(get_db)
 ):
     """
     Initiate Salesforce OAuth flow.
     Redirects user to Salesforce login page.
 
-    Accepts token via:
-    1. Authorization header (for API calls)
-    2. Query parameter (for browser redirects)
+    Authentication via Authorization: Bearer header only.
+    Query parameter tokens are not accepted (tokens in URLs leak via
+    logs, browser history, and Salesforce redirect chains).
     """
     try:
-        # Try getting user from header first, then from query param token
         user_id = get_current_user_id(request, db)
-
-        # If no user from header, try the token query parameter
-        if not user_id and token:
-            try:
-                import jwt
-                secret_key = os.getenv("SECRET_KEY", "")
-                # Decode with options to handle various token formats
-                payload = jwt.decode(
-                    token,
-                    secret_key,
-                    algorithms=["HS256"],
-                    options={"verify_aud": False, "verify_iss": False}
-                )
-                email = payload.get("sub")
-                logger.info(f"Salesforce connect: decoded token for email {email}")
-                if email:
-                    # Ensure clean transaction state before query
-                    try:
-                        db.rollback()
-                    except Exception as e:
-                        logger.error(f"Error in salesforce_connect (rollback): {e}")
-                    result = db.execute(
-                        text("SELECT id FROM users WHERE email = :email"),
-                        {"email": email}
-                    ).fetchone()
-                    if result:
-                        user_id = result[0]
-                        logger.info(f"Salesforce connect: found user_id {user_id} for email {email}")
-                    else:
-                        logger.warning(f"Salesforce connect: no user found for email {email}")
-            except jwt.ExpiredSignatureError:
-                logger.warning("Salesforce connect: token expired")
-            except jwt.InvalidTokenError as e:
-                logger.warning(f"Salesforce connect: invalid token: {e}")
-            except SQLAlchemyError as e:
-                logger.warning(f"Failed to decode token from query param: {e}")
 
         if not user_id:
             raise HTTPException(status_code=401, detail="Authentication required")
@@ -1223,16 +1175,26 @@ async def oauth_callback(
                 logger.warning(f"Initial schema discovery failed (non-fatal): {schema_error}")
 
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        # Validate return_url to prevent open redirect (including protocol-relative URLs)
+        # Validate return_url to prevent open redirect
+        # Rejects: javascript: URLs, data: URLs, protocol-relative URLs,
+        # external domains, and any non-http(s) scheme
         raw_return_url = result.get('return_url')
         if raw_return_url:
             from urllib.parse import urlparse
             parsed = urlparse(raw_return_url)
             frontend_parsed = urlparse(frontend_url)
-            # Reject if: has external netloc, missing scheme, or protocol-relative (//...)
-            if raw_return_url.startswith("//"):
+            # Must be http or https scheme (blocks javascript:, data:, vbscript:, etc.)
+            if parsed.scheme and parsed.scheme not in ("http", "https"):
                 raw_return_url = None
-            elif parsed.netloc and (not parsed.scheme or parsed.scheme not in ("http", "https") or parsed.netloc != frontend_parsed.netloc):
+            # Block protocol-relative URLs (//evil.com)
+            elif raw_return_url.startswith("//"):
+                raw_return_url = None
+            # If it has a netloc (host), it must match the frontend domain
+            elif parsed.netloc and parsed.netloc != frontend_parsed.netloc:
+                raw_return_url = None
+            # If no scheme and no netloc, it's a relative path — that's OK
+            # But if scheme is present without netloc, reject (malformed)
+            elif parsed.scheme and not parsed.netloc:
                 raw_return_url = None
         final_redirect = raw_return_url or f"{frontend_url}/settings/integrations"
 
@@ -2602,6 +2564,16 @@ async def push_single_loan_to_salesforce(
     if not is_profile_connected(profile):
         raise HTTPException(status_code=400, detail="Salesforce not connected")
 
+    # Verify the user owns this loan
+    loan_owner = db.execute(
+        text("SELECT loan_officer_id FROM loans WHERE id = :loan_id"),
+        {"loan_id": loan_id}
+    ).fetchone()
+    if not loan_owner:
+        raise HTTPException(status_code=404, detail="Loan not found")
+    if loan_owner[0] != user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to push this loan")
+
     try:
         from services.salesforce.sync_service import salesforce_sync
 
@@ -2620,6 +2592,8 @@ async def push_single_loan_to_salesforce(
             }
         else:
             raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
@@ -2642,6 +2616,16 @@ async def push_single_lead_to_salesforce(
     if not is_profile_connected(profile):
         raise HTTPException(status_code=400, detail="Salesforce not connected")
 
+    # Verify the user owns this lead
+    lead_owner = db.execute(
+        text("SELECT owner_id FROM leads WHERE id = :lead_id"),
+        {"lead_id": lead_id}
+    ).fetchone()
+    if not lead_owner:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    if lead_owner[0] != user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to push this lead")
+
     try:
         from services.salesforce.sync_service import salesforce_sync
 
@@ -2660,6 +2644,8 @@ async def push_single_lead_to_salesforce(
             }
         else:
             raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:
@@ -2682,6 +2668,16 @@ async def push_calendar_event_to_salesforce(
     if not is_profile_connected(profile):
         raise HTTPException(status_code=400, detail="Salesforce not connected")
 
+    # Verify the user owns this calendar event
+    event_owner = db.execute(
+        text("SELECT user_id FROM calendar_events WHERE id = :event_id"),
+        {"event_id": event_id}
+    ).fetchone()
+    if not event_owner:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    if event_owner[0] != user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to push this calendar event")
+
     try:
         from services.salesforce.sync_service import salesforce_sync
 
@@ -2700,6 +2696,8 @@ async def push_calendar_event_to_salesforce(
             }
         else:
             raise HTTPException(status_code=500, detail=result.get('error', 'Push failed'))
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail="Not found")
     except Exception as e:

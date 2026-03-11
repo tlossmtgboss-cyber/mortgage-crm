@@ -178,7 +178,7 @@ async def generate_response(
 
         llm_start = time.time()
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
             max_tokens=1500,
             system=f"{RESPONSE_SYSTEM_PROMPT}\n\n{intent_guidance}",
             messages=[

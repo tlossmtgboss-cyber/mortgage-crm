@@ -16,11 +16,37 @@ The functions themselves are resolved at request time (FastAPI dependency inject
 """
 import logging
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from db import get_db
 
 logger = logging.getLogger(__name__)
+
+_security = HTTPBearer(auto_error=False)
+
+
+async def require_auth(
+    credentials: HTTPAuthorizationCredentials = Depends(_security),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Router-level auth dependency. Rejects unauthenticated requests.
+
+    Usage (protects ALL endpoints on the router):
+        from auth.dependencies import require_auth
+
+        router = APIRouter(
+            prefix="/api/v1/example",
+            dependencies=[Depends(require_auth)],
+        )
+    """
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = await get_current_user_flexible(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user
 
 
 def _get_main_auth():
@@ -113,6 +139,7 @@ oauth2_scheme = _LazyAuthProxy('oauth2_scheme')
 
 
 __all__ = [
+    'require_auth',
     'get_current_user',
     'get_current_user_flexible',
     'get_oauth2_scheme',

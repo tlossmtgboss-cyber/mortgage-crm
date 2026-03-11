@@ -25,23 +25,16 @@ router = APIRouter(prefix="/api/v1/portal-assistant", tags=["Portal AI Assistant
 # DEPENDENCY INJECTION
 # =============================================================================
 
-_get_db = None
+from db import get_db
+
 _get_current_user = None
 
 
 def set_dependencies(get_db_func, get_current_user_func):
     """Set dependencies from main.py."""
-    global _get_db, _get_current_user
-    _get_db = get_db_func
+    global _get_current_user
     _get_current_user = get_current_user_func
     logger.info("Portal AI Assistant routes dependencies set")
-
-
-def get_db():
-    """Get database session."""
-    if _get_db is None:
-        raise RuntimeError("Portal AI Assistant routes not initialized")
-    yield from _get_db()
 
 
 # =============================================================================

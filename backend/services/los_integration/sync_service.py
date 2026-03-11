@@ -385,20 +385,42 @@ class LOSSyncService:
         result = await self.client.push_loan(push_data)
         result.completed_at = datetime.now(timezone.utc)
 
-        # If this was a create (no existing LOS ID), store the returned ID
+        # If this was a create (no existing LOS ID), persist the returned GUID
         if result.status == LOSSyncStatus.SUCCESS and result.los_loan_id and not los_loan_id:
             _set_los_loan_id(loan, result.los_loan_id)
             try:
                 db.flush()
-            except Exception as e:
-                logger.error(f"Failed to save LOS loan ID: {e}")
+            except Exception as flush_exc:
+                logger.error(
+                    f"Failed to persist new LOS loan ID {result.los_loan_id} "
+                    f"for CRM loan {loan_id}: {flush_exc}",
+                    exc_info=True,
+                )
 
-        # Log the sync event with latency
+        # Update encompass sync status columns regardless of create vs update
+        if hasattr(loan, "encompass_last_synced_at"):
+            loan.encompass_last_synced_at = datetime.now(timezone.utc)
+        if hasattr(loan, "encompass_sync_status"):
+            loan.encompass_sync_status = (
+                "synced" if result.status == LOSSyncStatus.SUCCESS else "error"
+            )
+        try:
+            db.flush()
+        except Exception as flush_exc:
+            logger.warning(
+                f"Failed to update encompass_sync_status for loan {loan_id}: {flush_exc}"
+            )
+
+        # Write to audit trail (AuditLog only — LosSyncLog is written for pull ops
+        # where conflict details are meaningful; push uses a lighter log)
         _log_sync_event(db, loan_id, result)
 
         logger.info(
             f"LOS push for loan {loan_id}: {result.status.value} "
-            f"in {result.latency_ms}ms (SLA: {'PASS' if result.within_sla else 'FAIL'})"
+            f"in {result.latency_ms}ms "
+            f"(SLA: {'PASS' if result.within_sla else 'FAIL'}) "
+            f"| fields_synced={result.fields_synced} "
+            f"| los_loan_id={result.los_loan_id}"
         )
 
         return result
@@ -461,6 +483,13 @@ class LOSSyncService:
             los_loan_id=effective_los_id,
         )
 
+        # Initialize tracking vars here so they are defined if the try block
+        # raises before they are assigned, preventing NameError in the
+        # logger.info call in the finally path.
+        conflicts: list = []
+        auto_resolved: int = 0
+        manual_pending: int = 0
+
         try:
             # Pull from LOS
             los_data = await self.client.pull_loan(effective_los_id)
@@ -492,11 +521,12 @@ class LOSSyncService:
             # Initialize conflict detector (Check 7.5)
             conflict_detector = ConflictDetector(strategy=self.conflict_resolution)
 
-            # Apply fields to CRM loan
+            # Apply fields to CRM loan (re-assigned here so later code references
+            # the list populated by the loop, not the sentinel from outer scope)
             conflicts = []
             auto_resolved = 0
             manual_pending = 0
-            changes = []
+            changes: list = []
 
             for mapping in self.field_mappings:
                 # Skip push-only fields
@@ -638,20 +668,29 @@ class LOSSyncService:
                 result.status = LOSSyncStatus.SUCCESS
             result.completed_at = datetime.now(timezone.utc)
 
-        except Exception as e:
+        except Exception as exc:
             result.status = LOSSyncStatus.FAILED
-            result.errors.append(str(e))
+            result.errors.append(str(exc))
             result.completed_at = datetime.now(timezone.utc)
-            logger.error(f"Pull from LOS failed for loan {loan_id}: {e}")
+            logger.error(
+                f"Pull from LOS failed for loan {loan_id} "
+                f"(los_loan_id={effective_los_id}): {exc}",
+                exc_info=True,
+            )
 
-        # Log the sync event with latency (audit trail + LosSyncLog)
+        # Log the sync event with latency (audit trail + LosSyncLog).
+        # These helpers are called unconditionally so we always record the
+        # outcome, even on failure.
         _log_sync_event(db, loan_id, result)
         _log_to_los_sync_log(db, loan_id, result)
 
         logger.info(
             f"LOS pull for loan {loan_id}: {result.status.value} "
-            f"in {result.latency_ms}ms (SLA: {'PASS' if result.within_sla else 'FAIL'})"
-            f" | conflicts: {len(conflicts)} (auto: {auto_resolved}, manual: {manual_pending})"
+            f"in {result.latency_ms}ms "
+            f"(SLA: {'PASS' if result.within_sla else 'FAIL'}) "
+            f"| fields_synced={result.fields_synced} "
+            f"| conflicts={len(conflicts)} "
+            f"(auto_resolved={auto_resolved}, manual_pending={manual_pending})"
         )
 
         return result
@@ -835,8 +874,11 @@ class LOSSyncService:
                     try:
                         from dateutil.parser import parse as parse_date
                         new_loan.closing_date = parse_date(los_data.closing_date)
-                    except Exception:
-                        pass
+                    except Exception as date_exc:
+                        logger.warning(
+                            f"Could not parse closing_date '{los_data.closing_date}' "
+                            f"for Encompass loan {los_id}: {date_exc}"
+                        )
 
                 db.add(new_loan)
                 db.flush()
@@ -851,11 +893,14 @@ class LOSSyncService:
 
                 logger.info(f"Imported loan from Encompass: {los_id} -> CRM loan {new_loan.id}")
 
-            except Exception as e:
-                logger.error(f"Failed to import Encompass loan {los_id}: {e}")
+            except Exception as exc:
+                logger.error(
+                    f"Failed to import Encompass loan {los_id}: {exc}",
+                    exc_info=True,
+                )
                 failed.append({
                     "los_loan_id": los_id,
-                    "error": str(e),
+                    "error": str(exc),
                 })
 
         return {

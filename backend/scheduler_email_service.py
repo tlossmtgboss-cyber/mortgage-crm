@@ -11,8 +11,14 @@ Provides:
 - Team member notification emails
 - Appointment cancellation emails
 - Team member cancellation emails
+- AI booking confirmation emails
+- Pre-appointment prep reminder emails
+- No-show recovery emails
+- Async wrappers for all email functions (via asyncio.to_thread)
+- Retry with exponential backoff (max 3 retries) for transient SMTP failures
 """
 
+import asyncio
 import os
 import base64
 import html
@@ -21,7 +27,6 @@ import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 
 import pytz
-import time as _time
 
 from services.notification_service import notification_service
 
@@ -32,35 +37,54 @@ logger = logging.getLogger(__name__)
 # R1: Email retry with SMS fallback
 # ============================================================================
 
-def _retry_email_send(send_fn, max_retries=2, backoff_base=1.0):
+async def _retry_email_send(send_fn, max_retries=3, backoff_base=1.0):
     """
     Retry an email send function up to max_retries times with exponential backoff.
     send_fn: zero-arg callable returning {"success": bool, ...} or bool.
     Returns the result dict from the last attempt.
+    Uses asyncio.sleep() to avoid blocking the event loop.
+
+    Backoff schedule (with default backoff_base=1.0):
+        Attempt 1: immediate
+        Attempt 2: 1s delay
+        Attempt 3: 2s delay
+        Attempt 4: 4s delay
     """
     last_result = {"success": False, "error": "No attempts made"}
-    for attempt in range(1 + max_retries):
+    total_attempts = 1 + max_retries
+    for attempt in range(total_attempts):
         try:
             result = send_fn()
             if isinstance(result, bool):
                 result = {"success": result}
             if isinstance(result, dict) and result.get("success"):
+                if attempt > 0:
+                    logger.info(
+                        f"Email send succeeded on retry attempt {attempt + 1}/{total_attempts}"
+                    )
                 return result
             last_result = result if isinstance(result, dict) else {"success": False, "error": str(result)}
+            logger.warning(
+                f"Email send attempt {attempt + 1}/{total_attempts} returned failure: "
+                f"{last_result.get('error', 'unknown')}"
+            )
         except Exception as e:
-            logger.warning(f"Email send attempt {attempt + 1} failed: {e}")
+            logger.warning(
+                f"Email send attempt {attempt + 1}/{total_attempts} raised exception: {e}"
+            )
             last_result = {"success": False, "error": str(e)}
         if attempt < max_retries:
             delay = backoff_base * (2 ** attempt)
-            logger.info(f"Retrying email in {delay}s (attempt {attempt + 2}/{max_retries + 1})")
-            _time.sleep(delay)
+            logger.info(f"Retrying email in {delay:.1f}s (attempt {attempt + 2}/{total_attempts})")
+            await asyncio.sleep(delay)
+    logger.error(f"Email send failed after all {total_attempts} attempts: {last_result.get('error')}")
     return last_result
 
 
-def send_with_sms_fallback(
+async def send_with_sms_fallback(
     email_send_fn,
     sms_fallback_fn=None,
-    max_retries=2,
+    max_retries=3,
     context_label="notification",
     escalation_fn=None,
 ):
@@ -70,7 +94,7 @@ def send_with_sms_fallback(
     If both fail and escalation_fn is provided, call it with the error message.
     Returns dict: {"email_sent": bool, "sms_sent": bool, "error": str|None}
     """
-    email_result = _retry_email_send(email_send_fn, max_retries=max_retries)
+    email_result = await _retry_email_send(email_send_fn, max_retries=max_retries)
     email_sent = email_result.get("success", False)
     sms_sent = False
     error = None
@@ -113,13 +137,13 @@ def check_sms_consent(phone: str, organization_id: int = None) -> tuple:
     Returns (can_send: bool, reason: str).
 
     Policy:
-    - Outside 8am-9pm recipient local time → BLOCK (TCPA)
-    - DNC list match → BLOCK
-    - DNC check error → BLOCK (fail-closed for compliance)
-    - ChannelPreference.do_not_sms=True → BLOCK
-    - ChannelPreference.sms_consent=False → BLOCK
-    - No lead/preference found → ALLOW (transactional SMS exemption)
-    - Consent check error → BLOCK (fail-safe)
+    - Outside 8am-9pm recipient local time -> BLOCK (TCPA)
+    - DNC list match -> BLOCK
+    - DNC check error -> BLOCK (fail-closed for compliance)
+    - ChannelPreference.do_not_sms=True -> BLOCK
+    - ChannelPreference.sms_consent=False -> BLOCK
+    - No lead/preference found -> ALLOW (transactional SMS exemption)
+    - Consent check error -> BLOCK (fail-safe)
     """
     if not phone:
         return False, "No phone number provided"
@@ -144,7 +168,7 @@ def check_sms_consent(phone: str, organization_id: int = None) -> tuple:
             except ImportError:
                 logger.debug("telephony.compliance not available, skipping DNC check")
             except Exception as dnc_err:
-                # CF-6: Fail-closed — block SMS when DNC check errors (TCPA compliance)
+                # CF-6: Fail-closed -- block SMS when DNC check errors (TCPA compliance)
                 logger.error(f"DNC check failed, blocking SMS for safety: {dnc_err}")
                 return False, f"DNC check unavailable: {dnc_err}"
 
@@ -182,7 +206,7 @@ def check_sms_consent(phone: str, organization_id: int = None) -> tuple:
             except ImportError:
                 logger.debug("ChannelPreference model not available, skipping consent check")
 
-            # No block found — allow transactional SMS
+            # No block found -- allow transactional SMS
             return True, "OK"
         finally:
             db.close()
@@ -193,7 +217,7 @@ def check_sms_consent(phone: str, organization_id: int = None) -> tuple:
 
 def _check_contact_hours(recipient_tz_name: str = None) -> tuple:
     """
-    CF-7: TCPA time-of-day restriction — block SMS outside 8am-9pm recipient local time.
+    CF-7: TCPA time-of-day restriction -- block SMS outside 8am-9pm recipient local time.
     Returns (can_send: bool, reason: str).
     If recipient timezone is unknown, defaults to America/New_York (earliest US timezone = most conservative).
     """
@@ -207,7 +231,7 @@ def _check_contact_hours(recipient_tz_name: str = None) -> tuple:
             return False, f"TCPA: Outside contact hours (8am-9pm). Local time: {local_now.strftime('%I:%M %p %Z')}"
         return True, "OK"
     except Exception as e:
-        # Unknown timezone — use conservative block during late/early hours UTC
+        # Unknown timezone -- use conservative block during late/early hours UTC
         utc_hour = datetime.now(timezone.utc).hour
         if utc_hour >= 2 and utc_hour < 13:
             # 2am-1pm UTC = could be nighttime somewhere in the US
@@ -215,6 +239,95 @@ def _check_contact_hours(recipient_tz_name: str = None) -> tuple:
         logger.warning(f"Contact hours check failed, allowing: {e}")
         return True, "OK"
 
+
+# ============================================================================
+# Shared base email template
+# ============================================================================
+
+_HEADER_COLOR_TEAL = "linear-gradient(135deg, #217F8D 0%, #1a6670 100%)"
+_HEADER_COLOR_AMBER = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
+_HEADER_COLOR_RED = "linear-gradient(135deg, #dc2626 0%, #991b1b 100%)"
+
+
+def _build_scheduler_email_html(
+    header_color: str,
+    heading: str,
+    body_content: str,
+    footer_text: str = None,
+) -> str:
+    """Build a complete HTML email from shared boilerplate.
+
+    Args:
+        header_color: CSS gradient for the header bar,
+            e.g. ``"linear-gradient(135deg, #217F8D 0%, #1a6670 100%)"``
+        heading: Text shown inside the colored header bar.
+        body_content: Pre-escaped HTML that goes inside the white content area.
+        footer_text: Optional override for the small footer line.
+            Defaults to ``"Sent from Perennia AI"``.
+    """
+    footer = footer_text or "Sent from Perennia AI"
+    return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
+                    <div style="background: {header_color}; padding: 30px; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px;">{heading}</h1>
+                    </div>
+
+                    <div style="padding: 30px;">
+                        {body_content}
+                    </div>
+                </div>
+
+                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
+                    {footer}
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+
+
+def _video_button_html(safe_video_link: str, show_copy_link: bool = False) -> str:
+    """Return HTML for the video-call button (and optional copy-link line)."""
+    if not safe_video_link:
+        return ""
+    copy_line = ""
+    if show_copy_link:
+        copy_line = f"""
+                    <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
+                        Or copy this link: <a href="{safe_video_link}" style="color: #217F8D;">{safe_video_link}</a>
+                    </p>"""
+    return f"""
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                            Join Video Call
+                        </a>
+                    </div>{copy_line}
+            """
+
+
+def _calendar_notice_html(text: str = None) -> str:
+    """Return the blue calendar-invite notice box."""
+    msg = text or "A calendar invite is attached to this email. Click on the attachment to add this appointment to your calendar."
+    return f"""
+                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
+                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
+                                {msg}
+                            </p>
+                        </div>
+        """
+
+
+# ============================================================================
+# ICS and URL helpers
+# ============================================================================
 
 def generate_reschedule_url(appointment_id: int, attendee_email: str, slug: str = None) -> str:
     """Generate a time-limited reschedule URL (valid 72 hours)."""
@@ -313,6 +426,10 @@ END:VCALENDAR"""
     return ics_content
 
 
+# ============================================================================
+# Email functions
+# ============================================================================
+
 def send_appointment_confirmation_email(
     attendee_email: str,
     attendee_name: str,
@@ -344,44 +461,16 @@ def send_appointment_confirmation_email(
 
         team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
-        # Add video call button if video link is provided
-        video_button_section = ""
-        if safe_video_link:
-            video_button_section = f"""
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                            Join Video Call
-                        </a>
-                    </div>
-                    <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
-                        Or copy this link: <a href="{safe_video_link}" style="color: #217F8D;">{safe_video_link}</a>
-                    </p>
-            """
+        reschedule_section = ""
+        if reschedule_url:
+            reschedule_section = f'''
+                        <div style="text-align: center; margin: 20px 0;">
+                            <a href="{html.escape(reschedule_url)}" style="display: inline-block; background: #f3f4f6; color: #374151; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; border: 1px solid #d1d5db;">
+                                Reschedule Appointment
+                            </a>
+                        </div>'''
 
-        # Add calendar reminder section
-        calendar_section = """
-                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
-                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
-                                A calendar invite is attached to this email. Click on the attachment to add this appointment to your calendar.
-                            </p>
-                        </div>
-        """
-
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); padding: 30px; text-align: center;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Confirmed!</h1>
-                    </div>
-
-                    <div style="padding: 30px;">
+        body_content = f"""
                         <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">Your appointment has been scheduled. Here are the details:</p>
@@ -393,31 +482,24 @@ def send_appointment_confirmation_email(
                             <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                             {team_member_section}
                         </div>
-                        {video_button_section}
-                        {calendar_section}
+                        {_video_button_html(safe_video_link, show_copy_link=True)}
+                        {_calendar_notice_html()}
                         <p style="font-size: 14px; color: #6b7280;">
                             We'll send you a reminder before your appointment.
                         </p>
-                        {"" if not reschedule_url else f'''
-                        <div style="text-align: center; margin: 20px 0;">
-                            <a href="{html.escape(reschedule_url)}" style="display: inline-block; background: #f3f4f6; color: #374151; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; border: 1px solid #d1d5db;">
-                                Reschedule Appointment
-                            </a>
-                        </div>'''}
+                        {reschedule_section}
 
                         <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
                             Looking forward to speaking with you!
                         </p>
-                    </div>
-                </div>
-
-                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Perennia AI
-                </p>
-            </div>
-        </body>
-        </html>
         """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_TEAL,
+            heading="Appointment Confirmed!",
+            body_content=body_content,
+            footer_text="Sent from Perennia AI - Perennia AI",
+        )
 
         video_link_text = f"\nJoin Video Call: {video_link}" if video_link else ""
         text_content = f"""
@@ -588,39 +670,7 @@ def send_appointment_update_email(
                         </div>
             """
 
-        video_button_section = ""
-        if safe_video_link:
-            video_button_section = f"""
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                            Join Video Call
-                        </a>
-                    </div>
-            """
-
-        calendar_section = """
-                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
-                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
-                                An updated calendar invite is attached. Please add it to replace the previous appointment.
-                            </p>
-                        </div>
-        """
-
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Updated!</h1>
-                    </div>
-
-                    <div style="padding: 30px;">
+        body_content = f"""
                         <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">Your appointment has been updated. Here are the new details:</p>
@@ -632,17 +682,18 @@ def send_appointment_update_email(
                             <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                             {team_member_section}
                         </div>
-                        {video_button_section}
-                        {calendar_section}
+                        {_video_button_html(safe_video_link)}
+                        {_calendar_notice_html("An updated calendar invite is attached. Please add it to replace the previous appointment.")}
                         <p style="font-size: 14px; color: #6b7280;">
                             If you have any questions about this change, please contact us.
                         </p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
         """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_AMBER,
+            heading="Appointment Updated!",
+            body_content=body_content,
+        )
 
         text_content = f"""
 Appointment Updated!
@@ -783,7 +834,7 @@ def send_team_member_notification_email(
         safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
         safe_video_link = html.escape(video_link) if video_link else None
 
-        # Add video call button if video link is provided
+        # Build video button with "Video link:" label for team member
         video_button_section = ""
         if safe_video_link:
             video_button_section = f"""
@@ -797,30 +848,7 @@ def send_team_member_notification_email(
                     </p>
             """
 
-        # Add calendar reminder section
-        calendar_section = """
-                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
-                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
-                                A calendar invite is attached to this email. Click on the attachment to add this appointment to your calendar.
-                            </p>
-                        </div>
-        """
-
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); padding: 30px; text-align: center;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">New Appointment Scheduled</h1>
-                    </div>
-
-                    <div style="padding: 30px;">
+        body_content = f"""
                         <p style="font-size: 16px; color: #374151;">Hi {safe_team_member_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">A new appointment has been scheduled for you:</p>
@@ -835,17 +863,15 @@ def send_team_member_notification_email(
                             <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                         </div>
                         {video_button_section}
-                        {calendar_section}
-                    </div>
-                </div>
-
-                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Perennia AI
-                </p>
-            </div>
-        </body>
-        </html>
+                        {_calendar_notice_html()}
         """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_TEAL,
+            heading="New Appointment Scheduled",
+            body_content=body_content,
+            footer_text="Sent from Perennia AI - Perennia AI",
+        )
 
         video_link_text = f"\nVideo Call Link: {video_link}" if video_link else ""
         text_content = f"""
@@ -941,21 +967,7 @@ def send_appointment_cancellation_email(
         team_member_section = f" with {safe_team_member_name}" if safe_team_member_name else ""
         text_team_member_section = f" with {team_member_name}" if team_member_name else ""
 
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 30px; text-align: center;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Cancelled</h1>
-                    </div>
-
-                    <div style="padding: 30px;">
+        body_content = f"""
                         <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">Your appointment{team_member_section} has been cancelled.</p>
@@ -975,16 +987,14 @@ def send_appointment_cancellation_email(
                         <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
                             We apologize for any inconvenience.
                         </p>
-                    </div>
-                </div>
-
-                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Perennia AI
-                </p>
-            </div>
-        </body>
-        </html>
         """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_RED,
+            heading="Appointment Cancelled",
+            body_content=body_content,
+            footer_text="Sent from Perennia AI - Perennia AI",
+        )
 
         text_content = f"""
 Appointment Cancelled
@@ -1051,21 +1061,7 @@ def send_team_member_cancellation_email(
         reason_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Reason:</strong> {safe_cancellation_reason}</p>" if safe_cancellation_reason else ""
         cancelled_by_section = f"<p style='margin: 8px 0; color: #6b7280;'><strong>Cancelled by:</strong> {safe_cancelled_by}</p>" if safe_cancelled_by else ""
 
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 30px; text-align: center;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">Appointment Cancelled</h1>
-                    </div>
-
-                    <div style="padding: 30px;">
+        body_content = f"""
                         <p style="font-size: 16px; color: #374151;">Hi {safe_team_member_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">An appointment with <strong>{safe_attendee_name}</strong> has been cancelled.</p>
@@ -1083,16 +1079,14 @@ def send_team_member_cancellation_email(
                         <p style="font-size: 14px; color: #6b7280;">
                             This time slot is now available in your calendar.
                         </p>
-                    </div>
-                </div>
-
-                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI - Perennia AI
-                </p>
-            </div>
-        </body>
-        </html>
         """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_RED,
+            heading="Appointment Cancelled",
+            body_content=body_content,
+            footer_text="Sent from Perennia AI - Perennia AI",
+        )
 
         text_content = f"""
 Appointment Cancelled
@@ -1170,30 +1164,7 @@ def send_appointment_reminder_email(
 
         team_member_section = f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>" if safe_team_member_name else ""
 
-        video_button_section = ""
-        if safe_video_link:
-            video_button_section = f"""
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                            Join Video Call
-                        </a>
-                    </div>
-            """
-
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
-                    <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">{heading}</h1>
-                    </div>
-                    <div style="padding: 30px;">
+        body_content = f"""
                         <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
                         <p style="font-size: 16px; color: #374151;">{message}</p>
                         <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
@@ -1203,19 +1174,17 @@ def send_appointment_reminder_email(
                             <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
                             {team_member_section}
                         </div>
-                        {video_button_section}
+                        {_video_button_html(safe_video_link)}
                         <p style="font-size: 14px; color: #6b7280;">
                             If you need to reschedule or cancel, please contact us as soon as possible.
                         </p>
-                    </div>
-                </div>
-                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    Sent from Perennia AI
-                </p>
-            </div>
-        </body>
-        </html>
         """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_AMBER,
+            heading=heading,
+            body_content=body_content,
+        )
 
         text_content = f"""
 {heading}
@@ -1336,3 +1305,693 @@ def send_appointment_reminder_sms(
     except Exception as e:
         logger.error(f"Failed to send appointment reminder SMS: {e}")
         return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# New email templates: AI booking, pre-appointment prep, no-show recovery
+# ============================================================================
+
+_HEADER_COLOR_BLUE = "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
+_HEADER_COLOR_GREEN = "linear-gradient(135deg, #059669 0%, #047857 100%)"
+_HEADER_COLOR_PURPLE = "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)"
+
+
+def send_ai_booking_confirmation_email(
+    attendee_email: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    duration: str,
+    meeting_mode: str = "Phone Call",
+    team_member_name: str = None,
+    team_member_email: str = None,
+    video_link: str = None,
+    scheduled_start: datetime = None,
+    duration_minutes: int = 30,
+    ai_context: str = None,
+    reschedule_url: str = None,
+):
+    """Send confirmation email for an AI-booked appointment.
+
+    Similar to send_appointment_confirmation_email but includes messaging
+    that the appointment was intelligently scheduled by Perennia AI and
+    optionally includes AI context (e.g., why this time was chosen).
+    """
+    try:
+        logger.info(
+            f"Sending AI booking confirmation to {attendee_email} "
+            f"for '{appointment_title}' on {appointment_date}"
+        )
+
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_duration = html.escape(str(duration) if duration else '')
+        safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
+        safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+        safe_video_link = html.escape(video_link) if video_link else None
+        safe_ai_context = html.escape(ai_context or '') if ai_context else None
+
+        team_section = (
+            f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>"
+            if safe_team_member_name else ""
+        )
+
+        ai_section = ""
+        if safe_ai_context:
+            ai_section = f"""
+                        <div style="background: #ede9fe; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                            <p style="margin: 0 0 4px 0; color: #5b21b6; font-weight: bold; font-size: 13px;">
+                                Why this time was selected
+                            </p>
+                            <p style="margin: 0; color: #6d28d9; font-size: 14px;">
+                                {safe_ai_context}
+                            </p>
+                        </div>
+            """
+
+        reschedule_section = ""
+        if reschedule_url:
+            reschedule_section = f'''
+                        <div style="text-align: center; margin: 20px 0;">
+                            <a href="{html.escape(reschedule_url)}" style="display: inline-block; background: #f3f4f6; color: #374151; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; border: 1px solid #d1d5db;">
+                                Reschedule Appointment
+                            </a>
+                        </div>'''
+
+        body_content = f"""
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">
+                            Great news! Perennia AI has scheduled your appointment.
+                            Here are the details:
+                        </p>
+
+                        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {safe_duration}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Meeting Type:</strong> {safe_meeting_mode}</p>
+                            {team_section}
+                        </div>
+                        {ai_section}
+                        {_video_button_html(safe_video_link, show_copy_link=True)}
+                        {_calendar_notice_html()}
+                        <p style="font-size: 14px; color: #6b7280;">
+                            We'll send you a reminder before your appointment.
+                        </p>
+                        {reschedule_section}
+
+                        <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+                            Looking forward to speaking with you!
+                        </p>
+        """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_BLUE,
+            heading="AI-Scheduled Appointment Confirmed!",
+            body_content=body_content,
+            footer_text="Intelligently scheduled by Perennia AI",
+        )
+
+        video_link_text = f"\nJoin Video Call: {video_link}" if video_link else ""
+        ai_context_text = f"\nWhy this time: {ai_context}" if ai_context else ""
+        text_content = f"""
+AI-Scheduled Appointment Confirmed!
+
+Hi {attendee_name},
+
+Perennia AI has scheduled your appointment. Here are the details:
+
+Date: {appointment_date}
+Time: {appointment_time}
+Duration: {duration}
+Meeting Type: {meeting_mode}
+{f'Meeting with: {team_member_name}' if team_member_name else ''}{video_link_text}{ai_context_text}
+
+A calendar invite is attached to this email.
+
+We'll send you a reminder before your appointment.{f" To reschedule, visit: {reschedule_url}" if reschedule_url else ""}
+
+Looking forward to speaking with you!
+
+- Perennia AI Team
+        """
+
+        attachments = []
+        if scheduled_start:
+            try:
+                organizer_email = team_member_email or os.getenv(
+                    "SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"
+                )
+                organizer_name = team_member_name or "Perennia AI"
+
+                ics_content = generate_ics_content(
+                    appointment_title=appointment_title,
+                    start_datetime=scheduled_start,
+                    duration_minutes=duration_minutes,
+                    attendee_email=attendee_email,
+                    attendee_name=attendee_name,
+                    organizer_email=organizer_email,
+                    organizer_name=organizer_name,
+                    description=f"AI-Scheduled: {appointment_title}",
+                    video_link=video_link,
+                )
+
+                attachments.append({
+                    'content': base64.b64encode(ics_content.encode('utf-8')).decode('utf-8'),
+                    'filename': 'appointment.ics',
+                    'type': 'text/calendar',
+                })
+                logger.info("ICS attachment created for AI booking confirmation")
+            except Exception as ics_error:
+                logger.error(f"Failed to generate ICS for AI booking: {ics_error}")
+
+        result = notification_service.send_email(
+            to_email=attendee_email,
+            subject=f"Appointment Confirmed: {appointment_title}",
+            html_content=html_content,
+            plain_content=text_content,
+            attachments=attachments if attachments else None,
+        )
+
+        if result.get("success"):
+            logger.info(f"AI booking confirmation email sent to {attendee_email}")
+            return {"success": True, "error": None}
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Failed to send AI booking confirmation to {attendee_email}: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+    except Exception as e:
+        logger.error(f"Exception in send_ai_booking_confirmation_email: {e}", exc_info=True)
+        return {"success": False, "error": "Internal server error"}
+
+
+def send_pre_appointment_prep_email(
+    attendee_email: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    duration_minutes: int = 30,
+    meeting_mode: str = "Phone Call",
+    team_member_name: str = None,
+    team_member_email: str = None,
+    video_link: str = None,
+    scheduled_start: datetime = None,
+    prep_items: list = None,
+    meeting_type_key: str = None,
+):
+    """Send a pre-appointment preparation reminder email.
+
+    Sent ~24h before the appointment with a checklist of items the borrower
+    should gather/review before the meeting (e.g., documents, questions).
+    """
+    try:
+        logger.info(
+            f"Sending pre-appointment prep email to {attendee_email} "
+            f"for '{appointment_title}' on {appointment_date}"
+        )
+
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_meeting_mode = html.escape(meeting_mode or 'Phone Call')
+        safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+        safe_video_link = html.escape(video_link) if video_link else None
+
+        # Build preparation checklist based on meeting type or custom items
+        if prep_items:
+            checklist_items = prep_items
+        else:
+            checklist_items = _default_prep_items(meeting_type_key)
+
+        checklist_html = ""
+        if checklist_items:
+            items_html = "".join(
+                f'<li style="margin: 8px 0; color: #374151;">{html.escape(item)}</li>'
+                for item in checklist_items
+            )
+            checklist_html = f"""
+                        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 0 0 12px 0; color: #065f46; font-weight: bold; font-size: 15px;">
+                                Preparation Checklist
+                            </p>
+                            <ul style="margin: 0; padding-left: 20px;">
+                                {items_html}
+                            </ul>
+                        </div>
+            """
+
+        team_section = (
+            f"<p style='margin: 8px 0;'><strong>Meeting with:</strong> {safe_team_member_name}</p>"
+            if safe_team_member_name else ""
+        )
+
+        body_content = f"""
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">
+                            Your appointment is coming up tomorrow! Here is a quick reminder
+                            with some tips to help you prepare.
+                        </p>
+
+                        <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Duration:</strong> {safe_meeting_mode} ({duration_minutes} min)</p>
+                            {team_section}
+                        </div>
+                        {checklist_html}
+                        {_video_button_html(safe_video_link)}
+                        <p style="font-size: 14px; color: #6b7280;">
+                            Having these items ready will help us make the most of our time together.
+                            If you have questions beforehand, feel free to reply to this email.
+                        </p>
+        """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_GREEN,
+            heading="Prepare for Your Appointment",
+            body_content=body_content,
+            footer_text="Sent from Perennia AI",
+        )
+
+        checklist_text = ""
+        if checklist_items:
+            checklist_text = "\nPreparation Checklist:\n" + "\n".join(
+                f"  - {item}" for item in checklist_items
+            ) + "\n"
+
+        text_content = f"""
+Prepare for Your Appointment
+
+Hi {attendee_name},
+
+Your appointment is coming up tomorrow! Here is a quick reminder.
+
+Date: {appointment_date}
+Time: {appointment_time}
+Duration: {duration_minutes} minutes ({meeting_mode})
+{f'Meeting with: {team_member_name}' if team_member_name else ''}
+{checklist_text}
+{f'Join Video Call: {video_link}' if video_link else ''}
+
+Having these items ready will help us make the most of our time together.
+
+- Perennia AI Team
+        """
+
+        attachments = []
+        if scheduled_start:
+            try:
+                organizer_email = team_member_email or os.getenv(
+                    "SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"
+                )
+                organizer_name = team_member_name or "Perennia AI"
+
+                ics_content = generate_ics_content(
+                    appointment_title=appointment_title,
+                    start_datetime=scheduled_start,
+                    duration_minutes=duration_minutes,
+                    attendee_email=attendee_email,
+                    attendee_name=attendee_name,
+                    organizer_email=organizer_email,
+                    organizer_name=organizer_name,
+                    description=f"Prep Reminder: {appointment_title}",
+                    video_link=video_link,
+                )
+
+                attachments.append({
+                    'content': base64.b64encode(ics_content.encode('utf-8')).decode('utf-8'),
+                    'filename': 'appointment.ics',
+                    'type': 'text/calendar',
+                })
+            except Exception as ics_error:
+                logger.error(f"Failed to generate ICS for prep email: {ics_error}")
+
+        result = notification_service.send_email(
+            to_email=attendee_email,
+            subject=f"Prepare for Tomorrow: {appointment_title}",
+            html_content=html_content,
+            plain_content=text_content,
+            attachments=attachments if attachments else None,
+        )
+
+        if result.get("success"):
+            logger.info(f"Pre-appointment prep email sent to {attendee_email}")
+            return {"success": True, "error": None}
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Failed to send prep email to {attendee_email}: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+    except Exception as e:
+        logger.error(f"Exception in send_pre_appointment_prep_email: {e}", exc_info=True)
+        return {"success": False, "error": "Internal server error"}
+
+
+def _default_prep_items(meeting_type_key: str = None) -> list:
+    """Return default preparation checklist items based on meeting type."""
+    defaults = {
+        "discovery_call": [
+            "Think about your home buying timeline and budget",
+            "Have a rough idea of your desired location and property type",
+            "Know your current employment and income situation",
+            "Prepare any questions you have about the mortgage process",
+        ],
+        "pre_approval_review": [
+            "Have your most recent pay stubs available (last 30 days)",
+            "Know your approximate credit score",
+            "Have your bank/asset statements handy",
+            "Prepare your target home price range",
+        ],
+        "application_walkthrough": [
+            "Gather your last 2 years of W-2s or tax returns",
+            "Have your most recent pay stubs (last 30 days)",
+            "Prepare 2 months of bank statements for all accounts",
+            "Have your driver's license or government ID ready",
+            "Know your current debts and monthly payments",
+        ],
+        "document_review": [
+            "Have any documents you were asked to provide",
+            "Prepare questions about items on your to-do list",
+            "Have access to your email to share documents if needed",
+        ],
+        "rate_lock_discussion": [
+            "Know your expected closing date",
+            "Review your current rate quote",
+            "Consider how long you plan to stay in the home",
+            "Think about your preference: lowest rate vs. lowest payment",
+        ],
+        "closing_prep": [
+            "Review your Closing Disclosure (CD) document",
+            "Confirm your closing date and time",
+            "Have your cashier's check or wire transfer ready",
+            "Bring a valid photo ID to closing",
+            "Prepare any questions about closing costs",
+        ],
+    }
+    if meeting_type_key and meeting_type_key in defaults:
+        return defaults[meeting_type_key]
+    # Generic fallback
+    return [
+        "Review any documents or information previously discussed",
+        "Prepare questions you would like to ask",
+        "Ensure you are in a quiet place with good connectivity",
+    ]
+
+
+def send_no_show_recovery_email(
+    attendee_email: str,
+    attendee_name: str,
+    appointment_title: str,
+    appointment_date: str,
+    appointment_time: str,
+    team_member_name: str = None,
+    reschedule_url: str = None,
+    meeting_type_key: str = None,
+):
+    """Send a no-show recovery email to encourage the borrower to rebook.
+
+    Sent after an appointment is marked as no-show. The tone is warm and
+    non-judgmental, offering an easy way to reschedule.
+    """
+    try:
+        logger.info(
+            f"Sending no-show recovery email to {attendee_email} "
+            f"for missed appointment '{appointment_title}' on {appointment_date}"
+        )
+
+        safe_attendee_name = html.escape(attendee_name or '')
+        safe_appointment_title = html.escape(appointment_title or '')
+        safe_appointment_date = html.escape(appointment_date or '')
+        safe_appointment_time = html.escape(appointment_time or '')
+        safe_team_member_name = html.escape(team_member_name or '') if team_member_name else None
+
+        team_section = (
+            f" with {safe_team_member_name}" if safe_team_member_name else ""
+        )
+
+        reschedule_button = ""
+        if reschedule_url:
+            reschedule_button = f"""
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{html.escape(reschedule_url)}" style="display: inline-block; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 16px 36px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                                Reschedule Now
+                            </a>
+                        </div>
+                        <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
+                            Or copy this link: <a href="{html.escape(reschedule_url)}" style="color: #217F8D;">{html.escape(reschedule_url)}</a>
+                        </p>
+            """
+
+        body_content = f"""
+                        <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
+
+                        <p style="font-size: 16px; color: #374151;">
+                            We missed you at your appointment{team_section} today. We hope everything is okay!
+                        </p>
+
+                        <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 20px; margin: 20px 0;">
+                            <p style="margin: 8px 0; color: #9a3412;"><strong>Missed Appointment:</strong></p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Title:</strong> {safe_appointment_title}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Date:</strong> {safe_appointment_date}</p>
+                            <p style="margin: 8px 0; color: #111827;"><strong>Time:</strong> {safe_appointment_time}</p>
+                        </div>
+
+                        <p style="font-size: 16px; color: #374151;">
+                            Life happens, and we completely understand. We would love to find a
+                            time that works better for you. Rescheduling only takes a moment:
+                        </p>
+                        {reschedule_button}
+                        <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+                            If you are no longer interested or have any questions, just reply to
+                            this email and we will be happy to help.
+                        </p>
+        """
+
+        html_content = _build_scheduler_email_html(
+            header_color=_HEADER_COLOR_AMBER,
+            heading="We Missed You!",
+            body_content=body_content,
+            footer_text="Sent from Perennia AI",
+        )
+
+        text_team = f" with {team_member_name}" if team_member_name else ""
+        text_content = f"""
+We Missed You!
+
+Hi {attendee_name},
+
+We missed you at your appointment{text_team} today. We hope everything is okay!
+
+Missed Appointment:
+Title: {appointment_title}
+Date: {appointment_date}
+Time: {appointment_time}
+
+Life happens, and we completely understand. We would love to find a time that works better for you.
+{f'Reschedule here: {reschedule_url}' if reschedule_url else 'Please reply to this email to reschedule.'}
+
+If you are no longer interested or have any questions, just reply to this email.
+
+- Perennia AI Team
+        """
+
+        result = notification_service.send_email(
+            to_email=attendee_email,
+            subject=f"We Missed You - Let's Reschedule: {appointment_title}",
+            html_content=html_content,
+            plain_content=text_content,
+        )
+
+        if result.get("success"):
+            logger.info(f"No-show recovery email sent to {attendee_email}")
+            return {"success": True, "error": None}
+        else:
+            error_msg = result.get('error', 'Unknown error')
+            logger.error(f"Failed to send no-show recovery email to {attendee_email}: {error_msg}")
+            return {"success": False, "error": error_msg}
+
+    except Exception as e:
+        logger.error(f"Exception in send_no_show_recovery_email: {e}", exc_info=True)
+        return {"success": False, "error": "Internal server error"}
+
+
+# ============================================================================
+# Async wrappers
+# ============================================================================
+# All sync email functions are wrapped via asyncio.to_thread() so they can be
+# awaited from async route handlers without blocking the event loop.
+# The sync functions are preserved unchanged for backward compatibility.
+# ============================================================================
+
+async def async_send_appointment_confirmation_email(**kwargs) -> dict:
+    """Async wrapper for send_appointment_confirmation_email with retry."""
+    return await _async_email_with_retry(
+        send_appointment_confirmation_email,
+        "appointment_confirmation",
+        **kwargs,
+    )
+
+
+async def async_send_appointment_update_email(**kwargs) -> dict:
+    """Async wrapper for send_appointment_update_email with retry."""
+    return await _async_email_with_retry(
+        send_appointment_update_email,
+        "appointment_update",
+        **kwargs,
+    )
+
+
+async def async_send_appointment_cancellation_email(**kwargs) -> dict:
+    """Async wrapper for send_appointment_cancellation_email with retry.
+
+    The sync version returns bool; this normalizes to dict.
+    """
+    def _send():
+        result = send_appointment_cancellation_email(**kwargs)
+        if isinstance(result, bool):
+            return {"success": result, "error": None if result else "Send failed"}
+        return result
+
+    return await _retry_email_send(_send, max_retries=3)
+
+
+async def async_send_team_member_notification_email(**kwargs) -> dict:
+    """Async wrapper for send_team_member_notification_email with retry.
+
+    The sync version returns bool; this normalizes to dict.
+    """
+    def _send():
+        result = send_team_member_notification_email(**kwargs)
+        if isinstance(result, bool):
+            return {"success": result, "error": None if result else "Send failed"}
+        return result
+
+    return await _retry_email_send(_send, max_retries=3)
+
+
+async def async_send_team_member_cancellation_email(**kwargs) -> dict:
+    """Async wrapper for send_team_member_cancellation_email with retry.
+
+    The sync version returns bool; this normalizes to dict.
+    """
+    def _send():
+        result = send_team_member_cancellation_email(**kwargs)
+        if isinstance(result, bool):
+            return {"success": result, "error": None if result else "Send failed"}
+        return result
+
+    return await _retry_email_send(_send, max_retries=3)
+
+
+async def async_send_appointment_reminder_email(**kwargs) -> dict:
+    """Async wrapper for send_appointment_reminder_email with retry."""
+    return await _async_email_with_retry(
+        send_appointment_reminder_email,
+        "appointment_reminder",
+        **kwargs,
+    )
+
+
+async def async_send_ai_booking_confirmation_email(**kwargs) -> dict:
+    """Async wrapper for send_ai_booking_confirmation_email with retry."""
+    return await _async_email_with_retry(
+        send_ai_booking_confirmation_email,
+        "ai_booking_confirmation",
+        **kwargs,
+    )
+
+
+async def async_send_pre_appointment_prep_email(**kwargs) -> dict:
+    """Async wrapper for send_pre_appointment_prep_email with retry."""
+    return await _async_email_with_retry(
+        send_pre_appointment_prep_email,
+        "pre_appointment_prep",
+        **kwargs,
+    )
+
+
+async def async_send_no_show_recovery_email(**kwargs) -> dict:
+    """Async wrapper for send_no_show_recovery_email with retry."""
+    return await _async_email_with_retry(
+        send_no_show_recovery_email,
+        "no_show_recovery",
+        **kwargs,
+    )
+
+
+async def _async_email_with_retry(
+    sync_fn,
+    label: str,
+    max_retries: int = 3,
+    **kwargs,
+) -> dict:
+    """Run a sync email function in a thread with retry + exponential backoff.
+
+    This is the core async retry helper. It wraps the sync function via
+    asyncio.to_thread and feeds it into _retry_email_send.
+    """
+    def _send():
+        return sync_fn(**kwargs)
+
+    result = await _retry_email_send(_send, max_retries=max_retries)
+    if not result.get("success"):
+        logger.error(f"Async {label} email failed after retries: {result.get('error')}")
+    return result
+
+
+# ============================================================================
+# Fire-and-forget helper
+# ============================================================================
+
+def schedule_email_task(coro) -> None:
+    """Schedule an async email coroutine as a fire-and-forget background task.
+
+    Email failures are logged but never propagate to the caller, ensuring
+    appointment operations are never interrupted by notification issues.
+
+    Usage from a sync context::
+
+        schedule_email_task(async_send_appointment_confirmation_email(
+            attendee_email="...",
+            ...
+        ))
+
+    Usage from an async context::
+
+        asyncio.ensure_future(async_send_appointment_confirmation_email(...))
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        task = loop.create_task(coro)
+        task.add_done_callback(_email_task_done_callback)
+    else:
+        # No running loop -- run synchronously in a new loop (fallback).
+        # This path is only hit in non-async contexts like CLI scripts.
+        try:
+            asyncio.run(coro)
+        except Exception as e:
+            logger.error(f"Fire-and-forget email task failed (sync fallback): {e}")
+
+
+def _email_task_done_callback(task: asyncio.Task) -> None:
+    """Callback for fire-and-forget email tasks -- logs exceptions."""
+    try:
+        exc = task.exception()
+        if exc:
+            logger.error(f"Background email task failed: {exc}", exc_info=exc)
+    except asyncio.CancelledError:
+        logger.warning("Background email task was cancelled")
+    except Exception as e:
+        logger.error(f"Error in email task done callback: {e}")

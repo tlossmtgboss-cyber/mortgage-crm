@@ -14,6 +14,7 @@ import logging
 import re
 import os
 from sqlalchemy.exc import SQLAlchemyError
+from db import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -22,27 +23,20 @@ router = APIRouter(prefix="/api/v1/integration-settings")
 # Dependency injection placeholders
 User = None
 _get_current_user = None
-_get_db = None
 
-def set_dependencies(user_model, current_user_func, db_func):
-    """Set dependencies for this router."""
-    global User, _get_current_user, _get_db
+
+def set_dependencies(user_model, current_user_func, db_func=None):
+    """Set dependencies for this router.
+    db_func is accepted for API compatibility but ignored; get_db is imported from db.py.
+    """
+    global User, _get_current_user
     User = user_model
     _get_current_user = current_user_func
-    _get_db = db_func
 
 
 # Wrapper functions for FastAPI Depends - called at request time
 from fastapi import Request
 from sqlalchemy.orm import Session
-
-def get_db():
-    """Get database session - wrapper that works at request time."""
-    if _get_db is None:
-        raise HTTPException(status_code=500, detail="Database dependency not configured")
-    # Use yield from to properly delegate to the original generator
-    # This ensures FastAPI can manage the session lifecycle correctly
-    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):

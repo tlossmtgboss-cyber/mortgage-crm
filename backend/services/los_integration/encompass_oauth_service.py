@@ -20,6 +20,7 @@ Usage:
     result = await client.pull_loan("some-guid")
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -35,6 +36,19 @@ logger = logging.getLogger(__name__)
 # Clients are re-authenticated when their tokens expire.
 _client_cache: Dict[int, EncompassClient] = {}
 
+# Per-org asyncio locks to prevent concurrent re-authentication stampedes.
+# Without this, two simultaneous requests for the same org could both attempt
+# to re-authenticate when the token expires, resulting in duplicate token
+# requests and a wasted auth cycle.
+_auth_locks: Dict[int, asyncio.Lock] = {}
+
+
+def _get_auth_lock(org_id: int) -> asyncio.Lock:
+    """Get or create an asyncio.Lock for a given organization."""
+    if org_id not in _auth_locks:
+        _auth_locks[org_id] = asyncio.Lock()
+    return _auth_locks[org_id]
+
 
 class EncompassOAuthService:
     """Service for managing Encompass OAuth credentials and client instances.
@@ -42,6 +56,10 @@ class EncompassOAuthService:
     Handles the full lifecycle of Encompass API authentication per organization:
     storing credentials, creating authenticated clients, testing connections,
     and disconnecting.
+
+    Thread safety:
+        get_authenticated_client() uses per-org asyncio locks to prevent
+        concurrent re-authentication when the token expires.
     """
 
     def __init__(self):
@@ -83,7 +101,11 @@ class EncompassOAuthService:
         """
         from database.models.encompass_config import EncompassConfig
 
-        # Test the credentials before saving
+        # Test the credentials before saving them
+        logger.info(
+            f"Testing Encompass credentials for org {org_id} "
+            f"(instance={instance_id})"
+        )
         test_client = EncompassClient(
             instance_id=instance_id,
             client_id=client_id,
@@ -91,6 +113,10 @@ class EncompassOAuthService:
         )
         auth_success = await test_client.authenticate()
         if not auth_success:
+            logger.warning(
+                f"Encompass credential test failed for org {org_id} "
+                f"(instance={instance_id})"
+            )
             raise ValueError(
                 "Failed to authenticate with Encompass. "
                 "Please verify your instance_id, client_id, and client_secret."
@@ -123,7 +149,7 @@ class EncompassOAuthService:
 
         db.flush()
 
-        # Cache the authenticated client
+        # Populate cache with the freshly authenticated client
         _client_cache[org_id] = test_client
 
         logger.info(
@@ -191,6 +217,12 @@ class EncompassOAuthService:
         refreshable -- a new token must be obtained via client_credentials
         grant each time.
 
+        Concurrency:
+            Uses a per-org asyncio lock so that if two requests arrive
+            simultaneously when the token has expired, only one triggers
+            re-authentication; the second waits and then reuses the freshly
+            cached client.
+
         Args:
             db: Database session
             org_id: Organization ID
@@ -202,37 +234,77 @@ class EncompassOAuthService:
             ValueError: If no active config exists for the org
             RuntimeError: If authentication fails
         """
-        # Check cache first
+        # Fast path: cached client with a valid token
         cached = _client_cache.get(org_id)
         if cached and cached.is_authenticated:
             return cached
 
-        # Load config from database
-        config = await self._get_active_config(db, org_id)
-        if not config:
-            raise ValueError(
-                f"No active Encompass configuration found for organization {org_id}. "
-                "Please connect via the Encompass integration settings."
+        # Slow path: need to re-authenticate — serialize per org
+        lock = _get_auth_lock(org_id)
+        async with lock:
+            # Re-check after acquiring the lock; another coroutine may have
+            # already refreshed the token while we were waiting.
+            cached = _client_cache.get(org_id)
+            if cached and cached.is_authenticated:
+                return cached
+
+            # Load config from database
+            config = await self._get_active_config(db, org_id)
+            if not config:
+                raise ValueError(
+                    f"No active Encompass configuration found for organization {org_id}. "
+                    "Please connect via the Encompass integration settings."
+                )
+
+            # Create and authenticate a fresh client
+            client = EncompassClient(
+                instance_id=config.instance_id,
+                client_id=config.client_id,
+                client_secret=config.client_secret,
             )
 
-        # Create and authenticate client
-        client = EncompassClient(
-            instance_id=config.instance_id,
-            client_id=config.client_id,
-            client_secret=config.client_secret,
-        )
-
-        auth_success = await client.authenticate()
-        if not auth_success:
-            raise RuntimeError(
-                f"Failed to authenticate with Encompass for org {org_id}. "
-                "Credentials may have been revoked or expired."
+            logger.info(
+                f"Authenticating Encompass client for org {org_id} "
+                f"(instance={config.instance_id})"
             )
+            auth_success = await client.authenticate()
+            if not auth_success:
+                # Increment failure counter on the config record so the health
+                # endpoint can report degraded state.
+                try:
+                    config.consecutive_auth_failures = (
+                        (config.consecutive_auth_failures or 0) + 1
+                    )
+                    config.last_failed_at = datetime.now(timezone.utc)
+                    db.flush()
+                except Exception as db_exc:
+                    logger.warning(
+                        f"Could not update auth failure counter for org {org_id}: {db_exc}"
+                    )
 
-        # Cache the client
-        _client_cache[org_id] = client
+                raise RuntimeError(
+                    f"Failed to authenticate with Encompass for org {org_id} "
+                    f"(instance={config.instance_id}). "
+                    "Credentials may have been revoked or expired. "
+                    "Please reconnect via the Encompass integration settings."
+                )
 
-        return client
+            # Reset failure counter on success
+            try:
+                config.consecutive_auth_failures = 0
+                db.flush()
+            except Exception as db_exc:
+                logger.warning(
+                    f"Could not reset auth failure counter for org {org_id}: {db_exc}"
+                )
+
+            # Update the cache with the freshly authenticated client
+            _client_cache[org_id] = client
+            logger.info(
+                f"Encompass client (re)authenticated for org {org_id}, "
+                f"token valid until {client._token_expires_at}"
+            )
+            return client
 
     # =========================================================================
     # Connection Status & Testing
@@ -245,15 +317,16 @@ class EncompassOAuthService:
     ) -> Dict[str, Any]:
         """Test the Encompass connection for an organization.
 
-        Attempts to authenticate with stored credentials and reports
-        the result including latency.
+        Attempts to authenticate with stored credentials and then performs
+        a lightweight API health check to verify the token actually works
+        against the Encompass API (not just that the token was issued).
 
         Args:
             db: Database session
             org_id: Organization ID
 
         Returns:
-            Dict with test results including status, latency, and any errors
+            Dict with test results including status, latency_ms, and any errors
         """
         import time
 
@@ -274,34 +347,66 @@ class EncompassOAuthService:
 
         try:
             auth_success = await client.authenticate()
-            latency_ms = round((time.monotonic() - start) * 1000, 1)
+            auth_latency_ms = round((time.monotonic() - start) * 1000, 1)
 
-            if auth_success:
-                # Update cache with fresh client
-                _client_cache[org_id] = client
-                return {
-                    "status": "healthy",
-                    "authenticated": True,
-                    "instance_id": config.instance_id,
-                    "latency_ms": latency_ms,
-                }
-            else:
+            if not auth_success:
+                logger.warning(
+                    f"Encompass connection test: auth failed for org {org_id} "
+                    f"(instance={config.instance_id})"
+                )
                 return {
                     "status": "auth_failed",
                     "authenticated": False,
                     "instance_id": config.instance_id,
-                    "latency_ms": latency_ms,
-                    "message": "Authentication failed - check credentials",
+                    "latency_ms": auth_latency_ms,
+                    "message": "Authentication failed — verify instance_id, client_id, and client_secret",
                 }
-        except Exception as e:
+
+            # Perform a lightweight API call to confirm the token works end-to-end.
+            # Use the base client health_check which calls ensure_authenticated().
+            health = await client.health_check()
+            total_latency_ms = round((time.monotonic() - start) * 1000, 1)
+
+            if health.get("status") == "healthy":
+                # Update the in-memory cache with the fresh, tested client
+                _client_cache[org_id] = client
+                logger.info(
+                    f"Encompass connection test passed for org {org_id} "
+                    f"(instance={config.instance_id}, latency={total_latency_ms}ms)"
+                )
+                return {
+                    "status": "healthy",
+                    "authenticated": True,
+                    "instance_id": config.instance_id,
+                    "latency_ms": total_latency_ms,
+                    "token_expires_at": (
+                        client._token_expires_at.isoformat()
+                        if client._token_expires_at
+                        else None
+                    ),
+                }
+            else:
+                return {
+                    "status": "api_error",
+                    "authenticated": True,
+                    "instance_id": config.instance_id,
+                    "latency_ms": total_latency_ms,
+                    "message": "Token obtained but API health check failed",
+                    "error": health.get("error"),
+                }
+
+        except Exception as exc:
             latency_ms = round((time.monotonic() - start) * 1000, 1)
-            logger.error(f"Encompass connection test failed for org {org_id}: {e}")
+            logger.error(
+                f"Encompass connection test raised an error for org {org_id}: {exc}",
+                exc_info=True,
+            )
             return {
                 "status": "error",
                 "authenticated": False,
                 "instance_id": config.instance_id,
                 "latency_ms": latency_ms,
-                "error": str(e),
+                "error": str(exc),
             }
 
     async def get_config(
@@ -341,6 +446,17 @@ class EncompassOAuthService:
             "auto_push_on_stage_change": config.auto_push_on_stage_change,
             "sync_frequency_minutes": config.sync_frequency_minutes,
             "last_sync_at": config.last_sync_at.isoformat() if config.last_sync_at else None,
+            "last_failed_at": (
+                config.last_failed_at.isoformat()
+                if getattr(config, "last_failed_at", None)
+                else None
+            ),
+            "consecutive_auth_failures": getattr(config, "consecutive_auth_failures", 0) or 0,
+            "health_status": (
+                config.health_status
+                if hasattr(config, "health_status")
+                else ("healthy" if config.is_active else "inactive")
+            ),
             "is_active": config.is_active,
             "created_at": config.created_at.isoformat() if config.created_at else None,
             "updated_at": config.updated_at.isoformat() if config.updated_at else None,

@@ -1203,6 +1203,19 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# SMART DOCS V2 ROUTES (Intelligence, Income, Review, Follow-up, Security,
+#                        Bank Analysis, Analytics, Portal, E-Signature)
+# ============================================================================
+try:
+    from routes.smart_docs_v2_registration import register_smart_docs_v2_routes
+    register_smart_docs_v2_routes(app=app)
+    logger.info("✅ Smart Docs V2 routes loaded (intelligence, income, review, followup, security, bank-analysis, analytics, portal, esign)")
+except Exception as e:
+    logger.error(f"❌ Smart Docs V2 routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # SOC 2 TYPE II COMPLIANCE ROUTES
 # ============================================================================
 try:
@@ -1280,6 +1293,120 @@ except Exception as e:
     logger.error(f"AI Prospect Re-Engagement routes failed to load: {e}")
     import traceback
     traceback.print_exc()
+
+# ============================================================================
+# BOOKING BRANDING ROUTES (public org-branded booking pages)
+# ============================================================================
+try:
+    from routes.booking_branding_routes import register_booking_branding_routes
+    register_booking_branding_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("Booking branding routes loaded (public org pages, admin branding)")
+except Exception as e:
+    logger.warning(f"Booking branding routes skipped: {e}")
+
+# ============================================================================
+# ENTERPRISE HARDENING ROUTES (March 2026 sprint)
+# ============================================================================
+
+# TCPA Consent Management
+try:
+    from routes.tcpa_consent_routes import router as tcpa_consent_router
+    app.include_router(tcpa_consent_router, tags=["TCPA Compliance"])
+    logger.info("TCPA Consent routes loaded")
+except Exception as e:
+    logger.warning(f"TCPA Consent routes skipped: {e}")
+
+# Credit Bureau Monitoring & Recapture Intelligence
+try:
+    from routes.credit_monitoring_routes import router as credit_monitoring_router
+    app.include_router(credit_monitoring_router, tags=["Credit Monitoring"])
+    logger.info("Credit Monitoring routes loaded")
+except Exception as e:
+    logger.warning(f"Credit Monitoring routes skipped: {e}")
+
+# Content Governance (marketing compliance approval workflows)
+try:
+    from routes.content_governance_routes import router as content_governance_router
+    app.include_router(content_governance_router, tags=["Content Governance"])
+    logger.info("Content Governance routes loaded")
+except Exception as e:
+    logger.warning(f"Content Governance routes skipped: {e}")
+
+# Scheduling Intelligence — Continuous Learning System
+try:
+    from routes.scheduling_intelligence_routes import router as scheduling_intelligence_router
+    app.include_router(scheduling_intelligence_router, tags=["Scheduling Intelligence"])
+    logger.info("Scheduling Intelligence routes loaded")
+except Exception as e:
+    logger.warning(f"Scheduling Intelligence routes skipped: {e}")
+
+# SOC 2 Compliance Admin Dashboard
+try:
+    from routes.soc2_compliance_routes import router as soc2_admin_router
+    app.include_router(soc2_admin_router, tags=["SOC 2 Admin"])
+    logger.info("SOC 2 Compliance admin routes loaded")
+except Exception as e:
+    logger.warning(f"SOC 2 Compliance admin routes skipped: {e}")
+
+# ============================================================================
+# DB MIGRATION ROUTES
+# DISABLED: Schema mutations must not be exposed via HTTP (security audit March 2026)
+# ============================================================================
+# try:
+#     from routes.db_migration_routes import register_db_migration_routes
+#     register_db_migration_routes(
+#         app=app,
+#         get_db=get_db,
+#         get_current_user=get_current_user
+#     )
+#     logger.info("✅ DB migration routes loaded")
+# except Exception as e:
+#     logger.error(f"❌ DB migration routes failed to load: {e}")
+#     import traceback
+#     traceback.print_exc()
+
+# ============================================================================
+# EXPERIMENTAL MODULE ROUTES
+# ARCHIVED: Experimental modules frozen - no SLA (March 2026)
+# ============================================================================
+# try:
+#     from routes.decision_lab_routes import register_decision_lab_routes
+#     register_decision_lab_routes(app=app, get_db=get_db, get_current_user=get_current_user)
+#     logger.info("✅ Decision Lab routes loaded")
+# except Exception as e:
+#     logger.error(f"❌ Decision Lab routes failed to load: {e}")
+#
+# try:
+#     from routes.circle_of_cashflow_routes import register_circle_of_cashflow_routes
+#     register_circle_of_cashflow_routes(app=app, get_db=get_db, get_current_user=get_current_user)
+#     logger.info("✅ Circle of Cashflow routes loaded")
+# except Exception as e:
+#     logger.error(f"❌ Circle of Cashflow routes failed to load: {e}")
+#
+# try:
+#     from routes.hr_management_routes import register_hr_management_routes
+#     register_hr_management_routes(app=app, get_db=get_db, get_current_user=get_current_user)
+#     logger.info("✅ HR Management routes loaded")
+# except Exception as e:
+#     logger.error(f"❌ HR Management routes failed to load: {e}")
+#
+# try:
+#     from routes.it_helpdesk_routes import register_it_helpdesk_routes
+#     register_it_helpdesk_routes(app=app, get_db=get_db, get_current_user=get_current_user)
+#     logger.info("✅ IT Helpdesk routes loaded")
+# except Exception as e:
+#     logger.error(f"❌ IT Helpdesk routes failed to load: {e}")
+#
+# try:
+#     from routes.avatar_studio_routes import register_avatar_studio_routes
+#     register_avatar_studio_routes(app=app, get_db=get_db, get_current_user=get_current_user)
+#     logger.info("✅ Avatar Studio routes loaded")
+# except Exception as e:
+#     logger.error(f"❌ Avatar Studio routes failed to load: {e}")
 
 # ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
@@ -1387,6 +1514,15 @@ async def startup_event():
         cms_session.close()
     except Exception as e:
         logger.debug(f"SOC 2 deployment record skipped: {e}")
+
+    # Post-startup route health check
+    critical_paths = ["/api/v1/leads", "/api/v1/loans", "/api/v1/pipeline", "/api/v1/auth", "/api/v1/ai"]
+    registered_paths = [route.path for route in app.routes if hasattr(route, 'path')]
+    missing = [p for p in critical_paths if not any(p in rp for rp in registered_paths)]
+    if missing:
+        logger.error(f"CRITICAL: Missing route registrations: {missing}")
+    else:
+        logger.info(f"✅ All {len(critical_paths)} critical route groups verified")
 
 
 def _run_critical_schema_migrations():

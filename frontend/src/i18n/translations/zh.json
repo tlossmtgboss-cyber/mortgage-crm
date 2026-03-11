@@ -1,0 +1,78 @@
+{
+  "booking": {
+    "loading": "\u52a0\u8f7d\u4e2d...",
+    "unavailable": "\u9884\u7ea6\u4e0d\u53ef\u7528",
+    "poweredBy": "\u6280\u672f\u652f\u6301",
+    "scheduleAppointment": "\u9884\u7ea6\u4f1a\u8bae",
+    "errorSelectDateTime": "\u8bf7\u9009\u62e9\u65e5\u671f\u548c\u65f6\u95f4\u3002",
+    "errorRequiredFields": "\u8bf7\u586b\u5199\u6240\u6709\u5fc5\u586b\u5b57\u6bb5\u3002",
+    "errorVerification": "\u8bf7\u5b8c\u6210\u9a8c\u8bc1\u3002",
+    "errorBookingFailed": "\u65e0\u6cd5\u5b8c\u6210\u60a8\u7684\u9884\u7ea6\u3002\u8bf7\u91cd\u8bd5\u6216\u8054\u7cfb\u6211\u4eec\u83b7\u53d6\u5e2e\u52a9\u3002",
+    "errorCancelFailed": "\u65e0\u6cd5\u53d6\u6d88\u9884\u7ea6\u3002\u8bf7\u91cd\u8bd5\u6216\u8054\u7cfb\u6211\u4eec\u83b7\u53d6\u5e2e\u52a9\u3002",
+    "errorCancelRetry": "\u65e0\u6cd5\u53d6\u6d88\u9884\u7ea6\u3002\u8bf7\u91cd\u8bd5\u3002",
+    "errorLinkNotAvailable": "\u6b64\u9884\u7ea6\u94fe\u63a5\u4e0d\u53ef\u7528\u3002",
+    "errorLoadFailed": "\u65e0\u6cd5\u52a0\u8f7d\u9884\u7ea6\u9875\u9762\u3002",
+    "errorConnectFailed": "\u65e0\u6cd5\u8fde\u63a5\u5230\u9884\u7ea6\u670d\u52a1\u3002",
+    "errorPhoneInvalid": "\u8bf7\u8f93\u5165\u6709\u6548\u7684\u7f8e\u56fd\u7535\u8bdd\u53f7\u7801\uff0c\u4f8b\u5982 (555) 123-4567"
+  },
+  "datetime": {
+    "pickDate": "\u9009\u62e9\u65e5\u671f",
+    "pickTime": "\u9009\u62e9\u65f6\u95f4",
+    "timeSubtitle": "\u9009\u62e9\u60a8\u5e0c\u671b\u7684\u65f6\u95f4\u3002\u53ef\u968f\u65f6\u91cd\u65b0\u5b89\u6392\u3002",
+    "noTimes": "\u6ca1\u6709\u53ef\u7528\u65f6\u95f4",
+    "previousWeek": "\u4e0a\u4e00\u5468",
+    "nextWeek": "\u4e0b\u4e00\u5468",
+    "selectType": "\u9009\u62e9\u9884\u7ea6\u7c7b\u578b",
+    "next": "\u4e0b\u4e00\u6b65",
+    "phoneCall": "\u7535\u8bdd",
+    "videoCall": "\u89c6\u9891\u901a\u8bdd",
+    "min": "\u5206\u949f"
+  },
+  "form": {
+    "back": "\u8fd4\u56de",
+    "title": "\u8bf7\u544a\u8bc9\u6211\u4eec\u4e00\u4e9b\u5173\u4e8e\u60a8\u7684\u4fe1\u606f",
+    "firstName": "\u540d",
+    "lastName": "\u59d3",
+    "email": "\u7535\u5b50\u90ae\u4ef6",
+    "phone": "\u7535\u8bdd",
+    "phonePlaceholder": "(   )    -",
+    "phoneHint": "\u6211\u4eec\u53ef\u80fd\u4f1a\u5c31\u60a8\u7684\u9884\u7ea6\u4e8b\u5b9c\u7ed9\u60a8\u6253\u7535\u8bdd\u6216\u53d1\u77ed\u4fe1\u3002",
+    "notes": "\u5907\u6ce8\uff08\u53ef\u9009\uff09",
+    "notesPlaceholder": "\u8fd8\u6709\u5176\u4ed6\u65f6\u95f4\u53ef\u4ee5\u5417\uff1f\u6709\u4ec0\u4e48\u5177\u4f53\u8bdd\u9898\u8981\u8ba8\u8bba\u5417\uff1f",
+    "workingWithLO": "\u60a8\u76ee\u524d\u662f\u5426\u6b63\u5728\u4e0e\u8d37\u6b3e\u4e13\u5458\u5408\u4f5c\uff1f",
+    "yes": "\u662f",
+    "no": "\u5426",
+    "scheduling": "\u6b63\u5728\u5b89\u6392...",
+    "scheduleAppointment": "\u9884\u7ea6",
+    "required": "*"
+  },
+  "confirmation": {
+    "title": "\u60a8\u7684\u8bf7\u6c42\u5df2\u63d0\u4ea4",
+    "subtitle": "\u6211\u4eec\u5c06\u5c1d\u8bd5\u5b89\u6392\u60a8\u7684\u9884\u7ea6\u3002\u786e\u8ba4\u65f6\u95f4\u540e\uff0c\u60a8\u5c06\u6536\u5230\u7535\u5b50\u90ae\u4ef6\u901a\u77e5\u3002",
+    "details": "\u9884\u7ea6\u8be6\u60c5",
+    "date": "\u65e5\u671f\uff1a",
+    "time": "\u65f6\u95f4\uff1a",
+    "type": "\u7c7b\u578b\uff1a",
+    "format": "\u683c\u5f0f\uff1a",
+    "videoCall": "\u89c6\u9891\u901a\u8bdd",
+    "phoneCall": "\u7535\u8bdd",
+    "goHome": "\u8fd4\u56de\u9996\u9875",
+    "cancelAppointment": "\u53d6\u6d88\u9884\u7ea6",
+    "yesCancel": "\u662f\u7684\uff0c\u53d6\u6d88",
+    "cancelling": "\u53d6\u6d88\u4e2d...",
+    "nevermind": "\u6ca1\u5173\u7cfb"
+  },
+  "cancelled": {
+    "title": "\u9884\u7ea6\u5df2\u53d6\u6d88",
+    "subtitle": "\u60a8\u7684\u9884\u7ea6\u5df2\u6210\u529f\u53d6\u6d88\u3002\u60a8\u53ef\u4ee5\u968f\u65f6\u9884\u7ea6\u65b0\u7684\u65f6\u95f4\u3002",
+    "bookNew": "\u9884\u7ea6\u65b0\u65f6\u95f4"
+  },
+  "language": {
+    "label": "\u8bed\u8a00",
+    "en": "English",
+    "es": "Espa\u00f1ol",
+    "zh": "\u4e2d\u6587",
+    "vi": "Ti\u1ebfng Vi\u1ec7t",
+    "ko": "\ud55c\uad6d\uc5b4"
+  }
+}

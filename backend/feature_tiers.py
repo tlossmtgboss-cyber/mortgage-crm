@@ -59,14 +59,13 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "referral_partners": FeatureTier.CORE,
     "rate_monitor": FeatureTier.CORE,
     "recruiting": FeatureTier.CORE,
+    # Promoted from PREMIUM to CORE - enterprise table stakes (March 2026)
+    "salesforce_sync": FeatureTier.CORE,
+    "encompass_sync": FeatureTier.CORE,
 
     # PREMIUM - maintained when resources allow
     "microsite_builder": FeatureTier.PREMIUM,
     "video_meetings": FeatureTier.PREMIUM,
-
-    # DEFERRED - parked until platform is stable
-    "salesforce_sync": FeatureTier.PREMIUM,
-    "encompass_sync": FeatureTier.PREMIUM,
 
     # EXPERIMENTAL - frozen, no SLA, not exposed to production orgs
     "avatar_studio": FeatureTier.EXPERIMENTAL,

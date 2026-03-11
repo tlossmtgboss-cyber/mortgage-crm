@@ -7,10 +7,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { getAuthHeaders } from '../utils/auth';
+import api from '../services/api';
 import './CalendarManagement.css';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const CalendarManagement = () => {
   const [assignments, setAssignments] = useState([]);
@@ -31,17 +29,17 @@ const CalendarManagement = () => {
     setLoading(true);
     try {
       const [assignmentsRes, purposesRes, usersRes, bookingLinksRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/calendar-assignments`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/calendar-assignments/purposes`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/users/with-calendars`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/scheduler/booking-links/all`, { headers: getAuthHeaders() }).catch(() => null)
+        api.get('/api/v1/calendar-assignments'),
+        api.get('/api/v1/calendar-assignments/purposes'),
+        api.get('/api/v1/users/with-calendars'),
+        api.get('/api/v1/scheduler/booking-links/all').catch(() => null)
       ]);
 
-      if (assignmentsRes.ok) setAssignments(await assignmentsRes.json());
-      if (purposesRes.ok) setPurposes(await purposesRes.json());
-      if (usersRes.ok) setUsers(await usersRes.json());
-      if (bookingLinksRes?.ok) {
-        const data = await bookingLinksRes.json();
+      if (assignmentsRes) setAssignments(assignmentsRes.data);
+      if (purposesRes) setPurposes(purposesRes.data);
+      if (usersRes) setUsers(usersRes.data);
+      if (bookingLinksRes) {
+        const data = bookingLinksRes.data;
         setBookingLinks(data.booking_links || []);
       }
     } catch (err) {
@@ -65,24 +63,14 @@ const CalendarManagement = () => {
 
     try {
       if (existing) {
-        const response = await fetch(`${API_BASE}/api/v1/calendar-assignments/${existing.id}`, {
-          method: 'PUT',
-          headers: getAuthHeaders(),
-          body: JSON.stringify(updates)
-        });
-        if (!response.ok) throw new Error('Failed to update assignment');
+        await api.put(`/api/v1/calendar-assignments/${existing.id}`, updates);
       } else {
-        const response = await fetch(`${API_BASE}/api/v1/calendar-assignments`, {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
+        await api.post('/api/v1/calendar-assignments', {
             purpose: purpose,
             purpose_label: purposeInfo?.label || purpose,
             is_active: true,
             ...updates
-          })
-        });
-        if (!response.ok) throw new Error('Failed to create assignment');
+          });
       }
 
       setMessage({ type: 'success', text: 'Calendar assignment saved!' });
@@ -120,10 +108,7 @@ const CalendarManagement = () => {
 
     setSaving(true);
     try {
-      await fetch(`${API_BASE}/api/v1/calendar-assignments/${existing.id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
+      await api.delete(`/api/v1/calendar-assignments/${existing.id}`);
 
       setMessage({ type: 'success', text: 'Assignment cleared' });
       await loadData();

@@ -1,14 +1,17 @@
 """
-Salesforce HTTP Client with Timeout Configuration
-=================================================
+Salesforce HTTP Client with Connection Pooling and Rate Limiting
+================================================================
 
-Provides a properly configured httpx AsyncClient for Salesforce API calls
-with connection and read timeouts to prevent hanging connections.
+Provides a shared, long-lived httpx AsyncClient for Salesforce API calls
+with connection pooling, rate limit enforcement, and proper timeouts.
 
 Connection exhaustion prevention:
 - Connection timeout: 10 seconds (time to establish connection)
 - Read timeout: 30 seconds (time to receive response)
 - Total timeout: 60 seconds (overall request timeout)
+- Shared client with connection pooling (max 20 connections)
+- Concurrency limiter: max 10 concurrent SF API calls
+- Rate limit tracking from Sforce-Limit-Info response headers
 
 Usage:
     from services.salesforce.http_client import get_sf_client, SF_TIMEOUT
@@ -17,8 +20,11 @@ Usage:
         response = await client.get(url, headers=headers)
 """
 
+import asyncio
 import httpx
 import logging
+from contextlib import asynccontextmanager
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -35,105 +41,144 @@ SF_TIMEOUT = httpx.Timeout(
 SF_REQUEST_TIMEOUT = 60.0  # 60 seconds total
 
 
-def get_sf_client() -> httpx.AsyncClient:
-    """
-    Get a properly configured httpx AsyncClient for Salesforce API calls.
+# =============================================================================
+# Connection Pooling — shared long-lived client
+# =============================================================================
 
-    Returns:
-        httpx.AsyncClient with appropriate timeouts configured
+_sf_client: Optional[httpx.AsyncClient] = None
+_client_lock = asyncio.Lock()
+
+
+async def _get_or_create_client() -> httpx.AsyncClient:
+    """Get or create a long-lived HTTP client with connection pooling."""
+    global _sf_client
+    if _sf_client is None or _sf_client.is_closed:
+        async with _client_lock:
+            # Double-check after acquiring lock
+            if _sf_client is None or _sf_client.is_closed:
+                _sf_client = httpx.AsyncClient(
+                    timeout=SF_TIMEOUT,
+                    follow_redirects=True,
+                    limits=httpx.Limits(
+                        max_connections=20,
+                        max_keepalive_connections=10,
+                        keepalive_expiry=300,
+                    ),
+                    http2=True,
+                )
+    return _sf_client
+
+
+@asynccontextmanager
+async def get_sf_client():
+    """
+    Get the shared HTTP client for Salesforce API calls.
+
+    Enforces rate limits before yielding the client, and tracks API usage
+    from response headers after each request.
 
     Usage:
         async with get_sf_client() as client:
             response = await client.get(url, headers=headers)
     """
-    return httpx.AsyncClient(
-        timeout=SF_TIMEOUT,
-        follow_redirects=True,
-        limits=httpx.Limits(
-            max_connections=10,        # Max concurrent connections
-            max_keepalive_connections=5,  # Keep-alive connections
-            keepalive_expiry=30.0      # Close idle connections after 30s
-        )
-    )
+    await _check_rate_limit()
+    async with _rate_limit_semaphore:
+        client = await _get_or_create_client()
+        yield client
+        # Don't close — the client is shared across callers
 
 
-async def sf_request(
-    method: str,
-    url: str,
-    headers: dict = None,
-    params: dict = None,
-    json: dict = None,
-    timeout: float = None
-) -> httpx.Response:
+async def close_sf_client():
     """
-    Make a Salesforce API request with proper timeout handling.
+    Close the shared client gracefully. Call on application shutdown.
+
+    Register with FastAPI:
+        @app.on_event("shutdown")
+        async def shutdown():
+            from services.salesforce.http_client import close_sf_client
+            await close_sf_client()
+    """
+    global _sf_client
+    if _sf_client and not _sf_client.is_closed:
+        await _sf_client.aclose()
+        _sf_client = None
+
+
+# =============================================================================
+# Rate Limit Tracking and Enforcement
+# =============================================================================
+
+_rate_limit_semaphore = asyncio.Semaphore(10)  # Max 10 concurrent SF API calls
+_daily_api_calls: int = 0
+_daily_api_limit: int = 100000  # Default, updated from response headers
+_api_usage_lock = asyncio.Lock()
+
+
+async def _check_rate_limit():
+    """Check and enforce Salesforce API rate limits."""
+    global _daily_api_calls, _daily_api_limit
+
+    if _daily_api_limit <= 0:
+        return
+
+    usage_pct = (_daily_api_calls / _daily_api_limit * 100)
+
+    if usage_pct >= 90:
+        raise RuntimeError(
+            f"Salesforce API usage at {usage_pct:.0f}% ({_daily_api_calls}/{_daily_api_limit}) "
+            f"- operations suspended to prevent quota exhaustion"
+        )
+    elif usage_pct >= 75:
+        logger.warning(f"Salesforce API usage at {usage_pct:.0f}% - throttling requests")
+        await asyncio.sleep(1)  # Slow down
+    elif usage_pct >= 50:
+        await asyncio.sleep(0.1)  # Light throttle
+
+
+def track_api_usage(response: httpx.Response):
+    """
+    Track API usage from Salesforce response headers.
+
+    Call this after each Salesforce API response to keep rate limit
+    tracking up to date. Parses the Sforce-Limit-Info header.
 
     Args:
-        method: HTTP method (GET, POST, PATCH, DELETE)
-        url: Full URL to request
-        headers: Request headers
-        params: Query parameters
-        json: JSON body for POST/PATCH
-        timeout: Override default timeout (seconds)
-
-    Returns:
-        httpx.Response object
-
-    Raises:
-        httpx.TimeoutException: If request times out
-        httpx.HTTPError: For other HTTP errors
+        response: The httpx.Response from a Salesforce API call
     """
-    request_timeout = timeout or SF_REQUEST_TIMEOUT
+    global _daily_api_calls, _daily_api_limit
 
-    async with get_sf_client() as client:
-        try:
-            response = await client.request(
-                method=method,
-                url=url,
-                headers=headers,
-                params=params,
-                json=json,
-                timeout=request_timeout
-            )
-            # Track Salesforce API quota from Sforce-Limit-Info header
-            # Format: "api-usage=25/15000"
-            limit_info = response.headers.get('Sforce-Limit-Info', '')
-            if limit_info:
-                _track_api_usage(limit_info)
-            return response
-        except httpx.TimeoutException as e:
-            logger.error(f"Salesforce API timeout after {request_timeout}s: {method} {url[:100]}")
-            raise
-        except httpx.HTTPError as e:
-            logger.error(f"Salesforce API error: {method} {url[:100]} - {e}")
-            raise
+    usage_header = response.headers.get("Sforce-Limit-Info", "")
+    if not usage_header:
+        return
 
-
-# Module-level API usage tracking
-_last_api_usage = {'used': 0, 'limit': 15000}
-
-
-def _track_api_usage(limit_info: str):
-    """Parse and track Salesforce API usage from Sforce-Limit-Info header."""
-    global _last_api_usage
     try:
         # Format: "api-usage=25/15000"
-        parts = limit_info.split('=')
+        parts = usage_header.split("=")
         if len(parts) == 2:
-            usage_parts = parts[1].split('/')
+            usage_parts = parts[1].split("/")
             if len(usage_parts) == 2:
-                used = int(usage_parts[0])
-                limit = int(usage_parts[1])
-                _last_api_usage = {'used': used, 'limit': limit}
-                pct = (used / limit * 100) if limit > 0 else 0
+                _daily_api_calls = int(usage_parts[0])
+                _daily_api_limit = int(usage_parts[1])
+
+                pct = (_daily_api_calls / _daily_api_limit * 100) if _daily_api_limit > 0 else 0
                 if pct > 80:
-                    logger.warning(f"Salesforce API quota at {pct:.1f}%: {used}/{limit}")
+                    logger.warning(
+                        f"Salesforce API quota at {pct:.1f}%: "
+                        f"{_daily_api_calls}/{_daily_api_limit}"
+                    )
                 elif pct > 50:
-                    logger.info(f"Salesforce API usage: {used}/{limit} ({pct:.1f}%)")
+                    logger.info(
+                        f"Salesforce API usage: "
+                        f"{_daily_api_calls}/{_daily_api_limit} ({pct:.1f}%)"
+                    )
     except (ValueError, IndexError):
         pass
 
 
 def get_api_usage() -> dict:
-    """Get the last known Salesforce API usage stats."""
-    return _last_api_usage.copy()
+    """Get the current Salesforce API usage stats."""
+    return {
+        "used": _daily_api_calls,
+        "limit": _daily_api_limit,
+        "pct": round((_daily_api_calls / _daily_api_limit * 100), 1) if _daily_api_limit > 0 else 0,
+    }

@@ -76,7 +76,7 @@ class AIAgentService:
         )
 
         # Model configuration
-        self.model = "claude-sonnet-4-20250514"
+        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
         # Tool functions will be registered when processing
         self._tool_functions: Dict[str, Callable] = {}

@@ -22,6 +22,7 @@ This analysis provides:
 
 import sys
 import os
+import logging
 from datetime import datetime
 from typing import Dict, Any, List
 
@@ -29,6 +30,8 @@ from typing import Dict, Any, List
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from services.calculator_service import calculator_service
+
+logger = logging.getLogger(__name__)
 
 
 class AlexScenarioAnalysis:
@@ -68,21 +71,21 @@ class AlexScenarioAnalysis:
     def run_full_analysis(self) -> Dict[str, Any]:
         """Run all calculators and generate complete analysis."""
 
-        print("\n" + "="*70)
-        print("FIRST-TIME HOMEBUYER ANALYSIS: ALEX")
-        print("="*70)
-        print(f"\nGenerated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}")
-        print("\n" + "-"*70)
-        print("YOUR PROFILE")
-        print("-"*70)
-        print(f"Annual Income:        ${self.profile['annual_income']:,.0f}")
-        print(f"Monthly Gross Income: ${self.profile['monthly_income']:,.0f}")
-        print(f"Current Savings:      ${self.profile['savings']:,.0f}")
-        print(f"Monthly Debts:        ${self.profile['total_monthly_debts']:,.0f}")
-        print(f"  - Student Loan:     ${self.profile['monthly_student_loan']:,.0f}")
-        print(f"  - Car Payment:      ${self.profile['monthly_car_payment']:,.0f}")
-        print(f"Credit Score:         ~{self.profile['credit_score']}")
-        print(f"Current Rent:         ~${self.profile['current_rent']:,.0f}/month")
+        logger.info("\n" + "="*70)
+        logger.info("FIRST-TIME HOMEBUYER ANALYSIS: ALEX")
+        logger.info("="*70)
+        logger.info(f"\nGenerated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}")
+        logger.info("\n" + "-"*70)
+        logger.info("YOUR PROFILE")
+        logger.info("-"*70)
+        logger.info(f"Annual Income:        ${self.profile['annual_income']:,.0f}")
+        logger.info(f"Monthly Gross Income: ${self.profile['monthly_income']:,.0f}")
+        logger.info(f"Current Savings:      ${self.profile['savings']:,.0f}")
+        logger.info(f"Monthly Debts:        ${self.profile['total_monthly_debts']:,.0f}")
+        logger.info(f"  - Student Loan:     ${self.profile['monthly_student_loan']:,.0f}")
+        logger.info(f"  - Car Payment:      ${self.profile['monthly_car_payment']:,.0f}")
+        logger.info(f"Credit Score:         ~{self.profile['credit_score']}")
+        logger.info(f"Current Rent:         ~${self.profile['current_rent']:,.0f}/month")
 
         # Run each analysis
         self.results["comfort_zone"] = self._analyze_comfort_zone()

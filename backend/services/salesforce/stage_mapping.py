@@ -119,3 +119,72 @@ def map_salesforce_stage(sf_stage: str) -> str:
     if not sf_stage:
         return None
     return SALESFORCE_STAGE_MAPPING.get(sf_stage)
+
+
+# Mapping from UPPERCASE LoanStage values to mixed-case LeadStage values.
+# Used when a Salesforce status needs to be mapped to a lead stage instead
+# of a loan stage (e.g., when the record is routed to the leads table).
+_LOAN_STAGE_TO_LEAD_STAGE = {
+    "APPLICATION": "Application",
+    "DISCLOSED": "Disclosed",
+    "PROCESSING": "Disclosed",
+    "SUBMITTED": "Disclosed",
+    "UNDERWRITING": "Disclosed",
+    "UW_RECEIVED": "Disclosed",
+    "CONDITIONAL_APPROVAL": "Disclosed",
+    "APPROVED": "Disclosed",
+    "SUSPENDED": "Disclosed",
+    "CTC": "Disclosed",
+    "CLEAR_TO_CLOSE": "Disclosed",
+    "CLOSING": "Disclosed",
+    "DOCS": "Disclosed",
+    "DOCS_OUT": "Disclosed",
+    "FUNDED": "Closed",
+    "CANCELLED": "Withdrawn",
+    "DENIED": "Does Not Qualify",
+    "DEAD": "Withdrawn",
+    "NURTURE": "Long-Term Nurture",
+    "WITHDRAWN": "Withdrawn",
+    "DOES_NOT_QUALIFY": "Does Not Qualify",
+}
+
+# Additional SF-specific lead statuses not in SALESFORCE_STAGE_MAPPING
+# (standard SF Lead Status values that have no loan-stage equivalent)
+_SF_LEAD_ONLY_STATUSES = {
+    "Open - Not Contacted": "New",
+    "Working - Contacted": "Attempted Contact",
+    "Qualified": "Pre-Qualified",
+    "Pre-Qualified": "Pre-Qualified",
+    "Pre-Approved": "Pre-Approved",
+    "Long-Term Nurture": "Long-Term Nurture",
+    "Closed - Not Converted": "Withdrawn",
+    "Closed Lost": "Withdrawn",
+    "Shipped": "Closed",
+    "Complete": "Closed",
+}
+
+
+def map_salesforce_lead_stage(sf_status: str) -> str:
+    """Map a Salesforce status to a valid CRM LeadStage enum string.
+
+    Uses the canonical SALESFORCE_STAGE_MAPPING as the source of truth,
+    then converts the UPPERCASE LoanStage to the equivalent LeadStage value.
+
+    Falls back to SF-specific lead statuses for values that don't appear
+    in the loan stage mapping (e.g., 'Open - Not Contacted').
+
+    Returns 'New' for unmapped statuses.
+    """
+    if not sf_status:
+        return "New"
+
+    # First check SF-specific lead statuses
+    if sf_status in _SF_LEAD_ONLY_STATUSES:
+        return _SF_LEAD_ONLY_STATUSES[sf_status]
+
+    # Then try the canonical loan stage mapping and convert to lead stage
+    loan_stage = SALESFORCE_STAGE_MAPPING.get(sf_status)
+    if loan_stage:
+        return _LOAN_STAGE_TO_LEAD_STAGE.get(loan_stage, "New")
+
+    return "New"

@@ -29,6 +29,9 @@ _get_current_user = None
 _get_db = None
 
 
+from db import get_db
+
+
 def set_dependencies(user_model, current_user_func, db_func):
     """Set dependencies for this router."""
     global User, _get_current_user, _get_db
@@ -40,12 +43,6 @@ def set_dependencies(user_model, current_user_func, db_func):
 from fastapi import Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-
-
-def get_db():
-    if _get_db is None:
-        raise HTTPException(status_code=500, detail="Database dependency not configured")
-    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):

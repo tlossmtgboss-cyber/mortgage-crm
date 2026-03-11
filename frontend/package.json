@@ -49,6 +49,8 @@
     "start:cra": "react-scripts start",
     "build:cra": "CI=false react-scripts build",
     "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:cra": "react-scripts test",
     "eject": "react-scripts eject",
     "test:e2e": "playwright test",

@@ -690,7 +690,7 @@ class SalesforceAgent(SpecializedAgent):
                 data={
                     "issues": issues,
                     "recommendations": recommendations,
-                    "recent_error_count": len(recent_errors) if 'recent_errors' in dir() else 0,
+                    "recent_error_count": len(recent_errors),
                     "sync_direction": "Salesforce → CRM (inbound only)",
                     "diagnosed_at": datetime.utcnow().isoformat()
                 },
@@ -702,111 +702,208 @@ class SalesforceAgent(SpecializedAgent):
             return ToolResult(success=False, error=str(e))
 
     async def _get_field_mappings(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Get field mappings between Salesforce and CRM"""
+        """Get actual field mappings from the database."""
+        db = self._get_db_session()
+        if not db:
+            return ToolResult(success=False, error="Database session not available")
 
-        # Default field mappings (Salesforce → CRM direction)
-        default_mappings = {
-            "loan": {
-                "mappings": [
-                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
-                    {"sf_field": "Name", "crm_field": "loan_number", "direction": "SF → CRM"},
-                    {"sf_field": "Amount", "crm_field": "loan_amount", "direction": "SF → CRM"},
-                    {"sf_field": "StageName", "crm_field": "status", "direction": "SF → CRM"},
-                    {"sf_field": "Loan_Type__c", "crm_field": "loan_type", "direction": "SF → CRM"},
-                    {"sf_field": "Interest_Rate__c", "crm_field": "interest_rate", "direction": "SF → CRM"},
-                    {"sf_field": "CloseDate", "crm_field": "expected_close_date", "direction": "SF → CRM"},
-                    {"sf_field": "Property_Address__c", "crm_field": "property_address", "direction": "SF → CRM"},
-                ],
-                "sf_object": "Opportunity"
-            },
-            "lead": {
-                "mappings": [
-                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
-                    {"sf_field": "FirstName", "crm_field": "first_name", "direction": "SF → CRM"},
-                    {"sf_field": "LastName", "crm_field": "last_name", "direction": "SF → CRM"},
-                    {"sf_field": "Email", "crm_field": "email", "direction": "SF → CRM"},
-                    {"sf_field": "Phone", "crm_field": "phone", "direction": "SF → CRM"},
-                    {"sf_field": "Company", "crm_field": "company", "direction": "SF → CRM"},
-                    {"sf_field": "Status", "crm_field": "status", "direction": "SF → CRM"},
-                    {"sf_field": "LeadSource", "crm_field": "source", "direction": "SF → CRM"},
-                ],
-                "sf_object": "Lead"
-            },
-            "email": {
-                "mappings": [
-                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
-                    {"sf_field": "Subject", "crm_field": "subject", "direction": "SF → CRM"},
-                    {"sf_field": "Description", "crm_field": "body", "direction": "SF → CRM"},
-                    {"sf_field": "ActivityDate", "crm_field": "sent_at", "direction": "SF → CRM"},
-                    {"sf_field": "FromAddress", "crm_field": "from_address", "direction": "SF → CRM"},
-                    {"sf_field": "ToAddress", "crm_field": "to_address", "direction": "SF → CRM"},
-                ],
-                "sf_object": "Task"
-            },
-            "event": {
-                "mappings": [
-                    {"sf_field": "Id", "crm_field": "salesforce_id", "direction": "SF → CRM"},
-                    {"sf_field": "Subject", "crm_field": "title", "direction": "SF → CRM"},
-                    {"sf_field": "Description", "crm_field": "description", "direction": "SF → CRM"},
-                    {"sf_field": "StartDateTime", "crm_field": "start_time", "direction": "SF → CRM"},
-                    {"sf_field": "EndDateTime", "crm_field": "end_time", "direction": "SF → CRM"},
-                    {"sf_field": "Location", "crm_field": "location", "direction": "SF → CRM"},
-                ],
-                "sf_object": "Event"
-            }
-        }
+        try:
+            from sqlalchemy import text
 
-        entity_type = input_data.get("entity_type")
+            user_id = self._get_user_id()
+            org_id = self.require_org_id()
 
-        if entity_type and entity_type in default_mappings:
+            # Get the user's active Salesforce integration profile
+            profile = db.execute(
+                text("""
+                    SELECT id, user_id FROM integration_profiles
+                    WHERE user_id = :user_id AND provider = 'salesforce'
+                    AND status IN ('connected', 'active')
+                    AND organization_id = :org_id
+                    ORDER BY updated_at DESC LIMIT 1
+                """),
+                {"user_id": user_id, "org_id": org_id}
+            ).fetchone()
+
+            if not profile:
+                return ToolResult(
+                    success=True,
+                    data={
+                        "mappings": [],
+                        "message": "No active Salesforce integration found. Connect your Salesforce account first."
+                    },
+                    message="No active Salesforce integration found"
+                )
+
+            # Build filter for entity_type if provided
+            entity_type = input_data.get("entity_type")
+            params = {"profile_id": profile.id}
+            entity_filter = ""
+            if entity_type:
+                entity_filter = "AND target_entity = :entity_type"
+                params["entity_type"] = entity_type
+
+            # Get live field mappings from database
+            mappings = db.execute(
+                text(f"""
+                    SELECT source_object, source_field, target_entity, target_field,
+                           transform_type, sync_direction, enabled, mapping_category
+                    FROM field_mappings
+                    WHERE integration_profile_id = :profile_id AND enabled = true
+                    {entity_filter}
+                    ORDER BY source_object, source_field
+                """),
+                params
+            ).fetchall()
+
+            # Get stage mapping count for reference
+            stage_mapping_count = 0
+            try:
+                from services.salesforce.stage_mapping import SALESFORCE_STAGE_MAPPING
+                stage_mapping_count = len(SALESFORCE_STAGE_MAPPING)
+            except ImportError:
+                pass
+
+            mapping_list = [
+                {
+                    "source": f"{m.source_object}.{m.source_field}",
+                    "target": f"{m.target_entity}.{m.target_field}",
+                    "transform": m.transform_type,
+                    "direction": m.sync_direction,
+                    "category": m.mapping_category,
+                }
+                for m in mappings
+            ]
+
+            return ToolResult(
+                success=True,
+                data={
+                    "profile_id": profile.id,
+                    "total_mappings": len(mapping_list),
+                    "mappings": mapping_list,
+                    "stage_mapping_count": stage_mapping_count,
+                    "sync_direction": "Salesforce -> CRM (inbound only)",
+                },
+                message=f"Retrieved {len(mapping_list)} field mappings"
+            )
+        except Exception as e:
+            logger.exception("Failed to get field mappings")
+            return ToolResult(success=False, error=f"Failed to get field mappings: {str(e)}")
+
+    async def _update_field_mapping(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
+        """Update a field mapping in the database."""
+        db = self._get_db_session()
+        if not db:
+            return ToolResult(success=False, error="Database session not available")
+
+        try:
+            from sqlalchemy import text
+
+            user_id = self._get_user_id()
+            org_id = self.require_org_id()
+
+            entity_type = input_data.get("entity_type")
+            crm_field = input_data.get("crm_field")
+            salesforce_field = input_data.get("salesforce_field")
+
+            if not entity_type or not crm_field or not salesforce_field:
+                return ToolResult(success=False, error="entity_type, crm_field, and salesforce_field are required")
+
+            # Find the user's active Salesforce profile
+            profile = db.execute(
+                text("""
+                    SELECT id FROM integration_profiles
+                    WHERE user_id = :user_id AND provider = 'salesforce'
+                    AND status IN ('connected', 'active')
+                    AND organization_id = :org_id
+                    ORDER BY updated_at DESC LIMIT 1
+                """),
+                {"user_id": user_id, "org_id": org_id}
+            ).fetchone()
+
+            if not profile:
+                return ToolResult(success=False, error="No active Salesforce integration found")
+
+            # Find the existing mapping by target entity and field
+            mapping = db.execute(
+                text("""
+                    SELECT id, source_object, source_field, target_entity, target_field
+                    FROM field_mappings
+                    WHERE integration_profile_id = :profile_id
+                    AND target_entity = :entity_type
+                    AND target_field = :crm_field
+                """),
+                {"profile_id": profile.id, "entity_type": entity_type, "crm_field": crm_field}
+            ).fetchone()
+
+            if mapping:
+                # Update the source field mapping
+                db.execute(
+                    text("""
+                        UPDATE field_mappings
+                        SET source_field = :sf_field, updated_at = NOW()
+                        WHERE id = :mapping_id
+                    """),
+                    {"sf_field": salesforce_field, "mapping_id": mapping.id}
+                )
+                db.commit()
+                action = "updated"
+            else:
+                # Create a new mapping
+                db.execute(
+                    text("""
+                        INSERT INTO field_mappings (
+                            integration_profile_id, source_object, source_field,
+                            target_entity, target_field, transform_type,
+                            sync_direction, enabled, created_at, updated_at
+                        ) VALUES (
+                            :profile_id, :source_object, :sf_field,
+                            :entity_type, :crm_field, 'direct',
+                            'inbound', true, NOW(), NOW()
+                        )
+                    """),
+                    {
+                        "profile_id": profile.id,
+                        "source_object": "MtgPlanner_CRM__Transaction_Property__c",
+                        "sf_field": salesforce_field,
+                        "entity_type": entity_type,
+                        "crm_field": crm_field,
+                    }
+                )
+                db.commit()
+                action = "created"
+
+            self.audit_log(
+                action="update_field_mapping",
+                entity_type="field_mapping",
+                details={
+                    "entity_type": entity_type,
+                    "crm_field": crm_field,
+                    "salesforce_field": salesforce_field,
+                    "organization_id": org_id,
+                    "action": action,
+                }
+            )
+
             return ToolResult(
                 success=True,
                 data={
                     "entity_type": entity_type,
-                    "sync_direction": "Salesforce → CRM (inbound only)",
-                    **default_mappings[entity_type]
+                    "crm_field": crm_field,
+                    "salesforce_field": salesforce_field,
+                    "action": action,
+                    "sync_direction": "Salesforce -> CRM",
+                    "updated_at": datetime.utcnow().isoformat()
                 },
-                message=f"Retrieved {len(default_mappings[entity_type]['mappings'])} field mappings for {entity_type}"
+                message=f"Mapping {action}: SF:{salesforce_field} -> CRM:{crm_field}"
             )
-
-        return ToolResult(
-            success=True,
-            data={
-                "entity_types": list(default_mappings.keys()),
-                "mappings": default_mappings,
-                "sync_direction": "Salesforce → CRM (inbound only)",
-                "total_mappings": sum(len(m["mappings"]) for m in default_mappings.values())
-            },
-            message=f"Retrieved field mappings for {len(default_mappings)} entity types"
-        )
-
-    async def _update_field_mapping(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
-        """Update a field mapping (inbound direction only)"""
-        org_id = self.require_org_id()
-
-        self.audit_log(
-            action="update_field_mapping",
-            entity_type="field_mapping",
-            details={
-                "entity_type": input_data["entity_type"],
-                "crm_field": input_data["crm_field"],
-                "salesforce_field": input_data["salesforce_field"],
-                "organization_id": org_id,
-            }
-        )
-
-        return ToolResult(
-            success=True,
-            data={
-                "entity_type": input_data["entity_type"],
-                "crm_field": input_data["crm_field"],
-                "salesforce_field": input_data["salesforce_field"],
-                "organization_id": org_id,
-                "sync_direction": "Salesforce → CRM",
-                "updated_at": datetime.utcnow().isoformat()
-            },
-            message=f"Updated mapping: SF:{input_data['salesforce_field']} → CRM:{input_data['crm_field']}"
-        )
+        except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            logger.exception("Failed to update field mapping")
+            return ToolResult(success=False, error=f"Failed to update mapping: {str(e)}")
 
     async def _test_salesforce_connection(self, input_data: Dict[str, Any], context: AgentContext) -> ToolResult:
         """Test Salesforce connection"""

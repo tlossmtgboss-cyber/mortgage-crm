@@ -18,11 +18,15 @@ Usage:
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# Default buffer minutes when no scheduler config is found
+_DEFAULT_BUFFER_BEFORE = 5
+_DEFAULT_BUFFER_AFTER = 5
 
 
 def assign_loan_officer(
@@ -108,13 +112,23 @@ def _assign_direct(candidate_ids: List[int]) -> Optional[int]:
 
 
 def _assign_round_robin(db: Session, org_id: int, candidate_ids: List[int]) -> Optional[int]:
-    """Round-robin: rotate through candidates based on last assignment."""
+    """Round-robin: rotate through candidates based on last assignment.
+
+    Uses SELECT ... FOR UPDATE to prevent race conditions where two concurrent
+    requests read the same last-assigned user and pick the same next LO.
+    The row lock is held until the caller's transaction commits (after the new
+    appointment is inserted), so the next concurrent request will see the
+    updated state.
+    """
     try:
-        # Get the most recently assigned user for this org
+        # Lock the most recent appointment row for this org to serialize
+        # concurrent round-robin reads.  FOR UPDATE blocks other transactions
+        # from reading the same row until this transaction commits.
         last_assigned = db.execute(text(
             "SELECT assigned_user_id FROM scheduler_appointments "
             "WHERE organization_id = :org_id "
-            "ORDER BY created_at DESC LIMIT 1"
+            "ORDER BY created_at DESC LIMIT 1 "
+            "FOR UPDATE"
         ), {"org_id": org_id}).scalar()
 
         if last_assigned and last_assigned in candidate_ids:
@@ -167,35 +181,136 @@ def _assign_availability(db: Session, org_id: int, candidate_ids: List[int],
 
 
 def _assign_load_balanced(db: Session, org_id: int, candidate_ids: List[int]) -> Optional[int]:
-    """Assign to LO with fewest active appointments this week."""
+    """Assign to LO with fewest active appointments this week.
+
+    Uses a single aggregating query with GROUP BY instead of one COUNT per
+    candidate to avoid the N+1 query problem.
+    """
     try:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         week_start = now - timedelta(days=now.weekday())
         week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
         week_end = week_start + timedelta(days=7)
 
-        counts = []
-        for uid in candidate_ids:
-            count = db.execute(text(
-                "SELECT COUNT(*) FROM scheduler_appointments "
-                "WHERE assigned_user_id = :uid AND organization_id = :org_id "
-                "AND scheduled_start >= :start AND scheduled_start < :end_dt "
-                "AND status IN ('booked', 'completed')"
-            ), {"uid": uid, "org_id": org_id, "start": week_start, "end_dt": week_end}).scalar() or 0
-            counts.append((uid, count))
+        # Single query: get appointment counts for ALL candidates at once
+        rows = db.execute(text(
+            "SELECT assigned_user_id, COUNT(*) as cnt "
+            "FROM scheduler_appointments "
+            "WHERE assigned_user_id = ANY(:ids) AND organization_id = :org_id "
+            "AND scheduled_start >= :start AND scheduled_start < :end_dt "
+            "AND status IN ('booked', 'completed') "
+            "GROUP BY assigned_user_id"
+        ), {
+            "ids": candidate_ids, "org_id": org_id,
+            "start": week_start, "end_dt": week_end,
+        }).fetchall()
 
+        # Build a lookup of user_id -> count; candidates with no appointments
+        # won't appear in the result set, so default to 0.
+        count_map = {row[0]: row[1] for row in rows}
+        counts = [(uid, count_map.get(uid, 0)) for uid in candidate_ids]
         counts.sort(key=lambda x: x[1])
+
         return counts[0][0] if counts else None
     except Exception as e:
         logger.error(f"Load balanced assignment failed: {e}")
         return candidate_ids[0] if candidate_ids else None
 
 
+def _get_buffer_minutes(db: Session, org_id: int) -> Tuple[int, int]:
+    """Read buffer_before_minutes and buffer_after_minutes from scheduler_configs.
+
+    Returns (buffer_before, buffer_after) in minutes. Falls back to defaults
+    if no config exists or the table is missing.
+    """
+    try:
+        row = db.execute(text(
+            "SELECT buffer_before_minutes, buffer_after_minutes "
+            "FROM scheduler_configs "
+            "WHERE organization_id = :org_id AND is_active = true "
+            "ORDER BY user_id ASC NULLS FIRST "  # team-level (user_id=NULL) first
+            "LIMIT 1"
+        ), {"org_id": org_id}).first()
+
+        if row:
+            return (
+                row[0] if row[0] is not None else _DEFAULT_BUFFER_BEFORE,
+                row[1] if row[1] is not None else _DEFAULT_BUFFER_AFTER,
+            )
+    except Exception as e:
+        logger.debug(f"Could not read scheduler_configs buffer settings: {e}")
+
+    return (_DEFAULT_BUFFER_BEFORE, _DEFAULT_BUFFER_AFTER)
+
+
+def _get_cross_source_conflicts(
+    db: Session, user_id: int, start_dt: datetime, end_dt: datetime, org_id: int
+) -> List[Tuple[datetime, datetime]]:
+    """Gather busy time blocks from all calendar sources for a user.
+
+    Checks:
+      1. scheduler_appointments (canonical v2 table)
+      2. CalendarEvent (manual calendar entries)
+      3. CRMCalendarEvent (Salesforce-synced events)
+
+    Returns a list of (start, end) tuples representing occupied time.
+    """
+    conflicts: List[Tuple[datetime, datetime]] = []
+
+    # Source 1: scheduler_appointments (canonical)
+    try:
+        rows = db.execute(text(
+            "SELECT scheduled_start, scheduled_end FROM scheduler_appointments "
+            "WHERE assigned_user_id = :uid AND organization_id = :org_id "
+            "AND status IN ('booked', 'tentative', 'completed') "
+            "AND scheduled_start <= :end_dt AND scheduled_end >= :start_dt"
+        ), {"uid": user_id, "org_id": org_id, "start_dt": start_dt, "end_dt": end_dt}).fetchall()
+        for r in rows:
+            if r[0] and r[1]:
+                conflicts.append((r[0], r[1]))
+    except Exception as e:
+        logger.debug(f"scheduler_appointments cross-source check failed: {e}")
+
+    # Source 2: CalendarEvent (manual calendar entries)
+    try:
+        rows = db.execute(text(
+            "SELECT start_time, end_time FROM calendar_events "
+            "WHERE user_id = :uid AND organization_id = :org_id "
+            "AND status != 'cancelled' "
+            "AND start_time <= :end_dt AND end_time >= :start_dt"
+        ), {"uid": user_id, "org_id": org_id, "start_dt": start_dt, "end_dt": end_dt}).fetchall()
+        for r in rows:
+            if r[0] and r[1]:
+                conflicts.append((r[0], r[1]))
+    except Exception as e:
+        logger.debug(f"CalendarEvent cross-source check unavailable: {e}")
+
+    # Source 3: CRMCalendarEvent (Salesforce-synced events)
+    try:
+        rows = db.execute(text(
+            "SELECT start_at, end_at FROM crm_calendar_events "
+            "WHERE owner_user_id = :uid AND organization_id = :org_id "
+            "AND status != 'canceled' "
+            "AND start_at <= :end_dt AND end_at >= :start_dt"
+        ), {"uid": user_id, "org_id": org_id, "start_dt": start_dt, "end_dt": end_dt}).fetchall()
+        for r in rows:
+            if r[0] and r[1]:
+                conflicts.append((r[0], r[1]))
+    except Exception as e:
+        logger.debug(f"CRMCalendarEvent cross-source check unavailable: {e}")
+
+    return conflicts
+
+
 def _is_lo_available(db: Session, user_id: int, org_id: int,
                      appointment_time: datetime, duration_mins: int = 30) -> bool:
     """
     Check if LO is available at the given time.
-    Checks: daily capacity limit, and direct time conflicts.
+
+    Checks:
+      1. Daily capacity limit from scheduler_resources
+      2. Cross-source time conflicts (scheduler_appointments, CalendarEvent,
+         CRMCalendarEvent) with buffer time from scheduler_configs
     """
     if not appointment_time:
         return True
@@ -221,20 +336,26 @@ def _is_lo_available(db: Session, user_id: int, org_id: int,
         logger.debug(f"LO {user_id} at daily capacity ({today_count}/{max_daily})")
         return False
 
-    # Check direct time conflict
-    appt_end = appointment_time + timedelta(minutes=duration_mins)
-    conflict_count = db.execute(text(
-        "SELECT COUNT(*) FROM scheduler_appointments "
-        "WHERE assigned_user_id = :uid AND organization_id = :org_id "
-        "AND status IN ('booked', 'completed') "
-        "AND scheduled_start < :end_dt AND scheduled_end > :start"
-    ), {
-        "uid": user_id, "org_id": org_id,
-        "start": appointment_time, "end_dt": appt_end
-    }).scalar() or 0
+    # Read org buffer settings
+    buffer_before, buffer_after = _get_buffer_minutes(db, org_id)
 
-    if conflict_count > 0:
-        logger.debug(f"LO {user_id} has conflict at {appointment_time}")
-        return False
+    # Build the search window (appointment time +/- buffer) to gather all
+    # potentially overlapping events from every calendar source.
+    appt_end = appointment_time + timedelta(minutes=duration_mins)
+    search_start = appointment_time - timedelta(minutes=buffer_before)
+    search_end = appt_end + timedelta(minutes=buffer_after)
+
+    conflicts = _get_cross_source_conflicts(db, user_id, search_start, search_end, org_id)
+
+    # Check each conflict with buffer applied around the *busy* block
+    for busy_start, busy_end in conflicts:
+        buffered_start = busy_start - timedelta(minutes=buffer_before)
+        buffered_end = busy_end + timedelta(minutes=buffer_after)
+        if appointment_time < buffered_end and appt_end > buffered_start:
+            logger.debug(
+                f"LO {user_id} has cross-source conflict at {appointment_time} "
+                f"(busy {busy_start}-{busy_end}, buffer {buffer_before}/{buffer_after}min)"
+            )
+            return False
 
     return True

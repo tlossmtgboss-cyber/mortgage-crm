@@ -737,7 +737,7 @@ def print_extraction_report(result: Dict[str, Any]) -> None:
     Args:
         result: Dict from process_transcript_and_create_lead()
     """
-    print(format_extraction_report(result))
+    logger.info(format_extraction_report(result))
 
 
 # CLI entry point

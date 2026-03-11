@@ -14,28 +14,22 @@ from sqlalchemy import text
 
 from utils.responses import success_response, error_response
 from sqlalchemy.exc import SQLAlchemyError
+from db import get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/hubspot", tags=["hubspot"])
 
 # Dependency injection placeholders
-_get_db: Optional[Callable] = None
 _get_current_user: Optional[Callable] = None
 
 
 def set_dependencies(get_db_func: Callable, get_current_user_func: Callable):
-    """Set dependencies at runtime from main.py."""
-    global _get_db, _get_current_user
-    _get_db = get_db_func
+    """Set dependencies at runtime from main.py.
+    get_db_func is accepted for API compatibility but ignored; get_db is imported from db.py.
+    """
+    global _get_current_user
     _get_current_user = get_current_user_func
-
-
-def get_db():
-    """Get database session - wrapper that works at request time."""
-    if _get_db is None:
-        raise HTTPException(status_code=500, detail="Database dependency not configured")
-    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):

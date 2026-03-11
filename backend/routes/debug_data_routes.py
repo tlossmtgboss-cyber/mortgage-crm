@@ -16,6 +16,8 @@ import asyncio
 import requests
 from utils.pii_mask import mask_email
 
+from auth.dependencies import require_auth
+
 logger = logging.getLogger(__name__)
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
@@ -40,7 +42,7 @@ def register_debug_data_routes(
     from schemas.core import ErrorFixRequest, MicrosoftSyncSettings
     from services.dre_helpers import get_entity_name, create_milestone_tasks
 
-    @app.get("/api/v1/debug/email-sync-status")
+    @app.get("/api/v1/debug/email-sync-status", dependencies=[Depends(require_auth)])
     async def email_sync_status(
         current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
@@ -125,7 +127,7 @@ def register_debug_data_routes(
                 "error": "Internal server error"
             }
 
-    @app.post("/api/v1/create-sample-tasks")
+    @app.post("/api/v1/create-sample-tasks", dependencies=[Depends(require_auth)])
     async def create_sample_tasks(
         current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db)
@@ -253,7 +255,7 @@ def register_debug_data_routes(
                 "error": "Internal server error"
             }
 
-    @app.post("/api/v1/auto-fix-error")
+    @app.post("/api/v1/auto-fix-error", dependencies=[Depends(require_auth)])
     async def auto_fix_error(
         request: ErrorFixRequest,
         current_user: User = Depends(get_current_user)

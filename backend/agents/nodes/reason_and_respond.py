@@ -31,9 +31,12 @@ logger = logging.getLogger(__name__)
 # MODEL SELECTION
 # =============================================================================
 
-# Models for different complexity levels
-MODEL_HAIKU = "claude-haiku-4-5-20251001"   # Fast for simple queries (~1-2s)
-MODEL_SONNET = "claude-sonnet-4-20250514"   # Full power for complex analysis (~7-8s)
+# Models for different complexity levels — read at point of use to allow runtime changes
+def _model_haiku() -> str:
+    return os.getenv("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5-20251001")   # Fast for simple queries (~1-2s)
+
+def _model_sonnet() -> str:
+    return os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")   # Full power for complex analysis (~7-8s)
 
 
 UNIFIED_SYSTEM_PROMPT = """You are Perennia AI, a mortgage assistant. Be EXTREMELY concise.
@@ -298,7 +301,7 @@ Keep it brief (1-2 sentences max). You're Perennia AI, a helpful mortgage assist
 DO NOT use a canned/scripted response. Be natural and human."""
 
             greeting_response_obj = anthropic_client.messages.create(
-                model=MODEL_HAIKU,
+                model=_model_haiku(),
                 max_tokens=150,
                 system=[
                     {
@@ -390,7 +393,7 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         # Use Haiku if: explicit flag set, intent in HAIKU_INTENTS, data not needed (greeting), or data insufficient
         use_haiku = use_haiku_flag or intent_str in HAIKU_INTENTS or intent_str_override in HAIKU_INTENTS or data_quality in ("insufficient", "not_needed")
-        model = MODEL_HAIKU if use_haiku else MODEL_SONNET
+        model = _model_haiku() if use_haiku else _model_sonnet()
 
         # Token budget: data-heavy intents (priorities, pipeline, leads) need room to list names
         DATA_HEAVY_INTENTS = {"task_management", "pipeline_status", "lead_management", "predictive_analytics"}

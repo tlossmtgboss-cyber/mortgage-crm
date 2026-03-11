@@ -1,64 +1,53 @@
 """
-Calendar Invite Service - Generates RFC 5545 compliant ICS calendar invites
-for Perennia AI video meeting platform.
+Calendar Invite Service (backward-compatibility wrapper)
+
+All ICS generation logic has been consolidated into ``utils.ics_generator``.
+This class delegates to those functions so that existing call sites using
+``calendar_invite_service.generate_ics(...)`` continue to work unchanged.
 """
 
+import base64
 import logging
-import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+from utils.ics_generator import (
+    generate_meeting_ics,
+    generate_meeting_ics_bytes,
+    format_datetime_utc,
+    _escape_ics_text,
+    _fold_line,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class CalendarInviteService:
-    """Generates .ics calendar invite files for video meetings."""
+    """Generates .ics calendar invite files for video meetings.
 
+    This class now delegates to :mod:`utils.ics_generator` for all ICS
+    generation.  It is retained for backward compatibility and for the
+    higher-level ``create_meeting_invite`` and ``attach_ics_to_email``
+    convenience methods.
+    """
+
+    # Kept for any code that references these class attributes directly.
     PRODID = "-//Perennia AI//Video Meeting Platform//EN"
     CALSCALE = "GREGORIAN"
     VERSION = "2.0"
 
-    def _escape_ics_text(self, text: str) -> str:
-        """Escape special characters per RFC 5545 Section 3.3.11.
+    # Expose the consolidated helpers as instance methods for backward compat.
+    @staticmethod
+    def _escape_ics_text(text: str) -> str:
+        return _escape_ics_text(text)
 
-        Backslashes must be escaped first to avoid double-escaping.
-        Commas, semicolons, and newlines all require escaping in TEXT values.
-        """
-        if not text:
-            return ""
-        text = text.replace("\\", "\\\\")
-        text = text.replace(";", "\\;")
-        text = text.replace(",", "\\,")
-        text = text.replace("\r\n", "\\n")
-        text = text.replace("\r", "\\n")
-        text = text.replace("\n", "\\n")
-        return text
+    @staticmethod
+    def _format_datetime(dt: datetime) -> str:
+        return format_datetime_utc(dt)
 
-    def _format_datetime(self, dt: datetime) -> str:
-        """Format a datetime as an ICS UTC timestamp (YYYYMMDDTHHMMSSZ)."""
-        return dt.strftime("%Y%m%dT%H%M%SZ")
-
-    def _fold_line(self, line: str) -> str:
-        """Fold long lines per RFC 5545 Section 3.1.
-
-        Content lines should be no longer than 75 octets. Lines that exceed
-        this limit are folded by inserting a CRLF followed by a single
-        whitespace character.
-        """
-        if len(line.encode("utf-8")) <= 75:
-            return line
-        result = []
-        current = ""
-        for char in line:
-            test = current + char
-            if len(test.encode("utf-8")) > 75 if not result else len(test.encode("utf-8")) > 74:
-                result.append(current)
-                current = char
-            else:
-                current = test
-        if current:
-            result.append(current)
-        return "\r\n ".join(result)
+    @staticmethod
+    def _fold_line(line: str) -> str:
+        return _fold_line(line)
 
     def generate_ics(
         self,
@@ -75,80 +64,20 @@ class CalendarInviteService:
     ) -> str:
         """Generate an ICS calendar invite string following RFC 5545.
 
-        Args:
-            meeting_name: Title/summary of the meeting.
-            description: Meeting description or agenda text.
-            start_time: Meeting start in UTC.
-            end_time: Meeting end in UTC.
-            organizer_email: Email address of the organizer.
-            organizer_name: Display name of the organizer.
-            attendees: List of dicts with "email" and "name" keys.
-            join_url: Video meeting join URL.
-            location: Optional physical or virtual location string.
-            uid: Optional unique event identifier. Generated if not provided.
-
-        Returns:
-            The complete ICS file content as a string.
+        Delegates to :func:`utils.ics_generator.generate_meeting_ics`.
         """
-        if uid is None:
-            uid = f"{uuid.uuid4()}@perenniaai.com"
-
-        dtstamp = self._format_datetime(datetime.utcnow())
-        dtstart = self._format_datetime(start_time)
-        dtend = self._format_datetime(end_time)
-
-        escaped_name = self._escape_ics_text(meeting_name)
-        escaped_description = self._escape_ics_text(description)
-        escaped_organizer = self._escape_ics_text(organizer_name)
-
-        # Build the effective location: prefer explicit location, fall back to join URL
-        effective_location = self._escape_ics_text(location) if location else join_url
-
-        lines = [
-            "BEGIN:VCALENDAR",
-            f"PRODID:{self.PRODID}",
-            f"VERSION:{self.VERSION}",
-            f"CALSCALE:{self.CALSCALE}",
-            "METHOD:REQUEST",
-            "BEGIN:VEVENT",
-            f"UID:{uid}",
-            f"DTSTAMP:{dtstamp}",
-            f"DTSTART:{dtstart}",
-            f"DTEND:{dtend}",
-            f"SUMMARY:{escaped_name}",
-            f"DESCRIPTION:{escaped_description}",
-            f"LOCATION:{effective_location}",
-            f"URL:{join_url}",
-            f"ORGANIZER;CN={escaped_organizer}:mailto:{organizer_email}",
-            "SEQUENCE:0",
-            "STATUS:CONFIRMED",
-            "TRANSP:OPAQUE",
-        ]
-
-        # Add attendees
-        for attendee in attendees:
-            attendee_name = self._escape_ics_text(attendee.get("name", ""))
-            attendee_email = attendee.get("email", "")
-            if attendee_email:
-                lines.append(
-                    f"ATTENDEE;CN={attendee_name};ROLE=REQ-PARTICIPANT;"
-                    f"PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{attendee_email}"
-                )
-
-        # Add a 15-minute reminder alarm
-        lines.extend([
-            "BEGIN:VALARM",
-            "TRIGGER:-PT15M",
-            "ACTION:DISPLAY",
-            f"DESCRIPTION:Reminder: {escaped_name} starts in 15 minutes",
-            "END:VALARM",
-            "END:VEVENT",
-            "END:VCALENDAR",
-        ])
-
-        # Fold long lines and join with CRLF per RFC 5545
-        folded_lines = [self._fold_line(line) for line in lines]
-        return "\r\n".join(folded_lines) + "\r\n"
+        return generate_meeting_ics(
+            meeting_name=meeting_name,
+            description=description,
+            start_time=start_time,
+            end_time=end_time,
+            organizer_email=organizer_email,
+            organizer_name=organizer_name,
+            attendees=attendees,
+            join_url=join_url,
+            location=location,
+            uid=uid,
+        )
 
     def generate_ics_bytes(
         self,
@@ -163,12 +92,11 @@ class CalendarInviteService:
         location: Optional[str] = None,
         uid: Optional[str] = None,
     ) -> bytes:
-        """Generate an ICS calendar invite as bytes for email attachment.
+        """Generate ICS as UTF-8 bytes for email attachment.
 
-        Accepts the same parameters as generate_ics. Returns UTF-8 encoded
-        bytes suitable for attaching to an email message.
+        Delegates to :func:`utils.ics_generator.generate_meeting_ics_bytes`.
         """
-        ics_string = self.generate_ics(
+        return generate_meeting_ics_bytes(
             meeting_name=meeting_name,
             description=description,
             start_time=start_time,
@@ -180,7 +108,6 @@ class CalendarInviteService:
             location=location,
             uid=uid,
         )
-        return ics_string.encode("utf-8")
 
     def create_meeting_invite(
         self,
@@ -189,30 +116,23 @@ class CalendarInviteService:
         attendee_list: List[Dict[str, str]],
         base_url: str,
     ) -> str:
-        """High-level method to generate an ICS invite from a meeting room object.
+        """Generate an ICS invite from a meeting room object.
 
         Args:
-            room: Meeting room object with attributes:
-                - room_name (str): Name of the meeting room / meeting title.
-                - room_description (str): Description or agenda.
-                - scheduled_start (datetime): Start time in UTC.
-                - scheduled_end (datetime): End time in UTC.
-                - room_code (str): Unique room code for the join URL.
-            host_user: User object with attributes:
-                - email (str): Host's email address.
-                - name (str) or first_name/last_name: Host's display name.
-            attendee_list: List of dicts with "email" and "name" keys.
-            base_url: Application base URL (e.g. "https://app.perenniaai.com").
+            room: Meeting room object with ``room_name``, ``room_description``,
+                ``scheduled_start``, ``scheduled_end``, ``room_code``.
+            host_user: User object with ``email`` and ``name`` (or
+                ``first_name``/``last_name``).
+            attendee_list: List of dicts with ``email`` and ``name``.
+            base_url: Application base URL.
 
         Returns:
             The ICS file content as a string.
         """
-        # Build join URL from base_url and room code
         clean_base = base_url.rstrip("/")
         room_code = getattr(room, "room_code", "")
         join_url = f"{clean_base}/meeting/{room_code}"
 
-        # Resolve host name from various possible attribute patterns
         host_name = getattr(host_user, "name", None)
         if not host_name:
             first = getattr(host_user, "first_name", "")
@@ -221,7 +141,6 @@ class CalendarInviteService:
 
         host_email = getattr(host_user, "email", "noreply@perenniaai.com")
 
-        # Build description including the join link
         room_description = getattr(room, "room_description", "") or ""
         description_parts = []
         if room_description:
@@ -229,7 +148,6 @@ class CalendarInviteService:
         description_parts.append(f"Join the meeting: {join_url}")
         full_description = "\n\n".join(description_parts)
 
-        # Generate a stable UID from the room code
         uid = f"{room_code}@perenniaai.com"
 
         return self.generate_ics(
@@ -250,22 +168,16 @@ class CalendarInviteService:
         ics_content: str,
         meeting_name: str,
     ) -> Dict[str, Any]:
-        """Prepare email data with an ICS calendar invite attachment.
+        """Prepare email data with an ICS attachment.
 
         Args:
-            email_html: The HTML body of the email.
-            ics_content: The ICS file content string (from generate_ics).
-            meeting_name: Meeting name used to derive the attachment filename.
+            email_html: HTML body of the email.
+            ics_content: ICS file content string.
+            meeting_name: Meeting name for the attachment filename.
 
         Returns:
-            A dict with email data suitable for use with email_service:
-                - html: The email HTML body.
-                - attachments: List containing the ICS attachment dict with
-                  filename, content (base64), and content_type fields.
+            Dict with ``html`` and ``attachments`` keys.
         """
-        import base64
-
-        # Sanitize meeting name for use as a filename
         safe_name = "".join(
             c if c.isalnum() or c in (" ", "-", "_") else "_"
             for c in meeting_name

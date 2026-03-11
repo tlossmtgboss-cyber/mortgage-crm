@@ -6,10 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
+import api from '../services/api';
 import './BookingLinksManager.css';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const BookingLinksManager = () => {
   const [links, setLinks] = useState([]);
@@ -33,16 +31,15 @@ const BookingLinksManager = () => {
     setError(null);
     try {
       const [linksRes, typesRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/scheduler/booking-links`, { headers: getAuthHeaders() }),
-        fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, { headers: getAuthHeaders() }).catch(() => null),
+        api.get('/api/v1/scheduler/booking-links'),
+        api.get('/api/v1/scheduler/appointment-types').catch(() => null),
       ]);
 
-      if (!linksRes.ok) throw new Error('Failed to load booking links');
-      const linksData = await linksRes.json();
+      const linksData = linksRes.data;
       setLinks(linksData.booking_links || linksData || []);
 
-      if (typesRes?.ok) {
-        const typesData = await typesRes.json();
+      if (typesRes) {
+        const typesData = typesRes.data;
         setAppointmentTypes(typesData.appointment_types || typesData || []);
       }
     } catch (err) {
@@ -148,16 +145,7 @@ const BookingLinksManager = () => {
         payload.slug = generateSlug(payload.link_name);
       }
 
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/booking-links`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.error?.message || 'Failed to create booking link');
-      }
+      await api.post('/api/v1/scheduler/booking-links', payload);
 
       setShowModal(false);
       await loadData();
@@ -170,11 +158,7 @@ const BookingLinksManager = () => {
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/booking-links/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to delete booking link');
+      await api.delete(`/api/v1/scheduler/booking-links/${id}`);
       setDeleteConfirm(null);
       await loadData();
     } catch (err) {

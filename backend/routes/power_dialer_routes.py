@@ -622,10 +622,13 @@ async def remove_from_dnc(
 
 @router.get("/dialer/call-tasks-debug")
 async def get_dialer_call_tasks_debug(
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """Debug endpoint to test AITask query without auth."""
+    """Debug endpoint to test AITask query."""
     import main
+
+    current_user = await main.get_current_user_flexible(request, db)
 
     try:
         # Test basic count

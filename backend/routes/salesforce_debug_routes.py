@@ -2,25 +2,96 @@
 Salesforce Integration - Debug & Diagnostic Routes
 
 Debug endpoints for Salesforce connection testing, token refresh,
-database stats, and diagnostic imports. These are development/admin
-tools and should be access-controlled in production.
+database stats, and diagnostic imports. These are admin-only
+tools with platform admin access required for all endpoints.
+
+SECURITY: All endpoints require platform_admin or site_admin role.
+All database queries are tenant-scoped. PII is masked in responses.
 """
 import logging
 from datetime import datetime
+from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .salesforce_helpers import (
-    get_db, get_current_user_id, decrypt_token,
+    get_db, get_current_user_id, decrypt_token, encrypt_token,
     parse_instance_url_from_scopes,
     _async_get, SALESFORCE_API_VERSION,
 )
+from utils.pii_mask import mask_name
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# =============================================================================
+# Security helpers
+# =============================================================================
+
+def _mask_borrower_name(name: Optional[str]) -> str:
+    """Mask borrower name for safe display in debug output."""
+    if not name:
+        return "***"
+    return mask_name(name)
+
+
+def _sanitize_instance_url(url: Optional[str]) -> Optional[str]:
+    """Truncate instance_url to just the domain (no path/query)."""
+    if not url:
+        return None
+    try:
+        parsed = urlparse(url)
+        return f"{parsed.scheme}://{parsed.hostname}"
+    except Exception:
+        return url[:50] if len(url) > 50 else url
+
+
+def _sanitize_sf_error(response_text: str) -> str:
+    """Sanitize Salesforce API error responses to remove sensitive details."""
+    # Return a generic message; do not leak raw SF API responses
+    if not response_text:
+        return "Salesforce API error"
+    # Only allow safe status/error keywords through
+    lower = response_text.lower()
+    if "invalid_grant" in lower:
+        return "Token expired or invalid - reconnect required"
+    if "invalid_session" in lower or "session expired" in lower:
+        return "Session expired - token refresh needed"
+    if "unauthorized" in lower or "authentication" in lower:
+        return "Authentication failed - check credentials"
+    if "not found" in lower:
+        return "Salesforce object or resource not found"
+    if "request_limit" in lower or "rate limit" in lower:
+        return "Salesforce API rate limit exceeded"
+    return "Salesforce API error - check connection status"
+
+
+async def require_platform_admin(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> dict:
+    """Require platform admin role for debug endpoints.
+
+    Returns dict with user_id and organization_id for tenant scoping.
+    """
+    user_id = get_current_user_id(request, db)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    user = db.execute(
+        text("SELECT role, organization_id FROM users WHERE id = :user_id"),
+        {"user_id": user_id}
+    ).fetchone()
+
+    if not user or user[0] not in ("platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Platform admin access required")
+
+    return {"user_id": user_id, "organization_id": user[1]}
 
 
 # ============ Debug Endpoints ============
@@ -28,14 +99,15 @@ router = APIRouter()
 @router.get("/debug/salesforce-objects")
 async def debug_salesforce_objects(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
 ):
     """
     Debug endpoint to list available Salesforce objects.
+    Requires platform admin access.
     """
-    user_id = get_current_user_id(request, db)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    user_id = admin["user_id"]
+    logger.info(f"Debug endpoint accessed: salesforce-objects by admin user_id={user_id}")
 
     try:
         from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
@@ -56,7 +128,7 @@ async def debug_salesforce_objects(
             )
 
             if response.status_code != 200:
-                return {"error": f"Failed to get objects: {response.text}"}
+                return {"error": _sanitize_sf_error(response.text)}
 
             data = response.json()
             sobjects = data.get('sobjects', [])
@@ -67,7 +139,7 @@ async def debug_salesforce_objects(
 
             return {
                 "status": "success",
-                "instance_url": importer.instance_url,
+                "instance_url": _sanitize_instance_url(importer.instance_url),
                 "total_objects": len(sobjects),
                 "relevant_objects": [{"name": o['name'], "label": o.get('label', '')} for o in relevant],
                 "all_custom_objects": [{"name": o['name'], "label": o.get('label', '')}
@@ -82,14 +154,15 @@ async def debug_salesforce_objects(
 @router.get("/debug/salesforce-query")
 async def debug_salesforce_query(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
 ):
     """
     Debug endpoint to see what Salesforce returns for closed opportunities.
+    Requires platform admin access.
     """
-    user_id = get_current_user_id(request, db)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    user_id = admin["user_id"]
+    logger.info(f"Debug endpoint accessed: salesforce-query by admin user_id={user_id}")
 
     try:
         from scripts.import_salesforce_closed_loans import SalesforceClosedLoansImporter
@@ -116,14 +189,14 @@ async def debug_salesforce_query(
 
         return {
             "status": "success",
-            "instance_url": importer.instance_url,
+            "instance_url": _sanitize_instance_url(importer.instance_url),
             "soql_query": soql,
             "total_opportunities": len(opportunities),
             "stages_found": stages,
             "sample_opportunities": [
                 {
                     "Id": o.get("Id"),
-                    "Name": o.get("Name"),
+                    "Name": _mask_borrower_name(o.get("Name")),
                     "StageName": o.get("StageName"),
                     "Amount": o.get("Amount"),
                     "CloseDate": o.get("CloseDate")
@@ -138,33 +211,54 @@ async def debug_salesforce_query(
 
 
 @router.get("/debug/db-stats")
-async def get_db_stats(db: Session = Depends(get_db)):
+async def get_db_stats(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
+):
     """
-    Debug endpoint to check database state (no auth required).
-    Returns counts and sample data to diagnose import issues.
+    Debug endpoint to check database state.
+    Requires platform admin access. Tenant-scoped.
     """
+    user_id = admin["user_id"]
+    organization_id = admin["organization_id"]
+    logger.info(f"Debug endpoint accessed: db-stats by admin user_id={user_id}")
+
     try:
-        # Count total loans
-        total_loans = db.execute(text("SELECT COUNT(*) FROM loans")).scalar() or 0
+        org_filter = ""
+        params = {}
+        if organization_id:
+            org_filter = "AND l.organization_id = :org_id"
+            params["org_id"] = organization_id
 
-        # Count salesforce loans
+        # Count total loans (tenant-scoped)
+        total_loans = db.execute(text(
+            f"SELECT COUNT(*) FROM loans l WHERE 1=1 {org_filter}"
+        ), params).scalar() or 0
+
+        # Count salesforce loans (tenant-scoped)
         sf_loans = db.execute(text(
-            "SELECT COUNT(*) FROM loans WHERE salesforce_id IS NOT NULL"
-        )).scalar() or 0
+            f"SELECT COUNT(*) FROM loans l WHERE l.salesforce_id IS NOT NULL {org_filter}"
+        ), params).scalar() or 0
 
-        # Count MUM clients
-        mum_clients = db.execute(text("SELECT COUNT(*) FROM mum_clients")).scalar() or 0
+        # Count MUM clients (tenant-scoped via loan join)
+        mum_clients = db.execute(text(f"""
+            SELECT COUNT(DISTINCT m.id) FROM mum_clients m
+            JOIN loans l ON l.loan_number = m.loan_number
+            WHERE 1=1 {org_filter}
+        """), params).scalar() or 0
 
-        # Get sample of recent loans with their stage
-        sample_loans = db.execute(text("""
-            SELECT id, loan_number, borrower_name, stage, salesforce_id, created_at
-            FROM loans
-            ORDER BY created_at DESC
+        # Get sample of recent loans with their stage (tenant-scoped, PII masked)
+        sample_loans = db.execute(text(f"""
+            SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.salesforce_id, l.created_at
+            FROM loans l
+            WHERE 1=1 {org_filter}
+            ORDER BY l.created_at DESC
             LIMIT 10
-        """)).fetchall()
+        """), params).fetchall()
 
-        # Count loans that should be in MUM
-        should_be_mum = db.execute(text("""
+        # Count loans that should be in MUM (tenant-scoped)
+        should_be_mum = db.execute(text(f"""
             SELECT COUNT(*) FROM loans l
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
                    OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
@@ -175,10 +269,11 @@ async def get_db_stats(db: Session = Depends(get_db)):
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number
             )
-        """)).scalar() or 0
+            {org_filter}
+        """), params).scalar() or 0
 
-        # Get details of loans that should be in MUM
-        mum_candidates = db.execute(text("""
+        # Get details of loans that should be in MUM (tenant-scoped, PII masked)
+        mum_candidates = db.execute(text(f"""
             SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date
             FROM loans l
             WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
@@ -190,8 +285,9 @@ async def get_db_stats(db: Session = Depends(get_db)):
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number
             )
+            {org_filter}
             LIMIT 20
-        """)).fetchall()
+        """), params).fetchall()
 
         return {
             "total_loans": total_loans,
@@ -202,7 +298,7 @@ async def get_db_stats(db: Session = Depends(get_db)):
                 {
                     "id": l[0],
                     "loan_number": l[1],
-                    "borrower": l[2],
+                    "borrower": _mask_borrower_name(l[2]),
                     "stage": l[3],
                     "funded_date": str(l[4]) if l[4] else None
                 }
@@ -212,7 +308,7 @@ async def get_db_stats(db: Session = Depends(get_db)):
                 {
                     "id": l[0],
                     "loan_number": l[1],
-                    "borrower": l[2],
+                    "borrower": _mask_borrower_name(l[2]),
                     "stage": l[3],
                     "salesforce_id": l[4],
                     "created_at": str(l[5]) if l[5] else None
@@ -228,13 +324,19 @@ async def get_db_stats(db: Session = Depends(get_db)):
 
 @router.post("/debug/import-closed-loans")
 async def debug_import_closed_loans_from_sf(
+    request: Request,
     limit: int = Query(10, description="Max records to import"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
 ):
     """
-    Debug endpoint to import closed loans from Salesforce to CRM (no auth required).
-    Limited to 10 records by default for testing.
+    Debug endpoint to import closed loans from Salesforce to CRM.
+    Requires platform admin access. Limited to 10 records by default for testing.
     """
+    user_id = admin["user_id"]
+    organization_id = admin["organization_id"]
+    logger.info(f"Debug endpoint accessed: import-closed-loans by admin user_id={user_id}, limit={limit}")
+
     from services.salesforce_sync_service import SalesforceSyncService, SALESFORCE_API_VERSION as SF_API_VER
 
     try:
@@ -248,21 +350,22 @@ async def debug_import_closed_loans_from_sf(
             'imported_loans': []
         }
 
-        # Get Salesforce credentials from integration_profiles (new OAuth)
+        # Get Salesforce credentials scoped to admin's user
         profile = db.execute(text("""
             SELECT id, access_token_encrypted, refresh_token_encrypted, instance_url, user_id
             FROM integration_profiles
             WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
+              AND user_id = :user_id
             ORDER BY updated_at DESC
             LIMIT 1
-        """)).fetchone()
+        """), {"user_id": user_id}).fetchone()
 
         if not profile:
-            return {"status": "error", "message": "No Salesforce integration found"}
+            return {"status": "error", "message": "No Salesforce integration found for your account"}
 
         profile_id = profile[0]
         instance_url = profile[3]
-        user_id = profile[4]
+        profile_user_id = profile[4]
 
         # Get access token - try refresh first since tokens expire frequently
         from services.salesforce.oauth_service import SalesforceOAuthService
@@ -280,7 +383,7 @@ async def debug_import_closed_loans_from_sf(
             except Exception as oauth_err:
                 return {
                     "status": "error",
-                    "message": f"Failed to get Salesforce access token: {oauth_err}",
+                    "message": "Failed to get Salesforce access token",
                     "hint": "Try reconnecting Salesforce in Settings > Integrations"
                 }
 
@@ -315,7 +418,7 @@ async def debug_import_closed_loans_from_sf(
             return {
                 "status": "error",
                 "message": f"Salesforce query failed: {response.status_code}",
-                "details": response.text[:500],
+                "details": _sanitize_sf_error(response.text),
                 "hint": "Token may have expired. Try reconnecting Salesforce."
             }
 
@@ -324,7 +427,7 @@ async def debug_import_closed_loans_from_sf(
         results['sf_records_found'] = len(records)
 
         # Import each record
-        sync_service = SalesforceSyncService(db, user_id=user_id)
+        sync_service = SalesforceSyncService(db, user_id=profile_user_id)
 
         for record in records:
             try:
@@ -351,6 +454,10 @@ async def debug_import_closed_loans_from_sf(
                     'salesforce_last_synced_at': datetime.utcnow(),
                 }
 
+                # Set organization_id for tenant isolation
+                if organization_id:
+                    loan_data['organization_id'] = organization_id
+
                 # Remove None values
                 loan_data = {k: v for k, v in loan_data.items() if v is not None}
 
@@ -361,7 +468,7 @@ async def debug_import_closed_loans_from_sf(
                     results['imported'] += 1
                     results['imported_loans'].append({
                         'loan_id': loan_id,
-                        'borrower': borrower_name,
+                        'borrower': _mask_borrower_name(borrower_name),
                         'sf_id': sf_id
                     })
                 elif action == 'updated':
@@ -370,7 +477,8 @@ async def debug_import_closed_loans_from_sf(
                     results['skipped'] += 1
 
             except Exception as e:
-                results['errors'].append(f"{record.get('Name', 'Unknown')}: {str(e)}")
+                logger.error(f"Error importing SF record {record.get('Name', 'Unknown')}: {e}")
+                results['errors'].append(f"{record.get('Name', 'Unknown')}: Import failed")
                 results['skipped'] += 1
 
         results['status'] = 'success'
@@ -378,7 +486,6 @@ async def debug_import_closed_loans_from_sf(
 
     except Exception as e:
         logger.error(f"Debug import failed: {e}")
-        import traceback
         return {
             "status": "error",
             "error": "Internal server error"
@@ -386,16 +493,30 @@ async def debug_import_closed_loans_from_sf(
 
 
 @router.post("/debug/import-to-mum")
-async def debug_import_to_mum(db: Session = Depends(get_db)):
+async def debug_import_to_mum(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
+):
     """
-    Debug endpoint to import funded loans to MUM (no auth required).
+    Debug endpoint to import funded loans to MUM.
+    Requires platform admin access. Tenant-scoped.
     """
+    user_id = admin["user_id"]
+    organization_id = admin["organization_id"]
+    logger.info(f"Debug endpoint accessed: import-to-mum by admin user_id={user_id}")
+
     try:
         results = {'imported': 0, 'skipped': 0, 'errors': [], 'imported_clients': []}
 
-        # Get funded loans not already in mum_clients
-        # Columns: 0=id, 1=loan_number, 2=borrower_name, 3=email, 4=phone, 5=amount, 6=rate, 7=funded_date, 8=closing_date
-        funded_loans = db.execute(text("""
+        org_filter = ""
+        params = {}
+        if organization_id:
+            org_filter = "AND l.organization_id = :org_id"
+            params["org_id"] = organization_id
+
+        # Get funded loans not already in mum_clients (tenant-scoped)
+        funded_loans = db.execute(text(f"""
             SELECT l.id, l.loan_number, l.borrower_name,
                    l.borrower_email, l.borrower_phone, l.amount, l.rate,
                    l.funded_date, l.closing_date, l.property_address,
@@ -411,9 +532,10 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
                 SELECT 1 FROM mum_clients m
                 WHERE m.loan_number = l.loan_number
             )
-        """)).fetchall()
+            {org_filter}
+        """), params).fetchall()
 
-        logger.info(f"Debug: Found {len(funded_loans)} funded loans to import to MUM clients")
+        logger.info(f"Debug: Found {len(funded_loans)} funded loans to import to MUM clients (admin user_id={user_id})")
 
         for loan in funded_loans:
             try:
@@ -462,11 +584,12 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
                 results['imported'] += 1
                 results['imported_clients'].append({
                     'loan_number': loan[1],
-                    'client_name': client_name
+                    'client_name': _mask_borrower_name(client_name)
                 })
 
             except Exception as e:
-                results['errors'].append(f"Error importing {loan[1]}: {str(e)}")
+                logger.error(f"Error importing loan {loan[1]} to MUM: {e}")
+                results['errors'].append(f"Error importing {loan[1]}: Import failed")
                 try:
                     db.rollback()  # Reset transaction so next insert can proceed
                 except Exception as e2:
@@ -482,32 +605,38 @@ async def debug_import_to_mum(db: Session = Depends(get_db)):
 
 @router.get("/debug/connection")
 async def debug_salesforce_connection(
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
 ):
     """
     Debug endpoint to check Salesforce connection status.
-    No auth required for debugging.
+    Requires platform admin access. Tenant-scoped.
     """
+    user_id = admin["user_id"]
+    logger.info(f"Debug endpoint accessed: connection by admin user_id={user_id}")
+
     result = {"sources_checked": []}
 
     try:
-        # Check new integration_profiles table first (OAuth flow stores here)
+        # Check new integration_profiles table - scoped to admin's user
         profile = db.execute(text("""
             SELECT user_id, status, instance_url, sf_username,
                    CASE WHEN access_token_encrypted IS NOT NULL THEN 'has_token' ELSE 'no_token' END as token_status,
                    updated_at, connected_at
             FROM integration_profiles
             WHERE provider = 'salesforce'
+              AND user_id = :user_id
             ORDER BY updated_at DESC
             LIMIT 1
-        """)).fetchone()
+        """), {"user_id": user_id}).fetchone()
 
         if profile:
             result["integration_profiles"] = {
                 "status": "found",
                 "user_id": profile[0],
                 "connection_status": profile[1],
-                "instance_url": profile[2][:50] if profile[2] else None,
+                "instance_url": _sanitize_instance_url(profile[2]),
                 "sf_username": profile[3],
                 "token_status": profile[4],
                 "updated_at": str(profile[5]) if profile[5] else None,
@@ -517,7 +646,7 @@ async def debug_salesforce_connection(
         else:
             result["integration_profiles"] = {"status": "not_found"}
 
-        # Also check old user_integrations table
+        # Also check old user_integrations table - scoped to admin's user
         integration = db.execute(text("""
             SELECT user_id,
                    CASE WHEN access_token IS NOT NULL THEN 'has_token' ELSE 'no_token' END as token_status,
@@ -525,9 +654,10 @@ async def debug_salesforce_connection(
                    updated_at
             FROM user_integrations
             WHERE provider = 'salesforce'
+              AND user_id = :user_id
             ORDER BY updated_at DESC
             LIMIT 1
-        """)).fetchone()
+        """), {"user_id": user_id}).fetchone()
 
         if integration:
             scopes = integration[2] or ""
@@ -539,7 +669,7 @@ async def debug_salesforce_connection(
                 "status": "found",
                 "user_id": integration[0],
                 "token_status": integration[1],
-                "instance_url": instance_url[:50] if instance_url else None,
+                "instance_url": _sanitize_instance_url(instance_url),
                 "updated_at": str(integration[3]) if integration[3] else None
             }
             result["sources_checked"].append("user_integrations")
@@ -559,6 +689,7 @@ async def debug_salesforce_connection(
         return result
 
     except Exception as e:
+        logger.error(f"Debug connection check failed: {e}")
         return {
             "status": "error",
             "error": "Internal server error"
@@ -567,24 +698,30 @@ async def debug_salesforce_connection(
 
 @router.get("/debug/token-refresh")
 async def debug_token_refresh(
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
 ):
     """
     Debug endpoint to explicitly test token refresh.
-    Shows detailed info about why refresh might fail.
+    Requires platform admin access. Scoped to admin's credentials.
     """
+    user_id = admin["user_id"]
+    logger.info(f"Debug endpoint accessed: token-refresh by admin user_id={user_id}")
+
     try:
-        # Get integration with refresh_token
+        # Get integration scoped to admin's user
         integration = db.execute(text("""
             SELECT access_token, refresh_token, scopes, user_id
             FROM user_integrations
             WHERE provider = 'salesforce' AND access_token IS NOT NULL
+              AND user_id = :user_id
             ORDER BY updated_at DESC
             LIMIT 1
-        """)).fetchone()
+        """), {"user_id": user_id}).fetchone()
 
         if not integration:
-            return {"status": "error", "message": "No Salesforce integration found"}
+            return {"status": "error", "message": "No Salesforce integration found for your account"}
 
         access_token = integration[0]
         refresh_token = integration[1]
@@ -595,7 +732,6 @@ async def debug_token_refresh(
             "access_token_length": len(access_token) if access_token else 0,
             "has_refresh_token": bool(refresh_token),
             "refresh_token_length": len(refresh_token) if refresh_token else 0,
-            "user_id": integration_user_id,
         }
 
         if not refresh_token:
@@ -621,25 +757,9 @@ async def debug_token_refresh(
                     token_to_use = decrypted
                     result["token_was_encrypted"] = True
             except Exception as decrypt_err:
-                result["decrypt_error"] = str(decrypt_err)
                 result["token_was_encrypted"] = False
 
-            # Try refresh with potentially decrypted token
-            # First, try a direct request to see the actual error response
-            import requests as req
-            direct_response = req.post(
-                "https://login.salesforce.com/services/oauth2/token",
-                data={
-                    "grant_type": "refresh_token",
-                    "refresh_token": token_to_use,
-                    "client_id": salesforce_client.client_id,
-                    "client_secret": salesforce_client.client_secret
-                },
-                timeout=30
-            )
-            result["direct_refresh_status"] = direct_response.status_code
-            result["direct_refresh_response"] = direct_response.text[:500]
-
+            # Try refresh via the salesforce client
             new_tokens = salesforce_client.refresh_access_token(token_to_use)
 
             if new_tokens and new_tokens.get("access_token"):
@@ -647,13 +767,26 @@ async def debug_token_refresh(
                 result["refresh_success"] = True
                 result["new_token_length"] = len(new_access_token)
 
+                # Encrypt the new token before storing
+                token_to_store = new_access_token
+                try:
+                    encrypted = encrypt_token(new_access_token)
+                    token_to_store = encrypted
+                    result["token_encrypted_before_storage"] = True
+                except Exception as enc_err:
+                    logger.warning(
+                        f"WARNING: Could not encrypt new access token before storage. "
+                        f"Storing in available format. Error: {enc_err}"
+                    )
+                    result["token_encrypted_before_storage"] = False
+
                 # Update in database
                 db.execute(text("""
                     UPDATE user_integrations
                     SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
                     WHERE user_id = :user_id AND provider = 'salesforce'
                 """), {
-                    "access_token": new_access_token,
+                    "access_token": token_to_store,
                     "user_id": integration_user_id
                 })
                 db.commit()
@@ -666,12 +799,13 @@ async def debug_token_refresh(
 
         except Exception as refresh_error:
             result["status"] = "error"
-            result["refresh_error"] = str(refresh_error)
-            result["message"] = f"Refresh failed: {str(refresh_error)}"
+            result["message"] = "Refresh failed - check server logs for details"
+            logger.error(f"Token refresh failed for user_id={user_id}: {refresh_error}")
 
         return result
 
     except Exception as e:
+        logger.error(f"Debug token-refresh failed: {e}")
         return {
             "status": "error",
             "error": "Internal server error"
@@ -680,25 +814,31 @@ async def debug_token_refresh(
 
 @router.get("/debug/test-query")
 async def debug_test_salesforce_query(
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
 ):
     """
     Debug endpoint to test an actual Salesforce query.
     Includes automatic token refresh on 401 errors.
-    No auth required for debugging.
+    Requires platform admin access. Scoped to admin's credentials.
     """
+    user_id = admin["user_id"]
+    logger.info(f"Debug endpoint accessed: test-query by admin user_id={user_id}")
+
     try:
-        # Get Salesforce integration with refresh_token
+        # Get Salesforce integration scoped to admin's user
         integration = db.execute(text("""
             SELECT access_token, refresh_token, scopes, user_id
             FROM user_integrations
             WHERE provider = 'salesforce' AND access_token IS NOT NULL
+              AND user_id = :user_id
             ORDER BY updated_at DESC
             LIMIT 1
-        """)).fetchone()
+        """), {"user_id": user_id}).fetchone()
 
         if not integration:
-            return {"status": "error", "message": "No Salesforce integration found"}
+            return {"status": "error", "message": "No Salesforce integration found for your account"}
 
         access_token = integration[0]
         refresh_token = integration[1]
@@ -734,13 +874,20 @@ async def debug_test_salesforce_query(
                     access_token = new_tokens["access_token"]
                     token_refreshed = True
 
+                    # Encrypt the new token before storing
+                    token_to_store = access_token
+                    try:
+                        token_to_store = encrypt_token(access_token)
+                    except Exception as enc_err:
+                        logger.warning(f"Could not encrypt refreshed token: {enc_err}")
+
                     # Update token in database
                     db.execute(text("""
                         UPDATE user_integrations
                         SET access_token = :access_token, updated_at = CURRENT_TIMESTAMP
                         WHERE user_id = :user_id AND provider = 'salesforce'
                     """), {
-                        "access_token": access_token,
+                        "access_token": token_to_store,
                         "user_id": integration_user_id
                     })
                     db.commit()
@@ -749,30 +896,38 @@ async def debug_test_salesforce_query(
                     headers["Authorization"] = f"Bearer {access_token}"
                     response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=30)
             except Exception as refresh_error:
+                logger.error(f"Token refresh failed during test-query for user_id={user_id}: {refresh_error}")
                 return {
                     "status": "error",
                     "message": "Token expired and refresh failed",
-                    "refresh_error": str(refresh_error)
                 }
 
         if response.status_code == 200:
             data = response.json()
+            # Mask names in records
+            masked_records = []
+            for r in data.get("records", [])[:3]:
+                masked_records.append({
+                    "Id": r.get("Id"),
+                    "Name": _mask_borrower_name(r.get("Name")),
+                })
             return {
                 "status": "success",
                 "message": "Salesforce query successful",
                 "token_refreshed": token_refreshed,
                 "total_size": data.get("totalSize", 0),
-                "records": data.get("records", [])[:3]
+                "records": masked_records
             }
         else:
             return {
                 "status": "error",
                 "http_status": response.status_code,
-                "response": response.text[:500],
+                "response": _sanitize_sf_error(response.text),
                 "token_refreshed": token_refreshed
             }
 
     except Exception as e:
+        logger.error(f"Debug test-query failed: {e}")
         return {
             "status": "error",
             "error": "Internal server error"
@@ -781,29 +936,35 @@ async def debug_test_salesforce_query(
 
 @router.get("/debug/all-statuses")
 async def debug_all_statuses(
-    db: Session = Depends(get_db)
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(require_platform_admin),
 ):
     """
     Debug endpoint to query ALL records and show their statuses.
     This helps identify what status values actually exist in Salesforce.
-    No auth required for debugging.
+    Requires platform admin access. Scoped to admin's credentials.
     """
+    user_id = admin["user_id"]
+    logger.info(f"Debug endpoint accessed: all-statuses by admin user_id={user_id}")
+
     try:
         access_token = None
         refresh_token = None
         instance_url = None
         token_source = None
 
-        # First try the new integration_profiles table (OAuth flow stores here)
+        # First try the new integration_profiles table - scoped to admin's user
         try:
             from services.salesforce.oauth_service import decrypt_value
             profile = db.execute(text("""
                 SELECT access_token_encrypted, refresh_token_encrypted, instance_url, user_id
                 FROM integration_profiles
                 WHERE provider = 'salesforce' AND access_token_encrypted IS NOT NULL
+                  AND user_id = :user_id
                 ORDER BY updated_at DESC
                 LIMIT 1
-            """)).fetchone()
+            """), {"user_id": user_id}).fetchone()
 
             if profile and profile[0]:
                 access_token = decrypt_value(profile[0])
@@ -813,15 +974,16 @@ async def debug_all_statuses(
         except Exception as e:
             logger.warning(f"Could not check integration_profiles: {e}")
 
-        # Fallback to old user_integrations table
+        # Fallback to old user_integrations table - scoped to admin's user
         if not access_token:
             integration = db.execute(text("""
                 SELECT access_token, refresh_token, scopes, user_id
                 FROM user_integrations
                 WHERE provider = 'salesforce' AND access_token IS NOT NULL
+                  AND user_id = :user_id
                 ORDER BY updated_at DESC
                 LIMIT 1
-            """)).fetchone()
+            """), {"user_id": user_id}).fetchone()
 
             if integration:
                 access_token = integration[0]
@@ -832,7 +994,7 @@ async def debug_all_statuses(
                 token_source = "user_integrations"
 
         if not access_token:
-            return {"status": "error", "message": "No Salesforce integration found in either table"}
+            return {"status": "error", "message": "No Salesforce integration found for your account"}
 
         if not instance_url:
             return {"status": "error", "message": "No instance URL found"}
@@ -843,7 +1005,6 @@ async def debug_all_statuses(
         }
 
         # Query ALL records without any WHERE clause, just get status field
-        # Note: Some fields may not exist in all orgs, use simple query
         soql = """
             SELECT Id, Name, MtgPlanner_CRM__Status__c,
                    MtgPlanner_CRM__Borrower_Name__c, LastModifiedDate
@@ -865,7 +1026,7 @@ async def debug_all_statuses(
                     headers["Authorization"] = f"Bearer {access_token}"
                     response = await _async_get(query_url, headers=headers, params={"q": soql}, timeout=60)
             except Exception as e:
-                logger.error(f"Error in debug_all_statuses (token refresh): {e}")
+                logger.error(f"Error in debug_all_statuses (token refresh) for user_id={user_id}: {e}")
 
         if response.status_code == 200:
             data = response.json()
@@ -882,9 +1043,9 @@ async def debug_all_statuses(
                 if len(sample_records) < 20:
                     sample_records.append({
                         "Id": r.get("Id"),
-                        "Name": r.get("Name"),
+                        "Name": _mask_borrower_name(r.get("Name")),
                         "Status": r.get("MtgPlanner_CRM__Status__c"),
-                        "Borrower": r.get("MtgPlanner_CRM__Borrower_Name__c"),
+                        "Borrower": _mask_borrower_name(r.get("MtgPlanner_CRM__Borrower_Name__c")),
                         "LastModified": r.get("LastModifiedDate"),
                     })
 
@@ -902,7 +1063,7 @@ async def debug_all_statuses(
                 "status": "error",
                 "token_source": token_source,
                 "http_status": response.status_code,
-                "response": response.text[:1000]
+                "response": _sanitize_sf_error(response.text)
             }
 
     except Exception as e:

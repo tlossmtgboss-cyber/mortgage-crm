@@ -6,10 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
+import api from '../services/api';
 import './AppointmentTypesManager.css';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const DURATION_OPTIONS = [
   { value: 15, label: '15 minutes' },
@@ -73,11 +71,8 @@ const AppointmentTypesManager = () => {
 
   const seedDefaults = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/seed-defaults`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-      });
-      return res.ok;
+      await api.post('/api/v1/scheduler/seed-defaults');
+      return true;
     } catch {
       return false;
     }
@@ -87,11 +82,8 @@ const AppointmentTypesManager = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, {
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to load appointment types');
-      const data = await res.json();
+      const res = await api.get('/api/v1/scheduler/appointment-types');
+      const data = res.data;
 
       // If defaults returned (no DB records), seed them first
       if (data.source === 'defaults') {
@@ -99,15 +91,11 @@ const AppointmentTypesManager = () => {
         const seeded = await seedDefaults();
         if (seeded) {
           // Re-fetch now that defaults are seeded in DB
-          const res2 = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types?include_inactive=true`, {
-            headers: getAuthHeaders(),
-          });
-          if (res2.ok) {
-            const data2 = await res2.json();
-            setTypes((data2.appointment_types || []).map(normalizeType));
-            setIsDefaults(false);
-            return;
-          }
+          const res2 = await api.get('/api/v1/scheduler/appointment-types', { params: { include_inactive: true } });
+          const data2 = res2.data;
+          setTypes((data2.appointment_types || []).map(normalizeType));
+          setIsDefaults(false);
+          return;
         }
         // Fallback: show defaults as read-only
         setTypes((data.appointment_types || []).map(normalizeType));
@@ -259,23 +247,10 @@ const AppointmentTypesManager = () => {
         intake_questions: form.intake_questions,
       };
 
-      const url = editingType
-        ? `${API_BASE}/api/v1/scheduler/appointment-types/${editingType.id}`
-        : `${API_BASE}/api/v1/scheduler/appointment-types`;
-
-      const res = await fetch(url, {
-        method: editingType ? 'PUT' : 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        const detail = errData.detail;
-        const errorMsg = typeof detail === 'string' ? detail
-          : Array.isArray(detail) ? detail.map(d => d.msg || String(d)).join(', ')
-          : errData.error?.message || 'Failed to save';
-        throw new Error(errorMsg);
+      if (editingType) {
+        await api.put(`/api/v1/scheduler/appointment-types/${editingType.id}`, payload);
+      } else {
+        await api.post('/api/v1/scheduler/appointment-types', payload);
       }
 
       setShowModal(false);
@@ -293,12 +268,7 @@ const AppointmentTypesManager = () => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types/${type.id}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ is_active: !type.is_active }),
-      });
-      if (!res.ok) throw new Error('Failed to update appointment type');
+      await api.put(`/api/v1/scheduler/appointment-types/${type.id}`, { is_active: !type.is_active });
       await loadTypes();
     } catch (err) {
       setError(extractErrorMessage(err));
@@ -311,11 +281,7 @@ const AppointmentTypesManager = () => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to delete appointment type');
+      await api.delete(`/api/v1/scheduler/appointment-types/${id}`);
       setDeleteConfirm(null);
       await loadTypes();
     } catch (err) {

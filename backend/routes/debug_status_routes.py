@@ -5,12 +5,14 @@ Extracted from inline_legacy_routes.py.
 Provides debug endpoints for PURL testing, appointment diagnostics,
 SMS testing, cache stats, DataDog monitoring, CDN status, and admin tools.
 """
-from fastapi import Depends, Body
+from fastapi import Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
 import logging
 import re
+
+from auth.dependencies import require_auth
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
     # Lazy import for User model (needed by datadog-test-metrics)
     from database.models import User
 
-    @app.get("/api/v1/debug/purl-routes-status")
+    @app.get("/api/v1/debug/purl-routes-status", dependencies=[Depends(require_auth)])
     async def debug_purl_routes_status(current_user: User = Depends(get_current_user)):
         """Debug endpoint to check PURL routes loading status"""
         return {
@@ -44,7 +46,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             "error": route_errors.get("purl")
         }
 
-    @app.get("/api/v1/debug/purl-tables-status")
+    @app.get("/api/v1/debug/purl-tables-status", dependencies=[Depends(require_auth)])
     async def debug_purl_tables_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Debug endpoint to check if PURL tables exist in database"""
         from sqlalchemy import inspect
@@ -79,7 +81,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             "all_table_count": len(all_tables)
         }
 
-    @app.get("/api/v1/debug/user-delete-diagnosis")
+    @app.get("/api/v1/debug/user-delete-diagnosis", dependencies=[Depends(require_auth)])
     async def debug_user_delete_diagnosis(
         user_id: int,
         db: Session = Depends(get_db),
@@ -135,7 +137,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             "can_delete": len(blocking_tables) == 0
         }
 
-    @app.get("/api/v1/debug/list-test-users")
+    @app.get("/api/v1/debug/list-test-users", dependencies=[Depends(require_auth)])
     async def debug_list_test_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """List users available for testing (non-admin only)"""
         users = db.execute(text("""
@@ -150,7 +152,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             "note": "Use these IDs with /api/v1/debug/user-delete-diagnosis?user_id=X"
         }
 
-    @app.get("/api/v1/debug/purl-token-verify")
+    @app.get("/api/v1/debug/purl-token-verify", dependencies=[Depends(require_auth)])
     async def debug_purl_token_verify(
         token: str,
         workspace_slug: str,
@@ -231,7 +233,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             "hash_lookup_result": hash_lookup
         }
 
-    @app.post("/api/v1/debug/purl-create-test-workspace")
+    @app.post("/api/v1/debug/purl-create-test-workspace", dependencies=[Depends(require_auth)])
     async def debug_create_test_workspace(
         test_name: str = "debug-test",
         db: Session = Depends(get_db),
@@ -306,7 +308,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
                 "error": "Internal server error"
             }
 
-    @app.get("/api/v1/debug/purl-auth-flow")
+    @app.get("/api/v1/debug/purl-auth-flow", dependencies=[Depends(require_auth)])
     async def debug_purl_auth_flow(
         token: str,
         db: Session = Depends(get_db),
@@ -424,7 +426,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return result
 
 
-    @app.get("/api/v1/debug/appointments-status", tags=["Debug"])
+    @app.get("/api/v1/debug/appointments-status", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def debug_appointments_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
         """Debug endpoint to check recent appointments and reminder status"""
         result = {
@@ -610,7 +612,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {"error": "Internal server error"}
 
 
-    @app.post("/api/v1/debug/create-test-appointment", tags=["Debug"])
+    @app.post("/api/v1/debug/create-test-appointment", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def create_test_appointment(
         attendee_email: str = "tloss@me.com",
         attendee_phone: str = "8438345251",
@@ -675,7 +677,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {"error": "Internal server error"}
 
 
-    @app.post("/api/v1/debug/send-test-sms", tags=["Debug"])
+    @app.post("/api/v1/debug/send-test-sms", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def send_test_sms(
         phone: str = "8438345251",
         message: str = "Test reminder from Perennia AI - your appointment is coming up!",
@@ -723,7 +725,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {"success": False, "error": "Internal server error"}
 
 
-    @app.post("/api/v1/debug/trigger-appointment-reminders", tags=["Debug"])
+    @app.post("/api/v1/debug/trigger-appointment-reminders", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def trigger_appointment_reminders(current_user: User = Depends(get_current_user)):
         """Manually trigger the appointment reminder job"""
         try:
@@ -734,7 +736,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {"success": False, "error": "Internal server error"}
 
 
-    @app.get("/api/v1/debug/cache-stats", tags=["Debug"])
+    @app.get("/api/v1/debug/cache-stats", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def debug_cache_stats(current_user: User = Depends(get_current_user)):
         """
         Debug endpoint to monitor Redis LLM cache statistics.
@@ -784,7 +786,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
 
 
     # DataDog monitoring status endpoint
-    @app.get("/api/v1/debug/datadog-status", tags=["Debug"])
+    @app.get("/api/v1/debug/datadog-status", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def debug_datadog_status(current_user: User = Depends(get_current_user)):
         """
         Debug endpoint to check DataDog monitoring status.
@@ -829,7 +831,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             }
 
 
-    @app.get("/api/v1/debug/datadog-dashboard-config", tags=["Debug"])
+    @app.get("/api/v1/debug/datadog-dashboard-config", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def get_datadog_dashboard_config(current_user: User = Depends(get_current_user)):
         """
         Get DataDog dashboard configuration JSON.
@@ -846,7 +848,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {"error": "Internal server error"}
 
 
-    @app.post("/api/v1/debug/datadog-test-metrics", tags=["Debug"])
+    @app.post("/api/v1/debug/datadog-test-metrics", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def test_datadog_metrics(current_user: User = Depends(get_current_user)):
         """
         Send test metrics to DataDog.
@@ -881,7 +883,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {"success": False, "error": "Internal server error"}
 
 
-    @app.get("/api/v1/debug/cdn-status", tags=["Debug"])
+    @app.get("/api/v1/debug/cdn-status", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def get_cdn_status(current_user: User = Depends(get_current_user)):
         """
         Get CloudFront CDN status and configuration.
@@ -915,7 +917,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             }
 
 
-    @app.post("/api/v1/debug/cdn-invalidate", tags=["Debug"])
+    @app.post("/api/v1/debug/cdn-invalidate", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def invalidate_cdn_cache(
         paths: list[str] = Body(..., description="List of paths to invalidate"),
         current_user: User = Depends(get_current_user)
@@ -940,7 +942,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             return {"success": False, "error": "Internal server error"}
 
 
-    @app.post("/api/v1/debug/add-missing-roles", tags=["Debug"])
+    @app.post("/api/v1/debug/add-missing-roles", tags=["Debug"], dependencies=[Depends(require_auth)])
     async def add_missing_employee_roles(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)

@@ -51,7 +51,10 @@ class EncompassSyncPullRequest(BaseModel):
 
 class EncompassSyncPushRequest(BaseModel):
     """Request to push a loan to Encompass."""
-    fields: Optional[List[str]] = Field(None, description="Specific CRM fields to push (None = all)")
+    fields: Optional[List[str]] = Field(
+        default=None,
+        description="Specific CRM fields to push (None = all mapped push/bidirectional fields)",
+    )
 
 
 class EncompassSearchRequest(BaseModel):
@@ -70,13 +73,27 @@ class EncompassImportRequest(BaseModel):
     assign_to_lo_id: Optional[int] = Field(None, description="Loan officer to assign imported loans to")
 
 
+_VALID_DIRECTIONS = frozenset({"push", "pull", "bidirectional"})
+
+
 class FieldMappingItem(BaseModel):
     """A single field mapping entry."""
-    crm_field: str
-    los_field: str
-    direction: str = "bidirectional"
+    crm_field: str = Field(..., min_length=1)
+    los_field: str = Field(..., min_length=1)
+    direction: str = Field("bidirectional", description="push | pull | bidirectional")
     required: bool = False
     transform: Optional[str] = None
+
+    class Config:
+        # Enforce direction is one of the allowed values at validation time
+        pass
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.direction not in _VALID_DIRECTIONS:
+            raise ValueError(
+                f"direction must be one of {sorted(_VALID_DIRECTIONS)}, got '{self.direction}'"
+            )
 
 
 class FieldMappingUpdateRequest(BaseModel):
@@ -275,13 +292,45 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
         sync_service = LOSSyncService(client=client)
         results = []
 
+        async def _pull_one(loan_id_val: int, los_loan_id_val: Optional[str] = None):
+            """Pull a single loan and record the result, isolating per-loan errors."""
+            try:
+                res = await sync_service.pull_from_los(
+                    db=db, loan_id=loan_id_val, los_loan_id=los_loan_id_val,
+                )
+                # Update encompass_sync_status on the CRM loan record
+                from database.models.lead_loan import Loan as _Loan
+                _loan = db.query(_Loan).filter(_Loan.id == loan_id_val).first()
+                if _loan:
+                    _loan.encompass_sync_status = (
+                        "synced" if res.status.value in ("success", "partial") else "error"
+                    )
+                    from datetime import datetime, timezone as _tz
+                    _loan.encompass_last_synced_at = datetime.now(_tz.utc)
+                    try:
+                        db.flush()
+                    except Exception as _e:
+                        logger.warning(f"Failed to update sync status for loan {loan_id_val}: {_e}")
+                results.append(res.to_dict())
+            except Exception as pull_exc:
+                logger.error(
+                    f"Unexpected error during pull for CRM loan {loan_id_val} "
+                    f"(los_loan_id={los_loan_id_val}): {pull_exc}",
+                    exc_info=True,
+                )
+                results.append({
+                    "status": "error",
+                    "loan_id": loan_id_val,
+                    "los_loan_id": los_loan_id_val,
+                    "error": str(pull_exc),
+                })
+
         if request.loan_ids:
             # Pull by CRM loan IDs
             for loan_id in request.loan_ids:
-                result = await sync_service.pull_from_los(db=db, loan_id=loan_id)
-                results.append(result.to_dict())
+                await _pull_one(loan_id)
         elif request.los_loan_ids:
-            # Pull by Encompass GUIDs - find matching CRM loans first
+            # Pull by Encompass GUIDs — find matching CRM loans first
             from database.models.lead_loan import Loan
 
             for los_id in request.los_loan_ids:
@@ -290,11 +339,12 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
                     Loan.organization_id == org_id,
                 ).first()
                 if loan:
-                    result = await sync_service.pull_from_los(
-                        db=db, loan_id=loan.id, los_loan_id=los_id,
-                    )
-                    results.append(result.to_dict())
+                    await _pull_one(loan.id, los_loan_id_val=los_id)
                 else:
+                    logger.info(
+                        f"Encompass pull: no CRM loan linked to GUID {los_id} "
+                        f"for org {org_id}; skipping"
+                    )
                     results.append({
                         "status": "skipped",
                         "los_loan_id": los_id,
@@ -309,17 +359,27 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
                 Loan.encompass_loan_id.isnot(None),
             ).all()
 
+            logger.info(
+                f"Encompass bulk pull for org {org_id}: "
+                f"{len(linked_loans)} linked loans found"
+            )
             for loan in linked_loans:
-                result = await sync_service.pull_from_los(
-                    db=db, loan_id=loan.id, los_loan_id=loan.encompass_loan_id,
-                )
-                results.append(result.to_dict())
+                await _pull_one(loan.id, los_loan_id_val=loan.encompass_loan_id)
 
-        # Update last sync timestamp on config
+        # Update last sync timestamp on the org's config
         _update_last_sync(db, org_id)
+
+        success_count = sum(1 for r in results if r.get("status") in ("success", "partial"))
+        error_count = sum(1 for r in results if r.get("status") == "error")
+        logger.info(
+            f"Encompass sync/pull for org {org_id}: "
+            f"total={len(results)}, success={success_count}, errors={error_count}"
+        )
 
         return {
             "total": len(results),
+            "success": success_count,
+            "errors": error_count,
             "results": results,
         }
 
@@ -521,6 +581,55 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
         }
 
     # -----------------------------------------------------------------
+    # GET /api/v1/encompass/health
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/encompass/health",
+        tags=["Encompass Integration"],
+        summary="Health check for Encompass integration",
+    )
+    async def encompass_health(
+        db: Session = Depends(get_db),
+        user=Depends(get_current_user),
+    ):
+        """Check Encompass OAuth token validity and API connectivity.
+
+        Attempts to obtain (or reuse) a valid access token for the
+        organization's Encompass configuration, then performs a lightweight
+        API call to verify end-to-end connectivity.
+
+        Returns:
+            status: "healthy" | "auth_failed" | "api_error" | "not_configured" | "error"
+            authenticated: bool
+            latency_ms: round-trip latency in milliseconds
+            token_expires_at: ISO timestamp when the current token expires (if healthy)
+            instance_id: Encompass instance ID
+        """
+        org_id = _get_org_id(user)
+
+        # First make sure a config exists
+        config_info = await oauth_service.get_config(db=db, org_id=org_id)
+        if not config_info or not config_info.get("is_active"):
+            return {
+                "status": "not_configured",
+                "authenticated": False,
+                "message": (
+                    "No active Encompass integration configured. "
+                    "Connect via POST /api/v1/encompass/connect."
+                ),
+            }
+
+        # Delegate to the OAuth service's test_connection which does both
+        # token acquisition and a lightweight API ping
+        result = await oauth_service.test_connection(db=db, org_id=org_id)
+        logger.info(
+            f"Encompass health check for org {org_id}: "
+            f"status={result.get('status')}, latency={result.get('latency_ms')}ms"
+        )
+        return result
+
+    # -----------------------------------------------------------------
     # PUT /api/v1/encompass/field-mappings
     # -----------------------------------------------------------------
 
@@ -541,6 +650,26 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
         """
         org_id = _get_org_id(user)
 
+        if not request.mappings:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="mappings list must not be empty",
+            )
+
+        # Validate all mappings before writing any to the database
+        invalid = []
+        for idx, item in enumerate(request.mappings):
+            if item.direction not in _VALID_DIRECTIONS:
+                invalid.append(
+                    f"mappings[{idx}].direction '{item.direction}' is not valid "
+                    f"(must be one of {sorted(_VALID_DIRECTIONS)})"
+                )
+        if invalid:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"errors": invalid},
+            )
+
         # Store custom mappings in the database via LosFieldMapping model
         from database.models.los_sync import LosFieldMapping as DbFieldMapping
 
@@ -549,6 +678,7 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
             DbFieldMapping.organization_id == org_id,
             DbFieldMapping.los_system == "encompass",
         ).all()
+        deactivated = len(existing)
         for mapping in existing:
             mapping.is_active = False
 
@@ -571,9 +701,15 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
 
         db.flush()
 
+        logger.info(
+            f"Encompass field mappings updated for org {org_id}: "
+            f"deactivated={deactivated}, created={created}"
+        )
+
         return {
             "status": "updated",
             "mappings_count": created,
+            "deactivated": deactivated,
             "message": f"Updated {created} field mappings for Encompass",
         }
 
@@ -596,4 +732,4 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
         except Exception as e:
             logger.warning(f"Failed to update last_sync_at for org {org_id}: {e}")
 
-    logger.info("Encompass integration routes registered (10 endpoints)")
+    logger.info("Encompass integration routes registered (11 endpoints)")

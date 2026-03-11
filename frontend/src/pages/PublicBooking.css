@@ -1,3 +1,20 @@
+/* ===========================================================================
+   PublicBooking.css — Organization-branded booking page styles
+   Uses CSS custom properties for dynamic org branding:
+     --booking-primary    (set by useOrgBranding hook, fallback #217F8D)
+     --booking-accent     (set by useOrgBranding hook, fallback #34a853)
+     --booking-primary-dark  (darker shade for hovers)
+     --booking-accent-dark   (darker shade for hovers)
+   =========================================================================== */
+
+/* Fallback values when no org branding is applied */
+:root {
+  --booking-primary: #217F8D;
+  --booking-accent: #34a853;
+  --booking-primary-dark: #1a6670;
+  --booking-accent-dark: #2d8f47;
+}
+
 /* Redfin-style Booking Page */
 .redfin-booking {
   min-height: 100vh;
@@ -16,7 +33,127 @@
   padding: 32px;
 }
 
-/* Header */
+/* ===========================================================================
+   Organization Branding Header
+   =========================================================================== */
+
+.booking-branding-header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.booking-org-logo {
+  margin-bottom: 12px;
+}
+
+.booking-org-logo img {
+  max-height: 56px;
+  max-width: 200px;
+  object-fit: contain;
+}
+
+.booking-org-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.booking-tagline {
+  font-size: 14px;
+  color: var(--booking-primary);
+  font-weight: 500;
+  margin: 4px 0 0 0;
+}
+
+.booking-welcome {
+  font-size: 13px;
+  color: #666;
+  margin: 8px 0 0 0;
+  line-height: 1.5;
+}
+
+/* LO Card */
+.booking-lo-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+}
+
+.booking-lo-photo {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--booking-primary);
+}
+
+.booking-lo-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.booking-lo-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.booking-lo-title {
+  font-size: 12px;
+  color: #666;
+}
+
+.booking-lo-nmls {
+  font-size: 11px;
+  color: #999;
+}
+
+/* Testimonials */
+.booking-testimonials {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.booking-testimonial {
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.booking-testimonial:last-child {
+  border-bottom: none;
+}
+
+.testimonial-text {
+  font-size: 13px;
+  color: #444;
+  font-style: italic;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
+}
+
+.testimonial-author {
+  font-size: 12px;
+  color: #888;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* ===========================================================================
+   Header
+   =========================================================================== */
+
 .booking-header {
   text-align: center;
   margin-bottom: 32px;
@@ -46,7 +183,10 @@
   text-align: center;
 }
 
-/* Type Selector */
+/* ===========================================================================
+   Type Selector
+   =========================================================================== */
+
 .type-selector {
   margin-bottom: 24px;
 }
@@ -78,13 +218,13 @@
 }
 
 .type-pill:hover {
-  border-color: #217F8D;
+  border-color: var(--booking-primary);
 }
 
 .type-pill.active {
-  border-color: #217F8D;
-  background: rgba(33, 127, 141, 0.08);
-  color: #217F8D;
+  border-color: var(--booking-primary);
+  background: color-mix(in srgb, var(--booking-primary) 8%, white);
+  color: var(--booking-primary);
 }
 
 .type-pill .duration {
@@ -92,7 +232,10 @@
   font-size: 12px;
 }
 
-/* Date Section */
+/* ===========================================================================
+   Date Section
+   =========================================================================== */
+
 .date-section {
   margin-bottom: 32px;
 }
@@ -126,8 +269,8 @@
 }
 
 .week-nav:hover:not(:disabled) {
-  border-color: #217F8D;
-  color: #217F8D;
+  border-color: var(--booking-primary);
+  color: var(--booking-primary);
 }
 
 .week-nav:disabled {
@@ -164,12 +307,12 @@
 
 .date-card:hover:not(.disabled) {
   background: #fff;
-  border-color: #217F8D;
+  border-color: var(--booking-primary);
 }
 
 .date-card.selected {
-  background: #217F8D;
-  border-color: #217F8D;
+  background: var(--booking-primary);
+  border-color: var(--booking-primary);
 }
 
 .date-card.selected .day-name,
@@ -184,7 +327,7 @@
 }
 
 .date-card.today:not(.selected) {
-  border-color: #217F8D;
+  border-color: var(--booking-primary);
 }
 
 .day-name {
@@ -208,7 +351,10 @@
   text-transform: uppercase;
 }
 
-/* Time Section */
+/* ===========================================================================
+   Time Section
+   =========================================================================== */
+
 .time-section {
   margin-bottom: 32px;
 }
@@ -247,7 +393,7 @@
 
 .time-dropdown:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: var(--booking-primary);
 }
 
 .dropdown-arrow {
@@ -284,13 +430,13 @@
 }
 
 .mode-button:hover {
-  border-color: #217F8D;
+  border-color: var(--booking-primary);
 }
 
 .mode-button.active {
-  border-color: #217F8D;
-  background: rgba(33, 127, 141, 0.08);
-  color: #217F8D;
+  border-color: var(--booking-primary);
+  background: color-mix(in srgb, var(--booking-primary) 8%, white);
+  color: var(--booking-primary);
 }
 
 .mode-button svg {
@@ -298,11 +444,14 @@
   height: 20px;
 }
 
-/* Primary Button */
+/* ===========================================================================
+   Primary Button
+   =========================================================================== */
+
 .primary-button {
   width: 100%;
   padding: 16px;
-  background: #217F8D;
+  background: var(--booking-primary);
   color: white;
   border: none;
   border-radius: 6px;
@@ -313,7 +462,7 @@
 }
 
 .primary-button:hover:not(:disabled) {
-  background: #1a6670;
+  background: var(--booking-primary-dark);
 }
 
 .primary-button:disabled {
@@ -325,7 +474,10 @@
   margin-top: 16px;
 }
 
-/* Form Step */
+/* ===========================================================================
+   Form Step
+   =========================================================================== */
+
 .form-step {
   animation: fadeIn 0.2s ease;
 }
@@ -341,7 +493,7 @@
   gap: 6px;
   background: none;
   border: none;
-  color: #217F8D;
+  color: var(--booking-primary);
   font-size: 14px;
   cursor: pointer;
   padding: 0;
@@ -393,7 +545,7 @@
 .form-group input:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #217F8D;
+  border-color: var(--booking-primary);
 }
 
 .form-group input::placeholder,
@@ -427,7 +579,7 @@
 .radio-label input[type="radio"] {
   width: 18px;
   height: 18px;
-  accent-color: #217F8D;
+  accent-color: var(--booking-primary);
 }
 
 .radio-label span {
@@ -454,7 +606,10 @@
   margin-top: 8px;
 }
 
-/* Confirmation State */
+/* ===========================================================================
+   Confirmation State
+   =========================================================================== */
+
 .confirmation-container {
   text-align: center;
 }
@@ -466,7 +621,7 @@
 .success-checkmark {
   width: 64px;
   height: 64px;
-  background: #dcfce7;
+  background: color-mix(in srgb, var(--booking-accent) 15%, white);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -477,7 +632,7 @@
 .success-checkmark svg {
   width: 32px;
   height: 32px;
-  color: #22c55e;
+  color: var(--booking-accent);
 }
 
 .confirmation-header h1 {
@@ -530,7 +685,10 @@
   font-weight: 500;
 }
 
-/* Loading State */
+/* ===========================================================================
+   Loading State
+   =========================================================================== */
+
 .loading-state {
   text-align: center;
   padding: 60px 20px;
@@ -540,7 +698,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #f0f0f0;
-  border-top-color: #217F8D;
+  border-top-color: var(--booking-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto 16px;
@@ -573,7 +731,10 @@
   font-size: 14px;
 }
 
-/* Modals */
+/* ===========================================================================
+   Modals
+   =========================================================================== */
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -716,7 +877,59 @@
   background: #b91c1c;
 }
 
-/* Footer */
+/* ===========================================================================
+   Language Selector
+   =========================================================================== */
+
+.language-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.language-icon {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.language-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 24px 4px 8px;
+  font-size: 12px;
+  color: #444;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 12px;
+  min-width: 90px;
+}
+
+.language-select:focus {
+  outline: none;
+  border-color: var(--booking-primary);
+}
+
+.language-select:hover {
+  border-color: #999;
+}
+
+/* Make booking-container position context for language selector */
+.booking-container {
+  position: relative;
+}
+
+/* ===========================================================================
+   Footer — always shown, not removable
+   =========================================================================== */
+
 .booking-footer {
   text-align: center;
   margin-top: 32px;
@@ -731,10 +944,13 @@
 }
 
 .booking-footer strong {
-  color: #217F8D;
+  color: var(--booking-primary);
 }
 
-/* Responsive */
+/* ===========================================================================
+   Responsive
+   =========================================================================== */
+
 @media (max-width: 640px) {
   .redfin-booking {
     padding: 16px;
@@ -792,5 +1008,18 @@
 
   .modal-actions button {
     width: 100%;
+  }
+
+  .booking-lo-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .booking-lo-info {
+    text-align: center;
+  }
+
+  .booking-org-logo img {
+    max-height: 44px;
   }
 }

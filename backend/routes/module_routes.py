@@ -75,26 +75,14 @@ class NavigationAccessResponse(BaseModel):
 
 # Database and user dependencies - injected from main app
 # These are stored as the actual dependency functions from main.py
-_get_db = None
+from db import get_db
 _get_current_user = None
 
 
 def set_dependencies(get_db_func, get_current_user_func):
     """Set the database and user dependencies from main app."""
-    global _get_db, _get_current_user
-    _get_db = get_db_func
+    global _get_current_user
     _get_current_user = get_current_user_func
-
-
-def get_db():
-    """
-    Wrapper for database dependency.
-    Yields from the underlying generator.
-    """
-    if _get_db is None:
-        raise RuntimeError("Database dependency not configured. Call set_dependencies first.")
-    # Yield from the generator
-    yield from _get_db()
 
 
 async def get_current_user(

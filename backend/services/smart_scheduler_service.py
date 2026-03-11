@@ -309,19 +309,14 @@ class SmartSchedulerService:
         return query.first()
 
     def update_settings(self, settings_data: Dict[str, Any], user_id: int = None) -> SchedulerSettings:
-        """Update scheduler settings"""
-        settings = self.get_settings(user_id)
-        if not settings:
-            settings = SchedulerSettings(user_id=user_id)
-            self.db.add(settings)
+        """Update scheduler settings.
 
-        for key, value in settings_data.items():
-            if hasattr(settings, key):
-                setattr(settings, key, value)
-
-        self.db.commit()
-        self.db.refresh(settings)
-        return settings
+        BLOCKED: Use scheduler_config_routes.py instead.
+        """
+        raise RuntimeError(
+            "SmartSchedulerService.update_settings() is permanently disabled — no tenant isolation. "
+            "Use scheduler_config_routes.py instead."
+        )
 
     def get_active_loan_officers(self) -> List[LoanOfficerSchedule]:
         """Get all active loan officers available for scheduling"""
@@ -332,35 +327,24 @@ class SmartSchedulerService:
     def add_loan_officer(self, user_id: int, name: str, email: str,
                          phone: str = None, priority: int = 1,
                          organization_id: int = None) -> LoanOfficerSchedule:
-        """Add a loan officer to the scheduling pool"""
-        lo = LoanOfficerSchedule(
-            user_id=user_id,
-            lo_name=name,
-            lo_email=email,
-            lo_phone=phone,
-            priority=priority,
-            is_active=True,
-            organization_id=organization_id
+        """Add a loan officer to the scheduling pool.
+
+        BLOCKED: Use scheduler_config_routes.py instead.
+        """
+        raise RuntimeError(
+            "SmartSchedulerService.add_loan_officer() is permanently disabled — no tenant isolation. "
+            "Use scheduler_config_routes.py instead."
         )
-        self.db.add(lo)
-        self.db.commit()
-        self.db.refresh(lo)
-        logger.info(f"Added loan officer to scheduler: {name} ({email})")
-        return lo
 
     def update_loan_officer(self, lo_id: int, updates: Dict[str, Any]) -> Optional[LoanOfficerSchedule]:
-        """Update loan officer scheduling settings"""
-        lo = self.db.query(LoanOfficerSchedule).filter(LoanOfficerSchedule.id == lo_id).first()
-        if not lo:
-            return None
+        """Update loan officer scheduling settings.
 
-        for key, value in updates.items():
-            if hasattr(lo, key):
-                setattr(lo, key, value)
-
-        self.db.commit()
-        self.db.refresh(lo)
-        return lo
+        BLOCKED: Use scheduler_config_routes.py instead.
+        """
+        raise RuntimeError(
+            "SmartSchedulerService.update_loan_officer() is permanently disabled — no tenant isolation. "
+            "Use scheduler_config_routes.py instead."
+        )
 
     def _get_real_time_appointment_count(self, lo_user_id: int, period: str = "week") -> int:
         """Get real-time appointment count from the database instead of stale counters."""
@@ -389,33 +373,15 @@ class SmartSchedulerService:
         return count
 
     def assign_loan_officer(self, appointment_time: datetime = None) -> Optional[LoanOfficerSchedule]:
+        """Assign a loan officer based on the configured scheduling method.
+
+        BLOCKED: Use scheduler_appointment_routes.py (which uses scheduler_routing_service.py)
+        for tenant-aware LO assignment.
         """
-        Assign a loan officer based on the configured scheduling method.
-
-        Returns the assigned LoanOfficerSchedule or None if no one is available.
-        """
-        settings = self.get_settings()
-        active_los = self.get_active_loan_officers()
-
-        if not active_los:
-            logger.warning("No active loan officers available for scheduling")
-            return None
-
-        method = settings.scheduling_method
-
-        if method == SchedulingMethod.DIRECT.value:
-            return self._assign_direct(active_los)
-        elif method == SchedulingMethod.ROUND_ROBIN.value:
-            return self._assign_round_robin(settings, active_los)
-        elif method == SchedulingMethod.PRIORITY.value:
-            return self._assign_by_priority(active_los, appointment_time)
-        elif method == SchedulingMethod.AVAILABILITY.value:
-            return self._assign_by_availability(active_los, appointment_time)
-        elif method == SchedulingMethod.LOAD_BALANCED.value:
-            return self._assign_load_balanced(active_los)
-        else:
-            # Default to round robin
-            return self._assign_round_robin(settings, active_los)
+        raise RuntimeError(
+            "SmartSchedulerService.assign_loan_officer() is permanently disabled — no tenant isolation. "
+            "Use scheduler_routing_service.py via scheduler_appointment_routes.py instead."
+        )
 
     def _assign_direct(self, los: List[LoanOfficerSchedule]) -> Optional[LoanOfficerSchedule]:
         """Direct booking — no routing, assign to the first (primary) LO.
@@ -561,100 +527,15 @@ class SmartSchedulerService:
         loan_officer_id: int = None,
         organization_id: int = None,
     ) -> Dict[str, Any]:
+        """Book an appointment.
+
+        BLOCKED: Use scheduler_appointment_routes.py for tenant-aware booking,
+        or direct ORM creation of ScheduledAppointment with organization_id filtering.
         """
-        Book an appointment with automatic or specified LO assignment.
-
-        DEPRECATED: Use direct ORM creation of ScheduledAppointment with
-        organization_id filtering instead.
-
-        Returns booking details including assigned LO and calendar info.
-        """
-        import uuid
-        import warnings
-        warnings.warn(
-            "SmartSchedulerService.book_appointment() is deprecated. "
-            "Use direct ORM operations with organization_id filtering instead.",
-            DeprecationWarning,
-            stacklevel=2,
+        raise RuntimeError(
+            "SmartSchedulerService.book_appointment() is permanently disabled — no tenant isolation. "
+            "Use scheduler_appointment_routes.py or direct ORM with organization_id filtering instead."
         )
-
-        settings = self.get_settings()
-        duration = duration_minutes or settings.default_duration_minutes
-
-        # Assign loan officer
-        if loan_officer_id:
-            lo = self.db.query(LoanOfficerSchedule).filter(
-                LoanOfficerSchedule.id == loan_officer_id
-            ).first()
-        else:
-            lo = self.assign_loan_officer(appointment_time)
-
-        if not lo:
-            return {
-                "success": False,
-                "error": "No loan officers available for scheduling"
-            }
-
-        # Generate appointment ID
-        appt_id = f"APPT-{str(uuid.uuid4())[:8].upper()}"
-
-        # Calculate end time
-        end_time = appointment_time + timedelta(minutes=duration)
-
-        # Create appointment record
-        appointment = ScheduledAppointment(
-            appointment_id=appt_id,
-            loan_officer_id=lo.id,
-            lo_name=lo.lo_name,
-            lo_email=lo.lo_email,
-            contact_id=contact_id,
-            contact_name=contact_name,
-            contact_email=contact_email,
-            contact_phone=contact_phone,
-            appointment_type=appointment_type,
-            start_time=appointment_time,
-            end_time=end_time,
-            duration_minutes=duration,
-            notes=notes,
-            conversation_id=conversation_id,
-            booked_via="ai_assistant",
-            organization_id=organization_id or lo.organization_id
-        )
-
-        self.db.add(appointment)
-
-        # Update LO stats (legacy counters — kept for backward compat)
-        lo.total_appointments = (lo.total_appointments or 0) + 1
-        lo.last_appointment_at = datetime.now(timezone.utc)
-
-        self.db.commit()
-        self.db.refresh(appointment)
-
-        logger.info(f"Appointment booked: {appt_id} with {lo.lo_name} at {appointment_time}")
-
-        return {
-            "success": True,
-            "appointment_id": appt_id,
-            "loan_officer": {
-                "id": lo.id,
-                "name": lo.lo_name,
-                "email": lo.lo_email,
-                "phone": lo.lo_phone
-            },
-            "contact": {
-                "name": contact_name,
-                "email": contact_email,
-                "phone": contact_phone
-            },
-            "appointment": {
-                "type": appointment_type,
-                "start_time": appointment_time.isoformat(),
-                "end_time": end_time.isoformat(),
-                "duration_minutes": duration,
-                "display_time": appointment_time.strftime("%A, %B %d at %I:%M %p")
-            },
-            "title": f"Mortgage Consultation - {contact_name}"
-        }
 
     def get_appointment(self, appointment_id: str) -> Optional[ScheduledAppointment]:
         """Get appointment by ID"""
@@ -663,19 +544,14 @@ class SmartSchedulerService:
         ).first()
 
     def cancel_appointment(self, appointment_id: str, reason: str = None) -> bool:
-        """Cancel an appointment"""
-        appointment = self.get_appointment(appointment_id)
-        if not appointment:
-            return False
+        """Cancel an appointment.
 
-        appointment.status = AppointmentStatus.CANCELLED.value
-        appointment.cancelled_at = datetime.now(timezone.utc)
-        if reason:
-            appointment.internal_notes = f"Cancelled: {reason}"
-
-        self.db.commit()
-        logger.info(f"Appointment cancelled: {appointment_id}")
-        return True
+        BLOCKED: Use scheduler_appointment_routes.py for tenant-aware cancellation.
+        """
+        raise RuntimeError(
+            "SmartSchedulerService.cancel_appointment() is permanently disabled — no tenant isolation. "
+            "Use scheduler_appointment_routes.py instead."
+        )
 
     def get_upcoming_appointments(self, loan_officer_id: int = None,
                                    days_ahead: int = 7) -> List[ScheduledAppointment]:

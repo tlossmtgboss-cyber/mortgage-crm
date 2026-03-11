@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './SmartScheduler.css';
 
 const API_BASE = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
@@ -22,6 +22,7 @@ function SmartScheduler({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [resolvedTypeId, setResolvedTypeId] = useState(appointmentTypeId);
+  const retryRef = useRef(null);
 
   // On mount, fetch booking link to resolve the appointment type ID if not provided
   useEffect(() => {
@@ -87,7 +88,7 @@ function SmartScheduler({
     return days;
   }, [currentMonth, daysAhead, selectedDate, slotsByDate]);
 
-  // Fetch available slots for the visible month using real booking API
+  // Fetch available slots for the visible month with a single date-range API call
   useEffect(() => {
     if (!resolvedTypeId) return;
 
@@ -113,33 +114,39 @@ function SmartScheduler({
           return;
         }
 
-        // Fetch slots day-by-day using the real booking link API
-        const grouped = {};
-        const fetchPromises = [];
-        const currentDate = new Date(rangeStart);
+        const startStr = rangeStart.toISOString().split('T')[0];
+        const endStr = rangeEnd.toISOString().split('T')[0];
 
-        while (currentDate <= rangeEnd) {
-          const dateStr = currentDate.toISOString().split('T')[0];
-          const fetchDate = dateStr;
-          fetchPromises.push(
-            fetch(`${API_BASE}/api/v1/scheduler/public/book/${slug}/slots?date=${fetchDate}&appointment_type_id=${resolvedTypeId}&duration_minutes=${durationMinutes}`)
-              .then(res => res.ok ? res.json() : { available_slots: [] })
-              .then(data => {
-                const daySlots = (data.available_slots || []).map(s => ({
-                  start_time: s.start,
-                  end_time: s.end,
-                  ...s
-                }));
-                if (daySlots.length > 0) {
-                  grouped[fetchDate] = daySlots;
-                }
-              })
-              .catch(() => {})
-          );
-          currentDate.setDate(currentDate.getDate() + 1);
+        // Single API call for the entire date range
+        const res = await fetch(
+          `${API_BASE}/api/v1/scheduler/public/book/${slug}/slots` +
+          `?start_date=${startStr}&end_date=${endStr}` +
+          `&appointment_type_id=${resolvedTypeId}` +
+          `&duration_minutes=${durationMinutes}`
+        );
+
+        if (!res.ok) {
+          throw new Error(`Server responded with ${res.status}`);
         }
 
-        await Promise.all(fetchPromises);
+        const data = await res.json();
+
+        // Group flat slot array into a date-keyed dictionary
+        const grouped = {};
+        for (const slot of (data.available_slots || [])) {
+          const dateKey = slot.date || slot.start?.split('T')[0] || slot.start_time?.split('T')[0];
+          if (!dateKey) continue;
+          const normalized = {
+            start_time: slot.start || slot.start_time,
+            end_time: slot.end || slot.end_time,
+            ...slot
+          };
+          if (!grouped[dateKey]) {
+            grouped[dateKey] = [];
+          }
+          grouped[dateKey].push(normalized);
+        }
+
         setSlotsByDate(grouped);
       } catch (err) {
         console.error('Failed to fetch slots:', err);
@@ -149,6 +156,8 @@ function SmartScheduler({
       }
     };
 
+    // Store fetchSlots so the retry button can re-invoke it
+    retryRef.current = fetchSlots;
     fetchSlots();
   }, [slug, resolvedTypeId, durationMinutes, daysAhead, currentMonth]);
 
@@ -181,8 +190,8 @@ function SmartScheduler({
   if (loading) {
     return (
       <div className="smart-scheduler">
-        <div className="scheduler-loading">
-          <div className="loading-spinner"></div>
+        <div className="scheduler-loading" role="status" aria-live="polite">
+          <div className="loading-spinner" aria-hidden="true"></div>
           <p>Loading available times...</p>
         </div>
       </div>
@@ -194,7 +203,7 @@ function SmartScheduler({
       <div className="smart-scheduler">
         <div className="scheduler-error">
           <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Try Again</button>
+          <button onClick={() => retryRef.current && retryRef.current()}>Try Again</button>
         </div>
       </div>
     );
@@ -214,6 +223,7 @@ function SmartScheduler({
             <button
               className="nav-btn"
               onClick={() => navigateMonth(-1)}
+              aria-label="Previous month"
               disabled={currentMonth.getMonth() === new Date().getMonth() &&
                         currentMonth.getFullYear() === new Date().getFullYear()}
             >
@@ -225,6 +235,7 @@ function SmartScheduler({
             <button
               className="nav-btn"
               onClick={() => navigateMonth(1)}
+              aria-label="Next month"
             >
               &#8250;
             </button>
@@ -238,20 +249,32 @@ function SmartScheduler({
             </div>
 
             <div className="calendar-days">
-              {calendarDays.map((dayInfo, idx) => (
-                <div
-                  key={idx}
-                  className={`calendar-day ${dayInfo.empty ? 'empty' : ''} ${dayInfo.isPast ? 'past' : ''} ${dayInfo.isTooFar ? 'too-far' : ''} ${dayInfo.hasSlots ? 'has-slots' : 'no-slots'} ${dayInfo.isToday ? 'today' : ''} ${dayInfo.isSelected ? 'selected' : ''}`}
-                  onClick={() => !dayInfo.empty && handleDateClick(dayInfo)}
-                >
-                  {!dayInfo.empty && (
-                    <>
-                      <span className="day-number">{dayInfo.day}</span>
-                      {dayInfo.hasSlots && <span className="slot-indicator"></span>}
-                    </>
-                  )}
-                </div>
-              ))}
+              {calendarDays.map((dayInfo, idx) => {
+                const isInteractive = !dayInfo.empty && !dayInfo.isPast && !dayInfo.isTooFar && dayInfo.hasSlots;
+                return (
+                  <div
+                    key={idx}
+                    className={`calendar-day ${dayInfo.empty ? 'empty' : ''} ${dayInfo.isPast ? 'past' : ''} ${dayInfo.isTooFar ? 'too-far' : ''} ${dayInfo.hasSlots ? 'has-slots' : 'no-slots'} ${dayInfo.isToday ? 'today' : ''} ${dayInfo.isSelected ? 'selected' : ''}`}
+                    onClick={() => !dayInfo.empty && handleDateClick(dayInfo)}
+                    role={isInteractive ? 'button' : undefined}
+                    tabIndex={isInteractive ? 0 : undefined}
+                    aria-label={!dayInfo.empty ? `${dayInfo.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}${dayInfo.hasSlots ? ', available' : ', unavailable'}` : undefined}
+                    onKeyDown={isInteractive ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleDateClick(dayInfo);
+                      }
+                    } : undefined}
+                  >
+                    {!dayInfo.empty && (
+                      <>
+                        <span className="day-number">{dayInfo.day}</span>
+                        {dayInfo.hasSlots && <span className="slot-indicator"></span>}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

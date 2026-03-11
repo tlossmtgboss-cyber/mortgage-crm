@@ -11,6 +11,7 @@ from datetime import datetime
 import logging
 import asyncio
 import json
+import os
 
 from langchain_core.tools import BaseTool, StructuredTool
 from langchain_core.messages import ToolMessage
@@ -703,7 +704,7 @@ def bind_tools_to_model(model, agent_role: str):
         from langchain_anthropic import ChatAnthropic
         from backend.agents.tool_integration import bind_tools_to_model
 
-        model = ChatAnthropic(model="claude-sonnet-4-20250514")
+        model = ChatAnthropic(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"))
         model_with_tools = bind_tools_to_model(model, "pipeline_analyst")
     """
     executor = AgentToolExecutor(agent_role)

@@ -36,6 +36,7 @@ from routes.smart_docs_models import (
     FRESHNESS_DAYS,
     _get_loan_org_id,
     _verify_loan_tenant,
+    _verify_document_tenant,
 )
 
 logger = logging.getLogger(__name__)
@@ -425,16 +426,8 @@ async def get_document(
     current_user = Depends(get_current_user),
 ):
     """Get document details and processing results."""
-    document = db.query(SmartDocument).filter(
-        SmartDocument.id == document_id
-    ).first()
-
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    # Tenant isolation: verify document belongs to user's organization via loan
-    if document.loan_id:
-        _verify_loan_tenant(db, document.loan_id, current_user)
+    # Tenant isolation: verify document exists and belongs to user's organization
+    document = _verify_document_tenant(db, document_id, current_user)
 
     return {
         "id": document.id,
@@ -482,20 +475,9 @@ async def download_document(
     Returns a temporary URL that can be used to download the file directly from S3.
     Requires authentication and verifies the requesting user's org matches the document's loan org.
     """
-    document = db.query(SmartDocument).filter(
-        SmartDocument.id == document_id
-    ).first()
-
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    # Tenant isolation: verify document belongs to user's organization via loan
+    # Tenant isolation: verify document exists and belongs to user's organization
+    document = _verify_document_tenant(db, document_id, current_user)
     org_id = getattr(current_user, 'organization_id', None)
-    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
-    if document.loan_id and org_id and not is_platform_admin:
-        doc_org_id = _get_loan_org_id(db, document.loan_id)
-        if doc_org_id is not None and doc_org_id != org_id:
-            raise HTTPException(status_code=404, detail="Document not found")
 
     if not document.storage_key:
         raise HTTPException(status_code=404, detail="Document file not available")
@@ -823,21 +805,41 @@ async def get_expiring_documents(
     """Get documents expiring within the specified window."""
     if loan_id:
         _verify_loan_tenant(db, loan_id, current_user)
+
     scheduler = AutoRenewalScheduler(db)
+    expiring = scheduler.get_upcoming_expirations(
+        loan_id=loan_id,
+        days_ahead=days_ahead,
+    )
+
+    # Tenant isolation: when no loan_id filter, restrict results to user's org
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not loan_id and org_id and not is_platform_admin:
+        from sqlalchemy import text as sa_text
+        tenant_loan_ids = {
+            row[0] for row in db.execute(
+                sa_text("SELECT id FROM loans WHERE organization_id = :org_id"),
+                {"org_id": org_id}
+            ).fetchall()
+        }
+        expiring = [doc for doc in expiring if doc.get("loan_id") in tenant_loan_ids]
+
     return {
         "days_ahead": days_ahead,
-        "expiring_documents": scheduler.get_upcoming_expirations(
-            loan_id=loan_id,
-            days_ahead=days_ahead,
-        ),
+        "expiring_documents": expiring,
     }
 
 
 @router.post("/check-expiration")
 async def run_expiration_check(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
-    """Run expiration check and mark expired documents."""
+    """Run expiration check and mark expired documents. Requires admin."""
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not is_platform_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
     scheduler = AutoRenewalScheduler(db)
     return scheduler.run_expiration_check()
 
@@ -845,8 +847,12 @@ async def run_expiration_check(
 @router.post("/process-renewals")
 async def process_renewals(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
-    """Process pending document renewals."""
+    """Process pending document renewals. Requires admin."""
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not is_platform_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
     scheduler = AutoRenewalScheduler(db)
     return scheduler.process_pending_renewals()
 
@@ -859,8 +865,26 @@ async def process_renewals(
 async def infer_payroll_frequency(
     borrower_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Infer payroll frequency from historical paystub data."""
+    # Tenant isolation: verify borrower belongs to a loan owned by user's org
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if org_id and not is_platform_admin:
+        from sqlalchemy import text as sa_text
+        borrower_loan = db.execute(
+            sa_text("""
+                SELECT l.id FROM loans l
+                JOIN smart_documents sd ON sd.loan_id = l.id
+                WHERE sd.borrower_id = :borrower_id AND l.organization_id = :org_id
+                LIMIT 1
+            """),
+            {"borrower_id": borrower_id, "org_id": org_id}
+        ).first()
+        if not borrower_loan:
+            raise HTTPException(status_code=404, detail="Not found")
+
     scheduler = AutoRenewalScheduler(db)
     frequency = scheduler.infer_payroll_frequency(borrower_id)
 
@@ -911,6 +935,7 @@ async def update_payroll_frequency(
 async def list_templates(
     active_only: bool = True,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """List available needs list templates."""
     import json
@@ -944,6 +969,7 @@ async def list_templates(
 async def get_template(
     template_id: int,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get a specific needs list template."""
     import json
@@ -1014,6 +1040,7 @@ async def get_applicants_with_pending_review(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Get all applicants/loans that have documents pending review.
@@ -1031,6 +1058,19 @@ async def get_applicants_with_pending_review(
     try:
         from sqlalchemy import func, distinct
         from models.purl import PURLLoan, PURLWorkspace
+        from models.loan import Loan
+
+        # Tenant isolation
+        org_id = getattr(current_user, 'organization_id', None)
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
+        # Build base filters
+        pending_filters = [SmartDocument.status == 'PENDING_REVIEW']
+
+        # Add tenant isolation - filter by loans that belong to user's organization
+        if not is_platform_admin and org_id:
+            org_loan_ids = db.query(Loan.id).filter(Loan.organization_id == org_id).subquery()
+            pending_filters.append(SmartDocument.loan_id.in_(org_loan_ids))
 
         # Get loans with pending documents
         pending_docs_query = db.query(
@@ -1038,12 +1078,12 @@ async def get_applicants_with_pending_review(
             func.count(SmartDocument.id).label('pending_count'),
             func.min(SmartDocument.uploaded_at).label('oldest_upload')
         ).filter(
-            SmartDocument.status == 'PENDING_REVIEW'
+            *pending_filters
         ).group_by(SmartDocument.loan_id)
 
         # Get total count
         total_query = db.query(func.count(distinct(SmartDocument.loan_id))).filter(
-            SmartDocument.status == 'PENDING_REVIEW'
+            *pending_filters
         ).scalar() or 0
 
         # Paginate
@@ -1258,42 +1298,63 @@ async def get_applicants_with_outstanding_docs(
 @router.get("/dashboard/summary")
 async def get_document_dashboard_summary(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Get summary statistics for the document management dashboard.
     """
     from sqlalchemy import func
+    from models.loan import Loan
+
+    # Tenant isolation
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
+    # Build tenant-scoped loan ID subquery
+    if not is_platform_admin and org_id:
+        org_loan_ids = db.query(Loan.id).filter(Loan.organization_id == org_id).subquery()
+        doc_tenant_filter = [SmartDocument.loan_id.in_(org_loan_ids)]
+        req_tenant_filter = [DocumentRequest.loan_id.in_(org_loan_ids)]
+    else:
+        doc_tenant_filter = []
+        req_tenant_filter = []
 
     # Pending review count
     pending_review = db.query(func.count(SmartDocument.id)).filter(
-        SmartDocument.status == 'PENDING_REVIEW'
+        SmartDocument.status == 'PENDING_REVIEW',
+        *doc_tenant_filter,
     ).scalar() or 0
 
     # Pending review by unique loans
     pending_review_loans = db.query(func.count(func.distinct(SmartDocument.loan_id))).filter(
-        SmartDocument.status == 'PENDING_REVIEW'
+        SmartDocument.status == 'PENDING_REVIEW',
+        *doc_tenant_filter,
     ).scalar() or 0
 
     # Outstanding requests
     outstanding = db.query(func.count(DocumentRequest.id)).filter(
-        DocumentRequest.status == RequestStatus.OPEN
+        DocumentRequest.status == RequestStatus.OPEN,
+        *req_tenant_filter,
     ).scalar() or 0
 
     # Outstanding by unique loans
     outstanding_loans = db.query(func.count(func.distinct(DocumentRequest.loan_id))).filter(
-        DocumentRequest.status == RequestStatus.OPEN
+        DocumentRequest.status == RequestStatus.OPEN,
+        *req_tenant_filter,
     ).scalar() or 0
 
     # Overdue requests
     overdue = db.query(func.count(DocumentRequest.id)).filter(
         DocumentRequest.status == RequestStatus.OPEN,
-        DocumentRequest.due_date < func.now()
+        DocumentRequest.due_date < func.now(),
+        *req_tenant_filter,
     ).scalar() or 0
 
     # Documents processed today
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     processed_today = db.query(func.count(SmartDocument.id)).filter(
-        SmartDocument.reviewed_at >= today_start
+        SmartDocument.reviewed_at >= today_start,
+        *doc_tenant_filter,
     ).scalar() or 0
 
     return {
@@ -1323,24 +1384,35 @@ async def get_smart_docs_loans(
     limit: int = Query(100, ge=1, le=500),
     stage: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Get all loans for Smart Docs dashboard.
 
     This endpoint returns all loans in active stages for document tracking purposes.
     Unlike the main /api/v1/loans/ endpoint, this does NOT filter by loan_officer_id
-    because Smart Docs is a document management tool that should show all active loans.
+    because Smart Docs is a document management tool that should show all active loans
+    within the user's organization.
     """
     from sqlalchemy import text
 
     try:
+        # Tenant isolation
+        org_id = getattr(current_user, 'organization_id', None)
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
         # Build WHERE clause for active loans (exclude funded)
         where_clauses = ["stage != 'Funded'"]
         params = {"skip": skip, "limit": limit}
 
+        # Add tenant isolation filter
+        if not is_platform_admin and org_id:
+            where_clauses.append("organization_id = :org_id")
+            params["org_id"] = org_id
+
         # Filter by specific stage if provided
         if stage:
-            where_clauses = ["stage = :stage"]
+            where_clauses.append("stage = :stage")
             params["stage"] = stage
 
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
@@ -1400,6 +1472,7 @@ async def get_document_queue(
     sla_status: Optional[str] = Query(default=None, description="Filter by SLA status: GOOD, AT_RISK, BREACHED"),
     search: Optional[str] = Query(default=None, description="Search by borrower name or loan number"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Get the prioritized document queue.
@@ -1414,25 +1487,67 @@ async def get_document_queue(
     """
     from services.smart_docs.queue_service import QueueService
 
+    # Tenant isolation
+    org_id = getattr(current_user, 'organization_id', None)
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
     queue_service = QueueService(db)
-    return queue_service.get_queue(
+    result = queue_service.get_queue(
         page=page,
         limit=limit,
         filter_sla_status=sla_status,
         search_query=search,
     )
 
+    # Post-filter by tenant if not platform admin
+    if not is_platform_admin and org_id:
+        from sqlalchemy import text as sa_text
+        tenant_loan_ids = {
+            row[0] for row in db.execute(
+                sa_text("SELECT id FROM loans WHERE organization_id = :org_id"),
+                {"org_id": org_id}
+            ).fetchall()
+        }
+        if isinstance(result, dict) and "items" in result:
+            result["items"] = [item for item in result["items"] if item.get("loan_id") in tenant_loan_ids]
+            result["total"] = len(result["items"])
+        elif isinstance(result, dict) and "queue" in result:
+            result["queue"] = [item for item in result["queue"] if item.get("loan_id") in tenant_loan_ids]
+            result["total"] = len(result["queue"])
+
+    return result
+
 
 @router.get("/queue/summary")
 async def get_queue_summary(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get summary statistics for the document queue."""
     try:
         from services.smart_docs.queue_service import QueueService
 
+        # Tenant isolation
+        org_id = getattr(current_user, 'organization_id', None)
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+
         queue_service = QueueService(db)
-        return queue_service.get_queue_summary()
+        result = queue_service.get_queue_summary()
+
+        # Post-filter: if the summary includes per-loan data, restrict to tenant
+        if not is_platform_admin and org_id and isinstance(result, dict):
+            from sqlalchemy import text as sa_text
+            tenant_loan_ids = {
+                row[0] for row in db.execute(
+                    sa_text("SELECT id FROM loans WHERE organization_id = :org_id"),
+                    {"org_id": org_id}
+                ).fetchall()
+            }
+            for key in ("items", "queue", "loans"):
+                if key in result and isinstance(result[key], list):
+                    result[key] = [item for item in result[key] if item.get("loan_id") in tenant_loan_ids]
+
+        return result
     except Exception as e:
         logger.error(f"Queue summary error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Queue service error")

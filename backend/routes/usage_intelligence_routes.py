@@ -26,18 +26,14 @@ _get_db = None
 _get_current_user = None
 
 
+from db import get_db
+
+
 def set_dependencies(get_db_func, get_current_user_func):
     """Set the database and user dependencies from main app."""
     global _get_db, _get_current_user
     _get_db = get_db_func
     _get_current_user = get_current_user_func
-
-
-def get_db():
-    """Wrapper for database dependency."""
-    if _get_db is None:
-        raise RuntimeError("Database dependency not configured. Call set_dependencies first.")
-    yield from _get_db()
 
 
 async def get_current_user(

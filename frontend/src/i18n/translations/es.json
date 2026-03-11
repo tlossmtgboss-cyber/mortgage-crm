@@ -1,0 +1,78 @@
+{
+  "booking": {
+    "loading": "Cargando...",
+    "unavailable": "Reserva no disponible",
+    "poweredBy": "Desarrollado por",
+    "scheduleAppointment": "Programar una cita",
+    "errorSelectDateTime": "Por favor seleccione una fecha y hora.",
+    "errorRequiredFields": "Por favor complete todos los campos obligatorios.",
+    "errorVerification": "Por favor complete el desaf\u00edo de verificaci\u00f3n.",
+    "errorBookingFailed": "No se pudo completar su reserva. Int\u00e9ntelo de nuevo o cont\u00e1ctenos para obtener ayuda.",
+    "errorCancelFailed": "No se pudo cancelar la cita. Int\u00e9ntelo de nuevo o cont\u00e1ctenos para obtener ayuda.",
+    "errorCancelRetry": "No se pudo cancelar la cita. Int\u00e9ntelo de nuevo.",
+    "errorLinkNotAvailable": "Este enlace de reserva no est\u00e1 disponible.",
+    "errorLoadFailed": "No se pudo cargar la p\u00e1gina de reserva.",
+    "errorConnectFailed": "No se pudo conectar con el servicio de reservas.",
+    "errorPhoneInvalid": "Ingrese un n\u00famero de tel\u00e9fono v\u00e1lido de EE.UU., ej. (555) 123-4567"
+  },
+  "datetime": {
+    "pickDate": "Elija una fecha",
+    "pickTime": "Elija una hora",
+    "timeSubtitle": "Elija su hora preferida. Puede reprogramar en cualquier momento.",
+    "noTimes": "No hay horarios disponibles",
+    "previousWeek": "Semana anterior",
+    "nextWeek": "Semana siguiente",
+    "selectType": "Seleccione tipo de cita",
+    "next": "Siguiente",
+    "phoneCall": "Llamada telef\u00f3nica",
+    "videoCall": "Videollamada",
+    "min": "min"
+  },
+  "form": {
+    "back": "Volver",
+    "title": "Cu\u00e9ntenos un poco sobre usted",
+    "firstName": "Nombre",
+    "lastName": "Apellido",
+    "email": "Correo electr\u00f3nico",
+    "phone": "Tel\u00e9fono",
+    "phonePlaceholder": "(   )    -",
+    "phoneHint": "Es posible que le llamemos o enviemos un mensaje sobre su cita.",
+    "notes": "Notas (opcional)",
+    "notesPlaceholder": "\u00bfHay otros horarios que le funcionen? \u00bfAlg\u00fan tema espec\u00edfico que discutir?",
+    "workingWithLO": "\u00bfEst\u00e1 trabajando actualmente con un oficial de pr\u00e9stamos?",
+    "yes": "S\u00ed",
+    "no": "No",
+    "scheduling": "Programando...",
+    "scheduleAppointment": "Programar cita",
+    "required": "*"
+  },
+  "confirmation": {
+    "title": "Su solicitud ha sido realizada",
+    "subtitle": "Intentaremos programar su cita. Recibir\u00e1 un correo electr\u00f3nico una vez que se confirme la hora.",
+    "details": "Detalles de la cita",
+    "date": "Fecha:",
+    "time": "Hora:",
+    "type": "Tipo:",
+    "format": "Formato:",
+    "videoCall": "Videollamada",
+    "phoneCall": "Llamada telef\u00f3nica",
+    "goHome": "Ir a la p\u00e1gina principal",
+    "cancelAppointment": "Cancelar cita",
+    "yesCancel": "S\u00ed, cancelar",
+    "cancelling": "Cancelando...",
+    "nevermind": "No importa"
+  },
+  "cancelled": {
+    "title": "Cita cancelada",
+    "subtitle": "Su cita ha sido cancelada exitosamente. Puede reservar una nueva cita en cualquier momento.",
+    "bookNew": "Reservar nueva cita"
+  },
+  "language": {
+    "label": "Idioma",
+    "en": "English",
+    "es": "Espa\u00f1ol",
+    "zh": "\u4e2d\u6587",
+    "vi": "Ti\u1ebfng Vi\u1ec7t",
+    "ko": "\ud55c\uad6d\uc5b4"
+  }
+}

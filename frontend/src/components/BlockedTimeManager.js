@@ -6,10 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAuthHeaders } from '../utils/auth';
+import api from '../services/api';
 import './BlockedTimeManager.css';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const BLOCK_TYPES = [
   { value: 'pto', label: 'PTO', icon: 'fa-umbrella-beach', color: '#0d9488' },
@@ -74,11 +72,8 @@ const BlockedTimeManager = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/blocked-times`, {
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to load blocked times');
-      const data = await res.json();
+      const res = await api.get('/api/v1/scheduler/blocked-times');
+      const data = res.data;
       setBlocks(data.blocked_times || data || []);
     } catch (err) {
       setError(err.message);
@@ -191,16 +186,7 @@ const BlockedTimeManager = () => {
         payload.end_time = form.end_time || null;
       }
 
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/blocked-times`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.error?.message || 'Failed to create blocked time');
-      }
+      await api.post('/api/v1/scheduler/blocked-times', payload);
 
       setShowModal(false);
       await loadBlocks();
@@ -213,11 +199,7 @@ const BlockedTimeManager = () => {
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/blocked-times/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) throw new Error('Failed to delete');
+      await api.delete(`/api/v1/scheduler/blocked-times/${id}`);
       setDeleteConfirm(null);
       await loadBlocks();
     } catch (err) {

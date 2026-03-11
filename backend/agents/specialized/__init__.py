@@ -1,7 +1,7 @@
 """
 Perennia AI - Specialized Agent Tools
 
-This module contains 23 specialized AI agents with 194+ tools designed
+This module contains 26 specialized AI agents with 239+ tools designed
 for mortgage CRM operations:
 
 CORE CRM AGENTS (8):
@@ -14,7 +14,7 @@ CORE CRM AGENTS (8):
 7. Portfolio Agent - Post-close client management
 8. Compliance Agent - Regulatory compliance monitoring
 
-EXTENDED AGENTS (15):
+EXTENDED AGENTS (18):
 9. Receptionist Agent - AI voice/chat receptionist
 10. Profitability Agent - Loan and branch profitability analysis
 11. Subscription Agent - SaaS subscription and billing management
@@ -30,6 +30,10 @@ EXTENDED AGENTS (15):
 21. Salesforce Agent - Salesforce integration and bidirectional sync
 22. Content Marketing Agent - Content calendars, carousels, SEO, publishing
 23. Ops Manager Agent - Proactive pipeline patrol and impediment detection
+24. Document Intelligence Agent - AI-powered document classification, review, income calculation
+25. Document Follow-Up Agent - Multi-channel document follow-up campaigns, urgency, escalation
+26. Document Review Agent - Deep document review, fraud detection, risk scoring, and underwriting condition generation
+27. Income Analysis Agent - Income calculation, DTI, trending, gap detection, gross-up, and underwriter findings
 """
 
 from .base import SpecializedAgent, AgentTool, AgentRegistry, ToolCategory, RiskLevel, ToolResult
@@ -60,6 +64,10 @@ from .rate_advisor_agent import RateAdvisorAgent
 from .salesforce_agent import SalesforceAgent
 from .content_marketing_agent import ContentMarketingAgent
 from .ops_manager_agent import OpsManagerAgent
+from .document_intelligence_agent import DocumentIntelligenceAgent
+from .document_followup_agent import DocumentFollowUpAgent
+from .document_review_agent import DocumentReviewAgent
+from .income_analysis_agent import IncomeAnalysisAgent
 
 __all__ = [
     # Base classes
@@ -96,8 +104,12 @@ __all__ = [
     "SalesforceAgent",
     "ContentMarketingAgent",
     "OpsManagerAgent",
+    "DocumentIntelligenceAgent",
+    "DocumentFollowUpAgent",
+    "DocumentReviewAgent",
+    "IncomeAnalysisAgent",
 ]
 
 # Agent count for verification
-AGENT_COUNT = 23
-TOOL_COUNT = 194  # 23 agents × ~8.4 tools average
+AGENT_COUNT = 27
+TOOL_COUNT = 254  # 27 agents × ~9.4 tools average

@@ -29,7 +29,8 @@ router = APIRouter(prefix="/api/v1/perennia-docs", tags=["Perennia Docs AI"])
 # DEPENDENCY INJECTION STORAGE
 # ============================================================================
 
-_get_db: Callable = None
+from db import get_db
+
 _get_current_user: Callable = None
 _User: Any = None
 _models: Dict[str, Any] = None
@@ -37,19 +38,11 @@ _models: Dict[str, Any] = None
 
 def set_dependencies(get_db_func: Callable, get_current_user_func: Callable, user_model: Any, perennia_models: Dict[str, Any] = None):
     """Set dependencies from main.py to avoid circular imports."""
-    global _get_db, _get_current_user, _User, _models
-    _get_db = get_db_func
+    global _get_current_user, _User, _models
     _get_current_user = get_current_user_func
     _User = user_model
     _models = perennia_models
     logger.info("Perennia Docs routes dependencies set")
-
-
-def get_db():
-    """Get database session dependency - wrapper for injected dependency."""
-    if _get_db is None:
-        raise RuntimeError("Perennia Docs routes not initialized. Call set_dependencies first.")
-    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
