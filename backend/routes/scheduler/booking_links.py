@@ -1,12 +1,12 @@
 """
 Scheduler Booking Links - CRUD endpoints for booking links.
 
-Extracted from routes/scheduler_appointment_routes.py
-
 Endpoints:
   - GET    /booking-links/all          List all org booking links (admin only)
   - GET    /booking-links              List user's booking links
   - POST   /booking-links              Create a booking link
+  - GET    /booking-links/{link_id}    Get a booking link
+  - PUT    /booking-links/{link_id}    Update a booking link
   - DELETE /booking-links/{link_id}    Delete (deactivate) a booking link
 """
 
@@ -17,70 +17,14 @@ import logging
 from smart_scheduler_models import RoutingStrategy
 from scheduler_models import BookingLinkCreate
 
+from routes.scheduler._helpers import (
+    get_current_user, get_models, _get_org_id, _audit_log,
+)
+from db import get_db
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ============================================================================
-# DEPENDENCY INJECTION STORAGE
-# ============================================================================
-
-_get_db = None
-_get_current_user_func = None
-_models = None
-
-
-def set_dependencies(get_db_func, get_current_user_func, models_dict):
-    """Set dependencies from parent module."""
-    global _get_db, _get_current_user_func, _models
-    _get_db = get_db_func
-    _get_current_user_func = get_current_user_func
-    _models = models_dict
-
-
-def get_db():
-    if _get_db is None:
-        raise RuntimeError("Dependencies not set")
-    yield from _get_db()
-
-
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user_func is None:
-        raise RuntimeError("Dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user_func(token=token, request=request, db=db)
-
-
-def _get_org_id(user) -> int:
-    """Get organization_id from user, raise 403 if missing."""
-    org_id = getattr(user, 'organization_id', None)
-    if org_id is None:
-        raise HTTPException(status_code=403, detail="No organization context")
-    return org_id
-
-
-def _audit_log(db, org_id: int, user_id: int, action: str, entity_type: str,
-               entity_id: int = None, changes: dict = None, request: Request = None):
-    """Record an audit log entry for scheduler operations."""
-    AuditLog = _models.get('SchedulerAuditLog')
-    if not AuditLog:
-        return
-    try:
-        entry = AuditLog(
-            organization_id=org_id,
-            user_id=user_id,
-            action=action,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            changes=changes,
-            ip_address=request.client.host if request and request.client else None,
-            user_agent=str(request.headers.get('user-agent', ''))[:255] if request else None,
-        )
-        db.add(entry)
-        # Don't commit here — let the caller's commit include this
-    except Exception as e:
-        logger.warning(f"Failed to write audit log: {e}")
 
 
 # ============================================================================
@@ -101,6 +45,7 @@ async def list_all_booking_links(
     if user_role.lower() not in ('admin', 'leadership', 'management', 'site_admin', 'platform_admin'):
         raise HTTPException(status_code=403, detail="Admin access required to list all booking links")
 
+    _models = get_models()
     BookingLink = _models['BookingLink']
     User = _models.get('User')
 
@@ -143,6 +88,7 @@ async def list_booking_links(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
+    _models = get_models()
     BookingLink = _models['BookingLink']
 
     links = db.query(BookingLink).filter(
@@ -180,9 +126,10 @@ async def create_booking_link(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
+    _models = get_models()
     BookingLink = _models['BookingLink']
 
-    # Check for duplicate slug globally — public lookup is cross-org so slugs must be unique
+    # Check for duplicate slug globally -- public lookup is cross-org so slugs must be unique
     existing = db.query(BookingLink).filter(
         BookingLink.slug == link_data.slug,
         BookingLink.is_active == True
@@ -236,6 +183,7 @@ async def delete_booking_link(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
+    _models = get_models()
     BookingLink = _models['BookingLink']
 
     link = db.query(BookingLink).filter(

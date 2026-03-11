@@ -1,11 +1,36 @@
 """
-Scheduler sub-package: extracted route modules for the scheduler.
+Scheduler sub-package: focused route modules for the appointment scheduling system.
 
 Modules:
-  - appointments_crud: Appointment CRUD, status transitions, booking links, AI recommendations
-  - blocked_time: Blocked time CRUD (lunch breaks, OOO, capacity blocks)
-  - booking_links: Booking link CRUD endpoints (superseded by appointments_crud)
-  - blocked_times: Blocked time CRUD endpoints (superseded by blocked_time)
-  - availability: Availability slots, conflict detection, slot generation engine
-  - public_booking: Public booking endpoints (no auth required, rate-limited)
+  - _helpers:        Shared helpers (auth, rate limiting, sanitization, conflict detection, CRM, slot engine)
+  - appointments:    Appointment CRUD, status transitions, timeline
+  - availability:    Availability slots CRUD, authenticated available-slots endpoint
+  - blocked_times:   Blocked time CRUD (lunch breaks, OOO, capacity blocks)
+  - booking_links:   Booking link CRUD endpoints
+  - public_booking:  Public booking endpoints (no auth required, rate-limited)
+  - ai_scheduling:   AI slot recommendations, no-show risk scoring
+  - email_testing:   Email service status and test endpoints
+
+Superseded modules (kept for backward compat, not included in scheduler_router):
+  - appointments_crud: Original combined module (superseded by appointments + booking_links + ai_scheduling)
+  - blocked_time:      Original blocked time module (superseded by blocked_times)
 """
+
+from fastapi import APIRouter
+
+from .appointments import router as appointments_router
+from .availability import router as availability_router
+from .blocked_times import router as blocked_times_router
+from .booking_links import router as booking_links_router
+from .public_booking import router as public_booking_router
+from .ai_scheduling import router as ai_scheduling_router
+from .email_testing import router as email_testing_router
+
+scheduler_router = APIRouter()
+scheduler_router.include_router(appointments_router)
+scheduler_router.include_router(availability_router)
+scheduler_router.include_router(blocked_times_router)
+scheduler_router.include_router(booking_links_router)
+scheduler_router.include_router(public_booking_router)
+scheduler_router.include_router(ai_scheduling_router)
+scheduler_router.include_router(email_testing_router)

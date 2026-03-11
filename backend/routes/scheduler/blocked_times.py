@@ -1,11 +1,16 @@
 """
 Scheduler Blocked Times - CRUD endpoints for blocked time periods.
 
-Extracted from routes/scheduler_appointment_routes.py
+Manages:
+  - Blocked time slot CRUD (meetings, personal, admin blocks)
+  - Lunch break management (via block_type='lunch')
+  - Out-of-office management (via block_type='ooo' / all_day blocks)
+  - Capacity-limiting time blocks (applies_to_all_users)
 
 Endpoints:
   - GET    /blocked-times              List blocked time periods
   - POST   /blocked-times              Create a blocked time period
+  - PUT    /blocked-times/{block_id}   Update a blocked time period
   - DELETE /blocked-times/{block_id}   Delete a blocked time period
 """
 
@@ -18,80 +23,14 @@ import logging
 
 from scheduler_models import BlockedTimeCreate
 
+from routes.scheduler._helpers import (
+    get_current_user, get_models, _get_org_id, _is_scheduler_admin, _audit_log,
+)
+from db import get_db
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ============================================================================
-# DEPENDENCY INJECTION STORAGE
-# ============================================================================
-
-_get_db = None
-_get_current_user_func = None
-_models = None
-
-
-def set_dependencies(get_db_func, get_current_user_func, models_dict):
-    """Set dependencies from parent module."""
-    global _get_db, _get_current_user_func, _models
-    _get_db = get_db_func
-    _get_current_user_func = get_current_user_func
-    _models = models_dict
-
-
-def get_db():
-    if _get_db is None:
-        raise RuntimeError("Dependencies not set")
-    yield from _get_db()
-
-
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    if _get_current_user_func is None:
-        raise RuntimeError("Dependencies not set")
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await _get_current_user_func(token=token, request=request, db=db)
-
-
-def _get_org_id(user) -> int:
-    """Get organization_id from user, raise 403 if missing."""
-    org_id = getattr(user, 'organization_id', None)
-    if org_id is None:
-        raise HTTPException(status_code=403, detail="No organization context")
-    return org_id
-
-
-def _is_scheduler_admin(user) -> bool:
-    """
-    Standardized admin check for scheduler endpoints.
-    Uses permission_role (primary) with role fallback.
-    Only true security roles qualify.
-    """
-    role = getattr(user, 'permission_role', '') or getattr(user, 'role', '') or ''
-    return role.lower() in ('admin', 'site_admin', 'platform_admin')
-
-
-def _audit_log(db, org_id: int, user_id: int, action: str, entity_type: str,
-               entity_id: int = None, changes: dict = None, request: Request = None):
-    """Record an audit log entry for scheduler operations."""
-    AuditLog = _models.get('SchedulerAuditLog')
-    if not AuditLog:
-        return
-    try:
-        entry = AuditLog(
-            organization_id=org_id,
-            user_id=user_id,
-            action=action,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            changes=changes,
-            ip_address=request.client.host if request and request.client else None,
-            user_agent=str(request.headers.get('user-agent', ''))[:255] if request else None,
-        )
-        db.add(entry)
-        # Don't commit here — let the caller's commit include this
-    except Exception as e:
-        logger.warning(f"Failed to write audit log: {e}")
 
 
 # ============================================================================
@@ -109,6 +48,7 @@ async def list_blocked_times(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
+    _models = get_models()
     BlockedTime = _models['BlockedTime']
 
     query = db.query(BlockedTime).filter(
@@ -153,10 +93,11 @@ async def create_blocked_time(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Create a blocked time period"""
+    """Create a blocked time period (lunch breaks, OOO, personal blocks, etc.)"""
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
+    _models = get_models()
     BlockedTime = _models['BlockedTime']
 
     # H1: Only admins can set applies_to_all_users
@@ -201,6 +142,7 @@ async def delete_blocked_time(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
+    _models = get_models()
     BlockedTime = _models['BlockedTime']
 
     blocked = db.query(BlockedTime).filter(

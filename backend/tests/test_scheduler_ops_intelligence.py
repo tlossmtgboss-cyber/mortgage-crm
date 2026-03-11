@@ -124,7 +124,7 @@ class TestC1_SMSConsentCheck:
             checker_inst.check_dnc.return_value = (False, "Not on DNC")
             MockChecker.return_value = checker_inst
 
-            with patch("scheduler_email_service.SessionLocal", return_value=mock_db):
+            with patch("database.SessionLocal", return_value=mock_db):
                 can_send, reason = check_sms_consent(
                     "+15551234567", organization_id=1
                 )
@@ -1103,7 +1103,7 @@ class TestDNCFailClosed:
             checker_inst.check_dnc.side_effect = Exception("Redis connection timeout")
             MockChecker.return_value = checker_inst
 
-            with patch("scheduler_email_service.SessionLocal", return_value=mock_db):
+            with patch("database.SessionLocal", return_value=mock_db):
                 can_send, reason = check_sms_consent(
                     "+15551234567", organization_id=1
                 )
