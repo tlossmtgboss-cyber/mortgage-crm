@@ -11,6 +11,12 @@ Modules:
   - ai_scheduling:   AI slot recommendations, no-show risk scoring
   - email_testing:   Email service status and test endpoints
   - search:          Advanced appointment search with full-text, filters, pagination
+  - meetings:        Virtual meeting integration (Zoom, Google Meet, Teams, Perennia Meet)
+  - reminders:       Reminder template CRUD, send history, test endpoint
+  - booking_meta:    SEO meta endpoint for booking link previews (public, no auth)
+  - sitemap:         XML sitemap and robots.txt for search engine discovery (public)
+  - waitlist:        Waiting room / queue management (authenticated + public)
+  - recurring_availability: Recurring weekly patterns, date exceptions, org templates
 
 Superseded modules (kept for backward compat, not included in scheduler_router):
   - appointments_crud: Original combined module (superseded by appointments + booking_links + ai_scheduling)
@@ -27,6 +33,12 @@ from .public_booking import router as public_booking_router
 from .ai_scheduling import router as ai_scheduling_router
 from .email_testing import router as email_testing_router
 from .search import router as search_router
+from .meetings import router as meetings_router
+from .booking_meta import router as booking_meta_router
+from .sitemap import router as sitemap_router
+from .reminders import router as reminders_router
+from .waitlist import router as waitlist_router
+from .recurring_availability import router as recurring_availability_router
 
 scheduler_router = APIRouter()
 scheduler_router.include_router(appointments_router)
@@ -37,3 +49,9 @@ scheduler_router.include_router(public_booking_router)
 scheduler_router.include_router(ai_scheduling_router)
 scheduler_router.include_router(email_testing_router)
 scheduler_router.include_router(search_router)
+scheduler_router.include_router(meetings_router)
+scheduler_router.include_router(booking_meta_router)
+scheduler_router.include_router(sitemap_router)
+scheduler_router.include_router(reminders_router)
+scheduler_router.include_router(waitlist_router)
+scheduler_router.include_router(recurring_availability_router)

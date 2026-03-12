@@ -459,6 +459,24 @@ async def create_appointment(
 
     logger.info(f"Appointment created: {appointment.id} by user {user.id}")
 
+    # Auto-generate meeting link for video appointments
+    meeting_link_generated = False
+    if meeting_mode == MeetingMode.VIDEO and not appointment.video_link:
+        try:
+            from services.virtual_meeting_service import create_meeting_for_appointment
+            meeting_result = await create_meeting_for_appointment(
+                db=db, appointment=appointment, provider="auto",
+                user_id=user.id, org_id=org_id,
+            )
+            if meeting_result.success:
+                meeting_link_generated = True
+                logger.info(
+                    f"Auto-generated meeting link for appointment {appointment.id}: "
+                    f"provider={meeting_result.provider}, url={meeting_result.join_url}"
+                )
+        except Exception as ml_err:
+            logger.warning(f"Could not auto-generate meeting link for appointment {appointment.id}: {ml_err}")
+
     # CRM Integration: Create/link lead if not already linked
     if not appointment.lead_id and appt_data.attendee_email:
         lead_id = _ensure_lead_for_booking(
@@ -1046,6 +1064,19 @@ async def cancel_appointment(
 
     logger.info(f"Appointment {appointment_id} cancelled by user {user.id}")
 
+    # Waitlist auto-offer: notify next person on the waitlist for this appointment type
+    waitlist_offered = None
+    try:
+        from services.waitlist_service import WaitlistService
+        _models = get_models()
+        waitlist_svc = WaitlistService(db, _models)
+        waitlist_offered = waitlist_svc.process_cancellation(appointment_id, org_id)
+        if waitlist_offered:
+            db.commit()
+            logger.info(f"Waitlist auto-offer: offered to {waitlist_offered.get('name')} (entry {waitlist_offered.get('entry_id')})")
+    except Exception as e:
+        logger.warning(f"Waitlist auto-offer failed (non-blocking): {e}")
+
     # Send cancellation emails
     emails_sent = []
 
@@ -1084,5 +1115,6 @@ async def cancel_appointment(
 
     return {
         "message": "Appointment cancelled",
-        "emails_sent": emails_sent
+        "emails_sent": emails_sent,
+        "waitlist_offered": waitlist_offered,
     }

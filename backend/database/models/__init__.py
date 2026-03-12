@@ -358,6 +358,8 @@ from .esignature import (
     ESignatureField,
     ESignatureAuditEvent,
     ESignatureTemplate,
+    ESignConsentSession,
+    ESignKBASession,
     EnvelopeStatus,
     RecipientType,
     RecipientStatus,
@@ -386,8 +388,154 @@ from .scheduling_analytics import (
     AppointmentOutcome,
 )
 
+# Decision audit trail models (append-only audit log, retention config)
+from .decision_audit import (
+    DecisionAuditLog,
+    AuditRetentionConfig,
+    ArchivedDecisionAuditLog,
+)
+
+# TCPA Smart Docs consent & DNC models
+from .tcpa_smart_docs import (
+    SmartDocsConsentRecord,
+    InternalDNCEntry,
+    OutreachLog,
+)
+
+# Business rule configuration (database-backed thresholds & limits)
+from .business_rules import BusinessRuleConfig
+
 # Calendar event mapping (provider-agnostic sync)
 from .calendar_event_map import CalendarEventMap
+
+# Document processing cache (hash-based AI result caching)
+from .document_cache import DocumentProcessingCache
+
+# eClosing session models (Snapdocs/Pavaso/NotaryCam integration)
+from .eclosing import (
+    EClosingSession,
+    EClosingSessionStatus,
+    ClosingType,
+    NotaryType,
+    EClosingProvider,
+)
+
+# Plaid bank account integration
+from .plaid_connection import PlaidConnection
+
+# AUS (Automated Underwriting System) submission tracking
+from .aus_submission import AUSSubmission
+
+# IRS Transcript (4506-C request and income verification)
+from .irs_transcript import (
+    IRSTranscriptRequest,
+    TranscriptType,
+    TranscriptStatus,
+)
+
+# AI Benchmark (classification accuracy benchmarking)
+from .ai_benchmark import (
+    AIBenchmarkDataset,
+    AIBenchmarkSample,
+)
+
+# Document version control (Smart Docs V2)
+from .document_version import DocumentVersion, ChangeType
+
+# Document annotation (Smart Docs V2)
+from .document_annotation import DocumentAnnotation, AnnotationType, AnnotationStatus
+
+# Document search index (Smart Docs V2 full-text search)
+from .document_search_index import (
+    DocumentSearchIndex,
+    SavedSearch,
+    SearchAnalyticsEvent,
+)
+
+# Smart Docs batch job tracking
+from .batch_job import (
+    BatchJob,
+    BatchJobType,
+    BatchJobStatus,
+)
+
+# Smart Docs V2 document templates
+from .document_template import (
+    DocumentTemplate,
+    DocumentGenerationLog,
+)
+
+# Document Archive (post-closing archive lifecycle)
+from .document_archive import (
+    DocumentArchive,
+    ArchiveType,
+    ArchiveStatus,
+    RetentionPolicy,
+    StorageClass,
+)
+
+# Smart Docs Escalation Engine (rule-based escalation chains)
+from .escalation_rule import (
+    EscalationRule as SmartDocsEscalationRule,
+    EscalationEvent as SmartDocsEscalationEvent,
+)
+
+# Smart Docs Follow-Up Cadence Engine
+from .followup_cadence import (
+    FollowupCadence,
+    FollowupExecution,
+)
+
+# Smart Docs White-Label (per-org branding & email templates)
+from .white_label_config import (
+    WhiteLabelConfig,
+    EmailTemplate as SmartDocsEmailTemplate,
+)
+
+# Smart Docs SLA Configuration & Tracking
+from .doc_sla_config import DocSLAConfig, DocSLATracking
+
+# Smart Docs Document Routing (Enterprise)
+from .routing_rule import (
+    RoutingRule,
+    ProcessingQueue,
+    RoutingAuditLog,
+)
+
+# Smart Docs Approval Chain (Enterprise multi-step approval workflows)
+from .approval_chain import (
+    ApprovalChainConfig,
+    ApprovalRequest,
+    ApprovalDecision,
+    ApprovalDelegation,
+    ApprovalType,
+    ApprovalRequestStatus,
+    DecisionVerdict,
+    TimeoutAction,
+    DelegationType,
+)
+
+# Smart Docs V2 Field Mapping (Enterprise document-to-CRM field mapping)
+from .doc_field_mapping import (
+    FieldMappingConfig,
+    CustomField,
+)
+
+# Recurring Availability (weekly patterns, date exceptions, org templates)
+from .recurring_availability import (
+    RecurringAvailability,
+    AvailabilityException,
+    AvailabilityTemplate,
+)
+
+# Appointment Reminder Configuration & Logging
+from .reminder_config import (
+    ReminderTemplate,
+    ReminderLog,
+)
+
+# Waiting room / queue management
+from .waiting_room import WaitlistEntry, WaitlistStatus
 
 
 __all__ = [
@@ -747,7 +895,174 @@ __all__ = [
     "AppointmentOutcome",
 
     # =====================
+    # Decision Audit Trail
+    # =====================
+    "DecisionAuditLog",
+    "AuditRetentionConfig",
+    "ArchivedDecisionAuditLog",
+
+    # =====================
     # Calendar Event Map
     # =====================
     "CalendarEventMap",
+
+    # =====================
+    # Document Processing Cache
+    # =====================
+    "DocumentProcessingCache",
+
+    # =====================
+    # TCPA Smart Docs
+    # =====================
+    "SmartDocsConsentRecord",
+    "InternalDNCEntry",
+    "OutreachLog",
+
+    # =====================
+    # Business Rule Config
+    # =====================
+    "BusinessRuleConfig",
+
+    # =====================
+    # eClosing Sessions
+    # =====================
+    "EClosingSession",
+    "EClosingSessionStatus",
+    "ClosingType",
+    "NotaryType",
+    "EClosingProvider",
+
+    # =====================
+    # Plaid Integration
+    # =====================
+    "PlaidConnection",
+
+    # =====================
+    # AUS Submissions
+    # =====================
+    "AUSSubmission",
+
+    # =====================
+    # IRS Transcript (4506-C)
+    # =====================
+    "IRSTranscriptRequest",
+    "TranscriptType",
+    "TranscriptStatus",
+
+    # =====================
+    # AI Benchmark
+    # =====================
+    "AIBenchmarkDataset",
+    "AIBenchmarkSample",
+
+    # =====================
+    # Document Version Control
+    # =====================
+    "DocumentVersion",
+    "ChangeType",
+
+    # =====================
+    # Document Annotation
+    # =====================
+    "DocumentAnnotation",
+    "AnnotationType",
+    "AnnotationStatus",
+
+    # =====================
+    # Document Search Index
+    # =====================
+    "DocumentSearchIndex",
+    "SavedSearch",
+    "SearchAnalyticsEvent",
+
+    # =====================
+    # Smart Docs Batch Jobs
+    # =====================
+    "BatchJob",
+    "BatchJobType",
+    "BatchJobStatus",
+
+    # =====================
+    # Smart Docs V2 Document Templates
+    # =====================
+    "DocumentTemplate",
+    "DocumentGenerationLog",
+
+    # =====================
+    # Document Archive
+    # =====================
+    "DocumentArchive",
+    "ArchiveType",
+    "ArchiveStatus",
+    "RetentionPolicy",
+    "StorageClass",
+
+    # =====================
+    # Smart Docs Escalation Engine
+    # =====================
+    "SmartDocsEscalationRule",
+    "SmartDocsEscalationEvent",
+
+    # =====================
+    # Smart Docs Follow-Up Cadence
+    # =====================
+    "FollowupCadence",
+    "FollowupExecution",
+
+    # =====================
+    # Smart Docs White-Label
+    # =====================
+    "WhiteLabelConfig",
+    "SmartDocsEmailTemplate",
+
+    # =====================
+    # Smart Docs SLA Config & Tracking
+    # =====================
+    "DocSLAConfig",
+    "DocSLATracking",
+
+    # =====================
+    # Smart Docs Document Routing
+    # =====================
+    "RoutingRule",
+    "ProcessingQueue",
+    "RoutingAuditLog",
+
+    # =====================
+    # Smart Docs Approval Chain
+    # =====================
+    "ApprovalChainConfig",
+    "ApprovalRequest",
+    "ApprovalDecision",
+    "ApprovalDelegation",
+    "ApprovalType",
+    "ApprovalRequestStatus",
+    "DecisionVerdict",
+    "TimeoutAction",
+    "DelegationType",
+
+    # =====================
+    # Smart Docs V2 Field Mapping
+    # =====================
+    "FieldMappingConfig",
+    "CustomField",
+
+    # =====================
+    # Recurring Availability
+    # =====================
+    "RecurringAvailability",
+    "AvailabilityException",
+    "AvailabilityTemplate",
+
+    # =====================
+    # Appointment Reminders
+    # =====================
+    "ReminderTemplate",
+    "ReminderLog",
+
+    # =====================
+    # Waiting Room / Queue
+    # =====================
+    "WaitlistEntry",
+    "WaitlistStatus",
 ]

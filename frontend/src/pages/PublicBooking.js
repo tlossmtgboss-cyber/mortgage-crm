@@ -2,8 +2,21 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import useOrgBranding from '../hooks/useOrgBranding';
 import { LanguageProvider, useTranslation } from '../i18n';
+import { useIsTablet, useScreenOrientation } from '../components/common/ResponsiveContainer';
 import LanguageSelector from '../components/calendar/LanguageSelector';
+import SEOHead from '../components/common/SEOHead';
+import ScreenReaderOnly from '../components/common/ScreenReaderOnly';
+import LiveRegion from '../components/common/LiveRegion';
+import {
+  generateBookingPageMeta,
+  generateStructuredData,
+  generateBreadcrumbs,
+  injectJsonLd,
+  cleanupJsonLd,
+} from '../utils/seo';
+import JoinWaitlist from '../components/calendar/JoinWaitlist';
 import './PublicBooking.css';
+import '../styles/tablet.css';
 
 const TURNSTILE_SITE_KEY = process.env.REACT_APP_TURNSTILE_SITE_KEY;
 
@@ -16,6 +29,8 @@ const API_BASE = window.location.hostname === 'localhost' || window.location.hos
 
 const PublicBookingInner = () => {
   const { t, locale } = useTranslation();
+  const isTablet = useIsTablet();
+  const orientation = useScreenOrientation();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,12 +49,14 @@ const PublicBookingInner = () => {
     today.setHours(0, 0, 0, 0);
     return today;
   });
-  const [step, setStep] = useState('datetime'); // datetime, form, confirmation, manage
+  const [step, setStep] = useState('datetime'); // datetime, form, confirmation, manage, waitlist
   const [submitting, setSubmitting] = useState(false);
   const [confirmedAppointment, setConfirmedAppointment] = useState(null);
+  const [showWaitlist, setShowWaitlist] = useState(false);
 
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [formErrors, setFormErrors] = useState({});
   const turnstileRef = useRef(null);
   const turnstileWidgetId = useRef(null);
 
@@ -66,6 +83,58 @@ const PublicBookingInner = () => {
 
   // Fetch org branding via the hook (only active for org-branded booking URLs)
   const { branding, loading: brandingLoading } = useOrgBranding(orgSlug, loSlug);
+
+  // ========================================================================
+  // SEO: Compute meta tags and structured data
+  // ========================================================================
+
+  // Derive SEO-relevant names from branding / booking link data
+  const seoOrgName = branding?.org_name || null;
+  const seoLoName = branding?.lo?.name || null;
+  const seoAppointmentType = selectedType?.type_name || bookingLink?.custom_title || bookingLink?.title || null;
+  const seoOgImage = branding?.logo_url || bookingLink?.logo_url || null;
+
+  const seoMeta = generateBookingPageMeta(seoOrgName, seoAppointmentType, seoLoName, {
+    image: seoOgImage,
+    slug,
+  });
+
+  // Inject JSON-LD Event structured data when a time slot is selected
+  useEffect(() => {
+    if (!selectedType || !selectedTime) {
+      return cleanupJsonLd;
+    }
+
+    const durationMs = (selectedType.default_duration_minutes || 30) * 60 * 1000;
+    const startDate = new Date(selectedTime);
+    const endDate = new Date(startDate.getTime() + durationMs);
+
+    const eventData = generateStructuredData({
+      name: selectedType.type_name || 'Appointment',
+      description: selectedType.description || seoMeta.description,
+      startTime: startDate.toISOString(),
+      endTime: endDate.toISOString(),
+      locationName: meetingMode === 'video' ? 'Video Call' : 'Phone Call',
+      organizerName: seoOrgName || 'Perennia AI',
+      url: seoMeta.url,
+      image: seoOgImage,
+    });
+
+    const cleanupEvent = injectJsonLd(eventData);
+
+    // Breadcrumbs
+    const breadcrumbData = generateBreadcrumbs([
+      { name: 'Home', url: 'https://app.perenniaai.com' },
+      { name: seoOrgName || 'Book', url: seoMeta.url },
+      { name: selectedType.type_name || 'Appointment' },
+    ]);
+    const cleanupBreadcrumbs = injectJsonLd(breadcrumbData);
+
+    return () => {
+      cleanupEvent();
+      cleanupBreadcrumbs();
+    };
+  }, [selectedType, selectedTime, meetingMode, seoOrgName, seoOgImage, seoMeta.description, seoMeta.url]);
 
   // Check if managing existing appointment
   const urlParams = new URLSearchParams(window.location.search);
@@ -249,10 +318,16 @@ const PublicBookingInner = () => {
       return;
     }
 
-    if (!form.first_name || !form.last_name || !form.email) {
+    const newFormErrors = {};
+    if (!form.first_name) newFormErrors.first_name = t('booking.errorRequiredFields');
+    if (!form.last_name) newFormErrors.last_name = t('booking.errorRequiredFields');
+    if (!form.email) newFormErrors.email = t('booking.errorRequiredFields');
+    if (Object.keys(newFormErrors).length > 0) {
+      setFormErrors(newFormErrors);
       setError(t('booking.errorRequiredFields'));
       return;
     }
+    setFormErrors({});
 
     // Validate phone if provided
     if (form.phone && form.phone.trim() !== '' && !PHONE_REGEX.test(form.phone.trim())) {
@@ -495,6 +570,7 @@ const PublicBookingInner = () => {
   if (loading || brandingLoading) {
     return (
       <div className="redfin-booking" style={coverStyle}>
+        <SEOHead {...seoMeta} />
         <div className="booking-container">
           <LanguageSelector />
           <div className="loading-state" role="status" aria-live="polite">
@@ -510,6 +586,7 @@ const PublicBookingInner = () => {
   if (error && !bookingLink) {
     return (
       <div className="redfin-booking" style={coverStyle}>
+        <SEOHead {...seoMeta} />
         <div className="booking-container">
           <LanguageSelector />
           {renderBrandingHeader()}
@@ -529,6 +606,7 @@ const PublicBookingInner = () => {
   if (step === 'confirmation' && confirmedAppointment) {
     return (
       <div className="redfin-booking" style={coverStyle}>
+        <SEOHead {...seoMeta} />
         <div className="booking-container confirmation-container">
           <LanguageSelector />
           {renderBrandingHeader()}
@@ -607,6 +685,7 @@ const PublicBookingInner = () => {
   if (step === 'cancelled') {
     return (
       <div className="redfin-booking" style={coverStyle}>
+        <SEOHead {...seoMeta} />
         <div className="booking-container confirmation-container">
           <LanguageSelector />
           {renderBrandingHeader()}
@@ -630,8 +709,21 @@ const PublicBookingInner = () => {
     );
   }
 
+  // Step indicator definitions
+  const BOOKING_STEPS = [
+    { key: 'datetime', label: t('datetime.pickDate') || 'Select Date & Time' },
+    { key: 'form', label: t('form.title') || 'Your Details' },
+    { key: 'confirmation', label: t('confirmation.title') || 'Confirmed' },
+  ];
+
+  const currentStepIndex = BOOKING_STEPS.findIndex(s => s.key === step);
+  const progressMessage = currentStepIndex >= 0
+    ? `Step ${currentStepIndex + 1} of ${BOOKING_STEPS.length}: ${BOOKING_STEPS[currentStepIndex].label}`
+    : '';
+
   return (
     <div className="redfin-booking" style={coverStyle}>
+      <SEOHead {...seoMeta} />
       <div className="booking-container">
         {/* Language Selector */}
         <LanguageSelector />
@@ -648,6 +740,31 @@ const PublicBookingInner = () => {
             ) : null}
           </div>
         )}
+
+        {/* Step indicator */}
+        {step !== 'cancelled' && (
+          <nav className="booking-step-indicator" aria-label="Booking progress">
+            <ol className="step-list">
+              {BOOKING_STEPS.map((s, idx) => {
+                const isCurrent = s.key === step;
+                const isCompleted = idx < currentStepIndex;
+                return (
+                  <li
+                    key={s.key}
+                    className={`step-item${isCurrent ? ' step-current' : ''}${isCompleted ? ' step-completed' : ''}`}
+                    aria-current={isCurrent ? 'step' : undefined}
+                  >
+                    <span className="step-number" aria-hidden="true">{idx + 1}</span>
+                    <span className="step-label">{s.label}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </nav>
+        )}
+
+        {/* Progress announcement for screen readers */}
+        <LiveRegion politeness="polite" message={progressMessage} debounceMs={200} />
 
         {error && <div className="error-banner" role="alert">{error}</div>}
 
@@ -696,17 +813,21 @@ const PublicBookingInner = () => {
                   </svg>
                 </button>
 
-                <div className="week-dates">
+                <div className="week-dates" role="listbox" aria-label={t('datetime.pickDate')}>
                   {weekDates.map((date, idx) => {
                     const disabled = isPast(date);
                     const selected = selectedDate && date.toDateString() === selectedDate.toDateString();
+                    const today = isToday(date);
 
                     return (
                       <button
                         key={idx}
-                        className={`date-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''} ${isToday(date) ? 'today' : ''}`}
+                        className={`date-card ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''} ${today ? 'today' : ''}`}
                         onClick={() => !disabled && setSelectedDate(date)}
                         disabled={disabled}
+                        role="option"
+                        aria-selected={selected}
+                        aria-current={today ? 'date' : undefined}
                         aria-label={formatDateAriaLabel(date)}
                       >
                         <span className="day-name">{formatDayName(date)}</span>
@@ -731,19 +852,30 @@ const PublicBookingInner = () => {
               <p className="time-subtitle">{t('datetime.timeSubtitle')}</p>
 
               <div className="time-dropdown-wrapper">
+                <label htmlFor="pb-time-select" className="sr-only">
+                  <ScreenReaderOnly>{t('datetime.pickTime')}</ScreenReaderOnly>
+                </label>
                 <select
+                  id="pb-time-select"
                   className="time-dropdown"
                   value={selectedTime}
                   onChange={(e) => setSelectedTime(e.target.value)}
+                  aria-label={t('datetime.pickTime')}
                 >
                   {availableSlots.length === 0 ? (
                     <option value="">{t('datetime.noTimes')}</option>
                   ) : (
-                    availableSlots.map((slot, idx) => (
-                      <option key={idx} value={slot.start_time}>
-                        {slot.display}
-                      </option>
-                    ))
+                    availableSlots.map((slot, idx) => {
+                      const slotDate = new Date(slot.start_time);
+                      const fullDateTimeLabel = selectedDate
+                        ? `${formatDateAriaLabel(selectedDate)} at ${slot.display}`
+                        : slot.display;
+                      return (
+                        <option key={idx} value={slot.start_time} aria-label={fullDateTimeLabel}>
+                          {slot.display}
+                        </option>
+                      );
+                    })
                   )}
                 </select>
                 <svg className="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -752,12 +884,13 @@ const PublicBookingInner = () => {
               </div>
 
               {/* Meeting Mode Toggle */}
-              <div className="meeting-mode-toggle">
+              <div className="meeting-mode-toggle" role="group" aria-label="Meeting format">
                 <button
                   className={`mode-button ${meetingMode === 'phone' ? 'active' : ''}`}
                   onClick={() => setMeetingMode('phone')}
+                  aria-pressed={meetingMode === 'phone'}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
                   {t('datetime.phoneCall')}
@@ -765,8 +898,9 @@ const PublicBookingInner = () => {
                 <button
                   className={`mode-button ${meetingMode === 'video' ? 'active' : ''}`}
                   onClick={() => setMeetingMode('video')}
+                  aria-pressed={meetingMode === 'video'}
                 >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <rect x="2" y="5" width="14" height="14" rx="2" />
                     <path d="M22 7l-6 4 6 4V7z" />
                   </svg>
@@ -782,11 +916,36 @@ const PublicBookingInner = () => {
             >
               {t('datetime.next')}
             </button>
+
+            {/* Waitlist option when no slots are available */}
+            {availableSlots.length === 0 && selectedDate && !showWaitlist && bookingLink && (
+              <div style={{ textAlign: 'center', marginTop: '16px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '12px' }}>
+                <p style={{ margin: '0 0 12px 0', color: '#1e40af', fontSize: '14px' }}>
+                  No times available for this date. Join the waitlist and we'll notify you when a slot opens up.
+                </p>
+                <button
+                  className="secondary-button"
+                  onClick={() => setShowWaitlist(true)}
+                  style={{ padding: '10px 24px', borderRadius: '8px', border: '1px solid #2563eb', backgroundColor: '#fff', color: '#2563eb', cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
+                >
+                  Join Waitlist
+                </button>
+              </div>
+            )}
+
+            {showWaitlist && bookingLink && (
+              <JoinWaitlist
+                organizationId={bookingLink.organization_id}
+                appointmentTypeId={selectedType?.id || bookingLink.appointment_type_id}
+                appointmentTypeName={selectedType?.type_name || bookingLink.title}
+                onClose={() => setShowWaitlist(false)}
+              />
+            )}
           </>
         )}
 
         {step === 'form' && (
-          <div className="form-step">
+          <div className={`form-step${isTablet && orientation === 'landscape' ? ' booking-two-column' : ''}`}>
             <button className="back-link" onClick={() => setStep('datetime')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M15 19l-7-7 7-7" />
@@ -796,7 +955,7 @@ const PublicBookingInner = () => {
 
             <h2>{t('form.title')}</h2>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="pb-first-name">{t('form.firstName')} {t('form.required')}</label>
@@ -804,10 +963,19 @@ const PublicBookingInner = () => {
                     id="pb-first-name"
                     type="text"
                     value={form.first_name}
-                    onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, first_name: e.target.value });
+                      if (formErrors.first_name && e.target.value) setFormErrors(prev => ({ ...prev, first_name: '' }));
+                    }}
                     placeholder="Jane"
                     required
+                    aria-required="true"
+                    aria-invalid={!!formErrors.first_name || undefined}
+                    aria-describedby={formErrors.first_name ? 'pb-first-name-error' : undefined}
                   />
+                  {formErrors.first_name && (
+                    <span id="pb-first-name-error" className="field-error" role="alert">{formErrors.first_name}</span>
+                  )}
                 </div>
               </div>
 
@@ -818,10 +986,19 @@ const PublicBookingInner = () => {
                     id="pb-last-name"
                     type="text"
                     value={form.last_name}
-                    onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, last_name: e.target.value });
+                      if (formErrors.last_name && e.target.value) setFormErrors(prev => ({ ...prev, last_name: '' }));
+                    }}
                     placeholder="Doe"
                     required
+                    aria-required="true"
+                    aria-invalid={!!formErrors.last_name || undefined}
+                    aria-describedby={formErrors.last_name ? 'pb-last-name-error' : undefined}
                   />
+                  {formErrors.last_name && (
+                    <span id="pb-last-name-error" className="field-error" role="alert">{formErrors.last_name}</span>
+                  )}
                 </div>
               </div>
 
@@ -832,10 +1009,19 @@ const PublicBookingInner = () => {
                     id="pb-email"
                     type="email"
                     value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, email: e.target.value });
+                      if (formErrors.email && e.target.value) setFormErrors(prev => ({ ...prev, email: '' }));
+                    }}
                     placeholder="jane@email.com"
                     required
+                    aria-required="true"
+                    aria-invalid={!!formErrors.email || undefined}
+                    aria-describedby={formErrors.email ? 'pb-email-error' : undefined}
                   />
+                  {formErrors.email && (
+                    <span id="pb-email-error" className="field-error" role="alert">{formErrors.email}</span>
+                  )}
                 </div>
               </div>
 
@@ -846,10 +1032,19 @@ const PublicBookingInner = () => {
                     id="pb-phone"
                     type="tel"
                     value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, phone: e.target.value });
+                      if (phoneError) validatePhone(e.target.value);
+                    }}
+                    onBlur={(e) => validatePhone(e.target.value)}
                     placeholder={t('form.phonePlaceholder')}
+                    aria-invalid={!!phoneError || undefined}
+                    aria-describedby={phoneError ? 'pb-phone-error' : 'pb-phone-hint'}
                   />
-                  <span className="field-hint">{t('form.phoneHint')}</span>
+                  <span id="pb-phone-hint" className="field-hint">{t('form.phoneHint')}</span>
+                  {phoneError && (
+                    <span id="pb-phone-error" className="field-error" role="alert">{phoneError}</span>
+                  )}
                 </div>
               </div>
 
@@ -863,15 +1058,17 @@ const PublicBookingInner = () => {
                     placeholder={t('form.notesPlaceholder')}
                     rows={3}
                     maxLength={500}
+                    aria-describedby="pb-notes-hint"
                   />
+                  <ScreenReaderOnly as="span" id="pb-notes-hint">Maximum 500 characters</ScreenReaderOnly>
                 </div>
               </div>
 
               {/* Custom Question Example */}
-              <div className="form-row">
+              <fieldset className="form-row">
+                <legend className="form-group-legend">{t('form.workingWithLO')}</legend>
                 <div className="form-group radio-group">
-                  <label>{t('form.workingWithLO')}</label>
-                  <div className="radio-options">
+                  <div className="radio-options" role="radiogroup" aria-label={t('form.workingWithLO')}>
                     <label className="radio-label">
                       <input
                         type="radio"
@@ -894,7 +1091,7 @@ const PublicBookingInner = () => {
                     </label>
                   </div>
                 </div>
-              </div>
+              </fieldset>
 
               <div className="form-summary">
                 <div className="summary-badge">
