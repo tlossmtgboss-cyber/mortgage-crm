@@ -1,7 +1,7 @@
 import React from 'react';
 import { DURATION_OPTIONS, MEETING_TYPE_OPTIONS } from './calendarUtils';
 
-function CreateAppointmentForm({
+const CreateAppointmentForm = React.memo(function CreateAppointmentForm({
   modalRef,
   form,
   onFormChange,
@@ -121,6 +121,6 @@ function CreateAppointmentForm({
       </div>
     </div>
   );
-}
+});
 
 export default CreateAppointmentForm;

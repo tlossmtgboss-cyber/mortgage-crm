@@ -5,7 +5,7 @@ import { useTranslation } from '../../i18n';
  * Compact language selector dropdown for the public booking page.
  * Shows a globe icon and native language name, persists selection to localStorage.
  */
-const LanguageSelector = () => {
+const LanguageSelector = React.memo(() => {
   const { language, setLanguage, languages, t } = useTranslation();
 
   return (
@@ -38,6 +38,8 @@ const LanguageSelector = () => {
       </select>
     </div>
   );
-};
+});
+
+LanguageSelector.displayName = 'LanguageSelector';
 
 export default LanguageSelector;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { DURATION_OPTIONS, MEETING_TYPE_OPTIONS, STATUS_OPTIONS } from './calendarUtils';
 
-function EditAppointmentForm({
+const EditAppointmentForm = React.memo(function EditAppointmentForm({
   modalRef,
   appointment,
   onAppointmentChange,
@@ -163,6 +163,6 @@ function EditAppointmentForm({
       </div>
     </div>
   );
-}
+});
 
 export default EditAppointmentForm;

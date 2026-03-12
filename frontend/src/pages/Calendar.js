@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calendarAPI, schedulerAPI, unifiedCalendarAPI, teamAPI } from '../services/api';
-import CalendarSearch from '../components/calendar/CalendarSearch';
+import { useCalendarKeyboard } from '../hooks/useCalendarKeyboard';
 import './Calendar.css';
+
+// Lazy load heavy modal components that are conditionally rendered
+const CalendarSearch = lazy(() => import('../components/calendar/CalendarSearch'));
+const KeyboardShortcutsHelp = lazy(() => import('../components/calendar/KeyboardShortcutsHelp'));
 
 const TAB_CONFIG = [
   { key: 'all', label: 'Appointments', filterType: null },
@@ -86,6 +90,11 @@ function Calendar() {
   // Inline confirmation dialog state
   const [confirmAction, setConfirmAction] = useState(null);
 
+  // Keyboard navigation state
+  const [selectedEventIndex, setSelectedEventIndex] = useState(-1);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const liveAnnouncerRef = useRef(null);
+
   useEffect(() => {
     loadEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,6 +133,98 @@ function Calendar() {
       setShowEditModal(true);
     }
   }, []);
+
+  // Announce date changes to screen readers
+  const announceToScreenReader = useCallback((message) => {
+    if (liveAnnouncerRef.current) {
+      liveAnnouncerRef.current.textContent = message;
+    }
+  }, []);
+
+  // Reset selected event index when events change
+  useEffect(() => {
+    setSelectedEventIndex(-1);
+  }, [activeTab, searchQuery]);
+
+  // Determine if any modal is open (disables most keyboard shortcuts)
+  const hasModalOpen = showAddModal || showEditModal || showSearch || showShortcutsHelp || !!confirmAction;
+
+  // Keyboard navigation: select previous event in sidebar
+  const handleSelectPrevEvent = useCallback(() => {
+    setSelectedEventIndex(prev => {
+      const newIdx = prev <= 0 ? 0 : prev - 1;
+      return newIdx;
+    });
+  }, []);
+
+  // Keyboard navigation: select next event in sidebar
+  const handleSelectNextEvent = useCallback(() => {
+    setSelectedEventIndex(prev => {
+      // sortedEvents is used in the memoized computation below
+      // We clamp to the last available index at render time
+      return prev + 1;
+    });
+  }, []);
+
+  // Keyboard navigation: open the selected event for editing (uses ref for latest data)
+  const openSelectedEventRef = useRef(null);
+  const handleOpenSelectedEvent = useCallback(() => {
+    openSelectedEventRef.current?.();
+  }, []);
+
+  // Close all modals
+  const handleCloseAllModals = useCallback(() => {
+    if (confirmAction) {
+      setConfirmAction(null);
+    } else if (showShortcutsHelp) {
+      setShowShortcutsHelp(false);
+    } else if (showSearch) {
+      setShowSearch(false);
+    } else if (showEditModal) {
+      setShowEditModal(false);
+    } else if (showAddModal) {
+      setShowAddModal(false);
+    }
+  }, [confirmAction, showShortcutsHelp, showSearch, showEditModal, showAddModal]);
+
+  // Wire up the keyboard hook
+  useCalendarKeyboard({
+    onPrev: useCallback(() => {
+      handlePrevRef.current?.();
+    }, []),
+    onNext: useCallback(() => {
+      handleNextRef.current?.();
+    }, []),
+    onToday: useCallback(() => {
+      handleTodayRef.current?.();
+      announceToScreenReader('Navigated to today');
+    }, [announceToScreenReader]),
+    onSetView: useCallback((v) => {
+      setView(v);
+      announceToScreenReader(`Switched to ${v} view`);
+    }, [announceToScreenReader]),
+    onNewEvent: useCallback(() => {
+      setSelectedDate(new Date());
+      setSelectedTime(null);
+      setShowAddModal(true);
+    }, []),
+    onOpenSearch: useCallback(() => {
+      setShowSearch(true);
+    }, []),
+    onCloseModals: handleCloseAllModals,
+    onToggleShortcutsHelp: useCallback(() => {
+      setShowShortcutsHelp(prev => !prev);
+    }, []),
+    onSelectPrevEvent: handleSelectPrevEvent,
+    onSelectNextEvent: handleSelectNextEvent,
+    onOpenSelectedEvent: handleOpenSelectedEvent,
+    hasModalOpen,
+  });
+
+  // Stable refs for navigation handlers (defined later in the component)
+  const handlePrevRef = useRef(null);
+  const handleNextRef = useRef(null);
+  const handleTodayRef = useRef(null);
 
   const loadEvents = async () => {
     try {
@@ -166,7 +267,7 @@ function Calendar() {
     }
   };
 
-  const handleAddEvent = async (eventData) => {
+  const handleAddEvent = useCallback(async (eventData) => {
     try {
       await calendarAPI.create(eventData);
       loadEvents();
@@ -175,9 +276,10 @@ function Calendar() {
     } catch {
       setError('Failed to create event. Please try again.');
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleAddAppointment = async (appointmentData) => {
+  const handleAddAppointment = useCallback(async (appointmentData) => {
     try {
       await schedulerAPI.createAppointment(appointmentData);
       loadEvents();
@@ -186,9 +288,10 @@ function Calendar() {
     } catch {
       setError('Failed to create appointment. Please try again.');
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleDeleteEvent = (event) => {
+  const handleDeleteEvent = useCallback((event) => {
     const message = event.isAppointment && event.appointmentId
       ? 'Are you sure you want to cancel this appointment? The attendee will be notified.'
       : 'Are you sure you want to delete this event?';
@@ -210,9 +313,10 @@ function Calendar() {
         }
       },
     });
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleEditAppointment = (event) => {
+  const handleEditAppointment = useCallback((event) => {
     if (!event.isAppointment) return;
     if (!event.start_time || !event.end_time) return;
 
@@ -235,9 +339,9 @@ function Calendar() {
       status: event.status || 'BOOKED',
     });
     setShowEditModal(true);
-  };
+  }, []);
 
-  const handleSaveAppointment = async (e) => {
+  const handleSaveAppointment = useCallback(async (e) => {
     e.preventDefault();
     if (!editingAppointment) return;
 
@@ -269,9 +373,10 @@ function Calendar() {
     } finally {
       setSaving(false);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingAppointment]);
 
-  const handleCancelFromModal = () => {
+  const handleCancelFromModal = useCallback(() => {
     if (!editingAppointment) return;
     setConfirmAction({
       message: 'Are you sure you want to cancel this appointment? The attendee will be notified.',
@@ -291,18 +396,26 @@ function Calendar() {
         }
       },
     });
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingAppointment]);
 
-  // Filter events by active tab
-  const getFilteredEvents = (eventList) => {
+  // Pre-filter events by active tab (memoized to avoid recomputation in renders)
+  const filteredByTab = useMemo(() => {
+    const tab = TAB_CONFIG.find(t => t.key === activeTab);
+    if (!tab || !tab.filterType) return allEvents;
+    return allEvents.filter(event => event.event_type === tab.filterType);
+  }, [allEvents, activeTab]);
+
+  // Also keep the getFilteredEvents helper for view renderers that need it
+  const getFilteredEvents = useCallback((eventList) => {
     const tab = TAB_CONFIG.find(t => t.key === activeTab);
     if (!tab || !tab.filterType) return eventList;
     return eventList.filter(event => event.event_type === tab.filterType);
-  };
+  }, [activeTab]);
 
   // Sort and group events by date, with search filter (memoized)
   const sortedEvents = useMemo(() => {
-    const filtered = getFilteredEvents(allEvents).filter(event => {
+    const filtered = filteredByTab.filter(event => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (event.title || '').toLowerCase().includes(q)
@@ -310,18 +423,57 @@ function Calendar() {
         || (event.location || '').toLowerCase().includes(q);
     });
     return [...filtered].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-  }, [allEvents, activeTab, searchQuery]);
+  }, [filteredByTab, searchQuery]);
 
-  const formatEventTime = (startTime, endTime) => {
+  // Clamp selectedEventIndex to valid range and scroll into view
+  const clampedSelectedIndex = sortedEvents.length === 0
+    ? -1
+    : Math.max(-1, Math.min(selectedEventIndex, sortedEvents.length - 1));
+
+  // Keep clampedSelectedIndex in sync with state
+  useEffect(() => {
+    if (clampedSelectedIndex !== selectedEventIndex) {
+      setSelectedEventIndex(clampedSelectedIndex);
+    }
+  }, [clampedSelectedIndex, selectedEventIndex]);
+
+  // Scroll selected event into view
+  useEffect(() => {
+    if (clampedSelectedIndex >= 0) {
+      const el = document.querySelector(`[data-event-index="${clampedSelectedIndex}"]`);
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      // Announce for screen readers
+      const event = sortedEvents[clampedSelectedIndex];
+      if (event) {
+        announceToScreenReader(`Selected: ${event.title || 'event'}`);
+      }
+    }
+  }, [clampedSelectedIndex, sortedEvents, announceToScreenReader]);
+
+  // Handle Enter key on selected event (wired via ref to avoid stale closure)
+  // The keyboard hook calls onOpenSelectedEvent -> openSelectedEventRef.current()
+  useEffect(() => {
+    openSelectedEventRef.current = () => {
+      if (clampedSelectedIndex >= 0 && sortedEvents[clampedSelectedIndex]) {
+        const event = sortedEvents[clampedSelectedIndex];
+        if (event.isAppointment) {
+          handleEditAppointment(event);
+        }
+      }
+    };
+  });
+
+
+  const formatEventTime = useCallback((startTime, endTime) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
     const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const duration = Math.round((end - start) / (1000 * 60));
     return { startStr, endStr, duration };
-  };
+  }, []);
 
-  const formatEventDate = (dateStr) => {
+  const formatEventDate = useCallback((dateStr) => {
     const date = new Date(dateStr);
     const today = new Date();
     const tomorrow = new Date(today);
@@ -334,9 +486,9 @@ function Calendar() {
     } else {
       return `${dayNames[date.getDay()]} \u2022 ${monthNames[date.getMonth()]} ${date.getDate()}`;
     }
-  };
+  }, []);
 
-  const getDaysInMonth = (date) => {
+  const getDaysInMonth = useCallback((date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
@@ -345,85 +497,102 @@ function Calendar() {
     const startingDayOfWeek = firstDay.getDay();
 
     return { daysInMonth, startingDayOfWeek, year, month };
-  };
+  }, []);
 
-  // Mini calendar months derived from currentDate (synced with main navigation)
-  const currentMonthData = getDaysInMonth(currentDate);
-  const nextMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-  const nextMonthData = getDaysInMonth(nextMonthDate);
+  // Mini calendar months derived from currentDate (memoized to avoid recomputation)
+  const currentMonthData = useMemo(() => getDaysInMonth(currentDate), [currentDate, getDaysInMonth]);
+  const nextMonthData = useMemo(() => {
+    const nextMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    return getDaysInMonth(nextMonthDate);
+  }, [currentDate, getDaysInMonth]);
 
   // View-aware navigation
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => {
     if (view === 'day') {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 1));
+      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 1));
     } else if (view === 'week') {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 7));
+      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7));
     } else {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1));
     }
-  };
+    announceToScreenReader(`Navigated to previous ${view}`);
+  }, [view, announceToScreenReader]);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (view === 'day') {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 1));
+      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 1));
     } else if (view === 'week') {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 7));
+      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7));
     } else {
-      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1));
     }
-  };
+    announceToScreenReader(`Navigated to next ${view}`);
+  }, [view, announceToScreenReader]);
 
-  const handleToday = () => {
+  const handleToday = useCallback(() => {
     setCurrentDate(new Date());
-  };
+    announceToScreenReader('Navigated to today');
+  }, [announceToScreenReader]);
+
+  // Keep refs in sync for the keyboard hook
+  handlePrevRef.current = handlePrev;
+  handleNextRef.current = handleNext;
+  handleTodayRef.current = handleToday;
 
   // Scroll mini calendar (same as prev/next in month mode)
-  const handleScrollUp = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
+  const handleScrollUp = useCallback(() => {
+    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  }, []);
 
-  const handleScrollDown = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-  };
+  const handleScrollDown = useCallback(() => {
+    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  }, []);
 
-  const handleDayClick = (day, year, month) => {
-    const date = new Date(year || currentDate.getFullYear(), month != null ? month : currentDate.getMonth(), day);
+  const handleDayClick = useCallback((day, year, month) => {
+    // year and month are always passed explicitly from the mini calendar renderers
+    const date = new Date(year, month, day);
     setSelectedDate(date);
     setSelectedTime(null);
     setShowAddModal(true);
-  };
+  }, []);
 
-  const handleTimeSlotClick = (date, hour) => {
+  const handleTimeSlotClick = useCallback((date, hour) => {
     setSelectedDate(date);
     setSelectedTime(hour);
     setShowAddModal(true);
-  };
+  }, []);
 
-  const getEventsForDate = (day, year, month) => {
-    const dateStart = new Date(year, month, day);
-    const dateEnd = new Date(year, month, day, 23, 59, 59);
-
-    const filtered = getFilteredEvents(allEvents);
-    return filtered.filter(event => {
+  // Pre-index filtered events by date key for O(1) lookups in day/week/month views
+  const eventsByDateKey = useMemo(() => {
+    const index = {};
+    for (const event of filteredByTab) {
       const eventDate = new Date(event.start_time);
-      return eventDate >= dateStart && eventDate <= dateEnd;
-    });
-  };
+      const key = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
+      if (!index[key]) index[key] = [];
+      index[key].push(event);
+    }
+    return index;
+  }, [filteredByTab]);
 
-  const getEventsForDateObj = (dateObj) => {
+  const getEventsForDate = useCallback((day, year, month) => {
+    const key = `${year}-${month}-${day}`;
+    return eventsByDateKey[key] || [];
+  }, [eventsByDateKey]);
+
+  const getEventsForDateObj = useCallback((dateObj) => {
     return getEventsForDate(dateObj.getDate(), dateObj.getFullYear(), dateObj.getMonth());
-  };
+  }, [getEventsForDate]);
 
-  const getEventsForDateAndHour = (dateObj, hour) => {
+  const getEventsForDateAndHour = useCallback((dateObj, hour) => {
     const dayEvents = getEventsForDateObj(dateObj);
     return dayEvents.filter(event => {
       const eventDate = new Date(event.start_time);
       return eventDate.getHours() === hour;
     });
-  };
+  }, [getEventsForDateObj]);
 
-  // Get header subtitle based on view
-  const getHeaderSubtitle = () => {
+  // Get header subtitle based on view (memoized)
+  const headerSubtitle = useMemo(() => {
     if (view === 'day') {
       return `${dayNames[currentDate.getDay()]}, ${monthNames[currentDate.getMonth()]} ${currentDate.getDate()}, ${currentDate.getFullYear()}`;
     } else if (view === 'week') {
@@ -438,7 +607,17 @@ function Calendar() {
       return `${startMonth} ${weekStart.getDate()} - ${endMonth} ${weekEnd.getDate()}, ${weekEnd.getFullYear()}`;
     }
     return `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
-  };
+  }, [view, currentDate]);
+
+  // Memoize week dates to avoid recomputing on every render
+  const weekDates = useMemo(() => {
+    const weekStart = getStartOfWeek(currentDate);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  }, [currentDate]);
 
   // Get event color class
   const getEventColorClass = (eventType) => {
@@ -519,12 +698,7 @@ function Calendar() {
 
   // ===== WEEK VIEW =====
   const renderWeekView = () => {
-    const weekStart = getStartOfWeek(currentDate);
-    const weekDays = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
+    const weekDays = weekDates;
     const today = new Date();
 
     return (
@@ -707,7 +881,7 @@ function Calendar() {
       <div className="calendar-header">
         <div>
           <h1>Calendar</h1>
-          <p>{getHeaderSubtitle()}</p>
+          <p>{headerSubtitle}</p>
         </div>
         <div className="calendar-controls">
           <div className="view-switcher" role="tablist" aria-label="Calendar view">
@@ -1036,11 +1210,21 @@ function Calendar() {
         </div>
       )}
 
-      <CalendarSearch
-        visible={showSearch}
-        onClose={() => setShowSearch(false)}
-        onSelectAppointment={handleSearchSelectAppointment}
-      />
+      {showSearch && (
+        <Suspense fallback={null}>
+          <CalendarSearch
+            visible={showSearch}
+            onClose={() => setShowSearch(false)}
+            onSelectAppointment={handleSearchSelectAppointment}
+          />
+        </Suspense>
+      )}
+
+      {showShortcutsHelp && (
+        <Suspense fallback={null}>
+          <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

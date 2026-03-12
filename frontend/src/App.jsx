@@ -287,19 +287,33 @@ const queryClient = new QueryClient({
   },
 });
 
-// Simple loading component
-const PageLoader = () => (
-  <div style={{
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '100vh',
-    fontSize: '14px',
-    color: '#666'
-  }}>
-    Loading...
-  </div>
-);
+// Loading fallback component with spinner for Suspense boundaries
+function PageLoadingFallback() {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      gap: '12px',
+    }}>
+      <div style={{
+        width: '32px',
+        height: '32px',
+        border: '3px solid #e5e7eb',
+        borderTopColor: '#3b82f6',
+        borderRadius: '50%',
+        animation: 'page-loader-spin 0.7s linear infinite',
+      }} />
+      <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>Loading...</p>
+      <style>{`@keyframes page-loader-spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// Keep backward-compatible alias
+const PageLoader = PageLoadingFallback;
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';

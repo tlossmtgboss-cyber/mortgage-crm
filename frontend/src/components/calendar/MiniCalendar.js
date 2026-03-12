@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { MONTH_NAMES, DAY_NAMES, isToday } from './calendarUtils';
 
-function MiniCalendar({
+const MiniCalendar = React.memo(function MiniCalendar({
   currentDate,
   selectedDate,
   eventDateSet,
@@ -10,7 +10,7 @@ function MiniCalendar({
   onNextMonth,
   onGoToToday,
 }) {
-  const getDaysInMonth = () => {
+  const days = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
@@ -18,35 +18,35 @@ function MiniCalendar({
     const daysInMonth = lastDay.getDate();
     const startingDay = firstDay.getDay();
 
-    const days = [];
+    const result = [];
 
     // Add empty cells for days before the first of the month
     for (let i = 0; i < startingDay; i++) {
-      days.push({ day: null, date: null });
+      result.push({ day: null, date: null });
     }
 
     // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
-      days.push({
+      result.push({
         day,
         date: new Date(year, month, day)
       });
     }
 
-    return days;
-  };
+    return result;
+  }, [currentDate]);
 
-  const hasAppointmentsOnDate = (date) => {
+  const selectedDateString = useMemo(() => selectedDate.toDateString(), [selectedDate]);
+
+  const hasAppointmentsOnDate = useCallback((date) => {
     if (!date) return false;
     return eventDateSet.has(date.toDateString());
-  };
+  }, [eventDateSet]);
 
-  const isSelected = (date) => {
+  const isSelected = useCallback((date) => {
     if (!date) return false;
-    return date.toDateString() === selectedDate.toDateString();
-  };
-
-  const days = getDaysInMonth();
+    return date.toDateString() === selectedDateString;
+  }, [selectedDateString]);
 
   return (
     <div className="mini-calendar">
@@ -88,6 +88,6 @@ function MiniCalendar({
       </div>
     </div>
   );
-}
+});
 
 export default MiniCalendar;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 /**
  * StatusBadge - Colored badge for appointment status display.
@@ -44,26 +44,26 @@ const sizeStyles = {
   lg: { fontSize: '13px', padding: '4px 12px', height: '28px' },
 };
 
-function StatusBadge({ status, size = 'md', showDot = true }) {
+const StatusBadge = React.memo(function StatusBadge({ status, size = 'md', showDot = true }) {
   const normalized = (status || '').toLowerCase().replace(/\s+/g, '_');
   const config = STATUS_CONFIG[normalized] || STATUS_CONFIG.available;
   const sizing = sizeStyles[size] || sizeStyles.md;
 
-  const style = {
+  const style = useMemo(() => ({
     ...baseStyle,
     ...sizing,
     backgroundColor: config.bg,
     color: config.color,
     borderColor: config.border,
-  };
+  }), [sizing, config]);
 
-  const dotStyle = {
+  const dotStyle = useMemo(() => ({
     width: size === 'sm' ? '5px' : '6px',
     height: size === 'sm' ? '5px' : '6px',
     borderRadius: '50%',
     backgroundColor: config.color,
     flexShrink: 0,
-  };
+  }), [size, config.color]);
 
   return (
     <span style={style} role="status" aria-label={`Status: ${config.label}`}>
@@ -71,7 +71,7 @@ function StatusBadge({ status, size = 'md', showDot = true }) {
       {config.label}
     </span>
   );
-}
+});
 
 export { STATUS_CONFIG };
 export default StatusBadge;
