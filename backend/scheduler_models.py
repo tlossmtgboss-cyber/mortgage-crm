@@ -87,16 +87,47 @@ class AppointmentTypeCreate(BaseModel):
     type_name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
     meeting_type: Optional[str] = "custom"
-    default_duration_minutes: int = Field(30, ge=5, le=480)
+    default_duration_minutes: int = Field(30, ge=15, le=480)
     allowed_durations: List[int] = [15, 30, 45, 60]
     allowed_modes: List[str] = ["video", "phone"]
+    default_mode: Optional[str] = None  # Default meeting mode (phone, video, in_person, screen_share)
+    buffer_before: int = Field(0, ge=0, le=60)
+    buffer_after: int = Field(0, ge=0, le=60)
+    max_per_day: Optional[int] = Field(None, ge=1, le=50)
     requires_loan_id: bool = False
     requires_lead_id: bool = False
+    requires_intake: bool = False
     intake_questions: List[IntakeQuestion] = []
     color: str = "#3b82f6"
     icon: str = "calendar"
     is_public: bool = True
     public_slug: Optional[str] = None
+
+    @validator('default_duration_minutes')
+    def validate_duration(cls, v):
+        if v < 15 or v > 480:
+            raise ValueError('Duration must be between 15 and 480 minutes')
+        return v
+
+    @validator('buffer_before', 'buffer_after')
+    def validate_buffer(cls, v):
+        if v < 0 or v > 60:
+            raise ValueError('Buffer must be between 0 and 60 minutes')
+        return v
+
+    @validator('color')
+    def validate_color(cls, v):
+        import re
+        if v and not re.match(r'^#[0-9a-fA-F]{6}$', v):
+            raise ValueError('Color must be a valid hex color (e.g., #3b82f6)')
+        return v
+
+    @validator('default_mode')
+    def validate_default_mode(cls, v):
+        valid_modes = {'video', 'phone', 'in_person', 'screen_share'}
+        if v is not None and v not in valid_modes:
+            raise ValueError(f'Meeting mode must be one of: {", ".join(valid_modes)}')
+        return v
 
     @validator('intake_questions', each_item=False)
     def serialize_intake_questions(cls, v):
@@ -107,13 +138,34 @@ class AppointmentTypeCreate(BaseModel):
 class AppointmentTypeUpdate(BaseModel):
     type_name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
-    default_duration_minutes: Optional[int] = Field(None, ge=5, le=480)
+    default_duration_minutes: Optional[int] = Field(None, ge=15, le=480)
     allowed_durations: Optional[List[int]] = None
     allowed_modes: Optional[List[str]] = None
+    default_mode: Optional[str] = None
+    buffer_before: Optional[int] = Field(None, ge=0, le=60)
+    buffer_after: Optional[int] = Field(None, ge=0, le=60)
+    max_per_day: Optional[int] = Field(None, ge=1, le=50)
+    requires_intake: Optional[bool] = None
     intake_questions: Optional[List[IntakeQuestion]] = None
     color: Optional[str] = None
+    icon: Optional[str] = None
     is_active: Optional[bool] = None
     is_public: Optional[bool] = None
+    display_order: Optional[int] = None
+
+    @validator('color')
+    def validate_color(cls, v):
+        import re
+        if v is not None and not re.match(r'^#[0-9a-fA-F]{6}$', v):
+            raise ValueError('Color must be a valid hex color (e.g., #3b82f6)')
+        return v
+
+    @validator('default_mode')
+    def validate_default_mode(cls, v):
+        valid_modes = {'video', 'phone', 'in_person', 'screen_share'}
+        if v is not None and v not in valid_modes:
+            raise ValueError(f'Meeting mode must be one of: {", ".join(valid_modes)}')
+        return v
 
     @validator('intake_questions', pre=False)
     def serialize_intake_questions(cls, v):
@@ -121,6 +173,11 @@ class AppointmentTypeUpdate(BaseModel):
         if v is None:
             return v
         return [q.model_dump(exclude_none=True) if isinstance(q, IntakeQuestion) else q for q in v]
+
+
+class AppointmentTypeReorder(BaseModel):
+    """Request body for reordering appointment types."""
+    ordered_ids: List[int] = Field(..., min_length=1)
 
 
 class AvailabilitySlotCreate(BaseModel):

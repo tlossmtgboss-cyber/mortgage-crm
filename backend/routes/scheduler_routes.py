@@ -34,7 +34,8 @@ from smart_scheduler_models import (
 )
 from scheduler_models import (
     SchedulerConfigCreate, SchedulerConfigUpdate,
-    LandingPageSettings, AppointmentTypeCreate, AppointmentTypeUpdate
+    LandingPageSettings, AppointmentTypeCreate, AppointmentTypeUpdate,
+    AppointmentTypeReorder,
 )
 
 logger = logging.getLogger(__name__)
@@ -366,14 +367,21 @@ async def list_appointment_types(
                 "default_duration_minutes": t.default_duration_minutes,
                 "allowed_durations": t.allowed_durations,
                 "allowed_modes": t.allowed_modes,
+                "default_mode": t.default_mode.value if t.default_mode else (t.allowed_modes[0] if t.allowed_modes else "video"),
+                "buffer_before": getattr(t, 'min_notice_hours', 0) or 0,
+                "buffer_after": 0,
+                "max_per_day": t.max_per_day,
                 "requires_loan_id": t.requires_loan_id,
                 "requires_lead_id": t.requires_lead_id,
+                "requires_intake": bool(t.intake_questions),
                 "intake_questions": t.intake_questions,
                 "color": t.color,
                 "icon": t.icon,
                 "is_public": t.is_public,
                 "public_slug": t.public_slug,
-                "is_active": t.is_active
+                "display_order": t.display_order,
+                "is_active": t.is_active,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
             }
             for t in types
         ],
@@ -439,6 +447,23 @@ async def create_appointment_type(
         if slug_exists:
             raise HTTPException(status_code=400, detail="An appointment type with this slug already exists")
 
+    # Calculate display_order: put new type at end
+    from sqlalchemy import func as sqla_func
+    max_order = db.query(sqla_func.max(AppointmentType.display_order)).filter(
+        AppointmentType.config_id == config.id,
+        AppointmentType.organization_id == org_id,
+    ).scalar()
+    next_order = (max_order or 0) + 1
+
+    # Parse default_mode if provided
+    from smart_scheduler_models import MeetingMode
+    default_mode = None
+    if type_data.default_mode:
+        try:
+            default_mode = MeetingMode(type_data.default_mode)
+        except ValueError:
+            pass
+
     appt_type = AppointmentType(
         config_id=config.id,
         organization_id=org_id,
@@ -449,13 +474,17 @@ async def create_appointment_type(
         default_duration_minutes=type_data.default_duration_minutes,
         allowed_durations=type_data.allowed_durations,
         allowed_modes=type_data.allowed_modes,
+        default_mode=default_mode,
+        max_per_day=type_data.max_per_day,
         requires_loan_id=type_data.requires_loan_id,
         requires_lead_id=type_data.requires_lead_id,
+        requires_contact_info=True,
         intake_questions=type_data.intake_questions,
         color=type_data.color,
         icon=type_data.icon,
         is_public=type_data.is_public,
-        public_slug=type_data.public_slug
+        public_slug=type_data.public_slug,
+        display_order=next_order,
     )
 
     db.add(appt_type)
@@ -463,6 +492,52 @@ async def create_appointment_type(
     db.refresh(appt_type)
 
     return {"message": "Appointment type created", "type_id": appt_type.id}
+
+
+@router.put("/appointment-types/reorder")
+async def reorder_appointment_types(
+    reorder_data: AppointmentTypeReorder,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Reorder appointment types by providing an ordered list of IDs."""
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    AppointmentType = _models['AppointmentType']
+    SchedulerConfig = _models['SchedulerConfig']
+
+    # Get user's config to scope the query
+    config = db.query(SchedulerConfig).filter(
+        SchedulerConfig.user_id == user.id,
+        SchedulerConfig.organization_id == org_id
+    ).first()
+
+    if not config:
+        raise HTTPException(status_code=404, detail="Scheduler configuration not found")
+
+    # Verify all IDs belong to this user's config and org
+    types = db.query(AppointmentType).filter(
+        AppointmentType.config_id == config.id,
+        AppointmentType.organization_id == org_id,
+        AppointmentType.id.in_(reorder_data.ordered_ids),
+    ).all()
+
+    type_map = {t.id: t for t in types}
+
+    if len(type_map) != len(reorder_data.ordered_ids):
+        raise HTTPException(
+            status_code=400,
+            detail="Some appointment type IDs are invalid or do not belong to your configuration"
+        )
+
+    # Update display_order based on list position
+    for idx, type_id in enumerate(reorder_data.ordered_ids):
+        type_map[type_id].display_order = idx
+
+    db.commit()
+
+    return {"message": f"Reordered {len(reorder_data.ordered_ids)} appointment types"}
 
 
 @router.put("/appointment-types/{type_id}")
@@ -526,6 +601,93 @@ async def delete_appointment_type(
     db.commit()
 
     return {"message": "Appointment type deactivated"}
+
+
+@router.post("/appointment-types/{type_id}/duplicate")
+async def duplicate_appointment_type(
+    type_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Clone an appointment type with a new name."""
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    AppointmentType = _models['AppointmentType']
+    SchedulerConfig = _models['SchedulerConfig']
+
+    original = db.query(AppointmentType).join(SchedulerConfig).filter(
+        AppointmentType.id == type_id,
+        AppointmentType.organization_id == org_id,
+        SchedulerConfig.user_id == user.id
+    ).first()
+
+    if not original:
+        raise HTTPException(status_code=404, detail="Appointment type not found")
+
+    # Calculate next display_order
+    from sqlalchemy import func as sqla_func
+    max_order = db.query(sqla_func.max(AppointmentType.display_order)).filter(
+        AppointmentType.config_id == original.config_id,
+        AppointmentType.organization_id == org_id,
+    ).scalar()
+    next_order = (max_order or 0) + 1
+
+    # Generate unique type_key
+    base_key = f"{original.type_key}_copy"
+    suffix = 1
+    new_key = base_key
+    while db.query(AppointmentType).filter(
+        AppointmentType.config_id == original.config_id,
+        AppointmentType.organization_id == org_id,
+        AppointmentType.type_key == new_key
+    ).first():
+        new_key = f"{base_key}_{suffix}"
+        suffix += 1
+
+    clone = AppointmentType(
+        config_id=original.config_id,
+        organization_id=org_id,
+        type_key=new_key,
+        type_name=f"{original.type_name} (Copy)",
+        description=original.description,
+        meeting_type=original.meeting_type,
+        default_duration_minutes=original.default_duration_minutes,
+        allowed_durations=original.allowed_durations,
+        allowed_modes=original.allowed_modes,
+        default_mode=original.default_mode,
+        min_notice_hours=original.min_notice_hours,
+        max_advance_days=original.max_advance_days,
+        max_per_day=original.max_per_day,
+        max_per_week=original.max_per_week,
+        requires_loan_id=original.requires_loan_id,
+        requires_lead_id=original.requires_lead_id,
+        requires_contact_info=original.requires_contact_info,
+        intake_questions=original.intake_questions or [],
+        send_confirmation=original.send_confirmation,
+        reminder_schedule=original.reminder_schedule,
+        assigned_users=original.assigned_users,
+        routing_strategy=original.routing_strategy,
+        color=original.color,
+        icon=original.icon,
+        display_order=next_order,
+        is_public=original.is_public,
+        public_slug=None,  # Slug must be unique, so don't copy
+        is_active=True,
+    )
+
+    db.add(clone)
+    db.commit()
+    db.refresh(clone)
+
+    logger.info(f"Appointment type {type_id} duplicated as {clone.id} by user {user.id}")
+
+    return {
+        "message": "Appointment type duplicated",
+        "type_id": clone.id,
+        "type_key": clone.type_key,
+        "type_name": clone.type_name,
+    }
 
 
 # ============================================================================
