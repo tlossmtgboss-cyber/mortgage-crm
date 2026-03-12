@@ -4,6 +4,7 @@ export { default as UpcomingAppointments } from './UpcomingAppointments';
 export { default as CreateAppointmentForm } from './CreateAppointmentForm';
 export { default as EditAppointmentForm } from './EditAppointmentForm';
 export { default as AppointmentTimeline } from './AppointmentTimeline';
+export { default as CalendarSearch } from './CalendarSearch';
 export { default as StatusBadge } from './StatusBadge';
 export { STATUS_CONFIG } from './StatusBadge';
 export { parseEmailData } from './EmailToAppointment';

@@ -10,6 +10,7 @@ Modules:
   - public_booking:  Public booking endpoints (no auth required, rate-limited)
   - ai_scheduling:   AI slot recommendations, no-show risk scoring
   - email_testing:   Email service status and test endpoints
+  - search:          Advanced appointment search with full-text, filters, pagination
 
 Superseded modules (kept for backward compat, not included in scheduler_router):
   - appointments_crud: Original combined module (superseded by appointments + booking_links + ai_scheduling)
@@ -25,6 +26,7 @@ from .booking_links import router as booking_links_router
 from .public_booking import router as public_booking_router
 from .ai_scheduling import router as ai_scheduling_router
 from .email_testing import router as email_testing_router
+from .search import router as search_router
 
 scheduler_router = APIRouter()
 scheduler_router.include_router(appointments_router)
@@ -34,3 +36,4 @@ scheduler_router.include_router(booking_links_router)
 scheduler_router.include_router(public_booking_router)
 scheduler_router.include_router(ai_scheduling_router)
 scheduler_router.include_router(email_testing_router)
+scheduler_router.include_router(search_router)

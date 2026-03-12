@@ -832,6 +832,25 @@ export const schedulerAPI = {
     const response = await api.get(`/api/v1/scheduler/appointments/${id}/timeline`);
     return response.data;
   },
+  searchAppointments: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/search', { params, paramsSerializer: (p) => {
+      const parts = [];
+      for (const [key, value] of Object.entries(p)) {
+        if (value === undefined || value === null || value === '') continue;
+        if (Array.isArray(value)) {
+          value.forEach(v => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`));
+        } else {
+          parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+      }
+      return parts.join('&');
+    }});
+    return response.data;
+  },
+  searchSuggestions: async (q) => {
+    const response = await api.get('/api/v1/scheduler/search/suggestions', { params: { q } });
+    return response.data;
+  },
 };
 
 // Team Calendar API (manager/admin multi-LO schedule view)

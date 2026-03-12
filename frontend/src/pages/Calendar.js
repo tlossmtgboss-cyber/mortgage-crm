@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calendarAPI, schedulerAPI, unifiedCalendarAPI, teamAPI } from '../services/api';
+import CalendarSearch from '../components/calendar/CalendarSearch';
 import './Calendar.css';
 
 const TAB_CONFIG = [
@@ -71,6 +72,9 @@ function Calendar() {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Advanced search overlay state
+  const [showSearch, setShowSearch] = useState(false);
+
   // Edit/reschedule appointment state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
@@ -94,6 +98,31 @@ function Calendar() {
 
   useEffect(() => {
     teamAPI.getMembers().then(members => setTeamMembers(members)).catch(() => {});
+  }, []);
+
+  // Keyboard shortcut: Ctrl/Cmd+K to open search
+  useEffect(() => {
+    const handleSearchShortcut = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleSearchShortcut);
+    return () => window.removeEventListener('keydown', handleSearchShortcut);
+  }, []);
+
+  const handleSearchSelectAppointment = useCallback((appointment) => {
+    setShowSearch(false);
+    // Navigate to the appointment's date and open detail view
+    if (appointment.scheduled_start) {
+      setCurrentDate(new Date(appointment.scheduled_start));
+    }
+    // If it has a numeric ID, open the edit modal
+    if (appointment.id && typeof appointment.id === 'number') {
+      setEditingAppointment(appointment);
+      setShowEditModal(true);
+    }
   }, []);
 
   const loadEvents = async () => {
@@ -711,6 +740,19 @@ function Calendar() {
             <button onClick={handlePrev} aria-label={`Previous ${view}`}>&larr;</button>
             <button onClick={handleToday}>Today</button>
             <button onClick={handleNext} aria-label={`Next ${view}`}>&rarr;</button>
+            <button
+              className="btn-calendar-search"
+              onClick={() => setShowSearch(true)}
+              title="Search appointments (Ctrl+K)"
+              aria-label="Search appointments"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              Search
+              <span className="search-shortcut">{navigator.platform?.includes('Mac') ? '\u2318K' : 'Ctrl+K'}</span>
+            </button>
             <button className="btn-add-event" onClick={() => { setSelectedDate(new Date()); setSelectedTime(null); setShowAddModal(true); }}>
               + Add Event
             </button>
@@ -993,6 +1035,12 @@ function Calendar() {
           </div>
         </div>
       )}
+
+      <CalendarSearch
+        visible={showSearch}
+        onClose={() => setShowSearch(false)}
+        onSelectAppointment={handleSearchSelectAppointment}
+      />
     </div>
   );
 }
