@@ -124,6 +124,10 @@ class DocumentAccessLog(Base):
         Index("ix_document_access_logs_created_at", "created_at"),
         Index("ix_document_access_logs_access_granted", "access_granted"),
         Index("ix_document_access_logs_session_id", "session_id"),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_doc_access_org_doc", "organization_id", "document_id"),
+        Index("ix_doc_access_org_created", "organization_id", "created_at"),
+        Index("ix_doc_access_org_user", "organization_id", "user_id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -190,6 +194,9 @@ class DocumentEncryptionRecord(Base):
         Index("ix_document_encryption_records_key_id", "key_id"),
         Index("ix_document_encryption_records_encryption_status", "encryption_status"),
         Index("ix_document_encryption_records_created_at", "created_at"),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_doc_encrypt_org_doc", "organization_id", "document_id"),
+        Index("ix_doc_encrypt_org_created", "organization_id", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -254,9 +261,15 @@ class DocumentIntegrityCheck(Base):
         Index("ix_document_integrity_checks_is_valid", "is_valid"),
         Index("ix_document_integrity_checks_tamper_detected", "tamper_detected"),
         Index("ix_document_integrity_checks_created_at", "created_at"),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_doc_integrity_org_id", "organization_id"),
+        Index("ix_doc_integrity_org_doc", "organization_id", "document_id"),
+        Index("ix_doc_integrity_org_created", "organization_id", "created_at"),
+        Index("ix_doc_integrity_org_tamper", "organization_id", "tamper_detected"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, default=0, comment="FK to organizations.id — tenant isolation")
 
     # Document reference
     document_id = Column(Integer, nullable=False)  # ref smart_documents.id or other doc table
@@ -324,6 +337,9 @@ class DocumentRetentionPolicy(Base):
         Index("ix_document_retention_policies_doc_type", "doc_type"),
         Index("ix_document_retention_policies_is_active", "is_active"),
         Index("ix_document_retention_policies_created_at", "created_at"),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_doc_retention_org_doc_type", "organization_id", "doc_type"),
+        Index("ix_doc_retention_org_active", "organization_id", "is_active"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -384,9 +400,14 @@ class DocumentWatermarkLog(Base):
         Index("ix_document_watermark_logs_watermark_type", "watermark_type"),
         Index("ix_document_watermark_logs_applied_to_user_id", "applied_to_user_id"),
         Index("ix_document_watermark_logs_applied_at", "applied_at"),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_doc_watermark_org_id", "organization_id"),
+        Index("ix_doc_watermark_org_doc", "organization_id", "document_id"),
+        Index("ix_doc_watermark_org_applied", "organization_id", "applied_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, default=0, comment="FK to organizations.id — tenant isolation")
 
     # Document reference
     document_id = Column(Integer, nullable=False)  # ref smart_documents.id or other doc table

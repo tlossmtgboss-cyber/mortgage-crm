@@ -103,6 +103,10 @@ class AIDocumentClassification(Base):
         Index("ix_ai_doc_class_confidence", "prediction_confidence"),
         Index("ix_ai_doc_class_is_correct", "is_correct"),
         Index("ix_ai_doc_class_created_at", "created_at"),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_ai_doc_class_org_doc", "organization_id", "document_id"),
+        Index("ix_ai_doc_class_org_created", "organization_id", "created_at"),
+        Index("ix_ai_doc_class_org_predicted", "organization_id", "predicted_doc_type"),
     )
 
     id = Column(Integer, primary_key=True, index=True)

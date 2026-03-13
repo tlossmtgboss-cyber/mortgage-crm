@@ -159,6 +159,11 @@ class FollowupCampaign(Base):
             "ix_document_followup_campaigns_active_loan",
             "loan_id", "status",
         ),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_followup_camp_org_loan", "organization_id", "loan_id"),
+        Index("ix_followup_camp_org_status", "organization_id", "status"),
+        Index("ix_followup_camp_org_created", "organization_id", "created_at"),
+        Index("ix_followup_camp_org_next_action", "organization_id", "next_action_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -233,9 +238,14 @@ class FollowupEvent(Base):
         Index("ix_document_followup_events_event_type", "event_type"),
         Index("ix_document_followup_events_delivery_status", "delivery_status"),
         Index("ix_document_followup_events_created_at", "created_at"),
+        # Composite indexes for tenant-scoped queries
+        Index("ix_followup_evt_org_id", "organization_id"),
+        Index("ix_followup_evt_org_campaign", "organization_id", "campaign_id"),
+        Index("ix_followup_evt_org_created", "organization_id", "created_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=False, default=0, comment="FK to organizations.id — tenant isolation")
     campaign_id = Column(Integer, nullable=False)  # ref document_followup_campaigns.id
 
     # Event details

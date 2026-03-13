@@ -120,6 +120,14 @@ class AuditEventType(str, enum.Enum):
     CORRECTED = "corrected"
     EXPIRED = "expired"
     TAMPER_DETECTED = "tamper_detected"
+    CONSENT_GIVEN = "consent_given"
+    CONSENT_DECLINED = "consent_declined"
+    CONSENT_WITHDRAWN = "consent_withdrawn"
+    KBA_STARTED = "kba_started"
+    KBA_PASSED = "kba_passed"
+    KBA_FAILED = "kba_failed"
+    KBA_LOCKED = "kba_locked"
+    PAPER_REQUESTED = "paper_requested"
 
 
 # ============================================================================
@@ -449,6 +457,116 @@ class ESignatureTemplate(Base):
 
 
 # ============================================================================
+# ESIGN CONSENT SESSION
+# ============================================================================
+
+class ESignConsentSession(Base):
+    """Records ESIGN Act consent (or refusal) for a recipient on an envelope.
+
+    The ESIGN Act (15 U.S.C. 7001) requires that consumers affirmatively
+    consent to receive electronic records *before* any electronic signature
+    is legally binding.  This table captures:
+
+    - The version of the disclosure text shown to the signer.
+    - Whether consent was given or declined.
+    - The IP address and user-agent string at the moment of consent.
+    - Withdrawal details if the signer later revokes consent.
+
+    A consent row must exist with ``consent_given = True`` and
+    ``withdrawn_at IS NULL`` before the signing endpoint will accept a
+    signature from the corresponding recipient.
+    """
+    __tablename__ = "esign_consent_sessions"
+    __table_args__ = (
+        Index("ix_esign_consent_recipient_id", "recipient_id"),
+        Index("ix_esign_consent_envelope_id", "envelope_id"),
+        Index("ix_esign_consent_org_id", "organization_id"),
+        Index(
+            "ix_esign_consent_recipient_envelope",
+            "recipient_id",
+            "envelope_id",
+            unique=True,
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipient_id = Column(Integer, nullable=False, comment="references esignature_recipients.id")
+    envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
+    organization_id = Column(Integer, nullable=True, comment="references organizations.id")
+
+    # Consent state
+    consent_given = Column(Boolean, nullable=False, default=False)
+    consent_text_version = Column(String(50), nullable=False, default="1.0")
+
+    # Client context at time of consent
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+
+    # Timestamps
+    consented_at = Column(DateTime, nullable=True)
+    withdrawn_at = Column(DateTime, nullable=True)
+    withdrawal_reason = Column(Text, nullable=True)
+
+    # Audit
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+# ============================================================================
+# ESIGN KBA SESSION
+# ============================================================================
+
+class ESignKBASession(Base):
+    """Knowledge-Based Authentication session for recipient identity verification.
+
+    KBA sessions are created when an envelope's auth_method requires identity
+    proofing beyond simple email-link verification.  The session tracks:
+
+    - Generated questions and their correct answers (hashed).
+    - Number of attempts and whether the session is locked.
+    - Pass/fail outcome.
+
+    After 3 failed attempts the session is locked and the recipient is
+    marked AUTH_FAILED on the envelope.
+    """
+    __tablename__ = "esign_kba_sessions"
+    __table_args__ = (
+        Index("ix_esign_kba_recipient_id", "recipient_id"),
+        Index("ix_esign_kba_envelope_id", "envelope_id"),
+        Index("ix_esign_kba_session_uuid", "session_uuid", unique=True),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_uuid = Column(String(36), unique=True, nullable=False, index=True)
+    recipient_id = Column(Integer, nullable=False, comment="references esignature_recipients.id")
+    envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
+
+    # Questions / answers stored as JSON: [{question, options, correct_index}]
+    questions = Column(JSON, nullable=True)
+
+    # Attempt tracking
+    max_attempts = Column(Integer, nullable=False, default=3)
+    attempts_used = Column(Integer, nullable=False, default=0)
+    locked = Column(Boolean, nullable=False, default=False)
+
+    # Outcome
+    passed = Column(Boolean, nullable=True, comment="null = not yet attempted")
+
+    # Client context
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+
+    # Timestamps
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ============================================================================
 # MODULE EXPORTS
 # ============================================================================
 
@@ -466,4 +584,6 @@ __all__ = [
     "ESignatureField",
     "ESignatureAuditEvent",
     "ESignatureTemplate",
+    "ESignConsentSession",
+    "ESignKBASession",
 ]

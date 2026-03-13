@@ -31,6 +31,7 @@ import enum
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -42,6 +43,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import validates
 
 from database import Base
 
@@ -80,6 +82,7 @@ class CalculationStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     NEEDS_REVIEW = "needs_review"
+    REVIEWED = "reviewed"
     APPROVED = "approved"
     REJECTED = "rejected"
 
@@ -168,6 +171,14 @@ class IncomeCalculation(Base):
         Index("ix_income_calculations_borrower_id", "borrower_id"),
         Index("ix_income_calculations_status", "status"),
         Index("ix_income_calculations_calculation_type", "calculation_type"),
+        CheckConstraint(
+            "dti_front_end IS NULL OR (dti_front_end >= 0 AND dti_front_end <= 100)",
+            name="ck_income_calculations_dti_front_end_range",
+        ),
+        CheckConstraint(
+            "dti_back_end IS NULL OR (dti_back_end >= 0 AND dti_back_end <= 100)",
+            name="ck_income_calculations_dti_back_end_range",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -212,14 +223,23 @@ class IncomeCalculation(Base):
     # Source documents
     source_documents = Column(JSON)  # List of document IDs used in calculation
 
-    # Review workflow
-    reviewed_by = Column(String(100))
+    # Who performed the calculation (user ID for maker-checker enforcement)
+    calculated_by_user_id = Column(Integer, nullable=True)  # ref users.id
+
+    # Review workflow (maker-checker: reviewer must differ from calculator)
+    reviewed_by = Column(String(100))       # Display name (legacy compat)
+    reviewed_by_user_id = Column(Integer, nullable=True)  # ref users.id
     reviewed_at = Column(DateTime)
     review_notes = Column(Text)
 
-    # Approval workflow
-    approved_by = Column(String(100))
+    # Approval workflow (maker-checker: approver must differ from calculator)
+    approved_by = Column(String(100))       # Display name (legacy compat)
+    approved_by_user_id = Column(Integer, nullable=True)  # ref users.id
     approved_at = Column(DateTime)
+
+    # Rejection tracking
+    rejection_reason = Column(Text)
+    rejected_by_user_id = Column(Integer, nullable=True)  # ref users.id
 
     # Audit timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -228,6 +248,28 @@ class IncomeCalculation(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+    @validates("dti_front_end")
+    def _validate_dti_front_end(self, key, value):
+        """Enforce DTI front-end ratio within 0-100."""
+        if value is not None:
+            val = float(value)
+            if val < 0 or val > 100:
+                raise ValueError(
+                    f"dti_front_end must be between 0 and 100, got {val}"
+                )
+        return value
+
+    @validates("dti_back_end")
+    def _validate_dti_back_end(self, key, value):
+        """Enforce DTI back-end ratio within 0-100."""
+        if value is not None:
+            val = float(value)
+            if val < 0 or val > 100:
+                raise ValueError(
+                    f"dti_back_end must be between 0 and 100, got {val}"
+                )
+        return value
 
     def __repr__(self):
         return (
