@@ -124,8 +124,8 @@ function SMSModal({ isOpen, onClose, lead }) {
     setResult(null);
 
     try {
-      const response = await api.post('/api/v1/integrations/sms/send', {
-        to_number: lead.phone,
+      const response = await api.post('/api/v1/sms-intelligence/send', {
+        to_phone: lead.phone,
         message: message,
         lead_id: lead.id
       });
