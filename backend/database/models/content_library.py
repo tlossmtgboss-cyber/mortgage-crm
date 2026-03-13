@@ -252,23 +252,26 @@ class ContentLibraryItem(Base):
 
 
 # ============================================================================
-# CONTENT USAGE LOG
+# CONTENT LIBRARY USAGE LOG
 # ============================================================================
 
-class ContentUsageLog(Base):
+class ContentLibraryUsageLog(Base):
     """Per-send tracking record for content library analytics.
 
     Created each time a library item is used in a campaign, one-off send,
     or manual outreach. Enables per-item open/click/conversion attribution
     and drives the rolling rating updates.
+
+    Note: Renamed from ContentUsageLog to avoid collision with
+    content_governance.ContentUsageLog which tracks governance template usage.
     """
-    __tablename__ = "content_usage_logs"
+    __tablename__ = "content_library_usage_logs"
     __table_args__ = (
-        Index("ix_cul_item_id", "item_id"),
-        Index("ix_cul_user_id", "user_id"),
-        Index("ix_cul_org_id", "organization_id"),
-        Index("ix_cul_sent_at", "sent_at"),
-        Index("ix_cul_item_sent", "item_id", "sent_at"),
+        Index("ix_clul_item_id", "item_id"),
+        Index("ix_clul_user_id", "user_id"),
+        Index("ix_clul_org_id", "organization_id"),
+        Index("ix_clul_sent_at", "sent_at"),
+        Index("ix_clul_item_sent", "item_id", "sent_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -316,12 +319,12 @@ class ContentUsageLog(Base):
     # -------------------------------------------------------------------------
     # Relationships
     # -------------------------------------------------------------------------
-    item = relationship("ContentLibraryItem", backref="usage_logs")
+    item = relationship("ContentLibraryItem", backref="library_usage_logs")
     organization = relationship("Organization")
     user = relationship("User")
 
     def __repr__(self) -> str:
-        return f"<ContentUsageLog id={self.id} item_id={self.item_id} user_id={self.user_id}>"
+        return f"<ContentLibraryUsageLog id={self.id} item_id={self.item_id} user_id={self.user_id}>"
 
 
 # ============================================================================
@@ -332,5 +335,5 @@ __all__ = [
     "ContentType",
     "ContentCategory",
     "ContentLibraryItem",
-    "ContentUsageLog",
+    "ContentLibraryUsageLog",
 ]

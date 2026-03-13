@@ -318,9 +318,18 @@ from .webhook import (
 # Content library models (pre-built and custom marketing templates)
 from .content_library import (
     ContentLibraryItem,
-    ContentUsageLog,
+    ContentLibraryUsageLog,
     ContentType,
     ContentCategory,
+)
+
+# Content governance models (approval workflows, audit logs)
+from .content_governance import (
+    ContentTemplate,
+    ContentApproval,
+    ContentUsageLog,
+    ContentStatus,
+    ApprovalDecision,
 )
 
 # AI Document Intelligence models
@@ -536,6 +545,35 @@ from .reminder_config import (
 
 # Waiting room / queue management
 from .waiting_room import WaitlistEntry, WaitlistStatus
+
+# Reschedule history (appointment rescheduling audit trail)
+from .reschedule_history import RescheduleHistory
+
+# Appointment Templates (pre-configured appointment settings)
+from .appointment_template import AppointmentTemplate
+
+# Calendar labels (color-coded appointment categorization)
+from .calendar_label import CalendarLabel, AppointmentLabel
+
+# Calendar feed subscription (iCalendar / webcal)
+from .calendar_feed import CalendarFeedToken
+
+# Post-appointment surveys
+from .appointment_survey import AppointmentSurvey
+
+# Appointment locations (saved meeting locations for scheduling)
+from .appointment_location import AppointmentLocation
+
+# A/B testing for public booking pages
+from .ab_test import (
+    ABTest,
+    ABTestResult,
+    ABTestStatus,
+    ABTestElementType,
+)
+
+# Cancellation Policy (per-org appointment cancellation rules)
+from .cancellation_policy import CancellationPolicy
 
 
 __all__ = [
@@ -827,9 +865,18 @@ __all__ = [
     # Content Library
     # =====================
     "ContentLibraryItem",
-    "ContentUsageLog",
+    "ContentLibraryUsageLog",
     "ContentType",
     "ContentCategory",
+
+    # =====================
+    # Content Governance
+    # =====================
+    "ContentTemplate",
+    "ContentApproval",
+    "ContentUsageLog",
+    "ContentStatus",
+    "ApprovalDecision",
 
     # =====================
     # AI Document Intelligence
@@ -1065,4 +1112,48 @@ __all__ = [
     # =====================
     "WaitlistEntry",
     "WaitlistStatus",
+
+    # =====================
+    # Appointment Templates
+    # =====================
+    "AppointmentTemplate",
+
+    # =====================
+    # Calendar Labels
+    # =====================
+    "CalendarLabel",
+    "AppointmentLabel",
+
+    # =====================
+    # Calendar Feed (iCal)
+    # =====================
+    "CalendarFeedToken",
+
+    # =====================
+    # Post-Appointment Surveys
+    # =====================
+    "AppointmentSurvey",
+
+    # =====================
+    # Reschedule History
+    # =====================
+    "RescheduleHistory",
+
+    # =====================
+    # Appointment Locations
+    # =====================
+    "AppointmentLocation",
+
+    # =====================
+    # A/B Testing
+    # =====================
+    "ABTest",
+    "ABTestResult",
+    "ABTestStatus",
+    "ABTestElementType",
+
+    # =====================
+    # Cancellation Policy
+    # =====================
+    "CancellationPolicy",
 ]

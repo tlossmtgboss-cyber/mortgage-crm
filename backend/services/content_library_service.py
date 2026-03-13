@@ -47,7 +47,7 @@ from sqlalchemy.orm import Session
 
 from database.models.content_library import (
     ContentLibraryItem,
-    ContentUsageLog,
+    ContentLibraryUsageLog,
     ContentCategory,
     ContentType,
 )
@@ -476,7 +476,7 @@ class ContentLibraryService:
         loan_id: Optional[int] = None,
         channel: Optional[str] = None,
         user_rating: Optional[int] = None,
-    ) -> ContentUsageLog:
+    ) -> ContentLibraryUsageLog:
         """Record a send/deployment event and increment the template's usage counter.
 
         If user_rating is provided (1–5), the template's rolling average rating
@@ -491,7 +491,7 @@ class ContentLibraryService:
             user_rating: Optional star rating 1–5 from the user.
 
         Returns:
-            The created ContentUsageLog record.
+            The created ContentLibraryUsageLog record.
 
         Raises:
             ValueError: If template_id is not accessible.
@@ -508,7 +508,7 @@ class ContentLibraryService:
             user_rating = max(1, min(5, int(user_rating)))
 
         # Create the usage log record
-        log = ContentUsageLog(
+        log = ContentLibraryUsageLog(
             item_id=template_id,
             organization_id=self.organization_id,
             user_id=user_id,
@@ -552,14 +552,14 @@ class ContentLibraryService:
         was_clicked: Optional[bool] = None,
         was_replied: Optional[bool] = None,
         led_to_conversion: Optional[bool] = None,
-    ) -> Optional[ContentUsageLog]:
+    ) -> Optional[ContentLibraryUsageLog]:
         """Update engagement outcomes on an existing usage log record.
 
         Called asynchronously by email/SMS webhook handlers when delivery
         events arrive (open, click, reply, conversion).
 
         Args:
-            log_id: ContentUsageLog.id to update.
+            log_id: ContentLibraryUsageLog.id to update.
             was_opened: Mark the message as opened.
             was_clicked: Mark that a link was clicked.
             was_replied: Mark that the recipient replied.
@@ -568,13 +568,13 @@ class ContentLibraryService:
         Returns:
             Updated log record, or None if not found.
         """
-        log = self.db.query(ContentUsageLog).filter(
-            ContentUsageLog.id == log_id,
-            ContentUsageLog.organization_id == self.organization_id,
+        log = self.db.query(ContentLibraryUsageLog).filter(
+            ContentLibraryUsageLog.id == log_id,
+            ContentLibraryUsageLog.organization_id == self.organization_id,
         ).first()
 
         if log is None:
-            logger.warning("ContentUsageLog %s not found for org %s", log_id, self.organization_id)
+            logger.warning("ContentLibraryUsageLog %s not found for org %s", log_id, self.organization_id)
             return None
 
         if was_opened is not None:
