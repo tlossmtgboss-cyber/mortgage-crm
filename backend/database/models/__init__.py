@@ -323,14 +323,6 @@ from .content_library import (
     ContentCategory,
 )
 
-# Content governance models (approval workflows, audit logs)
-from .content_governance import (
-    ContentTemplate,
-    ContentApproval,
-    ContentUsageLog,
-    ContentStatus,
-    ApprovalDecision,
-)
 
 # AI Document Intelligence models
 from .document_intelligence import (
@@ -869,14 +861,6 @@ __all__ = [
     "ContentType",
     "ContentCategory",
 
-    # =====================
-    # Content Governance
-    # =====================
-    "ContentTemplate",
-    "ContentApproval",
-    "ContentUsageLog",
-    "ContentStatus",
-    "ApprovalDecision",
 
     # =====================
     # AI Document Intelligence
