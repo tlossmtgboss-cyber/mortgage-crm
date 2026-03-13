@@ -76,9 +76,10 @@ def _html_scaffold(
 ) -> str:
     """Wrap body content in the standard email scaffold with header, footer, and branding."""
     logo_block = ""
-    if company_logo_url:
+    safe_logo_url = _safe_url(company_logo_url)
+    if safe_logo_url:
         logo_block = (
-            f'<img src="{_esc(company_logo_url)}" alt="{_esc(company_name)}" '
+            f'<img src="{_safe(safe_logo_url)}" alt="{_safe(company_name)}" '
             f'style="max-height:40px;margin-bottom:12px;" /><br>'
         )
 
@@ -120,7 +121,7 @@ This is an automated message from {_esc(company_name)}.
 </p>
 {footer_extra}
 <p style="margin:8px 0 0;color:#9ca3af;font-size:11px;">
-<a href="{_esc(unsubscribe_url)}" style="color:#9ca3af;text-decoration:underline;">
+<a href="{_safe(_safe_url(unsubscribe_url))}" style="color:#9ca3af;text-decoration:underline;">
 Manage notification preferences
 </a>
 </p>
@@ -143,13 +144,49 @@ def _esc(value: Any) -> str:
     return html.escape(str(value))
 
 
+def _safe(value: Any) -> str:
+    """HTML-escape a value for safe insertion into templates.
+
+    Handles None by returning empty string. Converts non-string types
+    to string before escaping.
+    """
+    if value is None:
+        return ""
+    return html.escape(str(value))
+
+
+def _safe_url(url: Any) -> str:
+    """Validate and return a URL safe for use in href attributes.
+
+    Only allows http:// and https:// schemes. Returns empty string
+    for None, empty, or unsafe URLs (e.g. javascript:, data:, vbscript:).
+    """
+    if url is None:
+        return ""
+    url_str = str(url).strip()
+    if not url_str:
+        return ""
+    # Only allow http and https schemes
+    url_lower = url_str.lower()
+    if url_lower.startswith("https://") or url_lower.startswith("http://"):
+        return url_str
+    # Also allow protocol-relative URLs (//example.com)
+    if url_lower.startswith("//"):
+        return url_str
+    # Reject everything else (javascript:, data:, vbscript:, etc.)
+    return ""
+
+
 def _cta_button(label: str, url: str, color: str = _BRAND_ACCENT) -> str:
     """Render a call-to-action button."""
+    safe_url = _safe_url(url)
+    if not safe_url:
+        return ""
     return (
         f'<div style="text-align:center;margin:24px 0;">'
-        f'<a href="{_esc(url)}" style="display:inline-block;padding:14px 32px;'
+        f'<a href="{_safe(safe_url)}" style="display:inline-block;padding:14px 32px;'
         f'background:{color};color:#ffffff;text-decoration:none;border-radius:8px;'
-        f'font-weight:600;font-size:15px;line-height:1;">{_esc(label)}</a>'
+        f'font-weight:600;font-size:15px;line-height:1;">{_safe(label)}</a>'
         f'</div>'
     )
 
@@ -540,9 +577,9 @@ def _template_document_received(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Document Received: {document_name}",
+        subject=f"Document Received: {_safe(document_name)}",
         html_body=_html_scaffold(
-            "Document Received", _esc(document_name), body,
+            "Document Received", document_name, body,
             header_bg=_COLOR_SUCCESS,
             company_name=company_name, company_logo_url=company_logo_url,
         ),
@@ -589,9 +626,9 @@ def _template_document_approved(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Approved: {document_name}",
+        subject=f"Approved: {_safe(document_name)}",
         html_body=_html_scaffold(
-            "Document Approved", _esc(document_name), body,
+            "Document Approved", document_name, body,
             header_bg=_COLOR_SUCCESS,
             company_name=company_name, company_logo_url=company_logo_url,
         ),
@@ -646,9 +683,9 @@ def _template_document_rejected(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Action Required: {document_name} Needs Resubmission",
+        subject=f"Action Required: {_safe(document_name)} Needs Resubmission",
         html_body=_html_scaffold(
-            "Document Needs Resubmission", _esc(document_name), body,
+            "Document Needs Resubmission", document_name, body,
             header_bg=_COLOR_DANGER,
             company_name=company_name, company_logo_url=company_logo_url,
         ),
@@ -701,9 +738,9 @@ def _template_document_expiring(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Document Expiring: {document_name}",
+        subject=f"Document Expiring: {_safe(document_name)}",
         html_body=_html_scaffold(
-            "Document Expiring", _esc(document_name), body,
+            "Document Expiring", document_name, body,
             header_bg=urgency_color,
             company_name=company_name, company_logo_url=company_logo_url,
         ),
@@ -773,9 +810,9 @@ def _template_esign_request(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Signature Required: {envelope_name}",
+        subject=f"Signature Required: {_safe(envelope_name)}",
         html_body=_html_scaffold(
-            "Signature Required", _esc(envelope_name), body,
+            "Signature Required", envelope_name, body,
             company_name=company_name, company_logo_url=company_logo_url,
         ),
         plain_text=plain,
@@ -822,9 +859,9 @@ def _template_esign_reminder(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Reminder: Signature Needed - {envelope_name}",
+        subject=f"Reminder: Signature Needed - {_safe(envelope_name)}",
         html_body=_html_scaffold(
-            "Signature Reminder", _esc(envelope_name), body,
+            "Signature Reminder", envelope_name, body,
             header_bg=_COLOR_WARNING,
             company_name=company_name, company_logo_url=company_logo_url,
         ),
@@ -879,7 +916,7 @@ def _template_esign_completed(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Signing Complete: {envelope_name}",
+        subject=f"Signing Complete: {_safe(envelope_name)}",
         html_body=_html_scaffold(
             "Signing Complete", "All signatures received", body,
             header_bg=_COLOR_SUCCESS,
@@ -933,9 +970,9 @@ def _template_esign_voided(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Signing Voided: {envelope_name}",
+        subject=f"Signing Voided: {_safe(envelope_name)}",
         html_body=_html_scaffold(
-            "Signing Request Voided", _esc(envelope_name), body,
+            "Signing Request Voided", envelope_name, body,
             header_bg=_COLOR_MUTED,
             company_name=company_name, company_logo_url=company_logo_url,
         ),
@@ -1008,7 +1045,7 @@ def _template_income_review_complete(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Income Review Ready: {borrower}" + (f" - Loan #{loan_number}" if loan_number else ""),
+        subject=f"Income Review Ready: {_safe(borrower)}" + (f" - Loan #{_safe(loan_number)}" if loan_number else ""),
         html_body=_html_scaffold(
             "Income Calculation Complete", f"Ready for review", body,
             header_bg=_COLOR_INFO,
@@ -1060,7 +1097,7 @@ def _template_income_task_assigned(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Task Assigned: Income Verification - {borrower}",
+        subject=f"Task Assigned: Income Verification - {_safe(borrower)}",
         html_body=_html_scaffold(
             "Task Assigned", "Income Verification", body,
             header_bg=_COLOR_INFO,
@@ -1136,7 +1173,7 @@ def _template_review_findings(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Review Findings: {len(findings)} Issue{'s' if len(findings) != 1 else ''} - {borrower}",
+        subject=f"Review Findings: {len(findings)} Issue{'s' if len(findings) != 1 else ''} - {_safe(borrower)}",
         html_body=_html_scaffold(
             "Review Findings", f"{len(findings)} item{'s' if len(findings) != 1 else ''} need attention",
             body, header_bg=sev_color,
@@ -1229,7 +1266,7 @@ def _template_appointment_scheduled(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Appointment Confirmed: {appointment_date} at {appointment_time}",
+        subject=f"Appointment Confirmed: {_safe(appointment_date)} at {_safe(appointment_time)}",
         html_body=_html_scaffold(
             "Appointment Confirmed", f"{appointment_date} at {appointment_time}",
             body, header_bg=_COLOR_SUCCESS,
@@ -1309,7 +1346,7 @@ def _template_appointment_reminder(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Appointment Reminder: {time_label.capitalize()} - {appointment_date}",
+        subject=f"Appointment Reminder: {_safe(time_label.capitalize())} - {_safe(appointment_date)}",
         html_body=_html_scaffold(
             "Appointment Reminder", f"{appointment_date} at {appointment_time}",
             body, header_bg=_COLOR_INFO,
@@ -1369,7 +1406,7 @@ def _template_appointment_cancelled(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
     return RenderedTemplate(
-        subject=f"Appointment Cancelled" + (f": {appointment_date}" if appointment_date else ""),
+        subject=f"Appointment Cancelled" + (f": {_safe(appointment_date)}" if appointment_date else ""),
         html_body=_html_scaffold(
             "Appointment Cancelled",
             f"{appointment_date} at {appointment_time}" if appointment_date and appointment_time else "",

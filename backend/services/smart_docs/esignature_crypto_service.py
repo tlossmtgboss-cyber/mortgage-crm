@@ -1,7 +1,7 @@
 """
 E-Signature Cryptographic Service
 
-Built-in e-signature system — no third-party providers (DocuSign, etc.).
+Built-in e-signature system -- no third-party providers (DocuSign, etc.).
 All signing operations happen on-platform using standard library crypto.
 
 Provides:
@@ -11,6 +11,15 @@ Provides:
 - Completion certificate generation
 - Access code / SMS verification code generation
 - Audit trail integrity hashing
+
+Security model:
+- All keys are derived from persistent env vars via ESignatureKeyManager.
+- The service REFUSES to initialise if ESIGN_SIGNING_SECRET or
+  ESIGN_TOKEN_SECRET are not set (no ephemeral fallback).
+- HMAC messages use length-prefixed encoding to prevent field-boundary
+  attacks (replaces the old pipe-separator approach).
+- Key rotation is supported: signatures can be verified against both the
+  current and previous key.
 """
 
 from __future__ import annotations
@@ -26,6 +35,12 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass, asdict
+
+from services.smart_docs.esignature_key_manager import (
+    ESignatureKeyManager,
+    get_esignature_key_manager,
+    length_prefix_encode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,44 +68,39 @@ class ESignatureCryptoService:
     """
     Cryptographic operations for the built-in e-signature system.
 
-    All signing happens on our platform — no external signing providers.
+    All signing happens on our platform -- no external signing providers.
+
+    Keys are managed by ``ESignatureKeyManager`` which derives
+    purpose-specific keys via HKDF from the master secrets set in the
+    environment.  If the env vars are missing, initialization raises
+    ``RuntimeError`` -- there is no ephemeral fallback.
 
     Capabilities:
     - Document hashing (SHA-256) for tamper detection
-    - HMAC-based signature generation
+    - HMAC-based signature generation (length-prefixed encoding)
     - Signing session token generation with expiry
     - Completion certificate generation
-    - Signature verification
+    - Signature verification (with key rotation support)
     - Document integrity validation
     - Access code and SMS verification code generation
     - Audit trail integrity hashing
     """
 
-    # Separator used in HMAC message construction to prevent field-boundary attacks
-    _FIELD_SEP = "|"
+    def __init__(self, key_manager: Optional[ESignatureKeyManager] = None):
+        """
+        Initialise the crypto service.
 
-    def __init__(self):
-        # Signing secret: used to HMAC signature hashes that prove a signing event occurred.
-        signing_secret_env = os.getenv("ESIGN_SIGNING_SECRET", "")
-        if signing_secret_env:
-            self._signing_secret = signing_secret_env.encode("utf-8")
-        else:
-            self._signing_secret = secrets.token_bytes(32)
-            logger.warning(
-                "ESIGN_SIGNING_SECRET not set — generated ephemeral secret. "
-                "Signatures will not survive process restarts."
-            )
+        Args:
+            key_manager: Optional explicit key manager.  If not provided,
+                the module-level singleton from ``get_esignature_key_manager()``
+                is used (which will raise RuntimeError if env vars are missing).
+        """
+        self._km = key_manager or get_esignature_key_manager()
 
-        # Token secret: used to generate and validate time-limited signing URL tokens.
-        token_secret_env = os.getenv("ESIGN_TOKEN_SECRET", "")
-        if token_secret_env:
-            self._token_secret = token_secret_env.encode("utf-8")
-        else:
-            self._token_secret = secrets.token_bytes(32)
-            logger.warning(
-                "ESIGN_TOKEN_SECRET not set — generated ephemeral secret. "
-                "Signing tokens will not survive process restarts."
-            )
+        # Convenience references to derived keys.
+        self._signing_key = self._km.get_signing_key()
+        self._token_key = self._km.get_token_key()
+        self._audit_key = self._km.get_audit_key()
 
         # Base URL for verification links embedded in certificates.
         self._base_url = os.getenv(
@@ -147,6 +157,10 @@ class ESignatureCryptoService:
         The token encodes the recipient, envelope, and expiry so that
         ``validate_signing_token`` can verify it without a database lookup.
 
+        The internal payload uses length-prefixed encoding so that field
+        values containing arbitrary characters cannot cause boundary
+        confusion.
+
         Args:
             recipient_id: Database ID of the signing recipient.
             envelope_uuid: UUID of the envelope being signed.
@@ -159,24 +173,27 @@ class ESignatureCryptoService:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
             expires_ts = int(expires_at.timestamp())
 
-            # Payload: recipient_id|envelope_uuid|expires_timestamp|random_nonce
             nonce = secrets.token_hex(16)
-            payload = self._FIELD_SEP.join([
+
+            # Length-prefixed payload prevents field-boundary attacks.
+            payload_bytes = length_prefix_encode(
                 str(recipient_id),
                 envelope_uuid,
                 str(expires_ts),
                 nonce,
-            ])
+            )
 
-            # HMAC the payload so it cannot be forged
+            # HMAC the payload so it cannot be forged.
             mac = hmac.new(
-                self._token_secret,
-                payload.encode("utf-8"),
+                self._token_key,
+                payload_bytes,
                 hashlib.sha256,
             ).digest()
 
-            # Token = base64(payload + "." + base64(mac))
-            token_raw = payload.encode("utf-8") + b"." + base64.b64encode(mac)
+            # Token = base64(payload_b64 + "." + mac_b64)
+            # We base64-encode the binary payload so the "." separator is
+            # unambiguous (payload_b64 never contains ".").
+            token_raw = base64.b64encode(payload_bytes) + b"." + base64.b64encode(mac)
             token = base64.urlsafe_b64encode(token_raw).decode("ascii")
 
             logger.info(
@@ -217,13 +234,13 @@ class ESignatureCryptoService:
                 logger.warning("Signing token missing separator")
                 return False
 
-            payload_bytes, mac_b64 = token_raw.rsplit(b".", 1)
-            payload = payload_bytes.decode("utf-8")
+            payload_b64, mac_b64 = token_raw.rsplit(b".", 1)
+            payload_bytes = base64.b64decode(payload_b64)
             provided_mac = base64.b64decode(mac_b64)
 
             # Verify HMAC
             expected_mac = hmac.new(
-                self._token_secret,
+                self._token_key,
                 payload_bytes,
                 hashlib.sha256,
             ).digest()
@@ -232,13 +249,13 @@ class ESignatureCryptoService:
                 logger.warning("Signing token HMAC mismatch")
                 return False
 
-            # Parse payload fields
-            parts = payload.split(self._FIELD_SEP)
-            if len(parts) != 4:
-                logger.warning("Signing token has unexpected field count: %d", len(parts))
+            # Parse length-prefixed payload fields
+            fields = _decode_length_prefixed(payload_bytes)
+            if len(fields) != 4:
+                logger.warning("Signing token has unexpected field count: %d", len(fields))
                 return False
 
-            token_recipient_id, token_envelope, token_expires_ts, _nonce = parts
+            token_recipient_id, token_envelope, token_expires_ts, _nonce = fields
 
             # Check recipient and envelope match
             if int(token_recipient_id) != recipient_id:
@@ -287,7 +304,8 @@ class ESignatureCryptoService:
         Create an HMAC-based signature hash proving a signing event occurred.
 
         The hash binds the document content, signer identity, timestamp, and
-        IP address together so that none can be altered after the fact.
+        IP address together using length-prefixed encoding so that none can
+        be altered after the fact.
 
         Args:
             document_hash: SHA-256 hex digest of the signed document.
@@ -300,21 +318,21 @@ class ESignatureCryptoService:
         """
         try:
             signed_at_iso = signed_at.isoformat()
-            message = self._FIELD_SEP.join([
+            message = length_prefix_encode(
                 document_hash,
                 signer_email.lower().strip(),
                 signed_at_iso,
                 ip_address,
-            ])
+            )
 
             signature = hmac.new(
-                self._signing_secret,
-                message.encode("utf-8"),
+                self._signing_key,
+                message,
                 hashlib.sha256,
             ).hexdigest()
 
             logger.info(
-                "Generated signature hash for signer=%s document=%s…",
+                "Generated signature hash for signer=%s document=%s...",
                 signer_email,
                 document_hash[:16],
             )
@@ -335,6 +353,8 @@ class ESignatureCryptoService:
         """
         Verify that a stored signature hash matches the expected inputs.
 
+        If key rotation is in progress, the previous key is also tried.
+
         Args:
             signature_hash: The hex HMAC hash to verify.
             document_hash: SHA-256 hex digest of the document at signing time.
@@ -346,10 +366,13 @@ class ESignatureCryptoService:
             True if the signature hash is valid, False otherwise.
         """
         try:
-            expected = self.generate_signature_hash(
-                document_hash, signer_email, signed_at, ip_address,
+            message = length_prefix_encode(
+                document_hash,
+                signer_email.lower().strip(),
+                signed_at.isoformat(),
+                ip_address,
             )
-            return hmac.compare_digest(signature_hash, expected)
+            return self._km.verify_with_rotation(message, signature_hash)
         except Exception as e:
             logger.exception("Signature hash verification failed: %s", e)
             return False
@@ -380,7 +403,7 @@ class ESignatureCryptoService:
 
             if not is_valid:
                 logger.warning(
-                    "Document integrity check FAILED: original=%s… current=%s…",
+                    "Document integrity check FAILED: original=%s... current=%s...",
                     original_hash[:16],
                     current_hash[:16],
                 )
@@ -431,28 +454,30 @@ class ESignatureCryptoService:
 
             certificate_id = f"CERT-{uuid.uuid4().hex[:12].upper()}"
 
-            # Build a composite signature hash over all signers
-            signer_components = []
+            # Build composite message using length-prefixed encoding.
+            # Each signer's fields are individually length-prefixed so there
+            # is no ambiguity even if emails contain special characters.
+            signer_fields: list[str] = []
             for signer in signers:
                 signed_at_str = signer.get("signed_at", datetime.now(timezone.utc).isoformat())
                 if isinstance(signed_at_str, datetime):
                     signed_at_str = signed_at_str.isoformat()
-                signer_components.append(self._FIELD_SEP.join([
+                signer_fields.extend([
                     signer.get("email", "").lower().strip(),
                     signed_at_str,
                     signer.get("ip_address", "unknown"),
-                ]))
+                ])
 
-            composite_message = self._FIELD_SEP.join([
+            composite_message = length_prefix_encode(
                 certificate_id,
                 envelope_uuid,
                 document_hash,
-                *signer_components,
-            ])
+                *signer_fields,
+            )
 
             composite_hash = hmac.new(
-                self._signing_secret,
-                composite_message.encode("utf-8"),
+                self._signing_key,
+                composite_message,
                 hashlib.sha256,
             ).hexdigest()
 
@@ -529,7 +554,7 @@ class ESignatureCryptoService:
         """
         Hash an access code for safe database storage.
 
-        Uses SHA-256 with a per-service salt derived from the signing secret.
+        Uses SHA-256 with a per-service salt derived from the signing key.
 
         Args:
             code: The plaintext access code.
@@ -538,10 +563,10 @@ class ESignatureCryptoService:
             Hex-encoded hash suitable for storage.
         """
         try:
-            # Derive a stable salt from the signing secret so hashes are
+            # Derive a stable salt from the signing key so hashes are
             # consistent across calls but not rainbow-table-friendly.
             salt = hashlib.sha256(
-                b"access-code-salt" + self._signing_secret
+                b"access-code-salt" + self._signing_key
             ).digest()[:16]
 
             return hashlib.sha256(salt + code.encode("utf-8")).hexdigest()
@@ -578,7 +603,7 @@ class ESignatureCryptoService:
 
         The events are serialized to canonical JSON (sorted keys, no extra
         whitespace) so that the hash is deterministic regardless of dict
-        ordering.
+        ordering.  Uses the dedicated audit key for domain separation.
 
         Args:
             events: List of audit event dicts. Each should contain at
@@ -597,13 +622,13 @@ class ESignatureCryptoService:
             )
 
             audit_hash = hmac.new(
-                self._signing_secret,
+                self._audit_key,
                 canonical.encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
 
             logger.debug(
-                "Generated audit hash over %d events: %s…",
+                "Generated audit hash over %d events: %s...",
                 len(events),
                 audit_hash[:16],
             )
@@ -645,7 +670,7 @@ class ESignatureCryptoService:
         try:
             created_at = datetime.now(timezone.utc).isoformat()
 
-            # Build canonical payload — sorted keys for determinism
+            # Build canonical payload -- sorted keys for determinism
             payload = {
                 "created_at": created_at,
                 "document_hash": document_hash,
@@ -667,13 +692,13 @@ class ESignatureCryptoService:
             )
 
             payload_hash = hmac.new(
-                self._signing_secret,
+                self._signing_key,
                 canonical.encode("utf-8"),
                 hashlib.sha256,
             ).hexdigest()
 
             logger.info(
-                "Created signing payload for signer=%s document=%s… hash=%s…",
+                "Created signing payload for signer=%s document=%s... hash=%s...",
                 signer_info.get("email", "unknown"),
                 document_hash[:16],
                 payload_hash[:16],
@@ -689,6 +714,110 @@ class ESignatureCryptoService:
             logger.exception("Failed to create signing payload")
             raise ValueError(f"Signing payload creation failed: {e}") from e
 
+    # ------------------------------------------------------------------
+    # Health / persistence verification
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def verify_key_persistence(cls) -> Dict:
+        """
+        Verify that the current keys can produce and verify a test signature.
+
+        This is intended for health-check endpoints.  It creates a temporary
+        service instance, signs a test message, and verifies it.
+
+        Returns:
+            A dict with ``persistent`` (bool), ``signing_ok``, ``token_ok``,
+            ``audit_ok``, and optionally ``error``.
+        """
+        try:
+            km = get_esignature_key_manager()
+            svc = cls(key_manager=km)
+
+            # Test signing key round-trip
+            test_hash = svc.generate_signature_hash(
+                document_hash="a" * 64,
+                signer_email="test@verify.internal",
+                signed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+                ip_address="127.0.0.1",
+            )
+            signing_ok = svc.verify_signature_hash(
+                signature_hash=test_hash,
+                document_hash="a" * 64,
+                signer_email="test@verify.internal",
+                signed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+                ip_address="127.0.0.1",
+            )
+
+            # Test token key round-trip
+            token, _ = svc.generate_signing_token(
+                recipient_id=0,
+                envelope_uuid="00000000-0000-0000-0000-000000000000",
+                expires_hours=1,
+            )
+            token_ok = svc.validate_signing_token(
+                token=token,
+                recipient_id=0,
+                envelope_uuid="00000000-0000-0000-0000-000000000000",
+            )
+
+            # Test audit key
+            audit_hash = svc.generate_audit_hash([{"action": "test", "timestamp": "2025-01-01"}])
+            audit_ok = len(audit_hash) == 64  # valid hex SHA-256
+
+            # Key manager self-test
+            km_health = km.health_check()
+
+            return {
+                "persistent": True,
+                "signing_ok": signing_ok,
+                "token_ok": token_ok,
+                "audit_ok": audit_ok,
+                "key_manager_healthy": km_health.get("healthy", False),
+                "has_rotation_key": km_health.get("has_rotation_key", False),
+            }
+
+        except RuntimeError as e:
+            # Keys not configured
+            return {
+                "persistent": False,
+                "signing_ok": False,
+                "token_ok": False,
+                "audit_ok": False,
+                "error": str(e),
+            }
+        except Exception as e:
+            logger.exception("Key persistence verification failed")
+            return {
+                "persistent": False,
+                "signing_ok": False,
+                "token_ok": False,
+                "audit_ok": False,
+                "error": f"Unexpected error: {e}",
+            }
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _decode_length_prefixed(data: bytes) -> List[str]:
+    """Decode a length-prefixed byte string into a list of str fields."""
+    import struct
+
+    fields: list[str] = []
+    offset = 0
+    while offset < len(data):
+        if offset + 4 > len(data):
+            raise ValueError("Truncated length prefix")
+        (length,) = struct.unpack(">I", data[offset:offset + 4])
+        offset += 4
+        if offset + length > len(data):
+            raise ValueError("Truncated field data")
+        fields.append(data[offset:offset + length].decode("utf-8"))
+        offset += length
+    return fields
+
 
 # ---------------------------------------------------------------------------
 # Module-level singleton
@@ -700,6 +829,9 @@ _service: Optional[ESignatureCryptoService] = None
 def get_esignature_crypto_service() -> ESignatureCryptoService:
     """
     Get or create the singleton ESignatureCryptoService instance.
+
+    Raises ``RuntimeError`` if the required environment variables
+    (ESIGN_SIGNING_SECRET, ESIGN_TOKEN_SECRET) are not set.
 
     Returns:
         The shared ``ESignatureCryptoService`` instance.

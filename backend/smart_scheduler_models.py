@@ -184,6 +184,13 @@ def create_smart_scheduler_models(Base):
         # Format: {"email_reminder_24h": true, "sms_reminder_2h": true, "quiet_hours_enabled": false, ...}
         notification_settings = Column(JSON, default=dict)
 
+        # Setup wizard tracking
+        setup_completed = Column(Boolean, default=False)
+        setup_progress = Column(JSON, default=lambda: {"completed_steps": [], "current_step": 0})
+
+        # Feature toggles (JSON dict of feature_name -> bool)
+        feature_toggles = Column(JSON, default=dict)
+
         # Status
         is_active = Column(Boolean, default=True)
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

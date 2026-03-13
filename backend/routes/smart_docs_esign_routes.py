@@ -47,6 +47,9 @@ from database.models.esignature import (
     SignatureFieldType,
 )
 from services.smart_docs.esignature_crypto_service import get_esignature_crypto_service
+from services.smart_docs.esign_consent_service import ESignConsentService
+from services.smart_docs.esign_kba_service import KBAService
+from validation.smart_docs_validators import validate_regex_safe
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +155,22 @@ class CreateEnvelopeFromTemplateRequest(BaseModel):
     expires_in_days: int = Field(default=30, ge=1, le=365)
 
 
+class RecordConsentRequest(BaseModel):
+    """Request body for recording ESIGN Act consent."""
+    consented: bool = Field(..., description="True if signer agrees to e-sign")
+
+
+class WithdrawConsentRequest(BaseModel):
+    """Request body for withdrawing previously-given consent."""
+    reason: Optional[str] = Field(default=None, max_length=2000)
+
+
+class KBAVerifyRequest(BaseModel):
+    """Request body for verifying KBA answers."""
+    session_id: str = Field(..., description="KBA session UUID")
+    answers: List[int] = Field(..., description="List of selected answer indices")
+
+
 # =============================================================================
 # Router
 # =============================================================================
@@ -253,6 +272,8 @@ def _send_signing_invitations_background(
     envelope_title: str,
 ):
     """Background task: send signing invitation emails to recipients."""
+    import html as html_mod
+
     try:
         from email_service import EmailService
 
@@ -260,20 +281,24 @@ def _send_signing_invitations_background(
         for signer in signers:
             try:
                 signing_url = f"https://app.perenniaai.com/sign/{signer['token']}"
+                safe_name = html_mod.escape(signer["name"])
+                safe_title = html_mod.escape(envelope_title)
+                safe_expires = html_mod.escape(signer.get("expires_at", "N/A"))
+                safe_url = html_mod.escape(signing_url)
                 subject = f"Signature Required: {envelope_title}"
-                html = f"""
+                email_html = f"""
                 <html>
                 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2>Hello {signer['name']},</h2>
-                    <p>You have been requested to review and sign a document: <strong>{envelope_title}</strong></p>
+                    <h2>Hello {safe_name},</h2>
+                    <p>You have been requested to review and sign a document: <strong>{safe_title}</strong></p>
                     <p style="margin: 20px 0;">
-                        <a href="{signing_url}"
+                        <a href="{safe_url}"
                            style="background-color: #2563eb; color: white; padding: 12px 24px;
                                   text-decoration: none; border-radius: 6px; display: inline-block;">
                             Review &amp; Sign Document
                         </a>
                     </p>
-                    <p><strong>This link expires on {signer.get('expires_at', 'N/A')}.</strong></p>
+                    <p><strong>This link expires on {safe_expires}.</strong></p>
                     <p style="color: #666; font-size: 12px; margin-top: 30px;">
                         If you did not expect this request, you can safely ignore it.
                     </p>
@@ -283,7 +308,7 @@ def _send_signing_invitations_background(
                 email_svc.send_email(
                     to_email=signer["email"],
                     subject=subject,
-                    html_content=html,
+                    html_content=email_html,
                 )
                 logger.info("Sent signing invitation to %s", signer["email"])
             except Exception as e:
@@ -380,6 +405,19 @@ async def create_envelope(
                 if 0 <= f.recipient_index < len(recipients_created):
                     recipient_id = recipients_created[f.recipient_index]["id"]
 
+                # Validate regex pattern if provided (ReDoS prevention)
+                field_regex = f.validation_regex
+                if field_regex is not None:
+                    if not validate_regex_safe(field_regex):
+                        raise HTTPException(
+                            status_code=400,
+                            detail=(
+                                f"Unsafe or invalid validation_regex for field "
+                                f"at index {body.fields.index(f)}: pattern rejected "
+                                f"(nested quantifiers, excessive length, or invalid syntax)"
+                            ),
+                        )
+
                 field = ESignatureField(
                     envelope_id=envelope.id,
                     recipient_id=recipient_id,
@@ -395,7 +433,7 @@ async def create_envelope(
                     default_value=f.default_value,
                     group_name=f.group_name,
                     dropdown_options=f.dropdown_options,
-                    validation_regex=f.validation_regex,
+                    validation_regex=field_regex,
                 )
                 db.add(field)
                 db.flush()
@@ -1045,6 +1083,20 @@ async def start_signing_session(
             and recipient.access_code is not None
         )
 
+        # Check ESIGN consent and KBA requirements
+        consent_svc = ESignConsentService(db)
+        has_consent = consent_svc.verify_consent(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+        )
+        requires_consent = not has_consent
+
+        kba_svc = KBAService(db)
+        requires_kba = kba_svc.check_kba_required_for_recipient(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+        )
+
         # Mark as viewed if first time
         if not recipient.viewed_at:
             recipient.viewed_at = datetime.now(timezone.utc)
@@ -1100,6 +1152,8 @@ async def start_signing_session(
             "document_url": document_url,
             "document_storage_key": envelope.document_storage_key,
             "requires_access_code": requires_access_code,
+            "requires_consent": requires_consent,
+            "requires_kba": requires_kba,
             "signer": {
                 "name": recipient.name,
                 "email": recipient.email,
@@ -1208,6 +1262,46 @@ async def submit_signature(
     crypto = get_esignature_crypto_service()
 
     try:
+        # --- ESIGN Act: verify consent before allowing signature ---
+        consent_svc = ESignConsentService(db)
+        if not consent_svc.verify_consent(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "ESIGN Act consent is required before signing. "
+                    "Please review the consent disclosure and provide consent."
+                ),
+            )
+
+        # --- KBA: verify identity if required for this recipient ---
+        kba_svc = KBAService(db)
+        if kba_svc.check_kba_required_for_recipient(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+        ):
+            from database.models.esignature import ESignKBASession
+
+            kba_session = (
+                db.query(ESignKBASession)
+                .filter(
+                    ESignKBASession.recipient_id == recipient.id,
+                    ESignKBASession.envelope_id == envelope.id,
+                    ESignKBASession.passed.is_(True),
+                )
+                .first()
+            )
+            if not kba_session:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Identity verification (KBA) is required before signing. "
+                        "Please complete the identity verification step."
+                    ),
+                )
+
         # Get all fields assigned to this recipient
         recipient_fields = (
             db.query(ESignatureField)
@@ -1254,15 +1348,27 @@ async def submit_signature(
         if body.signature_image:
             try:
                 from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+                from middleware.upload_limits import MAX_SIGNATURE_IMAGE_SIZE
 
                 s3_svc = get_smart_docs_s3_service()
                 if s3_svc.is_available:
                     import base64
 
                     sig_bytes = base64.b64decode(body.signature_image)
+
+                    # Enforce size limit on decoded signature image
+                    if len(sig_bytes) > MAX_SIGNATURE_IMAGE_SIZE:
+                        max_mb = MAX_SIGNATURE_IMAGE_SIZE / (1024 * 1024)
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"Signature image too large (max {max_mb:.0f} MB)",
+                        )
+
                     sig_key = f"esign/signatures/{envelope.envelope_uuid}/{recipient.id}/signature.png"
                     s3_svc.upload_file(sig_bytes, sig_key, content_type="image/png")
                     recipient.signature_image_key = sig_key
+            except HTTPException:
+                raise
             except Exception as e:
                 logger.warning("Failed to store signature image: %s", e)
 
@@ -1488,6 +1594,292 @@ async def decline_signing(
         db.rollback()
         logger.exception("Error declining signature: %s", e)
         raise HTTPException(status_code=500, detail="Failed to decline signing")
+
+
+# =============================================================================
+# ESIGN CONSENT ENDPOINTS (Token-based auth, no login required)
+# =============================================================================
+
+@router.get("/sign/{token}/consent-disclosure")
+async def get_consent_disclosure(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Get the ESIGN Act consent disclosure text.
+
+    PUBLIC ENDPOINT -- no login required.  Must be shown to the signer
+    before they can proceed with electronic signing.
+    """
+    recipient = _get_recipient_by_token(db, token)
+    envelope = _get_envelope_for_signing(db, recipient.envelope_id)
+
+    consent_svc = ESignConsentService(db)
+    disclosure = consent_svc.get_consent_disclosure_text(
+        org_id=envelope.organization_id,
+    )
+
+    # Also check if consent has already been given
+    has_consent = consent_svc.verify_consent(
+        recipient_id=recipient.id,
+        envelope_id=envelope.id,
+    )
+
+    return {
+        "envelope_uuid": envelope.envelope_uuid,
+        "recipient_name": recipient.name,
+        "disclosure_text": disclosure["text"],
+        "disclosure_version": disclosure["version"],
+        "consent_already_given": has_consent,
+    }
+
+
+@router.post("/sign/{token}/consent")
+async def record_consent(
+    token: str,
+    body: RecordConsentRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Record the signer's ESIGN Act consent decision.
+
+    PUBLIC ENDPOINT -- no login required.  If ``consented`` is False,
+    the system triggers a paper alternative workflow and creates a task
+    for staff to print and mail physical copies.
+
+    Must be called before ``/sign/{token}/submit``.
+    """
+    recipient = _get_recipient_by_token(db, token)
+    envelope = _get_envelope_for_signing(db, recipient.envelope_id)
+
+    if recipient.status in (RecipientStatus.SIGNED.value, RecipientStatus.DECLINED.value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Recipient has already {recipient.status}",
+        )
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")
+
+    try:
+        consent_svc = ESignConsentService(db)
+        result = consent_svc.record_consent(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+            org_id=envelope.organization_id,
+            consented=body.consented,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        db.commit()
+
+        return {
+            "envelope_uuid": envelope.envelope_uuid,
+            "consent_given": result["consent_given"],
+            "consent_text_version": result["consent_text_version"],
+            "consented_at": result["consented_at"],
+            "paper_delivery_requested": result["paper_task_id"] is not None,
+            "paper_task_id": result["paper_task_id"],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error recording consent: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to record consent")
+
+
+@router.post("/sign/{token}/request-paper")
+async def request_paper_alternative(
+    token: str,
+    body: WithdrawConsentRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Request paper alternative (withdraw consent or decline e-signature).
+
+    PUBLIC ENDPOINT -- no login required.  If the signer previously gave
+    consent, this withdraws it.  Either way, a paper delivery task is
+    created for staff.
+    """
+    recipient = _get_recipient_by_token(db, token)
+    envelope = _get_envelope_for_signing(db, recipient.envelope_id)
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")
+
+    try:
+        consent_svc = ESignConsentService(db)
+
+        # Check if consent exists to withdraw
+        has_consent = consent_svc.verify_consent(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+        )
+
+        if has_consent:
+            result = consent_svc.withdraw_consent(
+                recipient_id=recipient.id,
+                envelope_id=envelope.id,
+                reason=body.reason or "Paper alternative requested",
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            db.commit()
+            return {
+                "envelope_uuid": envelope.envelope_uuid,
+                "consent_withdrawn": True,
+                "withdrawn_at": result["withdrawn_at"],
+                "paper_task_id": result["paper_task_id"],
+                "message": "Consent withdrawn. Paper copies will be mailed to you.",
+            }
+        else:
+            # No consent to withdraw -- just create the paper task
+            paper_task_id = consent_svc.create_paper_delivery_task(
+                recipient_id=recipient.id,
+                envelope_id=envelope.id,
+                org_id=envelope.organization_id,
+            )
+            db.commit()
+            return {
+                "envelope_uuid": envelope.envelope_uuid,
+                "consent_withdrawn": False,
+                "paper_task_id": paper_task_id,
+                "message": "Paper copies will be mailed to you.",
+            }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error requesting paper alternative: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to request paper alternative")
+
+
+# =============================================================================
+# KBA ENDPOINTS (Token-based auth, no login required)
+# =============================================================================
+
+@router.post("/sign/{token}/kba/start")
+async def start_kba_session(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Start a Knowledge-Based Authentication session.
+
+    PUBLIC ENDPOINT -- no login required.  Generates identity verification
+    questions for the signer based on their profile data.  Returns the
+    questions (without correct answers) and a session UUID for answer
+    submission.
+    """
+    recipient = _get_recipient_by_token(db, token)
+    envelope = _get_envelope_for_signing(db, recipient.envelope_id)
+
+    if recipient.status in (RecipientStatus.SIGNED.value, RecipientStatus.DECLINED.value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Recipient has already {recipient.status}",
+        )
+
+    if recipient.status == RecipientStatus.AUTH_FAILED.value:
+        raise HTTPException(
+            status_code=403,
+            detail="Identity verification has been locked due to too many failed attempts",
+        )
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")
+
+    try:
+        kba_svc = KBAService(db)
+        result = kba_svc.create_kba_session(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        db.commit()
+
+        return {
+            "envelope_uuid": envelope.envelope_uuid,
+            "session_id": result["session_uuid"],
+            "questions": result["questions"],
+            "attempts_remaining": result["attempts_remaining"],
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error starting KBA session: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to start KBA session")
+
+
+@router.post("/sign/{token}/kba/verify")
+async def verify_kba_answers(
+    token: str,
+    body: KBAVerifyRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Verify KBA answers for identity authentication.
+
+    PUBLIC ENDPOINT -- no login required.  Checks the signer's answers
+    against the stored correct answers.  Requires 75% correct to pass.
+    After 3 failed attempts the session is locked and the recipient is
+    marked AUTH_FAILED.
+    """
+    recipient = _get_recipient_by_token(db, token)
+    envelope = _get_envelope_for_signing(db, recipient.envelope_id)
+
+    if recipient.status == RecipientStatus.AUTH_FAILED.value:
+        raise HTTPException(
+            status_code=403,
+            detail="Identity verification has been locked due to too many failed attempts",
+        )
+
+    ip_address = _get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "")
+
+    try:
+        kba_svc = KBAService(db)
+        result = kba_svc.verify_kba_answers(
+            session_id=body.session_id,
+            answers=body.answers,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        db.commit()
+
+        return {
+            "envelope_uuid": envelope.envelope_uuid,
+            "passed": result.passed,
+            "attempts_remaining": result.attempts_remaining,
+            "locked": result.locked,
+            "score": result.score,
+            "correct_count": result.correct_count,
+            "total_questions": result.total_questions,
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error verifying KBA answers: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to verify KBA answers")
 
 
 # =============================================================================

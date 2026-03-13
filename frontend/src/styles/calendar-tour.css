@@ -1,0 +1,420 @@
+/* =============================================================================
+ * Perennia AI - Calendar Feature Tour Styles
+ *
+ * Spotlight overlay with cutout, tooltip positioning, pulse animation,
+ * and smooth transitions between steps.
+ * ============================================================================= */
+
+/* ---------------------------------------------------------------------------
+ * Overlay: full-screen dim with a box-shadow "cutout" around the target
+ * --------------------------------------------------------------------------- */
+.calendar-tour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: auto;
+  transition: opacity 0.3s ease;
+}
+
+.calendar-tour-overlay--entering {
+  opacity: 0;
+}
+
+.calendar-tour-overlay--active {
+  opacity: 1;
+}
+
+.calendar-tour-overlay--exiting {
+  opacity: 0;
+}
+
+/* The spotlight cutout is a transparent box with a massive box-shadow */
+.calendar-tour-spotlight {
+  position: fixed;
+  z-index: 9999;
+  border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  transition: top 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Pulse ring around the spotlighted element */
+.calendar-tour-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 10px;
+  border: 2px solid rgba(99, 102, 241, 0.6);
+  animation: tour-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tour-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.03);
+  }
+}
+
+/* Allow clicks to pass through to the spotlighted element */
+.calendar-tour-spotlight-clickthrough {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: auto;
+  background: transparent;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  border-radius: 8px;
+  transition: top 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------------------------------------------------------------------------
+ * Tooltip
+ * --------------------------------------------------------------------------- */
+.calendar-tour-tooltip {
+  position: fixed;
+  z-index: 10001;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.08);
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  transition: top 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              left 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.calendar-tour-tooltip--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Accent bar at top of tooltip */
+.calendar-tour-tooltip__accent {
+  height: 4px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+}
+
+.calendar-tour-tooltip__body {
+  padding: 20px 20px 16px;
+}
+
+.calendar-tour-tooltip__step {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #6366f1;
+  margin-bottom: 6px;
+}
+
+.calendar-tour-tooltip__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e1b4b;
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.calendar-tour-tooltip__description {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #4b5563;
+  margin: 0 0 16px 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Arrow pointer
+ * --------------------------------------------------------------------------- */
+.calendar-tour-arrow {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  transform: rotate(45deg);
+  box-shadow: -2px -2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.calendar-tour-arrow--top {
+  top: -7px;
+  left: 32px;
+}
+
+.calendar-tour-arrow--bottom {
+  bottom: -7px;
+  left: 32px;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.calendar-tour-arrow--left {
+  left: -7px;
+  top: 24px;
+}
+
+.calendar-tour-arrow--right {
+  right: -7px;
+  top: 24px;
+  box-shadow: 2px -2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* ---------------------------------------------------------------------------
+ * Navigation buttons
+ * --------------------------------------------------------------------------- */
+.calendar-tour-tooltip__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.calendar-tour-tooltip__nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.calendar-tour-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.calendar-tour-btn:active {
+  transform: scale(0.97);
+}
+
+.calendar-tour-btn--skip {
+  background: transparent;
+  color: #9ca3af;
+  padding: 7px 10px;
+}
+
+.calendar-tour-btn--skip:hover {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.calendar-tour-btn--back {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.calendar-tour-btn--back:hover {
+  background: #e5e7eb;
+}
+
+.calendar-tour-btn--next {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.calendar-tour-btn--next:hover {
+  background: #4f46e5;
+}
+
+.calendar-tour-btn--finish {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.calendar-tour-btn--finish:hover {
+  background: #059669;
+}
+
+/* ---------------------------------------------------------------------------
+ * Progress dots
+ * --------------------------------------------------------------------------- */
+.calendar-tour-progress {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.calendar-tour-progress__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d1d5db;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.calendar-tour-progress__dot--active {
+  background: #6366f1;
+  transform: scale(1.3);
+}
+
+.calendar-tour-progress__dot--completed {
+  background: #a5b4fc;
+}
+
+/* ---------------------------------------------------------------------------
+ * "Don't show again" checkbox (last step)
+ * --------------------------------------------------------------------------- */
+.calendar-tour-dontshow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px 14px;
+  cursor: pointer;
+}
+
+.calendar-tour-dontshow input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #6366f1;
+  cursor: pointer;
+}
+
+.calendar-tour-dontshow__label {
+  font-size: 12px;
+  color: #6b7280;
+  user-select: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tour trigger button (in-header "?" icon)
+ * --------------------------------------------------------------------------- */
+.calendar-tour-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid #d1d5db;
+  background: #ffffff;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.calendar-tour-trigger:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+  background: #eef2ff;
+}
+
+.calendar-tour-trigger:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Final step celebration
+ * --------------------------------------------------------------------------- */
+.calendar-tour-celebration {
+  text-align: center;
+  padding: 8px 0 0;
+}
+
+.calendar-tour-celebration__icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.calendar-tour-tips {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  text-align: left;
+}
+
+.calendar-tour-tips li {
+  font-size: 12.5px;
+  color: #4b5563;
+  padding: 3px 0;
+  padding-left: 16px;
+  position: relative;
+}
+
+.calendar-tour-tips li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a5b4fc;
+}
+
+/* ---------------------------------------------------------------------------
+ * Responsive adjustments
+ * --------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .calendar-tour-tooltip {
+    width: calc(100vw - 24px);
+    border-radius: 10px;
+  }
+
+  .calendar-tour-tooltip__body {
+    padding: 16px 16px 12px;
+  }
+
+  .calendar-tour-tooltip__footer {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .calendar-tour-progress {
+    order: -1;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Reduced motion
+ * --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .calendar-tour-spotlight,
+  .calendar-tour-tooltip,
+  .calendar-tour-spotlight-clickthrough {
+    transition: none;
+  }
+
+  .calendar-tour-spotlight::after {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Print: hide everything tour-related
+ * --------------------------------------------------------------------------- */
+@media print {
+  .calendar-tour-overlay,
+  .calendar-tour-spotlight,
+  .calendar-tour-spotlight-clickthrough,
+  .calendar-tour-tooltip,
+  .calendar-tour-trigger {
+    display: none !important;
+  }
+}

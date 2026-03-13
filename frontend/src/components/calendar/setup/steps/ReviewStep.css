@@ -1,0 +1,1018 @@
+/**
+ * ReviewStep.css
+ * Step 10: Review & Activate for Smart Calendar guided setup.
+ * Uses Perennia brand color #218D8D and matches CalendarSettings.css patterns.
+ */
+
+/* ============================================================================
+   Layout & Loading
+   ============================================================================ */
+
+.rvs-step {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 0 48px;
+}
+
+.rvs-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 14px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.rvs-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #218D8D;
+  border-radius: 50%;
+  animation: rvs-spin 0.8s linear infinite;
+}
+
+@keyframes rvs-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.rvs-header {
+  margin-bottom: 28px;
+}
+
+.rvs-header__badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #218D8D;
+  background: #e6f5f5;
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+
+.rvs-header__title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.rvs-header__subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Readiness Checklist
+   ============================================================================ */
+
+.rvs-readiness {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 28px;
+}
+
+.rvs-readiness__title {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rvs-readiness__title i {
+  color: #218D8D;
+  font-size: 18px;
+}
+
+.rvs-readiness__summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.rvs-readiness__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rvs-readiness__stat--complete { color: #059669; }
+.rvs-readiness__stat--warning  { color: #d97706; }
+.rvs-readiness__stat--error    { color: #dc2626; }
+
+.rvs-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rvs-checklist__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f8fafc;
+  transition: background 150ms ease;
+}
+
+.rvs-checklist__item:hover {
+  background: #f1f5f9;
+}
+
+.rvs-checklist__item i {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 16px;
+}
+
+.rvs-checklist__item--complete i { color: #059669; }
+.rvs-checklist__item--warning  i { color: #d97706; }
+.rvs-checklist__item--error    i { color: #dc2626; }
+
+.rvs-checklist__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rvs-checklist__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.rvs-checklist__detail {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* ============================================================================
+   Summary Dashboard
+   ============================================================================ */
+
+.rvs-summary {
+  margin-bottom: 32px;
+}
+
+.rvs-summary__title {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rvs-summary__title i {
+  color: #218D8D;
+  font-size: 18px;
+}
+
+.rvs-summary__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ============================================================================
+   Summary Cards
+   ============================================================================ */
+
+.rvs-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  position: relative;
+}
+
+.rvs-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.rvs-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 0;
+}
+
+.rvs-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rvs-card__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #e6f5f5;
+  color: #218D8D;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.rvs-card__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.rvs-card__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.rvs-card__edit:hover {
+  border-color: #218D8D;
+  color: #218D8D;
+  background: #e6f5f5;
+}
+
+.rvs-card__edit:focus-visible {
+  outline: 2px solid #218D8D;
+  outline-offset: 1px;
+}
+
+.rvs-card__body {
+  padding: 14px 16px 16px;
+}
+
+.rvs-card__status-bar {
+  height: 3px;
+  background: #e2e8f0;
+  transition: background 150ms ease;
+}
+
+.rvs-card--complete .rvs-card__status-bar { background: #059669; }
+.rvs-card--warning .rvs-card__status-bar  { background: #d97706; }
+.rvs-card--error .rvs-card__status-bar    { background: #dc2626; }
+
+/* ============================================================================
+   Card Content: Detail Rows
+   ============================================================================ */
+
+.rvs-detail-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 6px 0;
+  gap: 8px;
+}
+
+.rvs-detail-row + .rvs-detail-row {
+  border-top: 1px solid #f1f5f9;
+}
+
+.rvs-detail-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.rvs-detail-value {
+  font-size: 13px;
+  color: #1e293b;
+  font-weight: 600;
+  text-align: right;
+}
+
+.rvs-detail-code {
+  font-size: 11px;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #334155;
+  font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  word-break: break-all;
+}
+
+.rvs-empty-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* ============================================================================
+   Card Content: Day Pills
+   ============================================================================ */
+
+.rvs-day-pills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.rvs-day-pill {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #94a3b8;
+  transition: all 150ms ease;
+}
+
+.rvs-day-pill--active {
+  background: #e6f5f5;
+  color: #218D8D;
+}
+
+/* ============================================================================
+   Card Content: Type List
+   ============================================================================ */
+
+.rvs-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rvs-type-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.rvs-type-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rvs-type-name {
+  font-size: 13px;
+  color: #1e293b;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rvs-type-duration {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.rvs-type-more {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  padding-left: 18px;
+}
+
+/* ============================================================================
+   Card Content: Booking Preview Mini
+   ============================================================================ */
+
+.rvs-booking-preview-mini {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 10px;
+}
+
+.rvs-booking-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rvs-booking-preview-logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.rvs-booking-preview-tagline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   Card Content: Reminder Tags
+   ============================================================================ */
+
+.rvs-reminder-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.rvs-reminder-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #e6f5f5;
+  color: #218D8D;
+}
+
+/* ============================================================================
+   Card Content: Integration List
+   ============================================================================ */
+
+.rvs-integration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rvs-integration-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.rvs-integration-item i:first-child {
+  color: #64748b;
+  width: 16px;
+  text-align: center;
+}
+
+.rvs-integration-check {
+  color: #059669;
+  margin-left: auto;
+  font-size: 14px;
+}
+
+/* ============================================================================
+   Card Content: Policy Badge
+   ============================================================================ */
+
+.rvs-policy-badge-container {
+  display: flex;
+  align-items: center;
+}
+
+.rvs-policy-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #e6f5f5;
+  color: #218D8D;
+}
+
+/* ============================================================================
+   Activation Section
+   ============================================================================ */
+
+.rvs-activation {
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 50%, #10b981 100%);
+  border-radius: 16px;
+  padding: 2px;
+}
+
+.rvs-activation__inner {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 36px 32px;
+  text-align: center;
+}
+
+.rvs-activation__icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #218D8D, #10b981);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.rvs-activation__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.rvs-activation__text {
+  margin: 0 0 24px;
+  font-size: 14px;
+  color: #64748b;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+.rvs-activate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 36px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #218D8D, #10b981);
+  color: #ffffff;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+  box-shadow: 0 4px 14px rgba(33, 141, 141, 0.3);
+}
+
+.rvs-activate-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(33, 141, 141, 0.4);
+}
+
+.rvs-activate-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.rvs-activate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rvs-activate-btn:focus-visible {
+  outline: 3px solid #218D8D;
+  outline-offset: 2px;
+}
+
+.rvs-activation__hint {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.rvs-activation__hint i {
+  color: #94a3b8;
+}
+
+/* ============================================================================
+   Activated / Success State
+   ============================================================================ */
+
+.rvs-activated {
+  text-align: center;
+  padding: 32px 0 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.rvs-activated__icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  color: #059669;
+  animation: rvs-icon-pop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.rvs-activated__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes rvs-icon-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  50%  { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.rvs-activated__title {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.rvs-activated__subtitle {
+  margin: 0 0 32px;
+  font-size: 15px;
+  color: #64748b;
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   Share Section
+   ============================================================================ */
+
+.rvs-share-section {
+  max-width: 520px;
+  margin: 0 auto 32px;
+  text-align: left;
+}
+
+.rvs-share-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.rvs-share-link-row {
+  display: flex;
+  align-items: stretch;
+  border: 2px solid #218D8D;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.rvs-share-link-url {
+  flex: 1;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+  color: #334155;
+  background: transparent;
+  border: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.rvs-share-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 20px;
+  background: #218D8D;
+  color: #ffffff;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 150ms ease;
+  white-space: nowrap;
+}
+
+.rvs-share-copy-btn:hover {
+  background: #1a7070;
+}
+
+.rvs-share-copy-btn:focus-visible {
+  outline: 2px solid #218D8D;
+  outline-offset: -2px;
+}
+
+/* ============================================================================
+   Quick Actions
+   ============================================================================ */
+
+.rvs-quick-actions {
+  max-width: 520px;
+  margin: 0 auto 32px;
+  text-align: left;
+}
+
+.rvs-quick-actions__title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.rvs-quick-actions__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rvs-quick-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.rvs-quick-action:hover {
+  border-color: #218D8D;
+  background: #e6f5f5;
+}
+
+.rvs-quick-action:focus-visible {
+  outline: 2px solid #218D8D;
+  outline-offset: 1px;
+}
+
+.rvs-quick-action i {
+  font-size: 16px;
+  color: #218D8D;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Go to Calendar Button (Activated State)
+   ============================================================================ */
+
+.rvs-activated__actions {
+  margin-top: 12px;
+}
+
+.rvs-goto-calendar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 36px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #218D8D, #10b981);
+  color: #ffffff;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  box-shadow: 0 4px 14px rgba(33, 141, 141, 0.3);
+}
+
+.rvs-goto-calendar-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(33, 141, 141, 0.4);
+}
+
+.rvs-goto-calendar-btn:focus-visible {
+  outline: 3px solid #218D8D;
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Confetti CSS Animation
+   ============================================================================ */
+
+.rvs-confetti-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.rvs-confetti-piece {
+  position: absolute;
+  top: 0;
+  left: var(--x, 50%);
+  width: 8px;
+  height: 8px;
+  background: var(--color, #218D8D);
+  border-radius: 2px;
+  opacity: 0;
+  animation: rvs-confetti-fall 2.5s ease-out var(--delay, 0s) forwards;
+}
+
+.rvs-confetti-piece:nth-child(odd) {
+  width: 6px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.rvs-confetti-piece:nth-child(3n) {
+  width: 10px;
+  height: 6px;
+  border-radius: 1px;
+}
+
+@keyframes rvs-confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(-20px) translateX(0) rotate(0deg) scale(1);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform:
+      translateY(var(--fall, 600px))
+      translateX(var(--drift, 50px))
+      rotate(720deg)
+      scale(0.3);
+  }
+}
+
+/* Second wave of confetti with different timing */
+.rvs-confetti-piece:nth-child(even) {
+  animation-duration: 3s;
+}
+
+.rvs-confetti-piece:nth-child(3n+1) {
+  animation-duration: 2s;
+}
+
+/* ============================================================================
+   Responsive: Single Column on Mobile
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .rvs-step {
+    padding: 0 0 32px;
+  }
+
+  .rvs-summary__grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .rvs-header__title {
+    font-size: 18px;
+  }
+
+  .rvs-activation__inner {
+    padding: 28px 20px;
+  }
+
+  .rvs-activation__title {
+    font-size: 18px;
+  }
+
+  .rvs-activate-btn,
+  .rvs-goto-calendar-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 24px;
+    font-size: 15px;
+  }
+
+  .rvs-share-link-row {
+    flex-direction: column;
+  }
+
+  .rvs-share-link-url {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 10px 14px;
+  }
+
+  .rvs-share-copy-btn {
+    justify-content: center;
+    padding: 10px 14px;
+  }
+
+  .rvs-activated__title {
+    font-size: 22px;
+  }
+
+  .rvs-readiness__summary {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .rvs-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .rvs-card__edit {
+    align-self: flex-end;
+    margin-top: -28px;
+  }
+}
+
+/* ============================================================================
+   Tablet Adjustments
+   ============================================================================ */
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .rvs-summary__grid {
+    gap: 12px;
+  }
+
+  .rvs-card__body {
+    padding: 12px 14px 14px;
+  }
+}
+
+/* ============================================================================
+   Print Styles
+   ============================================================================ */
+
+@media print {
+  .rvs-card__edit,
+  .rvs-activate-btn,
+  .rvs-goto-calendar-btn,
+  .rvs-quick-actions,
+  .rvs-share-copy-btn,
+  .rvs-confetti-container {
+    display: none !important;
+  }
+
+  .rvs-activation {
+    background: none;
+    padding: 0;
+  }
+
+  .rvs-activation__inner {
+    border: 1px solid #ccc;
+  }
+
+  .rvs-card {
+    break-inside: avoid;
+  }
+}
+
+/* ============================================================================
+   Reduced Motion
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .rvs-confetti-piece {
+    animation: none;
+    display: none;
+  }
+
+  .rvs-activated__icon {
+    animation: none;
+  }
+
+  .rvs-spinner {
+    animation-duration: 1.5s;
+  }
+
+  .rvs-activate-btn:hover:not(:disabled),
+  .rvs-goto-calendar-btn:hover {
+    transform: none;
+  }
+}

@@ -1,35 +1,568 @@
-/* Tablet-specific responsive styles */
+/* =============================================================================
+   Tablet Responsive Styles (768px - 1024px)
+   CSS Grid + Flexbox + media queries -- no CSS frameworks
+   ============================================================================= */
 
-/* Tablet breakpoint: 768px - 1023px */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .booking-container {
-    max-width: 700px;
-    padding: 20px;
+/* --------------------------------------------------------------------------
+   Custom Properties for Tablet Breakpoints
+   -------------------------------------------------------------------------- */
+:root {
+  --tablet-min: 768px;
+  --tablet-max: 1024px;
+  --tablet-sidebar-collapsed: 56px;
+  --tablet-sidebar-expanded: 240px;
+  --tablet-touch-target: 44px;
+  --tablet-touch-padding: 12px;
+}
+
+/* ==========================================================================
+   TABLET PORTRAIT & LANDSCAPE (768px - 1024px)
+   ========================================================================== */
+@media (min-width: 768px) and (max-width: 1024px) {
+
+  /* ---- Global Touch-Friendly Spacing ---- */
+  button,
+  .btn,
+  [role="button"],
+  a.nav-link,
+  .tab,
+  .calendar-tab {
+    min-height: var(--tablet-touch-target);
+    padding: var(--tablet-touch-padding) 16px;
   }
 
-  .booking-header {
-    padding: 16px 20px;
+  input,
+  select,
+  textarea {
+    min-height: var(--tablet-touch-target);
+    padding: 10px 14px;
+    font-size: 16px; /* Prevent zoom on iOS */
   }
 
-  .booking-form {
-    padding: 20px;
+  /* ---- Calendar Page Layout ---- */
+  .calendar-page {
+    padding: 16px;
   }
 
-  .time-slots-grid {
-    grid-template-columns: repeat(3, 1fr);
+  .calendar-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .calendar-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .calendar-controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .view-switcher {
+    flex: 0 0 auto;
+  }
+
+  .month-navigation {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* ---- Calendar Content: Two-Column -> Single Column ---- */
+  .calendar-content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .appointments-sidebar {
+    height: 360px;
+    margin-bottom: 8px;
+  }
+
+  .appointment-item {
+    grid-template-columns: 72px 1fr 36px;
+    padding: var(--tablet-touch-padding);
+  }
+
+  .delete-appointment {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+
+  /* ---- Calendar Sidebar: Icon-Only Mode ---- */
+  .sidebar-collapsible {
+    width: var(--tablet-sidebar-collapsed);
+    transition: width 0.25s ease;
+    overflow: hidden;
+  }
+
+  .sidebar-collapsible .sidebar-label {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+    transition: opacity 0.15s ease;
+  }
+
+  .sidebar-collapsible .sidebar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--tablet-sidebar-collapsed);
+    height: var(--tablet-touch-target);
+  }
+
+  .sidebar-collapsible:hover,
+  .sidebar-collapsible:focus-within {
+    width: var(--tablet-sidebar-expanded);
+  }
+
+  .sidebar-collapsible:hover .sidebar-label,
+  .sidebar-collapsible:focus-within .sidebar-label {
+    opacity: 1;
+    width: auto;
+  }
+
+  /* ---- Modal Widths ---- */
+  .modal,
+  .modal-content,
+  .calendar-search-panel {
+    max-width: 90vw;
+    width: 90vw;
+  }
+
+  .edit-appointment-modal {
+    max-width: 90vw;
+  }
+
+  /* ---- Week View: 3-Day Default ---- */
+  .week-view-header.three-day-view {
+    grid-template-columns: 60px repeat(3, 1fr);
+  }
+
+  .week-hour-row.three-day-view {
+    grid-template-columns: 60px repeat(3, 1fr);
+  }
+
+  .week-view-header {
+    grid-template-columns: 60px repeat(7, 1fr);
+  }
+
+  .week-hour-row {
+    grid-template-columns: 60px repeat(7, 1fr);
+  }
+
+  .hour-label {
+    font-size: 11px;
+    padding-right: 6px;
+  }
+
+  .week-day-name {
+    font-size: 10px;
+  }
+
+  .week-day-num {
+    font-size: 14px;
+  }
+
+  .week-event {
+    font-size: 11px;
+    padding: 2px 4px;
+  }
+
+  /* ---- Day View ---- */
+  .day-view-hour {
+    grid-template-columns: 60px 1fr;
+  }
+
+  /* ---- Mini Calendar ---- */
+  .two-month-view {
+    gap: 12px;
+  }
+
+  .mini-calendar {
+    max-width: 100%;
+  }
+
+  /* ---- Calendar Tabs: Scrollable ---- */
+  .calendar-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px 12px;
+  }
+
+  .calendar-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .calendar-tab {
+    min-height: var(--tablet-touch-target);
+    padding: 8px 16px;
+    white-space: nowrap;
+  }
+
+  /* ---- Search ---- */
+  .btn-calendar-search {
+    padding: 8px 12px;
+  }
+
+  .search-shortcut {
+    display: none;
+  }
+
+  /* ---- Confirm Dialog ---- */
+  .confirm-dialog {
+    max-width: 90vw;
+  }
+
+  /* ---- Error Banner ---- */
+  .calendar-error-banner {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
   }
 }
 
-/* Portrait tablet */
-@media (min-width: 768px) and (max-width: 1023px) and (orientation: portrait) {
-  .booking-container {
-    max-width: 600px;
+/* ==========================================================================
+   TABLET PORTRAIT ONLY (768px - 1024px, portrait orientation)
+   ========================================================================== */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+
+  /* Stack the calendar header vertically */
+  .calendar-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendar-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .view-switcher {
+    width: 100%;
+  }
+
+  .view-switcher button {
+    flex: 1;
+  }
+
+  .month-navigation {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Sidebar takes less height in portrait */
+  .appointments-sidebar {
+    height: 300px;
+  }
+
+  /* Week view adapts to fewer columns in portrait */
+  .week-view-header.three-day-view,
+  .week-hour-row.three-day-view {
+    grid-template-columns: 50px repeat(3, 1fr);
   }
 }
 
-/* Landscape tablet */
-@media (min-width: 768px) and (max-width: 1023px) and (orientation: landscape) {
+/* ==========================================================================
+   TABLET LANDSCAPE ONLY (768px - 1024px, landscape orientation)
+   ========================================================================== */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+
+  /* In landscape, we can show two columns again */
+  .calendar-content {
+    grid-template-columns: minmax(300px, 400px) 1fr;
+  }
+
+  .appointments-sidebar {
+    height: calc(100vh - 200px);
+  }
+
+  /* Week view can show more columns in landscape */
+  .week-view-header.three-day-view,
+  .week-hour-row.three-day-view {
+    grid-template-columns: 60px repeat(3, 1fr);
+  }
+
+  .calendar-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .calendar-controls {
+    flex-direction: row;
+    flex-wrap: nowrap;
+  }
+}
+
+/* ==========================================================================
+   PUBLIC BOOKING PAGE - TABLET LAYOUT
+   ========================================================================== */
+@media (min-width: 768px) and (max-width: 1024px) {
+
+  .redfin-booking {
+    padding: 24px 16px;
+  }
+
   .booking-container {
-    max-width: 800px;
+    max-width: 720px;
+    padding: 28px;
+  }
+
+  /* Date cards: larger touch targets */
+  .date-card {
+    width: 80px;
+    min-width: 80px;
+    padding: 14px 10px;
+  }
+
+  .week-nav {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Time dropdown: larger */
+  .time-dropdown {
+    padding: 16px 40px 16px 16px;
+    min-height: var(--tablet-touch-target);
+  }
+
+  /* Mode buttons: larger touch targets */
+  .mode-button {
+    padding: 16px;
+    min-height: var(--tablet-touch-target);
+  }
+
+  /* Form fields: more spacing */
+  .form-group input,
+  .form-group textarea {
+    padding: 14px;
+    min-height: var(--tablet-touch-target);
+  }
+
+  .form-row {
+    margin-bottom: 24px;
+  }
+
+  /* Primary button: larger */
+  .primary-button {
+    padding: 18px;
+    min-height: 52px;
+  }
+
+  /* Type pills: larger */
+  .type-pill {
+    padding: 12px 18px;
+    min-height: var(--tablet-touch-target);
+  }
+
+  /* Modals */
+  .modal {
+    max-width: 90vw;
+  }
+}
+
+/* Public Booking - Tablet Landscape: Side-by-Side Layout */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+
+  .booking-container {
+    max-width: 900px;
+  }
+
+  /* Two-column datetime+form layout when wide enough */
+  .booking-two-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .booking-two-column .time-slots-col {
+    order: 1;
+  }
+
+  .booking-two-column .form-col {
+    order: 2;
+  }
+}
+
+/* Public Booking - Tablet Portrait: Stacked Layout */
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+
+  .booking-two-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+
+/* ==========================================================================
+   RESPONSIVE CONTAINER UTILITY CLASSES
+   ========================================================================== */
+
+/* Used by ResponsiveContainer component */
+.responsive-container {
+  width: 100%;
+}
+
+.responsive-container--mobile {
+  /* Single column stacked layout */
+}
+
+.responsive-container--tablet {
+  /* Adapts to container width */
+}
+
+.responsive-container--desktop {
+  /* Full layout */
+}
+
+/* Two-column grid that collapses on tablet portrait */
+.responsive-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  .responsive-two-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Chart grid for analytics (two columns on tablet) */
+.chart-grid-responsive {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 767px) {
+  .chart-grid-responsive {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Scrollable table with sticky first column */
+.table-responsive-sticky {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive-sticky table {
+  min-width: 600px;
+}
+
+.table-responsive-sticky th:first-child,
+.table-responsive-sticky td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--color-bg-surface, white);
+  z-index: 1;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+/* ==========================================================================
+   CALENDAR HEADER - COMPACT TABLET LAYOUT
+   ========================================================================== */
+@media (min-width: 768px) and (max-width: 1024px) {
+
+  .calendar-page-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .calendar-nav-toolbar {
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .calendar-nav-toolbar .nav-btn {
+    width: var(--tablet-touch-target);
+    height: var(--tablet-touch-target);
+  }
+
+  .calendar-title {
+    font-size: 1.25rem;
+    text-align: center;
+  }
+
+  .calendar-view-toolbar {
+    justify-content: center;
+  }
+
+  .calendar-view-toolbar .view-btn {
+    min-height: var(--tablet-touch-target);
+    padding: 8px 16px;
+  }
+
+  /* Compact CalendarHeader: date range text + actions in row */
+  .calendar-header-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .calendar-header-compact .date-range-text {
+    font-size: 1rem;
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .calendar-header-compact .actions-dropdown {
+    flex-shrink: 0;
+  }
+
+  /* Navigation buttons: allow vertical stacking when cramped */
+  .calendar-nav-stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+/* ==========================================================================
+   3-DAY VIEW GRID SUPPORT
+   ========================================================================== */
+
+/* 3-day view: columns auto-adjust to visible days */
+.week-view-header.view-days-3 {
+  grid-template-columns: 60px repeat(3, 1fr);
+}
+
+.week-hour-row.view-days-3 {
+  grid-template-columns: 60px repeat(3, 1fr);
+}
+
+.week-view-header.view-days-1 {
+  grid-template-columns: 60px 1fr;
+}
+
+.week-hour-row.view-days-1 {
+  grid-template-columns: 60px 1fr;
+}
+
+.week-view-header.view-days-7 {
+  grid-template-columns: 80px repeat(7, 1fr);
+}
+
+.week-hour-row.view-days-7 {
+  grid-template-columns: 80px repeat(7, 1fr);
+}
+
+/* Abbreviated time labels for tablet */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .hour-label-abbreviated {
+    font-size: 11px;
+    letter-spacing: -0.3px;
   }
 }

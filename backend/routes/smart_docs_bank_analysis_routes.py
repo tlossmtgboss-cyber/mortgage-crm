@@ -427,50 +427,77 @@ async def source_large_deposit(
 ):
     """
     Mark a large deposit as sourced with explanation and optional supporting document.
+
+    Uses SELECT FOR UPDATE on the loan row to prevent concurrent modifications
+    to the bank_analysis_result JSON (race condition where two users source
+    different deposits simultaneously and overwrite each other's changes).
     """
     _verify_loan_tenant(db, loan_id, current_user)
 
-    cached = _get_cached_analysis(db, loan_id)
-    if not cached:
-        raise HTTPException(
-            status_code=404,
-            detail="No bank analysis found. Run analysis first.",
-        )
-
-    deposits = cached.get("large_deposits", [])
-    if deposit_index < 0 or deposit_index >= len(deposits):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Deposit index {deposit_index} not found. Valid range: 0-{len(deposits) - 1}",
-        )
-
-    # Update the deposit record
-    now = datetime.now(timezone.utc)
-    deposits[deposit_index]["sourcing_status"] = "sourced"
-    deposits[deposit_index]["explanation"] = body.explanation
-    deposits[deposit_index]["supporting_document_id"] = body.supporting_document_id
-    deposits[deposit_index]["sourced_by"] = body.sourced_by
-    deposits[deposit_index]["sourced_at"] = now.isoformat()
-
-    # Persist updated analysis back to the loan
-    cached["large_deposits"] = deposits
-
     try:
         import json
-        db.execute(
-            sa_text("""
-                UPDATE loans
-                SET bank_analysis_result = CAST(:result AS jsonb)
-                WHERE id = :loan_id
-            """),
-            {
-                "result": json.dumps(cached),
-                "loan_id": loan_id,
-            },
-        )
-        db.commit()
+        from services.smart_docs.db_transaction import atomic_operation
+
+        with atomic_operation(db):
+            # Lock the loan row before reading the cached analysis to prevent
+            # concurrent sourcing operations from overwriting each other.
+            locked_row = db.execute(
+                sa_text("""
+                    SELECT bank_analysis_result
+                    FROM loans
+                    WHERE id = :loan_id
+                    FOR UPDATE
+                """),
+                {"loan_id": loan_id},
+            ).first()
+
+            if not locked_row or not locked_row[0]:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No bank analysis found. Run analysis first.",
+                )
+
+            cached = locked_row[0] if isinstance(locked_row[0], dict) else None
+            if not cached:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No bank analysis found. Run analysis first.",
+                )
+
+            deposits = cached.get("large_deposits", [])
+            if deposit_index < 0 or deposit_index >= len(deposits):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Deposit index {deposit_index} not found. Valid range: 0-{len(deposits) - 1}",
+                )
+
+            # Update the deposit record
+            now = datetime.now(timezone.utc)
+            deposits[deposit_index]["sourcing_status"] = "sourced"
+            deposits[deposit_index]["explanation"] = body.explanation
+            deposits[deposit_index]["supporting_document_id"] = body.supporting_document_id
+            deposits[deposit_index]["sourced_by"] = body.sourced_by
+            deposits[deposit_index]["sourced_at"] = now.isoformat()
+
+            # Persist updated analysis back to the loan
+            cached["large_deposits"] = deposits
+
+            db.execute(
+                sa_text("""
+                    UPDATE loans
+                    SET bank_analysis_result = CAST(:result AS jsonb)
+                    WHERE id = :loan_id
+                """),
+                {
+                    "result": json.dumps(cached),
+                    "loan_id": loan_id,
+                },
+            )
+            # atomic_operation commits here
+
+    except HTTPException:
+        raise
     except SQLAlchemyError as e:
-        db.rollback()
         logger.exception("Failed to update deposit sourcing for loan %s", loan_id)
         raise HTTPException(status_code=500, detail="Failed to update deposit sourcing status")
 

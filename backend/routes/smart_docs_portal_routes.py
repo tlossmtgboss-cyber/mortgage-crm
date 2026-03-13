@@ -15,8 +15,11 @@ Borrower-facing document portal API endpoints accessed through the PURL
 - Communicate with their LO about documents
 - View a categorized visual checklist
 
-Auth: Portal token or workspace slug verification (no standard JWT auth).
-Endpoints are scoped under /portal/docs/{workspace_slug}/...
+Auth: Every endpoint requires a signed portal JWT token (X-Portal-Token header,
+Authorization: Bearer, or ?token= query param). The token encodes loan_id,
+borrower_email, and org_id. Workspace slug is cross-checked against the token
+claims. Write operations additionally require read_write scope and are rate-
+limited. See services/smart_docs/portal_auth_service.py for token generation.
 """
 
 import logging
@@ -40,6 +43,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text as sa_text
 
 from database import get_db
+from services.smart_docs.portal_auth_service import (
+    get_current_portal_user,
+    require_write_scope,
+    check_upload_rate_limit,
+)
 from models.smart_docs_models import (
     DocumentRequest,
     SmartDocument,
@@ -89,19 +97,37 @@ class RescheduleRequest(BaseModel):
 
 
 # =============================================================================
-# Portal Access Verification
+# Portal Access Verification (token-authenticated)
 # =============================================================================
 
-def _verify_portal_access(db: Session, workspace_slug: str) -> Dict:
+async def _verify_portal_access_authenticated(
+    request: Request,
+    db: Session,
+    workspace_slug: str,
+) -> Dict:
     """
-    Verify portal access and return loan/borrower info.
+    Verify portal access using a signed portal token and return loan/borrower info.
 
-    Looks up the PURLWorkspace by slug and resolves the associated loan
-    and borrower. Raises 404 if the workspace does not exist.
+    1. Authenticates the borrower via get_current_portal_user (token verification)
+    2. Cross-checks the workspace slug against the token claims
+    3. Resolves the associated loan and borrower from the workspace
+
+    Raises:
+        HTTPException(401): If no valid token is provided or claims don't match.
+        HTTPException(404): If the workspace does not exist.
 
     Returns:
-        Dict with workspace, purl_loan, loan_id, borrower_id, org_id keys.
+        Dict with workspace, purl_loan, loan_id, borrower_id, org_id,
+        borrower_name, borrower_email, portal_user keys.
     """
+    # Step 1: Authenticate via portal token
+    portal_user = await get_current_portal_user(
+        request=request,
+        db=db,
+        workspace_slug=workspace_slug,
+    )
+
+    # Step 2: Resolve workspace and loan (same ORM lookups as before)
     from models.purl import PURLWorkspace, PURLLoan, PURLContact
 
     workspace = db.query(PURLWorkspace).filter(
@@ -125,6 +151,21 @@ def _verify_portal_access(db: Session, workspace_slug: str) -> Dict:
     if purl_loan:
         loan_id = purl_loan.main_loan_id if purl_loan.main_loan_id else purl_loan.id
 
+    # Step 3: Additional verification - borrower email in token must match
+    # the workspace borrower (if we have one on file)
+    if borrower_contact and borrower_contact.email:
+        token_email = portal_user.get("borrower_email", "").lower()
+        workspace_email = borrower_contact.email.lower()
+        if token_email != workspace_email:
+            logger.warning(
+                f"Portal token email mismatch: token={token_email}, "
+                f"workspace_contact={workspace_email}, slug={workspace_slug}"
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="Portal access denied. Token does not match this borrower.",
+            )
+
     return {
         "workspace": workspace,
         "purl_loan": purl_loan,
@@ -136,6 +177,7 @@ def _verify_portal_access(db: Session, workspace_slug: str) -> Dict:
         ),
         "borrower_email": borrower_contact.email if borrower_contact else None,
         "org_id": workspace.organization_id,
+        "portal_user": portal_user,
     }
 
 
@@ -183,6 +225,7 @@ _STATUS_ICONS = {
 @router.get("/portal/docs/{workspace_slug}/needs-list")
 async def get_portal_needs_list(
     workspace_slug: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -191,8 +234,10 @@ async def get_portal_needs_list(
     Returns all document requests for the loan associated with this portal
     workspace, including status, instructions, uploaded documents, and any
     rejection details.
+
+    Auth: Requires valid portal token.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
     loan_id = portal["loan_id"]
     if not loan_id:
         return {"needs_list": [], "total": 0}
@@ -278,6 +323,7 @@ async def get_portal_needs_list(
 @router.post("/portal/docs/{workspace_slug}/upload")
 async def portal_upload_document(
     workspace_slug: str,
+    request: Request,
     file: UploadFile = File(...),
     request_id: Optional[int] = Form(None),
     doc_type: Optional[str] = Form(None),
@@ -290,8 +336,13 @@ async def portal_upload_document(
     tenant-scoped key, creates a SmartDocument record, triggers AI
     classification if doc_type is not specified, and triggers the AI
     review pipeline.
+
+    Auth: Requires valid portal token with read_write scope.
+    Rate limited to 10 uploads per hour per borrower.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
+    require_write_scope(portal["portal_user"])
+    check_upload_rate_limit(portal["portal_user"]["borrower_email"])
     loan_id = portal["loan_id"]
     if not loan_id:
         raise HTTPException(status_code=400, detail="No loan associated with this portal")
@@ -303,8 +354,10 @@ async def portal_upload_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
-    # -- Read file content --
-    file_content = await file.read()
+    # -- Read file content with size limit enforcement --
+    from middleware.upload_limits import validate_upload_size, MAX_DOCUMENT_SIZE
+
+    file_content = await validate_upload_size(file, MAX_DOCUMENT_SIZE)
     mime_type = file.content_type or "application/octet-stream"
     file_size = len(file_content)
 
@@ -327,9 +380,40 @@ async def portal_upload_document(
             detail="; ".join(critical_msgs) or "File validation failed",
         )
 
-    # -- File size hard cap (20 MB) --
-    if file_size > 20 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 20 MB)")
+    # -- Malware scan --
+    from services.smart_docs.malware_scanner_service import get_malware_scanner
+    try:
+        malware_scanner = get_malware_scanner()
+        scan_result = malware_scanner.validate_file_safety(
+            file_bytes=file_content,
+            filename=file.filename,
+            mime_type=mime_type,
+        )
+        if not scan_result.clean:
+            threat_names = [
+                f.threat_name for f in scan_result.findings
+                if not f.clean and f.threat_name
+            ]
+            logger.warning(
+                "Portal upload rejected: malware detected in '%s' for workspace %s: %s",
+                file.filename, workspace_slug, threat_names,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "File rejected: our security scan detected potentially harmful content. "
+                    "Please save the document as a new PDF and try again."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Malware scan error during portal upload: {e}")
+        # Fail closed: reject uploads when the scanner errors
+        raise HTTPException(
+            status_code=400,
+            detail="File security scan failed. Please try again.",
+        )
 
     # -- Parse doc_type if provided --
     parsed_doc_type = None
@@ -476,6 +560,7 @@ async def portal_upload_document(
 @router.get("/portal/docs/{workspace_slug}/status")
 async def get_portal_document_status(
     workspace_slug: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -484,8 +569,10 @@ async def get_portal_document_status(
     Returns counts of required, submitted, approved, rejected, and
     pending documents, along with completeness percentage and next
     actions the borrower should take.
+
+    Auth: Requires valid portal token.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
     loan_id = portal["loan_id"]
     if not loan_id:
         return {
@@ -577,6 +664,7 @@ async def get_portal_document_status(
 async def preview_portal_document(
     workspace_slug: str,
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -584,8 +672,10 @@ async def preview_portal_document(
 
     Verifies that the document belongs to the portal's loan before
     generating the URL. Logs an access event.
+
+    Auth: Requires valid portal token.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
     loan_id = portal["loan_id"]
 
     # Verify document belongs to this loan
@@ -647,6 +737,7 @@ async def preview_portal_document(
 async def get_portal_document_review_status(
     workspace_slug: str,
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -654,8 +745,10 @@ async def get_portal_document_review_status(
 
     Returns the current status, decision, and any rejection details
     including fix instructions.
+
+    Auth: Requires valid portal token.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
     loan_id = portal["loan_id"]
 
     document = db.query(SmartDocument).filter(
@@ -688,6 +781,7 @@ async def get_portal_document_review_status(
 async def reupload_portal_document(
     workspace_slug: str,
     document_id: int,
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
@@ -696,8 +790,13 @@ async def reupload_portal_document(
 
     Marks the old document as SUPERSEDED, creates a new SmartDocument
     linked to the same request, and triggers the AI review pipeline.
+
+    Auth: Requires valid portal token with read_write scope.
+    Rate limited to 10 uploads per hour per borrower.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
+    require_write_scope(portal["portal_user"])
+    check_upload_rate_limit(portal["portal_user"]["borrower_email"])
     loan_id = portal["loan_id"]
     org_id = portal["org_id"]
     borrower_id = portal["borrower_id"]
@@ -714,7 +813,10 @@ async def reupload_portal_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
-    file_content = await file.read()
+    from middleware.upload_limits import validate_upload_size as _validate_size
+    from middleware.upload_limits import MAX_DOCUMENT_SIZE as _MAX_DOC_SIZE
+
+    file_content = await _validate_size(file, _MAX_DOC_SIZE)
     mime_type = file.content_type or "application/octet-stream"
     file_size = len(file_content)
 
@@ -737,8 +839,39 @@ async def reupload_portal_document(
             detail="; ".join(critical_msgs) or "File validation failed",
         )
 
-    if file_size > 20 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 20 MB)")
+    # -- Malware scan --
+    from services.smart_docs.malware_scanner_service import get_malware_scanner
+    try:
+        malware_scanner = get_malware_scanner()
+        scan_result = malware_scanner.validate_file_safety(
+            file_bytes=file_content,
+            filename=file.filename,
+            mime_type=mime_type,
+        )
+        if not scan_result.clean:
+            threat_names = [
+                f.threat_name for f in scan_result.findings
+                if not f.clean and f.threat_name
+            ]
+            logger.warning(
+                "Portal re-upload rejected: malware detected in '%s' for workspace %s: %s",
+                file.filename, workspace_slug, threat_names,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "File rejected: our security scan detected potentially harmful content. "
+                    "Please save the document as a new PDF and try again."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Malware scan error during portal re-upload: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail="File security scan failed. Please try again.",
+        )
 
     # Upload to S3
     s3_service = get_smart_docs_s3_service()
@@ -847,6 +980,7 @@ async def reupload_portal_document(
 @router.get("/portal/docs/{workspace_slug}/signing-requests")
 async def get_portal_signing_requests(
     workspace_slug: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -854,6 +988,8 @@ async def get_portal_signing_requests(
 
     Returns a list of envelopes awaiting the borrower's signature,
     including the signing URL.
+
+    Auth: Requires valid portal token.
     """
     from database.models.esignature import (
         ESignatureEnvelope,
@@ -862,7 +998,7 @@ async def get_portal_signing_requests(
         RecipientStatus,
     )
 
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
     loan_id = portal["loan_id"]
     borrower_email = portal["borrower_email"]
 
@@ -939,6 +1075,7 @@ async def get_portal_signing_requests(
 async def submit_letter_of_explanation(
     workspace_slug: str,
     body: LOESubmission,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -947,8 +1084,11 @@ async def submit_letter_of_explanation(
     Generates a PDF from the explanation text, uploads it to S3,
     creates a SmartDocument record, and links it to the relevant
     document request if request_id is provided.
+
+    Auth: Requires valid portal token with read_write scope.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
+    require_write_scope(portal["portal_user"])
     loan_id = portal["loan_id"]
     if not loan_id:
         raise HTTPException(status_code=400, detail="No loan associated with this portal")
@@ -1063,6 +1203,7 @@ async def submit_letter_of_explanation(
 @router.get("/portal/docs/{workspace_slug}/appointments")
 async def get_portal_appointments(
     workspace_slug: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -1070,13 +1211,15 @@ async def get_portal_appointments(
 
     Returns scheduled and confirmed appointments including date, time,
     type, location, meeting link, and status.
+
+    Auth: Requires valid portal token.
     """
     from database.models.document_followup import (
         DocumentAppointment,
         AppointmentStatus,
     )
 
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
     loan_id = portal["loan_id"]
     if not loan_id:
         return {"appointments": [], "total": 0}
@@ -1127,6 +1270,7 @@ async def get_portal_appointments(
 async def confirm_portal_appointment(
     workspace_slug: str,
     appointment_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -1134,13 +1278,16 @@ async def confirm_portal_appointment(
 
     Sets the appointment status to CONFIRMED and records the confirmation
     timestamp.
+
+    Auth: Requires valid portal token with read_write scope.
     """
     from database.models.document_followup import (
         DocumentAppointment,
         AppointmentStatus,
     )
 
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
+    require_write_scope(portal["portal_user"])
     loan_id = portal["loan_id"]
 
     appointment = db.query(DocumentAppointment).filter(
@@ -1178,6 +1325,7 @@ async def reschedule_portal_appointment(
     workspace_slug: str,
     appointment_id: int,
     body: RescheduleRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -1186,11 +1334,14 @@ async def reschedule_portal_appointment(
     Records the borrower's preferred dates and notifies the LO/processor.
     The original appointment remains in its current status until the
     team responds with a new time.
+
+    Auth: Requires valid portal token with read_write scope.
     """
     from database.models.document_followup import DocumentAppointment
     from models.purl import PURLMessage
 
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
+    require_write_scope(portal["portal_user"])
     loan_id = portal["loan_id"]
 
     appointment = db.query(DocumentAppointment).filter(
@@ -1236,6 +1387,7 @@ async def reschedule_portal_appointment(
 @router.get("/portal/docs/{workspace_slug}/messages")
 async def get_portal_messages(
     workspace_slug: str,
+    request: Request,
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
@@ -1244,10 +1396,12 @@ async def get_portal_messages(
 
     Returns follow-up messages, system notifications, and direct messages
     from the LO.
+
+    Auth: Requires valid portal token.
     """
     from models.purl import PURLMessage
 
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
 
     messages = (
         db.query(PURLMessage)
@@ -1283,6 +1437,7 @@ async def get_portal_messages(
 async def send_portal_contact_message(
     workspace_slug: str,
     body: ContactLOMessage,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -1290,10 +1445,13 @@ async def send_portal_contact_message(
 
     Creates a message in the portal workspace and optionally links it
     to a specific document request. Notifies the LO.
+
+    Auth: Requires valid portal token with read_write scope.
     """
     from models.purl import PURLMessage
 
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
+    require_write_scope(portal["portal_user"])
 
     if not body.message or not body.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
@@ -1351,6 +1509,7 @@ async def send_portal_contact_message(
 @router.get("/portal/docs/{workspace_slug}/checklist")
 async def get_portal_checklist(
     workspace_slug: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -1359,8 +1518,10 @@ async def get_portal_checklist(
     Returns document requests organized by category (Identity, Income,
     Assets, Property, Credit, Special) with status icons, instructions,
     and upload counts.
+
+    Auth: Requires valid portal token.
     """
-    portal = _verify_portal_access(db, workspace_slug)
+    portal = await _verify_portal_access_authenticated(request, db, workspace_slug)
     loan_id = portal["loan_id"]
     if not loan_id:
         return {"categories": [], "summary": {"total": 0, "completed": 0}}

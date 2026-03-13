@@ -128,6 +128,8 @@ const RateMonitor = lazyRetry(() => import('../pages/RateMonitor'));
 const Tasks = lazyRetry(() => import('../pages/Tasks'));
 const Calendar = lazyRetry(() => import('../pages/Calendar'));
 const CalendarSettings = lazyRetry(() => import('../pages/CalendarSettings'));
+const CalendarSetupWizard = lazyRetry(() => import('../components/calendar/setup/CalendarSetupWizard'));
+const CalendarAnalyticsPage = lazyRetry(() => import('../components/calendar/CalendarAnalytics'));
 const Scorecard = lazyRetry(() => import('../pages/Scorecard'));
 const Assistant = lazyRetry(() => import('../pages/Assistant'));
 const ClientProfile = lazyRetry(() => import('../pages/ClientProfile'));
@@ -537,6 +539,8 @@ export function getRoutes(layoutProps) {
     <Route key="/tasks" path="/tasks" element={withMainLayout(Tasks)} />,
     <Route key="/calendar" path="/calendar" element={withMainLayout(Calendar)} />,
     <Route key="/calendar-settings" path="/calendar-settings" element={withMainLayout(CalendarSettings)} />,
+    <Route key="/calendar/setup" path="/calendar/setup" element={withMainLayout(CalendarSetupWizard)} />,
+    <Route key="/calendar/analytics" path="/calendar/analytics" element={withMainLayout(CalendarAnalyticsPage)} />,
 
     // Marketing
     <Route key="/marketing" path="/marketing" element={withMainLayout(Marketing)} />,

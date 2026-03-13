@@ -41,6 +41,8 @@ from typing import Optional, Dict, List, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from services.smart_docs.tcpa_compliance_service import TCPAComplianceService
+
 from database.models.document_followup import (
     FollowupCampaign,
     FollowupEvent,
@@ -247,6 +249,7 @@ class FollowupAutomationService:
     def __init__(self, db: Session):
         self.db = db
         self._portal_base_url = os.getenv("PORTAL_BASE_URL", "https://app.perenniaai.com/portal")
+        self._tcpa = TCPAComplianceService(db)
 
     # =========================================================================
     # CAMPAIGN LIFECYCLE
@@ -292,24 +295,51 @@ class FollowupAutomationService:
         first_delay_hours = step_config[0].get("delay_hours", 0) if step_config else 0
         next_action_at = now + timedelta(hours=first_delay_hours)
 
-        campaign = FollowupCampaign(
-            organization_id=organization_id,
-            loan_id=loan_id,
-            borrower_id=borrower_id,
-            campaign_type=campaign_type_enum,
-            status=CampaignStatus.ACTIVE,
-            trigger_source=trigger_source,
-            linked_request_ids=request_ids,
-            total_steps=len(step_config),
-            current_step=0,
-            step_config=step_config,
-            next_action_at=next_action_at,
-            started_at=now,
-            max_reminders=len(step_config),
-            created_by_user_id=created_by_user_id,
-        )
-        self.db.add(campaign)
-        self.db.flush()
+        from services.smart_docs.db_transaction import atomic_operation
+
+        try:
+            with atomic_operation(self.db):
+                campaign = FollowupCampaign(
+                    organization_id=organization_id,
+                    loan_id=loan_id,
+                    borrower_id=borrower_id,
+                    campaign_type=campaign_type_enum,
+                    status=CampaignStatus.ACTIVE,
+                    trigger_source=trigger_source,
+                    linked_request_ids=request_ids,
+                    total_steps=len(step_config),
+                    current_step=0,
+                    step_config=step_config,
+                    next_action_at=next_action_at,
+                    started_at=now,
+                    max_reminders=len(step_config),
+                    created_by_user_id=created_by_user_id,
+                )
+                self.db.add(campaign)
+                self.db.flush()
+
+                # Record campaign creation event atomically with the campaign
+                creation_event = FollowupEvent(
+                    campaign_id=campaign.id,
+                    event_type=FollowupEventType.EMAIL_SENT,
+                    step_number=0,
+                    channel="system",
+                    template_used="campaign_created",
+                    delivery_status=DeliveryStatus.QUEUED,
+                    metadata={
+                        "campaign_type": campaign_type,
+                        "request_ids": request_ids,
+                        "total_steps": len(step_config),
+                    },
+                )
+                self.db.add(creation_event)
+                # atomic_operation commits here
+        except Exception as e:
+            logger.exception(
+                "Failed to create %s campaign for loan %d: %s",
+                campaign_type, loan_id, e,
+            )
+            raise
 
         logger.info(
             "Created %s follow-up campaign %d for loan %d (%d steps, %d requests)",
@@ -531,22 +561,76 @@ class FollowupAutomationService:
 
             elif action == "send_sms":
                 event_type = FollowupEventType.SMS_SENT
-                result = self._send_sms_reminder(
-                    campaign_id=campaign_id,
-                    template_slug=template_slug,
-                    borrower_phone=borrower_info.get("borrower_phone", ""),
-                    borrower_name=borrower_info.get("borrower_name", "Borrower"),
-                    document_count=len(outstanding_docs),
+                # --- TCPA GATE: validate before sending any SMS ---
+                sms_phone = borrower_info.get("borrower_phone", "")
+                tcpa_validation = self._tcpa.validate_outreach(
+                    phone=sms_phone,
+                    org_id=campaign.organization_id or 0,
+                    channel="sms",
                 )
+                if not tcpa_validation.allowed:
+                    logger.warning(
+                        "TCPA BLOCKED SMS for campaign %d step %d: %s",
+                        campaign_id, step_number, "; ".join(tcpa_validation.blockers),
+                    )
+                    result = {
+                        "status": "blocked_tcpa",
+                        "reason": "; ".join(tcpa_validation.blockers),
+                        "channel": "sms",
+                    }
+                    delivery_status = DeliveryStatus.FAILED
+                else:
+                    result = self._send_sms_reminder(
+                        campaign_id=campaign_id,
+                        template_slug=template_slug,
+                        borrower_phone=sms_phone,
+                        borrower_name=borrower_info.get("borrower_name", "Borrower"),
+                        document_count=len(outstanding_docs),
+                    )
+                    # Log successful outreach for frequency tracking
+                    if result.get("status") == "sent":
+                        self._tcpa.log_outreach(
+                            phone=sms_phone,
+                            org_id=campaign.organization_id or 0,
+                            channel="sms",
+                            campaign_id=campaign_id,
+                        )
 
             elif action == "schedule_call":
                 event_type = FollowupEventType.CALL_SCHEDULED
-                result = self._schedule_call(
-                    campaign_id=campaign_id,
-                    loan_id=campaign.loan_id,
-                    borrower_phone=borrower_info.get("borrower_phone", ""),
-                    lo_user_id=borrower_info.get("lo_user_id"),
+                # --- TCPA GATE: validate before scheduling any call ---
+                call_phone = borrower_info.get("borrower_phone", "")
+                tcpa_call_validation = self._tcpa.validate_outreach(
+                    phone=call_phone,
+                    org_id=campaign.organization_id or 0,
+                    channel="call",
                 )
+                if not tcpa_call_validation.allowed:
+                    logger.warning(
+                        "TCPA BLOCKED call for campaign %d step %d: %s",
+                        campaign_id, step_number, "; ".join(tcpa_call_validation.blockers),
+                    )
+                    result = {
+                        "status": "blocked_tcpa",
+                        "reason": "; ".join(tcpa_call_validation.blockers),
+                        "channel": "call",
+                    }
+                    delivery_status = DeliveryStatus.FAILED
+                else:
+                    result = self._schedule_call(
+                        campaign_id=campaign_id,
+                        loan_id=campaign.loan_id,
+                        borrower_phone=call_phone,
+                        lo_user_id=borrower_info.get("lo_user_id"),
+                    )
+                    # Log successful outreach for frequency tracking
+                    if result.get("status") == "sent":
+                        self._tcpa.log_outreach(
+                            phone=call_phone,
+                            org_id=campaign.organization_id or 0,
+                            channel="call",
+                            campaign_id=campaign_id,
+                        )
 
             elif action == "offer_appointment":
                 event_type = FollowupEventType.APPOINTMENT_BOOKED
@@ -568,46 +652,57 @@ class FollowupAutomationService:
                 logger.warning("Unknown action '%s' for campaign %d step %d", action, campaign_id, step_number)
                 result = {"status": "skipped", "reason": f"Unknown action: {action}"}
 
-            delivery_status = DeliveryStatus.SENT if result.get("status") != "failed" else DeliveryStatus.FAILED
+            # Only recompute delivery_status if it wasn't already set by a TCPA block
+            if delivery_status == DeliveryStatus.QUEUED:
+                delivery_status = DeliveryStatus.SENT if result.get("status") not in ("failed", "blocked_tcpa") else DeliveryStatus.FAILED
 
         except Exception as e:
             logger.exception("Failed to execute step %d of campaign %d", step_number, campaign_id)
             result = {"status": "failed", "error": str(e)}
             delivery_status = DeliveryStatus.FAILED
 
-        # Record the event
-        event = FollowupEvent(
-            campaign_id=campaign_id,
-            event_type=event_type,
-            step_number=step_number,
-            channel=step.get("channel", "email"),
-            template_used=template_slug,
-            recipient_email=borrower_info.get("borrower_email"),
-            recipient_phone=borrower_info.get("borrower_phone"),
-            message_subject=result.get("subject"),
-            message_preview=(result.get("body", "") or "")[:500],
-            delivery_status=delivery_status,
-            delivery_error=result.get("error"),
-            metadata={"step_config": step, "result_summary": result.get("status")},
-        )
-        self.db.add(event)
+        # Record the event + advance campaign atomically
+        from services.smart_docs.db_transaction import atomic_operation
 
-        # Advance campaign
-        campaign.current_step = next_step_index + 1
-        campaign.reminders_sent = (campaign.reminders_sent or 0) + 1
-        campaign.updated_at = now
+        try:
+            with atomic_operation(self.db):
+                event = FollowupEvent(
+                    campaign_id=campaign_id,
+                    event_type=event_type,
+                    step_number=step_number,
+                    channel=step.get("channel", "email"),
+                    template_used=template_slug,
+                    recipient_email=borrower_info.get("borrower_email"),
+                    recipient_phone=borrower_info.get("borrower_phone"),
+                    message_subject=result.get("subject"),
+                    message_preview=(result.get("body", "") or "")[:500],
+                    delivery_status=delivery_status,
+                    delivery_error=result.get("error"),
+                    metadata={"step_config": step, "result_summary": result.get("status")},
+                )
+                self.db.add(event)
 
-        # Set next action time or complete
-        if campaign.current_step >= len(steps):
-            self._complete_campaign(campaign)
-            campaign_completed = True
-        else:
-            next_step = steps[campaign.current_step]
-            delay_hours = next_step.get("delay_hours", 24)
-            campaign.next_action_at = now + timedelta(hours=delay_hours)
-            campaign_completed = False
+                # Advance campaign
+                campaign.current_step = next_step_index + 1
+                campaign.reminders_sent = (campaign.reminders_sent or 0) + 1
+                campaign.updated_at = now
 
-        self.db.flush()
+                # Set next action time or complete
+                if campaign.current_step >= len(steps):
+                    self._complete_campaign(campaign)
+                    campaign_completed = True
+                else:
+                    next_step = steps[campaign.current_step]
+                    delay_hours = next_step.get("delay_hours", 24)
+                    campaign.next_action_at = now + timedelta(hours=delay_hours)
+                    campaign_completed = False
+                # atomic_operation commits here
+        except Exception as e:
+            logger.exception(
+                "Failed to record event and advance campaign %d: %s",
+                campaign_id, e,
+            )
+            raise
 
         return {
             "campaign_id": campaign_id,
@@ -627,6 +722,8 @@ class FollowupAutomationService:
     def handle_borrower_response(self, campaign_id: int, response_type: str) -> Dict:
         """Handle a borrower response to a follow-up campaign.
 
+        Campaign status update and event recording are committed atomically.
+
         Args:
             campaign_id: The campaign the borrower responded to.
             response_type: One of 'document_uploaded', 'appointment_booked',
@@ -635,75 +732,85 @@ class FollowupAutomationService:
         Returns:
             Dict with updated campaign info.
         """
+        from services.smart_docs.db_transaction import atomic_operation
+
         campaign = self._get_campaign(campaign_id)
         if campaign is None:
             return {"error": f"Campaign {campaign_id} not found"}
 
-        now = datetime.now(timezone.utc)
-        campaign.borrower_responded = True
-        campaign.response_date = now
-        campaign.updated_at = now
+        try:
+            with atomic_operation(self.db):
+                now = datetime.now(timezone.utc)
+                campaign.borrower_responded = True
+                campaign.response_date = now
+                campaign.updated_at = now
 
-        # Record the response event
-        event = FollowupEvent(
-            campaign_id=campaign_id,
-            event_type=FollowupEventType.BORROWER_RESPONDED,
-            channel="borrower_action",
-            metadata={"response_type": response_type},
-        )
-        self.db.add(event)
+                # Record the response event
+                event = FollowupEvent(
+                    campaign_id=campaign_id,
+                    event_type=FollowupEventType.BORROWER_RESPONDED,
+                    channel="borrower_action",
+                    metadata={"response_type": response_type},
+                )
+                self.db.add(event)
 
-        if response_type == "document_uploaded":
-            # Check if all linked requests are now fulfilled
-            outstanding = self._get_outstanding_documents(campaign.linked_request_ids or [])
-            if not outstanding:
-                self._complete_campaign(campaign)
-                self.db.flush()
-                return {
-                    "campaign_id": campaign_id,
-                    "status": "completed",
-                    "message": "All documents received, campaign completed",
-                }
-            else:
-                # Some docs still outstanding, keep campaign going
-                self.db.flush()
-                return {
-                    "campaign_id": campaign_id,
-                    "status": "active",
-                    "message": f"{len(outstanding)} document(s) still outstanding",
-                    "remaining_documents": [d.get("title", "") for d in outstanding],
-                }
+                if response_type == "document_uploaded":
+                    # Check if all linked requests are now fulfilled
+                    outstanding = self._get_outstanding_documents(campaign.linked_request_ids or [])
+                    if not outstanding:
+                        self._complete_campaign(campaign)
+                        response_data = {
+                            "campaign_id": campaign_id,
+                            "status": "completed",
+                            "message": "All documents received, campaign completed",
+                        }
+                    else:
+                        response_data = {
+                            "campaign_id": campaign_id,
+                            "status": "active",
+                            "message": f"{len(outstanding)} document(s) still outstanding",
+                            "remaining_documents": [d.get("title", "") for d in outstanding],
+                        }
 
-        elif response_type == "appointment_booked":
-            # Pause campaign until appointment is completed
-            campaign.status = CampaignStatus.PAUSED
-            campaign.cancel_reason = "Appointment booked by borrower"
-            campaign.next_action_at = None
-            self.db.flush()
-            return {
-                "campaign_id": campaign_id,
-                "status": "paused",
-                "message": "Campaign paused pending appointment completion",
-            }
+                elif response_type == "appointment_booked":
+                    campaign.status = CampaignStatus.PAUSED
+                    campaign.cancel_reason = "Appointment booked by borrower"
+                    campaign.next_action_at = None
+                    response_data = {
+                        "campaign_id": campaign_id,
+                        "status": "paused",
+                        "message": "Campaign paused pending appointment completion",
+                    }
 
-        else:
-            # Generic response (replied, called_back) -- keep campaign active
-            # but note the response
-            self.db.flush()
-            return {
-                "campaign_id": campaign_id,
-                "status": campaign.status.value,
-                "message": f"Borrower response recorded: {response_type}",
-            }
+                else:
+                    response_data = {
+                        "campaign_id": campaign_id,
+                        "status": campaign.status.value,
+                        "message": f"Borrower response recorded: {response_type}",
+                    }
+                # atomic_operation commits here
+        except Exception as e:
+            logger.exception(
+                "Failed to handle borrower response for campaign %d: %s",
+                campaign_id, e,
+            )
+            raise
+
+        return response_data
 
     def handle_document_uploaded(self, loan_id: int, request_id: int) -> None:
         """Handle a document upload event. Checks active campaigns and
         completes them if all requested documents are now received.
 
+        All campaign updates and events for this upload are committed
+        atomically.
+
         Args:
             loan_id: The loan the document was uploaded for.
             request_id: The document request that was fulfilled.
         """
+        from services.smart_docs.db_transaction import atomic_operation
+
         # Find active campaigns that reference this request
         campaigns = (
             self.db.query(FollowupCampaign)
@@ -716,36 +823,43 @@ class FollowupAutomationService:
 
         now = datetime.now(timezone.utc)
 
-        for campaign in campaigns:
-            linked_ids = campaign.linked_request_ids or []
-            if request_id not in linked_ids:
-                continue
+        try:
+            with atomic_operation(self.db):
+                for campaign in campaigns:
+                    linked_ids = campaign.linked_request_ids or []
+                    if request_id not in linked_ids:
+                        continue
 
-            # Record the upload event
-            event = FollowupEvent(
-                campaign_id=campaign.id,
-                event_type=FollowupEventType.DOCUMENT_UPLOADED,
-                channel="borrower_action",
-                metadata={"request_id": request_id, "loan_id": loan_id},
+                    # Record the upload event
+                    event = FollowupEvent(
+                        campaign_id=campaign.id,
+                        event_type=FollowupEventType.DOCUMENT_UPLOADED,
+                        channel="borrower_action",
+                        metadata={"request_id": request_id, "loan_id": loan_id},
+                    )
+                    self.db.add(event)
+
+                    # Check if all linked requests are now fulfilled
+                    outstanding = self._get_outstanding_documents(linked_ids)
+                    if not outstanding:
+                        self._complete_campaign(campaign)
+                        logger.info(
+                            "All documents received for campaign %d (loan %d), completing",
+                            campaign.id, loan_id,
+                        )
+                    else:
+                        campaign.updated_at = now
+                        logger.info(
+                            "Document %d uploaded for campaign %d, %d still outstanding",
+                            request_id, campaign.id, len(outstanding),
+                        )
+                # atomic_operation commits here
+        except Exception as e:
+            logger.exception(
+                "Failed to handle document upload for loan %d, request %d: %s",
+                loan_id, request_id, e,
             )
-            self.db.add(event)
-
-            # Check if all linked requests are now fulfilled
-            outstanding = self._get_outstanding_documents(linked_ids)
-            if not outstanding:
-                self._complete_campaign(campaign)
-                logger.info(
-                    "All documents received for campaign %d (loan %d), completing",
-                    campaign.id, loan_id,
-                )
-            else:
-                campaign.updated_at = now
-                logger.info(
-                    "Document %d uploaded for campaign %d, %d still outstanding",
-                    request_id, campaign.id, len(outstanding),
-                )
-
-        self.db.flush()
+            raise
 
     # =========================================================================
     # APPOINTMENTS

@@ -202,6 +202,50 @@ class DocumentIntelligenceAgent(SpecializedAgent):
             "analysis, call transcript extraction, cross-validation, and follow-up automation"
         )
 
+    # ========================================================================
+    # TENANT ISOLATION HELPERS
+    # ========================================================================
+
+    def _verify_loan_org(self, db, loan_id: int) -> None:
+        """Verify a loan belongs to this agent's organization.
+
+        Raises ValueError if the loan does not exist for this org.
+        Must be called at the START of every tool that accepts a loan_id.
+        """
+        org_id = self.require_org_id()
+        row = db.execute(
+            text("SELECT id FROM loans WHERE id = :loan_id AND organization_id = :org_id"),
+            {"loan_id": loan_id, "org_id": org_id},
+        ).fetchone()
+        if not row:
+            logger.warning(
+                "TENANT_ISOLATION: loan %s access denied for org %s by agent %s",
+                loan_id, org_id, self.name,
+            )
+            raise ValueError(f"Loan {loan_id} not found")
+
+    def _verify_document_org(self, db, document_id: int) -> None:
+        """Verify a smart_document belongs to this agent's organization (via its parent loan).
+
+        Raises ValueError if the document does not exist for this org.
+        Must be called at the START of every tool that accepts a document_id.
+        """
+        org_id = self.require_org_id()
+        row = db.execute(
+            text("""
+                SELECT sd.id FROM smart_documents sd
+                JOIN loans l ON l.id = sd.loan_id AND l.organization_id = :org_id
+                WHERE sd.id = :document_id
+            """),
+            {"document_id": document_id, "org_id": org_id},
+        ).fetchone()
+        if not row:
+            logger.warning(
+                "TENANT_ISOLATION: document %s access denied for org %s by agent %s",
+                document_id, org_id, self.name,
+            )
+            raise ValueError(f"Document {document_id} not found")
+
     def _register_tools(self):
         """Register all document intelligence tools"""
 
@@ -394,18 +438,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan belongs to this organization
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number, borrower_name FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             from services.smart_docs.pos_analyzer_service import get_pos_analyzer_service
             service = get_pos_analyzer_service(db)
@@ -466,26 +508,21 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         document_id = input_data["document_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify document belongs to org via loan
+            # Tenant isolation: verify document belongs to this organization
+            self._verify_document_org(db, document_id)
+
             doc = db.execute(
                 text("""
                     SELECT sd.id, sd.filename, sd.mime_type, sd.doc_type,
                            sd.loan_id, l.loan_number
                     FROM smart_documents sd
-                    JOIN loans l ON l.id = sd.loan_id AND l.organization_id = :org_id
+                    JOIN loans l ON l.id = sd.loan_id
                     WHERE sd.id = :document_id
                 """),
-                {"document_id": document_id, "org_id": org_id},
+                {"document_id": document_id},
             ).fetchone()
-
-            if not doc:
-                return ToolResult(
-                    success=False,
-                    error=f"Document {document_id} not found or access denied",
-                )
 
             from services.smart_docs.ai_classifier_service import get_ai_classifier_service
             classifier = get_ai_classifier_service()
@@ -552,26 +589,21 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         document_id = input_data["document_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify document belongs to org
+            # Tenant isolation: verify document belongs to this organization
+            self._verify_document_org(db, document_id)
+
             doc = db.execute(
                 text("""
                     SELECT sd.id, sd.filename, sd.doc_type, sd.loan_id,
                            l.loan_number
                     FROM smart_documents sd
-                    JOIN loans l ON l.id = sd.loan_id AND l.organization_id = :org_id
+                    JOIN loans l ON l.id = sd.loan_id
                     WHERE sd.id = :document_id
                 """),
-                {"document_id": document_id, "org_id": org_id},
+                {"document_id": document_id},
             ).fetchone()
-
-            if not doc:
-                return ToolResult(
-                    success=False,
-                    error=f"Document {document_id} not found or access denied",
-                )
 
             from services.smart_docs.ai_review_service import get_ai_review_service
             review_service = get_ai_review_service(db)
@@ -626,18 +658,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             # Find all unreviewed documents
             unreviewed = db.execute(
@@ -750,18 +780,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
 
         loan_id = input_data["loan_id"]
         borrower_id = input_data["borrower_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             from services.smart_docs.income_calculator_service import (
                 get_income_calculator_service,
@@ -835,18 +863,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
 
         loan_id = input_data["loan_id"]
         borrower_id = input_data["borrower_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             # Query bank statement analysis results from the DB
             # (bank_statement_analyses table populated by extraction service)
@@ -979,18 +1005,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         call_id = input_data["call_id"]
         transcript = input_data["transcript"]
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             from services.smart_docs.call_intel_extractor import get_call_intel_extractor
             extractor = get_call_intel_extractor(db)
@@ -1059,18 +1083,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number, borrower_name FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             # Get all open/pending requests (the needs list)
             open_requests = db.execute(
@@ -1157,18 +1179,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             # Get counts by category and status
             category_stats = db.execute(
@@ -1261,18 +1281,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number, borrower_name FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             # Get all accepted smart documents with their extracted data
             docs = db.execute(
@@ -1429,6 +1447,9 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             # Parse comma-separated IDs
             try:
                 request_ids = [
@@ -1448,15 +1469,11 @@ class DocumentIntelligenceAgent(SpecializedAgent):
                     error="No request IDs provided",
                 )
 
-            # Verify loan ownership
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             from services.smart_docs.followup_automation_service import (
                 get_followup_automation_service,
@@ -1514,18 +1531,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             tasks = db.execute(
                 text("""
@@ -1592,18 +1607,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             # Get all flags from bank statement analyses
             analyses = db.execute(
@@ -1673,18 +1686,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         occupancy_type = input_data["occupancy_type"]
         income_type = input_data["income_type"]
         borrower_id = input_data["borrower_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number, borrower_name FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             from services.smart_docs.needs_list_generator import NeedsListGenerator
             generator = NeedsListGenerator()
@@ -1749,18 +1760,16 @@ class DocumentIntelligenceAgent(SpecializedAgent):
         from database import SessionLocal
 
         loan_id = input_data["loan_id"]
-        org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Tenant isolation: verify loan belongs to this organization
+            self._verify_loan_org(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number, borrower_name, stage FROM loans "
-                     "WHERE id = :loan_id AND organization_id = :org_id"),
-                {"loan_id": loan_id, "org_id": org_id},
+                     "WHERE id = :loan_id"),
+                {"loan_id": loan_id},
             ).fetchone()
-
-            if not loan:
-                return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
             # Request status counts
             request_stats = db.execute(

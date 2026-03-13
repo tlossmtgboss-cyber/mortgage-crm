@@ -34,6 +34,32 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
+# Lazy imports for vendor + forensics integration (avoid circular imports at load time)
+_fraud_vendor_service_mod = None
+_pdf_forensics_service_mod = None
+
+
+def _get_fraud_vendor_module():
+    global _fraud_vendor_service_mod
+    if _fraud_vendor_service_mod is None:
+        try:
+            from services.smart_docs.integrations import fraud_vendor_service as mod
+            _fraud_vendor_service_mod = mod
+        except ImportError:
+            logger.debug("fraud_vendor_service not available")
+    return _fraud_vendor_service_mod
+
+
+def _get_pdf_forensics_module():
+    global _pdf_forensics_service_mod
+    if _pdf_forensics_service_mod is None:
+        try:
+            from services.smart_docs import pdf_forensics_service as mod
+            _pdf_forensics_service_mod = mod
+        except ImportError:
+            logger.debug("pdf_forensics_service not available")
+    return _pdf_forensics_service_mod
+
 
 # =============================================================================
 # DATA CLASSES
@@ -1544,7 +1570,90 @@ class FraudDetectionService:
         return sar_data
 
     # =========================================================================
-    # 13. SAVE ANALYSIS
+    # 13. GENERATE SANITIZED REPORT
+    # =========================================================================
+
+    def generate_sanitized_report(
+        self,
+        loan_id: int,
+        organization_id: Optional[int],
+        access_level: str,
+    ) -> Dict:
+        """Generate a fraud report filtered by access level.
+
+        Under BSA 31 USC 5318(g)(2), fraud indicator details must NOT be
+        exposed to borrowers or unauthorized staff. This method produces
+        a response appropriate for the caller's access level.
+
+        Args:
+            loan_id: The loan to analyze.
+            organization_id: The caller's organization (for tenant scoping).
+            access_level: One of "full", "summary", "restricted".
+
+        Returns:
+            A dict with fraud data filtered to the access level:
+            - "full": complete analysis including all indicators and SAR data.
+            - "summary": risk_score, risk_level, recommendation only.
+            - "restricted": neutral document_status only (no fraud info).
+        """
+        result = self.analyze_loan_documents(loan_id)
+
+        if access_level == "restricted":
+            # Borrower / portal: NEVER reveal fraud indicators.
+            # Map risk to a neutral document status.
+            if result.risk_level in ("HIGH", "CRITICAL"):
+                document_status = "under_review"
+            elif result.risk_level == "MEDIUM":
+                document_status = "under_review"
+            elif result.risk_score > 0:
+                document_status = "pending"
+            else:
+                document_status = "approved"
+
+            return {
+                "loan_id": loan_id,
+                "document_status": document_status,
+                "total_documents": result.documents_analyzed,
+            }
+
+        if access_level == "summary":
+            # Internal staff: risk score only, no indicator details.
+            recommendation = None
+            if result.recommendations:
+                recommendation = result.recommendations[0]
+            return {
+                "loan_id": loan_id,
+                "risk_score": result.risk_score,
+                "risk_level": result.risk_level,
+                "documents_analyzed": result.documents_analyzed,
+                "recommendation": recommendation,
+            }
+
+        # "full" — compliance officers and admins get everything
+        return {
+            "loan_id": loan_id,
+            "risk_score": result.risk_score,
+            "risk_level": result.risk_level,
+            "documents_analyzed": result.documents_analyzed,
+            "summary": result.summary,
+            "fraud_indicators": [
+                {
+                    "indicator_type": ind.indicator_type,
+                    "severity": ind.severity,
+                    "description": ind.description,
+                    "evidence": ind.evidence,
+                    "affected_documents": ind.affected_documents,
+                    "confidence": ind.confidence,
+                    "recommendation": ind.recommendation,
+                }
+                for ind in result.fraud_indicators
+            ],
+            "inconsistencies": result.inconsistencies,
+            "recommendations": result.recommendations,
+        }
+
+    # =========================================================================
+    # 14. SAVE ANALYSIS
     # =========================================================================
 
     def save_analysis(self, result: CrossValidationResult) -> Optional[int]:
@@ -1691,6 +1800,204 @@ class FraudDetectionService:
                 if total_analyzed > 0 else 0
             ),
         }
+
+    # =========================================================================
+    # 15. ENHANCED DOCUMENT ANALYSIS (Vendor + Forensics Integration)
+    # =========================================================================
+
+    async def analyze_document_enhanced(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        doc_type: str,
+        loan_id: int,
+        org_id: int,
+        doc_date: Optional[date] = None,
+    ) -> Dict:
+        """
+        Perform enhanced fraud analysis on a single document combining:
+        1. Vendor API analysis (40% weight) — external fraud detection
+        2. PDF forensics analysis (30% weight) — structural/metadata analysis
+        3. Cross-document consistency (30% weight) — existing cross-doc checks
+
+        Returns a unified result dict with combined risk scoring.
+        """
+        vendor_result = None
+        forensics_result = None
+        cross_doc_result = None
+
+        # 1. Vendor analysis (40% weight)
+        vendor_mod = _get_fraud_vendor_module()
+        if vendor_mod:
+            try:
+                vendor_service = vendor_mod.get_fraud_vendor_service(self.db)
+                vendor_result = await vendor_service.analyze_document(
+                    file_bytes=file_bytes,
+                    filename=filename,
+                    doc_type=doc_type,
+                    loan_id=loan_id,
+                    org_id=org_id,
+                )
+            except Exception as e:
+                logger.warning("Vendor analysis failed: %s", e)
+
+        # 2. PDF forensics analysis (30% weight)
+        forensics_mod = _get_pdf_forensics_module()
+        if forensics_mod:
+            try:
+                forensics_service = forensics_mod.get_pdf_forensics_service()
+                forensics_result = forensics_service.generate_forensics_report(
+                    file_bytes=file_bytes,
+                    doc_type=doc_type,
+                    filename=filename,
+                    doc_date=doc_date,
+                )
+            except Exception as e:
+                logger.warning("PDF forensics analysis failed: %s", e)
+
+        # 3. Cross-document consistency (30% weight) — use existing methods
+        try:
+            cross_doc_result = self.analyze_loan_documents(loan_id)
+        except Exception as e:
+            logger.warning("Cross-document analysis failed: %s", e)
+
+        # Combine scores with weighting
+        combined_score, combined_level = self._combine_analysis_scores(
+            vendor_result=vendor_result,
+            forensics_result=forensics_result,
+            cross_doc_result=cross_doc_result,
+        )
+
+        # Merge all indicators
+        all_indicators = []
+
+        if vendor_result:
+            for ind in vendor_result.indicators:
+                all_indicators.append({
+                    "source": f"vendor:{vendor_result.vendor}",
+                    "indicator_type": ind.indicator_type,
+                    "severity": ind.severity,
+                    "description": ind.description,
+                    "evidence": ind.evidence if isinstance(ind.evidence, dict) else {"detail": str(ind.evidence)},
+                })
+
+        if forensics_result:
+            for finding in forensics_result.findings:
+                all_indicators.append({
+                    "source": "forensics",
+                    "indicator_type": finding.category,
+                    "severity": finding.severity,
+                    "description": finding.description,
+                    "evidence": finding.evidence,
+                })
+
+        if cross_doc_result:
+            for ind in cross_doc_result.fraud_indicators:
+                all_indicators.append({
+                    "source": "cross_document",
+                    "indicator_type": ind.indicator_type,
+                    "severity": ind.severity,
+                    "description": ind.description,
+                    "evidence": {"detail": ind.evidence},
+                })
+
+        # Determine overall recommendation
+        if combined_score >= 70:
+            recommendation = "flag"
+        elif combined_score >= 40:
+            recommendation = "review"
+        else:
+            recommendation = "pass"
+
+        return {
+            "loan_id": loan_id,
+            "filename": filename,
+            "doc_type": doc_type,
+            "combined_risk_score": round(combined_score, 1),
+            "combined_risk_level": combined_level,
+            "recommendation": recommendation,
+            "component_scores": {
+                "vendor": {
+                    "score": vendor_result.risk_score if vendor_result else None,
+                    "level": vendor_result.risk_level if vendor_result else None,
+                    "vendor_name": vendor_result.vendor if vendor_result else None,
+                    "weight": 0.4,
+                    "duration_ms": vendor_result.analysis_duration_ms if vendor_result else None,
+                },
+                "forensics": {
+                    "score": forensics_result.risk_score if forensics_result else None,
+                    "level": forensics_result.risk_level if forensics_result else None,
+                    "weight": 0.3,
+                    "library": forensics_result.library_used if forensics_result else None,
+                },
+                "cross_document": {
+                    "score": cross_doc_result.risk_score if cross_doc_result else None,
+                    "level": cross_doc_result.risk_level if cross_doc_result else None,
+                    "documents_analyzed": cross_doc_result.documents_analyzed if cross_doc_result else 0,
+                    "weight": 0.3,
+                },
+            },
+            "indicators": all_indicators,
+            "indicator_count": len(all_indicators),
+            "forensics_metadata": (
+                forensics_result.metadata if forensics_result else None
+            ),
+            "forensics_fonts": (
+                forensics_result.fonts if forensics_result else None
+            ),
+        }
+
+    def _combine_analysis_scores(
+        self,
+        vendor_result=None,
+        forensics_result=None,
+        cross_doc_result=None,
+    ) -> Tuple[float, str]:
+        """
+        Combine scores from vendor, forensics, and cross-document analysis.
+
+        Weights:
+        - Vendor: 40%
+        - Forensics: 30%
+        - Cross-document: 30%
+
+        If a component is unavailable, its weight is redistributed
+        proportionally among the available components.
+        """
+        components: List[Tuple[float, float]] = []  # (score, weight)
+
+        if vendor_result is not None:
+            components.append((vendor_result.risk_score, 0.4))
+        if forensics_result is not None:
+            components.append((forensics_result.risk_score, 0.3))
+        if cross_doc_result is not None:
+            components.append((float(cross_doc_result.risk_score), 0.3))
+
+        if not components:
+            return 0.0, "LOW"
+
+        # Normalize weights to sum to 1.0
+        total_weight = sum(w for _, w in components)
+        if total_weight <= 0:
+            return 0.0, "LOW"
+
+        combined_score = sum(
+            score * (weight / total_weight)
+            for score, weight in components
+        )
+
+        combined_score = min(combined_score, 100.0)
+
+        if combined_score >= 70:
+            level = "CRITICAL"
+        elif combined_score >= 46:
+            level = "HIGH"
+        elif combined_score >= 21:
+            level = "MEDIUM"
+        else:
+            level = "LOW"
+
+        return combined_score, level
 
     # =========================================================================
     # PRIVATE HELPERS

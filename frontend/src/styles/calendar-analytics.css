@@ -1,0 +1,631 @@
+/* =============================================================================
+   Calendar Analytics Dashboard
+   CSS-only charts, heatmap grid, and responsive KPI cards
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   Layout & Container
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.cal-analytics__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.cal-analytics__title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.cal-analytics__period-selector {
+  display: flex;
+  gap: 4px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.cal-analytics__period-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cal-analytics__period-btn:hover {
+  color: #334155;
+  background: #e2e8f0;
+}
+
+.cal-analytics__period-btn--active {
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.cal-analytics__back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.cal-analytics__back-link:hover {
+  color: #2563eb;
+}
+
+/* -----------------------------------------------------------------------------
+   KPI Cards Grid
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics__kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.cal-analytics__kpi {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  transition: box-shadow 0.15s ease;
+}
+
+.cal-analytics__kpi:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.cal-analytics__kpi-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cal-analytics__kpi-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px;
+  line-height: 1.1;
+}
+
+.cal-analytics__kpi-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.cal-analytics__kpi-sub--positive {
+  color: #22c55e;
+}
+
+.cal-analytics__kpi-sub--negative {
+  color: #ef4444;
+}
+
+/* -----------------------------------------------------------------------------
+   Section Containers
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics__section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.cal-analytics__section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 20px;
+}
+
+.cal-analytics__grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+/* -----------------------------------------------------------------------------
+   CSS-Only Bar Chart
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics__bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.cal-analytics__bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cal-analytics__bar-row:last-child {
+  border-bottom: none;
+}
+
+.cal-analytics__bar-label {
+  flex: 0 0 120px;
+  font-size: 13px;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-analytics__bar-track {
+  flex: 1;
+  height: 24px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cal-analytics__bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+  min-width: 2px;
+  --bar-width: 0%;
+  width: var(--bar-width);
+  background: var(--bar-color, #3b82f6);
+}
+
+.cal-analytics__bar-value {
+  flex: 0 0 60px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  text-align: right;
+}
+
+/* Trend bar chart (vertical bars) */
+
+.cal-analytics__trend-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 200px;
+  padding: 0 4px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.cal-analytics__trend-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.cal-analytics__trend-bar {
+  width: 100%;
+  max-width: 40px;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --bar-height: 0%;
+  height: var(--bar-height);
+  background: var(--bar-color, #3b82f6);
+  position: relative;
+  min-height: 2px;
+}
+
+.cal-analytics__trend-bar:hover {
+  opacity: 0.85;
+}
+
+.cal-analytics__trend-bar:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.cal-analytics__trend-labels {
+  display: flex;
+  gap: 2px;
+  padding: 8px 4px 0;
+}
+
+.cal-analytics__trend-label {
+  flex: 1;
+  text-align: center;
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Chart legend */
+
+.cal-analytics__legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.cal-analytics__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.cal-analytics__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Heatmap Grid (7 days x 24 hours)
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics__heatmap {
+  overflow-x: auto;
+}
+
+.cal-analytics__heatmap-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(24, 1fr);
+  gap: 2px;
+  min-width: 700px;
+}
+
+.cal-analytics__heatmap-header {
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+  padding: 4px 0;
+  font-weight: 500;
+}
+
+.cal-analytics__heatmap-day-label {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+}
+
+.cal-analytics__heatmap-cell {
+  aspect-ratio: 1;
+  min-height: 20px;
+  border-radius: 3px;
+  transition: opacity 0.15s;
+  /* Intensity via CSS custom property */
+  --intensity: 0;
+  background: color-mix(in srgb, #3b82f6 calc(var(--intensity) * 100%), #f1f5f9);
+  cursor: default;
+  position: relative;
+}
+
+.cal-analytics__heatmap-cell:hover {
+  outline: 2px solid #3b82f6;
+  outline-offset: -1px;
+  z-index: 1;
+}
+
+.cal-analytics__heatmap-cell:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #fff;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  white-space: nowrap;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.cal-analytics__heatmap-scale {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.cal-analytics__heatmap-scale-block {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Horizontal Bar Chart (for type breakdown)
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics__hbar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cal-analytics__hbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cal-analytics__hbar-name {
+  flex: 0 0 160px;
+  font-size: 13px;
+  color: #334155;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cal-analytics__hbar-track {
+  flex: 1;
+  height: 28px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cal-analytics__hbar-fill {
+  height: 100%;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  transition: width 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --bar-width: 0%;
+  width: var(--bar-width);
+  background: var(--bar-color, #3b82f6);
+  min-width: fit-content;
+}
+
+.cal-analytics__hbar-stats {
+  flex: 0 0 100px;
+  font-size: 12px;
+  color: #64748b;
+  text-align: right;
+}
+
+/* -----------------------------------------------------------------------------
+   LO Breakdown Table
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics__lo-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cal-analytics__lo-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 8px 12px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.cal-analytics__lo-table th:not(:first-child) {
+  text-align: right;
+}
+
+.cal-analytics__lo-table td {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cal-analytics__lo-table td:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-analytics__lo-table tr:hover td {
+  background: #f8fafc;
+}
+
+.cal-analytics__lo-name {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+/* Utilization inline bar */
+.cal-analytics__util-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.cal-analytics__util-track {
+  flex: 1;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.cal-analytics__util-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  --bar-width: 0%;
+  width: var(--bar-width);
+  background: #3b82f6;
+}
+
+.cal-analytics__util-fill--high {
+  background: #22c55e;
+}
+
+.cal-analytics__util-fill--low {
+  background: #f59e0b;
+}
+
+.cal-analytics__util-fill--critical {
+  background: #ef4444;
+}
+
+/* -----------------------------------------------------------------------------
+   Loading & Empty States
+   ----------------------------------------------------------------------------- */
+
+.cal-analytics__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: #94a3b8;
+  gap: 12px;
+}
+
+.cal-analytics__spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: cal-analytics-spin 0.7s linear infinite;
+}
+
+@keyframes cal-analytics-spin {
+  to { transform: rotate(360deg); }
+}
+
+.cal-analytics__empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive: Tablet (2-col KPIs)
+   ----------------------------------------------------------------------------- */
+
+@media (max-width: 1024px) {
+  .cal-analytics__kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cal-analytics__grid-2col {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-analytics__hbar-name {
+    flex: 0 0 120px;
+  }
+
+  .cal-analytics__bar-label {
+    flex: 0 0 90px;
+    font-size: 12px;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive: Mobile (1-col KPIs)
+   ----------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .cal-analytics {
+    padding: 16px;
+  }
+
+  .cal-analytics__kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-analytics__kpi-value {
+    font-size: 26px;
+  }
+
+  .cal-analytics__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cal-analytics__hbar-name {
+    flex: 0 0 80px;
+    font-size: 11px;
+  }
+
+  .cal-analytics__hbar-stats {
+    flex: 0 0 60px;
+    font-size: 11px;
+  }
+
+  .cal-analytics__trend-chart {
+    height: 150px;
+  }
+
+  .cal-analytics__lo-table {
+    font-size: 12px;
+  }
+
+  .cal-analytics__lo-table th,
+  .cal-analytics__lo-table td {
+    padding: 6px 8px;
+  }
+}

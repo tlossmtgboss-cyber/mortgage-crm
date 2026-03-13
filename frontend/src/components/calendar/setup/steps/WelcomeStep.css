@@ -1,0 +1,712 @@
+/**
+ * Smart Calendar Setup - Step 1: Welcome & Timezone
+ * Follows Perennia brand palette (#218D8D primary) and CalendarSettings.css patterns.
+ */
+
+/* ============================================================================
+   Step container
+   ============================================================================ */
+
+.welcome-step {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* ============================================================================
+   Hero section
+   ============================================================================ */
+
+.welcome-hero {
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 50%, #10b981 100%);
+  border-radius: 16px;
+  padding: 36px 32px 28px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle decorative circle */
+.welcome-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+.welcome-hero__content {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+/* Avatar */
+.welcome-hero__avatar {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.welcome-hero__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.welcome-hero__initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+/* Text */
+.welcome-hero__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-hero__title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.welcome-hero__icon {
+  font-size: 26px;
+  opacity: 0.9;
+}
+
+.welcome-hero__greeting {
+  font-size: 15px;
+  margin: 0;
+  line-height: 1.55;
+  opacity: 0.92;
+}
+
+/* Time badge */
+.welcome-hero__time-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+/* ============================================================================
+   Features list
+   ============================================================================ */
+
+.welcome-features {
+  padding: 0;
+}
+
+.welcome-features__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 14px;
+}
+
+.welcome-features__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-features__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.welcome-features__icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #e6f5f5;
+  color: #218D8D;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Timezone section
+   ============================================================================ */
+
+.welcome-timezone {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+}
+
+.welcome-timezone__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 4px;
+}
+
+.welcome-timezone__subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 18px;
+}
+
+.welcome-timezone__row {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* Timezone selector dropdown */
+.welcome-timezone__selector {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.welcome-timezone__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  text-align: left;
+  font-family: inherit;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.welcome-timezone__trigger:hover {
+  border-color: #cbd5e1;
+}
+
+.welcome-timezone__trigger:focus-visible {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.15);
+}
+
+.welcome-timezone__trigger-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.welcome-timezone__trigger-content > i {
+  color: #218D8D;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.welcome-timezone__trigger-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.welcome-timezone__trigger-label {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.welcome-timezone__trigger-cities {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Dropdown panel */
+.welcome-timezone__dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  animation: tz-dropdown-in 0.15s ease-out;
+}
+
+@keyframes tz-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcome-timezone__group {
+  padding: 4px 0;
+}
+
+.welcome-timezone__group + .welcome-timezone__group {
+  border-top: 1px solid #f1f5f9;
+  margin-top: 2px;
+  padding-top: 6px;
+}
+
+.welcome-timezone__group-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 10px 4px;
+}
+
+.welcome-timezone__option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 13px;
+  color: #334155;
+  transition: background 0.1s;
+}
+
+.welcome-timezone__option:hover {
+  background: #f1f5f9;
+}
+
+.welcome-timezone__option.selected {
+  background: #e6f5f5;
+  color: #218D8D;
+  font-weight: 600;
+}
+
+.welcome-timezone__option-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-timezone__option-cities {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.welcome-timezone__option.selected .welcome-timezone__option-cities {
+  color: #5db5b5;
+}
+
+.welcome-timezone__option-check {
+  color: #218D8D;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* Clock preview card */
+.welcome-timezone__preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  padding: 16px 20px;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.welcome-timezone__clock {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+
+.welcome-timezone__abbr {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.welcome-timezone__auto-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e6f5f5;
+  color: #218D8D;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* ============================================================================
+   Schedule preset picker
+   ============================================================================ */
+
+.welcome-schedule {
+  padding: 0;
+}
+
+.welcome-schedule__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 4px;
+}
+
+.welcome-schedule__subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0 0 16px;
+}
+
+.welcome-schedule__grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.welcome-schedule__card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  background: #fff;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  position: relative;
+  outline: none;
+}
+
+.welcome-schedule__card:hover {
+  border-color: #cbd5e1;
+  background: #fafbfc;
+}
+
+.welcome-schedule__card:focus-visible {
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.15);
+}
+
+.welcome-schedule__card.selected {
+  border-color: #218D8D;
+  background: #f0fafa;
+  box-shadow: 0 0 0 1px #218D8D;
+}
+
+.welcome-schedule__card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.welcome-schedule__card.selected .welcome-schedule__card-icon {
+  background: #218D8D;
+  color: #fff;
+}
+
+.welcome-schedule__card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-schedule__card-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 2px;
+}
+
+.welcome-schedule__card-hours {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #218D8D;
+  margin-bottom: 2px;
+}
+
+.welcome-schedule__card-desc {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.welcome-schedule__card-check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: #218D8D;
+  font-size: 18px;
+  animation: check-pop 0.2s ease-out;
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+   CTA button
+   ============================================================================ */
+
+.welcome-cta {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+.welcome-cta__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 36px;
+  background: linear-gradient(135deg, #218D8D 0%, #1a7a7a 100%);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.15s, opacity 0.15s;
+  box-shadow: 0 4px 14px rgba(33, 141, 141, 0.3);
+  letter-spacing: 0.2px;
+}
+
+.welcome-cta__button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(33, 141, 141, 0.35);
+}
+
+.welcome-cta__button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.25);
+}
+
+.welcome-cta__button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.3), 0 4px 14px rgba(33, 141, 141, 0.3);
+}
+
+.welcome-cta__button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.welcome-cta__button i {
+  font-size: 14px;
+  transition: transform 0.15s;
+}
+
+.welcome-cta__button:hover:not(:disabled) i {
+  transform: translateX(3px);
+}
+
+/* Spinner */
+.welcome-cta__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: welcome-spin 0.6s linear infinite;
+}
+
+@keyframes welcome-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .welcome-step {
+    gap: 24px;
+  }
+
+  .welcome-hero {
+    padding: 28px 20px 22px;
+    border-radius: 12px;
+  }
+
+  .welcome-hero__content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .welcome-hero__title {
+    font-size: 20px;
+    justify-content: center;
+  }
+
+  .welcome-hero__greeting {
+    font-size: 14px;
+  }
+
+  .welcome-hero__time-badge {
+    display: flex;
+    justify-content: center;
+  }
+
+  .welcome-timezone {
+    padding: 18px;
+  }
+
+  .welcome-timezone__row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .welcome-timezone__preview {
+    min-width: unset;
+    flex-direction: row;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .welcome-timezone__clock {
+    font-size: 18px;
+  }
+
+  .welcome-timezone__abbr {
+    margin-top: 0;
+  }
+
+  .welcome-timezone__auto-badge {
+    margin-top: 0;
+  }
+
+  .welcome-schedule__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-schedule__card {
+    padding: 14px;
+  }
+
+  .welcome-cta__button {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 24px;
+  }
+}
+
+@media (max-width: 400px) {
+  .welcome-hero {
+    padding: 22px 16px 18px;
+  }
+
+  .welcome-hero__avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .welcome-hero__title {
+    font-size: 18px;
+  }
+
+  .welcome-hero__icon {
+    font-size: 22px;
+  }
+
+  .welcome-timezone__trigger {
+    padding: 10px 12px;
+  }
+
+  .welcome-timezone__dropdown {
+    max-height: 260px;
+  }
+}

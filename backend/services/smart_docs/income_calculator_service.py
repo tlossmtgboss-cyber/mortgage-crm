@@ -45,6 +45,8 @@ try:
 except ImportError:
     HAS_ANTHROPIC = False
 
+from services.smart_docs.ai_resilience import resilient_ai_call
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -1428,14 +1430,30 @@ class IncomeCalculatorService:
         """
         if HAS_ANTHROPIC and self._anthropic_key:
             try:
-                return self._extract_with_claude(document_text, doc_type)
+                result = self._extract_with_claude(document_text, doc_type)
+                if result is not None:
+                    logger.info(
+                        "Income AI extraction succeeded | doc_type=%s | "
+                        "fields_extracted=%d",
+                        doc_type,
+                        len([v for v in result.values() if v is not None]),
+                    )
+                    return result
+                # AI returned None (failed after retries) -- fall through to regex
+                logger.warning(
+                    "AI income extraction unavailable, falling back to regex | doc_type=%s",
+                    doc_type,
+                )
             except Exception as e:
                 logger.warning(f"AI extraction failed, falling back to regex: {e}")
 
         return self._extract_with_regex(document_text, doc_type)
 
-    def _extract_with_claude(self, document_text: str, doc_type: str) -> Dict:
-        """Call Claude to extract structured income data."""
+    def _extract_with_claude(self, document_text: str, doc_type: str) -> Optional[Dict]:
+        """Call Claude to extract structured income data.
+
+        Returns parsed dict on success, or None if AI call failed after retries.
+        """
         client = Anthropic(api_key=self._anthropic_key)
 
         prompt = f"""You are a mortgage document data extraction specialist.
@@ -1480,11 +1498,17 @@ Return a JSON object with these fields (use null if not found):
 For currency values, return numbers only (no $ or commas).
 Respond with ONLY the JSON object."""
 
-        response = client.messages.create(
+        response = resilient_ai_call(
+            client=client,
+            messages=[{"role": "user", "content": prompt}],
             model=self._model,
             max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
+            operation_name="income_extraction",
+            timeout=30.0,
         )
+
+        if response is None:
+            return None
 
         response_text = response.content[0].text.strip()
 

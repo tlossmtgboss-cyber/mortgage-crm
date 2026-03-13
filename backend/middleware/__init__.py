@@ -7,9 +7,13 @@ Provides:
 - Dynamic CORS: Database-driven CORS configuration
 - Tenant Context: Multi-tenant isolation
 - Impersonation Enforcement: Read-only mode for impersonation
-- Rate Limiting: Per-user/IP rate limiting
+- Rate Limiting: Per-user/IP rate limiting (Redis-based middleware + in-memory decorator)
+- Endpoint Rate Limiter: Decorator-based per-endpoint rate limiting (no Redis)
+- AI Cost Tracker: Per-org AI budget enforcement
 - Structured Logging: JSON logging for production
 - Idempotency: Prevent duplicate webhook operations via X-Idempotency-Key
+- PII Response Filter: Scans API responses for PII leaks, auto-masks portal responses
+- Request Logging: Per-request structured JSON logging with request_id propagation
 """
 
 from .ai_usage_middleware import (
@@ -32,6 +36,28 @@ from .pii_log_filter import PIIRedactionFilter, install_pii_filter
 
 from .idempotency import IdempotencyMiddleware, IdempotencyStore, CachedResponse
 
+from .rate_limiter import (
+    RateLimiter,
+    get_rate_limiter,
+    rate_limit,
+    UPLOAD_LIMIT,
+    AI_LIMIT,
+    READ_LIMIT,
+    WRITE_LIMIT,
+    AUTH_LIMIT,
+    ESIGN_TOKEN_LIMIT,
+)
+
+from .ai_cost_tracker import (
+    AIBudgetTracker,
+    get_ai_budget_tracker,
+    OPERATION_COSTS,
+)
+
+from .pii_response_filter import PIIResponseFilterMiddleware
+
+from .request_logging import RequestLoggingMiddleware
+
 __all__ = [
     # AI Usage
     "AIUsageTracker",
@@ -52,4 +78,22 @@ __all__ = [
     "IdempotencyMiddleware",
     "IdempotencyStore",
     "CachedResponse",
+    # Endpoint Rate Limiter
+    "RateLimiter",
+    "get_rate_limiter",
+    "rate_limit",
+    "UPLOAD_LIMIT",
+    "AI_LIMIT",
+    "READ_LIMIT",
+    "WRITE_LIMIT",
+    "AUTH_LIMIT",
+    "ESIGN_TOKEN_LIMIT",
+    # AI Cost Tracker
+    "AIBudgetTracker",
+    "get_ai_budget_tracker",
+    "OPERATION_COSTS",
+    # PII Response Filter
+    "PIIResponseFilterMiddleware",
+    # Request Logging
+    "RequestLoggingMiddleware",
 ]

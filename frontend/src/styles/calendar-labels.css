@@ -1,0 +1,487 @@
+/* ============================================================================
+   Calendar Labels - Color coding and label system
+   ============================================================================ */
+
+/* --------------------------------------------------------------------------
+   Color Swatch (shared between LabelManager, LabelPicker, and filter bar)
+   -------------------------------------------------------------------------- */
+
+.label-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.label-swatch--large {
+  width: 18px;
+  height: 18px;
+}
+
+.label-swatch--small {
+  width: 8px;
+  height: 8px;
+}
+
+
+/* --------------------------------------------------------------------------
+   Event card label indicator (border-left + dot)
+   -------------------------------------------------------------------------- */
+
+.appointment-item.has-labels {
+  border-left: 3px solid var(--label-color, #ccc);
+  padding-left: calc(var(--space-sm) - 3px);
+}
+
+.appointment-label-dots {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.appointment-label-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  color: #fff;
+}
+
+/* Day/week view event label stripe */
+.day-event.has-labels,
+.week-event.has-labels {
+  border-left: 3px solid var(--label-color, #ccc);
+}
+
+
+/* --------------------------------------------------------------------------
+   Label Filter Bar (in sidebar, below tabs)
+   -------------------------------------------------------------------------- */
+
+.label-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-bg-surface, #fff);
+}
+
+.label-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-bg-surface, #fff);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #64748b);
+  cursor: pointer;
+  transition: all 150ms ease;
+  white-space: nowrap;
+}
+
+.label-filter-toggle:hover {
+  background: var(--color-bg-secondary, #f8fafc);
+  border-color: var(--color-border-hover, #cbd5e1);
+}
+
+.label-filter-toggle.active {
+  background: var(--label-bg, #eef2ff);
+  border-color: var(--label-color, #4A90D9);
+  color: var(--label-color, #4A90D9);
+}
+
+.label-filter-toggle .label-swatch {
+  opacity: 0.4;
+  transition: opacity 150ms ease;
+}
+
+.label-filter-toggle.active .label-swatch {
+  opacity: 1;
+}
+
+
+/* --------------------------------------------------------------------------
+   LabelManager - Admin label list in settings
+   -------------------------------------------------------------------------- */
+
+.label-manager {
+  max-width: 560px;
+}
+
+.label-manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.label-manager-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1e293b);
+  margin: 0;
+}
+
+.label-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label-manager-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--color-bg-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  transition: background 150ms ease, box-shadow 150ms ease;
+  cursor: grab;
+}
+
+.label-manager-item:active {
+  cursor: grabbing;
+}
+
+.label-manager-item:hover {
+  background: var(--color-bg-secondary, #f8fafc);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.label-manager-item.dragging {
+  opacity: 0.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.label-manager-drag-handle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0.4;
+  cursor: grab;
+  padding: 4px;
+}
+
+.label-manager-drag-handle span {
+  display: block;
+  width: 12px;
+  height: 2px;
+  background: var(--color-text-secondary, #64748b);
+  border-radius: 1px;
+}
+
+.label-manager-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #1e293b);
+}
+
+.label-manager-icon {
+  font-size: 14px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.label-manager-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.label-manager-item:hover .label-manager-actions {
+  opacity: 1;
+}
+
+.label-manager-actions button {
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.label-manager-actions button:hover {
+  background: var(--color-bg-secondary, #f1f5f9);
+  color: var(--color-text-primary, #1e293b);
+}
+
+.label-manager-actions button.delete:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Label creation/edit form */
+.label-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  background: var(--color-bg-secondary, #f8fafc);
+  margin-top: 12px;
+}
+
+.label-form-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.label-form-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label-form-field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.label-form-field input {
+  padding: 6px 10px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--color-bg-surface, #fff);
+}
+
+.label-form-field input:focus {
+  outline: none;
+  border-color: var(--color-primary, #4A90D9);
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.2);
+}
+
+/* Color picker */
+.label-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label-color-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.label-color-preset {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease;
+  padding: 0;
+}
+
+.label-color-preset:hover {
+  transform: scale(1.15);
+}
+
+.label-color-preset.selected {
+  border-color: var(--color-text-primary, #1e293b);
+  box-shadow: 0 0 0 2px var(--color-bg-surface, #fff);
+}
+
+.label-color-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.label-color-custom input[type="text"] {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.label-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.label-form-actions button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-primary, #1e293b);
+}
+
+.label-form-actions button.btn-primary {
+  background: var(--color-primary, #4A90D9);
+  color: #fff;
+  border-color: var(--color-primary, #4A90D9);
+}
+
+.label-form-actions button.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.label-manager-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 13px;
+}
+
+
+/* --------------------------------------------------------------------------
+   LabelPicker - Inline dropdown/popover for assigning labels
+   -------------------------------------------------------------------------- */
+
+.label-picker-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.label-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px dashed var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.label-picker-trigger:hover {
+  background: var(--color-bg-secondary, #f8fafc);
+  border-color: var(--color-border-hover, #cbd5e1);
+  color: var(--color-text-primary, #1e293b);
+}
+
+.label-picker-trigger .selected-labels {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.label-picker-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 220px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--color-bg-surface, #fff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+}
+
+.label-picker-popover-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary, #64748b);
+  padding: 4px 8px 6px;
+}
+
+.label-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 100ms ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  color: var(--color-text-primary, #1e293b);
+}
+
+.label-picker-option:hover {
+  background: var(--color-bg-secondary, #f8fafc);
+}
+
+.label-picker-option.selected {
+  background: var(--color-bg-secondary, #f1f5f9);
+}
+
+.label-picker-checkbox {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--color-border, #cbd5e1);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 150ms ease;
+}
+
+.label-picker-option.selected .label-picker-checkbox {
+  background: var(--label-color, #4A90D9);
+  border-color: var(--label-color, #4A90D9);
+}
+
+.label-picker-checkbox svg {
+  width: 10px;
+  height: 10px;
+  stroke: #fff;
+  stroke-width: 2.5;
+  fill: none;
+  opacity: 0;
+}
+
+.label-picker-option.selected .label-picker-checkbox svg {
+  opacity: 1;
+}
+
+.label-picker-name {
+  flex: 1;
+}
+
+.label-picker-no-labels {
+  padding: 12px 8px;
+  text-align: center;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 12px;
+}
+
+.label-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}

@@ -72,6 +72,7 @@ const RateMonitor = lazyRetry(() => import('./pages/RateMonitor'));
 const Tasks = lazyRetry(() => import('./pages/Tasks'));
 const Calendar = lazyRetry(() => import('./pages/Calendar'));
 const CalendarSettings = lazyRetry(() => import('./pages/CalendarSettings'));
+const CalendarSetupWizard = lazyRetry(() => import('./components/calendar/setup/CalendarSetupWizard'));
 const TeamCalendar = lazyRetry(() => import('./pages/TeamCalendar'));
 const Scorecard = lazyRetry(() => import('./pages/Scorecard'));
 const Assistant = lazyRetry(() => import('./pages/Assistant'));
@@ -160,6 +161,7 @@ const SmartDocsDashboard = lazyRetry(() => import('./pages/SmartDocsDashboard'))
 const AIDailyBlog = lazyRetry(() => import('./pages/AIDailyBlog'));
 const AvatarStudio = lazyRetry(() => import('./pages/AvatarStudio'));
 const PublicBooking = lazyRetry(() => import('./pages/PublicBooking'));
+const BookingConfirmationPage = lazyRetry(() => import('./pages/BookingConfirmationPage'));
 const BorrowerApplication = lazyRetry(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazyRetry(() => import('./pages/AdaptiveURLA'));
 const PurchaseApplication = lazyRetry(() => import('./pages/PurchaseApplication'));
@@ -563,6 +565,9 @@ function App() {
 
           {/* Public Booking Page */}
           <Route path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />
+
+          {/* Public Booking Confirmation (standalone, token-based) */}
+          <Route path="/booking/confirmation/:appointmentId" element={<LazyPage><BookingConfirmationPage /></LazyPage>} />
 
           {/* Portal Components Test Page */}
           <Route path="/portal-test" element={<LazyPage><PortalTest /></LazyPage>} />
@@ -1487,6 +1492,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><CalendarSettings /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/calendar/setup"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><CalendarSetupWizard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

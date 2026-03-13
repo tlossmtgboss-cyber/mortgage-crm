@@ -1,15 +1,25 @@
 """
 Survey Service
 Business logic for survey delivery, analytics, and sentiment analysis.
+
+Contains:
+  - SurveyService:            Legacy loan-event-based survey system
+  - SurveyTriggerService:     Triggers surveys from loan events
+  - AppointmentSurveyService: Post-appointment feedback surveys (token-based)
 """
 
 import logging
-from datetime import datetime, timedelta
+import os
+import secrets as _secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_
+from sqlalchemy import func, and_, case
 
 logger = logging.getLogger(__name__)
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
+SURVEY_EXPIRY_DAYS = 14  # Post-appointment surveys expire after 14 days
 
 
 class SurveyService:
@@ -529,3 +539,545 @@ class SurveyTriggerService:
 
         logger.info(f"Survey triggered for loan {loan_id}: response ID {response.id}")
         return response.id
+
+
+# ============================================================================
+# POST-APPOINTMENT SURVEY SERVICE
+# ============================================================================
+
+
+class AppointmentSurveyService:
+    """
+    Service for post-appointment feedback surveys.
+
+    Uses token-based access so borrowers can respond without authenticating.
+
+    Usage:
+        from services.survey_service import AppointmentSurveyService
+
+        service = AppointmentSurveyService(db_session)
+        result = service.create_and_send_survey(appointment_id, org_id)
+        scores = service.get_aggregate_scores(org_id, lo_user_id=42)
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    # ------------------------------------------------------------------
+    # Lazy model accessors
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _get_survey_model():
+        from database.models.appointment_survey import AppointmentSurvey
+        return AppointmentSurvey
+
+    @staticmethod
+    def _get_appointment_model():
+        from smart_scheduler_models import create_smart_scheduler_models
+        from db import Base
+        models = create_smart_scheduler_models(Base)
+        return models["Appointment"]
+
+    # ------------------------------------------------------------------
+    # Token generation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def generate_survey_token() -> str:
+        """
+        Create a cryptographically secure, URL-safe token for survey access.
+        48 bytes = 64 characters in base64url, providing ~256 bits of entropy.
+        """
+        return _secrets.token_urlsafe(48)
+
+    # ------------------------------------------------------------------
+    # Create and send survey
+    # ------------------------------------------------------------------
+
+    def create_and_send_survey(
+        self,
+        appointment_id: int,
+        organization_id: int,
+        *,
+        lo_user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a survey record for a completed appointment and send
+        the invitation email to the borrower.
+
+        Args:
+            appointment_id: The completed appointment to survey
+            organization_id: Organization context for tenant isolation
+            lo_user_id: Override LO user ID (defaults to appointment.assigned_user_id)
+
+        Returns:
+            Dict with survey_id, token, sent status
+        """
+        AppointmentSurvey = self._get_survey_model()
+        Appointment = self._get_appointment_model()
+
+        # Load appointment and validate
+        appointment = (
+            self.db.query(Appointment)
+            .filter(
+                Appointment.id == appointment_id,
+                Appointment.organization_id == organization_id,
+            )
+            .first()
+        )
+        if not appointment:
+            return {"success": False, "error": "Appointment not found"}
+
+        if not appointment.attendee_email:
+            return {"success": False, "error": "No attendee email on this appointment"}
+
+        # Prevent duplicate surveys for same appointment
+        existing = (
+            self.db.query(AppointmentSurvey)
+            .filter(
+                AppointmentSurvey.appointment_id == appointment_id,
+                AppointmentSurvey.organization_id == organization_id,
+            )
+            .first()
+        )
+        if existing:
+            return {
+                "success": False,
+                "error": "Survey already sent for this appointment",
+                "survey_id": existing.id,
+            }
+
+        # Create survey
+        token = self.generate_survey_token()
+        now = datetime.now(timezone.utc)
+
+        survey = AppointmentSurvey(
+            organization_id=organization_id,
+            appointment_id=appointment_id,
+            lo_user_id=lo_user_id or appointment.assigned_user_id,
+            borrower_email=appointment.attendee_email,
+            borrower_name=appointment.attendee_name,
+            token=token,
+            sent_at=now,
+            expires_at=now + timedelta(days=SURVEY_EXPIRY_DAYS),
+        )
+        self.db.add(survey)
+        self.db.flush()
+
+        # Send email
+        survey_url = f"{FRONTEND_URL}/survey/{token}"
+        email_result = self._send_survey_email(
+            to_email=appointment.attendee_email,
+            borrower_name=appointment.attendee_name or "there",
+            lo_name=self._resolve_lo_name(survey.lo_user_id),
+            survey_url=survey_url,
+        )
+
+        return {
+            "success": True,
+            "survey_id": survey.id,
+            "token": token,
+            "email_sent": email_result.get("success", False),
+            "survey_url": survey_url,
+            "expires_at": survey.expires_at.isoformat(),
+        }
+
+    # ------------------------------------------------------------------
+    # Retrieve survey for response
+    # ------------------------------------------------------------------
+
+    def get_survey_by_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Look up a survey by its public token. Used by the public response
+        endpoint to render the survey form.
+
+        Returns None if not found; dict with state if found.
+        """
+        AppointmentSurvey = self._get_survey_model()
+
+        survey = (
+            self.db.query(AppointmentSurvey)
+            .filter(AppointmentSurvey.token == token)
+            .first()
+        )
+
+        if not survey:
+            return None
+
+        now = datetime.now(timezone.utc)
+
+        # Check expiry
+        if survey.expires_at and survey.expires_at < now:
+            return {"expired": True, "completed": False}
+
+        # Check already completed
+        if survey.completed_at is not None:
+            return {"expired": False, "completed": True}
+
+        return {
+            "expired": False,
+            "completed": False,
+            "survey_id": survey.id,
+            "borrower_name": survey.borrower_name,
+            "lo_name": self._resolve_lo_name(survey.lo_user_id),
+        }
+
+    # ------------------------------------------------------------------
+    # Submit response
+    # ------------------------------------------------------------------
+
+    def submit_response(
+        self,
+        token: str,
+        *,
+        overall_rating: int,
+        communication_rating: int,
+        knowledge_rating: int,
+        feedback_text: Optional[str] = None,
+        would_recommend: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Record a borrower's survey response.
+
+        Validates:
+          - Token exists and is valid
+          - Survey is not expired
+          - Survey has not already been completed
+          - Ratings are in range 1-5
+        """
+        AppointmentSurvey = self._get_survey_model()
+
+        survey = (
+            self.db.query(AppointmentSurvey)
+            .filter(AppointmentSurvey.token == token)
+            .first()
+        )
+        if not survey:
+            return {"success": False, "error": "Survey not found"}
+
+        now = datetime.now(timezone.utc)
+
+        if survey.expires_at and survey.expires_at < now:
+            return {"success": False, "error": "This survey has expired"}
+
+        if survey.completed_at is not None:
+            return {"success": False, "error": "This survey has already been submitted"}
+
+        # Validate ratings
+        for name, value in [
+            ("overall_rating", overall_rating),
+            ("communication_rating", communication_rating),
+            ("knowledge_rating", knowledge_rating),
+        ]:
+            if not isinstance(value, int) or value < 1 or value > 5:
+                return {"success": False, "error": f"{name} must be an integer between 1 and 5"}
+
+        # Record response
+        survey.overall_rating = overall_rating
+        survey.communication_rating = communication_rating
+        survey.knowledge_rating = knowledge_rating
+        survey.feedback_text = (feedback_text or "").strip()[:5000] or None
+        survey.would_recommend = would_recommend
+        survey.completed_at = now
+
+        self.db.flush()
+
+        return {
+            "success": True,
+            "survey_id": survey.id,
+            "message": "Thank you for your feedback!",
+        }
+
+    # ------------------------------------------------------------------
+    # NPS calculation
+    # ------------------------------------------------------------------
+
+    def calculate_appointment_nps(
+        self,
+        organization_id: int,
+        *,
+        lo_user_id: Optional[int] = None,
+        days: int = 90,
+    ) -> Dict[str, Any]:
+        """
+        Calculate Net Promoter Score from the would_recommend field.
+
+        NPS = %Promoters - %Detractors  (range -100 to +100)
+        """
+        AppointmentSurvey = self._get_survey_model()
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        filters = [
+            AppointmentSurvey.organization_id == organization_id,
+            AppointmentSurvey.completed_at.isnot(None),
+            AppointmentSurvey.would_recommend.isnot(None),
+            AppointmentSurvey.completed_at >= cutoff,
+        ]
+        if lo_user_id:
+            filters.append(AppointmentSurvey.lo_user_id == lo_user_id)
+
+        result = self.db.query(
+            func.count(AppointmentSurvey.id).label("total"),
+            func.count(case(
+                (AppointmentSurvey.would_recommend == True, 1),
+            )).label("promoters"),
+            func.count(case(
+                (AppointmentSurvey.would_recommend == False, 1),
+            )).label("detractors"),
+        ).filter(and_(*filters)).first()
+
+        total = result.total or 0
+        promoters = result.promoters or 0
+        detractors = result.detractors or 0
+
+        if total > 0:
+            nps = round(((promoters - detractors) / total) * 100, 1)
+        else:
+            nps = None
+
+        return {
+            "nps": nps,
+            "total_responses": total,
+            "promoters": promoters,
+            "detractors": detractors,
+            "passives": total - promoters - detractors,
+            "period_days": days,
+        }
+
+    # ------------------------------------------------------------------
+    # Aggregate scores
+    # ------------------------------------------------------------------
+
+    def get_aggregate_scores(
+        self,
+        organization_id: int,
+        *,
+        lo_user_id: Optional[int] = None,
+        days: int = 90,
+    ) -> Dict[str, Any]:
+        """
+        Calculate average ratings, response rate, NPS, and recent feedback.
+        """
+        AppointmentSurvey = self._get_survey_model()
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        filters = [
+            AppointmentSurvey.organization_id == organization_id,
+            AppointmentSurvey.sent_at >= cutoff,
+        ]
+        if lo_user_id:
+            filters.append(AppointmentSurvey.lo_user_id == lo_user_id)
+
+        # Totals for response rate
+        total_sent = (
+            self.db.query(func.count(AppointmentSurvey.id))
+            .filter(and_(*filters))
+            .scalar()
+        ) or 0
+
+        total_completed = (
+            self.db.query(func.count(AppointmentSurvey.id))
+            .filter(and_(*filters, AppointmentSurvey.completed_at.isnot(None)))
+            .scalar()
+        ) or 0
+
+        response_rate = round((total_completed / total_sent) * 100, 1) if total_sent > 0 else 0
+
+        # Average ratings (only completed surveys)
+        completed_filters = filters + [AppointmentSurvey.completed_at.isnot(None)]
+
+        averages = self.db.query(
+            func.avg(AppointmentSurvey.overall_rating).label("avg_overall"),
+            func.avg(AppointmentSurvey.communication_rating).label("avg_communication"),
+            func.avg(AppointmentSurvey.knowledge_rating).label("avg_knowledge"),
+        ).filter(and_(*completed_filters)).first()
+
+        avg_overall = round(float(averages.avg_overall), 2) if averages.avg_overall else None
+        avg_communication = round(float(averages.avg_communication), 2) if averages.avg_communication else None
+        avg_knowledge = round(float(averages.avg_knowledge), 2) if averages.avg_knowledge else None
+
+        # NPS
+        nps_data = self.calculate_appointment_nps(
+            organization_id, lo_user_id=lo_user_id, days=days
+        )
+
+        # Recent feedback (last 10 with text)
+        recent = (
+            self.db.query(AppointmentSurvey)
+            .filter(
+                and_(*completed_filters),
+                AppointmentSurvey.feedback_text.isnot(None),
+                AppointmentSurvey.feedback_text != "",
+            )
+            .order_by(AppointmentSurvey.completed_at.desc())
+            .limit(10)
+            .all()
+        )
+
+        recent_feedback = [
+            {
+                "survey_id": s.id,
+                "borrower_name": s.borrower_name,
+                "overall_rating": s.overall_rating,
+                "feedback_text": s.feedback_text,
+                "would_recommend": s.would_recommend,
+                "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+            }
+            for s in recent
+        ]
+
+        return {
+            "period_days": days,
+            "total_sent": total_sent,
+            "total_completed": total_completed,
+            "response_rate": response_rate,
+            "averages": {
+                "overall": avg_overall,
+                "communication": avg_communication,
+                "knowledge": avg_knowledge,
+            },
+            "nps": nps_data,
+            "recent_feedback": recent_feedback,
+        }
+
+    # ------------------------------------------------------------------
+    # Per-LO breakdown
+    # ------------------------------------------------------------------
+
+    def get_lo_breakdown(
+        self,
+        organization_id: int,
+        *,
+        days: int = 90,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get survey score breakdown per loan officer.
+        Returns list sorted by average overall rating descending.
+        """
+        AppointmentSurvey = self._get_survey_model()
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        rows = (
+            self.db.query(
+                AppointmentSurvey.lo_user_id,
+                func.count(AppointmentSurvey.id).label("total"),
+                func.avg(AppointmentSurvey.overall_rating).label("avg_overall"),
+                func.avg(AppointmentSurvey.communication_rating).label("avg_communication"),
+                func.avg(AppointmentSurvey.knowledge_rating).label("avg_knowledge"),
+                func.count(case(
+                    (AppointmentSurvey.would_recommend == True, 1),
+                )).label("promoters"),
+                func.count(case(
+                    (AppointmentSurvey.would_recommend == False, 1),
+                )).label("detractors"),
+            )
+            .filter(
+                AppointmentSurvey.organization_id == organization_id,
+                AppointmentSurvey.completed_at.isnot(None),
+                AppointmentSurvey.completed_at >= cutoff,
+            )
+            .group_by(AppointmentSurvey.lo_user_id)
+            .all()
+        )
+
+        breakdown = []
+        for row in rows:
+            total = row.total or 0
+            promoters = row.promoters or 0
+            detractors = row.detractors or 0
+            nps = round(((promoters - detractors) / total) * 100, 1) if total > 0 else None
+
+            lo_name = self._resolve_lo_name(row.lo_user_id)
+
+            breakdown.append({
+                "lo_user_id": row.lo_user_id,
+                "lo_name": lo_name,
+                "total_responses": total,
+                "avg_overall": round(float(row.avg_overall), 2) if row.avg_overall else None,
+                "avg_communication": round(float(row.avg_communication), 2) if row.avg_communication else None,
+                "avg_knowledge": round(float(row.avg_knowledge), 2) if row.avg_knowledge else None,
+                "nps": nps,
+            })
+
+        # Sort by average overall rating descending
+        breakdown.sort(key=lambda x: x["avg_overall"] or 0, reverse=True)
+        return breakdown
+
+    # ------------------------------------------------------------------
+    # Email sending
+    # ------------------------------------------------------------------
+
+    def _send_survey_email(
+        self,
+        to_email: str,
+        borrower_name: str,
+        lo_name: str,
+        survey_url: str,
+    ) -> Dict[str, Any]:
+        """Send the post-appointment survey invitation email."""
+        if not to_email:
+            return {"success": False, "error": "No recipient email"}
+
+        subject = "How was your appointment? We'd love your feedback"
+
+        plain_body = (
+            f"Hi {borrower_name},\n\n"
+            f"Thank you for meeting with {lo_name}. We'd love to hear about your experience.\n\n"
+            f"Please take a moment to share your feedback:\n"
+            f"{survey_url}\n\n"
+            f"Your response helps us improve our service.\n\n"
+            f"Thank you!"
+        )
+
+        html_body = (
+            f'<div style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', '
+            f'Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px;">'
+            f'<h2 style="color: #1e293b; margin-bottom: 16px;">How was your appointment?</h2>'
+            f'<p style="color: #475569; font-size: 15px; line-height: 1.6;">'
+            f'Hi {borrower_name},</p>'
+            f'<p style="color: #475569; font-size: 15px; line-height: 1.6;">'
+            f'Thank you for meeting with {lo_name}. We\'d love to hear about your experience.</p>'
+            f'<div style="text-align: center; margin: 32px 0;">'
+            f'<a href="{survey_url}" style="display: inline-block; padding: 14px 32px; '
+            f'background: #3b82f6; color: #fff; text-decoration: none; border-radius: 8px; '
+            f'font-weight: 600; font-size: 15px;">Share Your Feedback</a>'
+            f'</div>'
+            f'<p style="color: #94a3b8; font-size: 13px;">This survey takes less than a minute '
+            f'and helps us improve our service.</p>'
+            f'</div>'
+        )
+
+        try:
+            from services.notification_service import notification_service
+
+            result = notification_service.send_email(
+                to_email=to_email,
+                subject=subject,
+                html_content=html_body,
+                plain_content=plain_body,
+            )
+            return result
+        except Exception as e:
+            logger.exception(f"Failed to send survey email to {to_email}")
+            return {"success": False, "error": str(e)}
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_lo_name(self, user_id: Optional[int]) -> str:
+        """Resolve LO name from user_id."""
+        if not user_id:
+            return "your loan officer"
+        try:
+            from database.models.core import User
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if user:
+                return f"{user.first_name or ''} {user.last_name or ''}".strip() or "your loan officer"
+        except Exception as e:
+            logger.debug(f"Could not resolve LO name for user {user_id}: {e}")
+        return "your loan officer"

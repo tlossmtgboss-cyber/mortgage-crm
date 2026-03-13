@@ -1,0 +1,766 @@
+/**
+ * BookingPageStep.css
+ * Side-by-side layout: settings (left) + live preview (right).
+ * Stacks vertically on mobile with preview above settings.
+ */
+
+/* ==========================================================================
+   Layout: Two-column split
+   ========================================================================== */
+
+.bps-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+/* Settings panel (left) */
+.bps-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  order: 1;
+}
+
+/* Preview panel (right) */
+.bps-preview-panel {
+  order: 2;
+  position: sticky;
+  top: 24px;
+}
+
+/* ==========================================================================
+   Section Groups
+   ========================================================================== */
+
+.bps-section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.bps-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bps-section-title i {
+  color: #218D8D;
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Form Fields
+   ========================================================================== */
+
+.bps-field {
+  margin-bottom: 14px;
+}
+
+.bps-field:last-child {
+  margin-bottom: 0;
+}
+
+.bps-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 5px;
+}
+
+.bps-field input[type="text"],
+.bps-field input[type="url"],
+.bps-field textarea {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.bps-field input[type="text"]:focus,
+.bps-field input[type="url"]:focus,
+.bps-field textarea:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.bps-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.bps-field .bps-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+/* Row layout for name + title */
+.bps-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ==========================================================================
+   Color Picker
+   ========================================================================== */
+
+.bps-color-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bps-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  padding: 0;
+  position: relative;
+}
+
+.bps-color-swatch:hover {
+  transform: scale(1.12);
+}
+
+.bps-color-swatch.selected {
+  border-color: #1e293b;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1e293b;
+}
+
+/* Checkmark inside selected swatch */
+.bps-color-swatch.selected::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: translate(-50%, -60%) rotate(-45deg);
+}
+
+/* Dark colors get white check, light colors get dark check */
+.bps-color-swatch.selected.light-color::after {
+  border-color: #1e293b;
+}
+
+.bps-color-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bps-color-custom input[type="color"] {
+  width: 32px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+}
+
+.bps-color-custom input[type="text"] {
+  width: 90px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #475569;
+}
+
+.bps-color-custom input[type="text"]:focus {
+  outline: none;
+  border-color: #218D8D;
+}
+
+/* ==========================================================================
+   Toggle / Checkbox
+   ========================================================================== */
+
+.bps-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.bps-toggle-label {
+  font-size: 13px;
+  color: #475569;
+}
+
+.bps-toggle {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.bps-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.bps-toggle-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #cbd5e1;
+  border-radius: 22px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.bps-toggle-track::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.bps-toggle input:checked + .bps-toggle-track {
+  background: #218D8D;
+}
+
+.bps-toggle input:checked + .bps-toggle-track::after {
+  transform: translateX(18px);
+}
+
+.bps-toggle input:focus-visible + .bps-toggle-track {
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.25);
+}
+
+/* ==========================================================================
+   Photo Upload
+   ========================================================================== */
+
+.bps-photo-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bps-photo-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid #e2e8f0;
+}
+
+.bps-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bps-photo-preview .bps-photo-placeholder {
+  font-size: 24px;
+  color: #94a3b8;
+}
+
+.bps-photo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bps-photo-actions input[type="url"] {
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  width: 220px;
+  color: #1e293b;
+}
+
+.bps-photo-actions input[type="url"]:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.bps-photo-actions .bps-hint {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* ==========================================================================
+   Booking Link
+   ========================================================================== */
+
+.bps-link-display {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bps-link-display i {
+  color: #218D8D;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.bps-link-url {
+  flex: 1;
+  font-size: 13px;
+  color: #475569;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  word-break: break-all;
+}
+
+.bps-link-url strong {
+  color: #1e293b;
+}
+
+.bps-link-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.bps-link-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s;
+}
+
+.bps-link-actions button:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.bps-link-actions button.copied {
+  background: #dcfce7;
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+
+/* Slug Edit */
+.bps-slug-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bps-slug-edit input {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #1e293b;
+}
+
+.bps-slug-edit input:focus {
+  outline: none;
+  border-color: #218D8D;
+}
+
+.bps-slug-edit input.invalid {
+  border-color: #ef4444;
+}
+
+.bps-slug-edit button {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+
+.bps-slug-edit .bps-btn-save {
+  background: #218D8D;
+  color: #fff;
+}
+
+.bps-slug-edit .bps-btn-save:hover {
+  background: #1a7070;
+}
+
+.bps-slug-edit .bps-btn-cancel {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.bps-slug-validation {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+/* QR Code Placeholder */
+.bps-qr-placeholder {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.bps-qr-grid {
+  width: 80px;
+  height: 80px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  gap: 1px;
+  background: #fff;
+  border: 2px solid #1e293b;
+  padding: 3px;
+}
+
+.bps-qr-cell {
+  background: #1e293b;
+  border-radius: 1px;
+}
+
+.bps-qr-cell.white {
+  background: #fff;
+}
+
+.bps-qr-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* ==========================================================================
+   Preview Panel — Mockup Frame
+   ========================================================================== */
+
+.bps-preview-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.bps-mockup-frame {
+  background: #f7f7f7;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+/* Browser chrome bar */
+.bps-mockup-chrome {
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bps-chrome-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.bps-chrome-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.bps-chrome-dot.red { background: #ef4444; }
+.bps-chrome-dot.yellow { background: #f59e0b; }
+.bps-chrome-dot.green { background: #22c55e; }
+
+.bps-chrome-url {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #64748b;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Booking page mockup body */
+.bps-mockup-body {
+  padding: 24px 20px 28px;
+  text-align: center;
+  min-height: 340px;
+  transition: background-color 0.3s;
+}
+
+/* Branding header area within mockup */
+.bps-mock-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.bps-mock-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin: 0 auto 10px;
+  display: block;
+}
+
+.bps-mock-photo-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  margin: 0 auto 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 22px;
+}
+
+.bps-mock-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 2px;
+}
+
+.bps-mock-title-text {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 6px;
+}
+
+.bps-mock-tagline {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 6px 0 0;
+  transition: color 0.2s;
+}
+
+.bps-mock-welcome {
+  font-size: 12px;
+  color: #64748b;
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+/* Appointment type pills in preview */
+.bps-mock-types {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.bps-mock-type-btn {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1.5px solid;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: default;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.bps-mock-type-btn .bps-mock-duration {
+  font-size: 11px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+/* Mock date picker row */
+.bps-mock-dates {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.bps-mock-date {
+  width: 36px;
+  padding: 8px 0;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+  font-size: 10px;
+  color: #64748b;
+  cursor: default;
+}
+
+.bps-mock-date.active {
+  border-width: 2px;
+  font-weight: 600;
+}
+
+.bps-mock-date .day-num {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-top: 2px;
+}
+
+/* Powered by footer */
+.bps-mock-footer {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e5e5;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.bps-mock-footer strong {
+  color: #64748b;
+}
+
+/* ==========================================================================
+   Preview Full-Page Button
+   ========================================================================== */
+
+.bps-preview-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #218D8D;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.bps-preview-btn:hover {
+  background: #f0fdfa;
+  border-color: #218D8D;
+}
+
+.bps-preview-btn i {
+  font-size: 12px;
+}
+
+/* ==========================================================================
+   Responsive: Mobile — stack vertically, preview on top
+   ========================================================================== */
+
+@media (max-width: 860px) {
+  .bps-container {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* Preview above settings on mobile */
+  .bps-preview-panel {
+    order: 0;
+    position: static;
+  }
+
+  .bps-settings {
+    order: 1;
+  }
+
+  .bps-mockup-body {
+    min-height: 260px;
+    padding: 20px 16px 24px;
+  }
+
+  .bps-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bps-photo-area {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bps-photo-actions input[type="url"] {
+    width: 100%;
+  }
+
+  .bps-link-display {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bps-link-actions {
+    flex-wrap: wrap;
+  }
+}

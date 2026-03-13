@@ -17,6 +17,17 @@ Modules:
   - sitemap:         XML sitemap and robots.txt for search engine discovery (public)
   - waitlist:        Waiting room / queue management (authenticated + public)
   - recurring_availability: Recurring weekly patterns, date exceptions, org templates
+  - templates:             Appointment template CRUD (pre-configured appointment settings)
+  - calendar_feed:  iCalendar (.ics) feed subscription (webcal://)
+  - surveys:       Post-appointment surveys (send, respond, aggregate results)
+  - labels:         Calendar color labels CRUD, assign/unassign to appointments
+  - reschedule:     Appointment rescheduling (LO + borrower self-service)
+  - notifications:  Calendar notification feed (bookings, cancellations, reminders, reschedules)
+  - locations:      Appointment location CRUD (offices, virtual links, phone numbers)
+  - conflicts:      Conflict detection, listing, and resolution
+  - ab_testing:     A/B testing for public booking page optimization
+  - cancellation_policy: Cancellation policy CRUD, enforcement, and analytics
+  - analytics:      Calendar analytics dashboard (overview, trends, by-type, by-LO)
 
 Superseded modules (kept for backward compat, not included in scheduler_router):
   - appointments_crud: Original combined module (superseded by appointments + booking_links + ai_scheduling)
@@ -39,6 +50,17 @@ from .sitemap import router as sitemap_router
 from .reminders import router as reminders_router
 from .waitlist import router as waitlist_router
 from .recurring_availability import router as recurring_availability_router
+from .templates import router as templates_router
+from .calendar_feed import router as calendar_feed_router
+from .surveys import router as surveys_router
+from .labels import router as labels_router
+from .reschedule import router as reschedule_router
+from .notifications import router as notifications_router
+from .locations import router as locations_router
+from .conflicts import router as conflicts_router
+from .ab_testing import router as ab_testing_router
+from .cancellation_policy import router as cancellation_policy_router
+from .analytics import router as analytics_router
 
 scheduler_router = APIRouter()
 scheduler_router.include_router(appointments_router)
@@ -55,3 +77,14 @@ scheduler_router.include_router(sitemap_router)
 scheduler_router.include_router(reminders_router)
 scheduler_router.include_router(waitlist_router)
 scheduler_router.include_router(recurring_availability_router)
+scheduler_router.include_router(templates_router)
+scheduler_router.include_router(calendar_feed_router)
+scheduler_router.include_router(surveys_router)
+scheduler_router.include_router(labels_router)
+scheduler_router.include_router(reschedule_router)
+scheduler_router.include_router(notifications_router)
+scheduler_router.include_router(locations_router)
+scheduler_router.include_router(conflicts_router)
+scheduler_router.include_router(ab_testing_router)
+scheduler_router.include_router(cancellation_policy_router)
+scheduler_router.include_router(analytics_router)

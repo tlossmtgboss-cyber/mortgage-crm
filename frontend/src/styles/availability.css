@@ -1,0 +1,595 @@
+/**
+ * Availability Preferences Styles
+ * Follows CalendarSettings.css patterns with Perennia brand colors (#218D8D).
+ */
+
+/* ============================================================================
+   Weekly Schedule Grid
+   ============================================================================ */
+
+.availability-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.availability-day-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-radius: 10px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.availability-day-row:hover {
+  background: #f1f5f9;
+}
+
+.availability-day-row.day-disabled {
+  background: #f8fafc;
+  opacity: 0.55;
+}
+
+.availability-day-row.day-disabled:hover {
+  background: #f8fafc;
+}
+
+/* Day toggle (label + switch) */
+.avail-day-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 160px;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+
+.avail-day-toggle .day-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  user-select: none;
+}
+
+.day-disabled .avail-day-toggle .day-label {
+  color: #94a3b8;
+}
+
+/* Toggle switch (reuses CalendarSettings pattern) */
+.avail-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.avail-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.avail-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e1;
+  border-radius: 22px;
+  transition: background-color 0.2s;
+}
+
+.avail-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.avail-toggle-switch input:checked + .avail-toggle-slider {
+  background-color: #218D8D;
+}
+
+.avail-toggle-switch input:checked + .avail-toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.avail-toggle-switch input:focus-visible + .avail-toggle-slider {
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.25);
+}
+
+/* ============================================================================
+   Time Blocks Container
+   ============================================================================ */
+
+.avail-blocks-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Single time block row */
+.avail-time-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avail-time-select {
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 110px;
+}
+
+.avail-time-select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.avail-time-separator {
+  color: #94a3b8;
+  font-size: 13px;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+/* Remove block button */
+.avail-remove-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  font-size: 14px;
+  padding: 0;
+}
+
+.avail-remove-block:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Add block link */
+.avail-add-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #218D8D;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+
+.avail-add-block:hover {
+  color: #1a7a7a;
+}
+
+.avail-add-block i {
+  font-size: 11px;
+}
+
+/* "Unavailable" label shown when day is toggled off */
+.avail-unavailable-label {
+  color: #94a3b8;
+  font-size: 13px;
+  font-style: italic;
+  padding-top: 4px;
+}
+
+/* ============================================================================
+   Visual Preview
+   ============================================================================ */
+
+.avail-preview-section {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.avail-preview-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 16px;
+}
+
+.avail-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.avail-preview-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.avail-preview-day-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.avail-preview-bar-track {
+  width: 100%;
+  height: 120px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.avail-preview-bar-fill {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  background: #218D8D;
+  border-radius: 4px;
+  opacity: 0.75;
+  transition: all 0.3s ease;
+}
+
+.avail-preview-bar-fill:hover {
+  opacity: 1;
+}
+
+.avail-preview-hours {
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: center;
+  margin-top: 2px;
+}
+
+/* ============================================================================
+   Overrides Section
+   ============================================================================ */
+
+.avail-overrides-section {
+  margin-top: 0;
+}
+
+.avail-override-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 20px;
+}
+
+.avail-override-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.avail-override-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.avail-override-field input[type="date"],
+.avail-override-field input[type="text"],
+.avail-override-field select {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+  background: white;
+}
+
+.avail-override-field input:focus,
+.avail-override-field select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.avail-override-type-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avail-override-type-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #475569;
+  cursor: pointer;
+}
+
+.avail-override-type-option input[type="radio"] {
+  accent-color: #218D8D;
+}
+
+.avail-override-times {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avail-add-override-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+
+.avail-add-override-btn:hover:not(:disabled) {
+  background: #1a7a7a;
+}
+
+.avail-add-override-btn:disabled {
+  background: #7cc5c5;
+  cursor: not-allowed;
+}
+
+/* Overrides list */
+.avail-overrides-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.avail-override-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition: box-shadow 0.15s;
+}
+
+.avail-override-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.avail-override-card.is-blocked {
+  border-left: 3px solid #ef4444;
+}
+
+.avail-override-card.is-extra {
+  border-left: 3px solid #10b981;
+}
+
+.avail-override-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.avail-override-date {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.avail-override-detail {
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avail-override-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.avail-override-badge.blocked {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.avail-override-badge.extra {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.avail-override-reason {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.avail-override-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  background: none;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s;
+  font-size: 14px;
+}
+
+.avail-override-remove:hover {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+/* Empty state */
+.avail-overrides-empty {
+  text-align: center;
+  padding: 32px 20px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.avail-overrides-empty i {
+  font-size: 32px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* ============================================================================
+   Timezone selector
+   ============================================================================ */
+
+.avail-timezone-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.avail-timezone-row label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.avail-timezone-row select {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+  background: white;
+  min-width: 240px;
+}
+
+.avail-timezone-row select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+/* ============================================================================
+   Responsive: Stack on mobile
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .availability-day-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .avail-day-toggle {
+    min-width: unset;
+    padding-top: 0;
+  }
+
+  .avail-time-block {
+    flex-wrap: wrap;
+  }
+
+  .avail-time-select {
+    min-width: 95px;
+    flex: 1;
+  }
+
+  .avail-preview-grid {
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+
+  .avail-preview-bar-track {
+    height: 80px;
+  }
+
+  .avail-preview-day-label {
+    font-size: 9px;
+  }
+
+  .avail-override-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .avail-override-field {
+    width: 100%;
+  }
+
+  .avail-override-times {
+    flex-wrap: wrap;
+  }
+
+  .avail-add-override-btn {
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .avail-timezone-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .avail-timezone-row select {
+    min-width: unset;
+  }
+}
+
+@media (max-width: 480px) {
+  .avail-preview-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+}

@@ -4,7 +4,7 @@ Smart Docs V2 Route Registration
 Registers all new Smart Docs v2 API routers with the FastAPI app.
 Call register_smart_docs_v2_routes(app) from main.py.
 
-New route modules:
+V2 route modules:
 - E-Signature (/api/v1/esign/*) — has its own absolute prefix
 - Document Intelligence (/api/smart-docs/doc-intel/*)
 - Income Calculation (/api/smart-docs/income/*)
@@ -14,6 +14,13 @@ New route modules:
 - Bank Statement Analysis (/api/smart-docs/bank-analysis/*)
 - Document Analytics (/api/smart-docs/doc-analytics/*)
 - Borrower Portal (/api/smart-docs/portal/docs/*)
+- eClosing Platform (/api/smart-docs/eclosing/*)
+- Monitoring & Health (/api/smart-docs/monitoring/*)
+- Health Check & Canary (/api/smart-docs/health/*, /api/smart-docs/version, /api/smart-docs/features)
+
+After V2 modules, this also chains into the enterprise (Wave 3)
+registration which adds Plaid, AUS, eClosing, MISMO, IRS Transcript,
+extended config, and monitoring routes.
 """
 
 import logging
@@ -114,6 +121,86 @@ def register_smart_docs_v2_routes(app):
     except Exception as e:
         logger.warning(f"Failed to register portal routes: {e}")
 
+    # Borrower Portal V2 routes (enhanced portal with magic link, messaging, e-sign)
+    try:
+        from routes.smart_docs_portal_v2_routes import router as portal_v2_router
+        app.include_router(portal_v2_router, prefix=prefix)
+        registered.append("portal-v2")
+    except Exception as e:
+        logger.warning(f"Failed to register portal V2 routes: {e}")
+
+    # Business Rules Configuration routes
+    try:
+        from routes.smart_docs_config_routes import router as config_router
+        app.include_router(config_router, prefix=prefix)
+        registered.append("config")
+    except Exception as e:
+        logger.warning(f"Failed to register config routes: {e}")
+
+    # eClosing platform integration routes (Snapdocs/Pavaso/NotaryCam)
+    try:
+        from routes.smart_docs_eclosing_routes import router as eclosing_router
+        app.include_router(eclosing_router, prefix=prefix)
+        registered.append("eclosing")
+    except Exception as e:
+        logger.warning(f"Failed to register eClosing routes: {e}")
+
+    # Plaid bank account verification routes
+    try:
+        from routes.smart_docs_plaid_routes import router as plaid_router
+        app.include_router(plaid_router, prefix=prefix)
+        registered.append("plaid")
+    except Exception as e:
+        logger.warning(f"Failed to register Plaid routes: {e}")
+
+    # AUS (Automated Underwriting System) integration routes — DU and LPA
+    try:
+        from routes.smart_docs_aus_routes import router as aus_router
+        app.include_router(aus_router, prefix=prefix)
+        registered.append("aus")
+    except Exception as e:
+        logger.warning(f"Failed to register AUS integration routes: {e}")
+
+    # MISMO Data Mapping routes
+    try:
+        from routes.smart_docs_mismo_routes import router as mismo_router
+        app.include_router(mismo_router, prefix=prefix)
+        registered.append("mismo")
+    except Exception as e:
+        logger.warning(f"Failed to register MISMO mapping routes: {e}")
+
+    # Monitoring & Health Check routes
+    try:
+        from routes.smart_docs_monitoring_routes import router as monitoring_router
+        app.include_router(monitoring_router, prefix=prefix)
+        registered.append("monitoring")
+    except Exception as e:
+        logger.warning(f"Failed to register monitoring routes: {e}")
+
+    # Health Check & Canary Deployment routes
+    try:
+        from routes.smart_docs_health_routes import router as health_router
+        app.include_router(health_router, prefix=prefix)
+        registered.append("health")
+    except Exception as e:
+        logger.warning(f"Failed to register health check routes: {e}")
+
+    # IRS Transcript (4506-C) routes
+    try:
+        from routes.smart_docs_transcript_routes import router as transcript_router
+        app.include_router(transcript_router, prefix=prefix)
+        registered.append("transcript")
+    except Exception as e:
+        logger.warning(f"Failed to register transcript routes: {e}")
+
+    # AI Classification Benchmark routes
+    try:
+        from routes.smart_docs_benchmark_routes import router as benchmark_router
+        app.include_router(benchmark_router, prefix=prefix)
+        registered.append("benchmark")
+    except Exception as e:
+        logger.warning(f"Failed to register benchmark routes: {e}")
+
     logger.info(f"Smart Docs V2: registered {len(registered)} route modules: {', '.join(registered)}")
 
     # Run database migration on startup (creates tables if not exist)
@@ -124,6 +211,61 @@ def register_smart_docs_v2_routes(app):
         logger.info("Smart Docs V2: database migration complete")
     except Exception as e:
         logger.warning(f"Smart Docs V2: migration skipped or failed: {e}")
+
+    # Run business rules table migration
+    try:
+        from migrations.add_business_rules_table import run_migration as run_br_migration
+        run_br_migration()
+        logger.info("Smart Docs V2: business rules migration complete")
+    except Exception as e:
+        logger.warning(f"Smart Docs V2: business rules migration skipped or failed: {e}")
+
+    # Run eClosing table migration
+    try:
+        from migrations.add_eclosing_table import run_migration as run_eclosing_migration
+        run_eclosing_migration()
+        logger.info("Smart Docs V2: eClosing migration complete")
+    except Exception as e:
+        logger.warning(f"Smart Docs V2: eClosing migration skipped or failed: {e}")
+
+    # Run AUS submissions table migration
+    try:
+        from migrations.add_aus_submission_table import run_migration as run_aus_migration
+        run_aus_migration(db_engine)
+        logger.info("Smart Docs V2: AUS submissions migration complete")
+    except Exception as e:
+        logger.warning(f"Smart Docs V2: AUS submissions migration skipped or failed: {e}")
+
+    # Run IRS transcript table migration
+    try:
+        from migrations.add_irs_transcript_table import run_migration as run_transcript_migration
+        run_transcript_migration(db_engine)
+        logger.info("Smart Docs V2: IRS transcript migration complete")
+    except Exception as e:
+        logger.warning(f"Smart Docs V2: IRS transcript migration skipped or failed: {e}")
+
+    # Run AI benchmark tables migration
+    try:
+        from migrations.add_ai_benchmark_tables import run_migration as run_bench_migration
+        run_bench_migration(db_engine)
+        logger.info("Smart Docs V2: AI benchmark migration complete")
+    except Exception as e:
+        logger.warning(f"Smart Docs V2: AI benchmark migration skipped or failed: {e}")
+
+    # ---- Enterprise (Wave 3) routes and middleware ----
+    try:
+        from routes.smart_docs_enterprise_registration import (
+            register_smart_docs_enterprise_routes,
+            register_smart_docs_middleware,
+        )
+        enterprise_mw = register_smart_docs_middleware(app)
+        enterprise_routes = register_smart_docs_enterprise_routes(app)
+        logger.info(
+            f"Smart Docs Enterprise: {len(enterprise_routes)} route modules, "
+            f"{len(enterprise_mw)} middleware components"
+        )
+    except Exception as e:
+        logger.warning(f"Smart Docs Enterprise registration skipped or failed: {e}")
 
     return registered
 

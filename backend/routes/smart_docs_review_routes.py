@@ -23,6 +23,7 @@ from sqlalchemy import text
 
 from database import get_db
 from auth.dependencies import get_current_user
+from validation.smart_docs_validators import validate_threshold_pair
 from models.smart_docs_models import (
     SmartDocument, DocumentRequest, DocumentDecision,
     DocType, RequestStatus, DocPolicyEvent, DocPolicyEventType,
@@ -460,24 +461,46 @@ async def validate_upload(
     Validate a file before upload without saving it.
 
     Runs the document validation engine to check file type, size, security,
-    and format. Used by the frontend for pre-upload validation to give
-    immediate feedback.
+    and format, plus malware scanning. Used by the frontend for pre-upload
+    validation to give immediate feedback.
     """
     from services.smart_docs.document_validation_engine import get_document_validation_engine
+    from services.smart_docs.malware_scanner_service import get_malware_scanner
+    from middleware.upload_limits import validate_upload_size, MAX_DOCUMENT_SIZE
 
-    file_content = await file.read()
-    if not file_content:
-        raise HTTPException(status_code=400, detail="Empty file")
+    file_content = await validate_upload_size(file, MAX_DOCUMENT_SIZE)
+    filename = file.filename or "unknown"
+    mime_type = file.content_type or "application/octet-stream"
 
     engine = get_document_validation_engine()
     result = engine.validate_upload(
         file_content=file_content,
-        filename=file.filename or "unknown",
-        mime_type=file.content_type or "application/octet-stream",
+        filename=filename,
+        mime_type=mime_type,
         declared_doc_type=doc_type,
     )
 
-    return result.to_dict()
+    # Run malware scan
+    scanner = get_malware_scanner()
+    scan_result = scanner.validate_file_safety(
+        file_bytes=file_content,
+        filename=filename,
+        mime_type=mime_type,
+    )
+
+    response = result.to_dict()
+    response["malware_scan"] = scan_result.to_dict()
+
+    if not scan_result.clean:
+        response["is_valid"] = False
+        response["malware_scan"]["rejected"] = True
+        logger.warning(
+            "Pre-upload validation: malware detected in '%s' by user %s",
+            filename,
+            getattr(current_user, "id", "unknown"),
+        )
+
+    return response
 
 
 # =============================================================================
@@ -671,22 +694,23 @@ async def update_auto_review_settings(
     if not org_id:
         raise HTTPException(status_code=400, detail="Organization ID required")
 
-    # Validate thresholds
+    # Validate thresholds individually
     if body.auto_approve_threshold is not None:
         if not (0 <= body.auto_approve_threshold <= 100):
             raise HTTPException(status_code=400, detail="auto_approve_threshold must be 0-100")
     if body.auto_reject_threshold is not None:
         if not (0 <= body.auto_reject_threshold <= 100):
             raise HTTPException(status_code=400, detail="auto_reject_threshold must be 0-100")
-    if (
-        body.auto_approve_threshold is not None
-        and body.auto_reject_threshold is not None
-        and body.auto_reject_threshold >= body.auto_approve_threshold
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="auto_reject_threshold must be less than auto_approve_threshold",
-        )
+
+    # Validate the pair relationship: reject < approve
+    if body.auto_approve_threshold is not None and body.auto_reject_threshold is not None:
+        try:
+            validate_threshold_pair(body.auto_approve_threshold, body.auto_reject_threshold)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Auto-reject threshold must be lower than auto-approve threshold",
+            )
 
     # Upsert settings in the organization's configuration
     existing = db.execute(text("""

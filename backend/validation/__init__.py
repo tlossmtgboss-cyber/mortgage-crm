@@ -16,7 +16,21 @@ from validation.common import (
     SAFE_IDENTIFIER_RE,
 )
 
+from validation.smart_docs_validators import (
+    validate_regex_safe,
+    sanitize_html,
+    validate_threshold_pair,
+    validate_dti,
+    validate_phone,
+    validate_email_safe,
+    validate_loan_amount,
+    validate_percentage,
+    sanitize_filename,
+    validate_json_size,
+)
+
 __all__ = [
+    # common
     "sanitize_string",
     "validate_email_format",
     "validate_phone_format",
@@ -25,4 +39,15 @@ __all__ = [
     "safe_sql_identifier",
     "validate_column_names",
     "SAFE_IDENTIFIER_RE",
+    # smart_docs_validators
+    "validate_regex_safe",
+    "sanitize_html",
+    "validate_threshold_pair",
+    "validate_dti",
+    "validate_phone",
+    "validate_email_safe",
+    "validate_loan_amount",
+    "validate_percentage",
+    "sanitize_filename",
+    "validate_json_size",
 ]

@@ -1,0 +1,390 @@
+/* =============================================================================
+   Drag-and-Drop Appointment Rescheduling Styles
+   =============================================================================
+   Provides visual feedback for:
+   - Draggable event cards (grab cursor, drag ghost)
+   - Drop target highlighting (blue border, light background)
+   - Transition animations when settling into new position
+   - Disabled state for non-draggable events
+   - Undo toast bar
+   - Drop confirmation dialog
+   ============================================================================= */
+
+/* ---------------------------------------------------------------------------
+   Draggable Event Cards
+   --------------------------------------------------------------------------- */
+
+/* Enabled draggable: show grab cursor */
+.draggable-event.drag-enabled {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+}
+
+.draggable-event.drag-enabled:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* Active drag state: semi-transparent source element */
+.draggable-event.drag-active {
+  opacity: 0.35;
+  transform: scale(0.97);
+  cursor: grabbing;
+  box-shadow: none;
+}
+
+/* Disabled drag: normal cursor, slightly muted */
+.draggable-event.drag-disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+/* Drag ghost element (appended to body during drag) */
+.drag-ghost {
+  border-radius: 6px;
+  background: var(--color-bg-surface, #fff);
+  border: 2px solid var(--color-primary, #3B82F6);
+  pointer-events: none;
+  z-index: 10001;
+}
+
+
+/* ---------------------------------------------------------------------------
+   Drop Target (Time Slots)
+   --------------------------------------------------------------------------- */
+
+/* Base droppable slot */
+.droppable-slot {
+  position: relative;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+/* When any drag is in progress, show subtle affordance on all slots */
+.droppable-slot.drop-target-active {
+  background-color: rgba(59, 130, 246, 0.02);
+}
+
+/* Active drop highlight: slot being hovered over */
+.droppable-slot.drop-highlight {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+  outline: 2px dashed var(--color-primary, #3B82F6);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+/* Drop indicator line inside highlighted slot */
+.drop-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.drop-indicator-line {
+  width: 100%;
+  height: 2px;
+  background: var(--color-primary, #3B82F6);
+  border-radius: 1px;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+  animation: drop-line-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes drop-line-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Event Settle Animation
+   --------------------------------------------------------------------------- */
+
+/* Applied to events after a successful reschedule */
+.event-settled {
+  animation: event-settle 400ms ease-out;
+}
+
+@keyframes event-settle {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    box-shadow: none;
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Drop Confirmation Dialog
+   --------------------------------------------------------------------------- */
+
+.drop-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  animation: drop-confirm-fade-in 150ms ease-out;
+}
+
+@keyframes drop-confirm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.drop-confirm-dialog {
+  background: var(--color-bg-surface, #fff);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  animation: drop-confirm-slide-up 200ms ease-out;
+}
+
+@keyframes drop-confirm-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.drop-confirm-dialog h4 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1F2937);
+}
+
+.drop-confirm-dialog p {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: var(--color-text-secondary, #6B7280);
+  line-height: 1.5;
+}
+
+.drop-confirm-title {
+  font-weight: 600;
+  color: var(--color-text-primary, #1F2937);
+}
+
+.drop-confirm-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-primary, #3B82F6);
+}
+
+.drop-confirm-time svg {
+  width: 16px;
+  height: 16px;
+}
+
+.drop-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.drop-confirm-actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.drop-confirm-cancel {
+  background: var(--color-bg-secondary, #F3F4F6);
+  border: 1px solid var(--color-border, #E5E7EB);
+  color: var(--color-text-primary, #374151);
+}
+
+.drop-confirm-cancel:hover {
+  background: var(--color-bg-tertiary, #E5E7EB);
+}
+
+.drop-confirm-submit {
+  background: var(--color-primary, #3B82F6);
+  border: 1px solid transparent;
+  color: #fff;
+}
+
+.drop-confirm-submit:hover {
+  background: var(--color-primary-dark, #2563EB);
+}
+
+.drop-confirm-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+/* ---------------------------------------------------------------------------
+   Undo Toast Bar
+   --------------------------------------------------------------------------- */
+
+.drag-undo-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10003;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--color-text-primary, #1F2937);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  animation: undo-toast-slide-up 300ms ease-out;
+}
+
+@keyframes undo-toast-slide-up {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.drag-undo-toast-message {
+  flex: 1;
+}
+
+.drag-undo-toast button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.drag-undo-btn {
+  background: var(--color-primary, #3B82F6);
+  border: none;
+  color: #fff;
+}
+
+.drag-undo-btn:hover {
+  background: var(--color-primary-dark, #2563EB);
+}
+
+.drag-undo-dismiss {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.drag-undo-dismiss:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #fff;
+}
+
+/* Undo toast progress bar (5-second countdown) */
+.drag-undo-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--color-primary, #3B82F6);
+  border-radius: 0 0 8px 8px;
+  animation: undo-progress-shrink 5s linear forwards;
+}
+
+@keyframes undo-progress-shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Responsive: Tablet adjustments
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 1024px) {
+  .drop-confirm-dialog {
+    max-width: 320px;
+    padding: 20px;
+  }
+
+  .drag-undo-toast {
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+  }
+
+  @keyframes undo-toast-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+
+/* ---------------------------------------------------------------------------
+   Reduced motion: respect user preference
+   --------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .draggable-event.drag-enabled,
+  .droppable-slot,
+  .drop-confirm-dialog,
+  .drag-undo-toast,
+  .event-settled {
+    transition: none;
+    animation: none;
+  }
+
+  .drop-indicator-line {
+    animation: none;
+    opacity: 1;
+  }
+
+  /* Still show the progress bar but without animation */
+  .drag-undo-progress {
+    animation: none;
+    width: 100%;
+  }
+}

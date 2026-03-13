@@ -14,6 +14,7 @@ Usage:
 """
 
 import hashlib
+import io
 import logging
 import os
 import re
@@ -25,6 +26,14 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+
+from middleware.upload_limits import (
+    MAX_DOCUMENT_SIZE,
+    MAX_IMAGE_SIZE,
+    MAX_IMAGE_DIMENSIONS,
+    MAX_PDF_PAGES,
+    PDF_BOMB_RATIO,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +264,17 @@ class DocumentValidationEngine:
         all_issues: List[ValidationIssue] = []
         passed_rules: List[str] = []
 
+        # 0. Hard size limit check (before any other processing)
+        hard_limit_issues = self._validate_hard_size_limit(file_content, mime_type)
+        if hard_limit_issues:
+            all_issues.extend(hard_limit_issues)
+            # If hard limit is exceeded, skip further processing to avoid DoS
+            return self._build_result(all_issues, passed_rules, {
+                "file_size": len(file_content),
+                "declared_mime_type": mime_type,
+                "rejected_early": True,
+            })
+
         # 1. File type checks
         type_issues = self.validate_file_type(file_content, filename, mime_type)
         if type_issues:
@@ -269,7 +289,23 @@ class DocumentValidationEngine:
         else:
             passed_rules.append("FILE_SIZE")
 
-        # 3. Content safety (PDF or image)
+        # 3. Image dimension check (before loading into PIL or OCR)
+        if mime_type.startswith("image/"):
+            dim_issues = self._validate_image_dimensions(file_content)
+            if dim_issues:
+                all_issues.extend(dim_issues)
+            else:
+                passed_rules.append("IMAGE_DIMENSIONS")
+
+        # 4. PDF-specific: page count hard limit and bomb detection
+        if mime_type == "application/pdf":
+            pdf_limit_issues = self._validate_pdf_limits(file_content)
+            if pdf_limit_issues:
+                all_issues.extend(pdf_limit_issues)
+            else:
+                passed_rules.append("PDF_LIMITS")
+
+        # 5. Content safety (PDF or image)
         if mime_type == "application/pdf":
             safety_issues = self.validate_pdf_safety(file_content)
         elif mime_type.startswith("image/"):
@@ -282,7 +318,7 @@ class DocumentValidationEngine:
         else:
             passed_rules.append("CONTENT_SAFETY")
 
-        # 4. Page count validation (if doc type declared)
+        # 6. Page count validation (if doc type declared)
         if declared_doc_type:
             page_issues = self.validate_page_count(file_content, mime_type, declared_doc_type)
             if page_issues:
@@ -290,7 +326,7 @@ class DocumentValidationEngine:
             else:
                 passed_rules.append("PAGE_COUNT")
 
-        # 5. Filename sanitization produces no issues itself, but we record it
+        # 7. Filename sanitization produces no issues itself, but we record it
         sanitized = self.sanitize_filename(filename)
         if sanitized != filename:
             all_issues.append(ValidationIssue(
@@ -1102,6 +1138,193 @@ class DocumentValidationEngine:
             },
             "required_fields": completeness_fields,
         }
+
+    # ------------------------------------------------------------------
+    # Hard size and dimension limits (new checks)
+    # ------------------------------------------------------------------
+
+    def _validate_hard_size_limit(
+        self,
+        file_content: bytes,
+        mime_type: str,
+    ) -> List[ValidationIssue]:
+        """
+        Enforce absolute size limits from upload_limits module.
+
+        This runs FIRST before any other processing to prevent large files
+        from consuming memory during subsequent validation steps.
+        """
+        issues: List[ValidationIssue] = []
+        file_size = len(file_content)
+
+        # Determine the applicable hard limit
+        if mime_type.startswith("image/"):
+            hard_limit = MAX_IMAGE_SIZE
+            limit_label = "image"
+        else:
+            hard_limit = MAX_DOCUMENT_SIZE
+            limit_label = "document"
+
+        if file_size > hard_limit:
+            limit_mb = hard_limit / (1024 * 1024)
+            actual_mb = file_size / (1024 * 1024)
+            issues.append(ValidationIssue(
+                rule="HARD_SIZE_LIMIT_EXCEEDED",
+                severity="CRITICAL",
+                message=(
+                    f"File size ({actual_mb:.1f} MB) exceeds the maximum "
+                    f"allowed {limit_label} size ({limit_mb:.0f} MB)"
+                ),
+                fix_instruction=(
+                    f"Reduce the file size to under {limit_mb:.0f} MB. "
+                    f"For PDFs, try compressing or splitting. "
+                    f"For images, try reducing resolution or using JPEG compression."
+                ),
+            ))
+
+        return issues
+
+    def _validate_image_dimensions(
+        self,
+        file_content: bytes,
+    ) -> List[ValidationIssue]:
+        """
+        Check image dimensions against MAX_IMAGE_DIMENSIONS without
+        loading the full image into memory.
+        """
+        issues: List[ValidationIssue] = []
+        width, height = 0, 0
+        max_w, max_h = MAX_IMAGE_DIMENSIONS
+
+        if not file_content or len(file_content) < 24:
+            return issues
+
+        # PNG: IHDR at bytes 16-23
+        if file_content[:4] == b"\x89PNG":
+            try:
+                width = struct.unpack(">I", file_content[16:20])[0]
+                height = struct.unpack(">I", file_content[20:24])[0]
+            except (struct.error, IndexError):
+                pass
+
+        # JPEG: SOF marker
+        elif file_content[:3] == b"\xff\xd8\xff":
+            dims = self._extract_jpeg_dimensions(file_content)
+            if dims:
+                width, height = dims
+
+        # BMP
+        elif file_content[:2] == b"BM" and len(file_content) >= 26:
+            try:
+                width = struct.unpack("<I", file_content[18:22])[0]
+                height = abs(struct.unpack("<i", file_content[22:26])[0])
+            except (struct.error, IndexError):
+                pass
+
+        if width == 0 and height == 0:
+            return issues  # Cannot determine dimensions, skip
+
+        if width > max_w or height > max_h:
+            issues.append(ValidationIssue(
+                rule="IMAGE_DIMENSIONS_EXCEEDED",
+                severity="CRITICAL",
+                message=(
+                    f"Image dimensions {width}x{height} exceed the "
+                    f"maximum allowed {max_w}x{max_h} pixels"
+                ),
+                fix_instruction=(
+                    "Resize the image to smaller dimensions before uploading. "
+                    "Most mortgage documents should be 300 DPI letter size "
+                    "(2550x3300 pixels)."
+                ),
+            ))
+
+        # Decompression bomb check: total pixels
+        total_pixels = width * height
+        if total_pixels > 100_000_000:  # 100 megapixels
+            issues.append(ValidationIssue(
+                rule="IMAGE_DECOMPRESSION_BOMB",
+                severity="CRITICAL",
+                message=(
+                    f"Image has {total_pixels:,} total pixels, which could "
+                    f"exhaust server memory when processed"
+                ),
+                fix_instruction="Resize the image to reasonable dimensions",
+            ))
+
+        return issues
+
+    def _validate_pdf_limits(
+        self,
+        file_content: bytes,
+    ) -> List[ValidationIssue]:
+        """
+        Enforce PDF page count limit and detect decompression bombs.
+        """
+        issues: List[ValidationIssue] = []
+
+        # Page count check
+        page_count = self._estimate_pdf_page_count(file_content)
+        if page_count is not None and page_count > MAX_PDF_PAGES:
+            issues.append(ValidationIssue(
+                rule="PDF_PAGE_LIMIT_EXCEEDED",
+                severity="CRITICAL",
+                message=(
+                    f"PDF has {page_count} pages, exceeding the "
+                    f"maximum of {MAX_PDF_PAGES} pages"
+                ),
+                fix_instruction=(
+                    f"Split the document into parts with no more than "
+                    f"{MAX_PDF_PAGES} pages each and upload separately."
+                ),
+            ))
+
+        # PDF bomb detection: check if declared stream lengths are
+        # disproportionate to the compressed file size
+        compressed_size = len(file_content)
+        if compressed_size > 0:
+            try:
+                lengths = re.findall(rb"/Length\s+(\d+)", file_content)
+                total_declared = sum(
+                    int(l) for l in lengths if int(l) < 1_000_000_000
+                )
+                if total_declared > compressed_size * PDF_BOMB_RATIO:
+                    issues.append(ValidationIssue(
+                        rule="PDF_DECOMPRESSION_BOMB",
+                        severity="CRITICAL",
+                        message=(
+                            f"PDF contains compressed streams that would decompress "
+                            f"to ~{total_declared / (1024 * 1024):.0f} MB "
+                            f"(file is only {compressed_size / (1024 * 1024):.1f} MB). "
+                            f"Ratio exceeds {PDF_BOMB_RATIO}x threshold."
+                        ),
+                        fix_instruction=(
+                            "This file may be malformed or malicious. "
+                            "Try re-creating the PDF from the original source."
+                        ),
+                    ))
+            except Exception as e:
+                logger.debug("PDF bomb heuristic failed: %s", e)
+
+            # Also check if file is tiny but claims many pages
+            if page_count is not None and page_count > 10:
+                bytes_per_page = compressed_size / page_count
+                if bytes_per_page < 100:
+                    issues.append(ValidationIssue(
+                        rule="PDF_SUSPICIOUS_SIZE_RATIO",
+                        severity="CRITICAL",
+                        message=(
+                            f"PDF claims {page_count} pages but is only "
+                            f"{compressed_size:,} bytes "
+                            f"({bytes_per_page:.0f} bytes/page)"
+                        ),
+                        fix_instruction=(
+                            "This file may be malformed. "
+                            "Try re-scanning or re-creating the document."
+                        ),
+                    ))
+
+        return issues
 
     # ------------------------------------------------------------------
     # Private helpers

@@ -56,6 +56,13 @@ from typing import (
     Union,
 )
 
+from middleware.upload_limits import (
+    MAX_VISION_API_SIZE,
+    MAX_IMAGE_DIMENSIONS,
+    MAX_OCR_OUTPUT_CHARS,
+    MAX_PDF_PAGES,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -90,6 +97,8 @@ try:
     HAS_ANTHROPIC = True
 except ImportError:
     HAS_ANTHROPIC = False
+
+from services.smart_docs.ai_resilience import resilient_ai_call
 
 
 # ============================================================================
@@ -535,6 +544,40 @@ class ClaudeVisionOCREngine(OCREngine):
                 engine_used=self.name,
             )
 
+        # --- File size check for Vision API ---
+        if len(image_bytes) > MAX_VISION_API_SIZE:
+            size_mb = len(image_bytes) / (1024 * 1024)
+            limit_mb = MAX_VISION_API_SIZE / (1024 * 1024)
+            logger.warning(
+                "Image too large for Vision API (%.1f MB > %.0f MB limit), skipping",
+                size_mb, limit_mb,
+            )
+            return PageOCRResult(
+                page_number=0,
+                text="",
+                confidence=0.0,
+                engine_used=self.name,
+            )
+
+        # --- Image dimension check before processing ---
+        max_w, max_h = MAX_IMAGE_DIMENSIONS
+        try:
+            if HAS_PIL:
+                img = Image.open(io.BytesIO(image_bytes))
+                w, h = img.size
+                img.close()
+                if w > max_w or h > max_h:
+                    logger.warning(
+                        "Image dimensions %dx%d exceed limit %dx%d, skipping Vision API",
+                        w, h, max_w, max_h,
+                    )
+                    return PageOCRResult(
+                        page_number=0, text="", confidence=0.0,
+                        engine_used=self.name,
+                    )
+        except Exception:
+            pass  # If we cannot check, proceed anyway
+
         start = time.monotonic()
         try:
             b64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -546,9 +589,8 @@ class ClaudeVisionOCREngine(OCREngine):
             ):
                 media_type = "image/png"
 
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=4096,
+            response = resilient_ai_call(
+                client=client,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -573,7 +615,23 @@ class ClaudeVisionOCREngine(OCREngine):
                         },
                     ],
                 }],
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                operation_name="ocr_extract_text",
+                timeout=45.0,
             )
+
+            if response is None:
+                # AI OCR failed -- fall back to empty result (Tesseract fallback
+                # is handled by the composite engine layer above this engine)
+                logger.warning(
+                    "Claude Vision OCR unavailable after retries, returning empty result"
+                )
+                elapsed = int((time.monotonic() - start) * 1000)
+                return PageOCRResult(
+                    page_number=0, text="", confidence=0.0,
+                    engine_used=self.name, processing_ms=elapsed,
+                )
 
             text = response.content[0].text if response.content else ""
             has_handwriting = "[HANDWRITTEN]" in text
@@ -584,6 +642,17 @@ class ClaudeVisionOCREngine(OCREngine):
             base_confidence = 0.92 if not has_handwriting else 0.75
 
             elapsed = int((time.monotonic() - start) * 1000)
+
+            logger.info(
+                "OCR extraction completed | engine=%s | "
+                "duration_ms=%d | text_length=%d | "
+                "has_handwriting=%s | has_tables=%s",
+                self.name,
+                elapsed,
+                len(text),
+                has_handwriting,
+                has_tables,
+            )
 
             return PageOCRResult(
                 page_number=0,
@@ -609,11 +678,15 @@ class ClaudeVisionOCREngine(OCREngine):
         if client is None:
             return False, 0.0
 
+        # Skip if image is too large for the Vision API
+        if len(image_bytes) > MAX_VISION_API_SIZE:
+            logger.debug("Image too large for handwriting detection, skipping")
+            return False, 0.0
+
         try:
             b64_image = base64.b64encode(image_bytes).decode("utf-8")
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=100,
+            response = resilient_ai_call(
+                client=client,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -634,7 +707,15 @@ class ClaudeVisionOCREngine(OCREngine):
                         },
                     ],
                 }],
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                operation_name="ocr_detect_handwriting",
+                timeout=15.0,
             )
+
+            if response is None:
+                logger.warning("Handwriting detection unavailable after retries")
+                return False, 0.0
 
             answer = response.content[0].text.strip().upper() if response.content else ""
             if answer.startswith("YES"):
@@ -1682,11 +1763,16 @@ class DocumentOCRService:
         language: str = "eng",
         preprocess: bool = True,
         max_pages: int = 50,
+        db: Optional[Any] = None,
+        organization_id: Optional[int] = None,
     ) -> OCRExtractionResult:
         """Extract text from a document file.
 
         This is the main entry point. Handles PDFs (native text + OCR
         fallback) and images.
+
+        When db and organization_id are provided, results are cached by
+        document hash to avoid re-processing identical documents.
 
         Args:
             file_bytes: Raw file content.
@@ -1695,11 +1781,78 @@ class DocumentOCRService:
             language: OCR language code.
             preprocess: Whether to pre-process images before OCR.
             max_pages: Maximum pages to process (for large PDFs).
+            db: Optional SQLAlchemy session for cache lookups.
+            organization_id: Optional org ID for tenant-scoped caching.
 
         Returns:
             OCRExtractionResult with extracted text and metadata.
         """
         overall_start = time.monotonic()
+
+        # --- Document cache lookup ---
+        doc_hash = None
+        cache_service = None
+        if db is not None and organization_id is not None and file_bytes:
+            try:
+                from services.smart_docs.document_cache_service import get_document_cache_service
+                cache_service = get_document_cache_service()
+                doc_hash = cache_service.get_or_compute_hash(file_bytes)
+                cached = cache_service.get_cached_ocr(db, doc_hash, organization_id)
+                if cached is not None:
+                    logger.info(
+                        "doc_cache OCR_HIT hash=%s org=%s",
+                        doc_hash[:12], organization_id,
+                    )
+                    return OCRExtractionResult(
+                        success=cached.get("success", True),
+                        full_text=cached.get("full_text", ""),
+                        page_count=cached.get("page_count", 0),
+                        overall_confidence=cached.get("overall_confidence", 0.0),
+                        quality_grade=OCRQuality(cached.get("quality_grade", "poor")),
+                        document_format=DocumentFormat(cached.get("document_format", "unknown")),
+                        has_native_text=cached.get("has_native_text", False),
+                        has_handwriting=cached.get("has_handwriting", False),
+                        has_tables=cached.get("has_tables", False),
+                        needs_manual_review=cached.get("needs_manual_review", False),
+                        review_reasons=cached.get("review_reasons", []),
+                        engine_used=cached.get("engine_used", "cache"),
+                        total_processing_ms=int(
+                            (time.monotonic() - overall_start) * 1000
+                        ),
+                    )
+                else:
+                    logger.info(
+                        "doc_cache OCR_MISS hash=%s org=%s",
+                        doc_hash[:12], organization_id,
+                    )
+            except Exception as e:
+                logger.warning("doc_cache OCR lookup failed: %s", e)
+
+        # Enforce page limit from upload_limits
+        max_pages = min(max_pages, MAX_PDF_PAGES)
+
+        # Check image dimensions before processing image files
+        detected_mime = mime_type or ""
+        if detected_mime.startswith("image/") and HAS_PIL:
+            try:
+                img = Image.open(io.BytesIO(file_bytes))
+                w, h = img.size
+                img.close()
+                max_w, max_h = MAX_IMAGE_DIMENSIONS
+                if w > max_w or h > max_h:
+                    return OCRExtractionResult(
+                        success=False,
+                        full_text="",
+                        error=(
+                            f"Image dimensions {w}x{h} exceed maximum "
+                            f"{max_w}x{max_h}. Resize before processing."
+                        ),
+                        total_processing_ms=int(
+                            (time.monotonic() - overall_start) * 1000
+                        ),
+                    )
+            except Exception:
+                pass  # If check fails, proceed with processing
 
         doc_format = self.detect_format(file_bytes, mime_type, filename)
         if doc_format == DocumentFormat.UNKNOWN:
@@ -1743,6 +1896,40 @@ class DocumentOCRService:
             if result.has_handwriting:
                 result.needs_manual_review = True
                 result.review_reasons.append("Handwriting detected")
+
+            # Truncate OCR output to prevent excessive memory/token usage
+            if result.full_text and len(result.full_text) > MAX_OCR_OUTPUT_CHARS:
+                original_len = len(result.full_text)
+                result.full_text = result.full_text[:MAX_OCR_OUTPUT_CHARS]
+                result.review_reasons.append(
+                    f"OCR output truncated from {original_len:,} to "
+                    f"{MAX_OCR_OUTPUT_CHARS:,} characters"
+                )
+                logger.info(
+                    "OCR output truncated: %d -> %d chars",
+                    original_len, MAX_OCR_OUTPUT_CHARS,
+                )
+
+            # --- Cache the successful OCR result ---
+            if cache_service and doc_hash and db is not None and organization_id is not None:
+                if result.success:
+                    try:
+                        cache_service.cache_ocr(db, doc_hash, organization_id, {
+                            "success": result.success,
+                            "full_text": result.full_text,
+                            "page_count": result.page_count,
+                            "overall_confidence": result.overall_confidence,
+                            "quality_grade": result.quality_grade.value if hasattr(result.quality_grade, 'value') else str(result.quality_grade),
+                            "document_format": result.document_format.value if hasattr(result.document_format, 'value') else str(result.document_format),
+                            "has_native_text": result.has_native_text,
+                            "has_handwriting": result.has_handwriting,
+                            "has_tables": result.has_tables,
+                            "needs_manual_review": result.needs_manual_review,
+                            "review_reasons": result.review_reasons,
+                            "engine_used": result.engine_used,
+                        })
+                    except Exception as e:
+                        logger.warning("doc_cache OCR store failed: %s", e)
 
             return result
 

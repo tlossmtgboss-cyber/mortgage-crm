@@ -1,7 +1,7 @@
 """
 Perennia AI - Specialized Agent Tools
 
-This module contains 26 specialized AI agents with 239+ tools designed
+This module contains 32 specialized AI agents with 329+ tools designed
 for mortgage CRM operations:
 
 CORE CRM AGENTS (8):
@@ -14,7 +14,7 @@ CORE CRM AGENTS (8):
 7. Portfolio Agent - Post-close client management
 8. Compliance Agent - Regulatory compliance monitoring
 
-EXTENDED AGENTS (18):
+EXTENDED AGENTS (24):
 9. Receptionist Agent - AI voice/chat receptionist
 10. Profitability Agent - Loan and branch profitability analysis
 11. Subscription Agent - SaaS subscription and billing management
@@ -34,6 +34,11 @@ EXTENDED AGENTS (18):
 25. Document Follow-Up Agent - Multi-channel document follow-up campaigns, urgency, escalation
 26. Document Review Agent - Deep document review, fraud detection, risk scoring, and underwriting condition generation
 27. Income Analysis Agent - Income calculation, DTI, trending, gap detection, gross-up, and underwriter findings
+28. Document Lifecycle Agent - End-to-end document journey orchestration from request to approval
+29. Processor Productivity Agent - Processor workflow optimization, priority queues, batch approval, submission checklists
+30. Borrower Experience Agent - Borrower document journey optimization, sentiment, TCPA-compliant comms
+31. QC Audit Agent - Pre-funding/post-closing QC, defect tracking, repurchase risk, investor overlay compliance
+32. Document Security Agent - Document security monitoring, encryption enforcement, breach response, and privacy compliance
 """
 
 from .base import SpecializedAgent, AgentTool, AgentRegistry, ToolCategory, RiskLevel, ToolResult
@@ -68,6 +73,12 @@ from .document_intelligence_agent import DocumentIntelligenceAgent
 from .document_followup_agent import DocumentFollowUpAgent
 from .document_review_agent import DocumentReviewAgent
 from .income_analysis_agent import IncomeAnalysisAgent
+from .document_lifecycle_agent import DocumentLifecycleAgent
+from .processor_productivity_agent import ProcessorProductivityAgent
+from .borrower_experience_agent import BorrowerExperienceAgent
+from .qc_audit_agent import QCAuditAgent
+from .document_security_agent import DocumentSecurityAgent
+from .doc_compliance_agent import DocComplianceAgent
 
 __all__ = [
     # Base classes
@@ -108,8 +119,14 @@ __all__ = [
     "DocumentFollowUpAgent",
     "DocumentReviewAgent",
     "IncomeAnalysisAgent",
+    "DocumentLifecycleAgent",
+    "ProcessorProductivityAgent",
+    "BorrowerExperienceAgent",
+    "QCAuditAgent",
+    "DocumentSecurityAgent",
+    "DocComplianceAgent",
 ]
 
 # Agent count for verification
-AGENT_COUNT = 27
-TOOL_COUNT = 254  # 27 agents × ~9.4 tools average
+AGENT_COUNT = 33
+TOOL_COUNT = 344  # 33 agents × ~10.4 tools average

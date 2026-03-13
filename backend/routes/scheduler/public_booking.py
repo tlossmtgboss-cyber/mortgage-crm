@@ -811,52 +811,27 @@ async def confirm_public_booking(
             synchronize_session=False
         )
 
-        # Create video meeting room if meeting mode is VIDEO
+        # Create virtual meeting link if meeting mode is VIDEO
         video_link = None
-        room_code = None
         if meeting_mode == MeetingMode.VIDEO:
             try:
-                # Try to create a video meeting room
-                VideoMeetingRoom = _models.get('VideoMeetingRoom')
-                if VideoMeetingRoom:
-                    import secrets
-                    import string
-
-                    # Generate room code
-                    chars = string.ascii_uppercase + string.digits
-                    code = ''.join(secrets.choice(chars) for _ in range(9))
-                    room_code = f"MTG-{code[:3]}-{code[3:6]}-{code[6:]}"
-
-                    video_room = VideoMeetingRoom(
-                        room_code=room_code,
-                        room_name=f"Video Call - {attendee_name}",
-                        room_description=f"Scheduled video call with {attendee_name}",
-                        provider="internal",
-                        host_user_id=assigned_user_id,
-                        scheduled_start=slot_start,
-                        scheduled_end=slot_end,
-                        duration_minutes=duration_minutes,
-                        status="scheduled",
-                        waiting_room_enabled=True,
-                        recording_enabled=True,
-                        transcription_enabled=True,
-                        ai_assistant_enabled=True,
-                        meeting_type="scheduled_call",
-                        created_by=assigned_user_id
+                from services.virtual_meeting_service import create_meeting_for_appointment
+                meeting_result = await create_meeting_for_appointment(
+                    db=db,
+                    appointment=appointment,
+                    provider="auto",
+                    user_id=assigned_user_id,
+                    org_id=link_org_id,
+                )
+                if meeting_result.success:
+                    video_link = meeting_result.join_url
+                    logger.info(
+                        f"Auto-generated meeting link for public booking {appointment.id}: "
+                        f"provider={meeting_result.provider}, url={video_link}"
                     )
-                    db.add(video_room)
-                    db.flush()  # Get the video room ID
-
-                    # Update appointment with video link
-                    base_url = os.getenv("FRONTEND_URL", "https://perenniaai.com")
-                    video_link = f"{base_url}/meeting/{room_code}"
-                    appointment.video_link = video_link
-                    appointment.video_meeting_id = video_room.id
-
-                    logger.info(f"Created video meeting room {room_code} for appointment")
             except Exception as e:
-                logger.warning(f"Could not create video meeting room: {e}")
-                # Continue without video room - appointment still gets created
+                logger.warning(f"Could not auto-generate meeting link for public booking: {e}")
+                # Continue without meeting link - appointment still gets created
 
         db.commit()
         db.refresh(appointment)
@@ -1035,6 +1010,22 @@ async def confirm_public_booking(
             except Exception as e:
                 logger.error(f"Error sending confirmation SMS: {e}")
 
+        # Generate confirmation token for rich confirmation page
+        confirmation_token = None
+        confirmation_url = None
+        try:
+            from routes.scheduler.confirmation import _generate_confirmation_token
+            confirmation_token = _generate_confirmation_token(
+                appointment.id, attendee_email or ""
+            )
+            frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
+            confirmation_url = (
+                f"{frontend_url}/booking/confirmation/{appointment.id}"
+                f"?token={confirmation_token}"
+            )
+        except Exception as token_err:
+            logger.warning(f"Could not generate confirmation token: {token_err}")
+
         return {
             "message": "Appointment booked successfully",
             "appointment_id": appointment.id,
@@ -1042,6 +1033,8 @@ async def confirm_public_booking(
             "scheduled_end": appointment.scheduled_end.isoformat(),
             "video_link": video_link,
             "room_code": room_code,
+            "confirmation_token": confirmation_token,
+            "confirmation_url": confirmation_url,
             "confirmation_details": {
                 "title": appointment.title,
                 "date": appointment_date,

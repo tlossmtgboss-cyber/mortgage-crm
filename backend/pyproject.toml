@@ -29,6 +29,13 @@ markers = [
     "agents: Tests for AI agents",
     "tools: Tests for agent tools",
     "orchestrator: Tests for agent orchestration/routing",
+    "performance: Performance and load tests (skipped in CI by default)",
+    "security: Security-focused tests for auth, tenant isolation, input validation, and attack vectors",
+    "esign_compliance: E-signature legal compliance tests (ESIGN Act, UETA, TRID)",
+    "compliance: Regulatory compliance tests (TRID, RESPA, TCPA, BSA)",
+    "tenant_isolation: Multi-tenant data isolation boundary tests",
+    "income_accuracy: Income calculation correctness and trending tests",
+    "api_contract: API request/response shape and contract tests",
 ]
 
 # Default options

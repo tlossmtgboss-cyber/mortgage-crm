@@ -3,6 +3,12 @@ Smart Docs Income Calculation Routes
 
 Endpoints for AI-assisted income calculation, approval workflows,
 verification task management, income source overrides, and reporting.
+
+Maker-checker controls:
+- Calculations must be reviewed before approval
+- The reviewer/approver cannot be the same user who calculated
+- Approved_by is always set from the authenticated user, never from the request body
+- All approval/rejection/override actions are logged to the audit trail
 """
 
 import logging
@@ -42,8 +48,14 @@ class CalculateIncomeRequest(BaseModel):
 
 
 class ApproveCalculationBody(BaseModel):
+    """Approval request. approved_by is ignored — system uses current_user."""
     notes: Optional[str] = None
-    approved_by: str
+    admin_override: bool = False  # Platform admins can skip separation-of-duties
+
+
+class ReviewCalculationBody(BaseModel):
+    """Review request body."""
+    notes: Optional[str] = None
 
 
 class RejectCalculationBody(BaseModel):
@@ -65,7 +77,6 @@ class OverrideIncomeBody(BaseModel):
     monthly_amount: float
     annual_amount: float
     reason: str
-    override_by: str
 
 
 # =============================================================================
@@ -113,6 +124,53 @@ def _verify_task_tenant(
 
 
 # =============================================================================
+# Decision Audit Trail Helper
+# =============================================================================
+
+def _log_decision_audit(
+    db: Session,
+    current_user,
+    calc: IncomeCalculation,
+    action: str,
+    before_state: dict,
+    after_state: dict,
+    reason: str = "",
+) -> None:
+    """Log an income calculation decision to the hash-chained audit trail.
+
+    Uses the existing audit_service.create_audit_entry for tamper-evident logging.
+    Falls back to structured logger output if audit_service is unavailable.
+    """
+    try:
+        from services.audit_service import create_audit_entry
+
+        create_audit_entry(
+            db=db,
+            user_id=current_user.id,
+            changed_by_id=current_user.id,
+            change_type=action,
+            entity_type="income_calculation",
+            entity_id=calc.id,
+            before_state=before_state,
+            after_state=after_state,
+            reason=reason,
+            organization_id=getattr(current_user, "organization_id", None),
+        )
+    except Exception as e:
+        # Audit logging must not block the operation, but always log the attempt
+        logger.warning(
+            "Decision audit log failed (non-blocking): action=%s calc_id=%s user_id=%s error=%s",
+            action, calc.id, current_user.id, str(e),
+        )
+        # Structured fallback log for compliance evidence
+        logger.info(
+            "DECISION_AUDIT: action=%s calc_id=%s loan_id=%s user_id=%s before=%s after=%s reason=%s",
+            action, calc.id, calc.loan_id, current_user.id,
+            before_state, after_state, reason,
+        )
+
+
+# =============================================================================
 # Serialization Helpers
 # =============================================================================
 
@@ -138,11 +196,16 @@ def _serialize_calculation(calc: IncomeCalculation) -> dict:
         "ai_model_used": calc.ai_model_used,
         "calculation_duration_ms": calc.calculation_duration_ms,
         "source_documents": calc.source_documents or [],
+        "calculated_by_user_id": calc.calculated_by_user_id,
         "reviewed_by": calc.reviewed_by,
+        "reviewed_by_user_id": calc.reviewed_by_user_id,
         "reviewed_at": calc.reviewed_at.isoformat() if calc.reviewed_at else None,
         "review_notes": calc.review_notes,
         "approved_by": calc.approved_by,
+        "approved_by_user_id": calc.approved_by_user_id,
         "approved_at": calc.approved_at.isoformat() if calc.approved_at else None,
+        "rejection_reason": calc.rejection_reason,
+        "rejected_by_user_id": calc.rejected_by_user_id,
         "created_at": calc.created_at.isoformat() if calc.created_at else None,
         "updated_at": calc.updated_at.isoformat() if calc.updated_at else None,
     }
@@ -244,6 +307,16 @@ async def calculate_income(
         .order_by(IncomeCalculation.created_at.desc())
         .first()
     )
+
+    # Record who performed the calculation (for maker-checker enforcement)
+    if calc and not calc.calculated_by_user_id:
+        calc.calculated_by_user_id = current_user.id
+        try:
+            db.commit()
+            db.refresh(calc)
+        except SQLAlchemyError:
+            db.rollback()
+            logger.warning("Failed to set calculated_by_user_id on calculation %s", calc.id)
 
     sources = (
         db.query(IncomeSource)
@@ -433,34 +506,190 @@ async def approve_calculation(
 ):
     """
     Approve an income calculation. Sets status to APPROVED.
+
+    Maker-checker controls enforced:
+    - approved_by is always set from the authenticated user (ignores request body)
+    - Cannot approve your own calculation (separation of duties)
+    - Calculation must be in COMPLETED, NEEDS_REVIEW, or REVIEWED status
+    - Platform admins can override separation-of-duties with admin_override flag
     """
     calc = _verify_calculation_tenant(db, calculation_id, current_user)
 
     if calc.status == CalculationStatus.APPROVED:
         raise HTTPException(status_code=409, detail="Calculation already approved")
 
+    # Status gate: must be completed/reviewed before approval
+    approvable_statuses = (
+        CalculationStatus.COMPLETED,
+        CalculationStatus.NEEDS_REVIEW,
+        CalculationStatus.REVIEWED,
+    )
+    if calc.status not in approvable_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Calculation must be completed before approval (current status: {calc.status.value})",
+        )
+
+    # Separation of duties: cannot approve your own calculation
+    is_platform_admin = getattr(current_user, "permission_role", "") == "admin"
+    admin_override = body.admin_override and is_platform_admin
+
+    if calc.calculated_by_user_id == current_user.id and not admin_override:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot approve your own calculation — separation of duties required",
+        )
+
     now = datetime.now(timezone.utc)
+    approver_name = getattr(current_user, "full_name", None) or getattr(current_user, "email", str(current_user.id))
+
+    # Record before-state for audit
+    before_state = {
+        "status": calc.status.value,
+        "approved_by": calc.approved_by,
+        "approved_by_user_id": calc.approved_by_user_id,
+    }
+
     calc.status = CalculationStatus.APPROVED
-    calc.approved_by = body.approved_by
+    calc.approved_by = approver_name
+    calc.approved_by_user_id = current_user.id
     calc.approved_at = now
-    calc.review_notes = body.notes
-    calc.reviewed_by = body.approved_by
-    calc.reviewed_at = now
+    if body.notes:
+        calc.review_notes = (calc.review_notes or "") + f"\nApproval notes: {body.notes}".strip()
     calc.updated_at = now
+
+    try:
+        db.flush()
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Failed to approve calculation %s", calculation_id)
+        raise HTTPException(status_code=500, detail="Failed to approve calculation")
+
+    # Audit trail
+    after_state = {
+        "status": "approved",
+        "approved_by": approver_name,
+        "approved_by_user_id": current_user.id,
+        "admin_override": admin_override,
+    }
+    _log_decision_audit(
+        db=db,
+        current_user=current_user,
+        calc=calc,
+        action="income_calculation_approved",
+        before_state=before_state,
+        after_state=after_state,
+        reason=body.notes or "Approved",
+    )
 
     try:
         db.commit()
         db.refresh(calc)
     except SQLAlchemyError as e:
         db.rollback()
-        logger.exception("Failed to approve calculation %s", calculation_id)
+        logger.exception("Failed to commit approval for calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to approve calculation")
 
     return {
         "status": "approved",
         "calculation_id": calculation_id,
-        "approved_by": body.approved_by,
+        "approved_by": approver_name,
+        "approved_by_user_id": current_user.id,
         "approved_at": now.isoformat(),
+        "admin_override": admin_override,
+        "calculation": _serialize_calculation(calc),
+    }
+
+
+# =============================================================================
+# 6b. POST /income/calculation/{calculation_id}/review
+# =============================================================================
+
+@router.post("/income/calculation/{calculation_id}/review")
+async def review_calculation(
+    calculation_id: int,
+    body: ReviewCalculationBody,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Mark an income calculation as reviewed (pre-approval step).
+
+    Maker-checker controls:
+    - Reviewer cannot be the same person who calculated
+    - Calculation must be in COMPLETED or NEEDS_REVIEW status
+    - Sets status to REVIEWED, enabling subsequent approval
+    """
+    calc = _verify_calculation_tenant(db, calculation_id, current_user)
+
+    # Status gate
+    reviewable_statuses = (CalculationStatus.COMPLETED, CalculationStatus.NEEDS_REVIEW)
+    if calc.status not in reviewable_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Calculation must be in COMPLETED or NEEDS_REVIEW status to review (current: {calc.status.value})",
+        )
+
+    # Separation of duties: reviewer cannot be the calculator
+    if calc.calculated_by_user_id == current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot review your own calculation — separation of duties required",
+        )
+
+    now = datetime.now(timezone.utc)
+    reviewer_name = getattr(current_user, "full_name", None) or getattr(current_user, "email", str(current_user.id))
+
+    before_state = {
+        "status": calc.status.value,
+        "reviewed_by": calc.reviewed_by,
+        "reviewed_by_user_id": calc.reviewed_by_user_id,
+    }
+
+    calc.status = CalculationStatus.REVIEWED
+    calc.reviewed_by = reviewer_name
+    calc.reviewed_by_user_id = current_user.id
+    calc.reviewed_at = now
+    if body.notes:
+        calc.review_notes = body.notes
+    calc.updated_at = now
+
+    try:
+        db.flush()
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Failed to review calculation %s", calculation_id)
+        raise HTTPException(status_code=500, detail="Failed to review calculation")
+
+    after_state = {
+        "status": "reviewed",
+        "reviewed_by": reviewer_name,
+        "reviewed_by_user_id": current_user.id,
+    }
+    _log_decision_audit(
+        db=db,
+        current_user=current_user,
+        calc=calc,
+        action="income_calculation_reviewed",
+        before_state=before_state,
+        after_state=after_state,
+        reason=body.notes or "Reviewed",
+    )
+
+    try:
+        db.commit()
+        db.refresh(calc)
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Failed to commit review for calculation %s", calculation_id)
+        raise HTTPException(status_code=500, detail="Failed to review calculation")
+
+    return {
+        "status": "reviewed",
+        "calculation_id": calculation_id,
+        "reviewed_by": reviewer_name,
+        "reviewed_by_user_id": current_user.id,
+        "reviewed_at": now.isoformat(),
         "calculation": _serialize_calculation(calc),
     }
 
@@ -477,7 +706,9 @@ async def reject_calculation(
     current_user=Depends(get_current_user),
 ):
     """
-    Reject an income calculation. Sets status to REJECTED.
+    Reject an income calculation. Sets status to REJECTED with reason.
+
+    Logs rejection to decision audit trail.
     """
     calc = _verify_calculation_tenant(db, calculation_id, current_user)
 
@@ -485,24 +716,59 @@ async def reject_calculation(
         raise HTTPException(status_code=409, detail="Calculation already rejected")
 
     now = datetime.now(timezone.utc)
+    rejector_name = getattr(current_user, "full_name", None) or getattr(current_user, "email", str(current_user.id))
+
+    before_state = {
+        "status": calc.status.value,
+        "rejection_reason": calc.rejection_reason,
+    }
+
     calc.status = CalculationStatus.REJECTED
-    calc.review_notes = f"Reason: {body.reason}" + (f"\n{body.notes}" if body.notes else "")
-    calc.reviewed_by = getattr(current_user, "email", "system")
+    calc.rejection_reason = body.reason
+    calc.rejected_by_user_id = current_user.id
+    calc.review_notes = f"Rejected: {body.reason}" + (f"\n{body.notes}" if body.notes else "")
+    calc.reviewed_by = rejector_name
+    calc.reviewed_by_user_id = current_user.id
     calc.reviewed_at = now
     calc.updated_at = now
+
+    try:
+        db.flush()
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Failed to reject calculation %s", calculation_id)
+        raise HTTPException(status_code=500, detail="Failed to reject calculation")
+
+    after_state = {
+        "status": "rejected",
+        "rejection_reason": body.reason,
+        "rejected_by": rejector_name,
+        "rejected_by_user_id": current_user.id,
+    }
+    _log_decision_audit(
+        db=db,
+        current_user=current_user,
+        calc=calc,
+        action="income_calculation_rejected",
+        before_state=before_state,
+        after_state=after_state,
+        reason=body.reason,
+    )
 
     try:
         db.commit()
         db.refresh(calc)
     except SQLAlchemyError as e:
         db.rollback()
-        logger.exception("Failed to reject calculation %s", calculation_id)
+        logger.exception("Failed to commit rejection for calculation %s", calculation_id)
         raise HTTPException(status_code=500, detail="Failed to reject calculation")
 
     return {
         "status": "rejected",
         "calculation_id": calculation_id,
         "reason": body.reason,
+        "rejected_by": rejector_name,
+        "rejected_by_user_id": current_user.id,
         "rejected_at": now.isoformat(),
         "calculation": _serialize_calculation(calc),
     }
@@ -707,13 +973,15 @@ async def override_income_source(
     """
     Manually override income for a specific source.
 
-    Creates an audit trail with the reason and original values.
+    Validates tenant access BEFORE any data operations.
+    Logs override with previous and new values to decision audit trail.
+    Override_by is always set from authenticated user.
     """
     source = db.query(IncomeSource).filter(IncomeSource.id == source_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Income source not found")
 
-    # Verify tenant via the parent calculation
+    # Verify tenant FIRST via the parent calculation — before operating on data
     calc = db.query(IncomeCalculation).filter(
         IncomeCalculation.id == source.calculation_id
     ).first()
@@ -721,11 +989,13 @@ async def override_income_source(
         raise HTTPException(status_code=404, detail="Parent calculation not found")
     _verify_loan_tenant(db, calc.loan_id, current_user)
 
-    # Preserve original values in ai_notes for audit trail
+    override_by_name = getattr(current_user, "full_name", None) or getattr(current_user, "email", str(current_user.id))
+
+    # Preserve original values for audit trail
     original_monthly = float(source.total_monthly_income or 0)
     original_annual = float(source.total_annual_income or 0)
     audit_note = (
-        f"MANUAL OVERRIDE by {body.override_by}: "
+        f"MANUAL OVERRIDE by {override_by_name} (user_id={current_user.id}): "
         f"monthly {original_monthly:.2f} -> {body.monthly_amount:.2f}, "
         f"annual {original_annual:.2f} -> {body.annual_amount:.2f}. "
         f"Reason: {body.reason}"
@@ -740,11 +1010,41 @@ async def override_income_source(
     source.updated_at = now
 
     try:
+        db.flush()
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Failed to override income source %s", source_id)
+        raise HTTPException(status_code=500, detail="Failed to apply income override")
+
+    # Log to decision audit trail
+    before_state = {
+        "source_id": source_id,
+        "total_monthly_income": original_monthly,
+        "total_annual_income": original_annual,
+    }
+    after_state = {
+        "source_id": source_id,
+        "total_monthly_income": body.monthly_amount,
+        "total_annual_income": body.annual_amount,
+        "override_by": override_by_name,
+        "override_by_user_id": current_user.id,
+    }
+    _log_decision_audit(
+        db=db,
+        current_user=current_user,
+        calc=calc,
+        action="income_source_override",
+        before_state=before_state,
+        after_state=after_state,
+        reason=body.reason,
+    )
+
+    try:
         db.commit()
         db.refresh(source)
     except SQLAlchemyError as e:
         db.rollback()
-        logger.exception("Failed to override income source %s", source_id)
+        logger.exception("Failed to commit income override for source %s", source_id)
         raise HTTPException(status_code=500, detail="Failed to apply income override")
 
     return {
@@ -754,7 +1054,8 @@ async def override_income_source(
         "previous_annual": original_annual,
         "new_monthly": body.monthly_amount,
         "new_annual": body.annual_amount,
-        "override_by": body.override_by,
+        "override_by": override_by_name,
+        "override_by_user_id": current_user.id,
         "reason": body.reason,
         "source": _serialize_source(source),
     }

@@ -1,0 +1,627 @@
+/* ===========================================================================
+   BookingConfirmation.css — Polished booking confirmation page
+   Uses the same CSS custom properties as PublicBooking.css:
+     --booking-primary    (fallback #217F8D)
+     --booking-accent     (fallback #34a853)
+     --booking-primary-dark  (fallback #1a6670)
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   Success Animation — animated checkmark circle
+   --------------------------------------------------------------------------- */
+
+.bc-success-animation {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.bc-checkmark-circle {
+  width: 80px;
+  height: 80px;
+  position: relative;
+}
+
+.bc-checkmark-circle svg {
+  width: 80px;
+  height: 80px;
+}
+
+/* Circle stroke animation */
+.bc-circle {
+  fill: none;
+  stroke: var(--booking-accent, #34a853);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 226;
+  stroke-dashoffset: 226;
+  animation: bc-circle-draw 0.6s ease-out 0.2s forwards;
+  transform-origin: center;
+}
+
+@keyframes bc-circle-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Circle fill fade-in */
+.bc-circle-fill {
+  fill: var(--booking-accent, #34a853);
+  opacity: 0;
+  animation: bc-fill-in 0.3s ease-out 0.7s forwards;
+}
+
+@keyframes bc-fill-in {
+  to {
+    opacity: 0.1;
+  }
+}
+
+/* Checkmark stroke animation */
+.bc-checkmark-path {
+  fill: none;
+  stroke: var(--booking-accent, #34a853);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 36;
+  stroke-dashoffset: 36;
+  animation: bc-check-draw 0.4s ease-out 0.8s forwards;
+}
+
+@keyframes bc-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Confirmation Card
+   --------------------------------------------------------------------------- */
+
+.bc-card {
+  animation: bc-card-enter 0.5s ease-out;
+}
+
+@keyframes bc-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bc-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 6px;
+  text-align: center;
+}
+
+.bc-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 8px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Confirmation Number */
+.bc-confirmation-number {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.bc-conf-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.bc-conf-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--booking-primary, #217F8D);
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  letter-spacing: 0.05em;
+}
+
+/* ---------------------------------------------------------------------------
+   Appointment Details Card
+   --------------------------------------------------------------------------- */
+
+.bc-details-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.bc-details-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6b7280;
+  margin: 0 0 16px;
+}
+
+/* LO Profile Row */
+.bc-lo-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.bc-lo-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--booking-primary, #217F8D);
+  flex-shrink: 0;
+}
+
+.bc-lo-avatar-placeholder {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--booking-primary, #217F8D) 12%, white);
+  border: 2px solid var(--booking-primary, #217F8D);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--booking-primary, #217F8D);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.bc-lo-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.bc-lo-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.bc-lo-role {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.bc-lo-nmls {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+/* Detail Rows */
+.bc-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bc-detail-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.bc-detail-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--booking-primary, #217F8D);
+  margin-top: 1px;
+}
+
+.bc-detail-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.bc-detail-label {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bc-detail-value {
+  font-size: 15px;
+  color: #1a1a1a;
+  font-weight: 500;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------------------
+   Join Meeting Button (for virtual meetings)
+   --------------------------------------------------------------------------- */
+
+.bc-join-meeting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 20px;
+  background: var(--booking-primary, #217F8D);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+  margin-bottom: 16px;
+}
+
+.bc-join-meeting:hover {
+  background: var(--booking-primary-dark, #1a6670);
+}
+
+.bc-join-meeting svg {
+  width: 20px;
+  height: 20px;
+}
+
+.bc-join-note {
+  text-align: center;
+  font-size: 12px;
+  color: #9ca3af;
+  margin: -8px 0 20px;
+}
+
+/* ---------------------------------------------------------------------------
+   Calendar Buttons
+   --------------------------------------------------------------------------- */
+
+.bc-calendar-section {
+  margin-bottom: 24px;
+}
+
+.bc-calendar-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.bc-calendar-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.bc-cal-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.bc-cal-btn:hover {
+  border-color: var(--booking-primary, #217F8D);
+  background: color-mix(in srgb, var(--booking-primary, #217F8D) 5%, white);
+  color: var(--booking-primary, #217F8D);
+}
+
+.bc-cal-btn-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.bc-cal-btn-label {
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   Preparation Checklist
+   --------------------------------------------------------------------------- */
+
+.bc-prep-section {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.bc-prep-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+  margin: 0 0 6px;
+}
+
+.bc-prep-desc {
+  font-size: 13px;
+  color: #a16207;
+  margin: 0 0 14px;
+  line-height: 1.4;
+}
+
+.bc-prep-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.bc-prep-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  color: #78350f;
+}
+
+.bc-prep-bullet {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1.5px solid #d97706;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #d97706;
+}
+
+.bc-prep-item.priority-high .bc-prep-bullet {
+  background: #fef3c7;
+  border-color: #d97706;
+}
+
+.bc-prep-item.priority-medium .bc-prep-bullet {
+  border-color: #f59e0b;
+}
+
+.bc-prep-item.priority-low .bc-prep-bullet {
+  border-color: #fcd34d;
+  color: #fbbf24;
+}
+
+/* ---------------------------------------------------------------------------
+   Bottom Actions
+   --------------------------------------------------------------------------- */
+
+.bc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.bc-reschedule-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--booking-primary, #217F8D);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 8px 0;
+  transition: color 0.15s;
+  text-decoration: none;
+}
+
+.bc-reschedule-link:hover {
+  color: var(--booking-primary-dark, #1a6670);
+  text-decoration: underline;
+}
+
+.bc-cancel-link {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+
+.bc-cancel-link:hover {
+  color: #dc2626;
+}
+
+/* ---------------------------------------------------------------------------
+   Loading State
+   --------------------------------------------------------------------------- */
+
+.bc-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 16px;
+}
+
+.bc-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f0f0f0;
+  border-top-color: var(--booking-primary, #217F8D);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.bc-loading-text {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* ---------------------------------------------------------------------------
+   Error State
+   --------------------------------------------------------------------------- */
+
+.bc-error {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.bc-error-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  color: #dc2626;
+}
+
+.bc-error-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px;
+}
+
+.bc-error-message {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 24px;
+}
+
+.bc-error-retry {
+  padding: 10px 24px;
+  background: var(--booking-primary, #217F8D);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   Print Styles
+   --------------------------------------------------------------------------- */
+
+@media print {
+  .bc-calendar-section,
+  .bc-join-meeting,
+  .bc-join-note,
+  .bc-reschedule-link,
+  .bc-cancel-link,
+  .bc-actions {
+    display: none !important;
+  }
+
+  .bc-details-card {
+    border: 1px solid #ccc;
+    box-shadow: none;
+  }
+
+  .bc-card {
+    box-shadow: none;
+  }
+
+  /* Show a QR code placeholder area when printing */
+  .bc-print-qr {
+    display: block !important;
+    text-align: center;
+    margin-top: 24px;
+    padding: 20px;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+  }
+
+  .bc-print-qr-label {
+    font-size: 12px;
+    color: #999;
+  }
+}
+
+/* Hide QR area on screen */
+.bc-print-qr {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive
+   --------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .bc-title {
+    font-size: 20px;
+  }
+
+  .bc-details-card {
+    padding: 16px;
+  }
+
+  .bc-calendar-buttons {
+    flex-direction: column;
+  }
+
+  .bc-cal-btn {
+    flex-direction: row;
+    justify-content: center;
+    padding: 12px 16px;
+  }
+
+  .bc-cal-btn-icon {
+    font-size: 20px;
+  }
+
+  .bc-lo-profile {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .bc-lo-info {
+    align-items: center;
+  }
+
+  .bc-checkmark-circle {
+    width: 64px;
+    height: 64px;
+  }
+
+  .bc-checkmark-circle svg {
+    width: 64px;
+    height: 64px;
+  }
+}

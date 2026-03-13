@@ -534,8 +534,11 @@ class IncomeAnalysisAgent(SpecializedAgent):
         return ("STABLE", pct)
 
     def _verify_loan_ownership(self, db, loan_id: int, org_id: str):
-        """Verify loan belongs to organization. Returns loan row or None."""
-        return db.execute(
+        """Verify loan belongs to organization. Returns loan row or None.
+
+        Logs a tenant isolation warning if the loan is not found for this org.
+        """
+        row = db.execute(
             text(
                 "SELECT id, loan_number, borrower_name, loan_type, stage, "
                 "proposed_monthly_payment, total_monthly_obligations, "
@@ -545,6 +548,12 @@ class IncomeAnalysisAgent(SpecializedAgent):
             ),
             {"loan_id": loan_id, "org_id": org_id},
         ).fetchone()
+        if not row:
+            logger.warning(
+                "TENANT_ISOLATION: loan %s access denied for org %s by agent %s",
+                loan_id, org_id, self.name,
+            )
+        return row
 
     def _gather_income_docs(
         self, db, loan_id: int, borrower_id: int, doc_types: Optional[tuple] = None,

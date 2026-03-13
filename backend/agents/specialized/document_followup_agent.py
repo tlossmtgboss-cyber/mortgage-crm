@@ -692,21 +692,24 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Get borrower preferences
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
+            # Get borrower preferences (org-scoped via loan)
             borrower = db.execute(
                 text("""
                     SELECT id, first_name, email, phone,
                            preferred_communication
                     FROM leads
-                    WHERE id = :borrower_id
+                    WHERE id = :borrower_id AND organization_id = :org_id
                 """),
-                {"borrower_id": borrower_id},
+                {"borrower_id": borrower_id, "org_id": org_id},
             ).fetchone()
 
             if not borrower:
                 return ToolResult(success=False, error=f"Borrower {borrower_id} not found")
 
-            # Analyze past follow-up event response patterns
+            # Analyze past follow-up event response patterns (org-scoped via loan)
             channel_response = db.execute(
                 text("""
                     SELECT
@@ -716,11 +719,12 @@ class DocumentFollowUpAgent(SpecializedAgent):
                         COUNT(CASE WHEN fe.delivery_status = 'failed' THEN 1 END) as failed
                     FROM followup_events fe
                     JOIN followup_campaigns fc ON fc.id = fe.campaign_id
+                    JOIN loans l ON l.id = fc.loan_id AND l.organization_id = :org_id
                     WHERE fc.borrower_id = :borrower_id
                         AND fe.event_type NOT IN ('borrower_responded', 'document_uploaded')
                     GROUP BY fe.channel
                 """),
-                {"borrower_id": borrower_id},
+                {"borrower_id": borrower_id, "org_id": org_id},
             ).fetchall()
 
             # Build channel scores
@@ -819,13 +823,16 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Get borrower info
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
+            # Get borrower info (org-scoped)
             borrower = db.execute(
                 text("""
                     SELECT first_name, last_name, email, phone
-                    FROM leads WHERE id = :borrower_id
+                    FROM leads WHERE id = :borrower_id AND organization_id = :org_id
                 """),
-                {"borrower_id": borrower_id},
+                {"borrower_id": borrower_id, "org_id": org_id},
             ).fetchone()
 
             if not borrower:
@@ -984,6 +991,9 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
+            # Verify loan belongs to org first
+            self.verify_loan_tenant(db, loan_id)
+
             # Parse request IDs
             try:
                 request_ids = [
@@ -1000,7 +1010,7 @@ class DocumentFollowUpAgent(SpecializedAgent):
             if not request_ids:
                 return ToolResult(success=False, error="No request IDs provided")
 
-            # Verify loan ownership
+            # Get loan details (ownership already verified above)
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
                      "WHERE id = :loan_id AND organization_id = :org_id"),
@@ -1098,18 +1108,22 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Get all campaigns for this borrower
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
+            # Get all campaigns for this borrower (org-scoped via loan)
             campaigns = db.execute(
                 text("""
                     SELECT
-                        id, campaign_type, status, started_at,
-                        borrower_responded, response_date,
-                        reminders_sent, completed_at
-                    FROM followup_campaigns
-                    WHERE borrower_id = :borrower_id
-                    ORDER BY created_at DESC
+                        fc.id, fc.campaign_type, fc.status, fc.started_at,
+                        fc.borrower_responded, fc.response_date,
+                        fc.reminders_sent, fc.completed_at
+                    FROM followup_campaigns fc
+                    JOIN loans l ON l.id = fc.loan_id AND l.organization_id = :org_id
+                    WHERE fc.borrower_id = :borrower_id
+                    ORDER BY fc.created_at DESC
                 """),
-                {"borrower_id": borrower_id},
+                {"borrower_id": borrower_id, "org_id": org_id},
             ).fetchall()
 
             total_campaigns = len(campaigns)
@@ -1132,7 +1146,7 @@ class DocumentFollowUpAgent(SpecializedAgent):
                 if response_times_hours else None
             )
 
-            # Analyze channel effectiveness from events
+            # Analyze channel effectiveness from events (org-scoped via loan)
             channel_stats = db.execute(
                 text("""
                     SELECT
@@ -1142,13 +1156,14 @@ class DocumentFollowUpAgent(SpecializedAgent):
                               THEN 1 END) as engaged
                     FROM followup_events fe
                     JOIN followup_campaigns fc ON fc.id = fe.campaign_id
+                    JOIN loans l ON l.id = fc.loan_id AND l.organization_id = :org_id
                     WHERE fc.borrower_id = :borrower_id
                         AND fe.event_type NOT IN (
                             'borrower_responded', 'document_uploaded'
                         )
                     GROUP BY fe.channel
                 """),
-                {"borrower_id": borrower_id},
+                {"borrower_id": borrower_id, "org_id": org_id},
             ).fetchall()
 
             # Determine preferred response channel
@@ -1257,7 +1272,9 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
                      "WHERE id = :loan_id AND organization_id = :org_id"),
@@ -1267,12 +1284,15 @@ class DocumentFollowUpAgent(SpecializedAgent):
             if not loan:
                 return ToolResult(success=False, error=f"Loan {loan_id} not found")
 
+            # Verify campaign belongs to org (via loan)
+            self.verify_campaign_tenant(db, campaign_id)
+
             from services.smart_docs.followup_automation_service import (
                 get_followup_automation_service,
             )
             service = get_followup_automation_service(db)
 
-            # Get campaign info
+            # Get campaign info (already verified ownership above)
             campaign = db.execute(
                 text("""
                     SELECT id, borrower_id, reminders_sent, started_at,
@@ -1360,7 +1380,10 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
+            # Get loan details (ownership already verified above)
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
                      "WHERE id = :loan_id AND organization_id = :org_id"),
@@ -1658,7 +1681,10 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Get timestamps when borrower responded or uploaded docs
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
+            # Get timestamps when borrower responded or uploaded docs (org-scoped via loan)
             responses = db.execute(
                 text("""
                     SELECT
@@ -1667,16 +1693,17 @@ class DocumentFollowUpAgent(SpecializedAgent):
                         EXTRACT(HOUR FROM fe.created_at) as hour_of_day
                     FROM followup_events fe
                     JOIN followup_campaigns fc ON fc.id = fe.campaign_id
+                    JOIN loans l ON l.id = fc.loan_id AND l.organization_id = :org_id
                     WHERE fc.borrower_id = :borrower_id
                         AND fe.event_type IN (
                             'borrower_responded', 'document_uploaded'
                         )
                     ORDER BY fe.created_at DESC
                 """),
-                {"borrower_id": borrower_id},
+                {"borrower_id": borrower_id, "org_id": org_id},
             ).fetchall()
 
-            # Also look at email open/click times
+            # Also look at email open/click times (org-scoped via loan)
             engagement_times = db.execute(
                 text("""
                     SELECT
@@ -1687,10 +1714,11 @@ class DocumentFollowUpAgent(SpecializedAgent):
                             as hour_of_day
                     FROM followup_events fe
                     JOIN followup_campaigns fc ON fc.id = fe.campaign_id
+                    JOIN loans l ON l.id = fc.loan_id AND l.organization_id = :org_id
                     WHERE fc.borrower_id = :borrower_id
                         AND (fe.opened_at IS NOT NULL OR fe.clicked_at IS NOT NULL)
                 """),
-                {"borrower_id": borrower_id},
+                {"borrower_id": borrower_id, "org_id": org_id},
             ).fetchall()
 
             all_events = list(responses) + list(engagement_times)
@@ -1874,7 +1902,10 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
+            # Get loan details (ownership already verified above)
             loan = db.execute(
                 text("SELECT id, loan_number FROM loans "
                      "WHERE id = :loan_id AND organization_id = :org_id"),
@@ -2061,7 +2092,10 @@ class DocumentFollowUpAgent(SpecializedAgent):
         org_id = self.require_org_id()
         db = SessionLocal()
         try:
-            # Verify loan ownership
+            # Verify loan belongs to org
+            self.verify_loan_tenant(db, loan_id)
+
+            # Get loan details (ownership already verified above)
             loan = db.execute(
                 text("SELECT id, loan_number, borrower_name FROM loans "
                      "WHERE id = :loan_id AND organization_id = :org_id"),

@@ -35,6 +35,7 @@ except ImportError:
     HAS_ANTHROPIC = False
 
 from models.smart_docs_models import DocType
+from services.smart_docs.ai_resilience import resilient_ai_call
 
 logger = logging.getLogger(__name__)
 
@@ -699,48 +700,133 @@ class AIDocumentClassifierService:
         mime_type: str,
         filename: str,
         ocr_text: Optional[str] = None,
+        db: Optional[Session] = None,
+        organization_id: Optional[int] = None,
     ) -> ClassificationResult:
         """
         Classify a mortgage document using AI with rule-based fallback.
+
+        When db and organization_id are provided, results are cached by
+        document hash to avoid re-processing identical documents.
 
         Args:
             file_content: Raw file bytes.
             mime_type: MIME type (application/pdf, image/jpeg, etc.).
             filename: Original filename.
             ocr_text: Pre-extracted OCR text (optional; skips extraction).
+            db: Optional SQLAlchemy session for cache lookups.
+            organization_id: Optional org ID for tenant-scoped caching.
 
         Returns:
             ClassificationResult with predicted type, confidence, and features.
         """
         start_ms = _now_ms()
 
+        # --- Document cache lookup ---
+        doc_hash = None
+        cache_service = None
+        if db is not None and organization_id is not None and file_content:
+            try:
+                from services.smart_docs.document_cache_service import get_document_cache_service
+                cache_service = get_document_cache_service()
+                doc_hash = cache_service.get_or_compute_hash(file_content)
+                cached = cache_service.get_cached_classification(db, doc_hash, organization_id)
+                if cached is not None:
+                    logger.info(
+                        "doc_cache CLASSIFICATION_HIT hash=%s org=%s filename=%s",
+                        doc_hash[:12], organization_id, filename,
+                    )
+                    return ClassificationResult(
+                        predicted_type=cached.get("predicted_type", "OTHER"),
+                        confidence=cached.get("confidence", 0),
+                        alternatives=cached.get("alternatives", []),
+                        features_detected=cached.get("features_detected", {}),
+                        text_snippet=cached.get("text_snippet", ""),
+                        model_used=cached.get("model_used", "cache"),
+                        duration_ms=_now_ms() - start_ms,
+                        success=True,
+                    )
+                else:
+                    logger.info(
+                        "doc_cache CLASSIFICATION_MISS hash=%s org=%s filename=%s",
+                        doc_hash[:12], organization_id, filename,
+                    )
+            except Exception as e:
+                logger.warning("doc_cache classification lookup failed: %s", e)
+
+        # Helper: cache result before returning
+        def _cache_and_return(result: ClassificationResult) -> ClassificationResult:
+            if cache_service and doc_hash and db is not None and organization_id is not None:
+                if result.success and result.confidence >= 40:
+                    try:
+                        cache_service.cache_classification(db, doc_hash, organization_id, {
+                            "predicted_type": result.predicted_type,
+                            "confidence": result.confidence,
+                            "alternatives": result.alternatives,
+                            "features_detected": result.features_detected,
+                            "text_snippet": result.text_snippet,
+                            "model_used": result.model_used,
+                        })
+                    except Exception as e:
+                        logger.warning("doc_cache classification store failed: %s", e)
+            return result
+
         # Try AI classification first
+        fallback_used = False
         if self._anthropic:
             try:
                 result = self._classify_with_ai(file_content, mime_type, ocr_text)
                 if result.success and result.confidence >= 40:
                     result.duration_ms = _now_ms() - start_ms
-                    return result
+                    logger.info(
+                        "Document classified | doc_type=%s | confidence=%d | "
+                        "duration_ms=%d | fallback_used=False | filename=%s",
+                        result.predicted_type,
+                        result.confidence,
+                        result.duration_ms,
+                        filename,
+                    )
+                    return _cache_and_return(result)
                 # Low-confidence AI result -- supplement with rules
                 logger.info(
                     "AI classification low confidence (%d) for %s, supplementing with rules",
                     result.confidence,
                     filename,
                 )
+                fallback_used = True
             except Exception as e:
                 logger.warning("AI classification failed for %s: %s", filename, e)
+                fallback_used = True
 
         # Fallback: rule-based classification
         # Use OCR text if available, otherwise try filename
         if ocr_text:
             result = self.classify_by_text(ocr_text, filename)
             result.duration_ms = _now_ms() - start_ms
-            return result
+            logger.info(
+                "Document classified | doc_type=%s | confidence=%d | "
+                "duration_ms=%d | fallback_used=%s | filename=%s",
+                result.predicted_type,
+                result.confidence,
+                result.duration_ms,
+                fallback_used,
+                filename,
+            )
+            return _cache_and_return(result)
 
         # No OCR text and AI unavailable -- classify by filename only
         result = self.classify_by_filename(filename)
         result.duration_ms = _now_ms() - start_ms
-        return result
+        logger.info(
+            "Document classified | doc_type=%s | confidence=%d | "
+            "duration_ms=%d | fallback_used=%s | filename=%s",
+            result.predicted_type,
+            result.confidence,
+            result.duration_ms,
+            fallback_used,
+            filename,
+        )
+        return _cache_and_return(result)
 
     # -------------------------------------------------------------------------
     # PUBLIC: classify_by_text
@@ -996,12 +1082,30 @@ class AIDocumentClassifierService:
                         error=f"Unsupported mime type for AI classification: {mime_type}",
                     )
 
-            response = self._anthropic.messages.create(
+            response = resilient_ai_call(
+                client=self._anthropic,
+                messages=[{"role": "user", "content": messages_content}],
                 model=self._model,
                 max_tokens=1024,
+                operation_name="classify_document",
+                timeout=30.0,
                 system=AI_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": messages_content}],
             )
+
+            if response is None:
+                # AI call failed after retries or circuit is open -- trigger fallback
+                logger.warning("AI classification unavailable, falling back to rules")
+                return ClassificationResult(
+                    predicted_type=DocType.OTHER.value,
+                    confidence=0,
+                    alternatives=[],
+                    features_detected={},
+                    text_snippet=ocr_text[:1000] if ocr_text else "",
+                    model_used=self._model,
+                    duration_ms=_now_ms() - start_ms,
+                    success=False,
+                    error="AI call failed after retries or circuit breaker open",
+                )
 
             # Parse the response
             response_text = response.content[0].text.strip()

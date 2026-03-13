@@ -1,0 +1,567 @@
+/**
+ * AppointmentTypesStep — Guided Setup Step 3
+ *
+ * Follows CalendarSettings.css patterns (Perennia brand #218D8D, slate text,
+ * border-radius: 10-12px, input focus ring).
+ */
+
+/* ============================================================================
+   Container
+   ============================================================================ */
+
+.appt-types-step {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.appt-types-step .step-intro {
+  margin-bottom: 24px;
+}
+
+.appt-types-step .step-intro h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.appt-types-step .step-intro p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Live count banner
+   ============================================================================ */
+
+.appt-types-step .enabled-count-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.appt-types-step .enabled-count-banner.has-enabled {
+  background: #e6f5f5;
+  color: #155e5e;
+}
+
+.appt-types-step .enabled-count-banner.none-enabled {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.appt-types-step .enabled-count-banner i {
+  font-size: 15px;
+}
+
+/* ============================================================================
+   Type card list
+   ============================================================================ */
+
+.appt-types-step .type-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+/* ============================================================================
+   Individual type card
+   ============================================================================ */
+
+.appt-type-card {
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.15s, opacity 0.2s, border-color 0.15s;
+}
+
+.appt-type-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.appt-type-card.disabled-card {
+  opacity: 0.55;
+  background: #f8fafc;
+}
+
+.appt-type-card.editing {
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.12);
+}
+
+.appt-type-card.custom-card {
+  border-style: dashed;
+}
+
+/* Color bar */
+.appt-type-card .card-color-bar {
+  width: 5px;
+  flex-shrink: 0;
+  transition: background-color 0.2s;
+}
+
+/* Card body */
+.appt-type-card .card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Summary row (always visible) */
+.appt-type-card .card-summary {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.appt-type-card .card-summary:hover {
+  background: #fafbfc;
+}
+
+.appt-type-card .card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.appt-type-card .card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.appt-type-card .card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appt-type-card .card-custom-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #92400e;
+  flex-shrink: 0;
+}
+
+.appt-type-card .card-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Meta badges */
+.appt-type-card .card-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.appt-type-card .meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.appt-type-card .meta-badge i {
+  font-size: 11px;
+}
+
+/* Card controls (toggle + reorder) */
+.appt-type-card .card-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Reorder buttons */
+.appt-type-card .reorder-btn {
+  background: none;
+  border: 1px solid transparent;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.appt-type-card .reorder-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.appt-type-card .reorder-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* Toggle switch (matches CalendarSettings.css .toggle-switch) */
+.appt-type-card .type-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.appt-type-card .type-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.appt-type-card .type-toggle .toggle-track {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #cbd5e1;
+  border-radius: 24px;
+  transition: background-color 0.2s;
+}
+
+.appt-type-card .type-toggle .toggle-track::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.appt-type-card .type-toggle input:checked + .toggle-track {
+  background-color: #218D8D;
+}
+
+.appt-type-card .type-toggle input:checked + .toggle-track::before {
+  transform: translateX(20px);
+}
+
+.appt-type-card .type-toggle input:focus-visible + .toggle-track {
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.2);
+}
+
+/* ============================================================================
+   Inline editor (expanded below summary)
+   ============================================================================ */
+
+.appt-type-card .card-editor {
+  padding: 0 16px 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.appt-type-card .editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.appt-type-card .editor-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.appt-type-card .editor-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.appt-type-card .editor-field label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.appt-type-card .editor-field input[type="text"],
+.appt-type-card .editor-field textarea,
+.appt-type-card .editor-field select {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+  width: 100%;
+  font-family: inherit;
+}
+
+.appt-type-card .editor-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.appt-type-card .editor-field input:focus,
+.appt-type-card .editor-field textarea:focus,
+.appt-type-card .editor-field select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+/* Color picker row */
+.appt-type-card .color-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.appt-type-card .color-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s, border-color 0.15s;
+}
+
+.appt-type-card .color-dot:hover {
+  transform: scale(1.15);
+}
+
+.appt-type-card .color-dot.selected {
+  border-color: #1e293b;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #1e293b;
+}
+
+/* Meeting mode radio group */
+.appt-type-card .mode-options {
+  display: flex;
+  gap: 8px;
+}
+
+.appt-type-card .mode-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #475569;
+  transition: all 0.15s;
+  background: white;
+}
+
+.appt-type-card .mode-option:hover {
+  border-color: #cbd5e1;
+}
+
+.appt-type-card .mode-option.selected {
+  border-color: #218D8D;
+  background: #e6f5f5;
+  color: #155e5e;
+  font-weight: 500;
+}
+
+.appt-type-card .mode-option input[type="radio"] {
+  display: none;
+}
+
+.appt-type-card .mode-option i {
+  font-size: 14px;
+}
+
+/* Editor actions */
+.appt-type-card .editor-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.appt-type-card .editor-actions .editor-left-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.appt-type-card .editor-actions .editor-right-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.appt-type-card .editor-btn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #475569;
+}
+
+.appt-type-card .editor-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.appt-type-card .editor-btn.btn-save {
+  background: #218D8D;
+  color: white;
+  border-color: #218D8D;
+}
+
+.appt-type-card .editor-btn.btn-save:hover {
+  background: #1a7a7a;
+}
+
+.appt-type-card .editor-btn.btn-save:disabled {
+  background: #7cc5c5;
+  border-color: #7cc5c5;
+  cursor: not-allowed;
+}
+
+.appt-type-card .editor-btn.btn-danger {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.appt-type-card .editor-btn.btn-danger:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+/* ============================================================================
+   Add Custom Type button
+   ============================================================================ */
+
+.appt-types-step .add-custom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 20px;
+}
+
+.appt-types-step .add-custom-btn:hover {
+  border-color: #218D8D;
+  color: #218D8D;
+  background: #f0fafa;
+}
+
+.appt-types-step .add-custom-btn i {
+  font-size: 15px;
+}
+
+/* ============================================================================
+   Validation error
+   ============================================================================ */
+
+.appt-types-step .validation-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.appt-types-step .validation-error i {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .appt-type-card .card-summary {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .appt-type-card .card-controls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .appt-type-card .card-meta {
+    width: 100%;
+  }
+
+  .appt-type-card .editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appt-type-card .editor-field.full-width {
+    grid-column: 1;
+  }
+
+  .appt-type-card .mode-options {
+    flex-wrap: wrap;
+  }
+
+  .appt-type-card .editor-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .appt-type-card .editor-actions .editor-left-actions,
+  .appt-type-card .editor-actions .editor-right-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

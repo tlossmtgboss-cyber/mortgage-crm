@@ -806,11 +806,33 @@ def _generate_available_slots(
             if check_cross_source else []
         )
 
+        # Check if user has recurring availability patterns (takes precedence over JSON working_hours)
+        _recurring_schedule = None
+        try:
+            from services.recurring_availability_service import RecurringAvailabilityService
+            _ra_service = RecurringAvailabilityService(db)
+            _ra_check = _ra_service.get_weekly_schedule(user_id, org_id) if org_id else []
+            if _ra_check:
+                _recurring_schedule = _ra_service
+        except Exception as e:
+            logger.debug(f"RecurringAvailability not available, using JSON working_hours: {e}")
+
         # Generate slots day by day
         current_date = start_date
         while current_date <= end_date:
             day_name = current_date.strftime("%A").lower()
-            day_hours = working_hours.get(day_name, {})
+
+            # If recurring availability is configured, use it instead of JSON working_hours
+            if _recurring_schedule:
+                effective_blocks = _recurring_schedule.get_effective_schedule(user_id, org_id, current_date)
+                if not effective_blocks:
+                    current_date += timedelta(days=1)
+                    continue
+                # Use the first and last block to define the working window
+                # (individual blocks are respected in the slot generation below)
+                day_hours = {"enabled": True, "start": effective_blocks[0]["start"], "end": effective_blocks[-1]["end"]}
+            else:
+                day_hours = working_hours.get(day_name, {})
 
             if not day_hours.get("enabled", False):
                 current_date += timedelta(days=1)
@@ -847,10 +869,23 @@ def _generate_available_slots(
                     slot_start += timedelta(minutes=30)
                     continue
 
-                # Skip lunch break
-                if lunch_start and lunch_end and slot_start < lunch_end and slot_end > lunch_start:
+                # Skip lunch break (only when not using recurring availability, which handles gaps natively)
+                if not _recurring_schedule and lunch_start and lunch_end and slot_start < lunch_end and slot_end > lunch_start:
                     slot_start += timedelta(minutes=30)
                     continue
+
+                # When recurring availability is active, verify slot falls within an effective block
+                if _recurring_schedule and effective_blocks:
+                    in_block = False
+                    for blk in effective_blocks:
+                        blk_start = datetime.combine(current_date, datetime.strptime(blk["start"], "%H:%M").time())
+                        blk_end = datetime.combine(current_date, datetime.strptime(blk["end"], "%H:%M").time())
+                        if slot_start >= blk_start and slot_end <= blk_end:
+                            in_block = True
+                            break
+                    if not in_block:
+                        slot_start += timedelta(minutes=30)
+                        continue
 
                 # Check blocked times
                 is_blocked = any(

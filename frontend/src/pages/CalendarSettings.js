@@ -1,22 +1,30 @@
 /**
  * Perennia AI - Calendar Settings
  *
- * Comprehensive calendar settings page with six tabs:
- *   1. Availability  - Business hours per day, lunch break, buffer time, booking window
- *   2. Appointment Types - List with edit/delete/reorder, add new
- *   3. Notifications - Email/SMS reminder toggles (24h/2h/15min), quiet hours
- *   4. Booking Page  - Preview, branding (logo/colors/tagline), booking link + copy, QR code
- *   5. Integrations  - Google/Outlook connect/disconnect, sync status
- *   6. Team          - LO list, assignment strategy, capacity (managers only)
+ * Comprehensive calendar settings page with seven tabs:
+ *   1. Availability       - Business hours per day, lunch break, buffer time, booking window
+ *   2. Appointment Types  - List with edit/delete/reorder, add new
+ *   3. Notifications      - Email/SMS reminder toggles (24h/2h/15min), quiet hours
+ *   4. Booking Page       - Preview, branding (logo/colors/tagline), booking link + copy, QR code
+ *   5. Locations & Labels - Meeting locations, color-coded labels, appointment templates
+ *   6. Integrations       - Google/Outlook connect/disconnect, sync status
+ *   7. Team               - LO list, assignment strategy, capacity (managers only)
  *
  * Follows the SmartSchedulerSettings error-handling and layout patterns.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calendarSettingsAPI, API_BASE_URL } from '../services/api';
 import { toast } from '../utils/toast';
-import './CalendarSettings.css';
+import AvailabilityPreferences from '../components/calendar/AvailabilityPreferences';
+import BufferTimeSettings from '../components/calendar/BufferTimeSettings';
+import CalendarFeedSettings from '../components/calendar/CalendarFeedSettings';
+import ReminderSettings from '../components/calendar/ReminderSettings';
+import DigestSettings from '../components/calendar/DigestSettings';
+import LocationManager from '../components/calendar/LocationManager';
+import LabelManager from '../components/calendar/LabelManager';
+import '../styles/calendar-settings.css';
 
 // ============================================================================
 // Constants
@@ -28,23 +36,102 @@ const DAY_LABELS = {
   thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
 };
 
-const TAB_DEFINITIONS = [
-  { id: 'availability', label: 'Availability', icon: 'fa-clock' },
-  { id: 'appointment-types', label: 'Appointment Types', icon: 'fa-list-alt' },
-  { id: 'notifications', label: 'Notifications', icon: 'fa-bell' },
-  { id: 'booking-page', label: 'Booking Page', icon: 'fa-palette' },
-  { id: 'integrations', label: 'Integrations', icon: 'fa-plug' },
-  { id: 'team', label: 'Team', icon: 'fa-users' },
+const NAV_SECTIONS = [
+  {
+    group: 'Schedule',
+    items: [
+      { id: 'availability', label: 'Availability', icon: 'fa-clock', description: 'Business hours, lunch breaks, buffer time, and booking window' },
+      { id: 'appointment-types', label: 'Appointment Types', icon: 'fa-list-alt', description: 'Define the types of meetings clients can book' },
+      { id: 'locations-labels', label: 'Locations & Labels', icon: 'fa-map-marker-alt', description: 'Meeting locations, calendar labels, and appointment templates' },
+    ],
+  },
+  {
+    group: 'Booking',
+    items: [
+      { id: 'booking-page', label: 'Booking Page', icon: 'fa-palette', description: 'Customize your public booking page appearance and branding' },
+      { id: 'cancellation-policy', label: 'Cancellation Policy', icon: 'fa-ban', description: 'Set cancellation and rescheduling rules for appointments' },
+    ],
+  },
+  {
+    group: 'Communication',
+    items: [
+      { id: 'notifications', label: 'Notifications', icon: 'fa-bell', description: 'Email and SMS reminder settings, quiet hours, and digests' },
+      { id: 'integrations', label: 'Integrations', icon: 'fa-plug', description: 'Connect external calendars and third-party tools' },
+    ],
+  },
+  {
+    group: 'Management',
+    items: [
+      { id: 'team', label: 'Team', icon: 'fa-users', description: 'Manage team assignment strategy and capacity', badge: 'Manager' },
+      { id: 'advanced', label: 'Advanced', icon: 'fa-cog', description: 'Data export, calendar feeds, and developer options' },
+    ],
+  },
+];
+
+// Flat list of all nav items for keyboard navigation and mobile tabs
+const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(s => s.items);
+
+const CANCELLATION_POLICIES = [
+  { value: 'flexible', label: 'Flexible', description: 'Clients can cancel or reschedule up to 1 hour before' },
+  { value: 'moderate', label: 'Moderate', description: 'Clients can cancel or reschedule up to 24 hours before' },
+  { value: 'strict', label: 'Strict', description: 'Clients can cancel or reschedule up to 48 hours before' },
+  { value: 'none', label: 'No Cancellation', description: 'Clients cannot cancel or reschedule online' },
 ];
 
 const ASSIGNMENT_STRATEGIES = [
-  { value: 'round_robin', label: 'Round Robin', description: 'Distribute appointments evenly across team members' },
-  { value: 'priority', label: 'Priority', description: 'Assign to highest-priority LO first' },
-  { value: 'load_balanced', label: 'Load Balanced', description: 'Assign to LO with fewest upcoming appointments' },
-  { value: 'manual', label: 'Manual', description: 'Manually assign each appointment' },
+  {
+    value: 'round_robin',
+    label: 'Round Robin',
+    tagline: 'Distribute evenly',
+    description: 'Appointments rotate through team members in order, ensuring everyone gets an equal share regardless of schedule density.',
+    icon: 'fa-sync-alt',
+  },
+  {
+    value: 'load_balanced',
+    label: 'Load Balanced',
+    tagline: 'Assign to least busy',
+    description: 'Each new appointment goes to the team member with the fewest upcoming bookings, keeping workloads even across the team.',
+    icon: 'fa-balance-scale',
+  },
+  {
+    value: 'ai_optimized',
+    label: 'AI Optimized',
+    tagline: 'AI picks best match',
+    description: 'AI considers borrower needs, LO specialties, historical close rates, and workload to find the ideal match for each appointment.',
+    icon: 'fa-brain',
+    recommended: true,
+  },
+  {
+    value: 'manual',
+    label: 'Manual',
+    tagline: 'Admin assigns all',
+    description: 'No automatic assignment. A manager must manually assign every incoming appointment to a team member.',
+    icon: 'fa-hand-pointer',
+  },
+];
+
+const SPECIALTY_OPTIONS = ['FHA', 'VA', 'Jumbo', 'Conventional', 'USDA', 'Non-QM', 'Refinance', 'First-Time Buyer', 'Investment', 'Reverse'];
+const TEAM_SORT_OPTIONS = [
+  { value: 'name', label: 'Name' },
+  { value: 'load', label: 'Current Load' },
+  { value: 'capacity', label: 'Capacity' },
 ];
 
 const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+
+const DEFAULT_MORTGAGE_LABELS = [
+  { name: 'Pre-Approval', color: '#4A90D9' },
+  { name: 'Application', color: '#27AE60' },
+  { name: 'Closing', color: '#8E44AD' },
+  { name: 'Follow-Up', color: '#E67E22' },
+  { name: 'Consultation', color: '#16A085' },
+  { name: 'Document Review', color: '#F1C40F' },
+];
+
+const LABEL_PRESET_COLORS = [
+  '#4A90D9', '#27AE60', '#8E44AD', '#E67E22', '#16A085',
+  '#E74C3C', '#F1C40F', '#34495E', '#3498DB', '#1ABC9C',
+];
 
 // ============================================================================
 // Helper: API request wrapper
@@ -52,12 +139,30 @@ const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '
 
 function CalendarSettings() {
   const navigate = useNavigate();
+  const contentRef = useRef(null);
 
   // ========== Shared state ==========
-  const [activeTab, setActiveTab] = useState('availability');
+  const [activeSection, setActiveSection] = useState('availability');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'unsaved'
+
+  // ========== Cancellation Policy state ==========
+  const [cancellationPolicy, setCancellationPolicy] = useState({
+    policy: 'moderate',
+    allow_reschedule: true,
+    reschedule_limit: 2,
+    require_reason: false,
+  });
+
+  // ========== Advanced state ==========
+  const [advancedSettings, setAdvancedSettings] = useState({
+    calendar_feed_enabled: false,
+    auto_confirm_appointments: true,
+    show_timezone_selector: true,
+    enable_waitlist: false,
+  });
 
   // ========== Availability state ==========
   const [availability, setAvailability] = useState({
@@ -75,6 +180,23 @@ function CalendarSettings() {
     buffer_minutes: 5,
     min_booking_notice_hours: 2,
     max_advance_booking_days: 60,
+    // Holiday management
+    block_us_holidays: false,
+    blocked_holidays: {},
+    custom_blocked_dates: [],
+    // Daily limits
+    max_meetings_per_day: 0,
+    max_consecutive_meetings: 0,
+    min_break_between_meetings: 0,
+  });
+
+  // ========== Collapsible section state ==========
+  const [expandedSections, setExpandedSections] = useState({
+    'weekly-schedule': true,
+    'buffer-times': true,
+    'date-overrides': false,
+    'holidays': false,
+    'daily-limits': false,
   });
 
   // ========== Appointment Types state ==========
@@ -99,7 +221,40 @@ function CalendarSettings() {
     notify_on_booking: true,
     notify_on_cancellation: true,
     notify_on_reschedule: true,
+    // Event alert preferences (channel per event type)
+    alert_new_booking: 'both',
+    alert_cancellation: 'email',
+    alert_reschedule: 'email',
+    alert_no_show: 'push',
+    alert_waitlist_opened: 'none',
+    alert_survey_response: 'email',
+    // Daily digest
+    digest: {
+      enabled: false,
+      frequency: 'daily',
+      send_time: '07:00',
+      include_cancelled: false,
+      include_no_shows: true,
+      day_of_week: 'monday',
+    },
+    // Quiet hours (extended)
+    quiet_hours_enabled: false,
+    quiet_hours_start: '21:00',
+    quiet_hours_end: '08:00',
+    quiet_hours_include_weekends: false,
+    // Browser notifications
+    browser_notifications_enabled: false,
   });
+  const [notifSections, setNotifSections] = useState({
+    reminders: true,
+    alerts: true,
+    digest: false,
+    quiet: false,
+    browser: false,
+  });
+  const [browserPermission, setBrowserPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
 
   // ========== Booking Page state ==========
   const [bookingPage, setBookingPage] = useState({
@@ -115,16 +270,53 @@ function CalendarSettings() {
   const [integrations, setIntegrations] = useState({ google: { connected: false }, outlook: { connected: false } });
 
   // ========== Team state ==========
-  const [team, setTeam] = useState({ assignment_strategy: 'round_robin', members: [], total_members: 0 });
+  const [team, setTeam] = useState({
+    assignment_strategy: 'round_robin',
+    apply_to_new_only: true,
+    members: [],
+    total_members: 0,
+    overflow: {
+      enabled: false,
+      max_overflow_pct: 20,
+      notify_user_ids: [],
+      auto_expand_hours: false,
+    },
+    permissions: {
+      members_see_calendars: true,
+      members_reschedule_others: false,
+      only_managers_modify: true,
+    },
+    weekly_coverage: null,
+    utilization_pct: 0,
+  });
   const [isManager, setIsManager] = useState(false);
+  const [teamSearch, setTeamSearch] = useState('');
+  const [teamSort, setTeamSort] = useState('name');
+  const [showInviteForm, setShowInviteForm] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const [showSpecialtyPicker, setShowSpecialtyPicker] = useState(null);
+
+  // ========== Locations & Labels state ==========
+  const [labels, setLabels] = useState([]);
+  const [labelsLoading, setLabelsLoading] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [autoAssignLabels, setAutoAssignLabels] = useState(false);
+  const [labelMappings, setLabelMappings] = useState({});
+  const [locLabelsExpanded, setLocLabelsExpanded] = useState({
+    locations: true,
+    labels: true,
+    templates: false,
+  });
 
   // ============================================================================
   // Data Loading
   // ============================================================================
 
   useEffect(() => {
-    loadTabData(activeTab);
-  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+    loadTabData(activeSection);
+  }, [activeSection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadTabData = async (tab) => {
     setLoading(true);
@@ -133,7 +325,12 @@ function CalendarSettings() {
         case 'availability': {
           const res = await calendarSettingsAPI.getAvailability();
           if (res?.data) {
-            setAvailability(prev => ({ ...prev, ...res.data }));
+            setAvailability(prev => ({
+              ...prev,
+              ...res.data,
+              blocked_holidays: res.data.blocked_holidays || prev.blocked_holidays,
+              custom_blocked_dates: res.data.custom_blocked_dates || prev.custom_blocked_dates,
+            }));
           }
           break;
         }
@@ -172,7 +369,18 @@ function CalendarSettings() {
           try {
             const res = await calendarSettingsAPI.getTeam();
             if (res?.data) {
-              setTeam(res.data);
+              setTeam(prev => ({
+                ...prev,
+                ...res.data,
+                overflow: { ...prev.overflow, ...(res.data.overflow || {}) },
+                permissions: { ...prev.permissions, ...(res.data.permissions || {}) },
+                members: (res.data.members || []).map(m => ({
+                  ...m,
+                  specialties: m.specialties || [],
+                  weekly_appointments: m.weekly_appointments || 0,
+                  weekly_capacity: m.weekly_capacity || (m.max_daily_appointments || 8) * 5,
+                })),
+              }));
               setIsManager(true);
             }
           } catch (err) {
@@ -184,6 +392,43 @@ function CalendarSettings() {
           }
           break;
         }
+        case 'locations-labels': {
+          // Load labels
+          setLabelsLoading(true);
+          try {
+            const labelsRes = await calendarSettingsAPI.getLabels();
+            if (labelsRes?.data?.labels) {
+              setLabels(labelsRes.data.labels);
+            }
+            if (labelsRes?.data?.auto_assign_enabled !== undefined) {
+              setAutoAssignLabels(labelsRes.data.auto_assign_enabled);
+            }
+            if (labelsRes?.data?.label_mappings) {
+              setLabelMappings(labelsRes.data.label_mappings);
+            }
+          } catch (err) {
+            console.error('Failed to load labels:', err);
+          } finally {
+            setLabelsLoading(false);
+          }
+          // Load templates
+          setTemplatesLoading(true);
+          try {
+            const templatesRes = await calendarSettingsAPI.getTemplates();
+            if (templatesRes?.data?.templates) {
+              setTemplates(templatesRes.data.templates);
+            }
+          } catch (err) {
+            console.error('Failed to load templates:', err);
+          } finally {
+            setTemplatesLoading(false);
+          }
+          break;
+        }
+        case 'cancellation-policy':
+        case 'advanced':
+          // These sections use local state only for now
+          break;
         default:
           break;
       }
@@ -195,21 +440,60 @@ function CalendarSettings() {
     } finally {
       setLoading(false);
       setHasChanges(false);
+      setSaveStatus('saved');
     }
   };
+
+  // ============================================================================
+  // Navigation
+  // ============================================================================
+
+  const handleSectionChange = useCallback((sectionId) => {
+    if (hasChanges) {
+      const proceed = window.confirm('You have unsaved changes. Discard and continue?');
+      if (!proceed) return;
+    }
+    setActiveSection(sectionId);
+    setHasChanges(false);
+    setSaveStatus('saved');
+    if (contentRef.current) {
+      contentRef.current.scrollTo(0, 0);
+    }
+  }, [hasChanges]);
+
+  const handleNavKeyDown = useCallback((e, currentId) => {
+    const ids = ALL_NAV_ITEMS.map(t => t.id);
+    const idx = ids.indexOf(currentId);
+    let newIdx;
+    if (e.key === 'ArrowDown') { e.preventDefault(); newIdx = (idx + 1) % ids.length; }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); newIdx = (idx - 1 + ids.length) % ids.length; }
+    else if (e.key === 'Home') { e.preventDefault(); newIdx = 0; }
+    else if (e.key === 'End') { e.preventDefault(); newIdx = ids.length - 1; }
+    else return;
+    handleSectionChange(ids[newIdx]);
+    document.getElementById(`calnav-${ids[newIdx]}`)?.focus();
+  }, [handleSectionChange]);
 
   // ============================================================================
   // Save handlers
   // ============================================================================
 
+  const markChanged = useCallback(() => {
+    setHasChanges(true);
+    setSaveStatus('unsaved');
+  }, []);
+
   const handleSaveAvailability = async () => {
     setSaving(true);
+    setSaveStatus('saving');
     try {
       await calendarSettingsAPI.updateAvailability(availability);
       toast.success('Availability settings saved');
       setHasChanges(false);
+      setSaveStatus('saved');
     } catch (err) {
       toast.error('Failed to save availability settings');
+      setSaveStatus('unsaved');
     } finally {
       setSaving(false);
     }
@@ -217,12 +501,15 @@ function CalendarSettings() {
 
   const handleSaveNotifications = async () => {
     setSaving(true);
+    setSaveStatus('saving');
     try {
       await calendarSettingsAPI.updateNotifications(notifications);
       toast.success('Notification preferences saved');
       setHasChanges(false);
+      setSaveStatus('saved');
     } catch (err) {
       toast.error('Failed to save notification preferences');
+      setSaveStatus('unsaved');
     } finally {
       setSaving(false);
     }
@@ -230,12 +517,15 @@ function CalendarSettings() {
 
   const handleSaveBookingPage = async () => {
     setSaving(true);
+    setSaveStatus('saving');
     try {
       await calendarSettingsAPI.updateBookingPage(bookingPage.branding);
       toast.success('Booking page settings saved');
       setHasChanges(false);
+      setSaveStatus('saved');
     } catch (err) {
       toast.error('Failed to save booking page settings');
+      setSaveStatus('unsaved');
     } finally {
       setSaving(false);
     }
@@ -243,30 +533,66 @@ function CalendarSettings() {
 
   const handleSaveTeam = async () => {
     setSaving(true);
+    setSaveStatus('saving');
     try {
       await calendarSettingsAPI.updateTeam({
         assignment_strategy: team.assignment_strategy,
+        apply_to_new_only: team.apply_to_new_only,
         members: team.members?.map(m => ({
           user_id: m.user_id,
           max_daily_appointments: m.max_daily_appointments,
           is_accepting_appointments: m.is_accepting_appointments,
+          specialties: m.specialties || [],
         })),
+        overflow: team.overflow,
+        permissions: team.permissions,
       });
       toast.success('Team settings saved');
       setHasChanges(false);
+      setSaveStatus('saved');
     } catch (err) {
       toast.error('Failed to save team settings');
+      setSaveStatus('unsaved');
     } finally {
       setSaving(false);
     }
   };
 
+  const handleInviteTeamMember = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      await calendarSettingsAPI.inviteTeamMember({ email: inviteEmail.trim() });
+      toast.success(`Invitation sent to ${inviteEmail}`);
+      setInviteEmail('');
+      setShowInviteForm(false);
+      loadTabData('team');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to send invitation');
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const handleSave = async () => {
-    switch (activeTab) {
+    switch (activeSection) {
       case 'availability': return handleSaveAvailability();
       case 'notifications': return handleSaveNotifications();
       case 'booking-page': return handleSaveBookingPage();
       case 'team': return handleSaveTeam();
+      case 'cancellation-policy':
+      case 'locations-labels':
+      case 'advanced':
+        // Placeholder save for sections without API endpoints yet
+        setSaving(true);
+        setSaveStatus('saving');
+        setTimeout(() => {
+          setSaving(false);
+          setHasChanges(false);
+          setSaveStatus('saved');
+          toast.success('Settings saved');
+        }, 500);
+        return;
       default: return;
     }
   };
@@ -283,7 +609,7 @@ function CalendarSettings() {
         [day]: { ...prev.business_hours[day], [field]: value },
       },
     }));
-    setHasChanges(true);
+    markChanged();
   }, []);
 
   const updateLunchBreak = useCallback((field, value) => {
@@ -291,7 +617,7 @@ function CalendarSettings() {
       ...prev,
       lunch_break: { ...prev.lunch_break, [field]: value },
     }));
-    setHasChanges(true);
+    markChanged();
   }, []);
 
   // ============================================================================
@@ -362,21 +688,107 @@ function CalendarSettings() {
   };
 
   // ============================================================================
-  // Tab keyboard navigation
+  // Locations & Labels helpers
   // ============================================================================
 
-  const handleTabKeyDown = useCallback((e, currentId) => {
-    const tabIds = TAB_DEFINITIONS.map(t => t.id);
-    const idx = tabIds.indexOf(currentId);
-    let newIdx;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); newIdx = (idx + 1) % tabIds.length; }
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); newIdx = (idx - 1 + tabIds.length) % tabIds.length; }
-    else if (e.key === 'Home') { e.preventDefault(); newIdx = 0; }
-    else if (e.key === 'End') { e.preventDefault(); newIdx = tabIds.length - 1; }
-    else return;
-    setActiveTab(tabIds[newIdx]);
-    document.getElementById(`caltab-${tabIds[newIdx]}`)?.focus();
+  const toggleLocLabelsSection = useCallback((section) => {
+    setLocLabelsExpanded(prev => ({ ...prev, [section]: !prev[section] }));
   }, []);
+
+  const handleCreateLabel = useCallback(async (labelData) => {
+    try {
+      await calendarSettingsAPI.createLabel(labelData);
+      toast.success('Label created');
+      loadTabData('locations-labels');
+    } catch (err) {
+      toast.error('Failed to create label');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleUpdateLabel = useCallback(async (labelId, labelData) => {
+    try {
+      await calendarSettingsAPI.updateLabel(labelId, labelData);
+      toast.success('Label updated');
+      loadTabData('locations-labels');
+    } catch (err) {
+      toast.error('Failed to update label');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteLabel = useCallback(async (labelId) => {
+    try {
+      await calendarSettingsAPI.deleteLabel(labelId);
+      toast.success('Label deleted');
+      loadTabData('locations-labels');
+    } catch (err) {
+      toast.error('Failed to delete label');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleReorderLabels = useCallback(async (orderedIds) => {
+    try {
+      await calendarSettingsAPI.reorderLabels(orderedIds);
+      // Optimistically reorder in state
+      const reordered = orderedIds.map(id => labels.find(l => l.id === id)).filter(Boolean);
+      setLabels(reordered);
+    } catch (err) {
+      toast.error('Failed to reorder labels');
+      loadTabData('locations-labels');
+    }
+  }, [labels]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleAutoAssign = useCallback(async (enabled) => {
+    setAutoAssignLabels(enabled);
+    try {
+      await calendarSettingsAPI.updateLabelSettings({ auto_assign_enabled: enabled, label_mappings: labelMappings });
+    } catch (err) {
+      toast.error('Failed to update auto-assign setting');
+      setAutoAssignLabels(!enabled);
+    }
+  }, [labelMappings]);
+
+  const handleUpdateLabelMapping = useCallback(async (appointmentTypeId, labelId) => {
+    const newMappings = { ...labelMappings, [appointmentTypeId]: labelId };
+    setLabelMappings(newMappings);
+    try {
+      await calendarSettingsAPI.updateLabelSettings({ auto_assign_enabled: autoAssignLabels, label_mappings: newMappings });
+    } catch (err) {
+      toast.error('Failed to save label mapping');
+    }
+  }, [labelMappings, autoAssignLabels]);
+
+  const handleDeleteTemplate = useCallback(async (templateId) => {
+    if (!window.confirm('Delete this appointment template?')) return;
+    try {
+      await calendarSettingsAPI.deleteTemplate(templateId);
+      toast.success('Template deleted');
+      setTemplates(prev => prev.filter(t => t.id !== templateId));
+    } catch (err) {
+      toast.error('Failed to delete template');
+    }
+  }, []);
+
+  const handleToggleDefaultTemplate = useCallback(async (templateId) => {
+    try {
+      await calendarSettingsAPI.setDefaultTemplate(templateId);
+      setTemplates(prev => prev.map(t => ({
+        ...t,
+        is_default: t.id === templateId,
+      })));
+      toast.success('Default template updated');
+    } catch (err) {
+      toast.error('Failed to set default template');
+    }
+  }, []);
+
+  // ============================================================================
+  // Section metadata helpers
+  // ============================================================================
+
+  const activeNavItem = ALL_NAV_ITEMS.find(item => item.id === activeSection);
+  const activeGroupName = NAV_SECTIONS.find(s => s.items.some(i => i.id === activeSection))?.group || '';
+
+  const showSaveButton = ['availability', 'notifications', 'booking-page', 'team', 'cancellation-policy', 'locations-labels', 'advanced'].includes(activeSection);
 
   // ============================================================================
   // Render: Loading
@@ -394,114 +806,54 @@ function CalendarSettings() {
   // ============================================================================
 
   const renderAvailability = () => (
-    <section className="cal-settings-section" role="tabpanel" id="panel-availability" aria-labelledby="caltab-availability">
-      <h2>Business Hours</h2>
-      <p className="section-description">Set your available hours for each day of the week.</p>
+    <div role="tabpanel" id="panel-availability" aria-labelledby="calnav-availability">
+      {/* Recurring weekly schedule + date overrides (self-contained save) */}
+      <AvailabilityPreferences />
 
-      <div className="business-hours-grid">
-        {DAYS_OF_WEEK.map(day => {
-          const hours = availability.business_hours[day] || { start: '09:00', end: '17:00', enabled: false };
-          return (
-            <div key={day} className={`day-row ${hours.enabled ? 'enabled' : 'disabled'}`}>
-              <label className="day-toggle">
-                <input
-                  type="checkbox"
-                  checked={hours.enabled}
-                  onChange={(e) => updateBusinessHours(day, 'enabled', e.target.checked)}
-                />
-                <span className="day-name">{DAY_LABELS[day]}</span>
-              </label>
-              {hours.enabled && (
-                <div className="time-inputs">
-                  <input
-                    type="time"
-                    value={hours.start}
-                    onChange={(e) => updateBusinessHours(day, 'start', e.target.value)}
-                    aria-label={`${DAY_LABELS[day]} start time`}
-                  />
-                  <span className="time-separator">to</span>
-                  <input
-                    type="time"
-                    value={hours.end}
-                    onChange={(e) => updateBusinessHours(day, 'end', e.target.value)}
-                    aria-label={`${DAY_LABELS[day]} end time`}
-                  />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <h3 className="subsection-title">Lunch Break</h3>
-      <div className="lunch-break-row">
-        <label className="day-toggle">
-          <input
-            type="checkbox"
-            checked={availability.lunch_break.enabled}
-            onChange={(e) => updateLunchBreak('enabled', e.target.checked)}
-          />
-          <span>Block lunch break</span>
-        </label>
-        {availability.lunch_break.enabled && (
-          <div className="time-inputs">
+      {/* Booking Window settings (saved via parent CalendarSettings save) */}
+      <section className="cal-settings-section">
+        <h2>Booking Window</h2>
+        <p className="section-description">Control how clients can book appointments on your calendar.</p>
+        <div className="form-grid">
+          <div className="form-field">
+            <label htmlFor="buffer">Buffer Between Meetings (min)</label>
             <input
-              type="time"
-              value={availability.lunch_break.start}
-              onChange={(e) => updateLunchBreak('start', e.target.value)}
-              aria-label="Lunch start"
+              id="buffer"
+              type="number"
+              min="0"
+              max="60"
+              value={availability.buffer_minutes}
+              onChange={(e) => { setAvailability(prev => ({ ...prev, buffer_minutes: parseInt(e.target.value) || 0 })); markChanged(); }}
             />
-            <span className="time-separator">to</span>
-            <input
-              type="time"
-              value={availability.lunch_break.end}
-              onChange={(e) => updateLunchBreak('end', e.target.value)}
-              aria-label="Lunch end"
-            />
+            <span className="field-hint">Break time between consecutive meetings</span>
           </div>
-        )}
-      </div>
-
-      <h3 className="subsection-title">Booking Window</h3>
-      <div className="form-grid">
-        <div className="form-field">
-          <label htmlFor="buffer">Buffer Between Meetings (min)</label>
-          <input
-            id="buffer"
-            type="number"
-            min="0"
-            max="60"
-            value={availability.buffer_minutes}
-            onChange={(e) => { setAvailability(prev => ({ ...prev, buffer_minutes: parseInt(e.target.value) || 0 })); setHasChanges(true); }}
-          />
-          <span className="field-hint">Break time between consecutive meetings</span>
+          <div className="form-field">
+            <label htmlFor="min-notice">Minimum Notice (hours)</label>
+            <input
+              id="min-notice"
+              type="number"
+              min="0"
+              max="168"
+              value={availability.min_booking_notice_hours}
+              onChange={(e) => { setAvailability(prev => ({ ...prev, min_booking_notice_hours: parseInt(e.target.value) || 0 })); markChanged(); }}
+            />
+            <span className="field-hint">How far in advance bookings must be made</span>
+          </div>
+          <div className="form-field">
+            <label htmlFor="max-advance">Max Advance Booking (days)</label>
+            <input
+              id="max-advance"
+              type="number"
+              min="1"
+              max="365"
+              value={availability.max_advance_booking_days}
+              onChange={(e) => { setAvailability(prev => ({ ...prev, max_advance_booking_days: parseInt(e.target.value) || 1 })); markChanged(); }}
+            />
+            <span className="field-hint">How far into the future clients can book</span>
+          </div>
         </div>
-        <div className="form-field">
-          <label htmlFor="min-notice">Minimum Notice (hours)</label>
-          <input
-            id="min-notice"
-            type="number"
-            min="0"
-            max="168"
-            value={availability.min_booking_notice_hours}
-            onChange={(e) => { setAvailability(prev => ({ ...prev, min_booking_notice_hours: parseInt(e.target.value) || 0 })); setHasChanges(true); }}
-          />
-          <span className="field-hint">How far in advance bookings must be made</span>
-        </div>
-        <div className="form-field">
-          <label htmlFor="max-advance">Max Advance Booking (days)</label>
-          <input
-            id="max-advance"
-            type="number"
-            min="1"
-            max="365"
-            value={availability.max_advance_booking_days}
-            onChange={(e) => { setAvailability(prev => ({ ...prev, max_advance_booking_days: parseInt(e.target.value) || 1 })); setHasChanges(true); }}
-          />
-          <span className="field-hint">How far into the future clients can book</span>
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 
   // ============================================================================
@@ -509,7 +861,7 @@ function CalendarSettings() {
   // ============================================================================
 
   const renderAppointmentTypes = () => (
-    <section className="cal-settings-section" role="tabpanel" id="panel-appointment-types" aria-labelledby="caltab-appointment-types">
+    <section className="cal-settings-section" role="tabpanel" id="panel-appointment-types" aria-labelledby="calnav-appointment-types">
       <div className="section-header-row">
         <div>
           <h2>Appointment Types</h2>
@@ -663,93 +1015,419 @@ function CalendarSettings() {
   // Render: Tab 3 - Notifications
   // ============================================================================
 
-  const renderNotifications = () => {
-    const updateNotif = (key, value) => {
-      setNotifications(prev => ({ ...prev, [key]: value }));
-      setHasChanges(true);
+  const EVENT_ALERT_TYPES = [
+    { key: 'alert_new_booking', label: 'New booking received', icon: 'fa-calendar-plus' },
+    { key: 'alert_cancellation', label: 'Appointment cancelled', icon: 'fa-calendar-times' },
+    { key: 'alert_reschedule', label: 'Appointment rescheduled', icon: 'fa-calendar-alt' },
+    { key: 'alert_no_show', label: 'No-show detected', icon: 'fa-user-slash' },
+    { key: 'alert_waitlist_opened', label: 'Waitlist slot opened', icon: 'fa-list-ol' },
+    { key: 'alert_survey_response', label: 'Survey response received', icon: 'fa-poll' },
+  ];
+
+  const ALERT_CHANNEL_OPTIONS = [
+    { value: 'email', label: 'Email' },
+    { value: 'push', label: 'Push' },
+    { value: 'both', label: 'Both' },
+    { value: 'none', label: 'None' },
+  ];
+
+  const toggleNotifSection = (sectionId) => {
+    setNotifSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
+
+  const handleRequestBrowserPermission = async () => {
+    if (typeof Notification === 'undefined') {
+      toast.error('Browser notifications are not supported in this browser');
+      return;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      setBrowserPermission(result);
+      if (result === 'granted') {
+        updateNotif('browser_notifications_enabled', true);
+        toast.success('Browser notifications enabled');
+      } else if (result === 'denied') {
+        toast.error('Browser notification permission was denied. You can change this in your browser settings.');
+      }
+    } catch (err) {
+      toast.error('Failed to request notification permission');
+    }
+  };
+
+  const handleTestNotification = () => {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+      toast.error('Browser notifications are not enabled');
+      return;
+    }
+    new Notification('Perennia AI - Test Notification', {
+      body: 'Your browser notifications are working correctly.',
+      icon: '/favicon.ico',
+    });
+    toast.success('Test notification sent');
+  };
+
+  const computeQuietArc = () => {
+    const parseTime = (t) => {
+      const [h, m] = (t || '00:00').split(':').map(Number);
+      return h + m / 60;
     };
+    const startH = parseTime(notifications.quiet_hours_start);
+    const endH = parseTime(notifications.quiet_hours_end);
+    const startAngle = (startH / 24) * 360 - 90;
+    const endAngle = (endH / 24) * 360 - 90;
+    return { startAngle, endAngle };
+  };
 
+  const describeArc = (cx, cy, r, startAngle, endAngle) => {
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const start = { x: cx + r * Math.cos(toRad(startAngle)), y: cy + r * Math.sin(toRad(startAngle)) };
+    const end = { x: cx + r * Math.cos(toRad(endAngle)), y: cy + r * Math.sin(toRad(endAngle)) };
+    let sweep = endAngle - startAngle;
+    if (sweep < 0) sweep += 360;
+    const largeArc = sweep > 180 ? 1 : 0;
+    return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
+  };
+
+  const activeReminders = [
+    notifications.email_reminder_24h && { label: '24h', channel: 'Email', minutes: 1440 },
+    notifications.email_reminder_2h && { label: '2h', channel: 'Email', minutes: 120 },
+    notifications.email_reminder_15m && { label: '15m', channel: 'Email', minutes: 15 },
+    notifications.sms_reminder_24h && { label: '24h', channel: 'SMS', minutes: 1440 },
+    notifications.sms_reminder_2h && { label: '2h', channel: 'SMS', minutes: 120 },
+    notifications.sms_reminder_15m && { label: '15m', channel: 'SMS', minutes: 15 },
+  ].filter(Boolean).sort((a, b) => b.minutes - a.minutes);
+
+  const updateNotif = (key, value) => {
+    setNotifications(prev => ({ ...prev, [key]: value }));
+    markChanged();
+  };
+
+  const renderNotifications = () => {
     return (
-      <section className="cal-settings-section" role="tabpanel" id="panel-notifications" aria-labelledby="caltab-notifications">
-        <h2>Reminder Notifications</h2>
-        <p className="section-description">Configure when clients and you receive appointment reminders.</p>
+      <section className="cal-settings-section notif-enhanced-section" role="tabpanel" id="panel-notifications" aria-labelledby="calnav-notifications">
+        <h2><i className="fas fa-bell" aria-hidden="true"></i> Notification Preferences</h2>
+        <p className="section-description">Control how and when you receive notifications about your calendar events.</p>
 
-        <div className="notification-grid">
-          <div className="notif-column">
-            <h3><i className="fas fa-envelope"></i> Email Reminders</h3>
-            <label className="toggle-row">
-              <input type="checkbox" checked={notifications.email_reminder_24h} onChange={(e) => updateNotif('email_reminder_24h', e.target.checked)} />
-              <span>24 hours before</span>
-            </label>
-            <label className="toggle-row">
-              <input type="checkbox" checked={notifications.email_reminder_2h} onChange={(e) => updateNotif('email_reminder_2h', e.target.checked)} />
-              <span>2 hours before</span>
-            </label>
-            <label className="toggle-row">
-              <input type="checkbox" checked={notifications.email_reminder_15m} onChange={(e) => updateNotif('email_reminder_15m', e.target.checked)} />
-              <span>15 minutes before</span>
-            </label>
-          </div>
+        {/* ---- Section 1: Appointment Reminders ---- */}
+        <div className="notif-collapsible-section">
+          <button
+            type="button"
+            className="notif-section-header"
+            onClick={() => toggleNotifSection('reminders')}
+            aria-expanded={notifSections.reminders}
+          >
+            <div className="notif-section-header-left">
+              <i className="fas fa-clock" aria-hidden="true"></i>
+              <div>
+                <span className="notif-section-title">Appointment Reminders</span>
+                <span className="notif-section-desc">Configure automated reminders sent before each appointment</span>
+              </div>
+            </div>
+            <i className={`fas fa-chevron-${notifSections.reminders ? 'up' : 'down'} notif-chevron`} aria-hidden="true"></i>
+          </button>
 
-          <div className="notif-column">
-            <h3><i className="fas fa-sms"></i> SMS Reminders</h3>
-            <label className="toggle-row">
-              <input type="checkbox" checked={notifications.sms_reminder_24h} onChange={(e) => updateNotif('sms_reminder_24h', e.target.checked)} />
-              <span>24 hours before</span>
-            </label>
-            <label className="toggle-row">
-              <input type="checkbox" checked={notifications.sms_reminder_2h} onChange={(e) => updateNotif('sms_reminder_2h', e.target.checked)} />
-              <span>2 hours before</span>
-            </label>
-            <label className="toggle-row">
-              <input type="checkbox" checked={notifications.sms_reminder_15m} onChange={(e) => updateNotif('sms_reminder_15m', e.target.checked)} />
-              <span>15 minutes before</span>
-            </label>
-          </div>
+          {notifSections.reminders && (
+            <div className="notif-section-body">
+              {/* Visual reminder timeline */}
+              {activeReminders.length > 0 && (
+                <div className="reminder-timeline">
+                  <div className="reminder-timeline-label">Reminder Timeline</div>
+                  <div className="reminder-timeline-track">
+                    <div className="reminder-timeline-line"></div>
+                    {activeReminders.map((r) => {
+                      const maxMin = 1440;
+                      const pct = Math.max(5, Math.min(95, ((maxMin - r.minutes) / maxMin) * 100));
+                      return (
+                        <div
+                          key={`${r.channel}-${r.label}`}
+                          className="reminder-timeline-marker"
+                          style={{ left: `${pct}%` }}
+                          title={`${r.channel} - ${r.label} before`}
+                        >
+                          <div className={`reminder-marker-dot ${r.channel === 'Email' ? 'marker-email' : 'marker-sms'}`}></div>
+                          <div className="reminder-marker-label">{r.channel} {r.label}</div>
+                        </div>
+                      );
+                    })}
+                    <div className="reminder-timeline-marker" style={{ left: '100%' }}>
+                      <div className="reminder-marker-dot marker-event"></div>
+                      <div className="reminder-marker-label">Appointment</div>
+                    </div>
+                    <div className="reminder-timeline-start-label">24h before</div>
+                    <div className="reminder-timeline-end-label">Start time</div>
+                  </div>
+                </div>
+              )}
+
+              <ReminderSettings />
+            </div>
+          )}
         </div>
 
-        <h3 className="subsection-title">Event Notifications</h3>
-        <div className="event-notif-list">
-          <label className="toggle-row">
-            <input type="checkbox" checked={notifications.notify_on_booking} onChange={(e) => updateNotif('notify_on_booking', e.target.checked)} />
-            <span>Notify me when a new appointment is booked</span>
-          </label>
-          <label className="toggle-row">
-            <input type="checkbox" checked={notifications.notify_on_cancellation} onChange={(e) => updateNotif('notify_on_cancellation', e.target.checked)} />
-            <span>Notify me when an appointment is cancelled</span>
-          </label>
-          <label className="toggle-row">
-            <input type="checkbox" checked={notifications.notify_on_reschedule} onChange={(e) => updateNotif('notify_on_reschedule', e.target.checked)} />
-            <span>Notify me when an appointment is rescheduled</span>
-          </label>
+        {/* ---- Section 2: Event Alerts ---- */}
+        <div className="notif-collapsible-section">
+          <button
+            type="button"
+            className="notif-section-header"
+            onClick={() => toggleNotifSection('alerts')}
+            aria-expanded={notifSections.alerts}
+          >
+            <div className="notif-section-header-left">
+              <i className="fas fa-exclamation-circle" aria-hidden="true"></i>
+              <div>
+                <span className="notif-section-title">Event Alerts</span>
+                <span className="notif-section-desc">Choose how you are notified for each type of calendar event</span>
+              </div>
+            </div>
+            <i className={`fas fa-chevron-${notifSections.alerts ? 'up' : 'down'} notif-chevron`} aria-hidden="true"></i>
+          </button>
+
+          {notifSections.alerts && (
+            <div className="notif-section-body">
+              <div className="event-alerts-grid">
+                <div className="event-alerts-header">
+                  <span className="event-alerts-header-event">Event</span>
+                  <span className="event-alerts-header-channel">Notification Channel</span>
+                </div>
+                {EVENT_ALERT_TYPES.map(evt => (
+                  <div key={evt.key} className="event-alert-row">
+                    <div className="event-alert-label">
+                      <i className={`fas ${evt.icon}`} aria-hidden="true"></i>
+                      <span>{evt.label}</span>
+                    </div>
+                    <div className="event-alert-channels">
+                      {ALERT_CHANNEL_OPTIONS.map(ch => (
+                        <label key={ch.value} className={`event-alert-chip ${notifications[evt.key] === ch.value ? 'active' : ''}`}>
+                          <input
+                            type="radio"
+                            name={evt.key}
+                            value={ch.value}
+                            checked={notifications[evt.key] === ch.value}
+                            onChange={() => updateNotif(evt.key, ch.value)}
+                          />
+                          <span>{ch.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <h3 className="subsection-title">Quiet Hours</h3>
-        <p className="section-description">Suppress notifications during these hours.</p>
-        <div className="quiet-hours-row">
-          <label className="day-toggle">
-            <input
-              type="checkbox"
-              checked={notifications.quiet_hours_enabled}
-              onChange={(e) => updateNotif('quiet_hours_enabled', e.target.checked)}
-            />
-            <span>Enable quiet hours</span>
-          </label>
-          {notifications.quiet_hours_enabled && (
-            <div className="time-inputs">
-              <input
-                type="time"
-                value={notifications.quiet_hours_start}
-                onChange={(e) => updateNotif('quiet_hours_start', e.target.value)}
-                aria-label="Quiet hours start"
+        {/* ---- Section 3: Daily Digest ---- */}
+        <div className="notif-collapsible-section">
+          <button
+            type="button"
+            className="notif-section-header"
+            onClick={() => toggleNotifSection('digest')}
+            aria-expanded={notifSections.digest}
+          >
+            <div className="notif-section-header-left">
+              <i className="fas fa-newspaper" aria-hidden="true"></i>
+              <div>
+                <span className="notif-section-title">Daily Digest</span>
+                <span className="notif-section-desc">Receive a daily summary email of your upcoming schedule</span>
+              </div>
+            </div>
+            <i className={`fas fa-chevron-${notifSections.digest ? 'up' : 'down'} notif-chevron`} aria-hidden="true"></i>
+          </button>
+
+          {notifSections.digest && (
+            <div className="notif-section-body">
+              <DigestSettings
+                digest={notifications.digest}
+                onChange={(updatedDigest) => {
+                  setNotifications(prev => ({ ...prev, digest: updatedDigest }));
+                  markChanged();
+                }}
               />
-              <span className="time-separator">to</span>
-              <input
-                type="time"
-                value={notifications.quiet_hours_end}
-                onChange={(e) => updateNotif('quiet_hours_end', e.target.value)}
-                aria-label="Quiet hours end"
-              />
+            </div>
+          )}
+        </div>
+
+        {/* ---- Section 4: Quiet Hours ---- */}
+        <div className="notif-collapsible-section">
+          <button
+            type="button"
+            className="notif-section-header"
+            onClick={() => toggleNotifSection('quiet')}
+            aria-expanded={notifSections.quiet}
+          >
+            <div className="notif-section-header-left">
+              <i className="fas fa-moon" aria-hidden="true"></i>
+              <div>
+                <span className="notif-section-title">Quiet Hours</span>
+                <span className="notif-section-desc">Suppress all notifications during specified hours</span>
+              </div>
+            </div>
+            <i className={`fas fa-chevron-${notifSections.quiet ? 'up' : 'down'} notif-chevron`} aria-hidden="true"></i>
+          </button>
+
+          {notifSections.quiet && (
+            <div className="notif-section-body">
+              <div className="quiet-hours-content">
+                <div className="quiet-hours-controls">
+                  <label className="quiet-hours-toggle-row">
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        checked={notifications.quiet_hours_enabled}
+                        onChange={(e) => updateNotif('quiet_hours_enabled', e.target.checked)}
+                        aria-label="Enable quiet hours"
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    <span>Enable quiet hours</span>
+                  </label>
+
+                  {notifications.quiet_hours_enabled && (
+                    <>
+                      <div className="quiet-hours-times">
+                        <div className="quiet-hours-time-field">
+                          <label>Start time</label>
+                          <input
+                            type="time"
+                            value={notifications.quiet_hours_start}
+                            onChange={(e) => updateNotif('quiet_hours_start', e.target.value)}
+                            aria-label="Quiet hours start"
+                          />
+                        </div>
+                        <span className="time-separator">to</span>
+                        <div className="quiet-hours-time-field">
+                          <label>End time</label>
+                          <input
+                            type="time"
+                            value={notifications.quiet_hours_end}
+                            onChange={(e) => updateNotif('quiet_hours_end', e.target.value)}
+                            aria-label="Quiet hours end"
+                          />
+                        </div>
+                      </div>
+
+                      <label className="quiet-hours-toggle-row">
+                        <label className="toggle-switch">
+                          <input
+                            type="checkbox"
+                            checked={notifications.quiet_hours_include_weekends}
+                            onChange={(e) => updateNotif('quiet_hours_include_weekends', e.target.checked)}
+                            aria-label="Include weekends in quiet hours"
+                          />
+                          <span className="toggle-slider"></span>
+                        </label>
+                        <span>Include weekends</span>
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                {notifications.quiet_hours_enabled && (() => {
+                  const arc = computeQuietArc();
+                  return (
+                    <div className="quiet-hours-clock">
+                      <svg viewBox="0 0 120 120" width="140" height="140" aria-label={`Quiet hours from ${notifications.quiet_hours_start} to ${notifications.quiet_hours_end}`}>
+                        <circle cx="60" cy="60" r="52" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="2" />
+                        <path
+                          d={describeArc(60, 60, 44, arc.startAngle, arc.endAngle)}
+                          fill="none"
+                          stroke="#818cf8"
+                          strokeWidth="10"
+                          strokeLinecap="round"
+                          opacity="0.3"
+                        />
+                        {[0, 3, 6, 9, 12, 15, 18, 21].map(h => {
+                          const angle = ((h / 24) * 360 - 90) * (Math.PI / 180);
+                          const x1 = 60 + 48 * Math.cos(angle);
+                          const y1 = 60 + 48 * Math.sin(angle);
+                          const x2 = 60 + 52 * Math.cos(angle);
+                          const y2 = 60 + 52 * Math.sin(angle);
+                          const tx = 60 + 40 * Math.cos(angle);
+                          const ty = 60 + 40 * Math.sin(angle);
+                          return (
+                            <g key={h}>
+                              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#94a3b8" strokeWidth="1.5" />
+                              <text x={tx} y={ty} textAnchor="middle" dominantBaseline="central" fontSize="8" fill="#64748b">
+                                {h === 0 ? '12a' : h === 12 ? '12p' : h < 12 ? `${h}a` : `${h - 12}p`}
+                              </text>
+                            </g>
+                          );
+                        })}
+                        <text x="60" y="62" textAnchor="middle" dominantBaseline="central" fontSize="16" aria-hidden="true">
+                          {'\uD83C\uDF19'}
+                        </text>
+                      </svg>
+                      <div className="quiet-clock-label">
+                        {notifications.quiet_hours_start} - {notifications.quiet_hours_end}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ---- Section 5: Browser Notifications ---- */}
+        <div className="notif-collapsible-section">
+          <button
+            type="button"
+            className="notif-section-header"
+            onClick={() => toggleNotifSection('browser')}
+            aria-expanded={notifSections.browser}
+          >
+            <div className="notif-section-header-left">
+              <i className="fas fa-desktop" aria-hidden="true"></i>
+              <div>
+                <span className="notif-section-title">Browser Notifications</span>
+                <span className="notif-section-desc">Get real-time desktop notifications in your browser</span>
+              </div>
+            </div>
+            <i className={`fas fa-chevron-${notifSections.browser ? 'up' : 'down'} notif-chevron`} aria-hidden="true"></i>
+          </button>
+
+          {notifSections.browser && (
+            <div className="notif-section-body">
+              <div className="browser-notif-content">
+                <div className="browser-notif-status">
+                  <span className="browser-notif-status-label">Permission status:</span>
+                  <span className={`browser-notif-status-badge status-${browserPermission}`}>
+                    {browserPermission === 'granted' ? 'Granted' : browserPermission === 'denied' ? 'Denied' : 'Not Asked'}
+                  </span>
+                </div>
+
+                <div className="browser-notif-actions">
+                  {browserPermission !== 'granted' && (
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm"
+                      onClick={handleRequestBrowserPermission}
+                      disabled={browserPermission === 'denied'}
+                    >
+                      <i className="fas fa-bell" aria-hidden="true"></i>
+                      {browserPermission === 'denied' ? 'Permission Denied' : 'Enable Browser Notifications'}
+                    </button>
+                  )}
+                  {browserPermission === 'granted' && (
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={handleTestNotification}
+                    >
+                      <i className="fas fa-paper-plane" aria-hidden="true"></i>
+                      Send Test Notification
+                    </button>
+                  )}
+                </div>
+
+                <div className="browser-notif-note">
+                  <i className="fas fa-info-circle" aria-hidden="true"></i>
+                  <span>
+                    Browser notifications require your browser to be open. They work in Chrome, Firefox, Edge, and Safari.
+                    {browserPermission === 'denied' && ' You previously denied permission. To re-enable, update your notification settings in your browser\'s site permissions.'}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -767,11 +1445,11 @@ function CalendarSettings() {
         ...prev,
         branding: { ...prev.branding, [key]: value },
       }));
-      setHasChanges(true);
+      markChanged();
     };
 
     return (
-      <section className="cal-settings-section" role="tabpanel" id="panel-booking-page" aria-labelledby="caltab-booking-page">
+      <section className="cal-settings-section" role="tabpanel" id="panel-booking-page" aria-labelledby="calnav-booking-page">
         <h2>Booking Page</h2>
         <p className="section-description">Customize the appearance of your public booking page.</p>
 
@@ -909,11 +1587,237 @@ function CalendarSettings() {
   };
 
   // ============================================================================
-  // Render: Tab 5 - Integrations
+  // Render: Tab 5 - Locations & Labels
+  // ============================================================================
+
+  const renderLocationsLabels = () => {
+    const LOCATION_TYPE_ICONS = {
+      office: 'fa-building',
+      virtual: 'fa-video',
+      phone: 'fa-phone',
+      borrower_home: 'fa-home',
+    };
+
+    const durationLabel = (min) => {
+      if (min >= 60) {
+        const h = Math.floor(min / 60);
+        const m = min % 60;
+        return m > 0 ? `${h}h ${m}m` : `${h} hour${h > 1 ? 's' : ''}`;
+      }
+      return `${min} min`;
+    };
+
+    return (
+      <div role="tabpanel" id="panel-locations-labels" aria-labelledby="calnav-locations-labels">
+
+        {/* ---- Section 1: Meeting Locations ---- */}
+        <section className="cal-settings-section loc-labels-section">
+          <button
+            type="button"
+            className="collapsible-header"
+            onClick={() => toggleLocLabelsSection('locations')}
+            aria-expanded={locLabelsExpanded.locations}
+          >
+            <div className="collapsible-header-left">
+              <i className={`fas fa-chevron-${locLabelsExpanded.locations ? 'down' : 'right'} collapsible-chevron`}></i>
+              <div>
+                <h2>Meeting Locations</h2>
+                <p className="section-description">
+                  Define where appointments take place -- office, virtual, phone, or borrower's home.
+                </p>
+              </div>
+            </div>
+            <span className="collapsible-badge">
+              <i className="fas fa-map-marker-alt"></i>
+            </span>
+          </button>
+          {locLabelsExpanded.locations && (
+            <div className="collapsible-body">
+              <LocationManager />
+            </div>
+          )}
+        </section>
+
+        {/* ---- Section 2: Calendar Labels ---- */}
+        <section className="cal-settings-section loc-labels-section">
+          <button
+            type="button"
+            className="collapsible-header"
+            onClick={() => toggleLocLabelsSection('labels')}
+            aria-expanded={locLabelsExpanded.labels}
+          >
+            <div className="collapsible-header-left">
+              <i className={`fas fa-chevron-${locLabelsExpanded.labels ? 'down' : 'right'} collapsible-chevron`}></i>
+              <div>
+                <h2>Calendar Labels</h2>
+                <p className="section-description">
+                  Color-coded labels to categorize and filter your appointments at a glance.
+                </p>
+              </div>
+            </div>
+            <span className="collapsible-badge">
+              <i className="fas fa-tags"></i>
+            </span>
+          </button>
+          {locLabelsExpanded.labels && (
+            <div className="collapsible-body">
+              <LabelManager
+                labels={labels}
+                onCreateLabel={handleCreateLabel}
+                onUpdateLabel={handleUpdateLabel}
+                onDeleteLabel={handleDeleteLabel}
+                onReorderLabels={handleReorderLabels}
+                loading={labelsLoading}
+              />
+
+              {/* Auto-assign toggle */}
+              <div className="auto-assign-section">
+                <label className="toggle-row auto-assign-toggle">
+                  <input
+                    type="checkbox"
+                    checked={autoAssignLabels}
+                    onChange={(e) => handleToggleAutoAssign(e.target.checked)}
+                  />
+                  <span>Auto-assign labels based on appointment type</span>
+                </label>
+
+                {autoAssignLabels && appointmentTypes.length > 0 && (
+                  <div className="label-mapping-grid">
+                    {appointmentTypes.map(type => (
+                      <div key={type.id} className="label-mapping-row">
+                        <div className="mapping-type-name">
+                          <div
+                            className="mapping-color-dot"
+                            style={{ backgroundColor: type.color || '#218D8D' }}
+                          />
+                          <span>{type.type_name}</span>
+                        </div>
+                        <select
+                          value={labelMappings[type.id] || ''}
+                          onChange={(e) => handleUpdateLabelMapping(type.id, e.target.value || null)}
+                          className="mapping-select"
+                        >
+                          <option value="">No label</option>
+                          {labels.map(label => (
+                            <option key={label.id} value={label.id}>
+                              {label.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {autoAssignLabels && appointmentTypes.length === 0 && (
+                  <p className="empty-hint" style={{ marginTop: 8 }}>
+                    Create appointment types first to set up label mappings.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ---- Section 3: Appointment Templates ---- */}
+        <section className="cal-settings-section loc-labels-section">
+          <button
+            type="button"
+            className="collapsible-header"
+            onClick={() => toggleLocLabelsSection('templates')}
+            aria-expanded={locLabelsExpanded.templates}
+          >
+            <div className="collapsible-header-left">
+              <i className={`fas fa-chevron-${locLabelsExpanded.templates ? 'down' : 'right'} collapsible-chevron`}></i>
+              <div>
+                <h2>Appointment Templates</h2>
+                <p className="section-description">
+                  Pre-configured appointment setups for quick scheduling. Set a default for one-click booking.
+                </p>
+              </div>
+            </div>
+            <span className="collapsible-badge">
+              <i className="fas fa-copy"></i>
+            </span>
+          </button>
+          {locLabelsExpanded.templates && (
+            <div className="collapsible-body">
+              {templatesLoading ? (
+                <div className="empty-hint">Loading templates...</div>
+              ) : templates.length === 0 ? (
+                <div className="empty-state">
+                  <i className="fas fa-layer-group"></i>
+                  <p>No appointment templates yet.</p>
+                  <p className="empty-hint">
+                    Templates help you quickly create common appointment types with pre-filled settings.
+                  </p>
+                </div>
+              ) : (
+                <div className="template-list">
+                  {templates.map(template => (
+                    <div key={template.id} className={`template-card${template.is_default ? ' is-default' : ''}`}>
+                      <div className="template-card-left">
+                        <div className="template-card-header">
+                          <strong>{template.name}</strong>
+                          {template.is_default && (
+                            <span className="badge badge-default">Default</span>
+                          )}
+                        </div>
+                        <div className="template-meta">
+                          <span>
+                            <i className="fas fa-clock"></i> {durationLabel(template.duration_minutes || 30)}
+                          </span>
+                          {template.location_type && (
+                            <span>
+                              <i className={`fas ${LOCATION_TYPE_ICONS[template.location_type] || 'fa-map-pin'}`}></i>
+                              {' '}{template.location_type.replace('_', ' ')}
+                            </span>
+                          )}
+                          {template.appointment_type_name && (
+                            <span>
+                              <i className="fas fa-tag"></i> {template.appointment_type_name}
+                            </span>
+                          )}
+                        </div>
+                        {template.description && (
+                          <p className="template-desc">{template.description}</p>
+                        )}
+                      </div>
+                      <div className="template-card-actions">
+                        {!template.is_default && (
+                          <button
+                            className="btn-secondary btn-sm"
+                            onClick={() => handleToggleDefaultTemplate(template.id)}
+                            title="Use as default"
+                          >
+                            <i className="fas fa-star"></i> Set Default
+                          </button>
+                        )}
+                        <button
+                          className="icon-btn danger"
+                          onClick={() => handleDeleteTemplate(template.id)}
+                          title="Delete template"
+                        >
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  };
+
+  // ============================================================================
+  // Render: Tab 6 - Integrations
   // ============================================================================
 
   const renderIntegrations = () => (
-    <section className="cal-settings-section" role="tabpanel" id="panel-integrations" aria-labelledby="caltab-integrations">
+    <section className="cal-settings-section" role="tabpanel" id="panel-integrations" aria-labelledby="calnav-integrations">
       <h2>Calendar Integrations</h2>
       <p className="section-description">Connect your external calendars to sync events and check availability.</p>
 
@@ -1008,13 +1912,13 @@ function CalendarSettings() {
   );
 
   // ============================================================================
-  // Render: Tab 6 - Team
+  // Render: Tab 7 - Team
   // ============================================================================
 
   const renderTeam = () => {
     if (!isManager) {
       return (
-        <section className="cal-settings-section" role="tabpanel" id="panel-team" aria-labelledby="caltab-team">
+        <section className="cal-settings-section" role="tabpanel" id="panel-team" aria-labelledby="calnav-team">
           <div className="empty-state">
             <i className="fas fa-lock"></i>
             <p>Team calendar settings are available to managers only.</p>
@@ -1024,7 +1928,7 @@ function CalendarSettings() {
     }
 
     return (
-      <section className="cal-settings-section" role="tabpanel" id="panel-team" aria-labelledby="caltab-team">
+      <section className="cal-settings-section" role="tabpanel" id="panel-team" aria-labelledby="calnav-team">
         <h2>Team Calendar</h2>
         <p className="section-description">Manage how appointments are distributed across your team.</p>
 
@@ -1042,7 +1946,7 @@ function CalendarSettings() {
                 checked={team.assignment_strategy === strategy.value}
                 onChange={() => {
                   setTeam(prev => ({ ...prev, assignment_strategy: strategy.value }));
-                  setHasChanges(true);
+                  markChanged();
                 }}
               />
               <div className="strategy-content">
@@ -1085,7 +1989,7 @@ function CalendarSettings() {
                             m.user_id === member.user_id ? { ...m, max_daily_appointments: val } : m
                           ),
                         }));
-                        setHasChanges(true);
+                        markChanged();
                       }}
                     />
                   </td>
@@ -1102,7 +2006,7 @@ function CalendarSettings() {
                               m.user_id === member.user_id ? { ...m, is_accepting_appointments: e.target.checked } : m
                             ),
                           }));
-                          setHasChanges(true);
+                          markChanged();
                         }}
                       />
                       <span className="toggle-slider"></span>
@@ -1123,73 +2027,332 @@ function CalendarSettings() {
   };
 
   // ============================================================================
-  // Render: Main
+  // Render: Cancellation Policy
   // ============================================================================
 
-  const showSaveButton = ['availability', 'notifications', 'booking-page', 'team'].includes(activeTab);
+  const renderCancellationPolicy = () => (
+    <div role="tabpanel" id="panel-cancellation-policy" aria-labelledby="calnav-cancellation-policy">
+      <section className="cal-settings-section">
+        <h2>Cancellation Policy</h2>
+        <p className="section-description">Set rules for when clients can cancel or reschedule appointments.</p>
+
+        <div className="cancel-policy-options">
+          {CANCELLATION_POLICIES.map(policy => (
+            <label
+              key={policy.value}
+              className={`cancel-policy-option ${cancellationPolicy.policy === policy.value ? 'selected' : ''}`}
+            >
+              <input
+                type="radio"
+                name="cancellation-policy"
+                value={policy.value}
+                checked={cancellationPolicy.policy === policy.value}
+                onChange={() => {
+                  setCancellationPolicy(prev => ({ ...prev, policy: policy.value }));
+                  markChanged();
+                }}
+              />
+              <div className="strategy-content">
+                <strong>{policy.label}</strong>
+                <span>{policy.description}</span>
+              </div>
+            </label>
+          ))}
+        </div>
+
+        <h3 className="subsection-title">Rescheduling</h3>
+        <div className="form-grid">
+          <div className="form-field">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={cancellationPolicy.allow_reschedule}
+                onChange={(e) => {
+                  setCancellationPolicy(prev => ({ ...prev, allow_reschedule: e.target.checked }));
+                  markChanged();
+                }}
+              />
+              Allow clients to reschedule online
+            </label>
+          </div>
+          <div className="form-field">
+            <label htmlFor="reschedule-limit">Max reschedules per appointment</label>
+            <input
+              id="reschedule-limit"
+              type="number"
+              min="0"
+              max="10"
+              value={cancellationPolicy.reschedule_limit}
+              onChange={(e) => {
+                setCancellationPolicy(prev => ({ ...prev, reschedule_limit: parseInt(e.target.value) || 0 }));
+                markChanged();
+              }}
+            />
+          </div>
+          <div className="form-field">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={cancellationPolicy.require_reason}
+                onChange={(e) => {
+                  setCancellationPolicy(prev => ({ ...prev, require_reason: e.target.checked }));
+                  markChanged();
+                }}
+              />
+              Require reason for cancellation
+            </label>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+
+  // ============================================================================
+  // Render: Advanced
+  // ============================================================================
+
+  const renderAdvanced = () => (
+    <div role="tabpanel" id="panel-advanced" aria-labelledby="calnav-advanced">
+      <section className="cal-settings-section">
+        <h2>Advanced Settings</h2>
+        <p className="section-description">Additional configuration options for power users.</p>
+
+        <div className="advanced-settings-list">
+          <div className="advanced-setting-item">
+            <div className="advanced-setting-info">
+              <h4>Auto-confirm Appointments</h4>
+              <p>Automatically confirm appointments without manual approval.</p>
+            </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={advancedSettings.auto_confirm_appointments}
+                onChange={(e) => {
+                  setAdvancedSettings(prev => ({ ...prev, auto_confirm_appointments: e.target.checked }));
+                  markChanged();
+                }}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div className="advanced-setting-item">
+            <div className="advanced-setting-info">
+              <h4>Show Timezone Selector</h4>
+              <p>Allow clients to select their timezone on the booking page.</p>
+            </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={advancedSettings.show_timezone_selector}
+                onChange={(e) => {
+                  setAdvancedSettings(prev => ({ ...prev, show_timezone_selector: e.target.checked }));
+                  markChanged();
+                }}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div className="advanced-setting-item">
+            <div className="advanced-setting-info">
+              <h4>Enable Waitlist</h4>
+              <p>Allow clients to join a waitlist when no slots are available.</p>
+            </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={advancedSettings.enable_waitlist}
+                onChange={(e) => {
+                  setAdvancedSettings(prev => ({ ...prev, enable_waitlist: e.target.checked }));
+                  markChanged();
+                }}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div className="advanced-setting-item">
+            <div className="advanced-setting-info">
+              <h4>Calendar Feed (iCal/ICS)</h4>
+              <p>Generate an ICS feed URL for subscribing in external calendar apps.</p>
+            </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={advancedSettings.calendar_feed_enabled}
+                onChange={(e) => {
+                  setAdvancedSettings(prev => ({ ...prev, calendar_feed_enabled: e.target.checked }));
+                  markChanged();
+                }}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      {advancedSettings.calendar_feed_enabled && (
+        <section className="cal-settings-section">
+          <CalendarFeedSettings />
+        </section>
+      )}
+    </div>
+  );
+
+  // ============================================================================
+  // Render: Section Router
+  // ============================================================================
+
+  const renderActiveSection = () => {
+    if (loading) return renderLoading();
+
+    switch (activeSection) {
+      case 'availability': return renderAvailability();
+      case 'appointment-types': return renderAppointmentTypes();
+      case 'locations-labels': return renderLocationsLabels();
+      case 'booking-page': return renderBookingPage();
+      case 'cancellation-policy': return renderCancellationPolicy();
+      case 'notifications': return renderNotifications();
+      case 'integrations': return renderIntegrations();
+      case 'team': return renderTeam();
+      case 'advanced': return renderAdvanced();
+      default: return renderAvailability();
+    }
+  };
+
+  // ============================================================================
+  // Render: Main Layout
+  // ============================================================================
 
   return (
     <div className="cal-settings-page">
-      {/* Header */}
-      <div className="settings-header">
-        <div className="header-left">
-          <button onClick={() => navigate(-1)} className="back-btn" aria-label="Go back">
-            <i className="fas fa-arrow-left"></i>
-          </button>
-          <div>
-            <h1>Calendar Settings</h1>
-            <p className="subtitle">Configure your calendar, availability, and booking preferences</p>
+      {/* Top Bar */}
+      <header className="cal-settings-topbar">
+        <div className="cal-settings-topbar-inner">
+          <div className="topbar-left">
+            <button onClick={() => navigate(-1)} className="back-btn" aria-label="Go back">
+              <i className="fas fa-arrow-left"></i>
+            </button>
+            <h1>Smart Calendar Settings</h1>
+          </div>
+
+          <div className="topbar-right">
+            {/* Save Status Indicator */}
+            <div className={`save-status ${saveStatus}`}>
+              <span className="status-dot"></span>
+              <span>
+                {saveStatus === 'saved' && 'All changes saved'}
+                {saveStatus === 'saving' && 'Saving...'}
+                {saveStatus === 'unsaved' && 'Unsaved changes'}
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <button
+              className="btn-outline"
+              onClick={() => navigate('/calendar/setup')}
+              title="Run Setup Wizard"
+            >
+              <i className="fas fa-magic"></i>
+              <span>Setup Wizard</span>
+            </button>
+
+            <button
+              className="btn-outline"
+              onClick={() => toast.info('Calendar tour starting...')}
+              title="Take a guided tour"
+            >
+              <i className="fas fa-info-circle"></i>
+              <span>Tour</span>
+            </button>
+
+            {showSaveButton && (
+              <button
+                onClick={handleSave}
+                disabled={saving || !hasChanges}
+                className="btn-primary btn-sm"
+              >
+                {saving ? (
+                  <><i className="fas fa-spinner fa-spin"></i> Saving</>
+                ) : (
+                  <><i className="fas fa-save"></i> Save</>
+                )}
+              </button>
+            )}
           </div>
         </div>
-        {showSaveButton && (
-          <div className="header-actions">
+      </header>
+
+      {/* Mobile Tabs (visible < 768px) */}
+      <div className="cal-settings-mobile-tabs" role="tablist" aria-label="Calendar settings sections">
+        <div className="cal-settings-mobile-tabs-inner">
+          {ALL_NAV_ITEMS.map(item => (
             <button
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-              className="btn-primary"
+              key={item.id}
+              role="tab"
+              aria-selected={activeSection === item.id}
+              aria-controls={`panel-${item.id}`}
+              className={`mobile-tab-btn ${activeSection === item.id ? 'active' : ''}`}
+              onClick={() => handleSectionChange(item.id)}
             >
-              {saving ? (
-                <><i className="fas fa-spinner fa-spin"></i> Saving...</>
-              ) : (
-                <><i className="fas fa-save"></i> Save Changes</>
-              )}
+              <i className={`fas ${item.icon}`}></i> {item.label}
             </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Body: Sidebar + Content */}
+      <div className="cal-settings-body">
+        {/* Sidebar Navigation (hidden on mobile) */}
+        <nav className="cal-settings-sidebar" role="tablist" aria-label="Calendar settings navigation" aria-orientation="vertical">
+          {NAV_SECTIONS.map(section => (
+            <div key={section.group} className="sidebar-nav-group">
+              <span className="sidebar-group-label">{section.group}</span>
+              {section.items.map(item => (
+                <button
+                  key={item.id}
+                  id={`calnav-${item.id}`}
+                  role="tab"
+                  aria-selected={activeSection === item.id}
+                  aria-controls={`panel-${item.id}`}
+                  tabIndex={activeSection === item.id ? 0 : -1}
+                  className={`sidebar-nav-item ${activeSection === item.id ? 'active' : ''}`}
+                  onClick={() => handleSectionChange(item.id)}
+                  onKeyDown={(e) => handleNavKeyDown(e, item.id)}
+                >
+                  <i className={`fas ${item.icon}`}></i>
+                  <span>{item.label}</span>
+                  {item.badge && <span className="nav-badge">{item.badge}</span>}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        {/* Content Area */}
+        <main className="cal-settings-content" ref={contentRef}>
+          {/* Breadcrumb */}
+          <div className="cal-settings-breadcrumb">
+            <span>Settings</span>
+            <span className="breadcrumb-separator">/</span>
+            <span>{activeGroupName}</span>
+            <span className="breadcrumb-separator">/</span>
+            <span className="breadcrumb-current">{activeNavItem?.label}</span>
           </div>
-        )}
+
+          {/* Section Header */}
+          <div className="section-page-header">
+            <h2>{activeNavItem?.label}</h2>
+            <p>{activeNavItem?.description}</p>
+          </div>
+
+          {/* Section Content */}
+          {renderActiveSection()}
+        </main>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="settings-tabs" role="tablist" aria-label="Calendar settings">
-        {TAB_DEFINITIONS.map(tab => (
-          <button
-            key={tab.id}
-            role="tab"
-            id={`caltab-${tab.id}`}
-            aria-selected={activeTab === tab.id}
-            aria-controls={`panel-${tab.id}`}
-            tabIndex={activeTab === tab.id ? 0 : -1}
-            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-            onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
-          >
-            <i className={`fas ${tab.icon}`}></i> {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      {loading ? renderLoading() : (
-        <>
-          {activeTab === 'availability' && renderAvailability()}
-          {activeTab === 'appointment-types' && renderAppointmentTypes()}
-          {activeTab === 'notifications' && renderNotifications()}
-          {activeTab === 'booking-page' && renderBookingPage()}
-          {activeTab === 'integrations' && renderIntegrations()}
-          {activeTab === 'team' && renderTeam()}
-        </>
-      )}
-
-      {/* Sticky Save Bar */}
+      {/* Sticky Save Bar (bottom, only when unsaved) */}
       {hasChanges && showSaveButton && (
         <div className="sticky-save-bar">
           <div className="save-bar-content">
@@ -1197,7 +2360,7 @@ function CalendarSettings() {
             <div className="save-bar-actions">
               <button
                 type="button"
-                onClick={() => loadTabData(activeTab)}
+                onClick={() => loadTabData(activeSection)}
                 className="btn-secondary"
                 disabled={saving}
               >

@@ -71,6 +71,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.call_intelligence_tasks",
             "tasks.video_render_tasks",
             "tasks.report_tasks",
+            "tasks.reminder_tasks",
         ],
     )
 
@@ -250,6 +251,14 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.sla_tasks.verify_backup_task",
         "schedule": crontab(hour="5", minute="0"),  # Daily 5 AM
         "options": {"queue": "low_priority"},
+    },
+
+    # Appointment Reminders
+    "process-pending-reminders": {
+        "task": "tasks.reminder_tasks.process_pending_reminders",
+        "schedule": crontab(minute="*/5"),  # Every 5 minutes
+        "options": {"queue": "default"},
+        "kwargs": {"batch_size": 50},
     },
 }
 

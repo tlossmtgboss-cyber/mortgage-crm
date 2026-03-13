@@ -231,7 +231,12 @@ class FakeUser:
 def crypto_service():
     """Create a real ESignatureCryptoService for testing crypto operations."""
     from services.smart_docs.esignature_crypto_service import ESignatureCryptoService
-    return ESignatureCryptoService()
+    from services.smart_docs.esignature_key_manager import ESignatureKeyManager
+    km = ESignatureKeyManager(
+        signing_secret="e2e-test-signing-secret-32-chars!",
+        token_secret="e2e-test-token-secret-32-chars!!",
+    )
+    return ESignatureCryptoService(key_manager=km)
 
 
 @pytest.fixture

@@ -1,0 +1,1067 @@
+/* ============================================================================
+   Perennia AI - Calendar Setup Wizard Styles
+   ============================================================================ */
+
+/* --------------------------------------------------------------------------
+   Screen reader only utility
+   -------------------------------------------------------------------------- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Wizard layout
+   -------------------------------------------------------------------------- */
+.cal-setup-wizard {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 6rem;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+.cal-setup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.cal-setup-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cal-setup-header-left h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0;
+}
+
+.cal-setup-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0.125rem 0 0;
+}
+
+.cal-setup-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cal-setup-back-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.cal-setup-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cal-setup-autosave {
+  font-size: 0.8125rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: color 0.2s;
+}
+
+.cal-setup-autosave.saved {
+  color: #10b981;
+}
+
+.cal-setup-save-exit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cal-setup-save-exit:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* --------------------------------------------------------------------------
+   Progress indicator
+   -------------------------------------------------------------------------- */
+.cal-setup-progress {
+  margin-bottom: 1.5rem;
+}
+
+.cal-setup-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.cal-setup-progress-step-text {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.cal-setup-progress-pct {
+  font-size: 0.875rem;
+  color: #218D8D;
+  font-weight: 600;
+}
+
+.cal-setup-progress-bar {
+  width: 100%;
+  height: 6px;
+  background-color: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+
+.cal-setup-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #218D8D 0%, #1a7070 100%);
+  border-radius: 999px;
+  transition: width 0.5s ease-in-out;
+}
+
+/* Stepper (desktop) */
+.cal-setup-stepper {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+  padding: 0 0.5rem;
+}
+
+.cal-setup-stepper-line {
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  right: 24px;
+  height: 2px;
+  background: #e2e8f0;
+  z-index: 0;
+}
+
+.cal-setup-stepper-line-fill {
+  height: 100%;
+  background: #218D8D;
+  border-radius: 999px;
+  transition: width 0.5s ease-in-out;
+}
+
+.cal-setup-stepper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  position: relative;
+  z-index: 1;
+  cursor: default;
+  flex: 1;
+  min-width: 0;
+}
+
+.cal-setup-stepper-item.clickable {
+  cursor: pointer;
+}
+
+.cal-setup-stepper-item.clickable:focus-visible {
+  outline: none;
+}
+
+.cal-setup-stepper-item.clickable:focus-visible .cal-setup-stepper-circle {
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.3);
+}
+
+.cal-setup-stepper-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e2e8f0;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+}
+
+.cal-setup-stepper-item.active .cal-setup-stepper-circle {
+  background-color: #218D8D;
+  color: white;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 4px rgba(33, 141, 141, 0.2);
+  transform: scale(1.1);
+}
+
+.cal-setup-stepper-item.completed .cal-setup-stepper-circle {
+  background-color: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.cal-setup-stepper-item.skipped .cal-setup-stepper-circle {
+  background-color: #fbbf24;
+  color: white;
+  border-color: #fbbf24;
+}
+
+.cal-setup-stepper-item.clickable:hover .cal-setup-stepper-circle {
+  transform: scale(1.08);
+}
+
+.cal-setup-check {
+  width: 18px;
+  height: 18px;
+}
+
+.cal-setup-stepper-number {
+  display: block;
+}
+
+.cal-setup-stepper-label {
+  font-size: 0.6875rem;
+  color: #64748b;
+  text-align: center;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.cal-setup-stepper-item.active .cal-setup-stepper-label {
+  color: #134e4e;
+  font-weight: 600;
+}
+
+.cal-setup-stepper-item.completed .cal-setup-stepper-label {
+  color: #059669;
+}
+
+/* Compact dots (mobile only) */
+.cal-setup-dots {
+  display: none;
+  justify-content: center;
+  gap: 0.375rem;
+}
+
+.cal-setup-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background-color: #cbd5e1;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cal-setup-dot.active {
+  background-color: #218D8D;
+  transform: scale(1.4);
+}
+
+.cal-setup-dot.completed {
+  background-color: #10b981;
+}
+
+.cal-setup-dot.skipped {
+  background-color: #fbbf24;
+}
+
+.cal-setup-dot:disabled {
+  cursor: default;
+}
+
+/* --------------------------------------------------------------------------
+   Step content area
+   -------------------------------------------------------------------------- */
+.cal-setup-content-area {
+  overflow: hidden;
+  position: relative;
+}
+
+/* Step wrapper */
+.cal-setup-step-wrapper {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  padding: 2rem;
+  min-height: 350px;
+}
+
+.cal-setup-step-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #f1f5f9;
+  gap: 1rem;
+}
+
+.cal-setup-step-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.cal-setup-step-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e0f5f5, #d1eeee);
+  color: #218D8D;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.cal-setup-step-title-group {
+  min-width: 0;
+}
+
+.cal-setup-step-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 0.25rem;
+  outline: none;
+}
+
+.cal-setup-step-description {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.cal-setup-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Help tooltip */
+.cal-setup-help-container {
+  position: relative;
+}
+
+.cal-setup-help-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: #218D8D;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.375rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.cal-setup-help-btn:hover {
+  background: #f0fafa;
+}
+
+.cal-setup-help-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  padding: 0.875rem 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  animation: cal-setup-tooltip-in 0.15s ease-out;
+}
+
+.cal-setup-help-tooltip p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.cal-setup-help-tooltip-arrow {
+  position: absolute;
+  top: -5px;
+  right: 16px;
+  width: 10px;
+  height: 10px;
+  background: white;
+  border-left: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0;
+  transform: rotate(45deg);
+}
+
+@keyframes cal-setup-tooltip-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Skip button */
+.cal-setup-skip-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.375rem 0.5rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.cal-setup-skip-btn:hover {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+/* Step content */
+.cal-setup-step-content {
+  min-height: 200px;
+}
+
+/* --------------------------------------------------------------------------
+   Slide animations
+   -------------------------------------------------------------------------- */
+.cal-setup-step-animate {
+  animation-duration: 0.3s;
+  animation-fill-mode: both;
+  animation-timing-function: ease-in-out;
+}
+
+.cal-setup-slide-enter-right {
+  animation-name: cal-setup-enter-from-right;
+}
+
+.cal-setup-slide-enter-left {
+  animation-name: cal-setup-enter-from-left;
+}
+
+.cal-setup-slide-exit-left {
+  animation-name: cal-setup-exit-to-left;
+}
+
+.cal-setup-slide-exit-right {
+  animation-name: cal-setup-exit-to-right;
+}
+
+@keyframes cal-setup-enter-from-right {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes cal-setup-enter-from-left {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes cal-setup-exit-to-left {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-40px); }
+}
+
+@keyframes cal-setup-exit-to-right {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(40px); }
+}
+
+/* --------------------------------------------------------------------------
+   Footer / button bar
+   -------------------------------------------------------------------------- */
+.cal-setup-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.875rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 50;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* On wider screens, constrain footer content */
+@media (min-width: 901px) {
+  .cal-setup-footer {
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+  }
+}
+
+.cal-setup-footer-left,
+.cal-setup-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cal-setup-footer-center {
+  flex: 1;
+  text-align: center;
+}
+
+.cal-setup-progress-text {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Button styles (local overrides to match wizard branding) */
+.cal-setup-wizard .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  background: #218D8D;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cal-setup-wizard .btn-primary:hover {
+  background: #1a7070;
+}
+
+.cal-setup-wizard .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cal-setup-wizard .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #475569;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cal-setup-wizard .btn-secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.cal-setup-wizard .btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cal-setup-activate-btn {
+  font-size: 0.9375rem !important;
+  padding: 0.75rem 1.5rem !important;
+}
+
+/* --------------------------------------------------------------------------
+   Placeholder step content
+   -------------------------------------------------------------------------- */
+.cal-setup-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.cal-setup-placeholder .placeholder-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e0f5f5, #d1eeee);
+  color: #218D8D;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.cal-setup-placeholder h3 {
+  font-size: 1.125rem;
+  color: #1a202c;
+  margin: 0 0 0.5rem;
+}
+
+.cal-setup-placeholder p {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0 0 0.75rem;
+  max-width: 480px;
+  line-height: 1.6;
+}
+
+.cal-setup-placeholder .placeholder-hint {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* --------------------------------------------------------------------------
+   Welcome step
+   -------------------------------------------------------------------------- */
+.cal-setup-welcome {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.cal-setup-welcome .welcome-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #218D8D, #1a7070);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin: 0 auto 1.5rem;
+}
+
+.cal-setup-welcome h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 0.75rem;
+  outline: none;
+}
+
+.cal-setup-welcome .welcome-lead {
+  font-size: 1rem;
+  color: #64748b;
+  max-width: 520px;
+  margin: 0 auto 2rem;
+  line-height: 1.6;
+}
+
+.cal-setup-welcome .welcome-features {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  max-width: 520px;
+  margin: 0 auto 2rem;
+  text-align: left;
+}
+
+.cal-setup-welcome .feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  background: #f8fafa;
+  border-radius: 8px;
+  border: 1px solid #e0f0f0;
+}
+
+.cal-setup-welcome .feature-item i {
+  color: #218D8D;
+  font-size: 1.125rem;
+  margin-top: 0.125rem;
+  flex-shrink: 0;
+}
+
+.cal-setup-welcome .feature-item strong {
+  display: block;
+  font-size: 0.875rem;
+  color: #1a202c;
+  margin-bottom: 0.125rem;
+}
+
+.cal-setup-welcome .feature-item span {
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.cal-setup-welcome .welcome-note {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Review step
+   -------------------------------------------------------------------------- */
+.cal-setup-review {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.cal-setup-review .review-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e0f5f5, #d1eeee);
+  color: #218D8D;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin: 0 auto 1.25rem;
+}
+
+.cal-setup-review h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 0.5rem;
+  outline: none;
+}
+
+.cal-setup-review .review-summary {
+  font-size: 0.9375rem;
+  color: #64748b;
+  max-width: 480px;
+  margin: 0 auto 1.5rem;
+  line-height: 1.5;
+}
+
+.cal-setup-review .review-checklist {
+  max-width: 420px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.cal-setup-review .review-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.cal-setup-review .review-item:last-child {
+  border-bottom: none;
+}
+
+.cal-setup-review .review-item i {
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+
+.cal-setup-review .review-item.completed i {
+  color: #10b981;
+}
+
+.cal-setup-review .review-item.skipped i {
+  color: #cbd5e1;
+}
+
+.cal-setup-review .review-item span:first-of-type {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #334155;
+  font-weight: 500;
+}
+
+.cal-setup-review .review-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cal-setup-review .review-item.completed .review-status {
+  color: #10b981;
+}
+
+.cal-setup-review .review-item.skipped .review-status {
+  color: #94a3b8;
+}
+
+/* --------------------------------------------------------------------------
+   Celebration overlay
+   -------------------------------------------------------------------------- */
+.cal-setup-celebration {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: cal-setup-fade-in 0.3s ease;
+}
+
+.celebration-content {
+  background: white;
+  border-radius: 16px;
+  padding: 3rem 2.5rem;
+  text-align: center;
+  max-width: 420px;
+  width: 90%;
+  position: relative;
+  overflow: hidden;
+  animation: cal-setup-scale-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.celebration-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  margin: 0 auto 1.5rem;
+  animation: cal-setup-icon-bounce 0.6s ease 0.3s both;
+}
+
+.celebration-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 0.5rem;
+}
+
+.celebration-content p {
+  font-size: 1rem;
+  color: #64748b;
+  margin: 0 0 1.5rem;
+}
+
+/* Confetti-like particles */
+.celebration-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.celebration-particles .particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color, #3b82f6);
+  left: var(--x, 50%);
+  top: -10px;
+  animation: cal-setup-confetti-fall 2s ease-in var(--delay, 0s) both;
+}
+
+.celebration-particles .particle:nth-child(odd) {
+  width: 4px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.celebration-particles .particle:nth-child(3n) {
+  width: 8px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+@keyframes cal-setup-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(500px) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes cal-setup-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cal-setup-scale-in {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cal-setup-icon-bounce {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: Tablet
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .cal-setup-wizard {
+    padding: 1rem 1rem 5.5rem;
+  }
+
+  .cal-setup-header {
+    flex-wrap: wrap;
+  }
+
+  .cal-setup-header-left h1 {
+    font-size: 1.25rem;
+  }
+
+  .cal-setup-save-exit .btn-label {
+    display: none;
+  }
+
+  /* Hide stepper, show dots */
+  .cal-setup-stepper {
+    display: none;
+  }
+
+  .cal-setup-dots {
+    display: flex;
+  }
+
+  .cal-setup-step-wrapper {
+    padding: 1.5rem 1rem;
+    border-radius: 10px;
+  }
+
+  .cal-setup-step-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .cal-setup-step-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .cal-setup-welcome .welcome-features {
+    grid-template-columns: 1fr;
+  }
+
+  .cal-setup-footer {
+    padding: 0.75rem 1rem;
+  }
+
+  .cal-setup-footer-center {
+    display: none;
+  }
+
+  .cal-setup-help-tooltip {
+    width: 240px;
+  }
+
+  .cal-setup-help-label {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive: Small mobile
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .cal-setup-wizard {
+    padding: 0.75rem 0.75rem 5rem;
+  }
+
+  .cal-setup-step-wrapper {
+    padding: 1.25rem 0.875rem;
+    min-height: 280px;
+  }
+
+  .cal-setup-step-title {
+    font-size: 1.125rem;
+  }
+
+  .cal-setup-step-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .cal-setup-welcome .welcome-icon {
+    width: 56px;
+    height: 56px;
+    font-size: 1.5rem;
+  }
+
+  .cal-setup-welcome h2 {
+    font-size: 1.25rem;
+  }
+
+  .celebration-content {
+    padding: 2rem 1.5rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion preference
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .cal-setup-step-animate,
+  .cal-setup-progress-bar-fill,
+  .cal-setup-stepper-line-fill,
+  .cal-setup-stepper-circle,
+  .celebration-content,
+  .celebration-icon,
+  .celebration-particles .particle {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,223 @@
+/* ==========================================================================
+   ErrorBoundary  — shared styles for common/ErrorBoundary, CalendarErrorBoundary
+   ========================================================================== */
+
+/* Generic container */
+.eb-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 32px 16px;
+}
+
+.eb-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.eb-icon-wrapper {
+  margin-bottom: 16px;
+}
+
+.eb-icon {
+  width: 48px;
+  height: 48px;
+  color: #dc3545;
+}
+
+.eb-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.eb-message {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.eb-details {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.eb-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 6px 0;
+  user-select: none;
+}
+
+.eb-pre {
+  margin: 8px 0 0;
+  padding: 12px;
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.eb-stack {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Buttons */
+.eb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.eb-btn:active {
+  transform: scale(0.97);
+}
+
+.eb-btn-primary {
+  background: #218d8d;
+  color: #fff;
+}
+
+.eb-btn-primary:hover {
+  background: #1a7171;
+}
+
+.eb-btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.eb-btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+.eb-btn-group {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ---------- Calendar-specific error boundary ---------- */
+
+.ceb-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 32px 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px dashed #d1d5db;
+}
+
+.ceb-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 40px 32px;
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+
+.ceb-icon {
+  width: 56px;
+  height: 56px;
+  color: #218d8d;
+  margin-bottom: 16px;
+}
+
+.ceb-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.ceb-message {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.ceb-timestamp {
+  margin: 0 0 20px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+/* ---------- Widget-specific error boundary ---------- */
+
+.web-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px;
+  padding: 12px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.web-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #991b1b;
+}
+
+.web-icon {
+  width: 20px;
+  height: 20px;
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.web-retry {
+  background: none;
+  border: none;
+  color: #218d8d;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.web-retry:hover {
+  color: #1a7171;
+}
+
+@media (max-width: 640px) {
+  .eb-card,
+  .ceb-card {
+    padding: 24px 16px;
+  }
+}

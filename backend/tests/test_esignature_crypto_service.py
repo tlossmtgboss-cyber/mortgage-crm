@@ -35,21 +35,39 @@ from services.smart_docs.esignature_crypto_service import (
     SigningCertificate,
     get_esignature_crypto_service,
 )
+from services.smart_docs.esignature_key_manager import (
+    ESignatureKeyManager,
+    reset_key_manager,
+)
 
 
 # =============================================================================
 # Fixtures
 # =============================================================================
 
+# Secrets must be >= 32 chars for the new key manager validation.
+_TEST_SIGNING_SECRET = "test-signing-secret-32-bytes-ok!"
+_TEST_TOKEN_SECRET = "test-token-secret-32-bytes-okay!"
+
+
+@pytest.fixture(autouse=True)
+def _reset_key_manager_singleton():
+    """Reset the key manager singleton before and after each test."""
+    reset_key_manager()
+    yield
+    reset_key_manager()
+
+
 @pytest.fixture
 def crypto_service():
     """Create a fresh ESignatureCryptoService with deterministic secrets."""
-    with patch.dict(os.environ, {
-        "ESIGN_SIGNING_SECRET": "test-signing-secret-32-bytes-ok!",
-        "ESIGN_TOKEN_SECRET": "test-token-secret-32-bytes-okay!",
-        "ESIGN_VERIFY_BASE_URL": "https://test.example.com/verify",
-    }):
-        return ESignatureCryptoService()
+    km = ESignatureKeyManager(
+        signing_secret=_TEST_SIGNING_SECRET,
+        token_secret=_TEST_TOKEN_SECRET,
+    )
+    svc = ESignatureCryptoService(key_manager=km)
+    svc._base_url = "https://test.example.com/verify"
+    return svc
 
 
 @pytest.fixture
@@ -294,12 +312,14 @@ class TestSigningTokens:
         """A token with a tampered payload should fail HMAC verification."""
         token, _ = crypto_service.generate_signing_token(42, sample_envelope_uuid)
 
-        # Decode, tamper with the inner payload, re-encode
+        # Decode, tamper with the payload bytes, re-encode
         token_raw = base64.urlsafe_b64decode(token.encode("ascii"))
-        payload_bytes, mac_b64 = token_raw.rsplit(b".", 1)
-        # Change recipient_id from 42 to 99
-        tampered_payload = payload_bytes.replace(b"42", b"99")
-        tampered_raw = tampered_payload + b"." + mac_b64
+        payload_b64, mac_b64 = token_raw.rsplit(b".", 1)
+        # Decode the payload, flip a byte, re-encode
+        payload_bytes = bytearray(base64.b64decode(payload_b64))
+        payload_bytes[5] ^= 0xFF  # flip a byte in the payload
+        tampered_payload_b64 = base64.b64encode(bytes(payload_bytes))
+        tampered_raw = tampered_payload_b64 + b"." + mac_b64
         tampered_token = base64.urlsafe_b64encode(tampered_raw).decode("ascii")
 
         assert crypto_service.validate_signing_token(tampered_token, 99, sample_envelope_uuid) is False
@@ -317,14 +337,23 @@ class TestSigningTokens:
 
     def test_token_payload_encoding_roundtrip(self, crypto_service, sample_envelope_uuid):
         """The payload embedded in the token should decode back to the original fields."""
+        import struct
         recipient_id = 42
         token, _ = crypto_service.generate_signing_token(recipient_id, sample_envelope_uuid)
 
-        # Manually decode to inspect the payload
+        # Manually decode to inspect the length-prefixed payload
         token_raw = base64.urlsafe_b64decode(token.encode("ascii"))
-        payload_bytes, _mac_b64 = token_raw.rsplit(b".", 1)
-        payload = payload_bytes.decode("utf-8")
-        parts = payload.split("|")
+        payload_b64, _mac_b64 = token_raw.rsplit(b".", 1)
+        payload_bytes = base64.b64decode(payload_b64)
+
+        # Parse length-prefixed fields
+        parts = []
+        offset = 0
+        while offset < len(payload_bytes):
+            (length,) = struct.unpack(">I", payload_bytes[offset:offset + 4])
+            offset += 4
+            parts.append(payload_bytes[offset:offset + length].decode("utf-8"))
+            offset += length
 
         assert len(parts) == 4
         assert parts[0] == str(recipient_id)
@@ -505,13 +534,16 @@ class TestHashConsistency:
 
     def test_same_secret_same_signature_hash(self):
         """Two service instances with same secrets should produce identical signature hashes."""
-        env = {
-            "ESIGN_SIGNING_SECRET": "shared-secret-for-consistency-test",
-            "ESIGN_TOKEN_SECRET": "shared-token-secret-for-test-1234",
-        }
-        with patch.dict(os.environ, env):
-            svc1 = ESignatureCryptoService()
-            svc2 = ESignatureCryptoService()
+        km1 = ESignatureKeyManager(
+            signing_secret="shared-secret-for-consistency-test",
+            token_secret="shared-token-secret-for-test-1234",
+        )
+        km2 = ESignatureKeyManager(
+            signing_secret="shared-secret-for-consistency-test",
+            token_secret="shared-token-secret-for-test-1234",
+        )
+        svc1 = ESignatureCryptoService(key_manager=km1)
+        svc2 = ESignatureCryptoService(key_manager=km2)
 
         signed_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         kwargs = dict(
@@ -524,10 +556,16 @@ class TestHashConsistency:
 
     def test_document_hash_independent_of_service_secrets(self):
         """hash_document is pure SHA-256 and should not depend on service secrets."""
-        with patch.dict(os.environ, {"ESIGN_SIGNING_SECRET": "secret-A"}):
-            svc_a = ESignatureCryptoService()
-        with patch.dict(os.environ, {"ESIGN_SIGNING_SECRET": "secret-B"}):
-            svc_b = ESignatureCryptoService()
+        km_a = ESignatureKeyManager(
+            signing_secret="secret-A-that-is-at-least-32-chars!",
+            token_secret=_TEST_TOKEN_SECRET,
+        )
+        km_b = ESignatureKeyManager(
+            signing_secret="secret-B-that-is-at-least-32-chars!",
+            token_secret=_TEST_TOKEN_SECRET,
+        )
+        svc_a = ESignatureCryptoService(key_manager=km_a)
+        svc_b = ESignatureCryptoService(key_manager=km_b)
 
         content = b"same content"
         assert svc_a.hash_document(content) == svc_b.hash_document(content)
@@ -543,10 +581,16 @@ class TestKeyIsolation:
 
     def test_different_signing_secrets_different_hashes(self):
         """Two services with different signing secrets should produce different signature hashes."""
-        with patch.dict(os.environ, {"ESIGN_SIGNING_SECRET": "tenant-A-secret-32-bytes-long!!"}):
-            svc_a = ESignatureCryptoService()
-        with patch.dict(os.environ, {"ESIGN_SIGNING_SECRET": "tenant-B-secret-32-bytes-long!!"}):
-            svc_b = ESignatureCryptoService()
+        km_a = ESignatureKeyManager(
+            signing_secret="tenant-A-secret-32-bytes-long!!",
+            token_secret=_TEST_TOKEN_SECRET,
+        )
+        km_b = ESignatureKeyManager(
+            signing_secret="tenant-B-secret-32-bytes-long!!",
+            token_secret=_TEST_TOKEN_SECRET,
+        )
+        svc_a = ESignatureCryptoService(key_manager=km_a)
+        svc_b = ESignatureCryptoService(key_manager=km_b)
 
         signed_at = datetime(2026, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
         kwargs = dict(
@@ -562,30 +606,29 @@ class TestKeyIsolation:
     def test_different_token_secrets_incompatible_tokens(self):
         """A token generated with secret A should not validate with secret B."""
         envelope = str(uuid.uuid4())
-        with patch.dict(os.environ, {"ESIGN_TOKEN_SECRET": "token-secret-A-32-bytes-long!!!"}):
-            svc_a = ESignatureCryptoService()
-        with patch.dict(os.environ, {"ESIGN_TOKEN_SECRET": "token-secret-B-32-bytes-long!!!"}):
-            svc_b = ESignatureCryptoService()
+        km_a = ESignatureKeyManager(
+            signing_secret=_TEST_SIGNING_SECRET,
+            token_secret="token-secret-A-32-bytes-long!!!",
+        )
+        km_b = ESignatureKeyManager(
+            signing_secret=_TEST_SIGNING_SECRET,
+            token_secret="token-secret-B-32-bytes-long!!!",
+        )
+        svc_a = ESignatureCryptoService(key_manager=km_a)
+        svc_b = ESignatureCryptoService(key_manager=km_b)
 
         token, _ = svc_a.generate_signing_token(1, envelope)
         # Should fail because svc_b has a different token secret
         assert svc_b.validate_signing_token(token, 1, envelope) is False
 
-    def test_ephemeral_secret_when_env_not_set(self):
-        """When ESIGN_SIGNING_SECRET is unset, a random secret should be generated."""
+    def test_missing_env_vars_raises_runtime_error(self):
+        """When ESIGN_SIGNING_SECRET is unset, ESignatureCryptoService must refuse to start."""
         with patch.dict(os.environ, {}, clear=True):
             # Remove the keys entirely
             for key in ("ESIGN_SIGNING_SECRET", "ESIGN_TOKEN_SECRET", "ESIGN_VERIFY_BASE_URL"):
                 os.environ.pop(key, None)
-            svc = ESignatureCryptoService()
-
-        # Should still work (random secret generated)
-        doc_hash = svc.hash_document(b"test")
-        assert len(doc_hash) == 64
-
-        signed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        sig = svc.generate_signature_hash(doc_hash, "test@test.com", signed_at, "1.2.3.4")
-        assert len(sig) == 64
+            with pytest.raises(RuntimeError, match="ESIGN_SIGNING_SECRET"):
+                ESignatureCryptoService()
 
 
 # =============================================================================
@@ -831,11 +874,14 @@ class TestSingleton:
 
     def test_singleton_returns_same_instance(self):
         """get_esignature_crypto_service should return the same instance on repeated calls."""
-        # Reset the module-level singleton
         import services.smart_docs.esignature_crypto_service as mod
         mod._service = None
-        svc1 = get_esignature_crypto_service()
-        svc2 = get_esignature_crypto_service()
+        with patch.dict(os.environ, {
+            "ESIGN_SIGNING_SECRET": _TEST_SIGNING_SECRET,
+            "ESIGN_TOKEN_SECRET": _TEST_TOKEN_SECRET,
+        }):
+            svc1 = get_esignature_crypto_service()
+            svc2 = get_esignature_crypto_service()
         assert svc1 is svc2
         # Clean up
         mod._service = None

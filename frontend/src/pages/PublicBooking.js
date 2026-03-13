@@ -10,11 +10,14 @@ import LiveRegion from '../components/common/LiveRegion';
 import {
   generateBookingPageMeta,
   generateStructuredData,
+  generateLocalBusinessData,
+  generateCanonicalUrl,
   generateBreadcrumbs,
   injectJsonLd,
   cleanupJsonLd,
 } from '../utils/seo';
 import JoinWaitlist from '../components/calendar/JoinWaitlist';
+import BookingConfirmation from '../components/calendar/BookingConfirmation';
 import './PublicBooking.css';
 import '../styles/tablet.css';
 
@@ -93,11 +96,35 @@ const PublicBookingInner = () => {
   const seoLoName = branding?.lo?.name || null;
   const seoAppointmentType = selectedType?.type_name || bookingLink?.custom_title || bookingLink?.title || null;
   const seoOgImage = branding?.logo_url || bookingLink?.logo_url || null;
+  const seoCanonicalUrl = generateCanonicalUrl(slug);
 
   const seoMeta = generateBookingPageMeta(seoOrgName, seoAppointmentType, seoLoName, {
     image: seoOgImage,
     slug,
   });
+
+  // Build LocalBusiness structured data for the page (injected on load via SEOHead)
+  const typeNames = appointmentTypes.map((t) => t.type_name).filter(Boolean);
+  const localBusinessData = generateLocalBusinessData(
+    {
+      name: seoLoName || seoOrgName || 'Perennia AI',
+      description: bookingLink?.custom_description || bookingLink?.description || seoMeta.description,
+      image: seoOgImage,
+      orgName: seoOrgName,
+      appointmentTypes: typeNames.length > 0 ? typeNames : undefined,
+    },
+    seoCanonicalUrl,
+  );
+
+  // Build breadcrumbs for SEOHead
+  const breadcrumbData = generateBreadcrumbs([
+    { name: 'Home', url: 'https://app.perenniaai.com' },
+    ...(seoOrgName ? [{ name: seoOrgName, url: seoCanonicalUrl }] : []),
+    { name: seoAppointmentType || 'Book an Appointment' },
+  ]);
+
+  // Combine all structured data for SEOHead
+  const seoStructuredData = [localBusinessData, breadcrumbData].filter(Boolean);
 
   // Inject JSON-LD Event structured data when a time slot is selected
   useEffect(() => {
@@ -116,25 +143,16 @@ const PublicBookingInner = () => {
       endTime: endDate.toISOString(),
       locationName: meetingMode === 'video' ? 'Video Call' : 'Phone Call',
       organizerName: seoOrgName || 'Perennia AI',
-      url: seoMeta.url,
+      url: seoCanonicalUrl,
       image: seoOgImage,
     });
 
     const cleanupEvent = injectJsonLd(eventData);
 
-    // Breadcrumbs
-    const breadcrumbData = generateBreadcrumbs([
-      { name: 'Home', url: 'https://app.perenniaai.com' },
-      { name: seoOrgName || 'Book', url: seoMeta.url },
-      { name: selectedType.type_name || 'Appointment' },
-    ]);
-    const cleanupBreadcrumbs = injectJsonLd(breadcrumbData);
-
     return () => {
       cleanupEvent();
-      cleanupBreadcrumbs();
     };
-  }, [selectedType, selectedTime, meetingMode, seoOrgName, seoOgImage, seoMeta.description, seoMeta.url]);
+  }, [selectedType, selectedTime, meetingMode, seoOrgName, seoOgImage, seoMeta.description, seoCanonicalUrl]);
 
   // Check if managing existing appointment
   const urlParams = new URLSearchParams(window.location.search);
@@ -377,10 +395,24 @@ const PublicBookingInner = () => {
       const result = await response.json();
       setConfirmedAppointment({
         id: result.appointment_id,
+        appointment_id: result.appointment_id,
         date: selectedDate,
         time: selectedTime,
         type: selectedType,
-        meetingMode: meetingMode
+        meetingMode: meetingMode,
+        // Rich data from API for BookingConfirmation component
+        scheduled_start: result.scheduled_start,
+        scheduled_end: result.scheduled_end,
+        video_link: result.video_link,
+        confirmation_token: result.confirmation_token,
+        confirmation_url: result.confirmation_url,
+        title: result.confirmation_details?.title,
+        duration_minutes: selectedType.default_duration_minutes || 30,
+        appointment_type_name: selectedType.type_name,
+        meeting_mode: meetingMode,
+        lo_name: result.confirmation_details?.team_member,
+        attendee_name: `${form.first_name} ${form.last_name}`,
+        attendee_email: form.email,
       });
       setStep('confirmation');
     } catch (err) {
@@ -602,7 +634,7 @@ const PublicBookingInner = () => {
     );
   }
 
-  // Confirmation state
+  // Confirmation state — uses the polished BookingConfirmation component
   if (step === 'confirmation' && confirmedAppointment) {
     return (
       <div className="redfin-booking" style={coverStyle}>
@@ -610,67 +642,14 @@ const PublicBookingInner = () => {
         <div className="booking-container confirmation-container">
           <LanguageSelector />
           {renderBrandingHeader()}
-          <div className="confirmation-header">
-            <div className="success-checkmark">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" role="img" aria-label={t('confirmation.title')}>
-                <path d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h1>{t('confirmation.title')}</h1>
-            <p>{t('confirmation.subtitle')}</p>
-          </div>
 
-          <div className="appointment-summary">
-            <h3>{t('confirmation.details')}</h3>
-            <div className="summary-row">
-              <span className="label">{t('confirmation.date')}</span>
-              <span className="value">{formatFullDate(confirmedAppointment.date)}</span>
-            </div>
-            <div className="summary-row">
-              <span className="label">{t('confirmation.time')}</span>
-              <span className="value">{formatTime(confirmedAppointment.time)}</span>
-            </div>
-            <div className="summary-row">
-              <span className="label">{t('confirmation.type')}</span>
-              <span className="value">{confirmedAppointment.type.type_name}</span>
-            </div>
-            <div className="summary-row">
-              <span className="label">{t('confirmation.format')}</span>
-              <span className="value">{confirmedAppointment.meetingMode === 'video' ? t('confirmation.videoCall') : t('confirmation.phoneCall')}</span>
-            </div>
-          </div>
-
-          <div className="confirmation-actions">
-            <button className="primary-button" onClick={() => window.location.href = '/'}>
-              {t('confirmation.goHome')}
-            </button>
-            {cancelConfirm ? (
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                <button
-                  className="secondary-button cancel-link"
-                  onClick={() => handleCancel()}
-                  disabled={submitting}
-                  style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                >
-                  {submitting ? t('confirmation.cancelling') : t('confirmation.yesCancel')}
-                </button>
-                <button
-                  className="secondary-button"
-                  onClick={() => setCancelConfirm(false)}
-                >
-                  {t('confirmation.nevermind')}
-                </button>
-              </div>
-            ) : (
-              <button
-                className="secondary-button cancel-link"
-                onClick={() => handleCancel()}
-                disabled={submitting}
-              >
-                {t('confirmation.cancelAppointment')}
-              </button>
-            )}
-          </div>
+          <BookingConfirmation
+            appointmentData={confirmedAppointment}
+            appointmentId={confirmedAppointment.id}
+            token={confirmedAppointment.confirmation_token}
+            onCancel={() => handleCancel()}
+            onGoHome={() => window.location.href = '/'}
+          />
 
           {/* Footer - always shown */}
           <div className="booking-footer">
@@ -723,8 +702,8 @@ const PublicBookingInner = () => {
 
   return (
     <div className="redfin-booking" style={coverStyle}>
-      <SEOHead {...seoMeta} />
-      <div className="booking-container">
+      <SEOHead {...seoMeta} structuredData={seoStructuredData.length > 0 ? seoStructuredData : undefined} />
+      <main className="booking-container" role="main">
         {/* Language Selector */}
         <LanguageSelector />
 
@@ -733,12 +712,15 @@ const PublicBookingInner = () => {
 
         {/* Booking Link Header */}
         {bookingLink && (
-          <div className="booking-header">
+          <header className="booking-header">
             <h1>{bookingLink.custom_title || bookingLink.title || bookingLink.link_name || t('booking.scheduleAppointment')}</h1>
             {bookingLink.custom_description || bookingLink.description ? (
               <p>{bookingLink.custom_description || bookingLink.description}</p>
             ) : null}
-          </div>
+            {seoLoName && (
+              <p className="booking-lo-name">with <strong>{seoLoName}</strong></p>
+            )}
+          </header>
         )}
 
         {/* Step indicator */}
@@ -786,26 +768,28 @@ const PublicBookingInner = () => {
 
             {/* Appointment Type Selector (if multiple) */}
             {appointmentTypes.length > 1 && (
-              <div className="type-selector">
-                <h3>{t('datetime.selectType')}</h3>
-                <div className="type-pills">
+              <section className="type-selector" aria-labelledby="type-selector-heading">
+                <h2 id="type-selector-heading">{t('datetime.selectType')}</h2>
+                <div className="type-pills" role="listbox" aria-label={t('datetime.selectType')}>
                   {appointmentTypes.map(type => (
                     <button
                       key={type.id}
                       className={`type-pill ${selectedType?.id === type.id ? 'active' : ''}`}
                       onClick={() => setSelectedType(type)}
+                      role="option"
+                      aria-selected={selectedType?.id === type.id}
                     >
                       {type.type_name}
                       <span className="duration">{type.default_duration_minutes} {t('datetime.min')}</span>
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
 
             {/* Date Picker */}
-            <div className="date-section">
-              <h2>{t('datetime.pickDate')}</h2>
+            <section className="date-section" aria-labelledby="date-picker-heading">
+              <h2 id="date-picker-heading">{t('datetime.pickDate')}</h2>
               <div className="week-picker">
                 <button className="week-nav prev" onClick={prevWeek} disabled={isPast(weekDates[0])} aria-label={t('datetime.previousWeek')}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -844,11 +828,11 @@ const PublicBookingInner = () => {
                   </svg>
                 </button>
               </div>
-            </div>
+            </section>
 
             {/* Time Picker */}
-            <div className="time-section">
-              <h2>{t('datetime.pickTime')}</h2>
+            <section className="time-section" aria-labelledby="time-picker-heading">
+              <h2 id="time-picker-heading">{t('datetime.pickTime')}</h2>
               <p className="time-subtitle">{t('datetime.timeSubtitle')}</p>
 
               <div className="time-dropdown-wrapper">
@@ -907,7 +891,7 @@ const PublicBookingInner = () => {
                   {t('datetime.videoCall')}
                 </button>
               </div>
-            </div>
+            </section>
 
             <button
               className="primary-button next-button"
@@ -945,7 +929,7 @@ const PublicBookingInner = () => {
         )}
 
         {step === 'form' && (
-          <div className={`form-step${isTablet && orientation === 'landscape' ? ' booking-two-column' : ''}`}>
+          <section className={`form-step${isTablet && orientation === 'landscape' ? ' booking-two-column' : ''}`} aria-labelledby="form-step-heading">
             <button className="back-link" onClick={() => setStep('datetime')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M15 19l-7-7 7-7" />
@@ -953,7 +937,7 @@ const PublicBookingInner = () => {
               {t('form.back')}
             </button>
 
-            <h2>{t('form.title')}</h2>
+            <h2 id="form-step-heading">{t('form.title')}</h2>
 
             <form onSubmit={handleSubmit} noValidate>
               <div className="form-row">
@@ -1113,15 +1097,15 @@ const PublicBookingInner = () => {
                 {submitting ? t('form.scheduling') : t('form.scheduleAppointment')}
               </button>
             </form>
-          </div>
+          </section>
         )}
 
 
         {/* Footer - always shown, not removable */}
-        <div className="booking-footer">
+        <footer className="booking-footer">
           <p>{t('booking.poweredBy')} <strong>Perennia AI</strong></p>
-        </div>
-      </div>
+        </footer>
+      </main>
     </div>
   );
 };

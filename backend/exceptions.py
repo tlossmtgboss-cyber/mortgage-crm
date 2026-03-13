@@ -228,6 +228,35 @@ class AgentTimeoutError(PerenniaError):
         )
 
 
+# =============================================================================
+# Concurrency Errors
+# =============================================================================
+
+class ConflictError(PerenniaError):
+    """Raised when an optimistic lock detects a concurrent modification.
+
+    Defined here for module-level imports; the db_transaction module
+    re-exports its own ConflictError that subclasses this.
+    """
+
+    def __init__(
+        self,
+        message: str = "Concurrent modification conflict",
+        entity_type: Optional[str] = None,
+        entity_id: Any = None,
+    ):
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        super().__init__(
+            message,
+            code="OPTIMISTIC_LOCK_CONFLICT",
+            details={
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+            },
+        )
+
+
 __all__ = [
     # Base
     'PerenniaError',
@@ -247,6 +276,8 @@ __all__ = [
     # Data integrity
     'InvalidStageError',
     'DuplicateEntityError',
+    # Concurrency
+    'ConflictError',
     # Integrations
     'SalesforceError',
     'TelephonyError',

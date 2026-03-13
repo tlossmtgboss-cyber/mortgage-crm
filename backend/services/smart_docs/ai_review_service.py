@@ -58,6 +58,8 @@ try:
 except ImportError:
     HAS_ANTHROPIC = False
 
+from services.smart_docs.ai_resilience import resilient_ai_call
+
 try:
     import pdfplumber
     HAS_PDFPLUMBER = True
@@ -298,6 +300,49 @@ class AIDocumentReviewService:
                     review_priority="HIGH",
                 )
 
+        # --- Document cache lookup ---
+        doc_hash = None
+        cache_service = None
+        org_id = getattr(document, "organization_id", None)
+        if file_content and org_id is not None:
+            try:
+                from services.smart_docs.document_cache_service import get_document_cache_service
+                cache_service = get_document_cache_service()
+                doc_hash = cache_service.get_or_compute_hash(file_content)
+                cached = cache_service.get_cached_review(self.db, doc_hash, org_id)
+                if cached is not None:
+                    logger.info(
+                        "doc_cache REVIEW_HIT hash=%s org=%s doc_id=%s",
+                        doc_hash[:12], org_id, document_id,
+                    )
+                    decision = ReviewDecision(
+                        decision=cached.get("decision", DocumentDecision.NEEDS_REVIEW.value),
+                        confidence=cached.get("confidence", 0),
+                        reasons=cached.get("reasons", []),
+                        rejection_category=cached.get("rejection_category"),
+                        fix_instructions=cached.get("fix_instructions"),
+                        quality_score=cached.get("quality_score", 0),
+                        completeness_score=cached.get("completeness_score", 0),
+                        readability_score=cached.get("readability_score", 0),
+                        freshness_valid=cached.get("freshness_valid", True),
+                        type_match=cached.get("type_match", True),
+                        name_match=cached.get("name_match", True),
+                        auto_approved=cached.get("auto_approved", False),
+                        needs_human_review=cached.get("needs_human_review", False),
+                        review_priority=cached.get("review_priority", "NORMAL"),
+                    )
+                    # Still persist decision and log event even on cache hit
+                    self._update_document_status(document_id, decision)
+                    self._log_review_event(document=document, decision=decision)
+                    return decision
+                else:
+                    logger.info(
+                        "doc_cache REVIEW_MISS hash=%s org=%s doc_id=%s",
+                        doc_hash[:12], org_id, document_id,
+                    )
+            except Exception as e:
+                logger.warning("doc_cache review lookup failed: %s", e)
+
         # Update status to SCANNING
         document.status = "SCANNING"
         self.db.flush()
@@ -417,21 +462,59 @@ class AIDocumentReviewService:
             )
 
             logger.info(
-                f"AI review for document {document_id}: "
-                f"decision={decision.decision}, confidence={decision.confidence}, "
-                f"auto_approved={decision.auto_approved}"
+                "Document reviewed | document_id=%s | decision=%s | "
+                "confidence=%d | auto_approved=%s | quality=%d | "
+                "type_match=%s | name_match=%s | freshness=%s | "
+                "screenshot=%s | fraud=%s | reasons_count=%d",
+                document_id,
+                decision.decision,
+                decision.confidence,
+                decision.auto_approved,
+                quality_score,
+                type_match,
+                name_match,
+                freshness_valid,
+                is_screenshot,
+                fraud_suspected,
+                len(decision.reasons),
             )
+
+            # --- Cache the review result ---
+            if cache_service and doc_hash and org_id is not None:
+                try:
+                    cache_service.cache_review(self.db, doc_hash, org_id, {
+                        "decision": decision.decision,
+                        "confidence": decision.confidence,
+                        "reasons": decision.reasons,
+                        "rejection_category": decision.rejection_category,
+                        "fix_instructions": decision.fix_instructions,
+                        "quality_score": decision.quality_score,
+                        "completeness_score": decision.completeness_score,
+                        "readability_score": decision.readability_score,
+                        "freshness_valid": decision.freshness_valid,
+                        "type_match": decision.type_match,
+                        "name_match": decision.name_match,
+                        "auto_approved": decision.auto_approved,
+                        "needs_human_review": decision.needs_human_review,
+                        "review_priority": decision.review_priority,
+                    })
+                except Exception as e:
+                    logger.warning("doc_cache review store failed: %s", e)
 
             return decision
 
         except Exception as e:
-            logger.exception(f"AI review failed for document {document_id}: {e}")
+            logger.exception(
+                "Document review failed | document_id=%s | error=%s",
+                document_id,
+                str(e)[:200],
+            )
             document.status = "PROCESSING"
             self.db.flush()
             return ReviewDecision(
                 decision=DocumentDecision.NEEDS_REVIEW.value,
                 confidence=0,
-                reasons=[f"AI review error: {str(e)}"],
+                reasons=[f"AI review error: {str(e)[:200]}"],
                 needs_human_review=True,
                 review_priority="HIGH",
             )

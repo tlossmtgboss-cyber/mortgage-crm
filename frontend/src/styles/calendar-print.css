@@ -1,0 +1,319 @@
+/* ==========================================================================
+   Calendar Print Styles
+   Ink-friendly, high-contrast layout for window.print()
+   ========================================================================== */
+
+/* ---------- Hide the print view on screen ---------- */
+.print-calendar-view {
+  display: none;
+}
+
+/* ==========================================================================
+   @media print - Main Rules
+   ========================================================================== */
+@media print {
+  /* ---- Page setup ---- */
+  @page {
+    size: letter;
+    margin: 0.5in 0.6in;
+  }
+
+  /* Monthly layout prints better in landscape */
+  @page month-landscape {
+    size: letter landscape;
+    margin: 0.4in 0.5in;
+  }
+
+  /* ---- Hide everything except the print view ---- */
+  /* Global nav, sidebar, modals, tooltips, toasts, interactive controls */
+  nav,
+  .navbar,
+  .sidebar,
+  .app-sidebar,
+  .modal-overlay,
+  .modal-content,
+  .toast-container,
+  .tooltip,
+  [role="tooltip"],
+  .calendar-controls,
+  .month-navigation,
+  .view-switcher,
+  .calendar-tabs,
+  .search-container,
+  .appointments-sidebar,
+  .appointments-sidebar-header,
+  .btn-add-event,
+  .btn-add-appointment,
+  .btn-calendar-settings,
+  .btn-calendar-search,
+  .calendar-scroll-btn,
+  .calendar-page-header,
+  .calendar-error-banner,
+  .delete-appointment,
+  .appointment-edit-hint,
+  .confirm-dialog,
+  .btn-print-calendar {
+    display: none !important;
+  }
+
+  /* Hide the interactive calendar main area */
+  .calendar-main,
+  .calendar-content {
+    display: none !important;
+  }
+
+  /* Hide the calendar page header section (title, subtitle, controls) */
+  .calendar-header {
+    display: none !important;
+  }
+
+  /* ---- Show the print view ---- */
+  .print-calendar-view {
+    display: block !important;
+    position: relative;
+    width: 100%;
+    color: #000 !important;
+    background: #fff !important;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.4;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure the calendar page wrapper doesn't add padding/margin oddities */
+  .calendar-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+  }
+
+  /* ---- Print Header ---- */
+  .print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6pt;
+  }
+
+  .print-title {
+    font-size: 18pt;
+    font-weight: 700;
+    margin: 0 0 2pt 0;
+    color: #000;
+  }
+
+  .print-date-range {
+    font-size: 12pt;
+    font-weight: 400;
+    margin: 0;
+    color: #333;
+  }
+
+  .print-header-right {
+    text-align: right;
+    font-size: 9pt;
+    color: #555;
+  }
+
+  .print-lo-name {
+    font-weight: 600;
+    font-size: 10pt;
+    color: #000;
+    margin-bottom: 2pt;
+  }
+
+  .print-timestamp {
+    font-size: 8pt;
+    color: #888;
+  }
+
+  .print-divider {
+    border: none;
+    border-top: 2px solid #000;
+    margin: 6pt 0 10pt 0;
+  }
+
+  /* ---- Print Footer ---- */
+  .print-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8pt;
+    color: #999;
+    border-top: 1px solid #ccc;
+    padding-top: 4pt;
+    margin-top: 16pt;
+  }
+
+  /* ===========================
+     WEEKLY PRINT LAYOUT
+     =========================== */
+
+  .print-day-section {
+    margin-bottom: 10pt;
+    page-break-inside: avoid;
+  }
+
+  .print-day-heading {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #000;
+    margin: 0 0 3pt 0;
+    padding: 3pt 0;
+    border-bottom: 1px solid #999;
+  }
+
+  .print-no-events {
+    font-size: 9pt;
+    color: #888;
+    font-style: italic;
+    margin: 2pt 0 0 4pt;
+  }
+
+  /* Events table within each day */
+  .print-events-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-bottom: 4pt;
+  }
+
+  .print-events-table thead th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+    color: #555;
+    border-bottom: 1px solid #ccc;
+    padding: 2pt 4pt;
+  }
+
+  .print-events-table tbody td {
+    padding: 3pt 4pt;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+    color: #000;
+  }
+
+  /* Column widths */
+  .print-col-time     { width: 22%; }
+  .print-col-title    { width: 24%; }
+  .print-col-attendee { width: 20%; }
+  .print-col-type     { width: 16%; }
+  .print-col-location { width: 18%; }
+
+  .print-event-time {
+    white-space: nowrap;
+    font-weight: 500;
+  }
+
+  .print-event-title {
+    font-weight: 600;
+  }
+
+  .print-event-attendee {
+    color: #222;
+  }
+
+  .print-event-type {
+    font-size: 8pt;
+    color: #555;
+    text-transform: capitalize;
+  }
+
+  .print-event-location {
+    font-size: 8pt;
+    color: #555;
+  }
+
+  /* ===========================
+     MONTHLY PRINT LAYOUT
+     =========================== */
+
+  .print-month-layout {
+    page: month-landscape;
+  }
+
+  .print-month-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .print-month-day-header {
+    text-align: center;
+    font-size: 9pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    padding: 4pt 2pt;
+    border-bottom: 2px solid #000;
+    color: #000;
+  }
+
+  .print-month-week-row {
+    page-break-inside: avoid;
+  }
+
+  .print-month-cell {
+    border: 1px solid #ccc;
+    vertical-align: top;
+    padding: 2pt 3pt;
+    height: 70pt;
+    overflow: hidden;
+  }
+
+  .print-month-cell-empty {
+    background: #f8f8f8;
+  }
+
+  .print-month-day-number {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #000;
+    margin-bottom: 2pt;
+  }
+
+  .print-month-event-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .print-month-event-item {
+    font-size: 7pt;
+    line-height: 1.3;
+    margin-bottom: 1pt;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .print-month-event-time {
+    font-weight: 600;
+    color: #000;
+  }
+
+  .print-month-event-name {
+    color: #333;
+  }
+
+  .print-month-event-overflow {
+    font-size: 7pt;
+    color: #888;
+    font-style: italic;
+  }
+
+  /* ---- General print helpers ---- */
+  /* Remove shadows, rounded corners, backgrounds */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  a, a:visited {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+}

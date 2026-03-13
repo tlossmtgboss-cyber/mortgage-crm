@@ -1,0 +1,719 @@
+/**
+ * CancellationPolicyStep Styles
+ * Step 7 of Smart Calendar guided setup.
+ * Follows Perennia brand (#218D8D) and CalendarSettings patterns.
+ */
+
+/* ============================================================================
+   Container
+   ============================================================================ */
+
+.cancel-policy-step {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.cancel-policy-step h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.cancel-policy-step .section-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Section Blocks
+   ============================================================================ */
+
+.cancel-policy-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background: #fff;
+}
+
+.cancel-policy-section .section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.cancel-policy-section .section-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Preset Policy Cards
+   ============================================================================ */
+
+.policy-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .policy-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.policy-card {
+  position: relative;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.policy-card:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
+
+.policy-card.selected {
+  border-color: #218D8D;
+  background: #f0fdfa;
+  box-shadow: 0 0 0 1px #218D8D;
+}
+
+.policy-card .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.policy-card .card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.policy-card .card-icon.flexible {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.policy-card .card-icon.moderate {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.policy-card .card-icon.strict {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.policy-card .card-icon.custom {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.policy-card .card-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.policy-card.selected .card-check {
+  border-color: #218D8D;
+  background: #218D8D;
+}
+
+.policy-card .card-check-inner {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.policy-card.selected .card-check-inner {
+  background: #fff;
+}
+
+.policy-card .card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.policy-card .card-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: #218D8D;
+  color: #fff;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.policy-card .card-desc {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.policy-card .card-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.policy-card .card-detail-tag {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  color: #374151;
+  font-weight: 500;
+}
+
+.policy-card.selected .card-detail-tag {
+  background: #ccfbf1;
+  color: #115e59;
+}
+
+/* ============================================================================
+   Expandable Summary
+   ============================================================================ */
+
+.policy-summary-expand {
+  margin-top: 14px;
+}
+
+.policy-summary-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #218D8D;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.policy-summary-toggle:hover {
+  color: #176b6b;
+}
+
+.policy-summary-toggle .toggle-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 10px;
+}
+
+.policy-summary-toggle .toggle-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.policy-summary-body {
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.policy-summary-body .summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.policy-summary-body .summary-label {
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.policy-summary-body .summary-value {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* ============================================================================
+   Custom Configuration
+   ============================================================================ */
+
+.custom-config-panel {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.config-row {
+  margin-bottom: 20px;
+}
+
+.config-row:last-child {
+  margin-bottom: 0;
+}
+
+.config-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.config-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* Slider row */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e5e7eb;
+  border-radius: 3px;
+  outline: none;
+}
+
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #218D8D;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+.slider-row input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #218D8D;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+
+.slider-value {
+  min-width: 56px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #218D8D;
+  background: #f0fdfa;
+  padding: 4px 10px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+/* Max cancellations row */
+.max-cancel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.max-cancel-row input[type="number"] {
+  width: 72px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  text-align: center;
+  color: #111827;
+}
+
+.max-cancel-row input[type="number"]:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33,141,141,0.15);
+}
+
+.max-cancel-row .unlimited-toggle {
+  font-size: 13px;
+  color: #218D8D;
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-weight: 500;
+  padding: 0;
+}
+
+.max-cancel-row .unlimited-toggle:hover {
+  text-decoration: underline;
+}
+
+.max-cancel-row .unit-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* ============================================================================
+   Toggle Switch (consistent with CancellationPolicySettings)
+   ============================================================================ */
+
+.cancel-step-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.cancel-step-toggle .toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.cancel-step-toggle .toggle-track input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.cancel-step-toggle .toggle-track-bg {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 24px;
+  transition: background-color 0.2s;
+}
+
+.cancel-step-toggle .toggle-track-bg.on {
+  background-color: #218D8D;
+}
+
+.cancel-step-toggle .toggle-track-bg.off {
+  background-color: #d1d5db;
+}
+
+.cancel-step-toggle .toggle-thumb {
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  bottom: 3px;
+  border-radius: 50%;
+  background-color: #fff;
+  transition: left 0.2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.cancel-step-toggle .toggle-thumb.on {
+  left: 22px;
+}
+
+.cancel-step-toggle .toggle-thumb.off {
+  left: 3px;
+}
+
+.cancel-step-toggle .toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cancel-step-toggle .toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.cancel-step-toggle .toggle-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.4;
+}
+
+/* ============================================================================
+   Cancellation Reasons List
+   ============================================================================ */
+
+.reasons-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reasons-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reason-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  font-size: 13px;
+  color: #374151;
+  transition: background 0.15s;
+}
+
+.reason-tag:hover {
+  background: #e5e7eb;
+}
+
+.reason-tag .reason-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+.reason-tag .reason-remove:hover {
+  color: #dc2626;
+}
+
+.reason-add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.reason-add-row input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  color: #111827;
+  box-sizing: border-box;
+}
+
+.reason-add-row input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33,141,141,0.15);
+}
+
+.reason-add-row input::placeholder {
+  color: #9ca3af;
+}
+
+.reason-add-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.reason-add-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #218D8D;
+}
+
+.reason-add-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ============================================================================
+   Late Cancel Message + Preview
+   ============================================================================ */
+
+.late-cancel-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  line-height: 1.5;
+  color: #111827;
+  min-height: 80px;
+}
+
+.late-cancel-textarea:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33,141,141,0.15);
+}
+
+.late-cancel-preview {
+  margin-top: 12px;
+}
+
+.late-cancel-preview .preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #9ca3af;
+  margin-bottom: 6px;
+}
+
+.late-cancel-preview .preview-box {
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.late-cancel-preview .preview-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 6px;
+}
+
+.late-cancel-preview .preview-text {
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ============================================================================
+   No-Show Policy
+   ============================================================================ */
+
+.noshow-config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.noshow-threshold-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.noshow-threshold-row input[type="number"] {
+  width: 60px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+  text-align: center;
+  color: #111827;
+}
+
+.noshow-threshold-row input[type="number"]:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33,141,141,0.15);
+}
+
+.noshow-threshold-row .threshold-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* ============================================================================
+   Error & Status Messages
+   ============================================================================ */
+
+.cancel-step-error {
+  padding: 10px 14px;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cancel-step-error .dismiss-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  color: #dc2626;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+.cancel-step-success {
+  padding: 10px 14px;
+  background: #f0fdf4;
+  color: #16a34a;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.cancel-step-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}

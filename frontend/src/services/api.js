@@ -828,6 +828,10 @@ export const schedulerAPI = {
     const response = await api.post(`/api/v1/scheduler/appointments/${id}/cancel`, { reason });
     return response.data;
   },
+  sendReminder: async (id) => {
+    const response = await api.post(`/api/v1/scheduler/appointments/${id}/remind`);
+    return response.data;
+  },
   getAppointmentTimeline: async (id) => {
     const response = await api.get(`/api/v1/scheduler/appointments/${id}/timeline`);
     return response.data;
@@ -849,6 +853,92 @@ export const schedulerAPI = {
   },
   searchSuggestions: async (q) => {
     const response = await api.get('/api/v1/scheduler/search/suggestions', { params: { q } });
+    return response.data;
+  },
+  getNotifications: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/notifications', { params });
+    return response.data;
+  },
+  markNotificationRead: async (notificationId) => {
+    const response = await api.put(`/api/v1/scheduler/notifications/${notificationId}/read`);
+    return response.data;
+  },
+  markAllNotificationsRead: async () => {
+    const response = await api.put('/api/v1/scheduler/notifications/read-all');
+    return response.data;
+  },
+  // Conflict resolution
+  checkConflicts: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/conflicts/check', { params });
+    return response.data;
+  },
+  listConflicts: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/conflicts/list', { params });
+    return response.data;
+  },
+  resolveConflict: async (appointmentId, data) => {
+    const response = await api.post(`/api/v1/scheduler/conflicts/resolve/${appointmentId}`, data);
+    return response.data;
+  },
+};
+
+// Calendar Analytics API (dashboard metrics, trends, breakdowns)
+export const calendarAnalyticsAPI = {
+  getOverview: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/analytics/overview', { params });
+    return response.data;
+  },
+  getTrends: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/analytics/trends', { params });
+    return response.data;
+  },
+  getByType: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/analytics/by-type', { params });
+    return response.data;
+  },
+  getByLO: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/analytics/by-lo', { params });
+    return response.data;
+  },
+};
+
+// Calendar Labels API (color-coded appointment categorization)
+export const calendarLabelsAPI = {
+  getLabels: async () => {
+    const response = await api.get('/api/v1/scheduler/labels');
+    return response.data;
+  },
+  createLabel: async (data) => {
+    const response = await api.post('/api/v1/scheduler/labels', data);
+    return response.data;
+  },
+  updateLabel: async (id, data) => {
+    const response = await api.put(`/api/v1/scheduler/labels/${id}`, data);
+    return response.data;
+  },
+  deleteLabel: async (id) => {
+    const response = await api.delete(`/api/v1/scheduler/labels/${id}`);
+    return response.data;
+  },
+  reorderLabels: async (orderedIds) => {
+    const response = await api.put('/api/v1/scheduler/labels/reorder', { order: orderedIds });
+    return response.data;
+  },
+  assignLabels: async (appointmentId, labelIds) => {
+    const response = await api.post('/api/v1/scheduler/labels/assign', {
+      appointment_id: appointmentId,
+      label_ids: labelIds,
+    });
+    return response.data;
+  },
+  unassignLabels: async (appointmentId, labelIds) => {
+    const response = await api.delete('/api/v1/scheduler/labels/assign', {
+      data: { appointment_id: appointmentId, label_ids: labelIds },
+    });
+    return response.data;
+  },
+  getAppointmentLabels: async (appointmentId) => {
+    const response = await api.get(`/api/v1/scheduler/labels/appointment/${appointmentId}`);
     return response.data;
   },
 };
@@ -917,11 +1007,11 @@ export const calendarSettingsAPI = {
   },
   // Notifications
   getNotifications: async () => {
-    const response = await api.get('/api/v1/calendar-settings/notifications');
+    const response = await api.get('/api/v1/scheduler/settings/notifications');
     return response.data;
   },
   updateNotifications: async (data) => {
-    const response = await api.put('/api/v1/calendar-settings/notifications', data);
+    const response = await api.put('/api/v1/scheduler/settings/notifications', data);
     return response.data;
   },
   // Booking Page
@@ -945,6 +1035,44 @@ export const calendarSettingsAPI = {
   },
   updateTeam: async (data) => {
     const response = await api.put('/api/v1/calendar-settings/team', data);
+    return response.data;
+  },
+  // Labels
+  getLabels: async () => {
+    const response = await api.get('/api/v1/calendar-settings/labels');
+    return response.data;
+  },
+  createLabel: async (data) => {
+    const response = await api.post('/api/v1/calendar-settings/labels', data);
+    return response.data;
+  },
+  updateLabel: async (id, data) => {
+    const response = await api.put(`/api/v1/calendar-settings/labels/${id}`, data);
+    return response.data;
+  },
+  deleteLabel: async (id) => {
+    const response = await api.delete(`/api/v1/calendar-settings/labels/${id}`);
+    return response.data;
+  },
+  reorderLabels: async (labelIds) => {
+    const response = await api.put('/api/v1/calendar-settings/labels/reorder', { label_ids: labelIds });
+    return response.data;
+  },
+  updateLabelSettings: async (data) => {
+    const response = await api.put('/api/v1/calendar-settings/labels/settings', data);
+    return response.data;
+  },
+  // Appointment Templates
+  getTemplates: async () => {
+    const response = await api.get('/api/v1/calendar-settings/templates');
+    return response.data;
+  },
+  deleteTemplate: async (id) => {
+    const response = await api.delete(`/api/v1/calendar-settings/templates/${id}`);
+    return response.data;
+  },
+  setDefaultTemplate: async (id) => {
+    const response = await api.put(`/api/v1/calendar-settings/templates/${id}/default`);
     return response.data;
   },
 };

@@ -34,6 +34,8 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from services.smart_docs.ai_resilience import resilient_ai_call
+
 logger = logging.getLogger(__name__)
 
 # =============================================================================
@@ -458,65 +460,84 @@ class CallIntelDocumentExtractor:
         For needs with confidence >= AUTO_CREATE_THRESHOLD and
         auto_create_request=True, create smart_document_requests records.
 
+        Uses atomic_operation to ensure all request records and their
+        corresponding need-linkage updates are committed together or
+        rolled back together.
+
         Returns list of created request IDs.
         """
         from models.smart_docs_models import DocumentRequest, RequestStatus, RequestPriority, DocType
+        from services.smart_docs.db_transaction import atomic_operation
 
         created_ids: List[int] = []
 
-        for need in analysis.document_needs:
-            if need.confidence < self.AUTO_CREATE_THRESHOLD or not need.auto_create_request:
-                continue
+        eligible_needs = [
+            need for need in analysis.document_needs
+            if need.confidence >= self.AUTO_CREATE_THRESHOLD and need.auto_create_request
+        ]
 
-            # Resolve DocType enum; skip if unknown
-            try:
-                doc_type_enum = DocType(need.doc_type)
-            except ValueError:
-                logger.warning("Unknown DocType '%s', skipping auto-create", need.doc_type)
-                continue
+        if not eligible_needs:
+            return created_ids
 
-            try:
-                priority_enum = RequestPriority(need.priority)
-            except ValueError:
-                priority_enum = RequestPriority.NORMAL
+        try:
+            with atomic_operation(self.db):
+                for need in eligible_needs:
+                    # Resolve DocType enum; skip if unknown
+                    try:
+                        doc_type_enum = DocType(need.doc_type)
+                    except ValueError:
+                        logger.warning("Unknown DocType '%s', skipping auto-create", need.doc_type)
+                        continue
 
-            request = DocumentRequest(
-                loan_id=analysis.loan_id,
-                doc_type=doc_type_enum,
-                title=f"{need.doc_type.replace('_', ' ').title()} (from call)",
-                description=need.description,
-                instructions=f"Detected from call #{analysis.call_id}. Snippet: {need.source_snippet[:200]}",
-                priority=priority_enum,
-                status=RequestStatus.OPEN,
-            )
-            self.db.add(request)
-            self.db.flush()  # get the ID
-            created_ids.append(request.id)
+                    try:
+                        priority_enum = RequestPriority(need.priority)
+                    except ValueError:
+                        priority_enum = RequestPriority.NORMAL
 
-            # Link the need record to the created request
-            self.db.execute(
-                text("""
-                    UPDATE call_intel_document_needs
-                    SET linked_request_id = :request_id,
-                        status = 'REQUEST_CREATED'
-                    WHERE call_id = :call_id
-                      AND detected_doc_type = :doc_type
-                      AND linked_request_id IS NULL
-                """),
-                {
-                    "request_id": request.id,
-                    "call_id": analysis.call_id,
-                    "doc_type": need.doc_type,
-                },
-            )
+                    request = DocumentRequest(
+                        loan_id=analysis.loan_id,
+                        doc_type=doc_type_enum,
+                        title=f"{need.doc_type.replace('_', ' ').title()} (from call)",
+                        description=need.description,
+                        instructions=f"Detected from call #{analysis.call_id}. Snippet: {need.source_snippet[:200]}",
+                        priority=priority_enum,
+                        status=RequestStatus.OPEN,
+                    )
+                    self.db.add(request)
+                    self.db.flush()  # get the ID
+                    created_ids.append(request.id)
 
-        if created_ids:
-            self.db.commit()
+                    # Link the need record to the created request
+                    self.db.execute(
+                        text("""
+                            UPDATE call_intel_document_needs
+                            SET linked_request_id = :request_id,
+                                status = 'REQUEST_CREATED'
+                            WHERE call_id = :call_id
+                              AND detected_doc_type = :doc_type
+                              AND linked_request_id IS NULL
+                        """),
+                        {
+                            "request_id": request.id,
+                            "call_id": analysis.call_id,
+                            "doc_type": need.doc_type,
+                        },
+                    )
+                # atomic_operation commits here
+
             logger.info(
                 "Auto-created %d document requests from call %d",
                 len(created_ids),
                 analysis.call_id,
             )
+        except Exception as e:
+            # atomic_operation already rolled back; clear partial IDs
+            logger.exception(
+                "Failed to auto-create requests for call %d: %s",
+                analysis.call_id, e,
+            )
+            created_ids.clear()
+            raise
 
         return created_ids
 
@@ -527,8 +548,13 @@ class CallIntelDocumentExtractor:
     ) -> None:
         """
         Persist each detected need to the call_intel_document_needs table.
+
+        Uses atomic_operation to ensure all need records for a single call
+        analysis are committed together.  If any record fails, every record
+        from this batch is rolled back.
         """
         from database.models.document_intelligence import CallIntelDocumentNeed
+        from services.smart_docs.db_transaction import atomic_operation
 
         # Look up organization_id from the loan
         org_id = None
@@ -540,26 +566,26 @@ class CallIntelDocumentExtractor:
             if row:
                 org_id = row[0]
 
-        for need in result.document_needs:
-            record = CallIntelDocumentNeed(
-                organization_id=org_id,
-                loan_id=result.loan_id,
-                lead_id=lead_id,
-                call_id=result.call_id,
-                call_date=datetime.now(timezone.utc),
-                detected_doc_type=need.doc_type,
-                detected_doc_description=need.description,
-                detection_confidence=need.confidence,
-                source_transcript_snippet=need.source_snippet[:2000] if need.source_snippet else None,
-                keywords_matched=need.keywords_matched,
-                status="DETECTED",
-            )
-            self.db.add(record)
-
         try:
-            self.db.commit()
+            with atomic_operation(self.db):
+                for need in result.document_needs:
+                    record = CallIntelDocumentNeed(
+                        organization_id=org_id,
+                        loan_id=result.loan_id,
+                        lead_id=lead_id,
+                        call_id=result.call_id,
+                        call_date=datetime.now(timezone.utc),
+                        detected_doc_type=need.doc_type,
+                        detected_doc_description=need.description,
+                        detection_confidence=need.confidence,
+                        source_transcript_snippet=need.source_snippet[:2000] if need.source_snippet else None,
+                        keywords_matched=need.keywords_matched,
+                        status="DETECTED",
+                    )
+                    self.db.add(record)
+                # atomic_operation commits here
         except Exception as e:
-            self.db.rollback()
+            # atomic_operation already rolled back
             logger.exception("Failed to save call analysis for call_id=%s: %s", result.call_id, e)
             raise
 
@@ -831,11 +857,20 @@ TRANSCRIPT:
 {transcript[:6000]}"""
 
         try:
-            response = client.messages.create(
+            response = resilient_ai_call(
+                client=client,
+                messages=[{"role": "user", "content": prompt}],
                 model="claude-sonnet-4-20250514",
                 max_tokens=1500,
-                messages=[{"role": "user", "content": prompt}],
+                operation_name="call_intel_extraction",
+                timeout=30.0,
             )
+
+            if response is None:
+                logger.warning(
+                    "AI call intel extraction unavailable, using keyword-only results"
+                )
+                return []
 
             response_text = response.content[0].text.strip()
 
@@ -882,6 +917,14 @@ TRANSCRIPT:
                     ),
                 ))
 
+            logger.info(
+                "Call intel AI extraction completed | "
+                "ai_needs_found=%d | keyword_needs_input=%d | "
+                "transcript_length=%d",
+                len(ai_needs),
+                len(keyword_results),
+                len(transcript),
+            )
             return ai_needs
 
         except json.JSONDecodeError as e:

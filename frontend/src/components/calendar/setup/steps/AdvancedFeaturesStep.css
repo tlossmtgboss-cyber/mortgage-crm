@@ -1,0 +1,410 @@
+/**
+ * AdvancedFeaturesStep.css
+ * Step 9: Advanced feature toggles for Smart Calendar guided setup.
+ * Uses Perennia brand color #218D8D and matches CalendarSettings.css patterns.
+ */
+
+/* ============================================================================
+   Layout & Loading
+   ============================================================================ */
+
+.afs-step {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.afs-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  gap: 14px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.afs-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #218D8D;
+  border-radius: 50%;
+  animation: afs-spin 0.8s linear infinite;
+}
+
+@keyframes afs-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.afs-header {
+  margin-bottom: 24px;
+}
+
+.afs-step-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #218D8D;
+  background: #e6f5f5;
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+
+.afs-title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.afs-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Toolbar (counter + quick actions)
+   ============================================================================ */
+
+.afs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.afs-counter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.afs-counter__bar-bg {
+  width: 100px;
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.afs-counter__bar-fill {
+  height: 100%;
+  background: #218D8D;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.afs-counter__text {
+  font-size: 13px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.afs-counter__text strong {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.afs-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.afs-link-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.afs-link-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+/* ============================================================================
+   Feature Cards Grid
+   ============================================================================ */
+
+.afs-features-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.afs-feature-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  transition: all 0.15s;
+}
+
+.afs-feature-card:hover {
+  border-color: #cbd5e1;
+}
+
+.afs-feature-card--enabled {
+  border-color: #218D8D;
+  background: #f9fdfd;
+}
+
+.afs-feature-card__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  color: #64748b;
+  transition: all 0.15s;
+}
+
+.afs-feature-card--enabled .afs-feature-card__icon {
+  background: #e6f5f5;
+  color: #218D8D;
+}
+
+.afs-feature-card__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.afs-feature-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.afs-feature-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.afs-feature-card__recommended {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #dcfce7;
+  color: #16a34a;
+  white-space: nowrap;
+}
+
+.afs-feature-card__desc {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Toggle switch */
+.afs-feature-toggle {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.afs-feature-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.afs-toggle-track {
+  display: block;
+  width: 44px;
+  height: 24px;
+  background: #cbd5e1;
+  border-radius: 12px;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.afs-feature-toggle input:checked + .afs-toggle-track {
+  background: #218D8D;
+}
+
+.afs-toggle-thumb {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.afs-feature-toggle input:checked + .afs-toggle-track .afs-toggle-thumb {
+  transform: translateX(20px);
+}
+
+.afs-feature-toggle input:focus-visible + .afs-toggle-track {
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.2);
+}
+
+/* ============================================================================
+   Summary
+   ============================================================================ */
+
+.afs-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: #eff6ff;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #1e40af;
+  margin-bottom: 24px;
+}
+
+.afs-summary i {
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+/* ============================================================================
+   Actions
+   ============================================================================ */
+
+.afs-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.afs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  font-family: inherit;
+}
+
+.afs-btn--primary {
+  background: #218D8D;
+  color: #ffffff;
+}
+
+.afs-btn--primary:hover:not(:disabled) {
+  background: #1a7a7a;
+}
+
+.afs-btn--primary:disabled {
+  background: #7cc5c5;
+  cursor: not-allowed;
+}
+
+.afs-btn--secondary {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.afs-btn--secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .afs-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .afs-toolbar-actions {
+    justify-content: flex-end;
+  }
+
+  .afs-feature-card {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .afs-feature-card__body {
+    flex: 1;
+    min-width: calc(100% - 74px);
+  }
+
+  .afs-feature-toggle {
+    margin-left: auto;
+  }
+
+  .afs-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+
+  .afs-actions .afs-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .afs-counter__bar-bg {
+    width: 60px;
+  }
+
+  .afs-feature-card__icon {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+}

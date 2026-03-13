@@ -117,6 +117,10 @@ class ESignatureEnvelopeService:
         """
         Create a new signing envelope with recipients and fields.
 
+        This is an atomic operation: envelope + recipients + fields + audit
+        event are all committed together.  If any step fails, everything
+        is rolled back.
+
         Steps:
           - Fetch the document from S3 and compute its SHA-256 hash
           - Create ESignatureEnvelope record (status=DRAFT)
@@ -137,11 +141,12 @@ class ESignatureEnvelopeService:
             RecipientAuthMethod,
         )
         from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+        from services.smart_docs.db_transaction import atomic_operation
 
         now = datetime.now(timezone.utc)
         envelope_uuid = self.crypto.generate_envelope_uuid()
 
-        # --- Fetch document from S3 and compute hash ---
+        # --- Fetch document from S3 and compute hash (outside transaction) ---
         s3 = get_smart_docs_s3_service()
         doc_result = s3.download_file(request.document_storage_key)
         if not doc_result.get("success"):
@@ -151,100 +156,105 @@ class ESignatureEnvelopeService:
         document_content: bytes = doc_result["content"]
         document_hash = self.crypto.hash_document(document_content)
 
-        # --- Create envelope record ---
-        envelope = ESignatureEnvelope()
-        envelope.envelope_uuid = envelope_uuid
-        envelope.organization_id = request.organization_id
-        envelope.loan_id = request.loan_id
-        envelope.created_by_user_id = request.created_by_user_id
-        envelope.title = request.title
-        envelope.description = request.description
-        envelope.document_storage_key = request.document_storage_key
-        envelope.document_hash_sha256 = document_hash
-        envelope.status = EnvelopeStatus.DRAFT.value
-        envelope.total_recipients = len(
-            [r for r in request.recipients if r.get("type", "signer") == "signer"]
-        )
-        envelope.completed_recipients = 0
-        envelope.expires_at = now + timedelta(days=request.expires_in_days)
-        envelope.reminder_frequency_hours = request.reminder_frequency_hours
-        envelope.ip_address_created = request.ip_address
-        envelope.created_at = now
-        envelope.updated_at = now
+        try:
+            with atomic_operation(self.db):
+                # --- Create envelope record ---
+                envelope = ESignatureEnvelope()
+                envelope.envelope_uuid = envelope_uuid
+                envelope.organization_id = request.organization_id
+                envelope.loan_id = request.loan_id
+                envelope.created_by_user_id = request.created_by_user_id
+                envelope.title = request.title
+                envelope.description = request.description
+                envelope.document_storage_key = request.document_storage_key
+                envelope.document_hash_sha256 = document_hash
+                envelope.status = EnvelopeStatus.DRAFT.value
+                envelope.total_recipients = len(
+                    [r for r in request.recipients if r.get("type", "signer") == "signer"]
+                )
+                envelope.completed_recipients = 0
+                envelope.expires_at = now + timedelta(days=request.expires_in_days)
+                envelope.reminder_frequency_hours = request.reminder_frequency_hours
+                envelope.ip_address_created = request.ip_address
+                envelope.created_at = now
+                envelope.updated_at = now
 
-        self.db.add(envelope)
-        self.db.flush()  # populate envelope.id
+                self.db.add(envelope)
+                self.db.flush()  # populate envelope.id
 
-        # --- Create recipient records ---
-        recipient_records: List[ESignatureRecipient] = []
-        for idx, r in enumerate(request.recipients):
-            rec = ESignatureRecipient()
-            rec.envelope_id = envelope.id
-            rec.name = r["name"]
-            rec.email = r["email"]
-            rec.phone = r.get("phone")
-            rec.recipient_type = r.get("type", RecipientType.SIGNER.value)
-            rec.signing_order = r.get("signing_order", idx + 1)
-            rec.auth_method = r.get("auth_method", RecipientAuthMethod.EMAIL_LINK.value)
-            rec.status = RecipientStatus.PENDING.value
-            rec.created_at = now
-            rec.updated_at = now
+                # --- Create recipient records ---
+                recipient_records: List[ESignatureRecipient] = []
+                for idx, r in enumerate(request.recipients):
+                    rec = ESignatureRecipient()
+                    rec.envelope_id = envelope.id
+                    rec.name = r["name"]
+                    rec.email = r["email"]
+                    rec.phone = r.get("phone")
+                    rec.recipient_type = r.get("type", RecipientType.SIGNER.value)
+                    rec.signing_order = r.get("signing_order", idx + 1)
+                    rec.auth_method = r.get("auth_method", RecipientAuthMethod.EMAIL_LINK.value)
+                    rec.status = RecipientStatus.PENDING.value
+                    rec.created_at = now
+                    rec.updated_at = now
 
-            # Generate access code if auth method requires it
-            if rec.auth_method == RecipientAuthMethod.ACCESS_CODE.value:
-                raw_code = self.crypto.generate_access_code()
-                rec.access_code = self.crypto.hash_access_code(raw_code)
-                # The raw code would be communicated to the sender out-of-band
-                # (e.g. shown once in the UI after creation).
+                    # Generate access code if auth method requires it
+                    if rec.auth_method == RecipientAuthMethod.ACCESS_CODE.value:
+                        raw_code = self.crypto.generate_access_code()
+                        rec.access_code = self.crypto.hash_access_code(raw_code)
 
-            self.db.add(rec)
-            self.db.flush()
-            recipient_records.append(rec)
+                    self.db.add(rec)
+                    self.db.flush()
+                    recipient_records.append(rec)
 
-        # --- Create field records ---
-        for f in request.fields:
-            recipient_index = f.get("recipient_index", 0)
-            recipient_id = (
-                recipient_records[recipient_index].id
-                if recipient_index < len(recipient_records)
-                else None
+                # --- Create field records ---
+                for f in request.fields:
+                    recipient_index = f.get("recipient_index", 0)
+                    recipient_id = (
+                        recipient_records[recipient_index].id
+                        if recipient_index < len(recipient_records)
+                        else None
+                    )
+
+                    field = ESignatureField()
+                    field.envelope_id = envelope.id
+                    field.recipient_id = recipient_id
+                    field.field_type = f["type"]
+                    field.field_uuid = str(uuid.uuid4())
+                    field.page_number = f["page"]
+                    field.x_position = f["x"]
+                    field.y_position = f["y"]
+                    field.width = f["width"]
+                    field.height = f["height"]
+                    field.is_required = f.get("required", True)
+                    field.placeholder_text = f.get("placeholder")
+                    field.default_value = f.get("default_value")
+                    field.validation_regex = f.get("validation_regex")
+                    field.dropdown_options = f.get("dropdown_options")
+                    field.group_name = f.get("group_name")
+                    field.created_at = now
+
+                    self.db.add(field)
+
+                # --- Audit event ---
+                self._log_audit_event(
+                    envelope_id=envelope.id,
+                    recipient_id=None,
+                    event_type="created",
+                    description=f"Envelope '{request.title}' created with {len(request.recipients)} recipients",
+                    ip_address=request.ip_address,
+                    metadata={
+                        "document_hash": document_hash,
+                        "total_recipients": len(request.recipients),
+                        "total_fields": len(request.fields),
+                    },
+                )
+                # atomic_operation commits here
+        except Exception as e:
+            logger.exception(
+                "Failed to create envelope for loan %s: %s",
+                request.loan_id, e,
             )
-
-            field = ESignatureField()
-            field.envelope_id = envelope.id
-            field.recipient_id = recipient_id
-            field.field_type = f["type"]
-            field.field_uuid = str(uuid.uuid4())
-            field.page_number = f["page"]
-            field.x_position = f["x"]
-            field.y_position = f["y"]
-            field.width = f["width"]
-            field.height = f["height"]
-            field.is_required = f.get("required", True)
-            field.placeholder_text = f.get("placeholder")
-            field.default_value = f.get("default_value")
-            field.validation_regex = f.get("validation_regex")
-            field.dropdown_options = f.get("dropdown_options")
-            field.group_name = f.get("group_name")
-            field.created_at = now
-
-            self.db.add(field)
-
-        # --- Audit event ---
-        self._log_audit_event(
-            envelope_id=envelope.id,
-            recipient_id=None,
-            event_type="created",
-            description=f"Envelope '{request.title}' created with {len(request.recipients)} recipients",
-            ip_address=request.ip_address,
-            metadata={
-                "document_hash": document_hash,
-                "total_recipients": len(request.recipients),
-                "total_fields": len(request.fields),
-            },
-        )
-
-        self.db.commit()
+            raise
 
         logger.info(
             "Created envelope %s for loan %s with %d recipients, %d fields",
@@ -601,6 +611,11 @@ class ESignatureEnvelopeService:
         """
         Process a recipient's signature submission.
 
+        Uses SELECT FOR UPDATE on the recipient row to prevent concurrent
+        signing race conditions (e.g. double-click, duplicate tab).
+        The entire signing operation (field updates, status change,
+        envelope completion check) is atomic.
+
         - Validates the token and all required fields.
         - Generates a cryptographic signature hash.
         - Stores the signature image to S3 (if provided).
@@ -620,15 +635,22 @@ class ESignatureEnvelopeService:
             RecipientType,
         )
         from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+        from services.smart_docs.db_transaction import select_for_update
 
         now = datetime.now(timezone.utc)
 
-        # --- Validate token ---
-        recipient = (
+        # --- Validate token and lock the recipient row ---
+        # First look up the recipient ID by token (lightweight query)
+        recipient_lookup = (
             self.db.query(ESignatureRecipient)
             .filter(ESignatureRecipient.signing_token == token)
             .first()
         )
+        if not recipient_lookup:
+            raise ValueError("Invalid signing token")
+
+        # Now lock the row with SELECT FOR UPDATE to prevent concurrent signing
+        recipient = select_for_update(self.db, ESignatureRecipient, recipient_lookup.id)
         if not recipient:
             raise ValueError("Invalid signing token")
 
@@ -641,11 +663,8 @@ class ESignatureEnvelopeService:
         if recipient.status == RecipientStatus.DECLINED.value:
             raise ValueError("Recipient has declined signing")
 
-        envelope = (
-            self.db.query(ESignatureEnvelope)
-            .filter(ESignatureEnvelope.id == recipient.envelope_id)
-            .first()
-        )
+        # Lock the envelope too to prevent concurrent modifications
+        envelope = select_for_update(self.db, ESignatureEnvelope, recipient.envelope_id)
         if not envelope:
             raise ValueError("Envelope not found")
 
@@ -656,6 +675,41 @@ class ESignatureEnvelopeService:
             EnvelopeStatus.EXPIRED.value,
         ):
             raise ValueError(f"Envelope is {envelope.status} and cannot be signed")
+
+        # --- ESIGN Act: verify consent before allowing signature ---
+        from services.smart_docs.esign_consent_service import ESignConsentService
+        consent_svc = ESignConsentService(self.db)
+        if not consent_svc.verify_consent(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+        ):
+            raise ValueError(
+                "ESIGN Act consent is required before signing. "
+                "Please review the consent disclosure and provide consent."
+            )
+
+        # --- KBA: verify identity if required ---
+        from services.smart_docs.esign_kba_service import KBAService
+        kba_svc = KBAService(self.db)
+        if kba_svc.check_kba_required_for_recipient(
+            recipient_id=recipient.id,
+            envelope_id=envelope.id,
+        ):
+            from database.models.esignature import ESignKBASession
+            kba_session = (
+                self.db.query(ESignKBASession)
+                .filter(
+                    ESignKBASession.recipient_id == recipient.id,
+                    ESignKBASession.envelope_id == envelope.id,
+                    ESignKBASession.passed.is_(True),
+                )
+                .first()
+            )
+            if not kba_session:
+                raise ValueError(
+                    "Identity verification (KBA) is required before signing. "
+                    "Please complete the identity verification step."
+                )
 
         # --- Validate required fields ---
         fields = (
@@ -713,102 +767,112 @@ class ESignatureEnvelopeService:
                     upload_result.get("error"),
                 )
 
-        # --- Update field values ---
-        for field in fields:
-            value = field_values.get(field.field_uuid)
-            if value is not None:
-                field.value = str(value)
-                field.filled_at = now
+        # --- All DB mutations within atomic_operation ---
+        from services.smart_docs.db_transaction import atomic_operation
 
+        try:
+            with atomic_operation(self.db):
+                # Update field values
+                for field in fields:
+                    value = field_values.get(field.field_uuid)
+                    if value is not None:
+                        field.value = str(value)
+                        field.filled_at = now
+
+                        self._log_audit_event(
+                            envelope_id=envelope.id,
+                            recipient_id=recipient.id,
+                            event_type="field_filled",
+                            description=f"Field {field.field_type} filled on page {field.page_number}",
+                            ip_address=ip_address,
+                            user_agent=user_agent,
+                            metadata={
+                                "field_uuid": field.field_uuid,
+                                "field_type": field.field_type,
+                                "page": field.page_number,
+                            },
+                        )
+
+                # Update recipient status
+                recipient.status = RecipientStatus.SIGNED.value
+                recipient.signed_at = now
+                recipient.signing_ip_address = ip_address
+                recipient.signing_user_agent = user_agent
+                recipient.signing_geo_location = geo_location
+                recipient.signature_image_key = signature_image_key
+                recipient.updated_at = now
+
+                # Audit: SIGNED
                 self._log_audit_event(
                     envelope_id=envelope.id,
                     recipient_id=recipient.id,
-                    event_type="field_filled",
-                    description=f"Field {field.field_type} filled on page {field.page_number}",
+                    event_type="signed",
+                    description=f"{recipient.name} ({recipient.email}) signed the document",
                     ip_address=ip_address,
                     user_agent=user_agent,
                     metadata={
-                        "field_uuid": field.field_uuid,
-                        "field_type": field.field_type,
-                        "page": field.page_number,
+                        "signature_hash": signature_hash,
+                        "document_hash": envelope.document_hash_sha256,
+                        "geo_location": geo_location,
                     },
                 )
 
-        # --- Update recipient status ---
-        recipient.status = RecipientStatus.SIGNED.value
-        recipient.signed_at = now
-        recipient.signing_ip_address = ip_address
-        recipient.signing_user_agent = user_agent
-        recipient.signing_geo_location = geo_location
-        recipient.signature_image_key = signature_image_key
-        recipient.updated_at = now
+                # Update envelope counters
+                envelope.completed_recipients = (envelope.completed_recipients or 0) + 1
+                envelope.updated_at = now
 
-        # --- Audit: SIGNED ---
-        self._log_audit_event(
-            envelope_id=envelope.id,
-            recipient_id=recipient.id,
-            event_type="signed",
-            description=f"{recipient.name} ({recipient.email}) signed the document",
-            ip_address=ip_address,
-            user_agent=user_agent,
-            metadata={
-                "signature_hash": signature_hash,
-                "document_hash": envelope.document_hash_sha256,
-                "geo_location": geo_location,
-            },
-        )
+                # Check if all signers are done
+                all_signers = (
+                    self.db.query(ESignatureRecipient)
+                    .filter(
+                        ESignatureRecipient.envelope_id == envelope.id,
+                        ESignatureRecipient.recipient_type.in_([
+                            RecipientType.SIGNER.value,
+                            RecipientType.APPROVER.value,
+                        ]),
+                    )
+                    .all()
+                )
+                all_signed = all(
+                    s.status == RecipientStatus.SIGNED.value for s in all_signers
+                )
 
-        # --- Update envelope counters ---
-        envelope.completed_recipients = (envelope.completed_recipients or 0) + 1
-        envelope.updated_at = now
+                result = {
+                    "envelope_uuid": envelope.envelope_uuid,
+                    "recipient_id": recipient.id,
+                    "signer_name": recipient.name,
+                    "signed_at": now.isoformat(),
+                    "signature_hash": signature_hash,
+                    "fields_filled": len([f for f in fields if f.value is not None]),
+                    "all_signed": all_signed,
+                    "next_action": None,
+                }
 
-        # --- Check if all signers are done ---
-        all_signers = (
-            self.db.query(ESignatureRecipient)
-            .filter(
-                ESignatureRecipient.envelope_id == envelope.id,
-                ESignatureRecipient.recipient_type.in_([
-                    RecipientType.SIGNER.value,
-                    RecipientType.APPROVER.value,
-                ]),
+                if all_signed:
+                    # Complete the envelope within the same transaction
+                    self.db.flush()
+                    completion = self.complete_envelope(envelope.id)
+                    result["next_action"] = "completed"
+                    result["completion"] = completion
+                else:
+                    # Check if we need to send to the next signing order group
+                    envelope.status = EnvelopeStatus.PARTIALLY_SIGNED.value
+
+                    next_recipients = self._send_next_signing_group(envelope, all_signers)
+                    if next_recipients:
+                        result["next_action"] = "next_group_notified"
+                        result["next_recipients"] = [
+                            {"name": r.name, "email": r.email} for r in next_recipients
+                        ]
+                    else:
+                        result["next_action"] = "awaiting_signatures"
+                # atomic_operation commits here
+        except Exception as e:
+            logger.exception(
+                "Failed to submit signature for envelope %s by %s: %s",
+                envelope.envelope_uuid, recipient.email, e,
             )
-            .all()
-        )
-        all_signed = all(
-            s.status == RecipientStatus.SIGNED.value for s in all_signers
-        )
-
-        result = {
-            "envelope_uuid": envelope.envelope_uuid,
-            "recipient_id": recipient.id,
-            "signer_name": recipient.name,
-            "signed_at": now.isoformat(),
-            "signature_hash": signature_hash,
-            "fields_filled": len([f for f in fields if f.value is not None]),
-            "all_signed": all_signed,
-            "next_action": None,
-        }
-
-        if all_signed:
-            # Complete the envelope
-            self.db.flush()
-            completion = self.complete_envelope(envelope.id)
-            result["next_action"] = "completed"
-            result["completion"] = completion
-        else:
-            # Check if we need to send to the next signing order group
-            envelope.status = EnvelopeStatus.PARTIALLY_SIGNED.value
-
-            next_recipients = self._send_next_signing_group(envelope, all_signers)
-            if next_recipients:
-                result["next_action"] = "next_group_notified"
-                result["next_recipients"] = [
-                    {"name": r.name, "email": r.email} for r in next_recipients
-                ]
-            else:
-                result["next_action"] = "awaiting_signatures"
-
-        self.db.commit()
+            raise
 
         logger.info(
             "Signature submitted by %s for envelope %s (all_signed=%s)",
@@ -827,6 +891,11 @@ class ESignatureEnvelopeService:
         """
         Finalize a fully-signed envelope.
 
+        Verifies ALL recipients have signed within the same transaction
+        before marking as COMPLETED.  This prevents race conditions where
+        two concurrent signing requests both think they are the last signer.
+
+        - Verifies all signers have status SIGNED
         - Generates a completion certificate via the crypto service.
         - Stores the certificate data as JSON in S3.
         - Updates envelope status to COMPLETED.
@@ -840,6 +909,7 @@ class ESignatureEnvelopeService:
             ESignatureEnvelope,
             ESignatureRecipient,
             EnvelopeStatus,
+            RecipientStatus,
             RecipientType,
         )
         from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
@@ -868,6 +938,14 @@ class ESignatureEnvelopeService:
             .order_by(ESignatureRecipient.signing_order.asc())
             .all()
         )
+
+        # Verify all signers have actually signed (guard against race condition)
+        unsigned = [s for s in signers if s.status != RecipientStatus.SIGNED.value]
+        if unsigned:
+            unsigned_names = ", ".join(s.name for s in unsigned)
+            raise ValueError(
+                f"Cannot complete envelope: {len(unsigned)} signer(s) have not signed: {unsigned_names}"
+            )
 
         signer_data = [
             {
@@ -1865,6 +1943,13 @@ class ESignatureEnvelopeService:
                     <p style="margin:24px 0 0;color:#6b7280;font-size:13px;">
                         This signing link is unique to you. Do not forward this email.
                     </p>
+                    <p style="margin:12px 0 0;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;padding-top:12px;">
+                        <strong>ESIGN Act Notice:</strong> By proceeding to sign electronically,
+                        you will be asked to consent to electronic signatures and records.
+                        You have the right to receive paper copies of any document. If you do
+                        not wish to sign electronically, you may request a paper alternative
+                        during the signing process.
+                    </p>
                 </div>
                 <div style="background:#f9fafb;padding:16px 24px;text-align:center;border-top:1px solid #e5e7eb;">
                     <p style="margin:0;color:#9ca3af;font-size:12px;">
@@ -1881,7 +1966,12 @@ class ESignatureEnvelopeService:
                 f"Hi {recipient_name},\n\n"
                 f"{sender_name} has sent you \"{envelope_title}\" for your signature.\n\n"
                 f"Please review and sign the document using this link:\n{signing_url}\n\n"
-                f"This signing link is unique to you. Do not forward this email.\n"
+                f"This signing link is unique to you. Do not forward this email.\n\n"
+                f"ESIGN Act Notice: By proceeding to sign electronically, you will be "
+                f"asked to consent to electronic signatures and records. You have the "
+                f"right to receive paper copies. If you do not wish to sign "
+                f"electronically, you may request a paper alternative during the "
+                f"signing process.\n"
             )
 
             email_svc.send_html_email(

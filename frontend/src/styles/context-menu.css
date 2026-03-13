@@ -1,0 +1,247 @@
+/* ==========================================================================
+   Context Menu - Quick Actions Menu for Calendar
+   ========================================================================== */
+
+/* Menu container - positioned fixed at cursor coordinates */
+.context-menu {
+  position: fixed;
+  z-index: 10000;
+  min-width: 200px;
+  max-width: 260px;
+  background: var(--color-bg-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-lg, 8px);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 10px 15px -3px rgba(0, 0, 0, 0.08),
+    0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 4px 0;
+  animation: contextMenuFadeIn 120ms ease-out;
+  outline: none;
+  user-select: none;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Header - shows context (date/time or event title) */
+.context-menu-header {
+  padding: 6px 12px 4px;
+  font-size: var(--font-xs, 11px);
+  font-weight: var(--weight-semibold, 600);
+  color: var(--color-text-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-time {
+  font-weight: var(--weight-normal, 400);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Items container */
+.context-menu-items {
+  padding: 0;
+}
+
+/* Individual menu item */
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  font-size: var(--font-sm, 13px);
+  color: var(--color-text-primary, #1e293b);
+  cursor: pointer;
+  transition: background-color 80ms ease, color 80ms ease;
+  outline: none;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.context-menu-item:hover,
+.context-menu-item.focused {
+  background-color: var(--color-bg-secondary, #f1f5f9);
+}
+
+.context-menu-item:active {
+  background-color: var(--color-bg-tertiary, #e2e8f0);
+}
+
+/* Danger items (cancel, delete) */
+.context-menu-item.danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.context-menu-item.danger:hover,
+.context-menu-item.danger.focused {
+  background-color: #fef2f2;
+  color: var(--color-danger, #dc2626);
+}
+
+/* Icon */
+.context-menu-icon {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Label */
+.context-menu-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Divider between action groups */
+.context-menu-divider {
+  height: 1px;
+  background-color: var(--color-border, #e2e8f0);
+  margin: 4px 8px;
+}
+
+
+/* ==========================================================================
+   Time Blocker Modal Additions
+   ========================================================================== */
+
+.time-blocker-modal {
+  max-width: 420px;
+}
+
+.time-block-preview {
+  margin: 12px 0 4px;
+  padding: 8px 12px;
+  background: var(--color-bg-secondary, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-base, 6px);
+  font-size: var(--font-sm, 13px);
+}
+
+.time-block-preview-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.time-block-preview-icon {
+  font-size: 16px;
+}
+
+.form-error {
+  color: var(--color-danger, #dc2626);
+  font-size: var(--font-sm, 13px);
+  padding: 4px 0;
+}
+
+
+/* ==========================================================================
+   Time Block display on the calendar grid
+   ========================================================================== */
+
+.time-block {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-bg-secondary, #f1f5f9),
+    var(--color-bg-secondary, #f1f5f9) 4px,
+    var(--color-bg-tertiary, #e2e8f0) 4px,
+    var(--color-bg-tertiary, #e2e8f0) 8px
+  );
+  border-left: 3px solid var(--color-text-muted, #94a3b8);
+  border-radius: var(--radius-sm, 4px);
+  padding: 4px 8px;
+  font-size: var(--font-xs, 11px);
+  color: var(--color-text-secondary, #64748b);
+  font-style: italic;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  opacity: 0.85;
+}
+
+.time-block-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Day view time blocks */
+.day-event.time-block-event {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-bg-secondary, #f1f5f9),
+    var(--color-bg-secondary, #f1f5f9) 4px,
+    var(--color-bg-tertiary, #e2e8f0) 4px,
+    var(--color-bg-tertiary, #e2e8f0) 8px
+  ) !important;
+  border-left: 3px solid var(--color-text-muted, #94a3b8) !important;
+  opacity: 0.75;
+}
+
+/* Week view time blocks */
+.week-event.time-block-event {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--color-bg-secondary, #f1f5f9),
+    var(--color-bg-secondary, #f1f5f9) 3px,
+    var(--color-bg-tertiary, #e2e8f0) 3px,
+    var(--color-bg-tertiary, #e2e8f0) 6px
+  ) !important;
+  border-left: 2px solid var(--color-text-muted, #94a3b8) !important;
+  font-size: var(--font-xs, 11px);
+  color: var(--color-text-secondary, #64748b);
+  font-style: italic;
+  opacity: 0.75;
+}
+
+
+/* ==========================================================================
+   Dark mode support (if app uses prefers-color-scheme or [data-theme="dark"])
+   ========================================================================== */
+
+@media (prefers-color-scheme: dark) {
+  .context-menu {
+    background: var(--color-bg-surface, #1e293b);
+    border-color: var(--color-border, #334155);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.3),
+      0 10px 15px -3px rgba(0, 0, 0, 0.25);
+  }
+
+  .context-menu-item:hover,
+  .context-menu-item.focused {
+    background-color: var(--color-bg-secondary, #334155);
+  }
+
+  .context-menu-item.danger:hover,
+  .context-menu-item.danger.focused {
+    background-color: rgba(220, 38, 38, 0.15);
+  }
+
+  .context-menu-divider {
+    background-color: var(--color-border, #334155);
+  }
+}

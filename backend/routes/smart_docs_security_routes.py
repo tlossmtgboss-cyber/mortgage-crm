@@ -119,6 +119,30 @@ def _is_platform_admin(current_user) -> bool:
     return getattr(current_user, 'permission_role', '') == 'admin'
 
 
+def _is_portal_request(request) -> bool:
+    """Detect whether this request originates from the borrower portal.
+
+    Portal requests are identified by:
+    - X-Portal-Request header (set by the portal frontend)
+    - URL path containing /portal/
+    - Portal-specific referrer
+    """
+    if request is None:
+        return False
+    # Check explicit portal header
+    if request.headers.get("X-Portal-Request", "").lower() in ("true", "1"):
+        return True
+    # Check URL path
+    url_path = str(getattr(request, "url", ""))
+    if "/portal/" in url_path:
+        return True
+    # Check referrer for portal domain
+    referrer = request.headers.get("Referer", "") or request.headers.get("Referrer", "")
+    if "portal" in referrer.lower():
+        return True
+    return False
+
+
 def _verify_document_org_access(db: Session, document_id: int, current_user):
     """Verify the user's org owns the document's loan. Returns the SmartDocument row."""
     from models.smart_docs_models import SmartDocument as _SD
@@ -594,21 +618,54 @@ async def get_integrity_history(
 
 
 # =============================================================================
-# 7. GET /doc-security/fraud-analysis/{loan_id} — Fraud analysis
+# 7. GET /doc-security/fraud-analysis/{loan_id} — Fraud analysis (access-controlled)
 # =============================================================================
 
 @router.get("/doc-security/fraud-analysis/{loan_id}")
 async def run_fraud_analysis(
     loan_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Run fraud analysis on loan documents.
 
-    Analyzes all documents for a loan and returns a risk score, risk level,
-    indicators, and recommendations. Includes cross-validation results
-    (e.g., income vs stated income, address consistency).
+    **Access control (BSA/SAR tipping prevention):**
+    - Compliance officers + admins: full indicators and evidence.
+    - Internal staff: risk_score and risk_level only (no indicator details).
+    - Portal requests: blocked (use /fraud/{loan_id}/summary instead).
+
+    Detailed fraud indicators are restricted to compliance roles to prevent
+    SAR tipping, which is a federal crime under 31 USC 5318(g)(2).
     """
+    from services.smart_docs.fraud_access_control import (
+        FraudAccessLevel,
+        get_fraud_access_level,
+        filter_fraud_response,
+        log_fraud_data_access,
+    )
+
+    # Determine access level
+    is_portal = _is_portal_request(request)
+    access_level = get_fraud_access_level(current_user, is_portal_request=is_portal)
+
+    # Log every fraud data access (BSA audit requirement)
+    log_fraud_data_access(
+        db=db,
+        user_id=_get_user_id(current_user),
+        organization_id=_get_user_org_id(current_user),
+        loan_id=loan_id,
+        access_level=access_level,
+        endpoint=f"/doc-security/fraud-analysis/{loan_id}",
+    )
+
+    # Portal users must not access detailed fraud analysis at all
+    if access_level == FraudAccessLevel.RESTRICTED:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Use /doc-security/fraud/{loan_id}/summary for document status.",
+        )
+
     from routes.smart_docs_models import _verify_loan_tenant
     _verify_loan_tenant(db, loan_id, current_user)
 
@@ -616,14 +673,18 @@ async def run_fraud_analysis(
 
     docs = db.query(_SD).filter(_SD.loan_id == loan_id).all()
     if not docs:
-        return {
-            "loan_id": loan_id,
-            "risk_score": 0,
-            "risk_level": "unknown",
-            "message": "No documents found for this loan",
-            "indicators": [],
-            "recommendations": [],
-        }
+        return filter_fraud_response(
+            {
+                "loan_id": loan_id,
+                "risk_score": 0,
+                "risk_level": "none",
+                "message": "No documents found for this loan",
+                "indicators": [],
+                "recommendations": [],
+                "total_documents": 0,
+            },
+            access_level,
+        )
 
     indicators = []
     risk_score = 0
@@ -742,7 +803,7 @@ async def run_fraud_analysis(
     if risk_level in ("low", "none") and not recommendations:
         recommendations.append("No action required — documents appear clean")
 
-    return {
+    raw_response = {
         "loan_id": loan_id,
         "risk_score": risk_score,
         "risk_level": risk_level,
@@ -752,33 +813,118 @@ async def run_fraud_analysis(
         "analyzed_at": datetime.now(timezone.utc).isoformat(),
     }
 
+    # Filter response based on access level (BSA compliance)
+    return filter_fraud_response(raw_response, access_level)
+
 
 # =============================================================================
-# 8. GET /doc-security/fraud-summary — Org-wide fraud summary (admin)
+# 7b. GET /doc-security/fraud/{loan_id}/summary — Sanitized fraud summary
+# =============================================================================
+
+@router.get("/doc-security/fraud/{loan_id}/summary")
+async def get_fraud_summary_for_loan(
+    loan_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get sanitized document status for a loan.
+
+    Safe for ALL users including portal/borrower-facing contexts.
+    Returns only a neutral document_status string (e.g., "approved",
+    "pending", "under_review"). NEVER returns fraud indicators,
+    SAR status, or investigation details.
+
+    This endpoint exists specifically to prevent SAR tipping
+    (31 USC 5318(g)(2)).
+    """
+    from services.smart_docs.fraud_access_control import (
+        get_fraud_access_level,
+        filter_fraud_response,
+        log_fraud_data_access,
+    )
+    from services.smart_docs.fraud_detection_service import get_fraud_detection_service
+
+    is_portal = _is_portal_request(request)
+    access_level = get_fraud_access_level(current_user, is_portal_request=is_portal)
+
+    # Log every fraud data access (BSA audit requirement)
+    log_fraud_data_access(
+        db=db,
+        user_id=_get_user_id(current_user),
+        organization_id=_get_user_org_id(current_user),
+        loan_id=loan_id,
+        access_level=access_level,
+        endpoint=f"/doc-security/fraud/{loan_id}/summary",
+    )
+
+    from routes.smart_docs_models import _verify_loan_tenant
+    _verify_loan_tenant(db, loan_id, current_user)
+
+    # Use the fraud detection service to generate an access-level-appropriate report
+    service = get_fraud_detection_service(db)
+    org_id = _get_user_org_id(current_user)
+    report = service.generate_sanitized_report(
+        loan_id=loan_id,
+        organization_id=org_id,
+        access_level=access_level.value,
+    )
+
+    return report
+
+
+# =============================================================================
+# 8. GET /doc-security/fraud-summary — Org-wide fraud summary (compliance only)
 # =============================================================================
 
 @router.get("/doc-security/fraud-summary")
 async def get_fraud_summary(
     days: int = Query(30, ge=1, le=365),
+    request: Request = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Organization-wide fraud analysis summary. Requires admin role.
+    """Organization-wide fraud analysis summary.
 
-    Returns loans by risk level, most common indicators, and trend data.
+    **Restricted to compliance officers and admins.**
+    Contains aggregate fraud statistics that could reveal investigation
+    patterns. Non-compliance users receive 403.
+
+    This endpoint is access-controlled to prevent SAR tipping.
     """
-    _require_admin(current_user)
+    from services.smart_docs.fraud_access_control import (
+        FraudAccessLevel,
+        get_fraud_access_level,
+        log_fraud_data_access,
+    )
+
+    is_portal = _is_portal_request(request) if request else False
+    access_level = get_fraud_access_level(current_user, is_portal_request=is_portal)
+
+    # Log access attempt
+    log_fraud_data_access(
+        db=db,
+        user_id=_get_user_id(current_user),
+        organization_id=_get_user_org_id(current_user),
+        loan_id=None,
+        access_level=access_level,
+        endpoint="/doc-security/fraud-summary",
+        granted=access_level == FraudAccessLevel.FULL,
+        denial_reason=(
+            "Insufficient access level for org-wide fraud summary"
+            if access_level != FraudAccessLevel.FULL else None
+        ),
+    )
+
+    # Only compliance officers and admins may view org-wide fraud data
+    if access_level != FraudAccessLevel.FULL:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Org-wide fraud summary requires compliance officer or admin role.",
+        )
 
     org_id = _get_user_org_id(current_user)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-
-    # Get tamper detection summary
-    tamper_query = db.query(
-        func.count(DocumentIntegrityCheck.id).label("total_checks"),
-        func.sum(
-            func.cast(DocumentIntegrityCheck.tamper_detected, db.bind.dialect.name == 'postgresql' and 'integer' or 'integer')
-        ).label("tampered"),
-    ).filter(DocumentIntegrityCheck.created_at >= cutoff)
 
     # Use a simpler approach for counting tampered
     total_checks = (
@@ -1604,14 +1750,50 @@ def _build_compliance_recommendations(
 async def get_suspicious_activity(
     severity: Optional[str] = Query(None, description="Filter by severity: low, medium, high, critical"),
     days: int = Query(7, ge=1, le=90),
+    request: Request = None,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Get suspicious activity alerts.
 
+    **Restricted to compliance officers and admins.**
+    Suspicious activity alerts contain fraud-adjacent data that could
+    constitute SAR tipping if exposed to borrowers or unauthorized staff.
+
     Detects: unusual access patterns, multiple failed access attempts,
     bulk downloads, off-hours access, and integrity check failures.
     """
+    from services.smart_docs.fraud_access_control import (
+        FraudAccessLevel,
+        get_fraud_access_level,
+        log_fraud_data_access,
+    )
+
+    is_portal = _is_portal_request(request)
+    access_level = get_fraud_access_level(current_user, is_portal_request=is_portal)
+
+    # Log access attempt
+    log_fraud_data_access(
+        db=db,
+        user_id=_get_user_id(current_user),
+        organization_id=_get_user_org_id(current_user),
+        loan_id=None,
+        access_level=access_level,
+        endpoint="/doc-security/suspicious-activity",
+        granted=access_level == FraudAccessLevel.FULL,
+        denial_reason=(
+            "Insufficient access level for suspicious activity alerts"
+            if access_level != FraudAccessLevel.FULL else None
+        ),
+    )
+
+    # Suspicious activity alerts restricted to compliance/admin
+    if access_level != FraudAccessLevel.FULL:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Suspicious activity data requires compliance officer or admin role.",
+        )
+
     org_id = _get_user_org_id(current_user)
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 

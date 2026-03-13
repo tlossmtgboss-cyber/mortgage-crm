@@ -249,6 +249,122 @@ class SpecializedAgent(ABC):
             params.update(extra)
         return params
 
+    def verify_loan_tenant(self, db: Any, loan_id: int) -> None:
+        """Verify a loan belongs to this agent's organization.
+
+        Raises ValueError if the loan does not exist or belongs to a
+        different organization.  The error message intentionally omits
+        organization identifiers to prevent information leakage.
+        """
+        from sqlalchemy import text as _text
+
+        org_id = self.require_org_id()
+        row = db.execute(
+            _text(
+                "SELECT id FROM loans "
+                "WHERE id = :loan_id AND organization_id = :org_id"
+            ),
+            {"loan_id": loan_id, "org_id": org_id},
+        ).fetchone()
+        if not row:
+            logger.warning(
+                "TENANT_ISOLATION: loan %s access denied for org %s by agent %s",
+                loan_id, org_id, self.name,
+            )
+            raise ValueError(f"Loan {loan_id} not found")
+
+    def verify_document_tenant(self, db: Any, document_id: int) -> None:
+        """Verify a smart_document belongs to this agent's organization
+        (via its parent loan).
+
+        Raises ValueError if the document does not exist or belongs to a
+        different organization.
+        """
+        from sqlalchemy import text as _text
+
+        org_id = self.require_org_id()
+        row = db.execute(
+            _text(
+                "SELECT sd.id FROM smart_documents sd "
+                "JOIN loans l ON l.id = sd.loan_id AND l.organization_id = :org_id "
+                "WHERE sd.id = :document_id"
+            ),
+            {"document_id": document_id, "org_id": org_id},
+        ).fetchone()
+        if not row:
+            logger.warning(
+                "TENANT_ISOLATION: document %s access denied for org %s by agent %s",
+                document_id, org_id, self.name,
+            )
+            raise ValueError(f"Document {document_id} not found")
+
+    def verify_entity_tenant(
+        self, db: Any, table: str, entity_id: int,
+        org_column: str = "organization_id",
+    ) -> None:
+        """Generic tenant verification for any table with an org column.
+
+        Args:
+            db: SQLAlchemy session
+            table: Table name (must be an expected safe value)
+            entity_id: Primary key value
+            org_column: Name of the organization column (default: organization_id)
+
+        Raises ValueError if the entity does not exist or belongs to a
+        different organization.
+        """
+        from sqlalchemy import text as _text
+
+        # Allowlist of tables to prevent SQL injection via table name
+        ALLOWED_TABLES = {
+            "loans", "leads", "smart_documents", "followup_campaigns",
+            "smart_document_requests", "income_calculations",
+            "bank_statement_analyses", "compliance_alerts",
+            "documents", "tasks", "activities",
+        }
+        if table not in ALLOWED_TABLES:
+            raise ValueError(f"Table '{table}' is not allowed for tenant verification")
+
+        org_id = self.require_org_id()
+        row = db.execute(
+            _text(
+                f"SELECT id FROM {table} "
+                f"WHERE id = :entity_id AND {org_column} = :org_id"
+            ),
+            {"entity_id": entity_id, "org_id": org_id},
+        ).fetchone()
+        if not row:
+            logger.warning(
+                "TENANT_ISOLATION: %s %s access denied for org %s by agent %s",
+                table, entity_id, org_id, self.name,
+            )
+            raise ValueError(f"{table} entity {entity_id} not found")
+
+    def verify_campaign_tenant(self, db: Any, campaign_id: int) -> None:
+        """Verify a follow-up campaign belongs to this agent's organization
+        (via its parent loan).
+
+        Raises ValueError if the campaign does not exist or belongs to a
+        different organization.
+        """
+        from sqlalchemy import text as _text
+
+        org_id = self.require_org_id()
+        row = db.execute(
+            _text(
+                "SELECT fc.id FROM followup_campaigns fc "
+                "JOIN loans l ON l.id = fc.loan_id AND l.organization_id = :org_id "
+                "WHERE fc.id = :campaign_id"
+            ),
+            {"campaign_id": campaign_id, "org_id": org_id},
+        ).fetchone()
+        if not row:
+            logger.warning(
+                "TENANT_ISOLATION: campaign %s access denied for org %s by agent %s",
+                campaign_id, org_id, self.name,
+            )
+            raise ValueError(f"Campaign {campaign_id} not found")
+
     # =========================================================================
     # AUDIT LOGGING
     # =========================================================================
@@ -484,6 +600,62 @@ class AgentRegistry:
         # Intent to agent mapping for all agents
         # Note: More specific phrases should come before generic ones
         intent_mapping = {
+            # QC Audit Agent (specific phrases first)
+            "qc audit": "QCAuditAgent",
+            "quality control": "QCAuditAgent",
+            "prefunding audit": "QCAuditAgent",
+            "pre-funding audit": "QCAuditAgent",
+            "postclosing audit": "QCAuditAgent",
+            "post-closing audit": "QCAuditAgent",
+            "repurchase risk": "QCAuditAgent",
+            "qc scorecard": "QCAuditAgent",
+            "defect rate": "QCAuditAgent",
+            "defect trend": "QCAuditAgent",
+            "investor overlay": "QCAuditAgent",
+            "deficiency report": "QCAuditAgent",
+            "audit trail report": "QCAuditAgent",
+            "appraisal independence": "QCAuditAgent",
+            "signature completeness": "QCAuditAgent",
+            "loan file audit": "QCAuditAgent",
+            "data integrity check": "QCAuditAgent",
+
+            # Processor Productivity Agent (specific phrases first)
+            "processor productivity": "ProcessorProductivityAgent",
+            "processor workload": "ProcessorProductivityAgent",
+            "processor capacity": "ProcessorProductivityAgent",
+            "priority queue": "ProcessorProductivityAgent",
+            "batch approve": "ProcessorProductivityAgent",
+            "batch approval": "ProcessorProductivityAgent",
+            "stacking order": "ProcessorProductivityAgent",
+            "submission checklist": "ProcessorProductivityAgent",
+            "submission ready": "ProcessorProductivityAgent",
+            "doc triage": "ProcessorProductivityAgent",
+            "touch time": "ProcessorProductivityAgent",
+            "time to clear": "ProcessorProductivityAgent",
+            "workload capacity": "ProcessorProductivityAgent",
+            "task delegation": "ProcessorProductivityAgent",
+            "reusable documents": "ProcessorProductivityAgent",
+            "condition response": "ProcessorProductivityAgent",
+
+            # Borrower Experience Agent (specific phrases first)
+            "borrower experience": "BorrowerExperienceAgent",
+            "borrower journey": "BorrowerExperienceAgent",
+            "borrower sentiment": "BorrowerExperienceAgent",
+            "borrower frustration": "BorrowerExperienceAgent",
+            "document checklist": "BorrowerExperienceAgent",
+            "document tutorial": "BorrowerExperienceAgent",
+            "explain document": "BorrowerExperienceAgent",
+            "why do you need": "BorrowerExperienceAgent",
+            "borrower message": "BorrowerExperienceAgent",
+            "borrower celebration": "BorrowerExperienceAgent",
+            "progress celebration": "BorrowerExperienceAgent",
+            "borrower score": "BorrowerExperienceAgent",
+            "experience score": "BorrowerExperienceAgent",
+            "rejection explanation": "BorrowerExperienceAgent",
+            "simplify rejection": "BorrowerExperienceAgent",
+            "assistance call": "BorrowerExperienceAgent",
+            "borrower friction": "BorrowerExperienceAgent",
+
             # Operations Manager Agent (specific phrases first)
             "ops manager": "OpsManagerAgent",
             "operations manager": "OpsManagerAgent",
@@ -495,6 +667,44 @@ class AgentRegistry:
             "missing closer": "OpsManagerAgent",
             "unassigned lead": "OpsManagerAgent",
             "unassigned loan": "OpsManagerAgent",
+
+            # Document Analytics Agent (specific phrases before generic "document")
+            "document analytics": "DocumentAnalyticsAgent",
+            "doc analytics": "DocumentAnalyticsAgent",
+            "collection velocity": "DocumentAnalyticsAgent",
+            "collection bottleneck": "DocumentAnalyticsAgent",
+            "rejection pattern": "DocumentAnalyticsAgent",
+            "document rejection": "DocumentAnalyticsAgent",
+            "ai effectiveness": "DocumentAnalyticsAgent",
+            "document cost": "DocumentAnalyticsAgent",
+            "borrower responsiveness": "DocumentAnalyticsAgent",
+            "document forecast": "DocumentAnalyticsAgent",
+            "document workload": "DocumentAnalyticsAgent",
+            "team scorecard": "DocumentAnalyticsAgent",
+            "document benchmark": "DocumentAnalyticsAgent",
+            "esign adoption": "DocumentAnalyticsAgent",
+            "portal engagement": "DocumentAnalyticsAgent",
+            "document dashboard": "DocumentAnalyticsAgent",
+
+            # Document Security Agent (specific phrases before generic "security", "encryption")
+            "document security": "DocumentSecurityAgent",
+            "doc security": "DocumentSecurityAgent",
+            "document encryption": "DocumentSecurityAgent",
+            "encryption status": "DocumentSecurityAgent",
+            "document access audit": "DocumentSecurityAgent",
+            "access audit": "DocumentSecurityAgent",
+            "data breach": "DocumentSecurityAgent",
+            "breach notification": "DocumentSecurityAgent",
+            "pii exposure": "DocumentSecurityAgent",
+            "document tampering": "DocumentSecurityAgent",
+            "retention policy": "DocumentSecurityAgent",
+            "privacy impact": "DocumentSecurityAgent",
+            "watermark compliance": "DocumentSecurityAgent",
+            "failed access": "DocumentSecurityAgent",
+            "unauthorized access": "DocumentSecurityAgent",
+            "data exposure risk": "DocumentSecurityAgent",
+            "security incident": "DocumentSecurityAgent",
+            "security compliance report": "DocumentSecurityAgent",
 
             # Content Marketing Agent (specific phrases first to avoid matching generic terms)
             "content calendar": "ContentMarketingAgent",
@@ -527,6 +737,14 @@ class AgentRegistry:
             "sms": "CommunicationAgent",
             "message": "CommunicationAgent",
             "notification": "CommunicationAgent",
+            "document lifecycle": "DocumentLifecycleAgent",
+            "doc lifecycle": "DocumentLifecycleAgent",
+            "document orchestration": "DocumentLifecycleAgent",
+            "document completeness": "DocumentLifecycleAgent",
+            "blocking documents": "DocumentLifecycleAgent",
+            "processor briefing": "DocumentLifecycleAgent",
+            "document needs": "DocumentLifecycleAgent",
+            "smart needs list": "DocumentLifecycleAgent",
             "document intelligence": "DocumentIntelligenceAgent",
             "doc intelligence": "DocumentIntelligenceAgent",
             "classify document": "DocumentIntelligenceAgent",
@@ -651,6 +869,19 @@ class AgentRegistry:
             "pricing": "RateAdvisorAgent",
             "float": "RateAdvisorAgent",
             "quote": "RateAdvisorAgent",
+
+            # Vendor Management Agent
+            "vendor": "VendorManagementAgent",
+            "vendor order": "VendorManagementAgent",
+            "appraisal": "VendorManagementAgent",
+            "title search": "VendorManagementAgent",
+            "title company": "VendorManagementAgent",
+            "flood zone": "VendorManagementAgent",
+            "flood determination": "VendorManagementAgent",
+            "hoa cert": "VendorManagementAgent",
+            "closing vendor": "VendorManagementAgent",
+            "vendor delay": "VendorManagementAgent",
+            "vendor sla": "VendorManagementAgent",
         }
 
         intent_lower = intent.lower()
