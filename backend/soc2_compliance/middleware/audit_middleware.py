@@ -58,7 +58,7 @@ def _write_audit_log_bg(
                     "user_email": user_email,
                     "user_role": user_role,
                     "tenant_id": str(tenant_id) if tenant_id else None,
-                    "action": action,
+                    "action": action.value if hasattr(action, 'value') else str(action),
                     "method": method,
                     "path": path,
                     "request_id": request_id,
@@ -66,7 +66,7 @@ def _write_audit_log_bg(
                     "user_agent": user_agent,
                     "status_code": status_code,
                     "success": success,
-                    "severity": severity,
+                    "severity": severity.value if hasattr(severity, 'value') else str(severity),
                     "description": description,
                 }
             )
