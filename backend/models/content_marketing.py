@@ -247,7 +247,7 @@ class ContentBrief(Base):
     calendar = relationship("ContentCalendar", back_populates="briefs")
     template = relationship("ContentTemplate")
     comments = relationship("ContentComment", back_populates="brief", cascade="all, delete-orphan")
-    approvals = relationship("ContentApproval", back_populates="brief", cascade="all, delete-orphan", foreign_keys="[ContentApproval.brief_id]")
+    approvals = relationship("ContentBriefApproval", back_populates="brief", cascade="all, delete-orphan", ContentBriefApproval)
 
 
 # =============================================================================
@@ -290,7 +290,7 @@ class ContentComment(Base):
 # Content Approvals
 # =============================================================================
 
-class ContentApproval(Base):
+class ContentBriefApproval(Base):
     """Approval workflow tracking for content."""
     __tablename__ = "content_approvals"
 
