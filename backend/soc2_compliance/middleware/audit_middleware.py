@@ -48,7 +48,7 @@ def _write_audit_log_bg(
                     ) VALUES (
                         NOW(), :user_id, :user_email, :user_role, :tenant_id,
                         :action, :method, :path,
-                        :request_id, :ip::inet, :user_agent,
+                        :request_id, CAST(NULLIF(:ip, '') AS INET), :user_agent,
                         :status_code, :success, :severity,
                         :description
                     )
