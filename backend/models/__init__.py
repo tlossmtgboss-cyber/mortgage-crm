@@ -120,3 +120,14 @@ __all__ = [
     'MicrositeSlugGenerator',
     'ContentValidator'
 ]
+
+from .sms_models import (
+    SMSOptOut,
+    SMSConsent,
+    SMSComplianceLog,
+    SMSDeliveryStatus,
+    SMSAnalytics,
+    SMSRateLimit,
+    SMSScheduledMessage,
+    SMSQueue
+)
