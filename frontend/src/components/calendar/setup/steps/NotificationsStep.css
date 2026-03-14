@@ -1,0 +1,1307 @@
+/**
+ * NotificationsStep.css
+ * Step 5: Notification configuration for Smart Calendar guided setup.
+ * Uses Perennia brand color #218D8D and follows BEM naming.
+ * Responsive breakpoints at 640px and 768px.
+ */
+
+/* ============================================================================
+   Layout
+   ============================================================================ */
+
+@import "../../../../styles/calendar-design-tokens.css";
+
+.notifications-step {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.notifications-step__header {
+  margin-bottom: 24px;
+}
+
+.notifications-step__step-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--cal-primary);
+  background: var(--cal-primary-light);
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+
+.notifications-step__title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cal-text-primary);
+}
+
+.notifications-step__subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cal-text-secondary);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Accordion Section
+   ============================================================================ */
+
+.notifications-step__section {
+  border: 2px solid var(--cal-border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.notifications-step__section.enabled {
+  border-color: var(--cal-border);
+}
+
+.notifications-step__section.expanded.enabled {
+  border-color: var(--cal-primary);
+}
+
+.notifications-step__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px 18px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  gap: 12px;
+  text-align: left;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.notifications-step__section-header:hover {
+  background: var(--cal-bg-secondary);
+}
+
+.notifications-step__section-header:focus-visible {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: -2px;
+}
+
+.notifications-step__section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.notifications-step__section-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  background: var(--cal-bg-tertiary);
+  color: var(--cal-text-muted);
+  transition: all 0.15s;
+}
+
+.notifications-step__section-icon.active {
+  background: var(--cal-primary-light);
+  color: var(--cal-primary);
+}
+
+.notifications-step__section-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notifications-step__section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cal-text-primary);
+}
+
+.notifications-step__section-desc {
+  font-size: 12px;
+  color: var(--cal-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notifications-step__section-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.notifications-step__section-chevron {
+  color: var(--cal-text-muted);
+  font-size: 12px;
+  transition: transform 0.25s ease;
+}
+
+.notifications-step__section-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.notifications-step__section-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.notifications-step__section-body {
+  padding: 0 18px 18px;
+}
+
+/* ============================================================================
+   Mini Toggle (section header enable/disable)
+   ============================================================================ */
+
+.notifications-step__section-enable {
+  cursor: pointer;
+}
+
+.notifications-step__mini-toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.notifications-step__mini-toggle-track input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.notifications-step__mini-toggle-bg {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px;
+  transition: background-color 0.2s;
+}
+
+.notifications-step__mini-toggle-bg.on {
+  background-color: var(--cal-primary);
+}
+
+.notifications-step__mini-toggle-bg.off {
+  background-color: var(--cal-border-hover);
+}
+
+.notifications-step__mini-toggle-track input:focus-visible + .notifications-step__mini-toggle-bg {
+  box-shadow: 0 0 0 3px var(--cal-focus-ring-stronger);
+}
+
+.notifications-step__mini-toggle-thumb {
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  bottom: 3px;
+  border-radius: 50%;
+  background-color: #fff;
+  transition: left 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.notifications-step__mini-toggle-thumb.on {
+  left: 19px;
+}
+
+.notifications-step__mini-toggle-thumb.off {
+  left: 3px;
+}
+
+/* ============================================================================
+   Toggle Switch (full-size, used within sections)
+   ============================================================================ */
+
+.notifications-step__toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.notifications-step__toggle--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notifications-step__toggle-track {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.notifications-step__toggle-track input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.notifications-step__toggle-bg {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 24px;
+  transition: background-color 0.2s;
+}
+
+.notifications-step__toggle-bg.on {
+  background-color: var(--cal-primary);
+}
+
+.notifications-step__toggle-bg.off {
+  background-color: var(--cal-border-hover);
+}
+
+.notifications-step__toggle-track input:focus-visible + .notifications-step__toggle-bg {
+  box-shadow: 0 0 0 3px var(--cal-focus-ring-stronger);
+}
+
+.notifications-step__toggle-thumb {
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  bottom: 3px;
+  border-radius: 50%;
+  background-color: #fff;
+  transition: left 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.notifications-step__toggle-thumb.on {
+  left: 22px;
+}
+
+.notifications-step__toggle-thumb.off {
+  left: 3px;
+}
+
+.notifications-step__toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notifications-step__toggle-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cal-text-dark);
+}
+
+.notifications-step__toggle-hint {
+  font-size: 12px;
+  color: var(--cal-text-muted);
+  line-height: 1.4;
+}
+
+/* ============================================================================
+   Channel Radio Group
+   ============================================================================ */
+
+.notifications-step__channel-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notifications-step__channel-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--cal-border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cal-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #fff;
+}
+
+.notifications-step__channel-option input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.notifications-step__channel-option:hover {
+  border-color: var(--cal-border-hover);
+  background: var(--cal-bg-secondary);
+}
+
+.notifications-step__channel-option:focus-within {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: -2px;
+}
+
+.notifications-step__channel-option.selected {
+  border-color: var(--cal-primary);
+  background: var(--cal-primary-light);
+  color: var(--cal-primary);
+}
+
+.notifications-step__channel-option i {
+  font-size: 12px;
+}
+
+/* ============================================================================
+   Reminder Timeline
+   ============================================================================ */
+
+.notifications-step__timeline {
+  position: relative;
+  padding-left: 24px;
+  margin-bottom: 16px;
+}
+
+.notifications-step__timeline-line {
+  position: absolute;
+  left: 7px;
+  top: 16px;
+  bottom: 16px;
+  width: 2px;
+  background: var(--cal-border);
+  border-radius: 1px;
+}
+
+.notifications-step__timeline-item {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.notifications-step__timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.notifications-step__timeline-dot {
+  position: absolute;
+  left: -21px;
+  top: 16px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cal-border);
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 2px var(--cal-border);
+  transition: all 0.2s;
+}
+
+.notifications-step__timeline-item.active .notifications-step__timeline-dot {
+  background: var(--cal-primary);
+  box-shadow: 0 0 0 2px var(--cal-primary);
+}
+
+.notifications-step__timeline-card {
+  background: var(--cal-bg-secondary);
+  border: 1px solid var(--cal-border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.notifications-step__timeline-item.active .notifications-step__timeline-card {
+  background: var(--cal-primary-lighter);
+  border-color: #c5e5e5;
+}
+
+.notifications-step__timeline-item.inactive .notifications-step__timeline-card {
+  opacity: 0.65;
+}
+
+.notifications-step__timeline-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notifications-step__timeline-card-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--cal-border);
+}
+
+.notifications-step__remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--cal-text-muted);
+  font-size: 13px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.notifications-step__remove-btn:hover {
+  color: var(--cal-error-dark);
+  background: var(--cal-error-light);
+}
+
+.notifications-step__remove-btn:focus-visible {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: -2px;
+}
+
+/* ============================================================================
+   Custom Reminder Form
+   ============================================================================ */
+
+.notifications-step__add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1.5px dashed var(--cal-border-hover);
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cal-primary);
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.notifications-step__add-btn:hover {
+  border-color: var(--cal-primary);
+  background: var(--cal-primary-lighter);
+}
+
+.notifications-step__add-btn:focus-visible {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: -2px;
+}
+
+.notifications-step__custom-form {
+  background: var(--cal-bg-secondary);
+  border: 1px solid var(--cal-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.notifications-step__custom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.notifications-step__custom-input {
+  width: 72px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--cal-border-input);
+  font-size: 14px;
+  text-align: center;
+  color: var(--cal-text-primary);
+  font-family: inherit;
+}
+
+.notifications-step__custom-input:focus {
+  outline: none;
+  border-color: var(--cal-primary);
+  box-shadow: 0 0 0 2px var(--cal-focus-ring-strong);
+}
+
+.notifications-step__custom-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--cal-border-input);
+  font-size: 14px;
+  color: var(--cal-text-primary);
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.notifications-step__custom-select:focus {
+  outline: none;
+  border-color: var(--cal-primary);
+  box-shadow: 0 0 0 2px var(--cal-focus-ring-strong);
+}
+
+.notifications-step__custom-label {
+  font-size: 14px;
+  color: var(--cal-text-secondary);
+}
+
+.notifications-step__custom-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ============================================================================
+   Buttons
+   ============================================================================ */
+
+.notifications-step__btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  background: var(--cal-primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.notifications-step__btn-primary:hover {
+  background: var(--cal-primary-hover);
+}
+
+.notifications-step__btn-primary:focus-visible {
+  outline: 2px solid var(--cal-text-primary);
+  outline-offset: 2px;
+}
+
+.notifications-step__btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--cal-border-input);
+  background: #fff;
+  color: var(--cal-text-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.notifications-step__btn-secondary:hover {
+  background: var(--cal-bg-secondary);
+  border-color: var(--cal-text-muted);
+}
+
+.notifications-step__btn-secondary:focus-visible {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: -2px;
+}
+
+/* ============================================================================
+   Reminder Preview
+   ============================================================================ */
+
+.notifications-step__reminder-preview {
+  margin-top: 16px;
+}
+
+.notifications-step__preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--cal-text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.notifications-step__preview-card {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--cal-info-light);
+  border: 1px solid var(--cal-info-border);
+  border-radius: 10px;
+}
+
+.notifications-step__preview-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #dbeafe;
+  color: var(--cal-info-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.notifications-step__preview-body {
+  flex: 1;
+}
+
+.notifications-step__preview-body strong {
+  display: block;
+  font-size: 13px;
+  color: var(--cal-text-primary);
+  margin-bottom: 4px;
+}
+
+.notifications-step__preview-body p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cal-text-body);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Field Labels & Inline Inputs
+   ============================================================================ */
+
+.notifications-step__field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cal-text-body);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notifications-step__inline-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--cal-text-body);
+  flex-wrap: wrap;
+}
+
+.notifications-step__inline-input {
+  width: 60px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--cal-border-input);
+  font-size: 14px;
+  text-align: center;
+  color: var(--cal-text-primary);
+  font-family: inherit;
+}
+
+.notifications-step__inline-input:focus {
+  outline: none;
+  border-color: var(--cal-primary);
+  box-shadow: 0 0 0 2px var(--cal-focus-ring-strong);
+}
+
+.notifications-step__time-input {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--cal-border-input);
+  font-size: 14px;
+  color: var(--cal-text-primary);
+  font-family: inherit;
+}
+
+.notifications-step__time-input:focus {
+  outline: none;
+  border-color: var(--cal-primary);
+  box-shadow: 0 0 0 2px var(--cal-focus-ring-strong);
+}
+
+/* ============================================================================
+   Event Alerts
+   ============================================================================ */
+
+.notifications-step__alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notifications-step__alert-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cal-bg-tertiary);
+}
+
+.notifications-step__alert-row:last-child {
+  border-bottom: none;
+}
+
+.notifications-step__alert-config {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notifications-step__alert-channel {
+  margin-left: 56px;
+}
+
+.notifications-step__alert-detail {
+  margin-left: 56px;
+  padding-top: 4px;
+}
+
+/* ============================================================================
+   Quiet Hours
+   ============================================================================ */
+
+.notifications-step__quiet-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.notifications-step__quiet-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.notifications-step__quiet-controls {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.notifications-step__quiet-time-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.notifications-step__quiet-time-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notifications-step__quiet-separator {
+  font-size: 14px;
+  color: var(--cal-text-muted);
+  padding-bottom: 8px;
+}
+
+.notifications-step__quiet-weekend {
+  margin-top: 4px;
+}
+
+.notifications-step__quiet-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--cal-text-secondary);
+  line-height: 1.5;
+  background: var(--cal-bg-secondary);
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+
+.notifications-step__quiet-info i {
+  color: var(--cal-text-muted);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.notifications-step__disabled-hint {
+  font-size: 13px;
+  color: var(--cal-text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+/* ============================================================================
+   Quiet Hours Clock SVG
+   ============================================================================ */
+
+.notifications-step__clock-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.notifications-step__clock-svg {
+  width: 120px;
+  height: 120px;
+}
+
+.notifications-step__clock-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--cal-primary);
+  font-weight: 500;
+}
+
+.notifications-step__clock-badge i {
+  font-size: 10px;
+}
+
+/* ============================================================================
+   Digest Settings
+   ============================================================================ */
+
+.notifications-step__digest-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notifications-step__digest-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cal-bg-tertiary);
+}
+
+.notifications-step__digest-row:last-child {
+  border-bottom: none;
+}
+
+.notifications-step__digest-config {
+  margin-left: 56px;
+  margin-top: 8px;
+}
+
+.notifications-step__digest-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cal-text-dark);
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.notifications-step__digest-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.notifications-step__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--cal-text-body);
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--cal-border);
+  transition: all 0.15s;
+  background: #fff;
+}
+
+.notifications-step__checkbox-label:hover {
+  background: var(--cal-bg-secondary);
+  border-color: var(--cal-border-hover);
+}
+
+.notifications-step__checkbox-label input[type="checkbox"] {
+  accent-color: var(--cal-primary);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.notifications-step__checkbox-label i {
+  color: var(--cal-text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* Digest Preview Card */
+
+.notifications-step__digest-preview {
+  margin-top: 12px;
+}
+
+.notifications-step__digest-preview .notifications-step__digest-preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--cal-text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.notifications-step__digest-card {
+  border: 1px solid var(--cal-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.notifications-step__digest-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--cal-primary);
+  color: #fff;
+}
+
+.notifications-step__digest-card-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.notifications-step__digest-card-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.notifications-step__digest-card-date {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.notifications-step__digest-card-body {
+  padding: 12px 16px;
+}
+
+.notifications-step__digest-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cal-bg-tertiary);
+}
+
+.notifications-step__digest-item:last-child {
+  border-bottom: none;
+}
+
+.notifications-step__digest-item i {
+  color: var(--cal-primary);
+  font-size: 13px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.notifications-step__digest-item div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notifications-step__digest-item strong {
+  font-size: 13px;
+  color: var(--cal-text-primary);
+}
+
+.notifications-step__digest-item span {
+  font-size: 12px;
+  color: var(--cal-text-secondary);
+}
+
+.notifications-step__digest-empty {
+  font-size: 13px;
+  color: var(--cal-text-muted);
+  font-style: italic;
+  padding: 12px 0;
+  text-align: center;
+}
+
+/* ============================================================================
+   Browser Notifications
+   ============================================================================ */
+
+.notifications-step__browser-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notifications-step__permission-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notifications-step__permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.notifications-step__permission-badge.granted {
+  background: var(--cal-success-light);
+  color: var(--cal-success-darker);
+}
+
+.notifications-step__permission-badge.denied {
+  background: var(--cal-error-light);
+  color: var(--cal-error-dark);
+}
+
+.notifications-step__permission-badge.default {
+  background: var(--cal-bg-tertiary);
+  color: var(--cal-text-secondary);
+}
+
+.notifications-step__browser-options {
+  padding-top: 4px;
+}
+
+.notifications-step__preview-btn {
+  align-self: flex-start;
+}
+
+.notifications-step__warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.notifications-step__warning i {
+  color: var(--cal-warning-dark);
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Summary Footer
+   ============================================================================ */
+
+.notifications-step__summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--cal-info-light);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--cal-info-darker);
+  margin-top: 8px;
+}
+
+.notifications-step__summary i {
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+/* ============================================================================
+   Responsive: 768px
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .notifications-step__quiet-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .notifications-step__clock-container {
+    order: -1;
+  }
+
+  .notifications-step__quiet-controls {
+    width: 100%;
+  }
+
+  .notifications-step__digest-checks {
+    grid-template-columns: 1fr;
+  }
+
+  .notifications-step__alert-channel {
+    margin-left: 0;
+  }
+
+  .notifications-step__alert-detail {
+    margin-left: 0;
+  }
+
+  .notifications-step__digest-config {
+    margin-left: 0;
+  }
+}
+
+/* ============================================================================
+   Responsive: 640px
+   ============================================================================ */
+
+@media (max-width: 640px) {
+  .notifications-step__section-header {
+    padding: 14px 14px;
+  }
+
+  .notifications-step__section-body {
+    padding: 0 14px 14px;
+  }
+
+  .notifications-step__section-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+
+  .notifications-step__section-title {
+    font-size: 14px;
+  }
+
+  .notifications-step__section-desc {
+    font-size: 11px;
+  }
+
+  .notifications-step__title {
+    font-size: 18px;
+  }
+
+  .notifications-step__quiet-time-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notifications-step__quiet-separator {
+    text-align: center;
+    padding-bottom: 0;
+  }
+
+  .notifications-step__channel-group {
+    flex-direction: column;
+  }
+
+  .notifications-step__custom-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notifications-step__custom-input {
+    width: 100%;
+  }
+
+  .notifications-step__timeline {
+    padding-left: 20px;
+  }
+
+  .notifications-step__timeline-dot {
+    left: -17px;
+    width: 10px;
+    height: 10px;
+  }
+
+  .notifications-step__timeline-line {
+    left: 5px;
+  }
+
+  .notifications-step__preview-card {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .notifications-step__summary {
+    flex-direction: column;
+    text-align: center;
+    gap: 6px;
+  }
+
+  /* iOS auto-zoom prevention: all form inputs >= 16px */
+  .notifications-step input,
+  .notifications-step select,
+  .notifications-step textarea,
+  .notifications-step__custom-input,
+  .notifications-step__inline-input,
+  .notifications-step__custom-select,
+  .notifications-step__time-input,
+  .notifications-step__quiet-time-select {
+    font-size: 16px;
+  }
+
+  /* Touch targets: channel options and toggle switches */
+  .notifications-step__channel-option {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  .notifications-step__toggle {
+    min-width: 44px;
+    min-height: 28px;
+  }
+
+  .notifications-step__section-header {
+    min-height: 44px;
+  }
+
+  .notifications-step__preview-btn {
+    min-height: 44px;
+  }
+}
+
+/* ============================================================================
+   Reduced motion preference
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .notifications-step__section,
+  .notifications-step__section-header,
+  .notifications-step__section-icon,
+  .notifications-step__section-chevron,
+  .notifications-step__section-content,
+  .notifications-step__mini-toggle-bg,
+  .notifications-step__mini-toggle-thumb,
+  .notifications-step__toggle-bg,
+  .notifications-step__toggle-thumb,
+  .notifications-step__timeline-dot,
+  .notifications-step__timeline-card,
+  .notifications-step__channel-option,
+  .notifications-step__remove-btn,
+  .notifications-step__add-btn,
+  .notifications-step__btn-primary,
+  .notifications-step__btn-secondary,
+  .notifications-step__checkbox-label {
+    transition: none;
+  }
+}

@@ -1037,6 +1037,10 @@ export const calendarSettingsAPI = {
     const response = await api.put('/api/v1/calendar-settings/team', data);
     return response.data;
   },
+  inviteTeamMember: async (data) => {
+    const response = await api.post('/api/v1/calendar-settings/team/invite', data);
+    return response.data;
+  },
   // Labels
   getLabels: async () => {
     const response = await api.get('/api/v1/calendar-settings/labels');
@@ -1073,6 +1077,47 @@ export const calendarSettingsAPI = {
   },
   setDefaultTemplate: async (id) => {
     const response = await api.put(`/api/v1/calendar-settings/templates/${id}/default`);
+    return response.data;
+  },
+  createTemplate: async (data) => {
+    const response = await api.post('/api/v1/calendar-settings/templates', data);
+    return response.data;
+  },
+  updateTemplate: async (id, data) => {
+    const response = await api.put(`/api/v1/calendar-settings/templates/${id}`, data);
+    return response.data;
+  },
+  duplicateTemplate: async (id) => {
+    const response = await api.post(`/api/v1/calendar-settings/templates/${id}/duplicate`);
+    return response.data;
+  },
+  // Locations
+  getLocations: async () => {
+    const response = await api.get('/api/v1/calendar-settings/locations');
+    return response.data;
+  },
+  createLocation: async (data) => {
+    const response = await api.post('/api/v1/calendar-settings/locations', data);
+    return response.data;
+  },
+  updateLocation: async (id, data) => {
+    const response = await api.put(`/api/v1/calendar-settings/locations/${id}`, data);
+    return response.data;
+  },
+  deleteLocation: async (id) => {
+    const response = await api.delete(`/api/v1/calendar-settings/locations/${id}`);
+    return response.data;
+  },
+  reorderLocations: async (locationIds) => {
+    const response = await api.put('/api/v1/calendar-settings/locations/reorder', { location_ids: locationIds });
+    return response.data;
+  },
+  setDefaultLocation: async (id) => {
+    const response = await api.put(`/api/v1/calendar-settings/locations/${id}/default`);
+    return response.data;
+  },
+  setDefaultLabel: async (id) => {
+    const response = await api.put(`/api/v1/calendar-settings/labels/${id}/default`);
     return response.data;
   },
 };

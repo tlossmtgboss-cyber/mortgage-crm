@@ -96,40 +96,33 @@ function Leads() {
     'New',
     'Attempted Contact',
     'Prospect',
-    'Application',
     'Pre-Qualified',
     'Pre-Approved',
     'Nurture',
     'Credit Repair',
-    'Withdrawn',
-    'Does Not Qualify',
     'Do Not Call',
   ];
 
-  // Stages that belong on the Leads page — anything else belongs on Active Loans or MUM
+  // Stages that belong on the Leads page — once a file has an application it moves to Active Loans
   const LEAD_PIPELINE_STAGES = new Set([
-    'New', 'Attempted Contact', 'Prospect', 'Application', 'Application Started',
-    'Document Fulfillment', 'Pre-Qualified', 'Pre-Approved', 'Under Contract',
-    'Long-Term Nurture', 'Nurture', 'Credit Repair', 'Withdrawn', 'Does Not Qualify',
-    'Do Not Call',
+    'New', 'Attempted Contact', 'Prospect', 'Pre-Qualified', 'Pre-Approved',
+    'Long-Term Nurture', 'Nurture', 'Credit Repair', 'Do Not Call',
   ]);
 
   const statusOptions = [
-    // Lead stages
+    // Lead stages (pre-contract)
     { label: 'Lead Stages', isHeader: true },
     'New',
     'Attempted Contact',
     'Prospect',
-    'Application',
     'Pre-Qualified',
     'Pre-Approved',
     'Long-Term Nurture',
     'Credit Repair',
-    'Withdrawn',
-    'Does Not Qualify',
     'Do Not Call',
-    // Active Loan stages
+    // Active Loan stages (moves record to Active Loans page)
     { label: 'Active Loan Stages', isHeader: true },
+    'Application',
     'Disclosed',
     'Processing',
     'Submitted',
@@ -143,10 +136,12 @@ function Leads() {
     'Closing',
     'Docs',
     'Docs Out',
+    'Withdrawn',
     'Cancelled',
     'Denied',
     'Dead',
-    // MUM (Funded)
+    'Does Not Qualify',
+    // MUM (Funded) — moves record to MUM page
     { label: 'MUM / Closed', isHeader: true },
     'Funded',
   ];
@@ -156,10 +151,9 @@ function Leads() {
     // Lead stages
     'New': ['Attempted Contact', 'Prospect', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
     'Attempted Contact': ['Prospect', 'Application', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
-    'Prospect': ['Application', 'Pre-Qualified', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
-    'Application': ['Pre-Qualified', 'Pre-Approved', 'Disclosed', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
-    'Pre-Qualified': ['Pre-Approved', 'Disclosed', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
-    'Pre-Approved': ['Disclosed', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Prospect': ['Pre-Qualified', 'Application', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Pre-Qualified': ['Pre-Approved', 'Application', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
+    'Pre-Approved': ['Application', 'Disclosed', 'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify'],
     'Long-Term Nurture': ['New', 'Attempted Contact', 'Prospect', 'Withdrawn', 'Does Not Qualify'],
     // Active Loan stages
     'Disclosed': ['Processing', 'Suspended', 'Cancelled', 'Denied', 'Dead'],
@@ -931,14 +925,14 @@ function Leads() {
               <option value="New">New</option>
               <option value="Attempted Contact">Attempted Contact</option>
               <option value="Prospect">Prospect</option>
-              <option value="Application">Application</option>
               <option value="Pre-Qualified">Pre-Qualified</option>
               <option value="Pre-Approved">Pre-Approved</option>
               <option value="Long-Term Nurture">Nurture</option>
-              <option value="Withdrawn">Withdrawn</option>
-              <option value="Does Not Qualify">Does Not Qualify</option>
+              <option value="Credit Repair">Credit Repair</option>
+              <option value="Do Not Call">Do Not Call</option>
             </optgroup>
-            <optgroup label="Active Loan Stages">
+            <optgroup label="Active Loan Stages (moves to Loans page)">
+              <option value="Application">Application</option>
               <option value="Disclosed">Disclosed</option>
               <option value="Processing">Processing</option>
               <option value="Submitted">Submitted</option>

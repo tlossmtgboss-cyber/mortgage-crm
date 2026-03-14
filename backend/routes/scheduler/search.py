@@ -7,6 +7,7 @@ Endpoints:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, func, cast, String, desc, asc
 from datetime import datetime, date, time, timezone
@@ -25,9 +26,101 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# =============================================================================
+# RESPONSE SCHEMAS
+# =============================================================================
+
+class SearchResultItem(BaseModel):
+    """A single appointment result from search."""
+    id: int
+    title: Optional[str] = None
+    description: Optional[str] = None
+    meeting_type: Optional[str] = None
+    meeting_mode: Optional[str] = None
+    scheduled_start: Optional[str] = None
+    scheduled_end: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    timezone: Optional[str] = None
+    status: Optional[str] = None
+    attendee_name: Optional[str] = None
+    attendee_email: Optional[str] = None
+    attendee_phone: Optional[str] = None
+    attendee_notes: Optional[str] = None
+    location: Optional[str] = None
+    video_link: Optional[str] = None
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    contact_id: Optional[int] = None
+    assigned_user_id: Optional[int] = None
+    appointment_type_id: Optional[int] = None
+    booked_by_ai: Optional[bool] = None
+    internal_notes: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class PaginationMeta(BaseModel):
+    """Pagination metadata for search results."""
+    total: int = 0
+    page: int = 1
+    page_size: int = 25
+    total_pages: int = 1
+    has_next: bool = False
+    has_prev: bool = False
+
+
+class FiltersApplied(BaseModel):
+    """Echo of filters applied to the search."""
+    q: Optional[str] = None
+    status: Optional[List[str]] = None
+    appointment_type_id: Optional[int] = None
+    assigned_user_id: Optional[int] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    attendee_email: Optional[str] = None
+    meeting_type: Optional[str] = None
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    booked_by_ai: Optional[bool] = None
+    sort_by: str = "scheduled_start"
+    sort_order: str = "desc"
+
+
+class SearchResponse(BaseModel):
+    """Response for the appointment search endpoint."""
+    success: bool = True
+    data: List[SearchResultItem] = []
+    meta: PaginationMeta = PaginationMeta()
+    filters_applied: FiltersApplied = FiltersApplied()
+
+
+class SearchSuggestion(BaseModel):
+    """A single typeahead suggestion."""
+    type: str = Field(..., description="Suggestion category: attendee, email, or title")
+    value: str = Field(..., description="The matched value")
+    label: str = Field(..., description="Display label for the suggestion")
+
+
+class SuggestionsResponse(BaseModel):
+    """Response for the typeahead suggestions endpoint."""
+    success: bool = True
+    suggestions: List[SearchSuggestion] = []
+    query: str = ""
+
+
 # ============================================================================
 # SEARCH HELPERS
 # ============================================================================
+
+def _escape_like(text: str) -> str:
+    """Escape SQL LIKE special characters.
+
+    Prevents user-supplied '%' and '_' from acting as wildcards,
+    which could cause expensive full-table scans or unintended matches.
+    The backslash is escaped first to avoid double-escaping.
+    """
+    return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
 
 def _serialize_appointment(a) -> dict:
     """Serialize an Appointment model instance to a dict for API response."""
@@ -61,8 +154,13 @@ def _serialize_appointment(a) -> dict:
 
 
 def _apply_text_search(query, Appointment, search_text: str):
-    """Apply ILIKE free-text search across multiple columns."""
-    pattern = f"%{search_text}%"
+    """Apply ILIKE free-text search across multiple columns.
+
+    User-supplied LIKE wildcards (% and _) are escaped to prevent
+    unintended pattern matching and expensive full-table scans.
+    """
+    escaped = _escape_like(search_text)
+    pattern = f"%{escaped}%"
     return query.filter(
         or_(
             Appointment.title.ilike(pattern),
@@ -153,7 +251,7 @@ def _apply_sorting(query, Appointment, sort_by: str, sort_order: str):
 # SEARCH ENDPOINT
 # ============================================================================
 
-@router.get("/search")
+@router.get("/search", response_model=SearchResponse)
 async def search_appointments(
     request: Request,
     q: Optional[str] = Query(None, description="Free text search (name, email, title, notes)"),
@@ -256,40 +354,40 @@ async def search_appointments(
     offset = (page - 1) * page_size
     appointments = query.offset(offset).limit(page_size).all()
 
-    return {
-        "success": True,
-        "data": [_serialize_appointment(a) for a in appointments],
-        "meta": {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": total_pages,
-            "has_next": page < total_pages,
-            "has_prev": page > 1,
-        },
-        "filters_applied": {
-            "q": q,
-            "status": status,
-            "appointment_type_id": appointment_type_id,
-            "assigned_user_id": assigned_user_id,
-            "date_from": date_from,
-            "date_to": date_to,
-            "attendee_email": attendee_email,
-            "meeting_type": meeting_type,
-            "lead_id": lead_id,
-            "loan_id": loan_id,
-            "booked_by_ai": booked_by_ai,
-            "sort_by": sort_by,
-            "sort_order": sort_order,
-        },
-    }
+    return SearchResponse(
+        success=True,
+        data=[SearchResultItem(**_serialize_appointment(a)) for a in appointments],
+        meta=PaginationMeta(
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_prev=page > 1,
+        ),
+        filters_applied=FiltersApplied(
+            q=q,
+            status=status,
+            appointment_type_id=appointment_type_id,
+            assigned_user_id=assigned_user_id,
+            date_from=date_from,
+            date_to=date_to,
+            attendee_email=attendee_email,
+            meeting_type=meeting_type,
+            lead_id=lead_id,
+            loan_id=loan_id,
+            booked_by_ai=booked_by_ai,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        ),
+    )
 
 
 # ============================================================================
 # SEARCH SUGGESTIONS (TYPEAHEAD)
 # ============================================================================
 
-@router.get("/search/suggestions")
+@router.get("/search/suggestions", response_model=SuggestionsResponse)
 async def search_suggestions(
     request: Request,
     q: str = Query(..., min_length=2, description="Search query for typeahead suggestions"),
@@ -308,7 +406,8 @@ async def search_suggestions(
     _models = get_models()
     Appointment = _models['Appointment']
 
-    pattern = f"%{q.strip()}%"
+    search_text = q.strip()
+    pattern = f"%{_escape_like(search_text)}%"
     suggestions = []
 
     # Base filter: org-scoped + RBAC
@@ -403,8 +502,8 @@ async def search_suggestions(
         except Exception as e:
             logger.warning(f"Title suggestion query failed: {e}")
 
-    return {
-        "success": True,
-        "suggestions": suggestions,
-        "query": q,
-    }
+    return SuggestionsResponse(
+        success=True,
+        suggestions=[SearchSuggestion(**s) for s in suggestions],
+        query=q,
+    )

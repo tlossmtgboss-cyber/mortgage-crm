@@ -10,6 +10,16 @@ Tables:
 
 These models work alongside the existing SchedulerConfig.working_hours JSON to provide
 structured, queryable availability patterns with per-date exception support.
+
+Relationship to SchedulerConfig.working_hours (JSON blob):
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The slot generator (_helpers._generate_available_slots) checks for RecurringAvailability
+rows FIRST. If any active rows exist for a user, they are used as the availability
+source. If none exist, it falls back to the SchedulerConfig.working_hours JSON blob.
+
+This means these tables are the PREFERRED source of truth when populated.
+A sync mechanism in recurring_availability.py writes changes back to the JSON blob
+for backward compatibility with the settings UI.
 """
 
 from datetime import datetime, date, time, timezone

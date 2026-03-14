@@ -211,7 +211,7 @@ const AdvancedFeaturesStep = ({ onComplete, onBack }) => {
         await calendarSettingsAPI.updateFeatures({ features });
       }
       toast.success('Feature preferences saved');
-      if (onComplete) onComplete();
+      if (onComplete) onComplete({ features });
     } catch (err) {
       console.error('Failed to save feature settings:', err);
       toast.error('Failed to save feature preferences');

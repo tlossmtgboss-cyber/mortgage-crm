@@ -21,11 +21,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Optional
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
+import asyncio
 import html
+import ipaddress
 import logging
 import os
-import threading
 import time as _time
 
 try:
@@ -129,8 +130,90 @@ def _get_user_timezone(db, user_id: int, org_id: int = None) -> str:
 # RATE LIMITING (Redis-backed, multi-process safe)
 # ============================================================================
 
-_RATE_LIMIT_WINDOW = 60  # seconds
-_RATE_LIMIT_MAX_PUBLIC = 10  # max requests per window for public endpoints
+_PRIVATE_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+)
+
+
+def _is_private_ip(ip_str: str) -> bool:
+    """Check if an IP address is in a private/internal range (RFC 1918, loopback, ULA)."""
+    try:
+        addr = ipaddress.ip_address(ip_str)
+        return any(addr in net for net in _PRIVATE_NETWORKS)
+    except ValueError:
+        return False
+
+
+def _parse_trusted_proxy_cidrs() -> list:
+    """Parse TRUSTED_PROXY_CIDRS env var into a list of ipaddress networks.
+    Defaults include RFC 1918/loopback ranges (covers Railway, Docker, local dev)
+    and Cloudflare's primary IPv4 ranges."""
+    default_cidrs = (
+        "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8,"
+        "::1/128,fc00::/7,"
+        # Cloudflare IPv4 ranges (subset — covers most deployments)
+        "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,"
+        "141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,"
+        "197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,"
+        "104.24.0.0/14,172.64.0.0/13,131.0.72.0/22"
+    )
+    raw = os.getenv("TRUSTED_PROXY_CIDRS", default_cidrs)
+    networks = []
+    for cidr in raw.split(","):
+        cidr = cidr.strip()
+        if not cidr:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(cidr, strict=False))
+        except ValueError:
+            logger.warning(f"Invalid CIDR in TRUSTED_PROXY_CIDRS, skipping: {cidr}")
+    return networks
+
+
+_TRUSTED_PROXY_CIDRS = _parse_trusted_proxy_cidrs()
+
+
+def _is_trusted_proxy(ip_str: str) -> bool:
+    """Check if an IP address belongs to a trusted proxy network."""
+    try:
+        addr = ipaddress.ip_address(ip_str)
+        return any(addr in net for net in _TRUSTED_PROXY_CIDRS)
+    except ValueError:
+        return False
+
+
+def _get_client_ip(request: Request) -> str:
+    """
+    Extract the real client IP from a request.
+
+    Only trusts X-Forwarded-For when the direct connecting IP (request.client.host)
+    belongs to a trusted proxy network (Railway, Cloudflare, or private/internal).
+    Uses the rightmost (last) IP in X-Forwarded-For, which is the one appended by
+    the closest trusted proxy and is hardest to spoof.
+    Falls back to the direct connection IP if the header can't be trusted.
+    """
+    direct_ip = request.client.host if request.client else "unknown"
+
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded and _is_trusted_proxy(direct_ip):
+        # Request came through a trusted proxy; use the rightmost (last) IP
+        # which was appended by the closest trusted reverse proxy
+        ips = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
+        if ips:
+            return ips[-1]
+
+    return direct_ip
+
+
+# Rate limit configuration — all tuneable via env vars
+_RATE_LIMIT_WINDOW = int(os.getenv("SCHEDULER_RATE_LIMIT_WINDOW", os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")))
+_RATE_LIMIT_MAX_PUBLIC = int(os.getenv("SCHEDULER_RATE_LIMIT_MAX", os.getenv("RATE_LIMIT_MAX_PUBLIC", "10")))
+_RATE_LIMIT_MAX_AUTHENTICATED = int(os.getenv("SCHEDULER_RATE_LIMIT_MAX_AUTH", "60"))
 
 # Lazy Redis connection for rate limiting
 _rate_limit_redis = None
@@ -158,23 +241,44 @@ def _get_rate_limit_redis():
 
 
 # In-memory rate limiter fallback when Redis is unavailable
-_memory_rate_limits = defaultdict(deque)  # key -> deque of timestamps
-_memory_rate_lock = threading.Lock()
+# Uses OrderedDict for LRU-style eviction to bound memory usage.
+_memory_rate_limits: OrderedDict = OrderedDict()  # key -> deque of timestamps
+_memory_rate_lock = asyncio.Lock()  # asyncio.Lock for async FastAPI context (threading.Lock can deadlock)
 _memory_rate_check_count = 0  # Counter for periodic cleanup
-_MEMORY_CLEANUP_INTERVAL = 500  # Sweep empty keys every N checks
+_MAX_RATE_LIMIT_KEYS = int(os.getenv("SCHEDULER_RATE_LIMIT_MAX_KEYS", "10000"))
+_MEMORY_CLEANUP_INTERVAL = int(os.getenv("SCHEDULER_RATE_LIMIT_CLEANUP_INTERVAL",
+                                          os.getenv("RATE_LIMIT_CLEANUP_INTERVAL", "500")))
 
 
-def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: int = _RATE_LIMIT_WINDOW) -> bool:
+async def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: int = _RATE_LIMIT_WINDOW) -> bool:
     """
     In-memory sliding window rate limit. Returns True if allowed, False if over limit.
-    Thread-safe via lock. Not multi-process safe (per-worker protection only).
-    Periodically evicts empty keys to prevent unbounded memory growth.
+    Uses asyncio.Lock for safe use in async FastAPI handlers. Not multi-process safe
+    (per-worker protection only).
+
+    Uses an OrderedDict with LRU eviction: accessed keys are moved to the end,
+    and when the dict exceeds _MAX_RATE_LIMIT_KEYS, the oldest (least recently
+    accessed) entries are evicted first. Also periodically purges empty keys.
     """
     global _memory_rate_check_count
     now = _time.time()
-    with _memory_rate_lock:
-        timestamps = _memory_rate_limits[key]
-        # Evict expired timestamps
+    async with _memory_rate_lock:
+        if key in _memory_rate_limits:
+            timestamps = _memory_rate_limits[key]
+            # Move to end (most recently accessed) for LRU ordering
+            _memory_rate_limits.move_to_end(key)
+        else:
+            # New key -- check capacity before inserting
+            if len(_memory_rate_limits) >= _MAX_RATE_LIMIT_KEYS:
+                # Evict oldest entries (front of OrderedDict) until under capacity
+                evict_count = max(1, len(_memory_rate_limits) - _MAX_RATE_LIMIT_KEYS + 1)
+                for _ in range(evict_count):
+                    evicted_key, _ = _memory_rate_limits.popitem(last=False)
+                    logger.debug(f"Rate limiter LRU eviction: removed key {evicted_key}")
+            timestamps = deque()
+            _memory_rate_limits[key] = timestamps
+
+        # Evict expired timestamps from this key's deque
         while timestamps and timestamps[0] < now - window_seconds:
             timestamps.popleft()
         if len(timestamps) >= max_requests:
@@ -194,16 +298,12 @@ def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: int = 
         return True
 
 
-def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC):
+async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC):
     """
     Redis-backed rate limiter keyed by client IP + path.
-    Falls back to in-memory rate limiting if Redis is unavailable.
+    Falls back to async in-memory rate limiting if Redis is unavailable.
     """
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else "unknown"
+    client_ip = _get_client_ip(request)
 
     key = f"sched_rl:{request.url.path}:{client_ip}"
 
@@ -212,7 +312,7 @@ def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBL
         # Fallback: in-memory rate limiting (per-worker only -- degraded protection)
         logger.error("Rate limiter: Redis unavailable, using per-worker memory fallback. "
                       "Effective limit is multiplied by worker count. Restore Redis ASAP.")
-        if not _check_memory_rate_limit(key, max_requests):
+        if not await _check_memory_rate_limit(key, max_requests):
             raise HTTPException(
                 status_code=429,
                 detail="Too many requests. Please try again later.",
@@ -236,7 +336,7 @@ def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBL
     except Exception as e:
         # Redis command error -- fall back to in-memory
         logger.warning(f"Rate limit Redis error, using memory fallback: {e}")
-        if not _check_memory_rate_limit(key, max_requests):
+        if not await _check_memory_rate_limit(key, max_requests):
             raise HTTPException(
                 status_code=429,
                 detail="Too many requests. Please try again later.",
@@ -284,6 +384,37 @@ def _validate_url(value: Optional[str]) -> Optional[str]:
         return None
 
 
+def _validate_phone(phone: Optional[str]) -> Optional[str]:
+    """
+    Validate and normalize phone numbers for public booking.
+    Accepts E.164 (+1XXXXXXXXXX) or common US formats (XXX-XXX-XXXX, (XXX) XXX-XXXX, etc.).
+    Returns the cleaned phone string, or raises HTTPException for invalid formats.
+    """
+    import re
+    if phone is None or phone.strip() == "":
+        return None
+    # Strip whitespace and common formatting chars for digit counting
+    digits_only = re.sub(r'[^\d]', '', phone.strip())
+    # Accept 10-digit US numbers or 11-digit with leading 1, or E.164 with +
+    if phone.strip().startswith('+'):
+        # E.164: must be + followed by 10-15 digits
+        if not re.match(r'^\+\d{10,15}$', phone.strip()):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid phone number format. Please use a valid phone number."
+            )
+    elif len(digits_only) == 10:
+        pass  # Standard US 10-digit
+    elif len(digits_only) == 11 and digits_only.startswith('1'):
+        pass  # US with leading country code
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid phone number format. Please use a valid phone number."
+        )
+    return phone.strip()
+
+
 def _sanitize_public_error(status_code: int, detail: str) -> str:
     """
     Map internal error details to safe, user-friendly messages for public endpoints.
@@ -303,15 +434,35 @@ def _sanitize_public_error(status_code: int, detail: str) -> str:
     return "Something went wrong. Please try again later."
 
 
-# Cloudflare Turnstile secret key -- if not set, bot verification is skipped (dev mode)
+# Cloudflare Turnstile secret key
 _TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY")
+_RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT", "")
+_IS_PRODUCTION = _RAILWAY_ENVIRONMENT.lower() == "production"
+
+if _IS_PRODUCTION and not _TURNSTILE_SECRET_KEY:
+    logger.critical(
+        "TURNSTILE_SECRET_KEY is not set in production! "
+        "Public booking endpoints will REJECT all requests until this is configured. "
+        "Set the TURNSTILE_SECRET_KEY environment variable with your Cloudflare Turnstile secret."
+    )
 
 
 async def _verify_turnstile_token(token: str) -> bool:
     """
     Verify a Cloudflare Turnstile token by POSTing to Cloudflare's siteverify endpoint.
     Returns True if the token is valid, False otherwise.
+
+    Production safety: if TURNSTILE_SECRET_KEY is not set, returns False in production
+    (rejecting the request) and True in dev/test (allowing bypass for local development).
     """
+    if not _TURNSTILE_SECRET_KEY:
+        if _IS_PRODUCTION:
+            logger.error("Turnstile verification rejected: TURNSTILE_SECRET_KEY not configured in production")
+            return False
+        else:
+            logger.debug("Turnstile verification skipped: TURNSTILE_SECRET_KEY not set (dev mode)")
+            return True
+
     import httpx
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -735,6 +886,39 @@ def _generate_available_slots(
     Returns a sorted list of slot dicts. Key names controlled by params:
       time_key_format="start"      -> {"start": ..., "end": ...}
       time_key_format="start_time" -> {"start_time": ...Z, "end_time": ...Z}
+
+    NOTE: Availability Source of Truth
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    This function implements a two-tier availability lookup with precedence:
+
+    1. **RecurringAvailability tables** (preferred): If a user has ANY active rows
+       in the `recurring_availability` table, those structured patterns are used
+       as the availability source. The RecurringAvailabilityService.get_effective_schedule()
+       method merges weekly patterns with AvailabilityException overrides for each date.
+       Lunch breaks are handled natively via gaps between blocks (no separate enforcement).
+
+    2. **SchedulerConfig.working_hours JSON** (fallback): If no RecurringAvailability
+       rows exist for the user, the function falls back to the `working_hours` JSON
+       blob on SchedulerConfig. In this mode, lunch break enforcement uses the
+       separate lunch_break_start/lunch_break_end columns on SchedulerConfig.
+
+    IMPORTANT: These two systems can contain DIFFERENT data simultaneously. There is
+    currently no automatic sync between them:
+    - PUT /settings/availability updates SchedulerConfig.working_hours JSON only.
+    - PUT /recurring-availability/schedule updates RecurringAvailability tables only.
+
+    Once a user has RecurringAvailability rows, the JSON blob is effectively ignored
+    by this slot generator, but the settings UI may still display/edit the JSON blob
+    without the user realizing it has no effect on slot generation.
+
+    Migration plan:
+    1. Add a sync hook in settings.py _apply_availability() to also write
+       RecurringAvailability rows when working_hours JSON is updated.
+    2. Add a sync hook in recurring_availability.py update_weekly_schedule() to
+       also update SchedulerConfig.working_hours JSON for backward compatibility.
+    3. Once all users have RecurringAvailability rows, deprecate the JSON fallback
+       path and remove SchedulerConfig.working_hours column.
+    4. Update the settings UI to read/write RecurringAvailability directly.
     """
     SchedulerConfig = _models.get('SchedulerConfig') if _models else None
     BlockedTime = _models.get('BlockedTime') if _models else None
@@ -958,6 +1142,9 @@ def get_shared_helpers() -> dict:
         '_generate_available_slots': _generate_available_slots,
         '_audit_log': _audit_log,
         '_validate_url': _validate_url,
+        '_validate_phone': _validate_phone,
         '_mask_email': _mask_email,
+        '_sanitize_text': _sanitize_text,
+        '_sanitize_public_error': _sanitize_public_error,
         '_create_comm_failure_task': _create_comm_failure_task,
     }

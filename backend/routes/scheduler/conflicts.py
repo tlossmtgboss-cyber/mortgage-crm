@@ -10,7 +10,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, date, timedelta, timezone
-from typing import Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import logging
 
@@ -41,10 +41,88 @@ class ResolveConflictRequest(BaseModel):
 
 
 # ============================================================================
+# PYDANTIC RESPONSE MODELS
+# ============================================================================
+
+class ConflictDetail(BaseModel):
+    """A single scheduling conflict."""
+    severity: str = Field(..., description="Conflict severity: 'hard' or 'soft'")
+    appointment_id: Optional[int] = Field(None, description="ID of the conflicting appointment")
+    title: Optional[str] = Field(None, description="Title of the conflicting appointment")
+    scheduled_start: Optional[str] = Field(None, description="Start time of conflicting appointment (ISO 8601)")
+    scheduled_end: Optional[str] = Field(None, description="End time of conflicting appointment (ISO 8601)")
+    reason: Optional[str] = Field(None, description="Human-readable conflict reason")
+
+    class Config:
+        extra = "allow"
+
+
+class AlternativeSlot(BaseModel):
+    """A suggested alternative time slot."""
+    start: str = Field(..., description="Suggested start time (ISO 8601)")
+    end: str = Field(..., description="Suggested end time (ISO 8601)")
+    score: Optional[float] = Field(None, description="Preference score for this alternative")
+
+    class Config:
+        extra = "allow"
+
+
+class SoftResolution(BaseModel):
+    """An auto-resolved soft conflict."""
+    conflict_index: Optional[int] = Field(None, description="Index of the resolved conflict")
+    action: Optional[str] = Field(None, description="Resolution action taken")
+    message: Optional[str] = Field(None, description="Resolution description")
+
+    class Config:
+        extra = "allow"
+
+
+class ConflictCheckResponse(BaseModel):
+    """Response for conflict check endpoint."""
+    has_conflicts: bool = Field(..., description="Whether any conflicts were found")
+    has_hard_conflicts: bool = Field(False, description="Whether any hard (unresolvable) conflicts exist")
+    has_soft_conflicts: bool = Field(False, description="Whether any soft (auto-resolvable) conflicts exist")
+    conflict_count: int = Field(0, description="Total number of conflicts detected")
+    conflicts: List[Dict[str, Any]] = Field(default_factory=list, description="List of conflict details")
+    alternatives: List[Dict[str, Any]] = Field(default_factory=list, description="Suggested alternative time slots")
+    soft_resolutions: List[Dict[str, Any]] = Field(default_factory=list, description="Auto-resolved soft conflicts")
+
+
+class ConflictPair(BaseModel):
+    """A pair of conflicting appointments."""
+    appointment_a_id: Optional[int] = None
+    appointment_b_id: Optional[int] = None
+    overlap_start: Optional[str] = None
+    overlap_end: Optional[str] = None
+    severity: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class ConflictListResponse(BaseModel):
+    """Response for conflict list endpoint."""
+    user_id: int = Field(..., description="User whose conflicts are listed")
+    conflict_count: int = Field(0, description="Total number of conflict pairs found")
+    conflicts: List[Dict[str, Any]] = Field(default_factory=list, description="List of conflict pairs")
+
+
+class ConflictResolveResponse(BaseModel):
+    """Response for conflict resolution endpoint."""
+    status: str = Field(..., description="Resolution status (e.g. 'resolved')")
+    appointment_id: int = Field(..., description="ID of the rescheduled appointment")
+    old_start: Optional[str] = Field(None, description="Previous start time (ISO 8601)")
+    old_end: Optional[str] = Field(None, description="Previous end time (ISO 8601)")
+    new_start: str = Field(..., description="New start time (ISO 8601)")
+    new_end: str = Field(..., description="New end time (ISO 8601)")
+    remaining_soft_conflicts: int = Field(0, description="Number of remaining soft conflicts in the new slot")
+
+
+# ============================================================================
 # CHECK FOR CONFLICTS
 # ============================================================================
 
-@router.get("/conflicts/check")
+@router.get("/conflicts/check", response_model=ConflictCheckResponse)
 async def check_conflicts(
     request: Request,
     user_id: Optional[int] = Query(None, description="User ID to check (defaults to current user)"),
@@ -118,7 +196,7 @@ async def check_conflicts(
 # LIST ALL CURRENT CONFLICTS
 # ============================================================================
 
-@router.get("/conflicts/list")
+@router.get("/conflicts/list", response_model=ConflictListResponse)
 async def list_conflicts(
     request: Request,
     user_id: Optional[int] = Query(None, description="User ID (defaults to current user)"),
@@ -169,7 +247,7 @@ async def list_conflicts(
 # RESOLVE CONFLICT BY MOVING APPOINTMENT
 # ============================================================================
 
-@router.post("/conflicts/resolve/{appointment_id}")
+@router.post("/conflicts/resolve/{appointment_id}", response_model=ConflictResolveResponse)
 async def resolve_conflict(
     appointment_id: int,
     body: ResolveConflictRequest,

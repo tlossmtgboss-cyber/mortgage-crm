@@ -1,0 +1,545 @@
+/* =============================================================================
+   LOTodayView - Daily Command Center
+   ============================================================================= */
+
+.lo-today {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+/* Header */
+.lo-today__header {
+  margin-bottom: 28px;
+}
+
+.lo-today__greeting {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px;
+}
+
+.lo-today__date {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0 0 16px;
+}
+
+.lo-today__quick-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lo-today__quick-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.lo-today__quick-link:hover {
+  border-color: #3b82f6;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+/* Grid */
+.lo-today__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .lo-today__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Section cards */
+.lo-today__section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lo-today__section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.lo-today__section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lo-today__section-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #64748b;
+}
+
+.lo-today__section-badge--warning {
+  background: #f59e0b;
+}
+
+.lo-today__section-badge--danger {
+  background: #ef4444;
+}
+
+.lo-today__section-body {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 420px;
+}
+
+/* Empty state */
+.lo-today__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #94a3b8;
+  font-size: 14px;
+  text-align: center;
+}
+
+.lo-today__empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+/* Loading skeleton */
+.lo-today__skeleton {
+  padding: 16px 20px;
+}
+
+.lo-today__skeleton-row {
+  height: 52px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  animation: lo-today-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes lo-today-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Error state */
+.lo-today__error {
+  padding: 20px;
+  text-align: center;
+  color: #ef4444;
+  font-size: 13px;
+}
+
+.lo-today__retry-btn {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #ef4444;
+  background: #fef2f2;
+  color: #ef4444;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.lo-today__retry-btn:hover {
+  background: #fee2e2;
+}
+
+/* ==============================
+   Section 1: Schedule Timeline
+   ============================== */
+
+.lo-today__timeline-item {
+  display: flex;
+  align-items: stretch;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.1s ease;
+  gap: 14px;
+}
+
+.lo-today__timeline-item:last-child {
+  border-bottom: none;
+}
+
+.lo-today__timeline-item:hover {
+  background: #f8fafc;
+}
+
+.lo-today__timeline-item--current {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.lo-today__timeline-item--past {
+  opacity: 0.55;
+}
+
+.lo-today__timeline-time {
+  flex-shrink: 0;
+  width: 70px;
+  text-align: right;
+  padding-right: 12px;
+  border-right: 2px solid #e2e8f0;
+}
+
+.lo-today__timeline-time-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1.3;
+}
+
+.lo-today__timeline-time-end {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.lo-today__timeline-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.lo-today__timeline-client {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lo-today__timeline-type {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.lo-today__timeline-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #64748b;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  margin-top: 4px;
+}
+
+/* ==============================
+   Section 2: Pipeline Tasks
+   ============================== */
+
+.lo-today__task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.1s ease;
+}
+
+.lo-today__task-item:last-child {
+  border-bottom: none;
+}
+
+.lo-today__task-item:hover {
+  background: #f8fafc;
+}
+
+.lo-today__task-priority {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+
+.lo-today__task-priority--overdue {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.lo-today__task-priority--today {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.lo-today__task-priority--upcoming {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
+}
+
+.lo-today__task-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.lo-today__task-desc {
+  font-size: 14px;
+  color: #1e293b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lo-today__task-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lo-today__task-sla {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.lo-today__task-sla--overdue {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.lo-today__task-sla--warning {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.lo-today__task-sla--ok {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+/* ==============================
+   Section 3: Lead Follow-Ups
+   ============================== */
+
+.lo-today__lead-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.1s ease;
+}
+
+.lo-today__lead-item:last-child {
+  border-bottom: none;
+}
+
+.lo-today__lead-item:hover {
+  background: #f8fafc;
+}
+
+.lo-today__lead-avatar {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4338ca;
+}
+
+.lo-today__lead-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.lo-today__lead-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.lo-today__lead-detail {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.lo-today__lead-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.lo-today__lead-action-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.lo-today__lead-action-btn:hover {
+  border-color: #3b82f6;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.lo-today__lead-action-btn--primary {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+/* ==============================
+   Section 4: SLA Alerts
+   ============================== */
+
+.lo-today__sla-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.1s ease;
+}
+
+.lo-today__sla-item:last-child {
+  border-bottom: none;
+}
+
+.lo-today__sla-item:hover {
+  background: #f8fafc;
+}
+
+.lo-today__sla-item--critical {
+  background: #fef2f2;
+}
+
+.lo-today__sla-indicator {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lo-today__sla-indicator--overdue {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.lo-today__sla-indicator--warning {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.lo-today__sla-indicator--ok {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.lo-today__sla-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.lo-today__sla-loan {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.lo-today__sla-borrower {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.lo-today__sla-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
+  margin-top: 3px;
+}
+
+.lo-today__sla-days {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.lo-today__sla-days-number {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.lo-today__sla-days-number--overdue {
+  color: #dc2626;
+}
+
+.lo-today__sla-days-number--warning {
+  color: #d97706;
+}
+
+.lo-today__sla-days-number--ok {
+  color: #16a34a;
+}
+
+.lo-today__sla-days-label {
+  font-size: 11px;
+  color: #94a3b8;
+}

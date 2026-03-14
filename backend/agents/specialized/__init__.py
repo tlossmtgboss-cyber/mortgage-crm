@@ -1,7 +1,7 @@
 """
 Perennia AI - Specialized Agent Tools
 
-This module contains 32 specialized AI agents with 329+ tools designed
+This module contains 34 specialized AI agents with 354+ tools designed
 for mortgage CRM operations:
 
 CORE CRM AGENTS (8):
@@ -14,7 +14,7 @@ CORE CRM AGENTS (8):
 7. Portfolio Agent - Post-close client management
 8. Compliance Agent - Regulatory compliance monitoring
 
-EXTENDED AGENTS (24):
+EXTENDED AGENTS (26):
 9. Receptionist Agent - AI voice/chat receptionist
 10. Profitability Agent - Loan and branch profitability analysis
 11. Subscription Agent - SaaS subscription and billing management
@@ -39,6 +39,8 @@ EXTENDED AGENTS (24):
 30. Borrower Experience Agent - Borrower document journey optimization, sentiment, TCPA-compliant comms
 31. QC Audit Agent - Pre-funding/post-closing QC, defect tracking, repurchase risk, investor overlay compliance
 32. Document Security Agent - Document security monitoring, encryption enforcement, breach response, and privacy compliance
+33. Doc Compliance Agent - Document compliance monitoring and enforcement
+34. App Completion Agent - Application completion scoring, gap resolution, borrower outreach, and PA call scheduling
 """
 
 from .base import SpecializedAgent, AgentTool, AgentRegistry, ToolCategory, RiskLevel, ToolResult
@@ -79,6 +81,7 @@ from .borrower_experience_agent import BorrowerExperienceAgent
 from .qc_audit_agent import QCAuditAgent
 from .document_security_agent import DocumentSecurityAgent
 from .doc_compliance_agent import DocComplianceAgent
+from .app_completion_agent import AppCompletionAgent
 
 __all__ = [
     # Base classes
@@ -125,8 +128,9 @@ __all__ = [
     "QCAuditAgent",
     "DocumentSecurityAgent",
     "DocComplianceAgent",
+    "AppCompletionAgent",
 ]
 
 # Agent count for verification
-AGENT_COUNT = 33
-TOOL_COUNT = 344  # 33 agents × ~10.4 tools average
+AGENT_COUNT = 34
+TOOL_COUNT = 354  # 34 agents × ~10.4 tools average

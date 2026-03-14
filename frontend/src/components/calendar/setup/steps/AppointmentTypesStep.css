@@ -9,6 +9,8 @@
    Container
    ============================================================================ */
 
+@import "../../../../styles/calendar-design-tokens.css";
+
 .appt-types-step {
   max-width: 720px;
   margin: 0 auto;
@@ -22,12 +24,12 @@
   margin: 0 0 6px;
   font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--cal-text-primary);
 }
 
 .appt-types-step .step-intro p {
   margin: 0;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -49,13 +51,13 @@
 }
 
 .appt-types-step .enabled-count-banner.has-enabled {
-  background: #e6f5f5;
-  color: #155e5e;
+  background: var(--cal-primary-light);
+  color: var(--cal-primary-deeper);
 }
 
 .appt-types-step .enabled-count-banner.none-enabled {
-  background: #fef2f2;
-  color: #991b1b;
+  background: var(--cal-error-light);
+  color: var(--cal-error-darkest);
 }
 
 .appt-types-step .enabled-count-banner i {
@@ -79,23 +81,23 @@
 
 .appt-type-card {
   display: flex;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cal-border);
   border-radius: 10px;
   overflow: hidden;
   transition: box-shadow 0.15s, opacity 0.2s, border-color 0.15s;
 }
 
 .appt-type-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--cal-shadow-hover);
 }
 
 .appt-type-card.disabled-card {
   opacity: 0.55;
-  background: #f8fafc;
+  background: var(--cal-bg-secondary);
 }
 
 .appt-type-card.editing {
-  border-color: #218D8D;
+  border-color: var(--cal-primary);
   box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.12);
 }
 
@@ -146,7 +148,7 @@
 .appt-type-card .card-name {
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--cal-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -158,7 +160,7 @@
   border-radius: 12px;
   font-size: 11px;
   font-weight: 600;
-  background: #fef3c7;
+  background: var(--cal-warning-light);
   color: #92400e;
   flex-shrink: 0;
 }
@@ -166,7 +168,7 @@
 .appt-type-card .card-desc {
   margin: 0;
   font-size: 13px;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -188,8 +190,8 @@
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--cal-bg-tertiary);
+  color: var(--cal-text-body);
 }
 
 .appt-type-card .meta-badge i {
@@ -211,7 +213,7 @@
   width: 30px;
   height: 30px;
   border-radius: 6px;
-  color: #94a3b8;
+  color: var(--cal-text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -222,9 +224,9 @@
 }
 
 .appt-type-card .reorder-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #e2e8f0;
-  color: #334155;
+  background: var(--cal-bg-tertiary);
+  border-color: var(--cal-border);
+  color: var(--cal-text-dark);
 }
 
 .appt-type-card .reorder-btn:disabled {
@@ -252,7 +254,7 @@
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background-color: #cbd5e1;
+  background-color: var(--cal-border-hover);
   border-radius: 24px;
   transition: background-color 0.2s;
 }
@@ -270,7 +272,7 @@
 }
 
 .appt-type-card .type-toggle input:checked + .toggle-track {
-  background-color: #218D8D;
+  background-color: var(--cal-primary);
 }
 
 .appt-type-card .type-toggle input:checked + .toggle-track::before {
@@ -278,7 +280,7 @@
 }
 
 .appt-type-card .type-toggle input:focus-visible + .toggle-track {
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.2);
+  box-shadow: 0 0 0 3px var(--cal-focus-ring-stronger);
 }
 
 /* ============================================================================
@@ -287,7 +289,7 @@
 
 .appt-type-card .card-editor {
   padding: 0 16px 16px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--cal-bg-tertiary);
 }
 
 .appt-type-card .editor-grid {
@@ -309,7 +311,7 @@
 .appt-type-card .editor-field label {
   font-size: 13px;
   font-weight: 500;
-  color: #334155;
+  color: var(--cal-text-dark);
   margin-bottom: 4px;
 }
 
@@ -317,10 +319,10 @@
 .appt-type-card .editor-field textarea,
 .appt-type-card .editor-field select {
   padding: 8px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cal-border);
   border-radius: 8px;
   font-size: 14px;
-  color: #1e293b;
+  color: var(--cal-text-primary);
   transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
   width: 100%;
@@ -336,8 +338,8 @@
 .appt-type-card .editor-field textarea:focus,
 .appt-type-card .editor-field select:focus {
   outline: none;
-  border-color: #218D8D;
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+  border-color: var(--cal-primary);
+  box-shadow: 0 0 0 3px var(--cal-focus-ring);
 }
 
 /* Color picker row */
@@ -362,8 +364,8 @@
 }
 
 .appt-type-card .color-dot.selected {
-  border-color: #1e293b;
-  box-shadow: 0 0 0 2px white, 0 0 0 4px #1e293b;
+  border-color: var(--cal-text-primary);
+  box-shadow: 0 0 0 2px white, 0 0 0 4px var(--cal-text-primary);
 }
 
 /* Meeting mode radio group */
@@ -377,23 +379,23 @@
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cal-border);
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  color: #475569;
+  color: var(--cal-text-body);
   transition: all 0.15s;
   background: white;
 }
 
 .appt-type-card .mode-option:hover {
-  border-color: #cbd5e1;
+  border-color: var(--cal-border-hover);
 }
 
 .appt-type-card .mode-option.selected {
-  border-color: #218D8D;
-  background: #e6f5f5;
-  color: #155e5e;
+  border-color: var(--cal-primary);
+  background: var(--cal-primary-light);
+  color: var(--cal-primary-deeper);
   font-weight: 500;
 }
 
@@ -412,7 +414,7 @@
   align-items: center;
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--cal-bg-tertiary);
 }
 
 .appt-type-card .editor-actions .editor-left-actions {
@@ -432,40 +434,40 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cal-border);
   background: white;
-  color: #475569;
+  color: var(--cal-text-body);
 }
 
 .appt-type-card .editor-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--cal-bg-secondary);
+  border-color: var(--cal-border-hover);
 }
 
 .appt-type-card .editor-btn.btn-save {
-  background: #218D8D;
+  background: var(--cal-primary);
   color: white;
-  border-color: #218D8D;
+  border-color: var(--cal-primary);
 }
 
 .appt-type-card .editor-btn.btn-save:hover {
-  background: #1a7a7a;
+  background: var(--cal-primary-hover);
 }
 
 .appt-type-card .editor-btn.btn-save:disabled {
-  background: #7cc5c5;
-  border-color: #7cc5c5;
+  background: var(--cal-primary-disabled);
+  border-color: var(--cal-primary-disabled);
   cursor: not-allowed;
 }
 
 .appt-type-card .editor-btn.btn-danger {
-  color: #dc2626;
-  border-color: #fecaca;
+  color: var(--cal-error-dark);
+  border-color: var(--cal-error-border);
 }
 
 .appt-type-card .editor-btn.btn-danger:hover {
-  background: #fef2f2;
-  border-color: #fca5a5;
+  background: var(--cal-error-light);
+  border-color: var(--cal-error-border-bright);
 }
 
 /* ============================================================================
@@ -479,10 +481,10 @@
   gap: 8px;
   width: 100%;
   padding: 14px;
-  border: 2px dashed #cbd5e1;
+  border: 2px dashed var(--cal-border-hover);
   border-radius: 10px;
   background: transparent;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -491,9 +493,9 @@
 }
 
 .appt-types-step .add-custom-btn:hover {
-  border-color: #218D8D;
-  color: #218D8D;
-  background: #f0fafa;
+  border-color: var(--cal-primary);
+  color: var(--cal-primary);
+  background: var(--cal-primary-lighter);
 }
 
 .appt-types-step .add-custom-btn i {
@@ -509,9 +511,9 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: #fef2f2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
+  background: var(--cal-error-light);
+  color: var(--cal-error-darkest);
+  border: 1px solid var(--cal-error-border);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
@@ -526,6 +528,16 @@
 /* ============================================================================
    Responsive
    ============================================================================ */
+
+@media (max-width: 768px) {
+  .appt-type-card .editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appt-type-card .editor-field.full-width {
+    grid-column: 1;
+  }
+}
 
 @media (max-width: 640px) {
   .appt-type-card .card-summary {
@@ -542,14 +554,6 @@
     width: 100%;
   }
 
-  .appt-type-card .editor-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .appt-type-card .editor-field.full-width {
-    grid-column: 1;
-  }
-
   .appt-type-card .mode-options {
     flex-wrap: wrap;
   }
@@ -563,5 +567,39 @@
   .appt-type-card .editor-actions .editor-right-actions {
     width: 100%;
     justify-content: flex-end;
+  }
+
+  /* iOS auto-zoom prevention */
+  .appt-type-card input,
+  .appt-type-card select,
+  .appt-type-card textarea,
+  .appt-type-card .editor-input,
+  .appt-type-card .editor-select {
+    font-size: 16px;
+  }
+
+  /* Touch targets: reorder buttons need 44px */
+  .appt-type-card .reorder-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .appt-type-card .card-toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .appt-type-card .editor-btn {
+    min-height: 44px;
+  }
+
+  .appt-types-step .add-custom-btn {
+    min-height: 44px;
+  }
+
+  /* Color picker dots: enlarge for touch */
+  .appt-type-card .color-dot {
+    min-width: 32px;
+    min-height: 32px;
   }
 }

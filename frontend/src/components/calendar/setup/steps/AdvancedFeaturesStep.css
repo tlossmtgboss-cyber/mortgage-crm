@@ -8,6 +8,8 @@
    Layout & Loading
    ============================================================================ */
 
+@import "../../../../styles/calendar-design-tokens.css";
+
 .afs-step {
   max-width: 720px;
   margin: 0 auto;
@@ -20,15 +22,15 @@
   justify-content: center;
   min-height: 260px;
   gap: 14px;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   font-size: 14px;
 }
 
 .afs-spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #218D8D;
+  border: 3px solid var(--cal-border);
+  border-top-color: var(--cal-primary);
   border-radius: 50%;
   animation: afs-spin 0.8s linear infinite;
 }
@@ -52,8 +54,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #218D8D;
-  background: #e6f5f5;
+  color: var(--cal-primary);
+  background: var(--cal-primary-light);
   border-radius: 20px;
   margin-bottom: 10px;
 }
@@ -62,13 +64,13 @@
   margin: 0 0 6px;
   font-size: 22px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--cal-text-primary);
 }
 
 .afs-subtitle {
   margin: 0;
   font-size: 14px;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   line-height: 1.5;
 }
 
@@ -84,7 +86,7 @@
   margin-bottom: 20px;
   padding: 14px 18px;
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cal-border);
   border-radius: 10px;
 }
 
@@ -98,7 +100,7 @@
 .afs-counter__bar-bg {
   width: 100px;
   height: 6px;
-  background: #e2e8f0;
+  background: var(--cal-border);
   border-radius: 3px;
   overflow: hidden;
   flex-shrink: 0;
@@ -106,19 +108,19 @@
 
 .afs-counter__bar-fill {
   height: 100%;
-  background: #218D8D;
+  background: var(--cal-primary);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 
 .afs-counter__text {
   font-size: 13px;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   white-space: nowrap;
 }
 
 .afs-counter__text strong {
-  color: #1e293b;
+  color: var(--cal-text-primary);
   font-weight: 700;
 }
 
@@ -130,11 +132,11 @@
 
 .afs-link-btn {
   background: none;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cal-border);
   padding: 5px 12px;
   font-size: 12px;
   font-weight: 500;
-  color: #475569;
+  color: var(--cal-text-body);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
@@ -142,9 +144,9 @@
 }
 
 .afs-link-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #1e293b;
+  background: var(--cal-bg-tertiary);
+  border-color: var(--cal-border-hover);
+  color: var(--cal-text-primary);
 }
 
 /* ============================================================================
@@ -164,18 +166,18 @@
   gap: 16px;
   padding: 16px 18px;
   background: #ffffff;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--cal-border);
   border-radius: 10px;
   transition: all 0.15s;
 }
 
 .afs-feature-card:hover {
-  border-color: #cbd5e1;
+  border-color: var(--cal-border-hover);
 }
 
 .afs-feature-card--enabled {
-  border-color: #218D8D;
-  background: #f9fdfd;
+  border-color: var(--cal-primary);
+  background: var(--cal-primary-lighter);
 }
 
 .afs-feature-card__icon {
@@ -187,14 +189,14 @@
   justify-content: center;
   font-size: 17px;
   flex-shrink: 0;
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--cal-bg-tertiary);
+  color: var(--cal-text-secondary);
   transition: all 0.15s;
 }
 
 .afs-feature-card--enabled .afs-feature-card__icon {
-  background: #e6f5f5;
-  color: #218D8D;
+  background: var(--cal-primary-light);
+  color: var(--cal-primary);
 }
 
 .afs-feature-card__body {
@@ -212,7 +214,7 @@
 .afs-feature-card__title {
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--cal-text-primary);
 }
 
 .afs-feature-card__recommended {
@@ -225,15 +227,15 @@
   letter-spacing: 0.3px;
   padding: 2px 8px;
   border-radius: 4px;
-  background: #dcfce7;
-  color: #16a34a;
+  background: var(--cal-success-light);
+  color: var(--cal-success-darker);
   white-space: nowrap;
 }
 
 .afs-feature-card__desc {
   margin: 0;
   font-size: 13px;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   line-height: 1.4;
 }
 
@@ -256,14 +258,14 @@
   display: block;
   width: 44px;
   height: 24px;
-  background: #cbd5e1;
+  background: var(--cal-border-hover);
   border-radius: 12px;
   transition: background 0.2s;
   position: relative;
 }
 
 .afs-feature-toggle input:checked + .afs-toggle-track {
-  background: #218D8D;
+  background: var(--cal-primary);
 }
 
 .afs-toggle-thumb {
@@ -282,7 +284,7 @@
 }
 
 .afs-feature-toggle input:focus-visible + .afs-toggle-track {
-  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.2);
+  box-shadow: 0 0 0 3px var(--cal-focus-ring-stronger);
 }
 
 /* ============================================================================
@@ -294,10 +296,10 @@
   align-items: center;
   gap: 10px;
   padding: 12px 18px;
-  background: #eff6ff;
+  background: var(--cal-info-light);
   border-radius: 8px;
   font-size: 13px;
-  color: #1e40af;
+  color: var(--cal-info-darker);
   margin-bottom: 24px;
 }
 
@@ -315,7 +317,7 @@
   justify-content: space-between;
   align-items: center;
   padding-top: 24px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--cal-border);
 }
 
 .afs-btn {
@@ -333,28 +335,28 @@
 }
 
 .afs-btn--primary {
-  background: #218D8D;
+  background: var(--cal-primary);
   color: #ffffff;
 }
 
 .afs-btn--primary:hover:not(:disabled) {
-  background: #1a7a7a;
+  background: var(--cal-primary-hover);
 }
 
 .afs-btn--primary:disabled {
-  background: #7cc5c5;
+  background: var(--cal-primary-disabled);
   cursor: not-allowed;
 }
 
 .afs-btn--secondary {
   background: #ffffff;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  color: var(--cal-text-body);
+  border: 1px solid var(--cal-border);
 }
 
 .afs-btn--secondary:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--cal-bg-secondary);
+  border-color: var(--cal-border-hover);
 }
 
 /* ============================================================================
@@ -397,7 +399,7 @@
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .afs-counter__bar-bg {
     width: 60px;
   }
@@ -406,5 +408,24 @@
     width: 36px;
     height: 36px;
     font-size: 15px;
+  }
+
+  /* Touch targets: feature toggle and buttons */
+  .afs-feature-toggle {
+    min-width: 44px;
+    min-height: 28px;
+  }
+
+  .afs-btn {
+    min-height: 44px;
+  }
+
+  .afs-feature-card {
+    min-height: 44px;
+  }
+
+  .afs-feature-card__link-btn {
+    min-height: 44px;
+    padding: 10px 14px;
   }
 }

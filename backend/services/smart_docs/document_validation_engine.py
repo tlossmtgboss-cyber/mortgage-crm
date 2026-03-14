@@ -499,8 +499,17 @@ class DocumentValidationEngine:
         # Remove null bytes
         name = filename.replace("\x00", "")
 
-        # Remove path separators and traversal
-        name = name.replace("../", "").replace("..\\", "")
+        # Strip absolute path prefixes and leading slashes/backslashes
+        name = re.sub(r'^([a-zA-Z]:)?[\\/]+', '', name)
+
+        # Remove path traversal sequences in a loop to defeat bypass
+        # patterns like "....//", "..../\", etc.
+        prev = None
+        while prev != name:
+            prev = name
+            name = name.replace("../", "").replace("..\\", "")
+
+        # Replace any remaining path separators
         name = name.replace("/", "_").replace("\\", "_")
 
         # Remove control characters (0x00-0x1f, 0x7f)
@@ -808,6 +817,7 @@ class DocumentValidationEngine:
         file_content: bytes,
         doc_type: str,
         db: Session,
+        organization_id: Optional[int] = None,
     ) -> List[ValidationIssue]:
         """
         Detect duplicate documents for the same loan.
@@ -815,9 +825,24 @@ class DocumentValidationEngine:
         Checks:
         1. Exact duplicate by SHA-256 hash
         2. Same doc type uploaded recently (within 24 hours)
+
+        Args:
+            loan_id: The loan to check for duplicates.
+            file_content: Raw bytes of the file being uploaded.
+            doc_type: Document type string.
+            db: SQLAlchemy session.
+            organization_id: Optional org ID for tenant isolation.
         """
         issues: List[ValidationIssue] = []
         file_hash = hashlib.sha256(file_content).hexdigest()
+
+        # Build tenant isolation JOIN fragment
+        _org_join = (
+            "JOIN loans _org_l ON _org_l.id = smart_documents.loan_id "
+            "AND _org_l.organization_id = :_org_id"
+            if organization_id is not None else ""
+        )
+        _org_params: Dict = {"_org_id": organization_id} if organization_id is not None else {}
 
         try:
             # Check for exact hash match in smart_documents
@@ -826,9 +851,10 @@ class DocumentValidationEngine:
             # For true dedup, we'd need a hash column.  For now, check by file_size
             # + doc_type as a heuristic, and note the hash in metadata.
 
-            existing = db.execute(text("""
-                SELECT id, file_name, file_size, doc_type, uploaded_at
+            existing = db.execute(text(f"""
+                SELECT smart_documents.id, file_name, file_size, doc_type, uploaded_at
                 FROM smart_documents
+                {_org_join}
                 WHERE loan_id = :loan_id
                     AND file_size = :file_size
                     AND status NOT IN ('REJECTED', 'EXPIRED')
@@ -837,6 +863,7 @@ class DocumentValidationEngine:
             """), {
                 "loan_id": loan_id,
                 "file_size": len(file_content),
+                **_org_params,
             }).fetchall()
 
             if existing:
@@ -854,9 +881,10 @@ class DocumentValidationEngine:
 
             # Check for same doc type uploaded in last 24 hours
             if doc_type:
-                recent_same_type = db.execute(text("""
-                    SELECT id, file_name, uploaded_at
+                recent_same_type = db.execute(text(f"""
+                    SELECT smart_documents.id, file_name, uploaded_at
                     FROM smart_documents
+                    {_org_join}
                     WHERE loan_id = :loan_id
                         AND doc_type = :doc_type
                         AND uploaded_at >= NOW() - INTERVAL '24 hours'
@@ -866,6 +894,7 @@ class DocumentValidationEngine:
                 """), {
                     "loan_id": loan_id,
                     "doc_type": doc_type,
+                    **_org_params,
                 }).fetchall()
 
                 if recent_same_type:

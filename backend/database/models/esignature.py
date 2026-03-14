@@ -545,7 +545,8 @@ class ESignKBASession(Base):
     recipient_id = Column(Integer, nullable=False, comment="references esignature_recipients.id")
     envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
 
-    # Questions / answers stored as JSON: [{question, options, correct_index}]
+    # Questions / answers stored as JSON: [{question, options, correct_answer_hash}]
+    # correct_answer_hash is a bcrypt hash of the correct answer text (lowercased, stripped)
     questions = Column(JSON, nullable=True)
 
     # Attempt tracking

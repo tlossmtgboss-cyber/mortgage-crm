@@ -707,7 +707,8 @@ class TestAccessCodes:
         code = "042817"
         hashed = crypto_service.hash_access_code(code)
         assert isinstance(hashed, str)
-        assert len(hashed) == 64
+        # bcrypt hashes start with $2b$ and are ~60 chars
+        assert hashed.startswith("$2b$")
         assert crypto_service.verify_access_code(code, hashed) is True
 
     def test_access_code_verify_wrong_code(self, crypto_service):
@@ -716,18 +717,23 @@ class TestAccessCodes:
         hashed = crypto_service.hash_access_code(code)
         assert crypto_service.verify_access_code("654321", hashed) is False
 
-    def test_access_code_hash_deterministic(self, crypto_service):
-        """Same code should always produce the same hash."""
+    def test_access_code_hash_uses_bcrypt(self, crypto_service):
+        """Hash should be a valid bcrypt string (non-deterministic due to random salt)."""
         code = "999999"
         hash1 = crypto_service.hash_access_code(code)
         hash2 = crypto_service.hash_access_code(code)
-        assert hash1 == hash2
+        # bcrypt generates a new random salt each time, so hashes differ
+        assert hash1 != hash2
+        # But both should verify correctly
+        assert crypto_service.verify_access_code(code, hash1) is True
+        assert crypto_service.verify_access_code(code, hash2) is True
 
-    def test_different_codes_different_hashes(self, crypto_service):
-        """Different codes should produce different hashes."""
+    def test_different_codes_different_verification(self, crypto_service):
+        """Different codes should not verify against each other's hashes."""
         hash1 = crypto_service.hash_access_code("000000")
         hash2 = crypto_service.hash_access_code("000001")
-        assert hash1 != hash2
+        assert crypto_service.verify_access_code("000000", hash2) is False
+        assert crypto_service.verify_access_code("000001", hash1) is False
 
 
 # =============================================================================

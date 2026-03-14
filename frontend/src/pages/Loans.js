@@ -162,7 +162,7 @@ function Loans() {
 
   // Status options — all stages across Lead, Active Loan, and MUM
   const loanStatusOptions = [
-    // Lead stages
+    // Lead stages (pre-contract)
     { label: 'Lead Stages', isHeader: true },
     'New',
     'Attempted Contact',
@@ -170,7 +170,7 @@ function Loans() {
     'Pre-Qualified',
     'Pre-Approved',
     'Long-Term Nurture',
-    // Active Loan stages
+    // Active Loan stages (has application or contract)
     { label: 'Active Loan Stages', isHeader: true },
     'Application',
     'Disclosed',
@@ -186,12 +186,14 @@ function Loans() {
     'Closing',
     'Docs',
     'Docs Out',
+    // Terminal
+    { label: 'Inactive / Terminal', isHeader: true },
+    'Withdrawn',
     'Cancelled',
     'Denied',
     'Dead',
-    'Nurture',
-    'Withdrawn',
     'Does Not Qualify',
+    'Nurture',
     // MUM (Funded)
     { label: 'MUM / Closed', isHeader: true },
     'Funded',

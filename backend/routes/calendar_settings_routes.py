@@ -22,37 +22,13 @@ from typing import Optional, Dict, List, Any
 from pydantic import BaseModel, Field, validator
 import logging
 import json
+import re
 
 from db import get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/calendar-settings", tags=["Calendar Settings"])
-
-# Ensure notification_settings column exists on scheduler_configs
-_column_ensured = False
-
-
-def _ensure_notification_column(db: Session):
-    """Add notification_settings column if it doesn't exist (safe to call repeatedly)."""
-    global _column_ensured
-    if _column_ensured:
-        return
-    try:
-        result = db.execute(text("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'scheduler_configs' AND column_name = 'notification_settings'
-        """))
-        if not result.fetchone():
-            db.execute(text(
-                "ALTER TABLE scheduler_configs ADD COLUMN notification_settings JSONB DEFAULT '{}'::jsonb"
-            ))
-            db.commit()
-            logger.info("Added notification_settings column to scheduler_configs")
-        _column_ensured = True
-    except Exception as e:
-        logger.debug(f"notification_settings column check: {e}")
-        _column_ensured = True  # Don't retry on error
 
 # ============================================================================
 # DEPENDENCY INJECTION
@@ -165,6 +141,31 @@ class BookingPageSettings(BaseModel):
     welcome_message: Optional[str] = None
     show_branding: Optional[bool] = True
     custom_css: Optional[str] = None
+
+    @validator('custom_css', pre=True, always=True)
+    def sanitize_custom_css(cls, v):
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            return None
+        # Limit length to 10,000 characters
+        v = v[:10000]
+        # Strip HTML tags
+        css = re.sub(r'<[^>]*>', '', v)
+        # Remove dangerous CSS constructs that enable XSS (case-insensitive)
+        dangerous_patterns = [
+            r'javascript\s*:',         # javascript: protocol
+            r'expression\s*\(',        # IE CSS expression()
+            r'url\s*\(',               # url() can load external resources
+            r'@import',                # @import can load external stylesheets
+            r'behavior\s*:',           # IE behavior: directive
+            r'-moz-binding\s*:',       # Firefox XBL binding
+        ]
+        for pattern in dangerous_patterns:
+            css = re.sub(pattern, '/* sanitized */', css, flags=re.IGNORECASE)
+        # Return None if empty after cleaning
+        cleaned = css.strip()
+        return cleaned if cleaned else None
 
 
 class TeamMemberCapacity(BaseModel):
@@ -585,6 +586,8 @@ async def reorder_appointment_types(
 
 # ============================================================================
 # SECTION 3: NOTIFICATION PREFERENCES
+# The notification_settings JSONB column on scheduler_configs is created by
+# the migration script: backend/migrations/add_notification_settings_column.py
 # ============================================================================
 
 @router.get("/notifications")
@@ -595,7 +598,6 @@ async def get_notification_settings(
     """Get calendar notification preferences for the current user."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
-    _ensure_notification_column(db)
 
     try:
         result = db.execute(text("""
@@ -645,7 +647,6 @@ async def update_notification_settings(
     """Update calendar notification preferences."""
     user = await _get_current_user(request, db)
     org_id = _get_org_id(user)
-    _ensure_notification_column(db)
 
     try:
         notif_json = json.dumps(settings.dict(exclude_unset=False))

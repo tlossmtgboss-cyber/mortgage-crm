@@ -256,18 +256,28 @@ async def get_portal_needs_list(
         .all()
     )
 
-    needs_list = []
-    for req in requests:
-        # Get uploaded documents for this request
-        uploaded_docs = (
+    # Batch-fetch all uploaded documents for all requests (avoids N+1 queries)
+    request_ids = [req.id for req in requests]
+    all_uploaded_docs = []
+    if request_ids:
+        all_uploaded_docs = (
             db.query(SmartDocument)
             .filter(
-                SmartDocument.request_id == req.id,
+                SmartDocument.request_id.in_(request_ids),
                 SmartDocument.status.notin_(["DELETED", "SUPERSEDED"]),
             )
             .order_by(SmartDocument.uploaded_at.desc())
             .all()
         )
+
+    # Group documents by request_id
+    docs_by_request: Dict[int, List] = {}
+    for doc in all_uploaded_docs:
+        docs_by_request.setdefault(doc.request_id, []).append(doc)
+
+    needs_list = []
+    for req in requests:
+        uploaded_docs = docs_by_request.get(req.id, [])
 
         doc_items = []
         for doc in uploaded_docs:
@@ -1020,24 +1030,30 @@ async def get_portal_signing_requests(
         .all()
     )
 
+    # Batch-fetch all pending recipients for the borrower across all envelopes (avoids N+1 queries)
+    envelope_ids = [env.id for env in envelopes]
+    recipients_by_envelope: Dict[int, "ESignatureRecipient"] = {}
+    if envelope_ids and borrower_email:
+        pending_recipients = (
+            db.query(ESignatureRecipient)
+            .filter(
+                ESignatureRecipient.envelope_id.in_(envelope_ids),
+                ESignatureRecipient.email == borrower_email,
+                ESignatureRecipient.status.in_([
+                    RecipientStatus.PENDING.value,
+                    RecipientStatus.SENT.value,
+                    RecipientStatus.VIEWED.value,
+                ]),
+            )
+            .all()
+        )
+        for recip in pending_recipients:
+            recipients_by_envelope[recip.envelope_id] = recip
+
     signing_requests = []
     for envelope in envelopes:
         # Check if the borrower is a recipient who hasn't signed yet
-        recipient = None
-        if borrower_email:
-            recipient = (
-                db.query(ESignatureRecipient)
-                .filter(
-                    ESignatureRecipient.envelope_id == envelope.id,
-                    ESignatureRecipient.email == borrower_email,
-                    ESignatureRecipient.status.in_([
-                        RecipientStatus.PENDING.value,
-                        RecipientStatus.SENT.value,
-                        RecipientStatus.VIEWED.value,
-                    ]),
-                )
-                .first()
-            )
+        recipient = recipients_by_envelope.get(envelope.id) if borrower_email else None
 
         if not recipient and borrower_email:
             continue  # Borrower is not a pending recipient for this envelope
@@ -1537,6 +1553,25 @@ async def get_portal_checklist(
         .all()
     )
 
+    # Batch-fetch uploaded document counts per request (avoids N+1 queries)
+    from sqlalchemy import func as sa_func
+    request_ids = [req.id for req in requests]
+    uploaded_counts_map: Dict[int, int] = {}
+    if request_ids:
+        count_rows = (
+            db.query(
+                SmartDocument.request_id,
+                sa_func.count(SmartDocument.id).label("cnt"),
+            )
+            .filter(
+                SmartDocument.request_id.in_(request_ids),
+                SmartDocument.status.notin_(["DELETED", "SUPERSEDED"]),
+            )
+            .group_by(SmartDocument.request_id)
+            .all()
+        )
+        uploaded_counts_map = {row[0]: row[1] for row in count_rows}
+
     # Build categorized checklist
     categories_map: Dict[str, List[Dict]] = {}
 
@@ -1547,16 +1582,7 @@ async def get_portal_checklist(
         if category not in categories_map:
             categories_map[category] = []
 
-        # Count uploaded documents for this request
-        uploaded_count = (
-            db.query(SmartDocument)
-            .filter(
-                SmartDocument.request_id == req.id,
-                SmartDocument.status.notin_(["DELETED", "SUPERSEDED"]),
-            )
-            .count()
-        )
-
+        uploaded_count = uploaded_counts_map.get(req.id, 0)
         status_icon = _STATUS_ICONS.get(req.status, "circle_outline")
 
         categories_map[category].append({

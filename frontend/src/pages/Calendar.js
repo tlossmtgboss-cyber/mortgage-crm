@@ -1,73 +1,59 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { calendarAPI, schedulerAPI, unifiedCalendarAPI, teamAPI, calendarLabelsAPI } from '../services/api';
+import { calendarAPI, schedulerAPI, unifiedCalendarAPI, teamAPI, calendarSettingsAPI } from '../services/api';
 import { useCalendarKeyboard } from '../hooks/useCalendarKeyboard';
-import { useIsTablet, useScreenOrientation } from '../components/common/ResponsiveContainer';
-import CalendarErrorBoundary, { CalendarWidgetBoundary } from '../components/calendar/CalendarErrorBoundary';
-import { EventBoundary } from '../components/calendar/EventErrorFallback';
-import PrintCalendarView from '../components/calendar/PrintCalendarView';
-import useDragAppointment from '../hooks/useDragAppointment';
-import DraggableEvent from '../components/calendar/DraggableEvent';
-import DroppableTimeSlot from '../components/calendar/DroppableTimeSlot';
-import { toast } from '../utils/toast';
-import useCalendarContextMenu from '../components/calendar/useCalendarContextMenu';
-import QuickActionsMenu from '../components/calendar/QuickActionsMenu';
-import TimeBlocker from '../components/calendar/TimeBlocker';
-import LocationPicker from '../components/calendar/LocationPicker';
-import './Calendar.css';
-import '../styles/tablet.css';
-import '../styles/calendar-tablet.css';
-import '../styles/calendar-print.css';
-import '../styles/context-menu.css';
-import '../styles/drag-drop.css';
-import '../styles/notifications.css';
-import '../styles/calendar-labels.css';
-import '../styles/calendar-views.css';
-import ViewSwitcher, { getPersistedView } from '../components/calendar/ViewSwitcher';
-import DayView from '../components/calendar/DayView';
-import AgendaView from '../components/calendar/AgendaView';
-import CalendarNotifications from '../components/calendar/CalendarNotifications';
-import useCalendarNotifications from '../hooks/useCalendarNotifications';
-import LabelPicker from '../components/calendar/LabelPicker';
-import '../styles/conflict-resolution.css';
-import '../styles/calendar-tour.css';
-import ConflictWarning from '../components/calendar/ConflictWarning';
-import CalendarTour, { TourTriggerButton } from '../components/calendar/setup/CalendarTour';
 import useCalendarTour from '../hooks/useCalendarTour';
+import CommandCenterHeader from '../components/calendar/CommandCenterHeader';
+import CalendarToolbar from '../components/calendar/CalendarToolbar';
+import OperationalSidebar from '../components/calendar/OperationalSidebar';
+import InlineDayView from '../components/calendar/InlineDayView';
+import WeekView from '../components/calendar/WeekView';
+import MonthView from '../components/calendar/MonthView';
+import AddEventModal from '../components/calendar/AddEventModal';
+import EditAppointmentModal from '../components/calendar/EditAppointmentModal';
+import ConfirmDialog from '../components/calendar/ConfirmDialog';
+import SetupBanner from '../components/calendar/SetupBanner';
+import './Calendar.css';
 
-// Lazy load heavy modal components that are conditionally rendered
+// Lazy load heavy modal/overlay components that are conditionally rendered
 const CalendarSearch = lazy(() => import('../components/calendar/CalendarSearch'));
 const KeyboardShortcutsHelp = lazy(() => import('../components/calendar/KeyboardShortcutsHelp'));
+const CalendarTour = lazy(() => import('../components/calendar/setup/CalendarTour'));
 
-const TAB_CONFIG = [
-  { key: 'all', label: 'Appointments', filterType: null },
-  { key: 'pre_purchase', label: 'Pre-Purchase Consultations', filterType: 'pre_purchase_consultation' },
-  { key: 'purchase', label: 'Purchase Consultations', filterType: 'purchase_consultation' },
-  { key: 'closing', label: 'Closings', filterType: 'closing' },
-];
+// Feature flags
+const hasCalendarTour = true;
+const hasKeyboardShortcuts = true;
 
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const dayAbbreviations = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-// Hours for Day/Week views (7am to 8pm)
-const VIEW_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+// Default hours for Day/Week views — overridden by user's availability settings
+const DEFAULT_VIEW_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
-const formatHour = (hour, abbreviated = false) => {
-  if (abbreviated) {
-    if (hour === 0) return '12a';
-    if (hour < 12) return `${hour}a`;
-    if (hour === 12) return '12p';
-    return `${hour - 12}p`;
+// Derive display hours from availability schedule (earliest start - 1hr to latest end)
+function deriveViewHours(schedule) {
+  if (!schedule || typeof schedule !== 'object') return DEFAULT_VIEW_HOURS;
+  let earliest = 24, latest = 0;
+  for (const day of Object.values(schedule)) {
+    if (!day?.enabled || !Array.isArray(day.blocks)) continue;
+    for (const block of day.blocks) {
+      if (!block.start || !block.end) continue;
+      const [sh] = block.start.split(':').map(Number);
+      const [eh, em] = block.end.split(':').map(Number);
+      if (!isNaN(sh)) earliest = Math.min(earliest, sh);
+      if (!isNaN(eh)) latest = Math.max(latest, em > 0 ? eh + 1 : eh);
+    }
   }
-  if (hour === 0) return '12 AM';
-  if (hour < 12) return `${hour} AM`;
-  if (hour === 12) return '12 PM';
-  return `${hour - 12} PM`;
-};
+  if (earliest >= latest) return DEFAULT_VIEW_HOURS;
+  const start = Math.max(0, earliest - 1);
+  const end = Math.min(24, latest + 1);
+  const hours = [];
+  for (let h = start; h < end; h++) hours.push(h);
+  return hours;
+}
 
 // DRY helper: map unified API response to frontend format
 const mapUnifiedEvents = (events) => (events || []).map(event => ({
@@ -87,290 +73,72 @@ const getStartOfWeek = (date) => {
   return d;
 };
 
-const isSameDay = (d1, d2) =>
-  d1.getFullYear() === d2.getFullYear() &&
-  d1.getMonth() === d2.getMonth() &&
-  d1.getDate() === d2.getDate();
-
-// Keyboard handler: triggers onClick on Enter or Space for interactive non-button elements
-const handleInteractiveKeyDown = (e, onClick) => {
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    onClick(e);
-  }
-};
-
 function Calendar() {
   const navigate = useNavigate();
-  const isTablet = useIsTablet();
-  const orientation = useScreenOrientation();
+
+  // ── Core state ──
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState(() => {
-    // Restore persisted view from localStorage, falling back to device-appropriate default
-    const persisted = getPersistedView(null);
-    if (persisted) return persisted;
-    // Default to 3-day view on tablet-sized screens
-    if (typeof window !== 'undefined' && window.innerWidth >= 768 && window.innerWidth <= 1024) {
-      return '3day';
-    }
-    return 'month';
-  });
+  const [view, setView] = useState('month');
   const [allEvents, setAllEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // ── Modal/overlay state ──
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
-  const [activeTab, setActiveTab] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Advanced search overlay state
-  const [showSearch, setShowSearch] = useState(false);
-
-  // Edit/reschedule appointment state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [editConflicts, setEditConflicts] = useState([]);
-  const [editAlternatives, setEditAlternatives] = useState([]);
-  const [conflictCheckLoading, setConflictCheckLoading] = useState(false);
-  const conflictCheckTimerRef = useRef(null);
-
-  // Team members for appointment assignment
-  const [teamMembers, setTeamMembers] = useState([]);
-
-  // Inline confirmation dialog state
   const [confirmAction, setConfirmAction] = useState(null);
-
-  // Calendar labels state
-  const [calendarLabels, setCalendarLabels] = useState([]);
-  const [activeLabelFilters, setActiveLabelFilters] = useState(new Set()); // empty = show all
-  const [appointmentLabelMap, setAppointmentLabelMap] = useState({}); // { appointmentId: [labelId, ...] }
-
-  // Context menu (right-click quick actions)
-  const {
-    contextMenu, handleSlotContextMenu, handleEventContextMenu,
-    handleContextMenuAction, showTimeBlocker, setShowTimeBlocker,
-    timeBlockerInitial, timeBlocks, handleSaveTimeBlock,
-  } = useCalendarContextMenu({
-    setSelectedDate, setSelectedTime, setShowAddModal,
-    handleEditAppointment, handleDeleteEvent,
-    loadEvents, loadAllEvents, schedulerAPI, toast,
-  });
-
-  // Keyboard navigation state
-  const [selectedEventIndex, setSelectedEventIndex] = useState(-1);
+  const [showSearch, setShowSearch] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+
+  // ── Sidebar state ──
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // ── Other state ──
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [viewHours, setViewHours] = useState(DEFAULT_VIEW_HOURS);
+  const [selectedEventIndex, setSelectedEventIndex] = useState(-1);
   const liveAnnouncerRef = useRef(null);
 
-  // Notification panel state
-  const [showNotifications, setShowNotifications] = useState(false);
-  const {
-    notifications: calendarNotifications,
-    unreadCount: notificationUnreadCount,
-    markAsRead: markNotificationAsRead,
-    markAllRead: markAllNotificationsRead,
-  } = useCalendarNotifications();
+  // ── Setup banner ──
+  const [showSetupBanner, setShowSetupBanner] = useState(() => {
+    try {
+      const setupComplete = localStorage.getItem('calendar_setup_complete');
+      const bannerDismissed = sessionStorage.getItem('calendar_setup_banner_dismissed');
+      return !setupComplete && !bannerDismissed;
+    } catch {
+      return false;
+    }
+  });
 
-  // Feature tour
+  const dismissSetupBanner = useCallback(() => {
+    setShowSetupBanner(false);
+    try {
+      sessionStorage.setItem('calendar_setup_banner_dismissed', 'true');
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  // ── Feature tour ──
   const tour = useCalendarTour();
 
-  // Drag-and-drop appointment rescheduling
-  const handleDragReschedule = useCallback(async (appointmentId, updateData) => {
-    await schedulerAPI.updateAppointment(appointmentId, updateData);
-    loadEvents();
-    loadAllEvents();
-    toast.success('Appointment rescheduled');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const handleDragUndo = useCallback(async (appointmentId, originalData) => {
-    await schedulerAPI.updateAppointment(appointmentId, originalData);
-    loadEvents();
-    loadAllEvents();
-    toast.info('Reschedule undone');
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const drag = useDragAppointment({
-    onReschedule: handleDragReschedule,
-    onUndo: handleDragUndo,
-  });
+  // ══════════════════════════════════════════════════════════
+  // DATA FETCHING
+  // ══════════════════════════════════════════════════════════
 
-  // Tablet sidebar collapse state
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  useEffect(() => {
-    loadEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate]);
-
-  useEffect(() => {
-    loadAllEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    teamAPI.getMembers().then(members => setTeamMembers(members)).catch(() => {});
-  }, []);
-
-  // Load calendar labels
-  useEffect(() => {
-    calendarLabelsAPI.getLabels()
-      .then(data => setCalendarLabels(data.labels || []))
-      .catch(() => {});
-  }, []);
-
-  // Toggle a label filter on/off
-  const handleToggleLabelFilter = useCallback((labelId) => {
-    setActiveLabelFilters(prev => {
-      const next = new Set(prev);
-      if (next.has(labelId)) {
-        next.delete(labelId);
-      } else {
-        next.add(labelId);
-      }
-      return next;
-    });
-  }, []);
-
-  // Handle label toggle on an appointment (assign/unassign)
-  const handleToggleAppointmentLabel = useCallback(async (appointmentId, labelId, isNowSelected) => {
-    try {
-      if (isNowSelected) {
-        await calendarLabelsAPI.assignLabels(appointmentId, [labelId]);
-      } else {
-        await calendarLabelsAPI.unassignLabels(appointmentId, [labelId]);
-      }
-      // Update local state
-      setAppointmentLabelMap(prev => {
-        const current = prev[appointmentId] || [];
-        const updated = isNowSelected
-          ? [...current, labelId]
-          : current.filter(id => id !== labelId);
-        return { ...prev, [appointmentId]: updated };
-      });
-    } catch (err) {
-      toast.error('Failed to update label: ' + (err.response?.data?.detail || err.message));
-    }
-  }, []);
-
-  // Ctrl/Cmd+K search shortcut is handled by useCalendarKeyboard hook
-
-  const handleSearchSelectAppointment = useCallback((appointment) => {
-    setShowSearch(false);
-    // Navigate to the appointment's date and open detail view
-    if (appointment.scheduled_start) {
-      setCurrentDate(new Date(appointment.scheduled_start));
-    }
-    // If it has a numeric ID, open the edit modal
-    if (appointment.id && typeof appointment.id === 'number') {
-      setEditingAppointment(appointment);
-      setShowEditModal(true);
-    }
-  }, []);
-
-  // Announce date changes to screen readers
-  const announceToScreenReader = useCallback((message) => {
-    if (liveAnnouncerRef.current) {
-      liveAnnouncerRef.current.textContent = message;
-    }
-  }, []);
-
-  // Reset selected event index when events change
-  useEffect(() => {
-    setSelectedEventIndex(-1);
-  }, [activeTab, searchQuery]);
-
-  // Determine if any modal is open (disables most keyboard shortcuts)
-  const hasModalOpen = showAddModal || showEditModal || showSearch || showShortcutsHelp || !!confirmAction;
-
-  // Keyboard navigation: select previous event in sidebar
-  const handleSelectPrevEvent = useCallback(() => {
-    setSelectedEventIndex(prev => {
-      const newIdx = prev <= 0 ? 0 : prev - 1;
-      return newIdx;
-    });
-  }, []);
-
-  // Keyboard navigation: select next event in sidebar
-  const handleSelectNextEvent = useCallback(() => {
-    setSelectedEventIndex(prev => {
-      // sortedEvents is used in the memoized computation below
-      // We clamp to the last available index at render time
-      return prev + 1;
-    });
-  }, []);
-
-  // Keyboard navigation: open the selected event for editing (uses ref for latest data)
-  const openSelectedEventRef = useRef(null);
-  const handleOpenSelectedEvent = useCallback(() => {
-    openSelectedEventRef.current?.();
-  }, []);
-
-  // Close all modals
-  const handleCloseAllModals = useCallback(() => {
-    if (confirmAction) {
-      setConfirmAction(null);
-    } else if (showShortcutsHelp) {
-      setShowShortcutsHelp(false);
-    } else if (showSearch) {
-      setShowSearch(false);
-    } else if (showEditModal) {
-      setShowEditModal(false);
-    } else if (showAddModal) {
-      setShowAddModal(false);
-    }
-  }, [confirmAction, showShortcutsHelp, showSearch, showEditModal, showAddModal]);
-
-  // Wire up the keyboard hook
-  useCalendarKeyboard({
-    onPrev: useCallback(() => {
-      handlePrevRef.current?.();
-    }, []),
-    onNext: useCallback(() => {
-      handleNextRef.current?.();
-    }, []),
-    onToday: useCallback(() => {
-      handleTodayRef.current?.();
-      announceToScreenReader('Navigated to today');
-    }, [announceToScreenReader]),
-    onSetView: useCallback((v) => {
-      setView(v);
-      announceToScreenReader(`Switched to ${v} view`);
-    }, [announceToScreenReader]),
-    onNewEvent: useCallback(() => {
-      setSelectedDate(new Date());
-      setSelectedTime(null);
-      setShowAddModal(true);
-    }, []),
-    onOpenSearch: useCallback(() => {
-      setShowSearch(true);
-    }, []),
-    onCloseModals: handleCloseAllModals,
-    onToggleShortcutsHelp: useCallback(() => {
-      setShowShortcutsHelp(prev => !prev);
-    }, []),
-    onSelectPrevEvent: handleSelectPrevEvent,
-    onSelectNextEvent: handleSelectNextEvent,
-    onOpenSelectedEvent: handleOpenSelectedEvent,
-    hasModalOpen,
-  });
-
-  // Stable refs for navigation handlers (defined later in the component)
-  const handlePrevRef = useRef(null);
-  const handleNextRef = useRef(null);
-  const handleTodayRef = useRef(null);
-
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       setLoading(true);
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
-
       const response = await unifiedCalendarAPI.getAll({
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
       });
-
       setAllEvents(mapUnifiedEvents(response.events));
       setError(null);
     } catch {
@@ -379,27 +147,46 @@ function Calendar() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDate]);
 
-  const loadAllEvents = async () => {
+  const loadAllEvents = useCallback(async () => {
     try {
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 6);
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + 6);
-
       const response = await unifiedCalendarAPI.getAll({
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
       });
-
       setAllEvents(mapUnifiedEvents(response.events));
       setError(null);
     } catch {
       setError('Unable to load calendar events. Please try again.');
       setAllEvents([]);
     }
-  };
+  }, []);
+
+  useEffect(() => { loadEvents(); }, [loadEvents]);
+  useEffect(() => { loadAllEvents(); }, [loadAllEvents]);
+  useEffect(() => {
+    teamAPI.getMembers().then(members => setTeamMembers(members)).catch(() => {});
+  }, []);
+
+  // Load availability settings to derive visible hours
+  useEffect(() => {
+    calendarSettingsAPI.getAvailability()
+      .then(res => {
+        if (res?.data?.schedule) {
+          setViewHours(deriveViewHours(res.data.schedule));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // ══════════════════════════════════════════════════════════
+  // EVENT HANDLERS
+  // ══════════════════════════════════════════════════════════
 
   const handleAddEvent = useCallback(async (eventData) => {
     try {
@@ -410,48 +197,7 @@ function Calendar() {
     } catch {
       setError('Failed to create event. Please try again.');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Conflict check: debounced call to backend when editing appointment time
-  const checkConflicts = useCallback(async (dateStr, timeStr, durationStr, excludeId) => {
-    if (!dateStr || !timeStr) return;
-    // Clear previous timer
-    if (conflictCheckTimerRef.current) clearTimeout(conflictCheckTimerRef.current);
-    setConflictCheckLoading(true);
-
-    conflictCheckTimerRef.current = setTimeout(async () => {
-      try {
-        const startDt = new Date(`${dateStr}T${timeStr}`);
-        const endDt = new Date(startDt.getTime() + parseInt(durationStr || '30') * 60000);
-        const result = await schedulerAPI.checkConflicts({
-          start: startDt.toISOString(),
-          end: endDt.toISOString(),
-          exclude_appointment_id: excludeId || undefined,
-          duration_minutes: parseInt(durationStr || '30'),
-        });
-        setEditConflicts(result.conflicts || []);
-        setEditAlternatives(result.alternatives || []);
-      } catch {
-        setEditConflicts([]);
-        setEditAlternatives([]);
-      } finally {
-        setConflictCheckLoading(false);
-      }
-    }, 400); // 400ms debounce
-  }, []);
-
-  const handlePickAlternative = useCallback((slot) => {
-    if (!editingAppointment || !slot) return;
-    const startDt = new Date(slot.start);
-    setEditingAppointment(prev => ({
-      ...prev,
-      date: startDt.toISOString().split('T')[0],
-      time: startDt.toTimeString().slice(0, 5),
-    }));
-    setEditConflicts([]);
-    setEditAlternatives([]);
-  }, [editingAppointment]);
+  }, [loadEvents, loadAllEvents]);
 
   const handleAddAppointment = useCallback(async (appointmentData) => {
     try {
@@ -462,8 +208,7 @@ function Calendar() {
     } catch {
       setError('Failed to create appointment. Please try again.');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadEvents, loadAllEvents]);
 
   const handleDeleteEvent = useCallback((event) => {
     const message = event.isAppointment && event.appointmentId
@@ -487,8 +232,7 @@ function Calendar() {
         }
       },
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadEvents, loadAllEvents]);
 
   const handleEditAppointment = useCallback((event) => {
     if (!event.isAppointment) return;
@@ -496,12 +240,8 @@ function Calendar() {
 
     const startDate = new Date(event.start_time);
     const endDate = new Date(event.end_time);
-    const durationMs = endDate - startDate;
-    const durationMins = Math.round(durationMs / 60000);
+    const durationMins = Math.round((endDate - startDate) / 60000);
 
-    const dateStr = startDate.toISOString().split('T')[0];
-    const timeStr = startDate.toTimeString().slice(0, 5);
-    const durStr = String(durationMins);
     setEditingAppointment({
       id: event.appointmentId,
       title: event.title || '',
@@ -509,18 +249,18 @@ function Calendar() {
       attendee_email: event.attendee_email || '',
       attendee_phone: event.attendee_phone || '',
       meeting_mode: event.meeting_mode || 'PHONE',
-      date: dateStr,
-      time: timeStr,
-      duration: durStr,
+      date: startDate.toISOString().split('T')[0],
+      time: startDate.toTimeString().slice(0, 5),
+      duration: String(durationMins),
       description: event.description || '',
       status: event.status || 'BOOKED',
     });
-    setEditConflicts([]);
-    setEditAlternatives([]);
     setShowEditModal(true);
-    // Run initial conflict check for current time
-    checkConflicts(dateStr, timeStr, durStr, event.appointmentId);
-  }, [checkConflicts]);
+  }, []);
+
+  const handleEditFieldChange = useCallback((field, value) => {
+    setEditingAppointment(prev => prev ? { ...prev, [field]: value } : prev);
+  }, []);
 
   const handleSaveAppointment = useCallback(async (e) => {
     e.preventDefault();
@@ -531,7 +271,7 @@ function Calendar() {
       const startDateTime = new Date(`${editingAppointment.date}T${editingAppointment.time}`);
       const endDateTime = new Date(startDateTime.getTime() + parseInt(editingAppointment.duration) * 60000);
 
-      const updateData = {
+      await schedulerAPI.updateAppointment(editingAppointment.id, {
         title: editingAppointment.title,
         attendee_name: editingAppointment.attendee_name,
         attendee_email: editingAppointment.attendee_email,
@@ -541,9 +281,7 @@ function Calendar() {
         scheduled_end: endDateTime.toISOString(),
         duration_minutes: parseInt(editingAppointment.duration),
         attendee_notes: editingAppointment.description,
-      };
-
-      await schedulerAPI.updateAppointment(editingAppointment.id, updateData);
+      });
 
       setShowEditModal(false);
       setEditingAppointment(null);
@@ -554,8 +292,7 @@ function Calendar() {
     } finally {
       setSaving(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingAppointment]);
+  }, [editingAppointment, loadEvents, loadAllEvents]);
 
   const handleCancelFromModal = useCallback(() => {
     if (!editingAppointment) return;
@@ -577,38 +314,96 @@ function Calendar() {
         }
       },
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingAppointment]);
+  }, [editingAppointment, loadEvents, loadAllEvents]);
 
-  // Pre-filter events by active tab and active label filters (memoized)
-  const filteredByTab = useMemo(() => {
-    let events = allEvents;
-    const tab = TAB_CONFIG.find(t => t.key === activeTab);
-    if (tab && tab.filterType) {
-      events = events.filter(event => event.event_type === tab.filterType);
+  // ══════════════════════════════════════════════════════════
+  // SEARCH
+  // ══════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    const handleSearchShortcut = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleSearchShortcut);
+    return () => window.removeEventListener('keydown', handleSearchShortcut);
+  }, []);
+
+  const handleSearchSelectAppointment = useCallback((appointment) => {
+    setShowSearch(false);
+    if (appointment.scheduled_start) {
+      setCurrentDate(new Date(appointment.scheduled_start));
     }
-    // Apply label filters: if any labels are active, only show events that have at least one active label
-    if (activeLabelFilters.size > 0) {
-      events = events.filter(event => {
-        const apptId = event.appointmentId || (event.isAppointment ? event.id : null);
-        if (!apptId) return true; // Non-appointment events pass through label filters
-        const eventLabels = appointmentLabelMap[apptId] || [];
-        return eventLabels.some(lid => activeLabelFilters.has(lid));
-      });
+    if (appointment.id && typeof appointment.id === 'number') {
+      setEditingAppointment(appointment);
+      setShowEditModal(true);
     }
-    return events;
-  }, [allEvents, activeTab, activeLabelFilters, appointmentLabelMap]);
+  }, []);
 
-  // Also keep the getFilteredEvents helper for view renderers that need it
-  const getFilteredEvents = useCallback((eventList) => {
-    const tab = TAB_CONFIG.find(t => t.key === activeTab);
-    if (!tab || !tab.filterType) return eventList;
-    return eventList.filter(event => event.event_type === tab.filterType);
-  }, [activeTab]);
+  // ══════════════════════════════════════════════════════════
+  // KEYBOARD NAVIGATION
+  // ══════════════════════════════════════════════════════════
 
-  // Sort and group events by date, with search filter (memoized)
+  const announceToScreenReader = useCallback((message) => {
+    if (liveAnnouncerRef.current) {
+      liveAnnouncerRef.current.textContent = message;
+    }
+  }, []);
+
+  useEffect(() => { setSelectedEventIndex(-1); }, [searchQuery]);
+
+  const hasModalOpen = showAddModal || showEditModal || showSearch || showShortcutsHelp || !!confirmAction || (tour && tour.isActive);
+
+  const handleSelectPrevEvent = useCallback(() => {
+    setSelectedEventIndex(prev => prev <= 0 ? 0 : prev - 1);
+  }, []);
+
+  const handleSelectNextEvent = useCallback(() => {
+    setSelectedEventIndex(prev => prev + 1);
+  }, []);
+
+  const openSelectedEventRef = useRef(null);
+  const handleOpenSelectedEvent = useCallback(() => {
+    openSelectedEventRef.current?.();
+  }, []);
+
+  const handleCloseAllModals = useCallback(() => {
+    if (confirmAction) { setConfirmAction(null); }
+    else if (showShortcutsHelp) { setShowShortcutsHelp(false); }
+    else if (showSearch) { setShowSearch(false); }
+    else if (showEditModal) { setShowEditModal(false); }
+    else if (showAddModal) { setShowAddModal(false); }
+  }, [confirmAction, showShortcutsHelp, showSearch, showEditModal, showAddModal]);
+
+  // Stable refs for navigation handlers
+  const handlePrevRef = useRef(null);
+  const handleNextRef = useRef(null);
+  const handleTodayRef = useRef(null);
+
+  useCalendarKeyboard({
+    onPrev: useCallback(() => { handlePrevRef.current?.(); }, []),
+    onNext: useCallback(() => { handleNextRef.current?.(); }, []),
+    onToday: useCallback(() => { handleTodayRef.current?.(); announceToScreenReader('Navigated to today'); }, [announceToScreenReader]),
+    onSetView: useCallback((v) => { setView(v); announceToScreenReader(`Switched to ${v} view`); }, [announceToScreenReader]),
+    onNewEvent: useCallback(() => { setSelectedDate(new Date()); setSelectedTime(null); setShowAddModal(true); }, []),
+    onOpenSearch: useCallback(() => { setShowSearch(true); }, []),
+    onCloseModals: handleCloseAllModals,
+    onToggleShortcutsHelp: useCallback(() => { setShowShortcutsHelp(prev => !prev); }, []),
+    onSelectPrevEvent: handleSelectPrevEvent,
+    onSelectNextEvent: handleSelectNextEvent,
+    onOpenSelectedEvent: handleOpenSelectedEvent,
+    hasModalOpen,
+  });
+
+  // ══════════════════════════════════════════════════════════
+  // DERIVED / MEMOIZED DATA
+  // ══════════════════════════════════════════════════════════
+
+  // Sort and filter events for sidebar
   const sortedEvents = useMemo(() => {
-    const filtered = filteredByTab.filter(event => {
+    const filtered = allEvents.filter(event => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (event.title || '').toLowerCase().includes(q)
@@ -616,95 +411,99 @@ function Calendar() {
         || (event.location || '').toLowerCase().includes(q);
     });
     return [...filtered].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
-  }, [filteredByTab, searchQuery]);
+  }, [allEvents, searchQuery]);
 
-  // Clamp selectedEventIndex to valid range and scroll into view
+  // Clamp selectedEventIndex and sync
   const clampedSelectedIndex = sortedEvents.length === 0
     ? -1
     : Math.max(-1, Math.min(selectedEventIndex, sortedEvents.length - 1));
 
-  // Keep clampedSelectedIndex in sync with state
   useEffect(() => {
     if (clampedSelectedIndex !== selectedEventIndex) {
       setSelectedEventIndex(clampedSelectedIndex);
     }
   }, [clampedSelectedIndex, selectedEventIndex]);
 
-  // Scroll selected event into view
   useEffect(() => {
     if (clampedSelectedIndex >= 0) {
       const el = document.querySelector(`[data-event-index="${clampedSelectedIndex}"]`);
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      // Announce for screen readers
       const event = sortedEvents[clampedSelectedIndex];
-      if (event) {
-        announceToScreenReader(`Selected: ${event.title || 'event'}`);
-      }
+      if (event) { announceToScreenReader(`Selected: ${event.title || 'event'}`); }
     }
   }, [clampedSelectedIndex, sortedEvents, announceToScreenReader]);
 
-  // Handle Enter key on selected event (wired via ref to avoid stale closure)
-  // The keyboard hook calls onOpenSelectedEvent -> openSelectedEventRef.current()
   useEffect(() => {
     openSelectedEventRef.current = () => {
       if (clampedSelectedIndex >= 0 && sortedEvents[clampedSelectedIndex]) {
         const event = sortedEvents[clampedSelectedIndex];
-        if (event.isAppointment) {
-          handleEditAppointment(event);
-        }
+        if (event.isAppointment) { handleEditAppointment(event); }
       }
     };
   });
 
+  // Pre-index events by date key for O(1) lookups
+  const eventsByDateKey = useMemo(() => {
+    const index = {};
+    for (const event of allEvents) {
+      const eventDate = new Date(event.start_time);
+      const key = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
+      if (!index[key]) index[key] = [];
+      index[key].push(event);
+    }
+    return index;
+  }, [allEvents]);
+
+  const getEventsForDate = useCallback((day, year, month) => {
+    return eventsByDateKey[`${year}-${month}-${day}`] || [];
+  }, [eventsByDateKey]);
+
+  const getEventsForDateObj = useCallback((dateObj) => {
+    return getEventsForDate(dateObj.getDate(), dateObj.getFullYear(), dateObj.getMonth());
+  }, [getEventsForDate]);
+
+  const getEventsForDateAndHour = useCallback((dateObj, hour) => {
+    const dayEvents = getEventsForDateObj(dateObj);
+    return dayEvents.filter(event => new Date(event.start_time).getHours() === hour);
+  }, [getEventsForDateObj]);
 
   const formatEventTime = useCallback((startTime, endTime) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
     const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const duration = Math.round((end - start) / (1000 * 60));
-    return { startStr, endStr, duration };
+    return { startStr, duration };
   }, []);
 
-  const formatEventDate = useCallback((dateStr) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    } else {
-      return `${dayNames[date.getDay()]} \u2022 ${monthNames[date.getMonth()]} ${date.getDate()}`;
-    }
-  }, []);
+  // ══════════════════════════════════════════════════════════
+  // NAVIGATION
+  // ══════════════════════════════════════════════════════════
 
   const getDaysInMonth = useCallback((date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
-
-    return { daysInMonth, startingDayOfWeek, year, month };
+    return { daysInMonth: lastDay.getDate(), startingDayOfWeek: firstDay.getDay(), year, month };
   }, []);
 
-  // Mini calendar months derived from currentDate (memoized to avoid recomputation)
   const currentMonthData = useMemo(() => getDaysInMonth(currentDate), [currentDate, getDaysInMonth]);
   const nextMonthData = useMemo(() => {
-    const nextMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    return getDaysInMonth(nextMonthDate);
+    return getDaysInMonth(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   }, [currentDate, getDaysInMonth]);
 
-  // View-aware navigation
+  const weekDates = useMemo(() => {
+    const weekStart = getStartOfWeek(currentDate);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+  }, [currentDate]);
+
   const handlePrev = useCallback(() => {
     if (view === 'day') {
       setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 1));
-    } else if (view === '3day') {
-      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 3));
     } else if (view === 'week') {
       setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7));
     } else {
@@ -716,8 +515,6 @@ function Calendar() {
   const handleNext = useCallback(() => {
     if (view === 'day') {
       setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 1));
-    } else if (view === '3day') {
-      setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 3));
     } else if (view === 'week') {
       setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7));
     } else {
@@ -731,12 +528,10 @@ function Calendar() {
     announceToScreenReader('Navigated to today');
   }, [announceToScreenReader]);
 
-  // Keep refs in sync for the keyboard hook
   handlePrevRef.current = handlePrev;
   handleNextRef.current = handleNext;
   handleTodayRef.current = handleToday;
 
-  // Scroll mini calendar (same as prev/next in month mode)
   const handleScrollUp = useCallback(() => {
     setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   }, []);
@@ -746,9 +541,7 @@ function Calendar() {
   }, []);
 
   const handleDayClick = useCallback((day, year, month) => {
-    // year and month are always passed explicitly from the mini calendar renderers
-    const date = new Date(year, month, day);
-    setSelectedDate(date);
+    setSelectedDate(new Date(year, month, day));
     setSelectedTime(null);
     setShowAddModal(true);
   }, []);
@@ -759,49 +552,24 @@ function Calendar() {
     setShowAddModal(true);
   }, []);
 
-  // Pre-index filtered events by date key for O(1) lookups in day/week/month views
-  const eventsByDateKey = useMemo(() => {
-    const index = {};
-    for (const event of filteredByTab) {
-      const eventDate = new Date(event.start_time);
-      const key = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
-      if (!index[key]) index[key] = [];
-      index[key].push(event);
-    }
-    return index;
-  }, [filteredByTab]);
+  const handleDayHeaderClick = useCallback((day) => {
+    setCurrentDate(new Date(day));
+    setView('day');
+  }, []);
 
-  const getEventsForDate = useCallback((day, year, month) => {
-    const key = `${year}-${month}-${day}`;
-    return eventsByDateKey[key] || [];
-  }, [eventsByDateKey]);
+  const openAddModal = useCallback(() => {
+    setSelectedDate(new Date());
+    setSelectedTime(null);
+    setShowAddModal(true);
+  }, []);
 
-  const getEventsForDateObj = useCallback((dateObj) => {
-    return getEventsForDate(dateObj.getDate(), dateObj.getFullYear(), dateObj.getMonth());
-  }, [getEventsForDate]);
+  // ══════════════════════════════════════════════════════════
+  // HEADER SUBTITLE
+  // ══════════════════════════════════════════════════════════
 
-  const getEventsForDateAndHour = useCallback((dateObj, hour) => {
-    const dayEvents = getEventsForDateObj(dateObj);
-    return dayEvents.filter(event => {
-      const eventDate = new Date(event.start_time);
-      return eventDate.getHours() === hour;
-    });
-  }, [getEventsForDateObj]);
-
-  // Get header subtitle based on view (memoized)
   const headerSubtitle = useMemo(() => {
     if (view === 'day') {
       return `${dayNames[currentDate.getDay()]}, ${monthNames[currentDate.getMonth()]} ${currentDate.getDate()}, ${currentDate.getFullYear()}`;
-    } else if (view === '3day') {
-      const start = new Date(currentDate);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 2);
-      const startMonth = monthNames[start.getMonth()].slice(0, 3);
-      const endMonth = monthNames[end.getMonth()].slice(0, 3);
-      if (start.getMonth() === end.getMonth()) {
-        return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${end.getFullYear()}`;
-      }
-      return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${end.getFullYear()}`;
     } else if (view === 'week') {
       const weekStart = getStartOfWeek(currentDate);
       const weekEnd = new Date(weekStart);
@@ -816,466 +584,78 @@ function Calendar() {
     return `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
   }, [view, currentDate]);
 
-  // Memoize week dates to avoid recomputing on every render
-  const weekDates = useMemo(() => {
-    const weekStart = getStartOfWeek(currentDate);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-  }, [currentDate]);
+  // ══════════════════════════════════════════════════════════
+  // MAIN VIEW DISPATCH
+  // ══════════════════════════════════════════════════════════
 
-  // 3-day dates: start from currentDate, show 3 consecutive days
-  const threeDayDates = useMemo(() => {
-    return Array.from({ length: 3 }, (_, i) => {
-      const d = new Date(currentDate);
-      d.setDate(d.getDate() + i);
-      return d;
-    });
-  }, [currentDate]);
-
-  // Get event color class
-  const getEventColorClass = (eventType) => {
-    const typeMap = {
-      meeting: 'event-color-meeting',
-      call: 'event-color-call',
-      appraisal: 'event-color-appraisal',
-      closing: 'event-color-closing',
-      pre_purchase_consultation: 'event-color-pre-purchase',
-      purchase_consultation: 'event-color-purchase',
-    };
-    return typeMap[eventType] || 'event-color-other';
-  };
-
-  // ===== DAY VIEW =====
-  const renderDayView = () => {
-    const dayEvents = getEventsForDateObj(currentDate);
-    const today = new Date();
-
-    return (
-      <div className="day-view">
-        <div className="day-view-header">
-          <h3>{dayNames[currentDate.getDay()]}, {monthNames[currentDate.getMonth()]} {currentDate.getDate()}</h3>
-          {isSameDay(currentDate, today) && <span className="today-badge">Today</span>}
-        </div>
-        <div className="day-view-timeline">
-          {VIEW_HOURS.map(hour => {
-            const hourEvents = dayEvents.filter(event => {
-              const eventDate = new Date(event.start_time);
-              return eventDate.getHours() === hour;
-            });
-            return (
-              <div className="day-view-hour" key={hour}>
-                <div className="hour-label">{formatHour(hour)}</div>
-                <DroppableTimeSlot
-                  className="hour-slot"
-                  date={currentDate}
-                  hour={hour}
-                  drag={drag}
-                  ariaLabel={`Add event at ${formatHour(hour)}`}
-                  onClick={() => handleTimeSlotClick(currentDate, hour)}
-                  onKeyDown={(e) => handleInteractiveKeyDown(e, () => handleTimeSlotClick(currentDate, hour))}
-                  onContextMenu={(e) => handleSlotContextMenu(e, currentDate, hour)}
-                >
-                  {hourEvents.map(event => {
-                    const { startStr, duration } = formatEventTime(event.start_time, event.end_time);
-                    return (
-                      <EventBoundary key={event.id} event={event}>
-                        <DraggableEvent event={event} drag={drag}>
-                        <div
-                          className={`day-event ${getEventColorClass(event.event_type)} ${event.isAppointment ? 'clickable' : ''}`}
-                          role={event.isAppointment ? 'button' : undefined}
-                          tabIndex={event.isAppointment ? 0 : undefined}
-                          aria-label={event.isAppointment ? `Edit appointment: ${event.title}` : undefined}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (event.isAppointment) handleEditAppointment(event);
-                          }}
-                          onKeyDown={event.isAppointment ? (e) => handleInteractiveKeyDown(e, () => handleEditAppointment(event)) : undefined}
-                          onContextMenu={(e) => handleEventContextMenu(e, event)}
-                          title={event.title}
-                        >
-                          <div className="day-event-time">{startStr} ({duration}m)</div>
-                          <div className="day-event-title">{event.title}</div>
-                          {event.attendee_name && (
-                            <div className="day-event-attendee" title={event.attendee_name}>{event.attendee_name}</div>
-                          )}
-                          {event.location && (
-                            <div className="day-event-location" title={event.location}>{event.location}</div>
-                          )}
-                        </div>
-                        </DraggableEvent>
-                      </EventBoundary>
-                    );
-                  })}
-                </DroppableTimeSlot>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== WEEK VIEW =====
-  const renderWeekView = () => {
-    const weekDays = weekDates;
-    const today = new Date();
-    const useAbbreviated = isTablet;
-
-    return (
-      <div className="week-view">
-        <div className={`week-view-header view-days-7`}>
-          <div className="week-time-gutter" />
-          {weekDays.map((day, i) => (
-            <div
-              key={i}
-              className={`week-day-col-header ${isSameDay(day, today) ? 'today' : ''}`}
-              role="button"
-              tabIndex={0}
-              aria-label={`View ${dayNames[day.getDay()]}, ${monthNames[day.getMonth()]} ${day.getDate()}`}
-              onClick={() => {
-                setCurrentDate(new Date(day));
-                setView('day');
-              }}
-              onKeyDown={(e) => handleInteractiveKeyDown(e, () => {
-                setCurrentDate(new Date(day));
-                setView('day');
-              })}
-              style={{ cursor: 'pointer' }}
-            >
-              <span className="week-day-name">{dayAbbreviations[day.getDay()]}</span>
-              <span className="week-day-num">{day.getDate()}</span>
-            </div>
-          ))}
-        </div>
-        <div className="week-view-body">
-          {VIEW_HOURS.map(hour => (
-            <div className={`week-hour-row view-days-7`} key={hour}>
-              <div className={`hour-label ${useAbbreviated ? 'hour-label-abbreviated' : ''}`}>
-                {formatHour(hour, useAbbreviated)}
-              </div>
-              {weekDays.map((day, i) => {
-                const cellEvents = getEventsForDateAndHour(day, hour);
-                return (
-                  <DroppableTimeSlot
-                    key={i}
-                    className="week-cell"
-                    date={day}
-                    hour={hour}
-                    drag={drag}
-                    ariaLabel={`Add event on ${dayAbbreviations[day.getDay()]} at ${formatHour(hour)}`}
-                    onClick={() => handleTimeSlotClick(day, hour)}
-                    onKeyDown={(e) => handleInteractiveKeyDown(e, () => handleTimeSlotClick(day, hour))}
-                    onContextMenu={(e) => handleSlotContextMenu(e, day, hour)}
-                  >
-                    {cellEvents.map(event => (
-                      <EventBoundary key={event.id} event={event}>
-                        <DraggableEvent event={event} drag={drag}>
-                          <div
-                            className={`week-event ${getEventColorClass(event.event_type)} ${event.isAppointment ? 'clickable' : ''}`}
-                            role={event.isAppointment ? 'button' : undefined}
-                            tabIndex={event.isAppointment ? 0 : undefined}
-                            aria-label={event.isAppointment ? `Edit appointment: ${event.title}` : undefined}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (event.isAppointment) handleEditAppointment(event);
-                            }}
-                            onKeyDown={event.isAppointment ? (e) => handleInteractiveKeyDown(e, () => handleEditAppointment(event)) : undefined}
-                            onContextMenu={(e) => handleEventContextMenu(e, event)}
-                            title={event.title}
-                          >
-                            {event.title}
-                          </div>
-                        </DraggableEvent>
-                      </EventBoundary>
-                    ))}
-                  </DroppableTimeSlot>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== 3-DAY VIEW =====
-  const render3DayView = () => {
-    const days = threeDayDates;
-    const today = new Date();
-    const useAbbreviated = isTablet;
-
-    return (
-      <div className="week-view three-day-view">
-        <div className="week-view-header view-days-3">
-          <div className="week-time-gutter" />
-          {days.map((day, i) => (
-            <div
-              key={i}
-              className={`week-day-col-header ${isSameDay(day, today) ? 'today' : ''}`}
-              role="button"
-              tabIndex={0}
-              aria-label={`View ${dayNames[day.getDay()]}, ${monthNames[day.getMonth()]} ${day.getDate()}`}
-              onClick={() => {
-                setCurrentDate(new Date(day));
-                setView('day');
-              }}
-              onKeyDown={(e) => handleInteractiveKeyDown(e, () => {
-                setCurrentDate(new Date(day));
-                setView('day');
-              })}
-              style={{ cursor: 'pointer' }}
-            >
-              <span className="week-day-name">{dayAbbreviations[day.getDay()]}</span>
-              <span className="week-day-num">{day.getDate()}</span>
-            </div>
-          ))}
-        </div>
-        <div className="week-view-body">
-          {VIEW_HOURS.map(hour => (
-            <div className="week-hour-row view-days-3" key={hour}>
-              <div className={`hour-label ${useAbbreviated ? 'hour-label-abbreviated' : ''}`}>
-                {formatHour(hour, useAbbreviated)}
-              </div>
-              {days.map((day, i) => {
-                const cellEvents = getEventsForDateAndHour(day, hour);
-                return (
-                  <DroppableTimeSlot
-                    key={i}
-                    className="week-cell"
-                    date={day}
-                    hour={hour}
-                    drag={drag}
-                    ariaLabel={`Add event on ${dayAbbreviations[day.getDay()]} at ${formatHour(hour)}`}
-                    onClick={() => handleTimeSlotClick(day, hour)}
-                    onKeyDown={(e) => handleInteractiveKeyDown(e, () => handleTimeSlotClick(day, hour))}
-                    onContextMenu={(e) => handleSlotContextMenu(e, day, hour)}
-                  >
-                    {cellEvents.map(event => (
-                      <EventBoundary key={event.id} event={event}>
-                        <DraggableEvent event={event} drag={drag}>
-                          <div
-                            className={`week-event ${getEventColorClass(event.event_type)} ${event.isAppointment ? 'clickable' : ''}`}
-                            role={event.isAppointment ? 'button' : undefined}
-                            tabIndex={event.isAppointment ? 0 : undefined}
-                            aria-label={event.isAppointment ? `Edit appointment: ${event.title}` : undefined}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (event.isAppointment) handleEditAppointment(event);
-                            }}
-                            onKeyDown={event.isAppointment ? (e) => handleInteractiveKeyDown(e, () => handleEditAppointment(event)) : undefined}
-                            onContextMenu={(e) => handleEventContextMenu(e, event)}
-                            title={event.title}
-                          >
-                            {event.title}
-                          </div>
-                        </DraggableEvent>
-                      </EventBoundary>
-                    ))}
-                  </DroppableTimeSlot>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== MONTH VIEW (mini calendar) =====
-  const renderMiniCalendar = (monthData) => {
-    const { daysInMonth, startingDayOfWeek, year, month } = monthData;
-
-    return (
-      <div className="mini-calendar">
-        <div className="mini-calendar-header">
-          <h3>{monthNames[month]} {year}</h3>
-        </div>
-
-        <div className="mini-calendar-weekdays">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
-            <div key={idx} className="mini-weekday-label">{day}</div>
-          ))}
-        </div>
-
-        <div className="mini-calendar-days">
-          {[...Array(startingDayOfWeek)].map((_, index) => (
-            <div key={`empty-${index}`} className="mini-calendar-day empty" />
-          ))}
-
-          {[...Array(daysInMonth)].map((_, index) => {
-            const day = index + 1;
-            const dayEvents = getEventsForDate(day, year, month);
-            const dayDate = new Date(year, month, day);
-            const isToday = new Date().toDateString() === dayDate.toDateString();
-
-            return (
-              <div
-                key={day}
-                className={`mini-calendar-day ${isToday ? 'today' : ''} ${dayEvents.length > 0 ? 'has-events' : ''}`}
-                role="button"
-                tabIndex={0}
-                aria-label={`${monthNames[month]} ${day}, ${year}${dayEvents.length > 0 ? `, ${dayEvents.length} event${dayEvents.length > 1 ? 's' : ''}` : ''}`}
-                onClick={() => handleDayClick(day, year, month)}
-                onKeyDown={(e) => handleInteractiveKeyDown(e, () => handleDayClick(day, year, month))}
-              >
-                <div className="mini-day-number">{day}</div>
-                {dayEvents.length > 0 && (
-                  <div className="event-dots">
-                    {dayEvents.slice(0, 3).map((event, idx) => (
-                      <div
-                        key={idx}
-                        className={`event-dot event-dot-${event.event_type || 'meeting'}`}
-                      />
-                    ))}
-                  </div>
-                )}
-                {dayEvents.length > 3 && (
-                  <div className="event-overflow">+{dayEvents.length - 3}</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  // Render main view area
   const renderMainView = () => {
     if (loading) {
       return <div className="loading">Loading events...</div>;
     }
 
     if (view === 'day') {
-      return renderDayView();
-    }
-
-    if (view === '3day') {
-      return render3DayView();
+      return (
+        <InlineDayView
+          currentDate={currentDate}
+          viewHours={viewHours}
+          getEventsForDateObj={getEventsForDateObj}
+          onTimeSlotClick={handleTimeSlotClick}
+          onEventClick={handleEditAppointment}
+        />
+      );
     }
 
     if (view === 'week') {
-      return renderWeekView();
+      return (
+        <WeekView
+          weekDates={weekDates}
+          viewHours={viewHours}
+          getEventsForDateAndHour={getEventsForDateAndHour}
+          onTimeSlotClick={handleTimeSlotClick}
+          onEventClick={handleEditAppointment}
+          onDayHeaderClick={handleDayHeaderClick}
+        />
+      );
     }
 
-    // Month view (two mini calendars)
+    // Month view
     return (
-      <div className="calendar-scroll-container">
-        <button
-          className="calendar-scroll-btn scroll-up"
-          onClick={handleScrollUp}
-          title="Previous month"
-          aria-label="Previous month"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="18 15 12 9 6 15"></polyline>
-          </svg>
-        </button>
-
-        <div className="two-month-view">
-          {renderMiniCalendar(currentMonthData)}
-          {renderMiniCalendar(nextMonthData)}
-        </div>
-
-        <button
-          className="calendar-scroll-btn scroll-down"
-          onClick={handleScrollDown}
-          title="Next month"
-          aria-label="Next month"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
-      </div>
+      <MonthView
+        currentMonthData={currentMonthData}
+        nextMonthData={nextMonthData}
+        getEventsForDate={getEventsForDate}
+        onDayClick={handleDayClick}
+        onScrollUp={handleScrollUp}
+        onScrollDown={handleScrollDown}
+      />
     );
   };
 
+  // ══════════════════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════════════════
+
   return (
-    <div className={`calendar-page${isTablet ? ' tablet-layout' : ''}`}>
-      <div className="calendar-header">
-        <div>
-          <h1>Calendar</h1>
-          <p>{headerSubtitle}</p>
-        </div>
-        <div className="calendar-controls">
-          <div className="view-switcher" role="tablist" aria-label="Calendar view">
-            <button
-              role="tab"
-              aria-selected={view === 'day'}
-              className={view === 'day' ? 'active' : ''}
-              onClick={() => setView('day')}
-            >
-              Day
-            </button>
-            <button
-              role="tab"
-              aria-selected={view === '3day'}
-              className={view === '3day' ? 'active' : ''}
-              onClick={() => setView('3day')}
-            >
-              3-Day
-            </button>
-            <button
-              role="tab"
-              aria-selected={view === 'week'}
-              className={view === 'week' ? 'active' : ''}
-              onClick={() => setView('week')}
-            >
-              Week
-            </button>
-            <button
-              role="tab"
-              aria-selected={view === 'month'}
-              className={view === 'month' ? 'active' : ''}
-              onClick={() => setView('month')}
-            >
-              Month
-            </button>
-          </div>
-          <div className="month-navigation">
-            <button onClick={handlePrev} aria-label={`Previous ${view}`}>&larr;</button>
-            <button onClick={handleToday}>Today</button>
-            <button onClick={handleNext} aria-label={`Next ${view}`}>&rarr;</button>
-            <button
-              className="btn-calendar-search"
-              onClick={() => setShowSearch(true)}
-              title="Search appointments (Ctrl+K)"
-              aria-label="Search appointments"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              Search
-              <span className="search-shortcut">{navigator.platform?.includes('Mac') ? '\u2318K' : 'Ctrl+K'}</span>
-            </button>
-            <button
-              className="btn-print-calendar"
-              onClick={() => window.print()}
-              title="Print calendar"
-              aria-label="Print calendar"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
-              Print
-            </button>
-            <button className="btn-add-event" onClick={() => { setSelectedDate(new Date()); setSelectedTime(null); setShowAddModal(true); }}>
-              + Add Event
-            </button>
-            <button className="btn-calendar-settings" onClick={() => navigate('/calendar-settings')} title="Calendar Settings" aria-label="Calendar Settings">
-              <i className="fas fa-cog"></i>
-            </button>
-            <TourTriggerButton onClick={tour.restart} />
-          </div>
-        </div>
-      </div>
+    <div className="calendar-page calendar-page--control-center">
+      {showSetupBanner && <SetupBanner onDismiss={dismissSetupBanner} />}
+
+      <CommandCenterHeader />
+
+      <CalendarToolbar
+        headerSubtitle={headerSubtitle}
+        view={view}
+        onViewChange={setView}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        onToday={handleToday}
+        onSearchOpen={() => setShowSearch(true)}
+        onAddEvent={openAddModal}
+        onShortcutsOpen={() => setShowShortcutsHelp(true)}
+        onTourStart={tour?.restart}
+        onSettingsClick={() => navigate('/calendar-settings')}
+        hasKeyboardShortcuts={hasKeyboardShortcuts}
+        hasTour={hasCalendarTour && !!tour}
+      />
 
       {error && (
         <div className="calendar-error-banner" role="alert">
@@ -1286,170 +666,23 @@ function Calendar() {
         </div>
       )}
 
-      <div className={`calendar-content${isTablet && sidebarCollapsed ? ' sidebar-is-collapsed' : ''}`}>
-        {/* Appointments Sidebar */}
-        <div className={`appointments-sidebar${isTablet && sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-          <CalendarWidgetBoundary label="appointments sidebar" onRetry={() => { loadEvents(); loadAllEvents(); }}>
-          <div className="appointments-sidebar-header">
-            <h2>{TAB_CONFIG.find(t => t.key === activeTab)?.label || 'Appointments'}</h2>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <button
-                className="btn-add-appointment"
-                onClick={() => { setSelectedDate(new Date()); setSelectedTime(null); setShowAddModal(true); }}
-                title="Add new appointment"
-              >
-                + Add
-              </button>
-              {/* Sidebar collapse toggle - visible only on tablet via CSS */}
-              <button
-                className="sidebar-toggle-btn"
-                onClick={() => setSidebarCollapsed(prev => !prev)}
-                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                aria-expanded={!sidebarCollapsed}
-                type="button"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path d={sidebarCollapsed ? 'M6 9l6 6 6-6' : 'M18 15l-6-6-6 6'} />
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div className="calendar-tabs" role="tablist" aria-label="Appointment filters">
-            {TAB_CONFIG.map(tab => (
-              <button
-                key={tab.key}
-                role="tab"
-                aria-selected={activeTab === tab.key}
-                className={`calendar-tab ${activeTab === tab.key ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.key)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div className="search-container">
-            <label htmlFor="calendar-search" className="sr-only">Search events</label>
-            <input
-              id="calendar-search"
-              type="text"
-              className="search-input"
-              placeholder="Search events..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          {calendarLabels.length > 0 && (
-            <div className="label-filter-bar" role="group" aria-label="Filter by label">
-              {calendarLabels.map(label => (
-                <button
-                  key={label.id}
-                  type="button"
-                  className={`label-filter-toggle${activeLabelFilters.has(label.id) ? ' active' : ''}`}
-                  style={{ '--label-color': label.color, '--label-bg': label.color + '18' }}
-                  onClick={() => handleToggleLabelFilter(label.id)}
-                  title={`${activeLabelFilters.has(label.id) ? 'Hide' : 'Show'} ${label.name}`}
-                  aria-pressed={activeLabelFilters.has(label.id)}
-                >
-                  <span className="label-swatch label-swatch--small" style={{ backgroundColor: label.color }} />
-                  {label.name}
-                </button>
-              ))}
-              {activeLabelFilters.size > 0 && (
-                <button
-                  type="button"
-                  className="label-filter-toggle"
-                  onClick={() => setActiveLabelFilters(new Set())}
-                  title="Clear all label filters"
-                  style={{ fontStyle: 'italic' }}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-          )}
-          <div className="appointments-list">
-            {sortedEvents.length === 0 ? (
-              <div className="empty-appointments">
-                <p>{searchQuery ? 'No matching events' : 'No appointments scheduled'}</p>
-              </div>
-            ) : (
-              sortedEvents.map((event, index) => {
-                const { startStr, duration } = formatEventTime(event.start_time, event.end_time);
-                const dateLabel = formatEventDate(event.start_time);
-                const showDateHeader = index === 0 || formatEventDate(sortedEvents[index - 1].start_time) !== dateLabel;
+      <div className="calendar-content">
+        <OperationalSidebar
+          sortedEvents={sortedEvents}
+          onAddClick={openAddModal}
+          onEventClick={handleEditAppointment}
+          onDeleteEvent={handleDeleteEvent}
+          formatEventTime={formatEventTime}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+        />
 
-                return (
-                  <EventBoundary key={event.id} event={event}>
-                    <div>
-                      {showDateHeader && (
-                        <div className="appointment-date-header">{dateLabel}</div>
-                      )}
-                      <div
-                        className={`appointment-item appointment-${event.event_type || 'meeting'} ${event.isAppointment ? 'clickable' : ''}`}
-                        role={event.isAppointment ? 'button' : undefined}
-                        tabIndex={event.isAppointment ? 0 : undefined}
-                        aria-label={event.isAppointment ? `Edit appointment: ${event.title}` : undefined}
-                        onClick={() => event.isAppointment && handleEditAppointment(event)}
-                        onKeyDown={event.isAppointment ? (e) => handleInteractiveKeyDown(e, () => handleEditAppointment(event)) : undefined}
-                        style={{ cursor: event.isAppointment ? 'pointer' : 'default' }}
-                      >
-                        <div className="appointment-time">
-                          <div className="time-start">{startStr}</div>
-                          <div className="time-duration">{duration}m</div>
-                        </div>
-                        <div className="appointment-details">
-                          <div className="appointment-title" title={event.title}>{event.title}</div>
-                          {event.attendee_name && (
-                            <div className="appointment-attendee" title={event.attendee_name}>{event.attendee_name}</div>
-                          )}
-                          {event.location && (
-                            <div className="appointment-location" title={event.location}>{event.location}</div>
-                          )}
-                          {event.description && (
-                            <div className="appointment-description" title={event.description}>{event.description}</div>
-                          )}
-                          {event.isAppointment && (appointmentLabelMap[event.appointmentId] || []).length > 0 && (
-                            <div className="appointment-label-dots">
-                              {(appointmentLabelMap[event.appointmentId] || []).map(lid => {
-                                const lbl = calendarLabels.find(l => l.id === lid);
-                                return lbl ? <span key={lid} className="appointment-label-dot" style={{ backgroundColor: lbl.color }} title={lbl.name}>{lbl.name}</span> : null;
-                              })}
-                            </div>
-                          )}
-                          {event.isAppointment && (
-                            <div className="appointment-edit-hint">Click to edit/reschedule</div>
-                          )}
-                        </div>
-                        <button
-                          className="delete-appointment"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event); }}
-                          title={event.isAppointment ? "Cancel appointment" : "Delete event"}
-                          aria-label={event.isAppointment ? `Cancel appointment: ${event.title}` : `Delete event: ${event.title}`}
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    </div>
-                  </EventBoundary>
-                );
-              })
-            )}
-          </div>
-          </CalendarWidgetBoundary>
-        </div>
-
-        {/* Main View Area */}
         <div className="calendar-main">
-          <CalendarErrorBoundary
-            currentView={view}
-            onReloadCalendar={() => { loadEvents(); loadAllEvents(); }}
-            onSwitchToList={() => setView('day')}
-          >
-            {renderMainView()}
-          </CalendarErrorBoundary>
+          {renderMainView()}
         </div>
       </div>
 
+      {/* Modals */}
       {showAddModal && (
         <AddEventModal
           selectedDate={selectedDate}
@@ -1462,185 +695,22 @@ function Calendar() {
       )}
 
       {showEditModal && editingAppointment && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)} onKeyDown={(e) => { if (e.key === 'Escape') setShowEditModal(false); }}>
-          <div className="modal-content edit-appointment-modal" role="dialog" aria-modal="true" aria-label="Edit appointment" onClick={(e) => e.stopPropagation()}>
-            <h3>Edit Appointment</h3>
-            <form onSubmit={handleSaveAppointment}>
-              <div className="form-group">
-                <label>Title</label>
-                <input
-                  type="text"
-                  value={editingAppointment.title}
-                  onChange={(e) => setEditingAppointment({...editingAppointment, title: e.target.value})}
-                  required
-                />
-              </div>
-
-              {calendarLabels.length > 0 && editingAppointment.id && (
-                <div className="form-group">
-                  <label>Labels</label>
-                  <LabelPicker
-                    labels={calendarLabels}
-                    selectedLabelIds={appointmentLabelMap[editingAppointment.id] || []}
-                    onToggleLabel={(labelId, isSelected) => handleToggleAppointmentLabel(editingAppointment.id, labelId, isSelected)}
-                  />
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>Meeting Type</label>
-                <div className="meeting-mode-group">
-                  {[
-                    { value: 'PHONE', label: 'Phone Call' },
-                    { value: 'VIDEO', label: 'Video Call' },
-                    { value: 'IN_PERSON', label: 'In Person' },
-                  ].map(opt => (
-                    <div className="meeting-mode-option" key={opt.value}>
-                      <input
-                        type="radio"
-                        id={`edit-mode-${opt.value}`}
-                        name="edit-meeting-mode"
-                        value={opt.value}
-                        checked={editingAppointment.meeting_mode === opt.value}
-                        onChange={(e) => setEditingAppointment({...editingAppointment, meeting_mode: e.target.value})}
-                      />
-                      <label htmlFor={`edit-mode-${opt.value}`}>{opt.label}</label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="attendee-section">
-                <h4>Attendee</h4>
-                <div className="form-group">
-                  <label>Name</label>
-                  <input
-                    type="text"
-                    value={editingAppointment.attendee_name}
-                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_name: e.target.value})}
-                    placeholder="Attendee name"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Email</label>
-                  <input
-                    type="email"
-                    value={editingAppointment.attendee_email}
-                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_email: e.target.value})}
-                    placeholder="attendee@email.com"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Phone</label>
-                  <input
-                    type="tel"
-                    value={editingAppointment.attendee_phone}
-                    onChange={(e) => setEditingAppointment({...editingAppointment, attendee_phone: e.target.value})}
-                    placeholder="(555) 123-4567"
-                  />
-                </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Date</label>
-                  <input
-                    type="date"
-                    value={editingAppointment.date}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setEditingAppointment({...editingAppointment, date: v});
-                      checkConflicts(v, editingAppointment.time, editingAppointment.duration, editingAppointment.id);
-                    }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Time</label>
-                  <input
-                    type="time"
-                    value={editingAppointment.time}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setEditingAppointment({...editingAppointment, time: v});
-                      checkConflicts(editingAppointment.date, v, editingAppointment.duration, editingAppointment.id);
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Duration</label>
-                <select
-                  value={editingAppointment.duration}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setEditingAppointment({...editingAppointment, duration: v});
-                    checkConflicts(editingAppointment.date, editingAppointment.time, v, editingAppointment.id);
-                  }}
-                >
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                  <option value="45">45 minutes</option>
-                  <option value="60">1 hour</option>
-                  <option value="90">1.5 hours</option>
-                  <option value="120">2 hours</option>
-                </select>
-              </div>
-
-              <ConflictWarning
-                conflicts={editConflicts}
-                alternatives={editAlternatives}
-                loading={conflictCheckLoading}
-                onPickAlternative={handlePickAlternative}
-                onBookAnyway={() => { setEditConflicts([]); setEditAlternatives([]); }}
-                onDismiss={() => { setEditConflicts([]); setEditAlternatives([]); }}
-              />
-
-              <div className="form-group">
-                <label>Notes</label>
-                <textarea
-                  value={editingAppointment.description}
-                  onChange={(e) => setEditingAppointment({...editingAppointment, description: e.target.value})}
-                  placeholder="Additional notes..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="form-actions modal-actions-split">
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={handleCancelFromModal}
-                  disabled={saving}
-                >
-                  Cancel Appointment
-                </button>
-                <div className="modal-actions-right">
-                  <button type="button" onClick={() => setShowEditModal(false)} disabled={saving}>
-                    Close
-                  </button>
-                  <button type="submit" className="btn-primary" disabled={saving}>
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+        <EditAppointmentModal
+          appointment={editingAppointment}
+          onFieldChange={handleEditFieldChange}
+          onSave={handleSaveAppointment}
+          onCancel={handleCancelFromModal}
+          onClose={() => setShowEditModal(false)}
+          saving={saving}
+        />
       )}
 
       {confirmAction && (
-        <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
-          <div className="modal-content confirm-dialog" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Confirm action">
-            <p>{confirmAction.message}</p>
-            <div className="modal-actions">
-              <button type="button" onClick={() => setConfirmAction(null)}>No, go back</button>
-              <button type="button" className="btn-danger" onClick={confirmAction.onConfirm}>Yes, confirm</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          message={confirmAction.message}
+          onConfirm={confirmAction.onConfirm}
+          onCancel={() => setConfirmAction(null)}
+        />
       )}
 
       {showSearch && (
@@ -1659,377 +729,31 @@ function Calendar() {
         </Suspense>
       )}
 
-      {/* Drag-and-drop: confirmation dialog */}
-      {drag.pendingDrop && (
-        <div className="drop-confirm-overlay" onClick={drag.cancelDrop} role="presentation">
-          <div className="drop-confirm-dialog" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true" aria-label="Confirm reschedule">
-            <h4>Reschedule appointment?</h4>
-            <p><span className="drop-confirm-title">{drag.pendingDrop.dragData.title}</span>{drag.pendingDrop.dragData.attendeeName && (<> with {drag.pendingDrop.dragData.attendeeName}</>)}</p>
-            <div className="drop-confirm-time">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-              Move to {drag.pendingDrop.displayTime}
-            </div>
-            <div className="drop-confirm-actions">
-              <button type="button" className="drop-confirm-cancel" onClick={drag.cancelDrop}>Cancel</button>
-              <button type="button" className="drop-confirm-submit" onClick={drag.confirmDrop} disabled={drag.rescheduling}>{drag.rescheduling ? 'Moving...' : 'Confirm'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Drag-and-drop: undo toast */}
-      {drag.undoData && (
-        <div className="drag-undo-toast" role="status" aria-live="polite">
-          <span className="drag-undo-toast-message">Appointment rescheduled</span>
-          <button type="button" className="drag-undo-btn" onClick={drag.handleUndo}>Undo</button>
-          <button type="button" className="drag-undo-dismiss" onClick={drag.dismissUndo} aria-label="Dismiss">&times;</button>
-          <div className="drag-undo-progress" aria-hidden="true" />
-        </div>
+      {hasCalendarTour && tour && tour.isActive && (
+        <Suspense fallback={null}>
+          <CalendarTour
+            isActive={tour.isActive}
+            currentStep={tour.currentStep}
+            steps={tour.steps}
+            totalSteps={tour.totalSteps}
+            dontShowAgain={tour.dontShowAgain}
+            onNext={tour.next}
+            onBack={tour.back}
+            onSkip={tour.skip}
+            onComplete={tour.complete}
+            onToggleDontShowAgain={tour.toggleDontShowAgain}
+          />
+        </Suspense>
       )}
 
-      {/* Print-only view: hidden on screen, visible when printing */}
-      <PrintCalendarView
-        events={allEvents}
-        currentDate={currentDate}
-        view={view}
+      {/* Screen reader live region */}
+      <div
+        ref={liveAnnouncerRef}
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+        role="status"
       />
-
-      {/* Context menu for right-click quick actions */}
-      <QuickActionsMenu
-        isOpen={contextMenu.isOpen}
-        position={contextMenu.position}
-        contextData={contextMenu.contextData}
-        onAction={handleContextMenuAction}
-        onClose={contextMenu.closeMenu}
-        menuRef={contextMenu.menuRef}
-      />
-
-      {/* Time blocker modal */}
-      <TimeBlocker
-        isOpen={showTimeBlocker}
-        initialDate={timeBlockerInitial.date}
-        initialHour={timeBlockerInitial.hour}
-        onSave={handleSaveTimeBlock}
-        onClose={() => setShowTimeBlocker(false)}
-      />
-
-      {/* Feature tour walkthrough */}
-      <CalendarTour
-        isActive={tour.isActive}
-        currentStep={tour.currentStep}
-        steps={tour.steps}
-        totalSteps={tour.totalSteps}
-        dontShowAgain={tour.dontShowAgain}
-        onNext={tour.next}
-        onBack={tour.back}
-        onSkip={tour.skip}
-        onComplete={tour.complete}
-        onToggleDontShowAgain={tour.toggleDontShowAgain}
-      />
-    </div>
-  );
-}
-
-function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppointment, teamMembers }) {
-  const defaultStart = selectedDate || new Date();
-  // If a specific hour was selected (from Day/Week view), use it
-  if (selectedTime != null) {
-    defaultStart.setHours(selectedTime, 0, 0, 0);
-  }
-  const defaultEnd = new Date(defaultStart.getTime() + 3600000);
-
-  const [mode, setMode] = useState('event');
-
-  // Close on ESC key
-  useEffect(() => {
-    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    event_type: 'meeting',
-    location: '',
-    all_day: false,
-    start_time: defaultStart.toISOString().slice(0, 16),
-    end_time: defaultEnd.toISOString().slice(0, 16),
-    // Appointment-specific fields
-    meeting_mode: 'PHONE',
-    duration: '30',
-    attendee_name: '',
-    attendee_email: '',
-    attendee_phone: '',
-    team_member_id: '',
-    location_id: null,
-  });
-  const [addConflicts, setAddConflicts] = useState([]);
-  const [addAlternatives, setAddAlternatives] = useState([]);
-  const [addConflictLoading, setAddConflictLoading] = useState(false);
-  const addConflictTimer = useRef(null);
-  const checkAddConflicts = useCallback((startStr, durStr) => {
-    if (!startStr) return;
-    if (addConflictTimer.current) clearTimeout(addConflictTimer.current);
-    setAddConflictLoading(true);
-    addConflictTimer.current = setTimeout(async () => {
-      try {
-        const s = new Date(startStr);
-        const d = parseInt(durStr || '30');
-        const result = await schedulerAPI.checkConflicts({ start: s.toISOString(), end: new Date(s.getTime() + d * 60000).toISOString(), duration_minutes: d });
-        setAddConflicts(result.conflicts || []);
-        setAddAlternatives(result.alternatives || []);
-      } catch { setAddConflicts([]); setAddAlternatives([]); }
-      finally { setAddConflictLoading(false); }
-    }, 400);
-  }, []);
-  const handleAddPickAlt = useCallback((slot) => {
-    if (!slot) return;
-    setFormData(prev => ({ ...prev, start_time: new Date(slot.start).toISOString().slice(0, 16) }));
-    setAddConflicts([]); setAddAlternatives([]);
-  }, []);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (mode === 'appointment') {
-      const startTime = new Date(formData.start_time);
-      onAddAppointment({
-        title: formData.title,
-        description: formData.description,
-        meeting_mode: formData.meeting_mode.toLowerCase(),
-        scheduled_start: startTime.toISOString(),
-        duration_minutes: parseInt(formData.duration),
-        attendee_name: formData.attendee_name || undefined,
-        attendee_email: formData.attendee_email || undefined,
-        attendee_phone: formData.attendee_phone || undefined,
-        assigned_user_id: formData.team_member_id ? parseInt(formData.team_member_id) : undefined,
-        location_id: formData.location_id || undefined,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-    } else {
-      onAdd({
-        ...formData,
-        start_time: new Date(formData.start_time).toISOString(),
-        end_time: new Date(formData.end_time).toISOString(),
-      });
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" role="dialog" aria-modal="true" aria-label="Add event" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-mode-toggle" role="tablist" aria-label="Event type">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'event'}
-            className={mode === 'event' ? 'active' : ''}
-            onClick={() => setMode('event')}
-          >
-            Calendar Event
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'appointment'}
-            className={mode === 'appointment' ? 'active' : ''}
-            onClick={() => setMode('appointment')}
-          >
-            Appointment
-          </button>
-        </div>
-
-        <h3>{mode === 'event' ? 'Add Event' : 'Add Appointment'}</h3>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Title *</label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            />
-          </div>
-
-          {mode === 'event' && (
-            <>
-              <div className="form-group">
-                <label>Type</label>
-                <select
-                  value={formData.event_type}
-                  onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
-                >
-                  <option value="meeting">Meeting</option>
-                  <option value="call">Call</option>
-                  <option value="pre_purchase_consultation">Pre-Purchase Consultation</option>
-                  <option value="purchase_consultation">Purchase Consultation</option>
-                  <option value="appraisal">Appraisal</option>
-                  <option value="closing">Closing</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Start Time *</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={formData.start_time}
-                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>End Time *</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={formData.end_time}
-                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label>Location</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                />
-              </div>
-            </>
-          )}
-
-          {mode === 'appointment' && (
-            <>
-              <div className="form-group">
-                <label>Meeting Type</label>
-                <div className="meeting-mode-group">
-                  {[
-                    { value: 'PHONE', label: 'Phone Call' },
-                    { value: 'VIDEO', label: 'Video Call' },
-                    { value: 'IN_PERSON', label: 'In Person' },
-                  ].map(opt => (
-                    <div className="meeting-mode-option" key={opt.value}>
-                      <input
-                        type="radio"
-                        id={`add-mode-${opt.value}`}
-                        name="add-meeting-mode"
-                        value={opt.value}
-                        checked={formData.meeting_mode === opt.value}
-                        onChange={(e) => setFormData({ ...formData, meeting_mode: e.target.value })}
-                      />
-                      <label htmlFor={`add-mode-${opt.value}`}>{opt.label}</label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Start Time *</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={formData.start_time}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setFormData({ ...formData, start_time: v });
-                    checkAddConflicts(v, formData.duration);
-                  }}
-                />
-              </div>
-              <div className="form-group">
-                <label>Duration</label>
-                <select
-                  value={formData.duration}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setFormData({ ...formData, duration: v });
-                    checkAddConflicts(formData.start_time, v);
-                  }}
-                >
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                  <option value="45">45 minutes</option>
-                  <option value="60">1 hour</option>
-                  <option value="90">1.5 hours</option>
-                  <option value="120">2 hours</option>
-                </select>
-              </div>
-              <ConflictWarning
-                conflicts={addConflicts}
-                alternatives={addAlternatives}
-                loading={addConflictLoading}
-                onPickAlternative={handleAddPickAlt}
-                onBookAnyway={() => { setAddConflicts([]); setAddAlternatives([]); }}
-                onDismiss={() => { setAddConflicts([]); setAddAlternatives([]); }}
-              />
-              <div className="form-group">
-                <label>Location</label>
-                <LocationPicker
-                  value={formData.location_id}
-                  onChange={(locId) => setFormData({ ...formData, location_id: locId })}
-                  meetingMode={formData.meeting_mode}
-                />
-              </div>
-              <div className="attendee-section">
-                <h4>Attendee</h4>
-                <div className="form-group">
-                  <label>Name</label>
-                  <input
-                    type="text"
-                    value={formData.attendee_name}
-                    onChange={(e) => setFormData({ ...formData, attendee_name: e.target.value })}
-                    placeholder="Attendee name"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Email</label>
-                  <input
-                    type="email"
-                    value={formData.attendee_email}
-                    onChange={(e) => setFormData({ ...formData, attendee_email: e.target.value })}
-                    placeholder="attendee@email.com"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.attendee_phone}
-                    onChange={(e) => setFormData({ ...formData, attendee_phone: e.target.value })}
-                    placeholder="(555) 123-4567"
-                  />
-                </div>
-              </div>
-              {teamMembers.length > 0 && (
-                <div className="form-group">
-                  <label>Assign To</label>
-                  <select
-                    className="team-select"
-                    value={formData.team_member_id}
-                    onChange={(e) => setFormData({ ...formData, team_member_id: e.target.value })}
-                  >
-                    <option value="">Myself</option>
-                    {teamMembers.map(m => (
-                      <option key={m.id} value={m.id}>{m.full_name || m.email}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </>
-          )}
-
-          <div className="form-group">
-            <label>Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={3}
-            />
-          </div>
-          <div className="form-actions">
-            <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary">
-              {mode === 'event' ? 'Add Event' : 'Add Appointment'}
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }

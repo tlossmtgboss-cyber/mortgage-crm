@@ -20,13 +20,56 @@
  *  10. Review & Activate
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../../../utils/toast';
+import { trackFeature } from '../../../services/analytics';
+import ErrorBoundary from '../../common/ErrorBoundary';
 import SetupProgress from './SetupProgress';
 import SetupStepWrapper from './SetupStepWrapper';
 import WelcomeStepContent from './steps/WelcomeStep';
+import WorkingHoursStepContent from './steps/WorkingHoursStep';
+import AppointmentTypesStepContent from './steps/AppointmentTypesStep';
+import BookingPageStepContent from './steps/BookingPageStep';
+import NotificationsStepContent from './steps/NotificationsStep';
+import IntegrationsStepContent from './steps/IntegrationsStep';
+import CancellationPolicyStepContent from './steps/CancellationPolicyStep';
+import TeamSetupStepContent from './steps/TeamSetupStep';
+import AdvancedFeaturesStepContent from './steps/AdvancedFeaturesStep';
+import ReviewStepContent from './steps/ReviewStep';
 import '../../../styles/calendar-setup.css';
+
+// ============================================================================
+// Wizard analytics utility
+// ============================================================================
+
+function trackWizardEvent(eventName, data = {}) {
+  try {
+    window.dispatchEvent(new CustomEvent('perennia:analytics', {
+      detail: {
+        category: 'calendar_setup_wizard',
+        event: eventName,
+        timestamp: new Date().toISOString(),
+        ...data,
+      }
+    }));
+    // Also store in localStorage for internal dashboard consumption
+    const key = 'perennia_wizard_analytics';
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    existing.push({ event: eventName, ...data, timestamp: new Date().toISOString() });
+    // Keep last 100 events
+    if (existing.length > 100) existing.splice(0, existing.length - 100);
+    localStorage.setItem(key, JSON.stringify(existing));
+  } catch {
+    // Analytics should never break the app
+  }
+  // Also fire through the shared analytics service (fire-and-forget)
+  try {
+    trackFeature('calendar_setup_wizard', eventName, data);
+  } catch {
+    // Silently ignore
+  }
+}
 
 // ============================================================================
 // Step definitions
@@ -145,7 +188,7 @@ const STORAGE_KEY = 'perennia_calendar_setup_progress';
 function PlaceholderStep({ step }) {
   return (
     <div className="cal-setup-placeholder">
-      <div className="placeholder-icon">
+      <div className="placeholder-icon" aria-hidden="true">
         <i className={`fas ${step.icon}`}></i>
       </div>
       <h3>{step.title}</h3>
@@ -157,64 +200,50 @@ function PlaceholderStep({ step }) {
   );
 }
 
-// ============================================================================
-// Welcome step (imported from steps/WelcomeStep.js)
-// ============================================================================
-// WelcomeStepContent is imported at the top of this file.
-// It provides timezone selection, schedule preset picker, and user
-// personalization — replacing the original placeholder welcome screen.
-
-// ============================================================================
-// Review step
-// ============================================================================
-
-function ReviewStep({ stepData, completedSteps }) {
-  const configuredCount = completedSteps.length;
-  const skippedSteps = SETUP_STEPS.filter(
-    s => s.number > 1 && s.number < 10 && !completedSteps.includes(s.number)
-  );
-
-  return (
-    <div className="cal-setup-review">
-      <div className="review-icon">
-        <i className="fas fa-clipboard-check"></i>
-      </div>
-      <h2>Review Your Setup</h2>
-      <p className="review-summary">
-        You have configured {configuredCount} of {TOTAL_STEPS} steps.
-        {skippedSteps.length > 0 && ' You can always come back to the skipped steps from Calendar Settings.'}
-      </p>
-
-      <div className="review-checklist">
-        {SETUP_STEPS.slice(1, -1).map(step => {
-          const isCompleted = completedSteps.includes(step.number);
-          return (
-            <div key={step.id} className={`review-item ${isCompleted ? 'completed' : 'skipped'}`}>
-              <i className={`fas ${isCompleted ? 'fa-check-circle' : 'fa-circle'}`}></i>
-              <span>{step.title}</span>
-              <span className="review-status">
-                {isCompleted ? 'Configured' : 'Skipped'}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// All 10 step components are imported at the top of this file:
+//   WelcomeStepContent, WorkingHoursStepContent, AppointmentTypesStepContent,
+//   BookingPageStepContent, NotificationsStepContent, IntegrationsStepContent,
+//   CancellationPolicyStepContent, TeamSetupStepContent, AdvancedFeaturesStepContent,
+//   ReviewStepContent
 
 // ============================================================================
 // Celebration overlay
 // ============================================================================
 
 function CelebrationOverlay({ onDismiss }) {
+  const dismissBtnRef = useRef(null);
+
   useEffect(() => {
     const timer = setTimeout(onDismiss, 4000);
     return () => clearTimeout(timer);
   }, [onDismiss]);
 
+  // Focus the dismiss button on mount for keyboard accessibility
+  useEffect(() => {
+    if (dismissBtnRef.current) {
+      dismissBtnRef.current.focus();
+    }
+  }, []);
+
+  // Allow Escape to dismiss
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onDismiss();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onDismiss]);
+
   return (
-    <div className="cal-setup-celebration" role="alert" aria-live="assertive">
+    <div
+      className="cal-setup-celebration"
+      role="alertdialog"
+      aria-live="assertive"
+      aria-label="Calendar activated successfully"
+    >
       <div className="celebration-content">
         <div className="celebration-particles" aria-hidden="true">
           {Array.from({ length: 30 }).map((_, i) => (
@@ -229,12 +258,12 @@ function CelebrationOverlay({ onDismiss }) {
             />
           ))}
         </div>
-        <div className="celebration-icon">
+        <div className="celebration-icon" aria-hidden="true">
           <i className="fas fa-check-circle"></i>
         </div>
         <h2>Your Calendar is Live!</h2>
         <p>Clients can now book appointments with you online.</p>
-        <button className="btn-primary" onClick={onDismiss}>
+        <button ref={dismissBtnRef} className="btn-primary" onClick={onDismiss}>
           Go to Calendar
         </button>
       </div>
@@ -250,6 +279,8 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
   const navigate = useNavigate();
   const contentRef = useRef(null);
   const announceRef = useRef(null);
+  const wizardStartTime = useRef(Date.now());
+  const stepStartTime = useRef(Date.now());
 
   // ---------------------------------------------------------------------------
   // State
@@ -267,6 +298,7 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
   // Load persisted progress on mount
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    let resumed = false;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -275,10 +307,24 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
         if (parsed.stepData) setStepData(parsed.stepData);
         if (parsed.completedSteps) setCompletedSteps(parsed.completedSteps);
         if (parsed.skippedSteps) setSkippedSteps(parsed.skippedSteps);
+        resumed = !!(parsed.currentStep && parsed.currentStep > 1);
+        if (resumed) {
+          try {
+            trackWizardEvent('wizard_resumed', {
+              step: parsed.currentStep,
+              stepName: SETUP_STEPS[parsed.currentStep - 1]?.label,
+              stepsCompleted: (parsed.completedSteps || []).length,
+            });
+          } catch { /* analytics should never break the app */ }
+        }
       }
     } catch (e) {
       console.error('Failed to load setup progress:', e);
     }
+    // Track wizard start (fires on every mount, resumed or fresh)
+    try {
+      trackWizardEvent('wizard_started', { resumed });
+    } catch { /* analytics should never break the app */ }
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -318,6 +364,8 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
         heading.focus({ preventScroll: true });
       }
     }
+    // Reset per-step timer on every step change
+    stepStartTime.current = Date.now();
   }, [currentStep]);
 
   // ---------------------------------------------------------------------------
@@ -365,6 +413,15 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
   const handleNext = useCallback(() => {
     if (currentStep >= TOTAL_STEPS) return;
 
+    // Track step completion
+    try {
+      trackWizardEvent('step_completed', {
+        step: currentStep,
+        stepName: SETUP_STEPS[currentStep - 1]?.label,
+        timeOnStep: Date.now() - stepStartTime.current,
+      });
+    } catch { /* analytics should never break the app */ }
+
     // Mark current step as completed (unless already there)
     setCompletedSteps(prev => {
       if (prev.includes(currentStep)) return prev;
@@ -379,6 +436,15 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
 
   const handleBack = useCallback(() => {
     if (currentStep <= 1) return;
+
+    try {
+      trackWizardEvent('step_back', {
+        step: currentStep,
+        stepName: SETUP_STEPS[currentStep - 1]?.label,
+        timeOnStep: Date.now() - stepStartTime.current,
+      });
+    } catch { /* analytics should never break the app */ }
+
     transitionTo(currentStep - 1, 'backward');
   }, [currentStep, transitionTo]);
 
@@ -386,6 +452,15 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
     if (currentStep >= TOTAL_STEPS) return;
     const stepDef = SETUP_STEPS[currentStep - 1];
     if (!stepDef.skippable) return;
+
+    // Track skip
+    try {
+      trackWizardEvent('step_skipped', {
+        step: currentStep,
+        stepName: stepDef.label,
+        timeOnStep: Date.now() - stepStartTime.current,
+      });
+    } catch { /* analytics should never break the app */ }
 
     // Mark as skipped
     setSkippedSteps(prev => {
@@ -406,15 +481,37 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
   }, [currentStep, completedSteps, skippedSteps, transitionTo]);
 
   const handleSaveAndExit = useCallback(() => {
+    // Track abandonment
+    try {
+      trackWizardEvent('wizard_abandoned', {
+        lastStep: currentStep,
+        lastStepName: SETUP_STEPS[currentStep - 1]?.label,
+        stepsCompleted: completedSteps.length,
+        stepsSkipped: skippedSteps.length,
+        totalTime: Date.now() - wizardStartTime.current,
+        timeOnStep: Date.now() - stepStartTime.current,
+      });
+    } catch { /* analytics should never break the app */ }
+
     persistProgress();
     setAutoSaveStatus('Progress saved');
     toast.success('Your setup progress has been saved. You can resume anytime.');
     setTimeout(() => {
       navigate('/calendar-settings');
     }, 500);
-  }, [persistProgress, navigate]);
+  }, [persistProgress, navigate, currentStep, completedSteps, skippedSteps]);
 
   const handleActivate = useCallback(() => {
+    // Track wizard completion
+    try {
+      trackWizardEvent('wizard_completed', {
+        totalTime: Date.now() - wizardStartTime.current,
+        stepsCompleted: completedSteps.length + 1, // +1 for this final step
+        stepsSkipped: skippedSteps.length,
+        timeOnStep: Date.now() - stepStartTime.current,
+      });
+    } catch { /* analytics should never break the app */ }
+
     // Mark step 10 as completed
     setCompletedSteps(prev => {
       if (prev.includes(TOTAL_STEPS)) return prev;
@@ -426,7 +523,7 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
 
     // Show celebration
     setShowCelebration(true);
-  }, []);
+  }, [completedSteps, skippedSteps]);
 
   const handleCelebrationDismiss = useCallback(() => {
     setShowCelebration(false);
@@ -458,41 +555,179 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
   const isLastStep = currentStep === TOTAL_STEPS;
   const canSkip = stepDef && stepDef.skippable;
 
+  // ---------------------------------------------------------------------------
+  // Stable onChange callbacks per step ID.
+  // Inline arrow functions like (data) => handleStepDataChange('welcome', data)
+  // create a new reference on every render, which causes infinite render loops
+  // in step components that include onChange in useEffect dependency arrays.
+  // These memoized callbacks maintain a stable reference.
+  // ---------------------------------------------------------------------------
+  const onChangeWelcome = useCallback((data) => handleStepDataChange('welcome', data), [handleStepDataChange]);
+  const onChangeTimezone = useCallback((data) => handleStepDataChange('timezone-hours', data), [handleStepDataChange]);
+  const onChangeAppointmentTypes = useCallback((types) => handleStepDataChange('appointment-types', { types }), [handleStepDataChange]);
+  const onChangeBookingPage = useCallback((data) => handleStepDataChange('booking-page', data), [handleStepDataChange]);
+  const onChangeNotifications = useCallback((data) => handleStepDataChange('notifications', data), [handleStepDataChange]);
+  const onChangeIntegrations = useCallback((data) => handleStepDataChange('integrations', data), [handleStepDataChange]);
+  const onChangeCancellation = useCallback((data) => handleStepDataChange('cancellation-policy', data), [handleStepDataChange]);
+  const onChangeTeamSetup = useCallback((data) => handleStepDataChange('team-setup', data || {}), [handleStepDataChange]);
+  const onChangeAdvanced = useCallback((data) => handleStepDataChange('advanced-features', data || {}), [handleStepDataChange]);
+  const noopDirty = useCallback(() => {}, []);
+
+  // Stable empty-object references to avoid re-renders from new {} on each render
+  const emptyObj = useMemo(() => ({}), []);
+
+  // Error boundary fallback for step crashes
+  const stepErrorFallback = useCallback((error, resetFn) => (
+    <div className="cal-setup-step-error">
+      <div className="cal-setup-step-error-icon" aria-hidden="true">
+        <i className="fas fa-exclamation-triangle"></i>
+      </div>
+      <h3>Something went wrong</h3>
+      <p>This step encountered an error. Your progress on other steps is safe.</p>
+      <button onClick={resetFn} className="btn-secondary">
+        Try Again
+      </button>
+    </div>
+  ), []);
+
   function renderStepContent() {
+    let content;
+
     // Check for a custom component passed via stepComponents prop
     const CustomComponent = stepComponents[stepDef.id];
     if (CustomComponent) {
-      return (
+      content = (
         <CustomComponent
-          stepData={stepData[stepDef.id] || {}}
-          onChange={(data) => handleStepDataChange(stepDef.id, data)}
+          stepData={stepData[stepDef.id] || emptyObj}
+          onChange={onChangeWelcome}
           allStepData={stepData}
         />
       );
     }
 
-    // Built-in steps
-    if (currentStep === 1) {
-      return (
+    // Step 1: Welcome & Timezone
+    else if (currentStep === 1) {
+      content = (
         <WelcomeStepContent
-          stepData={stepData['welcome'] || {}}
-          onChange={(data) => handleStepDataChange('welcome', data)}
+          stepData={stepData['welcome'] || emptyObj}
+          onChange={onChangeWelcome}
           allStepData={stepData}
         />
       );
     }
 
-    if (currentStep === TOTAL_STEPS) {
-      return (
-        <ReviewStep
+    // Step 2: Working Hours
+    else if (currentStep === 2) {
+      content = (
+        <WorkingHoursStepContent
+          stepData={stepData['timezone-hours'] || emptyObj}
+          onChange={onChangeTimezone}
+          allStepData={stepData}
+        />
+      );
+    }
+
+    // Step 3: Appointment Types (legacy props: onStepComplete, initialTypes)
+    else if (currentStep === 3) {
+      content = (
+        <AppointmentTypesStepContent
+          onStepComplete={onChangeAppointmentTypes}
+          initialTypes={(stepData['appointment-types'] || emptyObj).types || null}
+        />
+      );
+    }
+
+    // Step 4: Booking Page (legacy props: onStepComplete, onDirty, initialData)
+    else if (currentStep === 4) {
+      content = (
+        <BookingPageStepContent
+          onStepComplete={onChangeBookingPage}
+          onDirty={noopDirty}
+          initialData={stepData['booking-page'] || null}
+        />
+      );
+    }
+
+    // Step 5: Notifications (wizard props)
+    else if (currentStep === 5) {
+      content = (
+        <NotificationsStepContent
+          stepData={stepData['notifications'] || emptyObj}
+          onChange={onChangeNotifications}
+          allStepData={stepData}
+        />
+      );
+    }
+
+    // Step 6: Integrations (wizard props)
+    else if (currentStep === 6) {
+      content = (
+        <IntegrationsStepContent
+          stepData={stepData['integrations'] || emptyObj}
+          onChange={onChangeIntegrations}
+          allStepData={stepData}
+        />
+      );
+    }
+
+    // Step 7: Cancellation Policy (legacy props: onComplete, initialData)
+    else if (currentStep === 7) {
+      content = (
+        <CancellationPolicyStepContent
+          onComplete={onChangeCancellation}
+          initialData={stepData['cancellation-policy'] || null}
+        />
+      );
+    }
+
+    // Step 8: Team Setup (legacy props: onComplete, onBack)
+    else if (currentStep === 8) {
+      content = (
+        <TeamSetupStepContent
+          onComplete={onChangeTeamSetup}
+          onBack={handleBack}
+        />
+      );
+    }
+
+    // Step 9: Advanced Features (legacy props: onComplete, onBack)
+    else if (currentStep === 9) {
+      content = (
+        <AdvancedFeaturesStepContent
+          onComplete={onChangeAdvanced}
+          onBack={handleBack}
+        />
+      );
+    }
+
+    // Step 10: Review & Activate
+    else if (currentStep === TOTAL_STEPS) {
+      content = (
+        <ReviewStepContent
           stepData={stepData}
           completedSteps={completedSteps}
+          onGoToStep={handleGoToStep}
+          onActivate={handleActivate}
         />
       );
     }
 
-    // Placeholder for unimplemented steps
-    return <PlaceholderStep step={stepDef} />;
+    // Fallback placeholder for any unexpected step
+    else {
+      content = <PlaceholderStep step={stepDef} />;
+    }
+
+    // Wrap every step in an ErrorBoundary so one crashing step
+    // does not tear down the entire wizard
+    return (
+      <ErrorBoundary
+        key={currentStep}
+        fallback={stepErrorFallback}
+        resetKeys={[currentStep]}
+      >
+        {content}
+      </ErrorBoundary>
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -547,9 +782,9 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
         </div>
         <div className="cal-setup-header-right">
           {autoSaveStatus && (
-            <span className={`cal-setup-autosave ${autoSaveStatus === 'Saved' ? 'saved' : ''}`}>
-              {autoSaveStatus === 'Saving...' && <i className="fas fa-spinner fa-spin"></i>}
-              {autoSaveStatus === 'Saved' && <i className="fas fa-check"></i>}
+            <span className={`cal-setup-autosave ${autoSaveStatus === 'Saved' ? 'saved' : ''}`} role="status" aria-live="polite">
+              {autoSaveStatus === 'Saving...' && <i className="fas fa-spinner fa-spin" aria-hidden="true"></i>}
+              {autoSaveStatus === 'Saved' && <i className="fas fa-check" aria-hidden="true"></i>}
               {' '}{autoSaveStatus}
             </span>
           )}
@@ -557,7 +792,7 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
             onClick={handleSaveAndExit}
             className="btn-secondary cal-setup-save-exit"
           >
-            <i className="fas fa-sign-out-alt"></i>
+            <i className="fas fa-sign-out-alt" aria-hidden="true"></i>
             <span className="btn-label">Save & Exit</span>
           </button>
         </div>
@@ -598,12 +833,12 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
               disabled={isAnimating}
               aria-label={`Go back to step ${currentStep - 1}`}
             >
-              <i className="fas fa-arrow-left"></i> Back
+              <i className="fas fa-arrow-left" aria-hidden="true"></i> Back
             </button>
           )}
         </div>
         <div className="cal-setup-footer-center">
-          <span className="cal-setup-progress-text">
+          <span className="cal-setup-progress-text" role="status" aria-live="polite" aria-atomic="true">
             {progressPercent}% complete
           </span>
         </div>
@@ -613,8 +848,9 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
               onClick={handleActivate}
               className="btn-primary cal-setup-activate-btn"
               disabled={isAnimating}
+              aria-label="Activate your Smart Calendar"
             >
-              <i className="fas fa-rocket"></i> Activate Calendar
+              <i className="fas fa-rocket" aria-hidden="true"></i> Activate Calendar
             </button>
           ) : (
             <button
@@ -623,7 +859,7 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
               disabled={isAnimating}
               aria-label={`Continue to step ${currentStep + 1}`}
             >
-              {isFirstStep ? 'Get Started' : 'Next'} <i className="fas fa-arrow-right"></i>
+              {isFirstStep ? 'Get Started' : 'Next'} <i className="fas fa-arrow-right" aria-hidden="true"></i>
             </button>
           )}
         </div>

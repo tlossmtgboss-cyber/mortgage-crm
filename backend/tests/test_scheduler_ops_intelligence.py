@@ -146,7 +146,7 @@ class TestC2_DuplicateBookingDetection:
 
     def test_duplicate_booking_raises_409(self):
         """_check_duplicate_booking raises HTTPException 409 when a duplicate is found."""
-        from routes.scheduler_appointment_routes import _check_duplicate_booking
+        from routes.scheduler._helpers import _check_duplicate_booking
         from fastapi import HTTPException
 
         # Create mock models dict
@@ -161,7 +161,7 @@ class TestC2_DuplicateBookingDetection:
         mock_db.query.return_value = mock_query
 
         # Set up the module-level _models dict
-        import routes.scheduler_appointment_routes as mod
+        import routes.scheduler._helpers as mod
         original_models = mod._models
         mod._models = {"Appointment": MagicMock()}
 
@@ -180,7 +180,7 @@ class TestC2_DuplicateBookingDetection:
 
     def test_no_duplicate_passes_silently(self):
         """_check_duplicate_booking does not raise when no duplicate exists."""
-        from routes.scheduler_appointment_routes import _check_duplicate_booking
+        from routes.scheduler._helpers import _check_duplicate_booking
 
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -188,7 +188,7 @@ class TestC2_DuplicateBookingDetection:
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
 
-        import routes.scheduler_appointment_routes as mod
+        import routes.scheduler._helpers as mod
         original_models = mod._models
         mod._models = {"Appointment": MagicMock()}
 
@@ -206,10 +206,10 @@ class TestC2_DuplicateBookingDetection:
 
     def test_duplicate_check_skips_when_no_email(self):
         """_check_duplicate_booking returns immediately when attendee_email is empty."""
-        from routes.scheduler_appointment_routes import _check_duplicate_booking
+        from routes.scheduler._helpers import _check_duplicate_booking
 
         mock_db = MagicMock()
-        import routes.scheduler_appointment_routes as mod
+        import routes.scheduler._helpers as mod
         original_models = mod._models
         mod._models = {"Appointment": MagicMock()}
 
@@ -232,7 +232,7 @@ class TestC3_LOLicensingCheck:
 
     def test_returns_none_when_nmls_present(self):
         """_check_lo_licensing returns None (no warning) when LO has NMLS number."""
-        from routes.scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._helpers import _check_lo_licensing
 
         mock_user = MagicMock()
         mock_user.nmls_number = "12345"
@@ -252,7 +252,7 @@ class TestC3_LOLicensingCheck:
 
     def test_returns_warning_when_no_nmls(self):
         """_check_lo_licensing returns a warning string when LO lacks NMLS number."""
-        from routes.scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._helpers import _check_lo_licensing
 
         mock_user = MagicMock()
         mock_user.nmls_number = None
@@ -274,7 +274,7 @@ class TestC3_LOLicensingCheck:
 
     def test_returns_none_when_no_state(self):
         """_check_lo_licensing returns None when no attendee_state is provided."""
-        from routes.scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._helpers import _check_lo_licensing
 
         result = _check_lo_licensing(
             db=MagicMock(), assigned_user_id=1, attendee_state="", org_id=1
@@ -283,7 +283,7 @@ class TestC3_LOLicensingCheck:
 
     def test_never_raises_exception(self):
         """_check_lo_licensing is advisory only -- it never raises an HTTPException."""
-        from routes.scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._helpers import _check_lo_licensing
 
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -307,7 +307,7 @@ class TestCRM1_LeadCreation:
 
     def test_ensure_lead_links_existing_lead(self):
         """_ensure_lead_for_booking returns existing lead ID when email matches."""
-        from routes.scheduler_appointment_routes import _ensure_lead_for_booking
+        from routes.scheduler._helpers import _ensure_lead_for_booking
 
         existing_lead = MagicMock()
         existing_lead.id = 42
@@ -330,10 +330,10 @@ class TestCRM1_LeadCreation:
 
         assert lead_id == 42
 
-    @patch("routes.scheduler_appointment_routes.Lead", create=True)
+    @patch("routes.scheduler._helpers.Lead", create=True)
     def test_ensure_lead_creates_new_lead_when_not_found(self, _mock_lead_cls):
         """_ensure_lead_for_booking creates a new Lead when none exists."""
-        from routes.scheduler_appointment_routes import _ensure_lead_for_booking
+        from routes.scheduler._helpers import _ensure_lead_for_booking
 
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -373,7 +373,7 @@ class TestCRM1_LeadCreation:
 
     def test_ensure_lead_returns_none_when_no_email(self):
         """_ensure_lead_for_booking returns None when no email is provided."""
-        from routes.scheduler_appointment_routes import _ensure_lead_for_booking
+        from routes.scheduler._helpers import _ensure_lead_for_booking
 
         lead_id = _ensure_lead_for_booking(
             db=MagicMock(),
@@ -391,12 +391,12 @@ class TestCRM2_ActivityLogging:
 
     def test_log_appointment_activity_creates_activity(self):
         """_log_appointment_activity adds an Activity object to the DB session."""
-        from routes.scheduler_appointment_routes import _log_appointment_activity
+        from routes.scheduler._helpers import _log_appointment_activity
 
         mock_db = MagicMock()
 
-        with patch("routes.scheduler_appointment_routes.Activity", create=True) as MockActivity, \
-             patch("routes.scheduler_appointment_routes.ActivityType", create=True) as MockActivityType:
+        with patch("routes.scheduler._helpers.Activity", create=True) as MockActivity, \
+             patch("routes.scheduler._helpers.ActivityType", create=True) as MockActivityType:
             # Provide a mapping return
             MockActivityType.MEETING = "meeting"
 
@@ -415,7 +415,7 @@ class TestCRM2_ActivityLogging:
 
     def test_log_appointment_activity_truncates_long_content(self):
         """_log_appointment_activity truncates content to 2000 chars."""
-        from routes.scheduler_appointment_routes import _log_appointment_activity
+        from routes.scheduler._helpers import _log_appointment_activity
 
         mock_db = MagicMock()
         long_content = "X" * 5000
@@ -443,7 +443,7 @@ class TestCRM3_FollowupTasks:
 
     def test_create_followup_task_adds_to_db(self):
         """_create_followup_task adds a Task to the session."""
-        from routes.scheduler_appointment_routes import _create_followup_task
+        from routes.scheduler._helpers import _create_followup_task
 
         mock_db = MagicMock()
 
@@ -467,7 +467,7 @@ class TestCRM3_FollowupTasks:
 
     def test_create_followup_task_truncates_title(self):
         """_create_followup_task truncates title to 255 chars."""
-        from routes.scheduler_appointment_routes import _create_followup_task
+        from routes.scheduler._helpers import _create_followup_task
 
         mock_db = MagicMock()
 
@@ -491,7 +491,7 @@ class TestCRM5_CommFailureTask:
 
     def test_create_comm_failure_task_adds_high_priority_task(self):
         """_create_comm_failure_task creates a high-priority task."""
-        from routes.scheduler_appointment_routes import _create_comm_failure_task
+        from routes.scheduler._helpers import _create_comm_failure_task
 
         mock_db = MagicMock()
 
@@ -515,7 +515,7 @@ class TestCRM5_CommFailureTask:
 
     def test_create_comm_failure_task_does_not_commit(self):
         """_create_comm_failure_task does NOT call db.commit() -- caller owns transaction."""
-        from routes.scheduler_appointment_routes import _create_comm_failure_task
+        from routes.scheduler._helpers import _create_comm_failure_task
 
         mock_db = MagicMock()
 
@@ -654,7 +654,7 @@ class TestR4_MemoryRateLimiter:
 
     def test_allows_requests_within_limit(self):
         """_check_memory_rate_limit allows requests under the limit."""
-        from routes.scheduler_appointment_routes import _check_memory_rate_limit
+        from routes.scheduler._helpers import _check_memory_rate_limit
 
         # Use a unique key to avoid cross-test interference
         key = f"test_allow_{time.time()}"
@@ -663,7 +663,7 @@ class TestR4_MemoryRateLimiter:
 
     def test_blocks_requests_over_limit(self):
         """_check_memory_rate_limit blocks requests exceeding the limit."""
-        from routes.scheduler_appointment_routes import _check_memory_rate_limit
+        from routes.scheduler._helpers import _check_memory_rate_limit
 
         key = f"test_block_{time.time()}"
         # Fill up the limit
@@ -675,7 +675,7 @@ class TestR4_MemoryRateLimiter:
 
     def test_evicts_expired_timestamps(self):
         """_check_memory_rate_limit evicts expired entries after window passes."""
-        from routes.scheduler_appointment_routes import _check_memory_rate_limit
+        from routes.scheduler._helpers import _check_memory_rate_limit
 
         key = f"test_evict_{time.time()}"
         # Use a very short window
@@ -926,7 +926,7 @@ class TestAdminRoleCheck:
 
     def test_admin_role_grants_access(self):
         """_is_scheduler_admin returns True for 'admin' role."""
-        from routes.scheduler_appointment_routes import _is_scheduler_admin
+        from routes.scheduler._helpers import _is_scheduler_admin
 
         user = MagicMock()
         user.permission_role = "admin"
@@ -936,7 +936,7 @@ class TestAdminRoleCheck:
 
     def test_site_admin_grants_access(self):
         """_is_scheduler_admin returns True for 'site_admin' role."""
-        from routes.scheduler_appointment_routes import _is_scheduler_admin
+        from routes.scheduler._helpers import _is_scheduler_admin
 
         user = MagicMock()
         user.permission_role = "site_admin"
@@ -946,7 +946,7 @@ class TestAdminRoleCheck:
 
     def test_platform_admin_grants_access(self):
         """_is_scheduler_admin returns True for 'platform_admin' role."""
-        from routes.scheduler_appointment_routes import _is_scheduler_admin
+        from routes.scheduler._helpers import _is_scheduler_admin
 
         user = MagicMock()
         user.permission_role = "platform_admin"
@@ -956,7 +956,7 @@ class TestAdminRoleCheck:
 
     def test_loan_officer_denied(self):
         """_is_scheduler_admin returns False for 'loan_officer' role."""
-        from routes.scheduler_appointment_routes import _is_scheduler_admin
+        from routes.scheduler._helpers import _is_scheduler_admin
 
         user = MagicMock()
         user.permission_role = "loan_officer"
@@ -966,7 +966,7 @@ class TestAdminRoleCheck:
 
     def test_leadership_is_not_admin(self):
         """'leadership' is a display title, not a security role -- should NOT grant admin."""
-        from routes.scheduler_appointment_routes import _is_scheduler_admin
+        from routes.scheduler._helpers import _is_scheduler_admin
 
         user = MagicMock()
         user.permission_role = "leadership"
@@ -976,7 +976,7 @@ class TestAdminRoleCheck:
 
     def test_management_is_not_admin(self):
         """'management' is a display title, not a security role."""
-        from routes.scheduler_appointment_routes import _is_scheduler_admin
+        from routes.scheduler._helpers import _is_scheduler_admin
 
         user = MagicMock()
         user.permission_role = "management"
@@ -990,8 +990,8 @@ class TestUserTimezone:
 
     def test_returns_configured_timezone(self):
         """_get_user_timezone returns the timezone from SchedulerConfig."""
-        from routes.scheduler_appointment_routes import _get_user_timezone
-        import routes.scheduler_appointment_routes as mod
+        from routes.scheduler._helpers import _get_user_timezone
+        import routes.scheduler._helpers as mod
 
         mock_config = MagicMock()
         mock_config.timezone = "America/New_York"
@@ -1015,8 +1015,8 @@ class TestUserTimezone:
 
     def test_returns_default_when_no_config(self):
         """_get_user_timezone returns default timezone when no config found."""
-        from routes.scheduler_appointment_routes import _get_user_timezone
-        import routes.scheduler_appointment_routes as mod
+        from routes.scheduler._helpers import _get_user_timezone
+        import routes.scheduler._helpers as mod
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -1117,7 +1117,7 @@ class TestAppointmentConflict:
 
     def test_conflict_detected_raises_409(self):
         """_check_appointment_conflict raises 409 when overlapping appointment found."""
-        from routes.scheduler_appointment_routes import _check_appointment_conflict
+        from routes.scheduler._helpers import _check_appointment_conflict
         from fastapi import HTTPException
 
         mock_conflict = MagicMock()
@@ -1130,7 +1130,7 @@ class TestAppointmentConflict:
         mock_query.first.return_value = mock_conflict
         mock_db.query.return_value = mock_query
 
-        import routes.scheduler_appointment_routes as mod
+        import routes.scheduler._helpers as mod
         original_models = mod._models
         mock_appt_model = MagicMock()
         # SQLAlchemy column attributes need to support comparison operators
@@ -1154,7 +1154,7 @@ class TestAppointmentConflict:
 
     def test_no_conflict_passes(self):
         """_check_appointment_conflict passes silently when no conflict."""
-        from routes.scheduler_appointment_routes import _check_appointment_conflict
+        from routes.scheduler._helpers import _check_appointment_conflict
 
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -1163,7 +1163,7 @@ class TestAppointmentConflict:
         mock_query.first.return_value = None  # No conflict
         mock_db.query.return_value = mock_query
 
-        import routes.scheduler_appointment_routes as mod
+        import routes.scheduler._helpers as mod
         original_models = mod._models
         mock_appt_model = MagicMock()
         mock_appt_model.scheduled_start.__lt__ = MagicMock(return_value=MagicMock())
@@ -1189,7 +1189,7 @@ class TestOrgIdIsolation:
 
     def test_duplicate_check_filters_by_org_id(self):
         """_check_duplicate_booking passes org_id to the query filter."""
-        from routes.scheduler_appointment_routes import _check_duplicate_booking
+        from routes.scheduler._helpers import _check_duplicate_booking
 
         mock_db = MagicMock()
         mock_query = MagicMock()
@@ -1202,7 +1202,7 @@ class TestOrgIdIsolation:
         mock_appointment_model.scheduled_start.__le__ = MagicMock(return_value=MagicMock())
         mock_appointment_model.status.notin_ = MagicMock(return_value=MagicMock())
 
-        import routes.scheduler_appointment_routes as mod
+        import routes.scheduler._helpers as mod
         original_models = mod._models
         mod._models = {"Appointment": mock_appointment_model}
 
@@ -1239,7 +1239,7 @@ class TestSanitization:
 
     def test_sanitize_text_strips_html(self):
         """_sanitize_text removes HTML tags from input."""
-        from routes.scheduler_appointment_routes import _sanitize_text
+        from routes.scheduler._helpers import _sanitize_text
 
         result = _sanitize_text("<script>alert('xss')</script>Hello")
         assert "<script>" not in result
@@ -1247,13 +1247,13 @@ class TestSanitization:
 
     def test_sanitize_text_returns_none_for_none(self):
         """_sanitize_text returns None when given None."""
-        from routes.scheduler_appointment_routes import _sanitize_text
+        from routes.scheduler._helpers import _sanitize_text
 
         assert _sanitize_text(None) is None
 
     def test_mask_email_hides_local_part(self):
         """_mask_email masks the local part of the email."""
-        from routes.scheduler_appointment_routes import _mask_email
+        from routes.scheduler._helpers import _mask_email
 
         result = _mask_email("john.smith@example.com")
         assert "john.smith" not in result
@@ -1261,14 +1261,14 @@ class TestSanitization:
 
     def test_validate_url_rejects_javascript_scheme(self):
         """_validate_url rejects javascript: URLs."""
-        from routes.scheduler_appointment_routes import _validate_url
+        from routes.scheduler._helpers import _validate_url
 
         result = _validate_url("javascript:alert(1)")
         assert result is None
 
     def test_validate_url_allows_https(self):
         """_validate_url allows https URLs."""
-        from routes.scheduler_appointment_routes import _validate_url
+        from routes.scheduler._helpers import _validate_url
 
         result = _validate_url("https://example.com/meeting")
         assert result == "https://example.com/meeting"
@@ -1279,7 +1279,7 @@ class TestGetOrgId:
 
     def test_returns_org_id_from_user(self):
         """_get_org_id returns organization_id from user object."""
-        from routes.scheduler_appointment_routes import _get_org_id
+        from routes.scheduler._helpers import _get_org_id
 
         user = MagicMock()
         user.organization_id = 42
@@ -1288,7 +1288,7 @@ class TestGetOrgId:
 
     def test_raises_403_when_missing(self):
         """_get_org_id raises 403 when user has no organization_id."""
-        from routes.scheduler_appointment_routes import _get_org_id
+        from routes.scheduler._helpers import _get_org_id
         from fastapi import HTTPException
 
         user = MagicMock()

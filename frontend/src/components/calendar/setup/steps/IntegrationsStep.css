@@ -1,0 +1,790 @@
+/**
+ * IntegrationsStep.css
+ * Step 6: Integration connections for Smart Calendar guided setup.
+ * Uses Perennia brand color #218D8D and matches CalendarSettings.css patterns.
+ * BEM naming: .integrations-step__*
+ */
+
+/* ============================================================================
+   Layout & Loading
+   ============================================================================ */
+
+@import "../../../../styles/calendar-design-tokens.css";
+
+.integrations-step {
+  max-width: 740px;
+  margin: 0 auto;
+}
+
+.integrations-step__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  gap: 14px;
+  color: var(--cal-text-secondary);
+  font-size: 14px;
+}
+
+.integrations-step__spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--cal-border);
+  border-top-color: var(--cal-primary);
+  border-radius: 50%;
+  animation: integrations-spin 0.8s linear infinite;
+}
+
+@keyframes integrations-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Header
+   ============================================================================ */
+
+.integrations-step__header {
+  margin-bottom: 20px;
+}
+
+.integrations-step__step-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--cal-primary);
+  background: var(--cal-primary-light);
+  border-radius: 20px;
+  margin-bottom: 10px;
+}
+
+.integrations-step__title {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cal-text-primary);
+}
+
+.integrations-step__subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cal-text-secondary);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Summary bar
+   ============================================================================ */
+
+.integrations-step__summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--cal-primary-light);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--cal-primary);
+  margin-bottom: 28px;
+}
+
+.integrations-step__summary-bar i {
+  font-size: 16px;
+}
+
+.integrations-step__summary-bar strong {
+  font-weight: 700;
+  color: #176767;
+}
+
+/* ============================================================================
+   Section headers
+   ============================================================================ */
+
+.integrations-step__section {
+  margin-bottom: 32px;
+}
+
+.integrations-step__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cal-text-primary);
+  margin: 0 0 4px;
+}
+
+.integrations-step__section-title i {
+  color: var(--cal-primary);
+  font-size: 15px;
+}
+
+.integrations-step__section-desc {
+  font-size: 13px;
+  color: var(--cal-text-secondary);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Cards grid
+   ============================================================================ */
+
+.integrations-step__cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+/* ============================================================================
+   Integration card
+   ============================================================================ */
+
+.integrations-step__card {
+  background: #ffffff;
+  border: 2px solid var(--cal-border);
+  border-radius: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  overflow: hidden;
+}
+
+.integrations-step__card:hover {
+  border-color: var(--cal-border-hover);
+}
+
+.integrations-step__card--connected {
+  border-color: var(--cal-primary);
+  background: #fafefe;
+}
+
+.integrations-step__card--crm {
+  border-color: var(--cal-primary);
+}
+
+/* Card header */
+.integrations-step__card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+/* Card icon */
+.integrations-step__card-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  background: var(--cal-bg-tertiary);
+  color: var(--cal-text-secondary);
+  transition: all 0.15s;
+}
+
+.integrations-step__card--connected .integrations-step__card-icon {
+  background: var(--cal-primary-light);
+  color: var(--cal-primary);
+}
+
+.integrations-step__card-icon--crm {
+  background: var(--cal-primary) !important;
+  color: #ffffff !important;
+}
+
+/* Card info */
+.integrations-step__card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.integrations-step__card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  flex-wrap: wrap;
+}
+
+.integrations-step__card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cal-text-primary);
+}
+
+.integrations-step__card-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cal-text-secondary);
+  line-height: 1.4;
+}
+
+/* Card actions */
+.integrations-step__card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Badges
+   ============================================================================ */
+
+.integrations-step__recommended {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--cal-success-light);
+  color: var(--cal-success-darker);
+  white-space: nowrap;
+}
+
+.integrations-step__always-connected {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--cal-primary-light);
+  color: var(--cal-primary);
+  white-space: nowrap;
+}
+
+/* Status badge */
+.integrations-step__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.integrations-step__status--connected {
+  background: var(--cal-success-light);
+  color: var(--cal-success-darker);
+}
+
+.integrations-step__status--disconnected {
+  background: var(--cal-bg-tertiary);
+  color: var(--cal-text-muted);
+}
+
+.integrations-step__status--syncing {
+  background: var(--cal-warning-light);
+  color: var(--cal-warning-dark);
+}
+
+/* Connect / Disconnect button */
+.integrations-step__connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  background: var(--cal-primary);
+  color: #ffffff;
+}
+
+.integrations-step__connect-btn:hover {
+  background: var(--cal-primary-hover);
+}
+
+.integrations-step__connect-btn:focus-visible {
+  outline: 2px solid var(--cal-text-primary);
+  outline-offset: 2px;
+}
+
+.integrations-step__connect-btn--disconnect {
+  background: #ffffff;
+  color: var(--cal-error-dark);
+  border: 1px solid var(--cal-error-border);
+}
+
+.integrations-step__connect-btn--disconnect:hover {
+  background: var(--cal-error-light);
+  border-color: var(--cal-error-border-bright);
+}
+
+.integrations-step__connect-btn--disconnect:focus-visible {
+  outline: 2px solid var(--cal-error-dark);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Card settings panel
+   ============================================================================ */
+
+.integrations-step__card-settings {
+  padding: 14px 18px 16px;
+  border-top: 1px solid var(--cal-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: integrations-settings-in 0.2s ease-out;
+}
+
+.integrations-step__card-settings--always {
+  animation: none;
+}
+
+@keyframes integrations-settings-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Setting row */
+.integrations-step__setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.integrations-step__setting-label {
+  font-size: 13px;
+  color: var(--cal-text-body);
+  flex: 1;
+  min-width: 0;
+}
+
+/* Select */
+.integrations-step__select {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--cal-border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--cal-text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.integrations-step__select:focus {
+  outline: none;
+  border-color: var(--cal-primary);
+  box-shadow: 0 0 0 2px var(--cal-focus-ring-strong);
+}
+
+/* Input */
+.integrations-step__input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid var(--cal-border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--cal-text-primary);
+  transition: border-color 0.15s;
+}
+
+.integrations-step__input:focus {
+  outline: none;
+  border-color: var(--cal-primary);
+  box-shadow: 0 0 0 2px var(--cal-focus-ring-strong);
+}
+
+.integrations-step__input::placeholder {
+  color: var(--cal-text-muted);
+}
+
+.integrations-step__input--feed {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--cal-text-secondary);
+  background: var(--cal-bg-secondary);
+}
+
+/* Last sync timestamp */
+.integrations-step__last-sync {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cal-text-muted);
+}
+
+.integrations-step__last-sync i {
+  font-size: 11px;
+}
+
+/* ============================================================================
+   Toggle switch
+   ============================================================================ */
+
+.integrations-step__toggle {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.integrations-step__toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.integrations-step__toggle-track {
+  display: block;
+  width: 44px;
+  height: 24px;
+  background: var(--cal-border-hover);
+  border-radius: 12px;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.integrations-step__toggle input:checked + .integrations-step__toggle-track {
+  background: var(--cal-primary);
+}
+
+.integrations-step__toggle-thumb {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.integrations-step__toggle input:checked + .integrations-step__toggle-track .integrations-step__toggle-thumb {
+  transform: translateX(20px);
+}
+
+.integrations-step__toggle input:focus-visible + .integrations-step__toggle-track {
+  box-shadow: 0 0 0 3px var(--cal-focus-ring-stronger);
+}
+
+/* ============================================================================
+   Sync details expandable
+   ============================================================================ */
+
+.integrations-step__sync-details {
+  margin-top: 2px;
+}
+
+.integrations-step__sync-details-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cal-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+
+.integrations-step__sync-details-trigger:hover {
+  color: #176767;
+}
+
+.integrations-step__sync-details-trigger:focus-visible {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: 2px;
+}
+
+.integrations-step__sync-details-trigger i {
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.integrations-step__sync-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: integrations-settings-in 0.15s ease-out;
+}
+
+.integrations-step__sync-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--cal-text-body);
+}
+
+.integrations-step__sync-list li i {
+  color: var(--cal-primary);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   Calendar feed section
+   ============================================================================ */
+
+.integrations-step__feed-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.integrations-step__feed-section + .integrations-step__feed-section {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cal-bg-tertiary);
+}
+
+.integrations-step__feed-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cal-text-primary);
+}
+
+.integrations-step__feed-label i {
+  color: var(--cal-primary);
+  font-size: 12px;
+}
+
+.integrations-step__feed-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.integrations-step__copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--cal-border);
+  background: #ffffff;
+  color: var(--cal-text-body);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.integrations-step__copy-btn:hover {
+  background: var(--cal-bg-tertiary);
+  border-color: var(--cal-border-hover);
+}
+
+.integrations-step__copy-btn:focus-visible {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: -2px;
+}
+
+.integrations-step__regen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cal-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 2px 0;
+  transition: color 0.15s;
+}
+
+.integrations-step__regen-btn:hover {
+  color: var(--cal-primary);
+}
+
+.integrations-step__regen-btn:focus-visible {
+  outline: 2px solid var(--cal-primary);
+  outline-offset: 2px;
+}
+
+.integrations-step__regen-btn i {
+  font-size: 11px;
+}
+
+/* ============================================================================
+   Info note
+   ============================================================================ */
+
+.integrations-step__info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--cal-info-light);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--cal-info-darker);
+  line-height: 1.5;
+}
+
+.integrations-step__info i {
+  flex-shrink: 0;
+  font-size: 15px;
+  margin-top: 1px;
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .integrations-step__cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .integrations-step__card-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .integrations-step__card-info {
+    flex: 1;
+    min-width: calc(100% - 60px);
+  }
+
+  .integrations-step__card-actions {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .integrations-step__feed-row {
+    flex-direction: column;
+  }
+
+  .integrations-step__copy-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .integrations-step__setting-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .integrations-step__select {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  /* iOS auto-zoom prevention */
+  .integrations-step input,
+  .integrations-step select,
+  .integrations-step textarea,
+  .integrations-step__select,
+  .integrations-step__feed-input {
+    font-size: 16px;
+  }
+
+  /* Touch targets */
+  .integrations-step__connect-btn {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+
+  .integrations-step__copy-btn {
+    min-height: 44px;
+  }
+
+  .integrations-step__toggle {
+    min-width: 44px;
+  }
+
+  .integrations-step__card-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
+  }
+
+  .integrations-step__card-header {
+    padding: 14px;
+  }
+
+  .integrations-step__card-settings {
+    padding: 12px 14px 14px;
+  }
+
+  .integrations-step__summary-bar {
+    font-size: 13px;
+    padding: 10px 14px;
+  }
+}
+
+/* ============================================================================
+   Reduced motion preference
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .integrations-step__spinner {
+    animation: integrations-spin 1.5s linear infinite;
+  }
+
+  .integrations-step__card-settings {
+    animation: none;
+  }
+
+  .integrations-step__sync-list {
+    animation: none;
+  }
+
+  .integrations-step__card,
+  .integrations-step__connect-btn,
+  .integrations-step__copy-btn,
+  .integrations-step__regen-btn,
+  .integrations-step__select,
+  .integrations-step__input,
+  .integrations-step__toggle-track,
+  .integrations-step__toggle-thumb,
+  .integrations-step__card-icon,
+  .integrations-step__sync-details-trigger,
+  .integrations-step__sync-details-trigger i {
+    transition: none;
+  }
+}

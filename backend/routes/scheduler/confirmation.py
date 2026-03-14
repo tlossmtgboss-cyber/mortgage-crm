@@ -21,6 +21,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import jwt
 
 from smart_scheduler_models import (
@@ -41,6 +42,70 @@ router = APIRouter()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
+
+# Maximum length for ICS description field to prevent abuse
+_ICS_DESCRIPTION_MAX_LENGTH = 2000
+
+# Regex to strip HTML tags
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+# ============================================================================
+# PII MASKING HELPERS (for public-facing responses)
+# ============================================================================
+
+def _mask_email_public(email: Optional[str]) -> Optional[str]:
+    """Mask email for public responses: ti***@company.com"""
+    if not email or "@" not in email:
+        return None
+    local, domain = email.split("@", 1)
+    if len(local) <= 2:
+        masked_local = local[0] + "***" if local else "***"
+    else:
+        masked_local = local[:2] + "***"
+    return f"{masked_local}@{domain}"
+
+
+def _mask_phone_public(phone: Optional[str]) -> Optional[str]:
+    """Mask phone for public responses: show only last 4 digits."""
+    if not phone:
+        return None
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) < 4:
+        return None
+    return f"***-***-{digits[-4:]}"
+
+
+def _mask_nmls_public(nmls: Optional[str]) -> Optional[str]:
+    """Mask NMLS number for public responses: show only last 4 digits."""
+    if not nmls:
+        return None
+    nmls_str = str(nmls)
+    if len(nmls_str) <= 4:
+        return None
+    return f"***{nmls_str[-4:]}"
+
+
+# ============================================================================
+# ICS CONTENT SANITIZATION
+# ============================================================================
+
+def _sanitize_ics_description(description: str) -> str:
+    """Sanitize user-provided content for ICS DESCRIPTION field.
+
+    Strips HTML tags, escapes special ICS characters per RFC 5545,
+    and limits length to prevent abuse.
+    """
+    if not description:
+        return ""
+    # Strip HTML tags
+    cleaned = _HTML_TAG_RE.sub("", description)
+    # Decode HTML entities (e.g., &amp; -> &)
+    cleaned = html.unescape(cleaned)
+    # Truncate to max length
+    if len(cleaned) > _ICS_DESCRIPTION_MAX_LENGTH:
+        cleaned = cleaned[:_ICS_DESCRIPTION_MAX_LENGTH] + "..."
+    return cleaned
 
 
 # ============================================================================
@@ -162,13 +227,21 @@ def _generate_confirmation_token(appointment_id: int, attendee_email: str) -> st
         "appt_id": appointment_id,
         "email": attendee_email,
         "purpose": "confirmation",
-        "exp": datetime.now(timezone.utc) + timedelta(days=90),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=48),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
 
-def _verify_confirmation_token(token: str, appointment_id: int) -> dict:
-    """Verify a confirmation token. Returns decoded payload or raises HTTPException."""
+def _verify_confirmation_token(
+    token: str,
+    appointment_id: int,
+    appointment_status: Optional[str] = None,
+) -> dict:
+    """Verify a confirmation token. Returns decoded payload or raises HTTPException.
+
+    If appointment_status is provided, also checks that the appointment has not
+    been cancelled or marked as no-show (revokes token implicitly).
+    """
     if not SECRET_KEY:
         raise HTTPException(status_code=500, detail="Server configuration error")
     try:
@@ -180,6 +253,10 @@ def _verify_confirmation_token(token: str, appointment_id: int) -> dict:
 
     if payload.get("appt_id") != appointment_id:
         raise HTTPException(status_code=403, detail="Token does not match this appointment")
+
+    # Implicit token revocation: reject tokens for cancelled/terminal appointments
+    if appointment_status and appointment_status in ("cancelled", "no_show"):
+        raise HTTPException(status_code=410, detail="This appointment has been cancelled")
 
     return payload
 
@@ -216,9 +293,7 @@ async def get_confirmation_details(
     Get appointment confirmation details for the public confirmation page.
     Requires a valid appointment-specific JWT token (no login needed).
     """
-    _check_rate_limit(request, max_requests=30)
-
-    payload = _verify_confirmation_token(token, appointment_id)
+    await _check_rate_limit(request, max_requests=30)
 
     models = get_models()
     if not models:
@@ -235,24 +310,27 @@ async def get_confirmation_details(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    # Get LO details
+    # Resolve appointment status for token revocation check
+    appt_status = appointment.status.value if hasattr(appointment.status, 'value') else str(appointment.status)
+
+    # Verify token AND implicitly revoke if appointment is cancelled/no-show
+    payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
+
+    # Get LO details -- mask PII for public response (no raw email/phone/NMLS)
     lo_name = None
-    lo_email = None
     lo_photo = None
-    lo_phone = None
     lo_title = None
-    lo_nmls = None
+    lo_nmls_masked = None
     if appointment.assigned_user_id:
         try:
             from database.models.core import User
             lo = db.query(User).filter(User.id == appointment.assigned_user_id).first()
             if lo:
                 lo_name = f"{getattr(lo, 'first_name', '') or ''} {getattr(lo, 'last_name', '') or ''}".strip()
-                lo_email = getattr(lo, 'email', None)
                 lo_photo = getattr(lo, 'profile_photo_url', None) or getattr(lo, 'avatar_url', None)
-                lo_phone = getattr(lo, 'phone', None)
                 lo_title = getattr(lo, 'title', None) or "Loan Officer"
-                lo_nmls = getattr(lo, 'nmls_number', None)
+                # Mask NMLS -- only show last 4 digits in public response
+                lo_nmls_masked = _mask_nmls_public(getattr(lo, 'nmls_number', None))
         except Exception as e:
             logger.warning(f"Could not load LO details: {e}")
 
@@ -356,15 +434,12 @@ async def get_confirmation_details(
     # Share link
     share_url = f"{FRONTEND_URL}/booking/confirmation/{appointment_id}?token={token}"
 
-    # Status info
-    status_value = appointment.status.value if hasattr(appointment.status, 'value') else str(appointment.status)
-
     return {
         "appointment": {
             "id": appointment.id,
             "title": appointment.title,
             "description": appointment.description,
-            "status": status_value,
+            "status": appt_status,
             "meeting_type": meeting_type_value,
             "meeting_mode": meeting_mode_value,
             "meeting_mode_label": meeting_mode_label,
@@ -381,11 +456,9 @@ async def get_confirmation_details(
         },
         "loan_officer": {
             "name": lo_name,
-            "email": lo_email,
-            "phone": lo_phone,
             "photo_url": lo_photo,
             "title": lo_title,
-            "nmls_number": lo_nmls,
+            "nmls_number": lo_nmls_masked,
         },
         "calendar_links": {
             "google": google_cal_url,
@@ -411,9 +484,7 @@ async def download_ics_file(
     db: Session = Depends(get_db),
 ):
     """Download ICS calendar file for the appointment."""
-    _check_rate_limit(request, max_requests=30)
-
-    _verify_confirmation_token(token, appointment_id)
+    await _check_rate_limit(request, max_requests=30)
 
     models = get_models()
     if not models:
@@ -430,6 +501,12 @@ async def download_ics_file(
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
+    # Resolve status for token revocation check (Task #7)
+    appt_status = appointment.status.value if hasattr(appointment.status, 'value') else str(appointment.status)
+
+    # Verify token AND reject if appointment is cancelled/no-show
+    _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
+
     # Get LO info for organizer fields
     organizer_name = "Perennia AI"
     organizer_email = "noreply@perenniaai.com"
@@ -443,6 +520,9 @@ async def download_ics_file(
         except Exception as e:
             logger.warning(f"Could not load LO for ICS: {e}")
 
+    # Sanitize description: strip HTML tags, limit length (Task #16)
+    safe_description = _sanitize_ics_description(appointment.description or "")
+
     ics_content = generate_ics_content(
         appointment_title=appointment.title or "Mortgage Appointment",
         start_datetime=appointment.scheduled_start,
@@ -451,7 +531,7 @@ async def download_ics_file(
         attendee_name=appointment.attendee_name or "",
         organizer_email=organizer_email,
         organizer_name=organizer_name,
-        description=appointment.description or "",
+        description=safe_description,
         location=appointment.location or "",
         video_link=appointment.video_link,
         appointment_id=appointment.id,

@@ -13,6 +13,9 @@
 /* --------------------------------------------------------------------------
    Custom Properties
    -------------------------------------------------------------------------- */
+
+@import "./calendar-design-tokens.css";
+
 :root {
   --cal-tablet-sidebar-width: 280px;
   --cal-tablet-sidebar-collapsed: 0px;

@@ -882,6 +882,20 @@ class AgentRegistry:
             "closing vendor": "VendorManagementAgent",
             "vendor delay": "VendorManagementAgent",
             "vendor sla": "VendorManagementAgent",
+
+            # Application Completion Agent
+            "application completion": "AppCompletionAgent",
+            "app completion": "AppCompletionAgent",
+            "completeness score": "AppCompletionAgent",
+            "application score": "AppCompletionAgent",
+            "missing items": "AppCompletionAgent",
+            "incomplete application": "AppCompletionAgent",
+            "application review": "AppCompletionAgent",
+            "scoring page": "AppCompletionAgent",
+            "pa call": "AppCompletionAgent",
+            "production assistant call": "AppCompletionAgent",
+            "borrower question": "AppCompletionAgent",
+            "application gap": "AppCompletionAgent",
         }
 
         intent_lower = intent.lower()

@@ -36,6 +36,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass, asdict
 
+import bcrypt
+
 from services.smart_docs.esignature_key_manager import (
     ESignatureKeyManager,
     get_esignature_key_manager,
@@ -554,22 +556,20 @@ class ESignatureCryptoService:
         """
         Hash an access code for safe database storage.
 
-        Uses SHA-256 with a per-service salt derived from the signing key.
+        Uses bcrypt for key-stretching, making brute-force attacks on
+        short numeric codes significantly more expensive than plain
+        SHA-256.
 
         Args:
             code: The plaintext access code.
 
         Returns:
-            Hex-encoded hash suitable for storage.
+            A bcrypt hash string suitable for storage.
         """
         try:
-            # Derive a stable salt from the signing key so hashes are
-            # consistent across calls but not rainbow-table-friendly.
-            salt = hashlib.sha256(
-                b"access-code-salt" + self._signing_key
-            ).digest()[:16]
-
-            return hashlib.sha256(salt + code.encode("utf-8")).hexdigest()
+            code_bytes = code.encode("utf-8")
+            hashed = bcrypt.hashpw(code_bytes, bcrypt.gensalt(rounds=12))
+            return hashed.decode("utf-8")
 
         except Exception as e:
             logger.exception("Failed to hash access code")
@@ -577,18 +577,19 @@ class ESignatureCryptoService:
 
     def verify_access_code(self, code: str, hashed: str) -> bool:
         """
-        Verify an access code against its stored hash.
+        Verify an access code against its stored bcrypt hash.
 
         Args:
             code: The plaintext code provided by the user.
-            hashed: The stored hex-encoded hash.
+            hashed: The stored bcrypt hash string.
 
         Returns:
             True if the code matches, False otherwise.
         """
         try:
-            expected = self.hash_access_code(code)
-            return hmac.compare_digest(expected, hashed)
+            code_bytes = code.encode("utf-8")
+            hashed_bytes = hashed.encode("utf-8")
+            return bcrypt.checkpw(code_bytes, hashed_bytes)
         except Exception as e:
             logger.exception("Access code verification failed: %s", e)
             return False

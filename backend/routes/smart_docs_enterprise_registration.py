@@ -7,13 +7,11 @@ single missing dependency (e.g. plaid-python) does not bring down the
 entire application.
 
 New route modules (all under /api/smart-docs):
-- Plaid VOA/VOI        /plaid/*
-- AUS Integration       /aus/*
-- eClosing / RON        /eclosing/*
-- MISMO XML Export       /mismo/*
-- IRS Transcript Orders  /transcript/*
-- Config / Rules         /config/*        (already in V2; enterprise adds more)
-- Monitoring Dashboard   /monitoring/*
+- Config / Rules         /config/*        (enterprise-specific config routes)
+
+Note: Plaid, AUS, eClosing, MISMO, Transcript, and Monitoring routes were
+moved to smart_docs_v2_registration.py.  They are NOT re-registered here
+to avoid duplicate router mounts.
 
 Middleware:
 - TraceIDMiddleware      — propagates X-Trace-ID across the request
@@ -52,45 +50,13 @@ ENTERPRISE_PREFIX = "/api/smart-docs"
 # Module specs: (human label, import path, attribute name for the router,
 #                extra prefix to append to ENTERPRISE_PREFIX or None)
 _ROUTE_MODULES = [
-    (
-        "plaid",
-        "routes.smart_docs_plaid_routes",
-        "router",
-        None,  # router defines its own /plaid prefix
-    ),
-    (
-        "aus",
-        "routes.smart_docs_aus_routes",
-        "router",
-        None,
-    ),
-    (
-        "eclosing",
-        "routes.smart_docs_eclosing_routes",
-        "router",
-        None,
-    ),
-    (
-        "mismo",
-        "routes.smart_docs_mismo_routes",
-        "router",
-        None,
-    ),
-    (
-        "transcript",
-        "routes.smart_docs_transcript_routes",
-        "router",
-        None,
-    ),
+    # NOTE: plaid, aus, eclosing, mismo, transcript, and monitoring routes are
+    # already registered by smart_docs_v2_registration.py (which calls us).
+    # They were previously listed here too, causing each router to be mounted
+    # twice at the same /api/smart-docs prefix.  Removed to fix the duplicate.
     (
         "config",
         "routes.smart_docs_enterprise_config_routes",
-        "router",
-        None,
-    ),
-    (
-        "monitoring",
-        "routes.smart_docs_monitoring_routes",
         "router",
         None,
     ),

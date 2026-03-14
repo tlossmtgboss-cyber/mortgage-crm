@@ -567,6 +567,30 @@ from .ab_test import (
 # Cancellation Policy (per-org appointment cancellation rules)
 from .cancellation_policy import CancellationPolicy
 
+# Application Completion Orchestrator (ACO) models
+from .app_completion import (
+    ApplicationCompletenessReview,
+    MissingItem,
+    DocumentStagingRequest,
+    BorrowerCommunicationLog,
+    AppointmentCoordination,
+    ApplicationScoreHistory,
+    ReviewStatus,
+    ComplexityLevel,
+    NextAction,
+    MissingItemType,
+    MissingItemSeverity,
+    MissingItemStatus,
+    ResolutionMethod,
+    DocStagingStatus,
+    CommChannel,
+    SenderType,
+    MessageIntent,
+    BookingStatus,
+    ScoreChangeReason,
+    ActorType,
+)
+
 
 __all__ = [
     # =====================
@@ -1140,4 +1164,28 @@ __all__ = [
     # Cancellation Policy
     # =====================
     "CancellationPolicy",
+
+    # =====================
+    # Application Completion Orchestrator (ACO)
+    # =====================
+    "ApplicationCompletenessReview",
+    "MissingItem",
+    "DocumentStagingRequest",
+    "BorrowerCommunicationLog",
+    "AppointmentCoordination",
+    "ApplicationScoreHistory",
+    "ReviewStatus",
+    "ComplexityLevel",
+    "NextAction",
+    "MissingItemType",
+    "MissingItemSeverity",
+    "MissingItemStatus",
+    "ResolutionMethod",
+    "DocStagingStatus",
+    "CommChannel",
+    "SenderType",
+    "MessageIntent",
+    "BookingStatus",
+    "ScoreChangeReason",
+    "ActorType",
 ]

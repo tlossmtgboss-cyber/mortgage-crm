@@ -1,9 +1,19 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import babel from 'vite-plugin-babel';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    // Babel plugin to handle JSX in .js files (CRA compatibility)
+    babel({
+      filter: /\.[jt]sx?$/,
+      babelConfig: {
+        presets: [['@babel/preset-react', { runtime: 'automatic' }]],
+      },
+    }),
+    react(),
+  ],
   test: {
     globals: true,
     environment: 'jsdom',
@@ -26,5 +36,10 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+  },
+  // Handle JSX in .js files (CRA compatibility)
+  esbuild: {
+    loader: 'jsx',
+    include: /\.[jt]sx?$/,
   },
 });

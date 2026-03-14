@@ -252,6 +252,14 @@ def register_smart_docs_v2_routes(app):
     except Exception as e:
         logger.warning(f"Smart Docs V2: AI benchmark migration skipped or failed: {e}")
 
+    # ---- Application Completion Orchestrator (ACO) routes ----
+    try:
+        from routes.app_completion_registration import register_app_completion_routes
+        aco_modules = register_app_completion_routes(app)
+        registered.extend(aco_modules)
+    except Exception as e:
+        logger.warning(f"ACO registration skipped or failed: {e}")
+
     # ---- Enterprise (Wave 3) routes and middleware ----
     try:
         from routes.smart_docs_enterprise_registration import (

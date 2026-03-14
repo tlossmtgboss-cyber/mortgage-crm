@@ -3,12 +3,26 @@ import { schedulerAPI } from '../../services/api';
 import StatusBadge, { STATUS_CONFIG } from './StatusBadge';
 
 /**
- * CalendarSearch - Advanced appointment search with typeahead, filters, and results.
+ * CalendarSearch -- Full-screen search overlay with typeahead suggestions, advanced filters,
+ * paginated results, and sort controls for appointments.
  *
- * Props:
- *   onSelectAppointment(appointment) - called when a result row is clicked
- *   onClose() - called when the search overlay is dismissed
- *   visible - whether the search panel is open
+ * Supports filtering by status, date range, AI-booked flag, and free-text query.
+ * Auto-focuses the input on open and closes on Escape key.
+ *
+ * Used in: Calendar (main page, triggered by Ctrl+K or search button)
+ *
+ * @param {Object} props
+ * @param {Function} props.onSelectAppointment - Callback(appointment) when a search result row is clicked
+ * @param {Function} props.onClose - Callback() to dismiss the search overlay
+ * @param {boolean} props.visible - Whether the search panel is currently open
+ * @returns {React.ReactElement|null} Returns null when not visible
+ *
+ * @example
+ * <CalendarSearch
+ *   visible={isSearchOpen}
+ *   onSelectAppointment={handleSelect}
+ *   onClose={() => setSearchOpen(false)}
+ * />
  */
 
 const STATUS_OPTIONS = Object.keys(STATUS_CONFIG).filter(

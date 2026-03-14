@@ -164,6 +164,17 @@ from services.smart_docs.white_label_service import (
     TEMPLATE_KEYS as WHITE_LABEL_TEMPLATE_KEYS,
 )
 
+# Application Completion Orchestrator (ACO) services
+from services.smart_docs.app_review_engine import ApplicationReviewEngine
+from services.smart_docs.completeness_scoring_engine import CompletenessScoreEngine
+from services.smart_docs.ai_resolution_engine import AIResolutionEngine
+from services.smart_docs.document_staging_service import DocumentStagingService
+from services.smart_docs.communication_orchestrator import SMSOrchestrator, CalendarCoordinator
+from services.smart_docs.app_completion_orchestrator import (
+    AppCompletionOrchestrator,
+    trigger_application_review,
+)
+
 __all__ = [
     "NeedsListGenerator",
     "ScreenshotDetector",
@@ -272,4 +283,13 @@ __all__ = [
     "BrandValidationResult",
     "ComplianceFooter",
     "WHITE_LABEL_TEMPLATE_KEYS",
+    # Application Completion Orchestrator (ACO)
+    "ApplicationReviewEngine",
+    "CompletenessScoreEngine",
+    "AIResolutionEngine",
+    "DocumentStagingService",
+    "SMSOrchestrator",
+    "CalendarCoordinator",
+    "AppCompletionOrchestrator",
+    "trigger_application_review",
 ]

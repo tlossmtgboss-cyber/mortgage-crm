@@ -16,7 +16,13 @@ import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
+import bcrypt
 import pytest
+
+
+def _hash_answer(answer: str) -> str:
+    """Hash a KBA answer the same way the service does (lowercase + strip + bcrypt)."""
+    return bcrypt.hashpw(answer.lower().strip().encode("utf-8"), bcrypt.gensalt(rounds=4)).decode("utf-8")
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -324,6 +330,7 @@ class TestKBAService:
             assert "question" in q
             assert "options" in q
             assert "correct_index" not in q  # hidden from caller
+            assert "correct_answer_hash" not in q  # hash also hidden from caller
 
     # --- Verify KBA answers (pass) ---
 
@@ -337,10 +344,10 @@ class TestKBAService:
         kba_session.attempts_used = 0
         kba_session.max_attempts = 3
         kba_session.questions = [
-            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_index": 0},
-            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_index": 1},
-            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_index": 2},
-            {"question": "Q4", "options": ["A", "B", "C", "D"], "correct_index": 3},
+            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("A")},
+            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("B")},
+            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("C")},
+            {"question": "Q4", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("D")},
         ]
 
         mock_db.query.return_value.filter.return_value.first.return_value = kba_session
@@ -373,10 +380,10 @@ class TestKBAService:
         kba_session.attempts_used = 0
         kba_session.max_attempts = 3
         kba_session.questions = [
-            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_index": 0},
-            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_index": 1},
-            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_index": 2},
-            {"question": "Q4", "options": ["A", "B", "C", "D"], "correct_index": 3},
+            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("A")},
+            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("B")},
+            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("C")},
+            {"question": "Q4", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("D")},
         ]
 
         mock_db.query.return_value.filter.return_value.first.return_value = kba_session
@@ -408,9 +415,9 @@ class TestKBAService:
         kba_session.attempts_used = 2  # already used 2 of 3
         kba_session.max_attempts = 3
         kba_session.questions = [
-            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_index": 0},
-            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_index": 1},
-            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_index": 2},
+            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("A")},
+            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("B")},
+            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("C")},
         ]
 
         def side_effect_query(model):
@@ -581,6 +588,9 @@ class TestKBAQuestionGeneration:
                 "Correct answer index must not be exposed to the client"
             )
             assert "correct_answer" not in q
+            assert "correct_answer_hash" not in q, (
+                "Correct answer hash must not be exposed to the client"
+            )
 
 
 # ============================================================================
@@ -600,9 +610,9 @@ class TestKBAAnswerValidation:
         s.attempts_used = 0
         s.max_attempts = 3
         s.questions = [
-            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_index": 0},
-            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_index": 1},
-            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_index": 2},
+            {"question": "Q1", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("A")},
+            {"question": "Q2", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("B")},
+            {"question": "Q3", "options": ["A", "B", "C", "D"], "correct_answer_hash": _hash_answer("C")},
         ]
         return s
 

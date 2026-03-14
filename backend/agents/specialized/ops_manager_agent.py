@@ -89,9 +89,11 @@ TERMINAL_STAGES = (
     "WITHDRAWN", "DOES_NOT_QUALIFY"
 )
 
-# Terminal lead stages (from LeadStage enum in database/enums.py)
+# Terminal lead stages — leads that have moved out of the active lead pipeline.
+# "Withdrawn" and "Does Not Qualify" are now Active Loan terminal stages, not lead stages.
+# Leads only exit to: Closed/Funded (MUM) or Do Not Call (suppressed).
 TERMINAL_LEAD_STAGES = (
-    "Closed", "Funded", "Withdrawn", "Does Not Qualify", "Do Not Call"
+    "Closed", "Funded", "AMR", "Referral Source", "Do Not Call"
 )
 
 # Stage thresholds for team role requirements

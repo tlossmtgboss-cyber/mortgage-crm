@@ -912,7 +912,7 @@ class TestESignE2EWorkflow:
         assert code.isdigit()
 
         hashed = crypto_service.hash_access_code(code)
-        assert len(hashed) == 64
+        assert hashed.startswith("$2b$"), "Hashed access code must be bcrypt"
 
         assert crypto_service.verify_access_code(code, hashed) is True
         assert crypto_service.verify_access_code("000000", hashed) is False

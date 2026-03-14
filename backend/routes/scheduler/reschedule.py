@@ -185,7 +185,7 @@ async def public_reschedule_slots(
 
     The token is a JWT from the reschedule link.  No login needed.
     """
-    _check_rate_limit(request, max_requests=20)
+    await _check_rate_limit(request, max_requests=20)
 
     svc = _get_reschedule_service(db)
 
@@ -243,7 +243,7 @@ async def public_reschedule_confirm(
 
     Moves the appointment to the new time and sends a confirmation email.
     """
-    _check_rate_limit(request, max_requests=10)
+    await _check_rate_limit(request, max_requests=10)
 
     svc = _get_reschedule_service(db)
 

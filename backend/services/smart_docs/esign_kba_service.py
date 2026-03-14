@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Optional
 
+import bcrypt
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,29 @@ class KBAService:
 
     def __init__(self, db: Session):
         self.db = db
+
+    # ------------------------------------------------------------------
+    # KBA answer hashing helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _hash_kba_answer(answer: str) -> str:
+        """Hash a KBA answer for safe storage using bcrypt.
+
+        The answer is lowercased and stripped before hashing so that
+        verification is case-insensitive and whitespace-tolerant.
+        """
+        normalized = answer.lower().strip().encode("utf-8")
+        return bcrypt.hashpw(normalized, bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+    @staticmethod
+    def _verify_kba_answer(answer: str, hashed: str) -> bool:
+        """Verify a KBA answer against its stored bcrypt hash."""
+        try:
+            normalized = answer.lower().strip().encode("utf-8")
+            return bcrypt.checkpw(normalized, hashed.encode("utf-8"))
+        except Exception:
+            return False
 
     # ------------------------------------------------------------------
     # Public API
@@ -217,7 +241,9 @@ class KBAService:
                 {
                     "question": q.question_text,
                     "options": q.answer_options,
-                    "correct_index": q.correct_answer_index,
+                    "correct_answer_hash": self._hash_kba_answer(
+                        q.answer_options[q.correct_answer_index]
+                    ),
                 }
                 for q in questions
             ],
@@ -364,8 +390,10 @@ class KBAService:
 
         correct_count = 0
         for i, q in enumerate(questions):
-            if i < len(answers) and answers[i] == q["correct_index"]:
-                correct_count += 1
+            if i < len(answers):
+                selected_answer = q["options"][answers[i]]
+                if self._verify_kba_answer(selected_answer, q["correct_answer_hash"]):
+                    correct_count += 1
 
         total_questions = len(questions)
         score = correct_count / total_questions if total_questions > 0 else 0

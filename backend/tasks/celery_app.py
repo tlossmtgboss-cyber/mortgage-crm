@@ -72,6 +72,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.video_render_tasks",
             "tasks.report_tasks",
             "tasks.reminder_tasks",
+            "tasks.app_completion_tasks",
         ],
     )
 
@@ -129,6 +130,10 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.call_intelligence_tasks.reprocess_failed_task": {"queue": "low_priority"},
             "tasks.video_render_tasks.process_render_job": {"queue": "video_render"},
             "tasks.video_render_tasks.queue_pending_jobs": {"queue": "video_render"},
+            "tasks.app_completion_tasks.trigger_application_review_task": {"queue": "default"},
+            "tasks.app_completion_tasks.process_borrower_sms_response_task": {"queue": "default"},
+            "tasks.app_completion_tasks.recalculate_stale_reviews_task": {"queue": "low_priority"},
+            "tasks.app_completion_tasks.send_pending_reminders_task": {"queue": "default"},
         },
     )
 
@@ -259,6 +264,20 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute="*/5"),  # Every 5 minutes
         "options": {"queue": "default"},
         "kwargs": {"batch_size": 50},
+    },
+
+    # Application Completion Orchestrator
+    "recalculate-stale-app-reviews": {
+        "task": "tasks.app_completion_tasks.recalculate_stale_reviews_task",
+        "schedule": crontab(hour="*/6"),  # Every 6 hours
+        "options": {"queue": "low_priority"},
+        "kwargs": {"stale_hours": 24},
+    },
+    "send-app-completion-reminders": {
+        "task": "tasks.app_completion_tasks.send_pending_reminders_task",
+        "schedule": crontab(hour="9,14", minute="0"),  # 9 AM and 2 PM daily
+        "options": {"queue": "default"},
+        "kwargs": {"reminder_delay_hours": 24},
     },
 }
 

@@ -1,22 +1,26 @@
 """
-Scheduler Appointments CRUD - Appointment lifecycle management.
+DEPRECATED -- This module is superseded by appointments.py, booking_links.py,
+availability.py, and ai_scheduling.py. It is retained for reference only.
+Do NOT import or register its router.
 
-Extracted from routes/scheduler_appointment_routes.py
+Original description:
+  Scheduler Appointments CRUD - Appointment lifecycle management.
+  Extracted from routes/scheduler_appointment_routes.py
 
-Endpoints:
-  - GET    /appointments                          List appointments with filters
-  - GET    /appointments/{appointment_id}         Get appointment details
-  - POST   /appointments                          Create a new appointment
-  - PUT    /appointments/{appointment_id}         Update an appointment
-  - POST   /appointments/{appointment_id}/cancel  Cancel an appointment
-  - GET    /booking-links/all                     List all org booking links (admin)
-  - GET    /booking-links                         List user's booking links
-  - POST   /booking-links                         Create a booking link
-  - DELETE /booking-links/{link_id}               Delete (deactivate) a booking link
-  - POST   /available-slots                       Get available time slots
-  - POST   /ai-recommend-slots                    AI-recommended time slots
-  - GET    /appointments/{id}/no-show-risk        No-show risk for one appointment
-  - GET    /analytics/no-show-risks               Batch no-show risk for a date
+  Endpoints (now served by successor modules):
+    - GET    /appointments                          -> appointments.py
+    - GET    /appointments/{appointment_id}         -> appointments.py
+    - POST   /appointments                          -> appointments.py
+    - PUT    /appointments/{appointment_id}         -> appointments.py
+    - POST   /appointments/{appointment_id}/cancel  -> appointments.py
+    - GET    /booking-links/all                     -> booking_links.py
+    - GET    /booking-links                         -> booking_links.py
+    - POST   /booking-links                         -> booking_links.py
+    - DELETE /booking-links/{link_id}               -> booking_links.py
+    - POST   /available-slots                       -> availability.py
+    - POST   /ai-recommend-slots                    -> ai_scheduling.py
+    - GET    /appointments/{id}/no-show-risk        -> ai_scheduling.py
+    - GET    /analytics/no-show-risks               -> ai_scheduling.py
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
@@ -49,10 +53,11 @@ from scheduler_email_service import (
 )
 from services.notification_service import notification_service
 from services.microsoft_graph import create_event_via_graph, CalendarResult
+from routes.scheduler.middleware import deprecated_endpoint
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+_deprecated_router = APIRouter()  # DEPRECATED: do not import or register
 
 
 # ============================================================================
@@ -169,7 +174,8 @@ def _calculate_no_show_risk(appointment, db, Appointment, AppointmentStatus, org
 # APPOINTMENT ENDPOINTS
 # ============================================================================
 
-@router.get("/appointments")
+@_deprecated_router.get("/appointments")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/appointments")
 async def list_appointments(
     request: Request,
     start_date: Optional[date] = None,
@@ -320,7 +326,8 @@ async def list_appointments(
     }
 
 
-@router.get("/appointments/{appointment_id}")
+@_deprecated_router.get("/appointments/{appointment_id}")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/appointments/{appointment_id}")
 async def get_appointment(
     appointment_id: int,
     request: Request,
@@ -379,7 +386,8 @@ async def get_appointment(
     }
 
 
-@router.get("/appointments/{appointment_id}/timeline")
+@_deprecated_router.get("/appointments/{appointment_id}/timeline")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/appointments/{appointment_id}/timeline")
 async def get_appointment_timeline(
     appointment_id: int,
     request: Request,
@@ -483,7 +491,8 @@ async def get_appointment_timeline(
     }
 
 
-@router.post("/appointments")
+@_deprecated_router.post("/appointments")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/appointments")
 async def create_appointment(
     appt_data: AppointmentCreate,
     request: Request,
@@ -813,7 +822,8 @@ async def create_appointment(
     }
 
 
-@router.put("/appointments/{appointment_id}")
+@_deprecated_router.put("/appointments/{appointment_id}")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/appointments/{appointment_id}")
 async def update_appointment(
     appointment_id: int,
     appt_data: AppointmentUpdate,
@@ -1062,7 +1072,8 @@ async def update_appointment(
     }
 
 
-@router.post("/appointments/{appointment_id}/cancel")
+@_deprecated_router.post("/appointments/{appointment_id}/cancel")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/appointments/{appointment_id}/cancel")
 async def cancel_appointment(
     appointment_id: int,
     cancel_data: Optional[CancelAppointmentRequest] = None,
@@ -1196,7 +1207,8 @@ async def cancel_appointment(
 # BOOKING LINK ENDPOINTS
 # ============================================================================
 
-@router.get("/booking-links/all")
+@_deprecated_router.get("/booking-links/all")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/booking-links/all")
 async def list_all_booking_links(
     request: Request,
     db: Session = Depends(get_db)
@@ -1243,7 +1255,8 @@ async def list_all_booking_links(
     return {"booking_links": result}
 
 
-@router.get("/booking-links")
+@_deprecated_router.get("/booking-links")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/booking-links")
 async def list_booking_links(
     request: Request,
     db: Session = Depends(get_db)
@@ -1279,7 +1292,8 @@ async def list_booking_links(
     }
 
 
-@router.post("/booking-links")
+@_deprecated_router.post("/booking-links")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/booking-links")
 async def create_booking_link(
     link_data: BookingLinkCreate,
     request: Request,
@@ -1335,7 +1349,8 @@ async def create_booking_link(
     }
 
 
-@router.delete("/booking-links/{link_id}")
+@_deprecated_router.delete("/booking-links/{link_id}")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/booking-links/{link_id}")
 async def delete_booking_link(
     link_id: int,
     request: Request,
@@ -1368,7 +1383,8 @@ async def delete_booking_link(
 # SLOT AVAILABILITY & AI RECOMMENDATIONS
 # ============================================================================
 
-@router.post("/available-slots")
+@_deprecated_router.post("/available-slots")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/available-slots")
 async def get_available_slots(
     slot_request: AvailableSlotsRequest,
     request: Request,
@@ -1407,7 +1423,8 @@ async def get_available_slots(
     }
 
 
-@router.post("/ai-recommend-slots")
+@_deprecated_router.post("/ai-recommend-slots")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/ai-recommend-slots")
 async def ai_recommend_slots(
     slot_request: AvailableSlotsRequest,
     request: Request,
@@ -1497,7 +1514,8 @@ async def ai_recommend_slots(
 # NO-SHOW RISK SCORING ENDPOINTS
 # ============================================================================
 
-@router.get("/appointments/{appointment_id}/no-show-risk")
+@_deprecated_router.get("/appointments/{appointment_id}/no-show-risk")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/appointments/{appointment_id}/no-show-risk")
 async def get_appointment_no_show_risk(
     appointment_id: int,
     request: Request,
@@ -1536,7 +1554,8 @@ async def get_appointment_no_show_risk(
     }
 
 
-@router.get("/analytics/no-show-risks")
+@_deprecated_router.get("/analytics/no-show-risks")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/analytics/no-show-risks")
 async def get_batch_no_show_risks(
     request: Request,
     target_date: date = Query(..., alias="date", description="Date to score (YYYY-MM-DD)"),

@@ -394,7 +394,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
         {/* — Profile — */}
         <div className="bps-section">
           <h3 className="bps-section-title">
-            <i className="fas fa-user"></i>
+            <i className="fas fa-user" aria-hidden="true"></i>
             Profile
           </h3>
 
@@ -449,7 +449,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
         {/* — Branding — */}
         <div className="bps-section">
           <h3 className="bps-section-title">
-            <i className="fas fa-palette"></i>
+            <i className="fas fa-palette" aria-hidden="true"></i>
             Branding
           </h3>
 
@@ -495,12 +495,13 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
           </div>
 
           <div className="bps-toggle-row">
-            <span className="bps-toggle-label">Show "Powered by Perennia" badge</span>
+            <span className="bps-toggle-label" id="bps-powered-by-label">Show "Powered by Perennia" badge</span>
             <label className="bps-toggle">
               <input
                 type="checkbox"
                 checked={showPoweredBy}
                 onChange={(e) => { setShowPoweredBy(e.target.checked); markDirty(); }}
+                aria-labelledby="bps-powered-by-label"
               />
               <span className="bps-toggle-track" />
             </label>
@@ -510,7 +511,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
         {/* — Photo — */}
         <div className="bps-section">
           <h3 className="bps-section-title">
-            <i className="fas fa-camera"></i>
+            <i className="fas fa-camera" aria-hidden="true"></i>
             Profile Photo
           </h3>
 
@@ -523,7 +524,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
                   onError={(e) => { e.target.style.display = 'none'; }}
                 />
               ) : (
-                <span className="bps-photo-placeholder">
+                <span className="bps-photo-placeholder" aria-hidden="true">
                   <i className="fas fa-user"></i>
                 </span>
               )}
@@ -544,12 +545,12 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
         {/* — Booking Link — */}
         <div className="bps-section">
           <h3 className="bps-section-title">
-            <i className="fas fa-link"></i>
+            <i className="fas fa-link" aria-hidden="true"></i>
             Booking Link
           </h3>
 
           <div className="bps-link-display">
-            <i className="fas fa-globe"></i>
+            <i className="fas fa-globe" aria-hidden="true"></i>
             <span className="bps-link-url">
               {APP_BASE}/book/<strong>{slug || 'your-name'}</strong>
             </span>
@@ -568,6 +569,8 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
                   className={slugError ? 'invalid' : ''}
                   placeholder="john-smith"
                   aria-label="Edit booking slug"
+                  aria-invalid={!!slugError}
+                  aria-describedby={slugError ? 'bps-slug-error' : undefined}
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') saveSlug();
@@ -577,20 +580,21 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
                 <button className="bps-btn-save" onClick={saveSlug}>Save</button>
                 <button className="bps-btn-cancel" onClick={cancelEditSlug}>Cancel</button>
               </div>
-              {slugError && <p className="bps-slug-validation">{slugError}</p>}
+              {slugError && <p className="bps-slug-validation" id="bps-slug-error" role="alert">{slugError}</p>}
             </>
           ) : (
             <div className="bps-link-actions">
-              <button onClick={startEditSlug} title="Edit booking slug">
-                <i className="fas fa-pencil-alt"></i>
+              <button onClick={startEditSlug} title="Edit booking slug" aria-label="Edit booking slug">
+                <i className="fas fa-pencil-alt" aria-hidden="true"></i>
                 Edit Slug
               </button>
               <button
                 onClick={handleCopyLink}
                 className={copied ? 'copied' : ''}
                 title="Copy booking link"
+                aria-label={copied ? 'Link copied to clipboard' : 'Copy booking link'}
               >
-                <i className={`fas ${copied ? 'fa-check' : 'fa-copy'}`}></i>
+                <i className={`fas ${copied ? 'fa-check' : 'fa-copy'}`} aria-hidden="true"></i>
                 {copied ? 'Copied!' : 'Copy Link'}
               </button>
               <button
@@ -599,8 +603,9 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
                   window.open(qrUrl, '_blank', 'noopener');
                 }}
                 title="Download QR code"
+                aria-label="Download QR code"
               >
-                <i className="fas fa-qrcode"></i>
+                <i className="fas fa-qrcode" aria-hidden="true"></i>
                 QR Code
               </button>
             </div>
@@ -748,8 +753,9 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
               toast.info('Save your booking page first to preview it');
             }
           }}
+          aria-label="Preview your booking page in a new tab"
         >
-          <i className="fas fa-external-link-alt"></i>
+          <i className="fas fa-external-link-alt" aria-hidden="true"></i>
           Preview your booking page
         </button>
       </div>

@@ -5,12 +5,6 @@
  * Also exports STEP_CONFIG, the metadata array consumed by
  * CalendarSetupWizard to drive step rendering, navigation,
  * and progress tracking.
- *
- * Steps without a dedicated component (Timezone & Hours uses
- * WelcomeStep, Notifications and Integrations use placeholders
- * in the wizard) are listed in STEP_CONFIG with component: null
- * so the wizard falls back to its built-in placeholder or
- * inline rendering.
  */
 
 // ============================================================================
@@ -18,8 +12,11 @@
 // ============================================================================
 
 export { default as WelcomeStep } from './WelcomeStep';
+export { default as WorkingHoursStep } from './WorkingHoursStep';
 export { default as AppointmentTypesStep } from './AppointmentTypesStep';
 export { default as BookingPageStep } from './BookingPageStep';
+export { default as NotificationsStep } from './NotificationsStep';
+export { default as IntegrationsStep } from './IntegrationsStep';
 export { default as CancellationPolicyStep } from './CancellationPolicyStep';
 export { default as TeamSetupStep } from './TeamSetupStep';
 export { default as AdvancedFeaturesStep } from './AdvancedFeaturesStep';
@@ -64,7 +61,7 @@ export const STEP_CONFIG = [
     icon: 'fa-clock',
     required: true,
     skippable: false,
-    component: 'WelcomeStep',  // Timezone selection is part of the Welcome step
+    component: 'WorkingHoursStep',
   },
   {
     number: 3,
@@ -97,7 +94,7 @@ export const STEP_CONFIG = [
     icon: 'fa-bell',
     required: false,
     skippable: true,
-    component: null,  // Uses wizard placeholder or inline rendering
+    component: 'NotificationsStep',
   },
   {
     number: 6,
@@ -108,7 +105,7 @@ export const STEP_CONFIG = [
     icon: 'fa-plug',
     required: false,
     skippable: true,
-    component: null,  // Uses wizard placeholder or inline rendering
+    component: 'IntegrationsStep',
   },
   {
     number: 7,

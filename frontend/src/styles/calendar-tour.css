@@ -8,6 +8,9 @@
 /* ---------------------------------------------------------------------------
  * Overlay: full-screen dim with a box-shadow "cutout" around the target
  * --------------------------------------------------------------------------- */
+
+@import "./calendar-design-tokens.css";
+
 .calendar-tour-overlay {
   position: fixed;
   inset: 0;
@@ -105,7 +108,7 @@
 /* Accent bar at top of tooltip */
 .calendar-tour-tooltip__accent {
   height: 4px;
-  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+  background: linear-gradient(90deg, var(--cal-tour-primary) 0%, var(--cal-purple) 50%, var(--cal-tour-accent-light) 100%);
 }
 
 .calendar-tour-tooltip__body {
@@ -118,7 +121,7 @@
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  color: #6366f1;
+  color: var(--cal-tour-primary);
   margin-bottom: 6px;
 }
 
@@ -179,7 +182,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--cal-bg-tertiary);
   background: #fafafa;
 }
 
@@ -208,40 +211,40 @@
 
 .calendar-tour-btn--skip {
   background: transparent;
-  color: #9ca3af;
+  color: var(--cal-text-muted);
   padding: 7px 10px;
 }
 
 .calendar-tour-btn--skip:hover {
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--cal-text-secondary);
+  background: var(--cal-bg-tertiary);
 }
 
 .calendar-tour-btn--back {
-  background: #f3f4f6;
+  background: var(--cal-bg-tertiary);
   color: #4b5563;
 }
 
 .calendar-tour-btn--back:hover {
-  background: #e5e7eb;
+  background: var(--cal-border);
 }
 
 .calendar-tour-btn--next {
-  background: #6366f1;
+  background: var(--cal-tour-primary);
   color: #ffffff;
 }
 
 .calendar-tour-btn--next:hover {
-  background: #4f46e5;
+  background: var(--cal-purple-dark);
 }
 
 .calendar-tour-btn--finish {
-  background: #10b981;
+  background: var(--cal-success);
   color: #ffffff;
 }
 
 .calendar-tour-btn--finish:hover {
-  background: #059669;
+  background: var(--cal-success-dark);
 }
 
 /* ---------------------------------------------------------------------------
@@ -257,12 +260,12 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #d1d5db;
+  background: var(--cal-border-input);
   transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .calendar-tour-progress__dot--active {
-  background: #6366f1;
+  background: var(--cal-tour-primary);
   transform: scale(1.3);
 }
 
@@ -284,13 +287,13 @@
 .calendar-tour-dontshow input[type="checkbox"] {
   width: 14px;
   height: 14px;
-  accent-color: #6366f1;
+  accent-color: var(--cal-tour-primary);
   cursor: pointer;
 }
 
 .calendar-tour-dontshow__label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--cal-text-secondary);
   user-select: none;
 }
 
@@ -304,9 +307,9 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1.5px solid #d1d5db;
+  border: 1.5px solid var(--cal-border-input);
   background: #ffffff;
-  color: #6b7280;
+  color: var(--cal-text-secondary);
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
@@ -315,13 +318,13 @@
 }
 
 .calendar-tour-trigger:hover {
-  border-color: #6366f1;
-  color: #6366f1;
-  background: #eef2ff;
+  border-color: var(--cal-tour-primary);
+  color: var(--cal-tour-primary);
+  background: var(--cal-purple-light);
 }
 
 .calendar-tour-trigger:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--cal-tour-primary);
   outline-offset: 2px;
 }
 
@@ -366,9 +369,9 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Responsive adjustments
+ * Responsive adjustments (640px mobile)
  * --------------------------------------------------------------------------- */
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .calendar-tour-tooltip {
     width: calc(100vw - 24px);
     border-radius: 10px;
@@ -388,6 +391,44 @@
     order: -1;
     width: 100%;
     justify-content: center;
+  }
+
+  /* Touch targets: buttons must be at least 44px */
+  .calendar-tour-btn {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+
+  .calendar-tour-btn--skip {
+    padding: 10px 12px;
+  }
+
+  /* "Don't show again" checkbox: enlarge touch target */
+  .calendar-tour-dontshow {
+    min-height: 44px;
+    padding: 4px 20px 14px;
+  }
+
+  .calendar-tour-dontshow input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Progress dots: enlarge for tappability */
+  .calendar-tour-progress__dot {
+    width: 10px;
+    height: 10px;
+  }
+
+  .calendar-tour-progress__dot--active {
+    transform: scale(1.2);
+  }
+
+  /* Tour trigger button: ensure 44px minimum */
+  .calendar-tour-trigger {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
   }
 }
 

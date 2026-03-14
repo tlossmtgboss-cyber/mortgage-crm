@@ -10,6 +10,28 @@ Endpoints:
   - POST   /check-availability          Check if a specific time is available (future)
 
 This module delegates slot generation to the unified engine in _helpers.py.
+
+NOTE: Availability Data Sources
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+This module works with THREE availability-related data stores:
+
+1. SchedulerConfig.working_hours (JSON blob) — the original weekly schedule
+   storage. Updated via PUT /settings/availability. Used as a FALLBACK by the
+   slot generator when no RecurringAvailability rows exist.
+
+2. AvailabilitySlot table — custom per-date or per-day-of-week availability
+   overrides created through this module's POST /availability/slots endpoint.
+   These are returned by GET /availability but are NOT used by the unified
+   slot generator in _helpers._generate_available_slots().
+
+3. RecurringAvailability / AvailabilityException tables — structured weekly
+   patterns managed via the recurring_availability.py endpoints. These take
+   PRECEDENCE over the JSON blob in the slot generator when they exist.
+
+The GET /availability endpoint returns data from store #1 (working_hours JSON)
+and store #2 (AvailabilitySlot rows). The POST /available-slots endpoint uses
+the unified slot generator which reads from store #3 (if populated) or store #1
+(as fallback), but never store #2.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

@@ -236,8 +236,26 @@ class FraudDetectionService:
     8. Employment verification patterns
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, org_id: Optional[int] = None):
         self.db = db
+        self.org_id = org_id
+
+    def _org_join_clause(self) -> str:
+        """Return a SQL JOIN + WHERE fragment that enforces tenant isolation.
+
+        When org_id is set, adds a JOIN on loans to filter smart_documents
+        to only those belonging to loans in the caller's organization.
+        The caller must alias the smart_documents table as ``sd``.
+        """
+        if self.org_id is not None:
+            return "JOIN loans _org_l ON _org_l.id = sd.loan_id AND _org_l.organization_id = :_org_id"
+        return ""
+
+    def _org_params(self) -> Dict:
+        """Return the parameter dict for the org JOIN clause."""
+        if self.org_id is not None:
+            return {"_org_id": self.org_id}
+        return {}
 
     # =========================================================================
     # 1. MAIN ENTRY POINT
@@ -251,6 +269,28 @@ class FraudDetectionService:
         Runs all cross-validation checks and fraud indicator checks,
         calculates an aggregate risk score, and returns a comprehensive result.
         """
+        # Validate loan belongs to the caller's organization
+        if self.org_id is not None:
+            loan_org_check = self.db.execute(
+                text("SELECT organization_id FROM loans WHERE id = :lid"),
+                {"lid": loan_id},
+            ).fetchone()
+            if loan_org_check and loan_org_check.organization_id != self.org_id:
+                logger.warning(
+                    "Tenant isolation violation: loan %d belongs to org %s, caller org %s",
+                    loan_id, loan_org_check.organization_id, self.org_id,
+                )
+                return CrossValidationResult(
+                    loan_id=loan_id,
+                    documents_analyzed=0,
+                    inconsistencies=[],
+                    fraud_indicators=[],
+                    risk_score=0,
+                    risk_level="LOW",
+                    summary="Access denied: loan does not belong to your organization.",
+                    recommendations=[],
+                )
+
         # Count documents analyzed
         doc_count_row = self.db.execute(
             text("SELECT COUNT(*) AS cnt FROM smart_documents WHERE loan_id = :lid"),
@@ -342,7 +382,7 @@ class FraudDetectionService:
         inconsistencies: List[Dict] = []
 
         # Get all extractions for this loan's documents
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
@@ -350,10 +390,11 @@ class FraudDetectionService:
                 sd.extracted_names
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
             ORDER BY sd.id
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         if len(rows) < 2:
             return inconsistencies
@@ -424,18 +465,19 @@ class FraudDetectionService:
         """
         inconsistencies: List[Dict] = []
 
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
                 sde.extracted_fields
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
               AND sde.extracted_fields IS NOT NULL
             ORDER BY sd.id
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         # Separate income-bearing documents by type
         paystub_data: List[Dict] = []
@@ -589,18 +631,19 @@ class FraudDetectionService:
         """
         inconsistencies: List[Dict] = []
 
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
                 sde.extracted_fields
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
               AND sde.extracted_fields IS NOT NULL
             ORDER BY sd.id
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         # Collect employer names and EINs by document
         employer_records: List[Dict] = []
@@ -687,18 +730,19 @@ class FraudDetectionService:
         """
         inconsistencies: List[Dict] = []
 
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
                 sde.extracted_fields
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
               AND sde.extracted_fields IS NOT NULL
             ORDER BY sd.id
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         # Collect addresses by document
         address_records: List[Dict] = []
@@ -761,18 +805,19 @@ class FraudDetectionService:
         """
         indicators: List[FraudIndicator] = []
 
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
                 sde.extracted_fields
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
               AND sde.extracted_fields IS NOT NULL
             ORDER BY sd.id
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         for row in rows:
             fields = row.extracted_fields if isinstance(row.extracted_fields, dict) else {}
@@ -884,7 +929,7 @@ class FraudDetectionService:
         now = datetime.now(timezone.utc)
         today = now.date()
 
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
@@ -893,10 +938,11 @@ class FraudDetectionService:
                 sde.extracted_fields
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
             ORDER BY sd.id
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         bank_statement_periods: List[Dict] = []
 
@@ -1075,7 +1121,7 @@ class FraudDetectionService:
         """
         indicators: List[FraudIndicator] = []
 
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
@@ -1085,10 +1131,11 @@ class FraudDetectionService:
                 sde.extracted_fields
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
             ORDER BY sd.uploaded_at
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         if not rows:
             return indicators
@@ -1312,7 +1359,7 @@ class FraudDetectionService:
         """
         indicators: List[FraudIndicator] = []
 
-        rows = self.db.execute(text("""
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.doc_type,
@@ -1323,10 +1370,11 @@ class FraudDetectionService:
                 sde.extracted_fields
             FROM smart_documents sd
             LEFT JOIN smart_document_extractions sde ON sde.document_id = sd.id
+            {self._org_join_clause()}
             WHERE sd.loan_id = :lid
               AND sd.status != 'REJECTED'
             ORDER BY sd.id
-        """), {"lid": loan_id}).fetchall()
+        """), {"lid": loan_id, **self._org_params()}).fetchall()
 
         if len(rows) < 2:
             return indicators
@@ -1481,8 +1529,9 @@ class FraudDetectionService:
         """
         result = self.analyze_loan_documents(loan_id)
 
-        # Get loan and borrower info
-        loan_info = self.db.execute(text("""
+        # Get loan and borrower info (with org_id filter when available)
+        _loan_org_filter = "AND l.organization_id = :_org_id" if self.org_id is not None else ""
+        loan_info = self.db.execute(text(f"""
             SELECT
                 l.id, l.loan_number, l.amount, l.loan_type, l.stage,
                 l.borrower_name, l.borrower_email, l.property_address,
@@ -1491,8 +1540,8 @@ class FraudDetectionService:
                 CONCAT(u.first_name, ' ', u.last_name) AS lo_name
             FROM loans l
             LEFT JOIN users u ON u.id = l.loan_officer_id
-            WHERE l.id = :lid
-        """), {"lid": loan_id}).fetchone()
+            WHERE l.id = :lid {_loan_org_filter}
+        """), {"lid": loan_id, **self._org_params()}).fetchone()
 
         # Get all affected document details
         affected_doc_ids = set()
@@ -2304,13 +2353,15 @@ class FraudDetectionService:
     def _get_job_title_for_loan(self, loan_id: int) -> Optional[str]:
         """Get borrower job title from lead data linked to this loan."""
         try:
-            row = self.db.execute(text("""
+            _org_filter = "AND lo.organization_id = :_org_id" if self.org_id is not None else ""
+            row = self.db.execute(text(f"""
                 SELECT ld.job_title
                 FROM leads ld
                 JOIN loans lo ON lo.loan_number = ld.loan_number
                 WHERE lo.id = :lid AND ld.job_title IS NOT NULL
+                {_org_filter}
                 LIMIT 1
-            """), {"lid": loan_id}).fetchone()
+            """), {"lid": loan_id, **self._org_params()}).fetchone()
             return row.job_title if row else None
         except Exception:
             return None
@@ -2373,12 +2424,17 @@ class FraudDetectionService:
 # SINGLETON
 # =============================================================================
 
-def get_fraud_detection_service(db: Session) -> FraudDetectionService:
+def get_fraud_detection_service(db: Session, org_id: Optional[int] = None) -> FraudDetectionService:
     """
     Get a FraudDetectionService instance for the given database session.
 
     Unlike other singletons in the codebase, this creates a new instance
     per session since the service is stateless and the db session should
     not be shared across requests.
+
+    Args:
+        db: SQLAlchemy database session.
+        org_id: Organization ID for tenant isolation.  When provided, all
+                queries are scoped to loans/documents belonging to that org.
     """
-    return FraudDetectionService(db)
+    return FraudDetectionService(db, org_id=org_id)

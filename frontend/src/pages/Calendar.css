@@ -17,6 +17,27 @@
   margin: 0 auto;
 }
 
+/* Control Center variant — wider to accommodate operational sidebar */
+.calendar-page--control-center {
+  max-width: 1600px;
+}
+
+/* In control center mode, the toolbar becomes a compact navigation bar */
+.calendar-page--control-center .calendar-header {
+  margin-bottom: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+}
+
+.calendar-page--control-center .calendar-header h1 {
+  font-size: 16px;
+  margin-bottom: 0;
+}
+
+.calendar-page--control-center .calendar-header p {
+  font-size: 13px;
+}
+
 .calendar-header {
   display: flex;
   justify-content: space-between;
@@ -299,6 +320,11 @@
   display: grid;
   grid-template-columns: minmax(400px, 700px) 1fr;
   gap: var(--space-lg);
+}
+
+/* Control center: narrower ops sidebar on left, calendar takes remaining space */
+.calendar-page--control-center .calendar-content {
+  grid-template-columns: 340px 1fr;
 }
 
 /* Appointments Sidebar */
@@ -592,6 +618,10 @@
     grid-template-columns: minmax(350px, 600px) 1fr;
   }
 
+  .calendar-page--control-center .calendar-content {
+    grid-template-columns: 300px 1fr;
+  }
+
   .appointments-sidebar {
     height: calc(100vh - 280px);
   }
@@ -599,6 +629,10 @@
 
 @media (max-width: 900px) {
   .calendar-content {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-page--control-center .calendar-content {
     grid-template-columns: 1fr;
   }
 

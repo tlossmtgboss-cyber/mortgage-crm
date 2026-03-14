@@ -219,16 +219,28 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
     return () => clearInterval(interval);
   }, [timezone]);
 
-  // Close dropdown on outside click
+  // Close dropdown on outside click or Escape key
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setTzDropdownOpen(false);
       }
     }
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setTzDropdownOpen(false);
+        // Return focus to the trigger button
+        const trigger = dropdownRef.current?.querySelector('.welcome-timezone__trigger');
+        if (trigger) trigger.focus();
+      }
+    }
     if (tzDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
     }
   }, [tzDropdownOpen]);
 
@@ -322,10 +334,10 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
           </div>
 
           <div className="welcome-hero__text">
-            <h1 className="welcome-hero__title">
+            <h2 className="welcome-hero__title">
               <i className="fas fa-calendar-alt welcome-hero__icon" aria-hidden="true"></i>
               Let's set up your Smart Calendar
-            </h1>
+            </h2>
             <p className="welcome-hero__greeting">
               Hi {userName}! We'll walk you through a few quick settings to get your
               calendar ready for client bookings.
@@ -342,7 +354,7 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
 
       {/* What we'll set up */}
       <section className="welcome-features" aria-label="Setup overview">
-        <h2 className="welcome-features__title">What we'll configure</h2>
+        <h3 className="welcome-features__title">What we'll configure</h3>
         <ul className="welcome-features__list">
           {SETUP_FEATURES.map((feature, idx) => (
             <li key={idx} className="welcome-features__item">
@@ -357,7 +369,7 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
 
       {/* Timezone selector */}
       <section className="welcome-timezone" aria-label="Timezone settings">
-        <h2 className="welcome-timezone__title">Your timezone</h2>
+        <h3 className="welcome-timezone__title">Your timezone</h3>
         <p className="welcome-timezone__subtitle">
           All appointment times will be shown in this timezone.
         </p>
@@ -370,6 +382,8 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
               onClick={() => setTzDropdownOpen(prev => !prev)}
               aria-expanded={tzDropdownOpen}
               aria-haspopup="listbox"
+              aria-label={`Timezone: ${selectedTzInfo.label}. Click to change.`}
+              id="tz-selector-trigger"
               type="button"
             >
               <div className="welcome-timezone__trigger-content">
@@ -412,7 +426,7 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
           </div>
 
           {/* Live clock preview card */}
-          <div className="welcome-timezone__preview" aria-live="polite">
+          <div className="welcome-timezone__preview" aria-hidden="true">
             <div className="welcome-timezone__clock">{currentTime}</div>
             <div className="welcome-timezone__abbr">{tzAbbr}</div>
             {isDetectedTz && isKnownTimezone(timezone) && (
@@ -426,7 +440,7 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
 
       {/* Work schedule quick picker */}
       <section className="welcome-schedule" aria-label="Work schedule">
-        <h2 className="welcome-schedule__title">What's your typical work schedule?</h2>
+        <h3 className="welcome-schedule__title">What's your typical work schedule?</h3>
         <p className="welcome-schedule__subtitle">
           Pick a starting point. You can fine-tune individual days in the next step.
         </p>

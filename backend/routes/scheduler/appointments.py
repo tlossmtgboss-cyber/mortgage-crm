@@ -14,7 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Backgroun
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from datetime import datetime, timedelta, date, time, timezone
-from typing import Optional
+from typing import Any, Dict, List, Optional, Union
+from pydantic import BaseModel, Field
 import html
 import logging
 import pytz
@@ -52,10 +53,148 @@ router = APIRouter()
 
 
 # ============================================================================
+# PYDANTIC RESPONSE MODELS
+# ============================================================================
+
+class AppointmentItem(BaseModel):
+    """A single appointment in a list or detail response."""
+    id: Union[int, str] = Field(..., description="Appointment ID (int for v2, 'ai-NNN' for legacy)")
+    title: Optional[str] = None
+    description: Optional[str] = None
+    meeting_type: Optional[str] = None
+    meeting_mode: Optional[str] = None
+    scheduled_start: Optional[str] = None
+    scheduled_end: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    status: Optional[str] = None
+    attendee_name: Optional[str] = None
+    attendee_email: Optional[str] = None
+    video_link: Optional[str] = None
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    booked_by_ai: Optional[bool] = None
+    created_at: Optional[str] = None
+
+    class Config:
+        extra = "allow"
+
+
+class AppointmentDetail(BaseModel):
+    """Full appointment detail with all fields."""
+    id: int
+    appointment_type_id: Optional[int] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    meeting_type: Optional[str] = None
+    meeting_mode: Optional[str] = None
+    scheduled_start: Optional[str] = None
+    scheduled_end: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    timezone: Optional[str] = None
+    location: Optional[str] = None
+    video_link: Optional[str] = None
+    phone_number: Optional[str] = None
+    attendee_name: Optional[str] = None
+    attendee_email: Optional[str] = None
+    attendee_phone: Optional[str] = None
+    attendee_notes: Optional[str] = None
+    intake_responses: Optional[Dict[str, Any]] = None
+    status: Optional[str] = None
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    contact_id: Optional[int] = None
+    assigned_user_id: Optional[int] = None
+    booked_by_ai: Optional[bool] = None
+    ai_booking_context: Optional[str] = None
+    internal_notes: Optional[str] = None
+    meeting_notes: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class AppointmentListResponse(BaseModel):
+    """Response for listing appointments."""
+    appointments: List[AppointmentItem] = Field(default_factory=list, description="List of appointments")
+    total: int = Field(0, description="Total count across both tables")
+    limit: int = Field(50, description="Page size")
+    offset: int = Field(0, description="Page offset")
+
+
+class AppointmentResponse(BaseModel):
+    """Response for a single appointment detail."""
+    appointment: AppointmentDetail
+
+
+class AppointmentCreateResponse(BaseModel):
+    """Response for appointment creation."""
+    message: str = "Appointment created"
+    appointment_id: int = Field(..., description="ID of the created appointment")
+    scheduled_start: str = Field(..., description="Scheduled start (ISO 8601)")
+    scheduled_end: str = Field(..., description="Scheduled end (ISO 8601)")
+    email_sent: bool = Field(False, description="Whether confirmation email was sent")
+    email_error: Optional[str] = Field(None, description="Email error if sending failed")
+    calendar_event_created: bool = Field(False, description="Whether Outlook event was created")
+    outlook_event_id: Optional[str] = Field(None, description="Outlook calendar event ID")
+
+
+class AppointmentUpdateResponse(BaseModel):
+    """Response for appointment update."""
+    message: str = "Appointment updated"
+    appointment_id: int = Field(..., description="ID of the updated appointment")
+    emails_sent: List[str] = Field(default_factory=list, description="Email addresses notified")
+    sms_sent: List[str] = Field(default_factory=list, description="Phone numbers notified via SMS")
+    is_reschedule: bool = Field(False, description="Whether this was a reschedule")
+    new_date: Optional[str] = Field(None, description="New appointment date (formatted)")
+    new_time: Optional[str] = Field(None, description="New appointment time (formatted)")
+
+
+class AppointmentCancelResponse(BaseModel):
+    """Response for appointment cancellation."""
+    message: str = "Appointment cancelled"
+    emails_sent: List[str] = Field(default_factory=list, description="Email addresses notified")
+    waitlist_offered: Optional[Dict[str, Any]] = Field(None, description="Waitlist offer details if a slot was offered")
+
+
+class TimelineEntry(BaseModel):
+    """A single status change entry in the appointment timeline."""
+    id: Optional[int] = None
+    previous_status: Optional[str] = None
+    new_status: Optional[str] = None
+    changed_by_name: Optional[str] = None
+    changed_by_user_id: Optional[int] = None
+    change_source: Optional[str] = None
+    notes: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    changed_at: Optional[str] = None
+
+
+class AppointmentSummary(BaseModel):
+    """Summary of an appointment for the timeline response."""
+    title: Optional[str] = None
+    attendee_name: Optional[str] = None
+    scheduled_start: Optional[str] = None
+    scheduled_end: Optional[str] = None
+    cancellation_reason: Optional[str] = None
+    reschedule_count: Optional[int] = None
+
+
+class AppointmentTimelineResponse(BaseModel):
+    """Response for appointment timeline endpoint."""
+    appointment_id: int = Field(..., description="Appointment ID")
+    current_status: str = Field(..., description="Current appointment status")
+    standard_progression: List[str] = Field(
+        default_factory=list,
+        description="Standard status progression for the timeline widget"
+    )
+    history: List[TimelineEntry] = Field(default_factory=list, description="Ordered status change history")
+    appointment_summary: AppointmentSummary = Field(..., description="Appointment summary details")
+
+
+# ============================================================================
 # LIST APPOINTMENTS
 # ============================================================================
 
-@router.get("/appointments")
+@router.get("/appointments", response_model=AppointmentListResponse)
 async def list_appointments(
     request: Request,
     start_date: Optional[date] = None,
@@ -211,7 +350,7 @@ async def list_appointments(
 # GET APPOINTMENT
 # ============================================================================
 
-@router.get("/appointments/{appointment_id}")
+@router.get("/appointments/{appointment_id}", response_model=AppointmentResponse)
 async def get_appointment(
     appointment_id: int,
     request: Request,
@@ -275,7 +414,7 @@ async def get_appointment(
 # APPOINTMENT TIMELINE
 # ============================================================================
 
-@router.get("/appointments/{appointment_id}/timeline")
+@router.get("/appointments/{appointment_id}/timeline", response_model=AppointmentTimelineResponse)
 async def get_appointment_timeline(
     appointment_id: int,
     request: Request,
@@ -384,7 +523,7 @@ async def get_appointment_timeline(
 # CREATE APPOINTMENT
 # ============================================================================
 
-@router.post("/appointments")
+@router.post("/appointments", response_model=AppointmentCreateResponse)
 async def create_appointment(
     appt_data: AppointmentCreate,
     request: Request,
@@ -730,7 +869,7 @@ async def create_appointment(
 # UPDATE APPOINTMENT
 # ============================================================================
 
-@router.put("/appointments/{appointment_id}")
+@router.put("/appointments/{appointment_id}", response_model=AppointmentUpdateResponse)
 async def update_appointment(
     appointment_id: int,
     appt_data: AppointmentUpdate,
@@ -977,7 +1116,7 @@ async def update_appointment(
 # CANCEL APPOINTMENT
 # ============================================================================
 
-@router.post("/appointments/{appointment_id}/cancel")
+@router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentCancelResponse)
 async def cancel_appointment(
     appointment_id: int,
     cancel_data: Optional[CancelAppointmentRequest] = None,

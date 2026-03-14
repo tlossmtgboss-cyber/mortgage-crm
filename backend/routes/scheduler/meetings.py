@@ -424,7 +424,6 @@ async def save_provider_settings(
             auto_create_for_video=body.auto_create_for_video,
             default_meeting_duration=body.default_meeting_duration,
         )
-        db.commit()
 
         _audit_log(db, org_id, user.id, "settings_updated", "meeting_provider",
                    changes=body.model_dump(exclude_none=True), request=request)

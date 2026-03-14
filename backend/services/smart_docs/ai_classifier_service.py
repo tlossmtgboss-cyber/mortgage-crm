@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass, field
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 try:
@@ -1280,6 +1281,7 @@ class AIDocumentClassifierService:
         self,
         db: Session,
         document_id: int,
+        organization_id: Optional[int] = None,
     ) -> Optional[Dict]:
         """
         Retrieve an existing AI classification for a document.
@@ -1289,11 +1291,31 @@ class AIDocumentClassifierService:
         Args:
             db: SQLAlchemy session.
             document_id: ID of the smart_documents record.
+            organization_id: Optional org ID for tenant isolation. When set,
+                verifies the document belongs to a loan in this organization.
 
         Returns:
             Dict with classification data, or None if not classified yet.
         """
         try:
+            # Tenant isolation: verify the document belongs to the caller's org
+            if organization_id is not None:
+                doc_org_check = db.execute(
+                    text("""
+                        SELECT l.organization_id
+                        FROM smart_documents sd
+                        JOIN loans l ON l.id = sd.loan_id
+                        WHERE sd.id = :doc_id
+                    """),
+                    {"doc_id": document_id},
+                ).fetchone()
+                if doc_org_check and doc_org_check.organization_id != organization_id:
+                    logger.warning(
+                        "Tenant isolation violation in classifier: doc %d belongs to org %s, caller org %s",
+                        document_id, doc_org_check.organization_id, organization_id,
+                    )
+                    return None
+
             from database.models.document_intelligence import AIDocumentClassification
 
             record = (

@@ -1,0 +1,238 @@
+@import '../../styles/calendar-design-tokens.css';
+
+/* ============================================================
+   Command Center Header
+   ============================================================ */
+
+.cc-header {
+  margin-bottom: var(--cal-space-7);
+}
+
+.cc-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--cal-space-7);
+}
+
+.cc-greeting-text {
+  font-size: var(--cal-font-4xl);
+  font-weight: 700;
+  color: var(--cal-text-primary);
+  margin: 0 0 var(--cal-space-1) 0;
+  line-height: 1.2;
+}
+
+.cc-date {
+  font-size: var(--cal-font-md);
+  color: var(--cal-text-secondary);
+  margin: 0;
+}
+
+/* Quick action links */
+.cc-quick-actions {
+  display: flex;
+  gap: var(--cal-space-3);
+  align-items: center;
+}
+
+.cc-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cal-space-2);
+  padding: var(--cal-space-3) var(--cal-space-5);
+  background: var(--cal-bg);
+  border: 1px solid var(--cal-border);
+  border-radius: var(--cal-radius-md);
+  color: var(--cal-text-body);
+  font-size: var(--cal-font-base);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: var(--cal-transition-fast);
+}
+
+.cc-quick-btn:hover {
+  background: var(--cal-bg-secondary);
+  border-color: var(--cal-border-hover);
+  color: var(--cal-text-primary);
+  box-shadow: var(--cal-shadow-xs);
+}
+
+.cc-quick-btn svg {
+  flex-shrink: 0;
+}
+
+/* Stats strip — 4 cards in a row */
+.cc-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--cal-space-5);
+}
+
+.cc-stat-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.cc-stat-link:hover .cc-stat-card {
+  box-shadow: var(--cal-shadow-md);
+  transform: translateY(-1px);
+}
+
+.cc-stat-card {
+  display: flex;
+  align-items: center;
+  gap: var(--cal-space-5);
+  padding: var(--cal-space-6) var(--cal-space-7);
+  background: var(--cal-bg);
+  border: 1px solid var(--cal-border);
+  border-radius: var(--cal-radius-xl);
+  transition: var(--cal-transition-fast);
+  cursor: default;
+  min-height: 72px;
+}
+
+.cc-stat-link .cc-stat-card {
+  cursor: pointer;
+}
+
+.cc-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--cal-radius-lg);
+  flex-shrink: 0;
+}
+
+/* Color variants */
+.cc-stat-card--primary .cc-stat-icon {
+  background: var(--cal-primary-light);
+  color: var(--cal-primary);
+}
+
+.cc-stat-card--info .cc-stat-icon {
+  background: var(--cal-info-light);
+  color: var(--cal-info);
+}
+
+.cc-stat-card--success .cc-stat-icon {
+  background: var(--cal-success-lighter);
+  color: var(--cal-success);
+}
+
+.cc-stat-card--warning .cc-stat-icon {
+  background: var(--cal-warning-lighter);
+  color: var(--cal-warning-dark);
+}
+
+.cc-stat-card--danger .cc-stat-icon {
+  background: var(--cal-error-light);
+  color: var(--cal-error);
+}
+
+.cc-stat-card--danger {
+  border-color: var(--cal-error-border);
+}
+
+.cc-stat-data {
+  min-width: 0;
+}
+
+.cc-stat-value {
+  font-size: var(--cal-font-3xl);
+  font-weight: 700;
+  color: var(--cal-text-primary);
+  line-height: 1.1;
+}
+
+.cc-stat-label {
+  font-size: var(--cal-font-sm);
+  color: var(--cal-text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cc-stat-sublabel {
+  font-size: var(--cal-font-xs);
+  color: var(--cal-text-muted);
+  margin-top: 1px;
+}
+
+.cc-stat-card--danger .cc-stat-sublabel {
+  color: var(--cal-error-dark);
+  font-weight: 600;
+}
+
+.cc-stat-card--warning .cc-stat-sublabel {
+  color: var(--cal-warning-darker);
+  font-weight: 600;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 1024px) {
+  .cc-stats-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .cc-header-top {
+    flex-direction: column;
+    gap: var(--cal-space-5);
+  }
+
+  .cc-greeting-text {
+    font-size: var(--cal-font-2xl);
+  }
+
+  .cc-quick-actions {
+    flex-wrap: wrap;
+  }
+
+  .cc-stats-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--cal-space-3);
+  }
+
+  .cc-stat-card {
+    padding: var(--cal-space-4) var(--cal-space-5);
+    min-height: 60px;
+  }
+
+  .cc-stat-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .cc-stat-value {
+    font-size: var(--cal-font-xl);
+  }
+}
+
+@media (max-width: 480px) {
+  .cc-stats-strip {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--cal-space-2);
+  }
+
+  .cc-stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--cal-space-2);
+    padding: var(--cal-space-4);
+  }
+
+  .cc-stat-icon {
+    width: 32px;
+    height: 32px;
+  }
+}

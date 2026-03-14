@@ -373,16 +373,24 @@ def sanitize_filename(filename: str) -> str:
     if not filename or not isinstance(filename, str):
         return "unnamed"
 
-    # Strip any directory components
-    name = os.path.basename(filename)
-
     # Remove null bytes
-    name = name.replace("\x00", "")
+    name = filename.replace("\x00", "")
 
-    # Remove path traversal sequences that survived basename
-    name = name.replace("..", "")
-    name = name.replace("/", "")
-    name = name.replace("\\", "")
+    # Strip absolute path prefixes (e.g., "C:\", "/")
+    name = re.sub(r'^([a-zA-Z]:)?[\\/]+', '', name)
+
+    # Remove path traversal sequences in a loop to defeat bypass
+    # patterns like "....//", "....\\", "..../\" etc.
+    prev = None
+    while prev != name:
+        prev = name
+        name = name.replace("../", "").replace("..\\", "").replace("..", "")
+
+    # Strip any remaining directory components
+    name = os.path.basename(name)
+
+    # Remove any leftover slashes/backslashes
+    name = name.replace("/", "").replace("\\", "")
 
     # Remove dangerous characters
     name = _SAFE_FILENAME_RE.sub("", name)

@@ -33,6 +33,9 @@ from routes.scheduler._helpers import (
     _is_scheduler_admin,
     _audit_log,
 )
+from routes.scheduler.recurring_availability import (
+    _sync_working_hours_json_to_recurring,
+)
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -627,6 +630,14 @@ async def update_settings_section(
     elif section == "advanced":
         _apply_advanced(config, payload, changes)
 
+    # Phase 2 reverse sync: if working_hours JSON was updated, propagate to
+    # RecurringAvailability structured tables so both sources stay consistent.
+    if section == "availability" and changes.get("working_hours"):
+        _sync_working_hours_json_to_recurring(
+            db, user_id, org_id, config.working_hours,
+            timezone_str=config.timezone or "America/Chicago",
+        )
+
     config.updated_at = datetime.now(timezone.utc)
     db.flush()
 
@@ -919,6 +930,12 @@ async def reset_settings(
     config.feature_toggles = {}
     config.updated_at = datetime.now(timezone.utc)
 
+    # Phase 2 reverse sync: reset RecurringAvailability to match defaults
+    _sync_working_hours_json_to_recurring(
+        db, user_id, org_id, DEFAULT_WORKING_HOURS,
+        timezone_str="America/Chicago",
+    )
+
     db.flush()
 
     _audit_log(
@@ -1095,6 +1112,13 @@ async def import_settings(
             config.lunch_break_end = time(int(parts[0]), int(parts[1]))
         if lb.get("enforced") is not None:
             config.enforce_lunch_break = lb["enforced"]
+        # Phase 2 reverse sync: propagate imported working_hours to
+        # RecurringAvailability structured tables.
+        if wh:
+            _sync_working_hours_json_to_recurring(
+                db, user_id, org_id, wh,
+                timezone_str=avail.get("timezone", config.timezone or "America/Chicago"),
+            )
         applied_sections.append("availability")
 
     if "notifications" in data:

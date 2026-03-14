@@ -158,18 +158,23 @@ async def create_lead(
 
 
 
-# Stages that belong on the Leads page (not Active Loans or MUM)
+# Stages that belong on the Leads page (pre-contract, not yet an active loan file)
 LEAD_PIPELINE_STAGES = [
-    'New', 'Attempted Contact', 'Prospect', 'Application', 'APPLICATION_STARTED',
-    'Document Fulfillment', 'Pre-Qualified', 'Pre-Approved', 'Under Contract',
-    'Long-Term Nurture', 'Withdrawn', 'Does Not Qualify',
+    'New', 'Attempted Contact', 'Prospect', 'Pre-Qualified', 'Pre-Approved',
+    'Long-Term Nurture', 'Credit Repair', 'Do Not Call',
 ]
 
 # Stages that belong on the MUM/Closed page
 MUM_STAGES = ['Closed', 'AMR', 'Referral Source', 'Funded']
 
-# Stages that indicate transition to Active Loans
-ACTIVE_LOAN_ENTRY_STAGES = ['Disclosed']
+# Stages that indicate the record is an Active Loan (exclude from Leads list).
+# Once a file has an application or contract, it's an active loan — not a lead.
+ACTIVE_LOAN_ENTRY_STAGES = [
+    'Application', 'Disclosed', 'Processing', 'Submitted',
+    'Underwriting', 'UW Received', 'Conditional Approval', 'Approved',
+    'Suspended', 'CTC', 'Clear to Close', 'Closing', 'Docs', 'Docs Out',
+    'Cancelled', 'Denied', 'Dead', 'Withdrawn', 'Does Not Qualify',
+]
 
 
 @router.get("/")

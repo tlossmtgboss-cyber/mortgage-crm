@@ -121,6 +121,55 @@ def map_salesforce_stage(sf_stage: str) -> str:
     return SALESFORCE_STAGE_MAPPING.get(sf_stage)
 
 
+def infer_stage_from_dates(loan_data: dict) -> str:
+    """Infer loan stage from date fields when Salesforce status is missing.
+
+    Uses the highest-watermark date to determine where the loan actually is
+    in the pipeline. Dates are the source of truth — if funded_date is set,
+    the loan is funded regardless of what the status field says.
+
+    Checked from most advanced stage to least, so the first match wins.
+    """
+    # Funded / post-closing
+    if loan_data.get("funded_date"):
+        return "FUNDED"
+    # Docs phase
+    if loan_data.get("docs_out_date"):
+        return "DOCS_OUT"
+    if loan_data.get("docs_ordered_date"):
+        return "DOCS"
+    # Clear to close
+    if loan_data.get("clear_to_close_date"):
+        return "CLEAR_TO_CLOSE"
+    # Closing disclosure sent → at least in closing
+    if loan_data.get("cd_sent_to_borrower_date"):
+        return "CLOSING"
+    # Approval
+    if loan_data.get("loan_approved_date"):
+        return "APPROVED"
+    # Conditional approval
+    if loan_data.get("conditions_for_review_date"):
+        return "CONDITIONAL_APPROVAL"
+    # Underwriting received
+    if loan_data.get("uw_received_date"):
+        return "UW_RECEIVED"
+    # Processing indicators (appraisal, title, insurance, lock)
+    if any(loan_data.get(f) for f in (
+        "appraisal_received_date", "appraisal_completed_date",
+        "appraisal_scheduled_date", "appraisal_ordered_date",
+        "title_ordered_date", "insurance_ordered_date", "lock_date",
+    )):
+        return "PROCESSING"
+    # Disclosed / LE sent
+    if loan_data.get("le_pending_date"):
+        return "DISCLOSED"
+    # Application
+    if loan_data.get("application_date"):
+        return "APPLICATION"
+    # No dates at all — genuinely new
+    return "APPLICATION"
+
+
 # Mapping from UPPERCASE LoanStage values to mixed-case LeadStage values.
 # Used when a Salesforce status needs to be mapped to a lead stage instead
 # of a loan stage (e.g., when the record is routed to the leads table).

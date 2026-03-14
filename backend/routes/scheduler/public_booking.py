@@ -8,7 +8,7 @@ Unauthenticated endpoints for public-facing booking pages:
   - POST /public/available-slots       - Get slots for website demo scheduling
   - POST /public/book-demo/confirm     - Confirm a website demo booking
 
-All endpoints are rate-limited (Redis with in-memory fallback).
+All endpoints are rate-limited via shared infrastructure in _helpers.py.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
@@ -16,17 +16,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Optional
-from collections import defaultdict, deque
 import html
 import logging
 import os
-import threading
-import time as _time
-
-try:
-    import nh3
-except ImportError:
-    nh3 = None
+import secrets
 
 import pytz
 
@@ -45,6 +38,23 @@ from scheduler_email_service import (
 )
 from services.notification_service import notification_service
 from services.microsoft_graph import create_event_via_graph, CalendarResult
+
+# Import shared utilities from _helpers.py (single source of truth)
+from routes.scheduler._helpers import (
+    _sanitize_text,
+    _mask_email,
+    _validate_phone,
+    _sanitize_public_error,
+    _verify_turnstile_token,
+    _get_client_ip,
+    _get_rate_limit_redis,
+    _check_memory_rate_limit,
+    _check_rate_limit,
+    _ensure_lead_for_booking,
+    _RATE_LIMIT_WINDOW,
+    _IS_PRODUCTION,
+    _TURNSTILE_SECRET_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,256 +102,87 @@ def get_db():
 
 
 # ============================================================================
-# RATE LIMITING (Redis-backed, multi-process safe)
+# BOOKING-SPECIFIC RATE LIMITS (per-email, per-IP for confirm endpoints)
+# These are unique to booking endpoints and use the shared rate-limit
+# infrastructure from _helpers.py.
 # ============================================================================
 
-_RATE_LIMIT_WINDOW = 60  # seconds
-_RATE_LIMIT_MAX_PUBLIC = 10  # max requests per window for public endpoints
-
-# Lazy Redis connection for rate limiting
-_rate_limit_redis = None
-_rate_limit_redis_checked = False
+_BOOKING_RATE_LIMIT_WINDOW = int(os.getenv("SCHEDULER_BOOKING_RATE_LIMIT_WINDOW", "3600"))  # 1 hour default
+_BOOKING_MAX_PER_EMAIL = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_EMAIL", "5"))
+_BOOKING_MAX_PER_IP = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_IP", "5"))
 
 
-def _get_rate_limit_redis():
-    """Get or create Redis connection for rate limiting. Returns None if unavailable."""
-    global _rate_limit_redis, _rate_limit_redis_checked
-    if _rate_limit_redis_checked:
-        return _rate_limit_redis
-    _rate_limit_redis_checked = True
-    try:
-        import redis as redis_lib
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        _rate_limit_redis = redis_lib.Redis.from_url(
-            redis_url, decode_responses=True, socket_connect_timeout=2
-        )
-        _rate_limit_redis.ping()
-        logger.info("Public booking rate limiter connected to Redis")
-    except Exception as e:
-        logger.warning(f"Redis unavailable for public booking rate limiting: {e}")
-        _rate_limit_redis = None
-    return _rate_limit_redis
-
-
-# In-memory rate limiter fallback when Redis is unavailable
-_memory_rate_limits = defaultdict(deque)  # key -> deque of timestamps
-_memory_rate_lock = threading.Lock()
-_memory_rate_check_count = 0  # Counter for periodic cleanup
-_MEMORY_CLEANUP_INTERVAL = 500  # Sweep empty keys every N checks
-
-
-def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: int = _RATE_LIMIT_WINDOW) -> bool:
+async def _check_booking_ip_rate_limit(request: Request):
     """
-    In-memory sliding window rate limit. Returns True if allowed, False if over limit.
-    Thread-safe via lock. Not multi-process safe (per-worker protection only).
-    Periodically evicts empty keys to prevent unbounded memory growth.
+    Tighter per-IP rate limit specifically for booking confirmation endpoints.
+    Max 5 booking creations per IP per hour.
+    Uses the shared _check_rate_limit infrastructure from _helpers.py with a custom key.
     """
-    global _memory_rate_check_count
-    now = _time.time()
-    with _memory_rate_lock:
-        timestamps = _memory_rate_limits[key]
-        # Evict expired timestamps
-        while timestamps and timestamps[0] < now - window_seconds:
-            timestamps.popleft()
-        if len(timestamps) >= max_requests:
-            return False
-        timestamps.append(now)
-
-        # Periodic cleanup: remove keys with empty deques to prevent memory growth
-        _memory_rate_check_count += 1
-        if _memory_rate_check_count >= _MEMORY_CLEANUP_INTERVAL:
-            _memory_rate_check_count = 0
-            empty_keys = [k for k, v in _memory_rate_limits.items() if not v]
-            for k in empty_keys:
-                del _memory_rate_limits[k]
-            if empty_keys:
-                logger.debug(f"Rate limiter cleanup: evicted {len(empty_keys)} expired keys")
-
-        return True
-
-
-def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC):
-    """
-    Redis-backed rate limiter keyed by client IP + path.
-    Falls back to in-memory rate limiting if Redis is unavailable.
-    """
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        client_ip = forwarded.split(",")[0].strip()
-    else:
-        client_ip = request.client.host if request.client else "unknown"
-
-    key = f"sched_rl:{request.url.path}:{client_ip}"
+    client_ip = _get_client_ip(request)
+    key = f"sched_booking:{client_ip}"
 
     r = _get_rate_limit_redis()
     if r is None:
-        # Fallback: in-memory rate limiting (per-worker only -- degraded protection)
-        logger.error("Rate limiter: Redis unavailable, using per-worker memory fallback. "
-                      "Effective limit is multiplied by worker count. Restore Redis ASAP.")
-        if not _check_memory_rate_limit(key, max_requests):
+        if not await _check_memory_rate_limit(key, _BOOKING_MAX_PER_IP, _BOOKING_RATE_LIMIT_WINDOW):
             raise HTTPException(
                 status_code=429,
-                detail="Too many requests. Please try again later.",
-                headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+                detail="Too many bookings. Please try again later.",
+                headers={"Retry-After": str(_BOOKING_RATE_LIMIT_WINDOW)}
             )
         return
 
     try:
         current = r.incr(key)
         if current == 1:
-            r.expire(key, _RATE_LIMIT_WINDOW)
-        if current > max_requests:
+            r.expire(key, _BOOKING_RATE_LIMIT_WINDOW)
+        if current > _BOOKING_MAX_PER_IP:
             ttl = r.ttl(key)
             raise HTTPException(
                 status_code=429,
-                detail="Too many requests. Please try again later.",
+                detail="Too many bookings. Please try again later.",
                 headers={"Retry-After": str(max(ttl, 1))}
             )
     except HTTPException:
         raise
     except Exception as e:
-        # Redis command error -- fall back to in-memory
-        logger.warning(f"Rate limit Redis error, using memory fallback: {e}")
-        if not _check_memory_rate_limit(key, max_requests):
+        logger.warning(f"Booking IP rate limit Redis error, using memory fallback: {e}")
+        if not await _check_memory_rate_limit(key, _BOOKING_MAX_PER_IP, _BOOKING_RATE_LIMIT_WINDOW):
             raise HTTPException(
                 status_code=429,
-                detail="Too many requests. Please try again later.",
-                headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+                detail="Too many bookings. Please try again later.",
+                headers={"Retry-After": str(_BOOKING_RATE_LIMIT_WINDOW)}
             )
 
 
-# ============================================================================
-# INPUT SANITIZATION & ERROR HELPERS
-# ============================================================================
-
-def _sanitize_text(value: Optional[str]) -> Optional[str]:
-    """Sanitize user-supplied text input, stripping all HTML."""
-    if value is None:
-        return None
-    if nh3:
-        return nh3.clean(value, tags=set())
-    # Fallback: html.escape
-    return html.escape(value)
-
-
-def _mask_email(email: Optional[str]) -> str:
-    """Mask email for logging: j***@example.com"""
-    if not email or '@' not in email:
-        return '***'
-    local, domain = email.split('@', 1)
-    return f"{local[0]}***@{domain}" if local else f"***@{domain}"
-
-
-def _sanitize_public_error(status_code: int, detail: str) -> str:
+def _check_booking_email_rate_limit(db: Session, attendee_email: str):
     """
-    Map internal error details to safe, user-friendly messages for public endpoints.
-    Prevents leaking SQL errors, stack traces, model names, or internal state.
-    """
-    safe_messages = {
-        400: "Invalid booking request. Please check your information and try again.",
-        403: "This action is not allowed.",
-        404: "Booking page not found.",
-        409: "This time slot has already been booked. Please select another time.",
-        410: "This booking link is no longer available.",
-        429: "Too many requests. Please wait a moment and try again.",
-    }
-    if status_code in safe_messages:
-        return safe_messages[status_code]
-    # For all 5xx and unknown codes, return a generic message
-    return "Something went wrong. Please try again later."
-
-
-# Cloudflare Turnstile secret key -- if not set, bot verification is skipped (dev mode)
-_TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY")
-
-
-async def _verify_turnstile_token(token: str) -> bool:
-    """
-    Verify a Cloudflare Turnstile token by POSTing to Cloudflare's siteverify endpoint.
-    Returns True if the token is valid, False otherwise.
-    """
-    import httpx
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-                data={
-                    "secret": _TURNSTILE_SECRET_KEY,
-                    "response": token,
-                },
-            )
-            result = response.json()
-            if result.get("success"):
-                return True
-            logger.warning(f"Turnstile verification failed: {result.get('error-codes', [])}")
-            return False
-    except Exception as e:
-        logger.error(f"Turnstile verification error: {e}")
-        return False
-
-
-# ============================================================================
-# CRM INTEGRATION HELPER
-# ============================================================================
-
-def _ensure_lead_for_booking(db, attendee_email: str, attendee_name: str,
-                              attendee_phone: str, assigned_user_id: int,
-                              org_id: int) -> Optional[int]:
-    """
-    Find or create a Lead record for a booking attendee.
-    Dedup: Match on email + organization_id. Returns lead_id or None.
+    Per-email booking rate limit: reject if this email has 3+ bookings in the last hour.
+    Queries the scheduler_appointments table directly.
     """
     if not attendee_email:
-        return None
+        return
 
-    try:
-        from database.models.lead_loan import Lead
-    except ImportError:
-        logger.debug("Lead model not available, skipping lead creation")
-        return None
+    from sqlalchemy import text as sql_text
+    result = db.execute(sql_text(
+        "SELECT COUNT(*) as cnt FROM scheduler_appointments "
+        "WHERE attendee_email = :email AND created_at > NOW() - INTERVAL '1 hour'"
+    ), {"email": attendee_email}).fetchone()
 
-    try:
-        existing = db.query(Lead).filter(
-            Lead.email == attendee_email,
-            Lead.organization_id == org_id
-        ).first()
-
-        if existing:
-            existing.last_contact = datetime.now(timezone.utc)
-            logger.info(f"Linked booking to existing lead {existing.id} ({_mask_email(attendee_email)})")
-            return existing.id
-
-        # Parse name into first/last
-        name_parts = (attendee_name or "").strip().split(None, 1)
-        first_name = name_parts[0] if name_parts else ""
-        last_name = name_parts[1] if len(name_parts) > 1 else ""
-
-        new_lead = Lead(
-            organization_id=org_id,
-            name=attendee_name or attendee_email,
-            first_name=first_name,
-            last_name=last_name,
-            email=attendee_email,
-            phone=attendee_phone,
-            stage="New",
-            source="scheduler",
-            owner_id=assigned_user_id,
-            last_contact=datetime.now(timezone.utc),
-            lead_received_date=datetime.now(timezone.utc),
+    count = result.cnt if result else 0
+    if count >= _BOOKING_MAX_PER_EMAIL:
+        logger.warning(
+            f"Email booking rate limit exceeded: {_mask_email(attendee_email)} "
+            f"has {count} bookings in the last hour"
         )
-        db.add(new_lead)
-        db.flush()  # Get the ID without committing
-
-        logger.info(f"Created new lead {new_lead.id} from booking ({_mask_email(attendee_email)})")
-        return new_lead.id
-
-    except Exception as e:
-        logger.error(f"Failed to ensure lead for booking: {e}")
-        return None
+        raise HTTPException(
+            status_code=429,
+            detail="Too many bookings. Please try again later.",
+            headers={"Retry-After": str(_BOOKING_RATE_LIMIT_WINDOW)}
+        )
 
 
 # ============================================================================
-# HELPER ACCESSORS (delegate to parent module helpers)
+# HELPER ACCESSORS (delegate to _helpers.py shared functions)
 # ============================================================================
 
 def _check_appointment_conflict(db, assigned_user_id, start_time, end_time, org_id=None, exclude_appointment_id=None):
@@ -401,7 +242,7 @@ async def get_public_booking_page(
 ):
     """Get public booking page data"""
     try:
-        _check_rate_limit(request)
+        await _check_rate_limit(request)
         BookingLink = _models['BookingLink']
         AppointmentType = _models['AppointmentType']
         User = _models.get('User')
@@ -416,6 +257,9 @@ async def get_public_booking_page(
         if not link:
             if slug != "demo":
                 raise HTTPException(status_code=404, detail="Booking page not found")
+
+            # Tighter rate limit for demo auto-creation to prevent spam
+            await _check_rate_limit(request, max_requests=3, custom_key=f"sched_demo_create:{_get_client_ip(request)}")
 
             try:
                 SchedulerConfig = _models['SchedulerConfig']
@@ -490,19 +334,37 @@ async def get_public_booking_page(
                             db.add(user_type)
                             db.flush()
 
-                        link = BookingLink(
-                            organization_id=demo_org_id,
-                            user_id=target_user.id,
-                            slug=slug,
-                            link_name="Schedule a Demo",
-                            description="Book a personalized demo of Perennia AI",
-                            is_active=True,
-                            is_public=True,
-                            appointment_type_ids=[user_type.id],
-                            custom_title="Schedule Your Demo",
-                            custom_description="See how Perennia AI can transform your mortgage operations."
+                        # Guard: check if a demo link already exists for this org
+                        # (may have been created by a concurrent request or previously deactivated)
+                        existing_demo_link_query = db.query(BookingLink).filter(
+                            BookingLink.slug == "demo"
                         )
-                        db.add(link)
+                        if demo_org_id:
+                            existing_demo_link_query = existing_demo_link_query.filter(
+                                BookingLink.organization_id == demo_org_id
+                            )
+                        existing_demo_link = existing_demo_link_query.first()
+
+                        if existing_demo_link:
+                            # Re-activate and update the existing link instead of creating a new one
+                            existing_demo_link.is_active = True
+                            existing_demo_link.is_public = True
+                            existing_demo_link.appointment_type_ids = [user_type.id]
+                            link = existing_demo_link
+                        else:
+                            link = BookingLink(
+                                organization_id=demo_org_id,
+                                user_id=target_user.id,
+                                slug=slug,
+                                link_name="Schedule a Demo",
+                                description="Book a personalized demo of Perennia AI",
+                                is_active=True,
+                                is_public=True,
+                                appointment_type_ids=[user_type.id],
+                                custom_title="Schedule Your Demo",
+                                custom_description="See how Perennia AI can transform your mortgage operations."
+                            )
+                            db.add(link)
                         db.commit()
                         logger.info(f"Auto-created booking link for slug: {slug}")
             except Exception as e:
@@ -608,7 +470,7 @@ async def get_public_available_slots(
     """
     try:
         if request:
-            _check_rate_limit(request)
+            await _check_rate_limit(request)
 
         # Resolve date range: prefer start_date/end_date, fall back to single date
         if start_date and end_date:
@@ -674,12 +536,21 @@ async def confirm_public_booking(
     """Confirm a public booking"""
     try:
         # Rate limit public booking endpoint
-        _check_rate_limit(request, max_requests=5)
+        await _check_rate_limit(request, max_requests=5)
+
+        # Anti-spam: per-IP booking rate limit (max 5 bookings/hour/IP)
+        await _check_booking_ip_rate_limit(request)
+
+        # Anti-spam: per-email booking rate limit (max 3 bookings/hour/email)
+        _check_booking_email_rate_limit(db, booking_data.attendee_email)
 
         # Bot protection: Cloudflare Turnstile verification
-        if _TURNSTILE_SECRET_KEY:
-            if not booking_data.cf_turnstile_token:
+        # Always run verification -- _verify_turnstile_token handles missing key
+        # (rejects in production, allows in dev/test)
+        if not booking_data.cf_turnstile_token:
+            if _TURNSTILE_SECRET_KEY or _IS_PRODUCTION:
                 raise HTTPException(status_code=403, detail="Bot verification required")
+        else:
             is_human = await _verify_turnstile_token(booking_data.cf_turnstile_token)
             if not is_human:
                 raise HTTPException(status_code=403, detail="Bot verification failed. Please try again.")
@@ -690,7 +561,8 @@ async def confirm_public_booking(
         duration_minutes = booking_data.duration_minutes
         attendee_name = _sanitize_text(booking_data.attendee_name)
         attendee_email = booking_data.attendee_email  # Already validated by EmailStr
-        attendee_phone = _sanitize_text(booking_data.attendee_phone)
+        attendee_phone = _validate_phone(booking_data.attendee_phone)
+        attendee_phone = _sanitize_text(attendee_phone)
         notes_text = _sanitize_text(booking_data.notes)
         intake_responses = {"notes": notes_text} if notes_text else {}
         BookingLink = _models['BookingLink']
@@ -813,7 +685,10 @@ async def confirm_public_booking(
 
         # Create virtual meeting link if meeting mode is VIDEO
         video_link = None
+        room_code = None
         if meeting_mode == MeetingMode.VIDEO:
+            # Generate a fallback room code in case the meeting service is unavailable
+            room_code = secrets.token_urlsafe(8)
             try:
                 from services.virtual_meeting_service import create_meeting_for_appointment
                 meeting_result = await create_meeting_for_appointment(
@@ -825,6 +700,7 @@ async def confirm_public_booking(
                 )
                 if meeting_result.success:
                     video_link = meeting_result.join_url
+                    room_code = meeting_result.meeting_id
                     logger.info(
                         f"Auto-generated meeting link for public booking {appointment.id}: "
                         f"provider={meeting_result.provider}, url={video_link}"
@@ -1083,7 +959,7 @@ async def get_website_demo_available_slots(
     Used by the public website demo scheduler.
     """
     try:
-        _check_rate_limit(http_request)
+        await _check_rate_limit(http_request)
         from sqlalchemy import text
 
         # Dates are already validated as date type by Pydantic
@@ -1207,7 +1083,13 @@ async def confirm_website_demo_booking(
     """
     try:
         # Rate limit public demo booking endpoint
-        _check_rate_limit(http_request, max_requests=5)
+        await _check_rate_limit(http_request, max_requests=5)
+
+        # Anti-spam: per-IP booking rate limit (max 5 bookings/hour/IP)
+        await _check_booking_ip_rate_limit(http_request)
+
+        # Anti-spam: per-email booking rate limit (max 3 bookings/hour/email)
+        _check_booking_email_rate_limit(db, request.attendee_email)
 
         from sqlalchemy import text
 
@@ -1257,9 +1139,10 @@ async def confirm_website_demo_booking(
         # Prevent double-booking
         _check_appointment_conflict(db, assigned_user_id, start_time, end_time, org_id=demo_org_id)
 
-        # Sanitize user-supplied text
+        # Validate and sanitize user-supplied text
         safe_name = _sanitize_text(request.attendee_name)
-        safe_phone = _sanitize_text(request.attendee_phone)
+        safe_phone = _validate_phone(request.attendee_phone)
+        safe_phone = _sanitize_text(safe_phone)
         safe_notes = _sanitize_text(request.notes)
 
         new_appointment = Appointment(

@@ -934,9 +934,9 @@ class TestIdentityVerification:
         assert len(code) == 6, "Access code must be 6 digits"
         assert code.isdigit(), "Access code must be numeric"
 
-        # Hash it for storage
+        # Hash it for storage (bcrypt)
         hashed = crypto_service.hash_access_code(code)
-        assert len(hashed) == 64, "Hashed access code must be SHA-256 hex"
+        assert hashed.startswith("$2b$"), "Hashed access code must be bcrypt"
         assert hashed != code, "Stored hash must not be plaintext"
 
         # Correct code verifies

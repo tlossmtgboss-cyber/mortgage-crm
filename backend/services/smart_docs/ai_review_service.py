@@ -236,8 +236,9 @@ class AIDocumentReviewService:
     8. Fraud indicators (altered text, mismatched fonts)
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, org_id: Optional[int] = None):
         self.db = db
+        self.org_id = org_id
         self._anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         self._auto_approve_threshold = int(
             os.getenv("SMART_DOCS_AUTO_APPROVE_THRESHOLD", "80")
@@ -284,6 +285,25 @@ class AIDocumentReviewService:
                 needs_human_review=True,
                 review_priority="CRITICAL",
             )
+
+        # Enforce tenant isolation: verify document's loan belongs to caller's org
+        if self.org_id is not None and document.loan_id:
+            loan_org = self.db.execute(
+                text("SELECT organization_id FROM loans WHERE id = :lid"),
+                {"lid": document.loan_id},
+            ).fetchone()
+            if loan_org and loan_org.organization_id != self.org_id:
+                logger.warning(
+                    "Tenant isolation violation in AI review: doc %d loan %d belongs to org %s, caller org %s",
+                    document_id, document.loan_id, loan_org.organization_id, self.org_id,
+                )
+                return ReviewDecision(
+                    decision=DocumentDecision.NEEDS_REVIEW.value,
+                    confidence=0,
+                    reasons=["Access denied: document does not belong to your organization"],
+                    needs_human_review=True,
+                    review_priority="CRITICAL",
+                )
 
         # Fetch file content from S3 if not provided
         if file_content is None:
@@ -529,6 +549,21 @@ class AIDocumentReviewService:
         Returns:
             BatchReviewResult with aggregate counts and per-document results
         """
+        # Validate loan belongs to the caller's organization
+        if self.org_id is not None:
+            loan_org_check = self.db.execute(
+                text("SELECT organization_id FROM loans WHERE id = :lid"),
+                {"lid": loan_id},
+            ).fetchone()
+            if loan_org_check and loan_org_check.organization_id != self.org_id:
+                logger.warning(
+                    "Tenant isolation violation in batch review: loan %d belongs to org %s, caller org %s",
+                    loan_id, loan_org_check.organization_id, self.org_id,
+                )
+                return BatchReviewResult(
+                    total=0, approved=0, rejected=0, needs_review=0, results=[],
+                )
+
         documents = self.db.query(SmartDocument).filter(
             SmartDocument.loan_id == loan_id,
             SmartDocument.decision.is_(None),
@@ -975,11 +1010,13 @@ class AIDocumentReviewService:
         if not document or not document.loan_id:
             return True, 50, []
 
-        loan_info = self.db.execute(text("""
+        _org_filter = "AND organization_id = :_org_id" if self.org_id is not None else ""
+        _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
+        loan_info = self.db.execute(text(f"""
             SELECT borrower_name, coborrower_name
             FROM loans
-            WHERE id = :loan_id
-        """), {"loan_id": document.loan_id}).fetchone()
+            WHERE id = :loan_id {_org_filter}
+        """), {"loan_id": document.loan_id, **_org_params}).fetchone()
 
         if not loan_info:
             return True, 50, []
@@ -1775,7 +1812,7 @@ class AIDocumentReviewService:
 # SINGLETON
 # =============================================================================
 
-def get_ai_review_service(db: Session) -> AIDocumentReviewService:
+def get_ai_review_service(db: Session, org_id: Optional[int] = None) -> AIDocumentReviewService:
     """
     Get an AIDocumentReviewService instance.
 
@@ -1784,8 +1821,10 @@ def get_ai_review_service(db: Session) -> AIDocumentReviewService:
 
     Args:
         db: SQLAlchemy database session
+        org_id: Organization ID for tenant isolation.  When provided, all
+                queries are scoped to loans/documents belonging to that org.
 
     Returns:
         AIDocumentReviewService instance
     """
-    return AIDocumentReviewService(db)
+    return AIDocumentReviewService(db, org_id=org_id)

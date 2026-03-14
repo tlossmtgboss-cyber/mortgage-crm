@@ -27,36 +27,38 @@ import { toast } from '../../utils/toast';
  * - statusOptions: Array of status options for status change modal
  */
 
-// Lead stages (pre-application)
+// Lead stages (pre-contract, before becoming an active loan)
 const LEAD_STATUS_OPTIONS = [
   { value: 'new', label: 'New', color: '#6366f1' },
   { value: 'attempted_contact', label: 'Attempted Contact', color: '#8b5cf6' },
-  { value: 'contact_made', label: 'Contact Made', color: '#06b6d4' },
-  { value: 'needs_analysis', label: 'Needs Analysis', color: '#0ea5e9' },
+  { value: 'prospect', label: 'Prospect', color: '#06b6d4' },
+  { value: 'pre_qualified', label: 'Pre-Qualified', color: '#0ea5e9' },
   { value: 'pre_approved', label: 'Pre-Approved', color: '#10b981' },
-  { value: 'application', label: 'Application', color: '#f59e0b' },
-  { value: 'not_qualified', label: 'Does Not Qualify', color: '#ef4444' },
-  { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' }
+  { value: 'long_term_nurture', label: 'Long-Term Nurture', color: '#a855f7' },
+  { value: 'credit_repair', label: 'Credit Repair', color: '#f97316' },
+  { value: 'do_not_call', label: 'Do Not Call', color: '#dc2626' }
 ];
 
-// Loan stages (active loans - from Processing onwards)
+// Loan stages (active loans - from Application onwards)
 const LOAN_STATUS_OPTIONS = [
+  { value: 'application', label: 'Application', color: '#f59e0b' },
   { value: 'disclosed', label: 'Disclosed', color: '#8b5cf6' },
   { value: 'processing', label: 'In Processing', color: '#f97316' },
   { value: 'in_underwriting', label: 'In Underwriting', color: '#0ea5e9' },
   { value: 'approved', label: 'Approved', color: '#10b981' },
   { value: 'clear_to_close', label: 'Clear to Close', color: '#22c55e' },
   { value: 'suspended', label: 'Suspended', color: '#f59e0b' },
-  { value: 'funded', label: 'Funded', color: '#16a34a' },
-  { value: 'nurture', label: 'Nurture', color: '#a855f7' },
   { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' },
-  { value: 'not_qualified', label: 'Does Not Qualify', color: '#ef4444' }
+  { value: 'not_qualified', label: 'Does Not Qualify', color: '#ef4444' },
+  { value: 'funded', label: 'Funded', color: '#16a34a' }
 ];
 
 // Active loan stages that indicate the entity is a loan (not a lead)
 const ACTIVE_LOAN_STAGES = [
-  'disclosed', 'processing', 'in_processing', 'in_underwriting', 'underwriting',
-  'approved', 'clear_to_close', 'ctc', 'suspended', 'funded', 'closing', 'docs_out', 'docs_back'
+  'application', 'disclosed', 'processing', 'in_processing', 'submitted',
+  'underwriting', 'in_underwriting', 'uw_received', 'conditional_approval',
+  'approved', 'clear_to_close', 'ctc', 'suspended', 'closing', 'docs', 'docs_out',
+  'withdrawn', 'cancelled', 'denied', 'dead', 'does_not_qualify', 'funded'
 ];
 
 // Default status options if none provided (legacy, use the specific ones above)

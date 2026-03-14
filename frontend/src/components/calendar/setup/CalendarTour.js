@@ -212,13 +212,13 @@ function CalendarTour({
     };
   }, [isActive, currentStep, reposition]);
 
-  // Keyboard handling: Escape to skip, Left/Right to navigate
+  // Keyboard handling: Escape to skip, Left/Right to navigate, Tab trap
   useEffect(() => {
     if (!isActive) return;
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         onSkip();
-      } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+      } else if (e.key === 'ArrowRight') {
         if (stepData?.isFinal) {
           onComplete();
         } else {
@@ -226,6 +226,25 @@ function CalendarTour({
         }
       } else if (e.key === 'ArrowLeft') {
         if (currentStep > 0) onBack();
+      } else if (e.key === 'Tab' && tooltipRef.current) {
+        // Focus trap within the tooltip
+        const focusable = tooltipRef.current.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -324,7 +343,7 @@ function CalendarTour({
         {/* Footer */}
         <div className="calendar-tour-tooltip__footer">
           {/* Progress dots */}
-          <div className="calendar-tour-progress" aria-hidden="true">
+          <div className="calendar-tour-progress" role="presentation" aria-hidden="true">
             {steps.map((_, idx) => (
               <div
                 key={idx}

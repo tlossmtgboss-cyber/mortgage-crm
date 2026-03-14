@@ -1,18 +1,15 @@
 """
-Scheduler Blocked Time - CRUD endpoints for blocked time periods.
+DEPRECATED -- This module is superseded by blocked_times.py.
+It is retained for reference only. Do NOT import or register its router.
 
-Extracted from routes/scheduler_appointment_routes.py
+Original description:
+  Scheduler Blocked Time - CRUD endpoints for blocked time periods.
+  Extracted from routes/scheduler_appointment_routes.py
 
-Manages:
-  - Blocked time slot CRUD (meetings, personal, admin blocks)
-  - Lunch break management (via block_type='lunch')
-  - Out-of-office management (via block_type='ooo' / all_day blocks)
-  - Capacity-limiting time blocks (applies_to_all_users)
-
-Endpoints:
-  - GET    /blocked-times              List blocked time periods
-  - POST   /blocked-times              Create a blocked time period
-  - DELETE /blocked-times/{block_id}   Delete a blocked time period
+  Endpoints (now served by blocked_times.py):
+    - GET    /blocked-times              -> blocked_times.py
+    - POST   /blocked-times              -> blocked_times.py
+    - DELETE /blocked-times/{block_id}   -> blocked_times.py
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -23,10 +20,11 @@ from typing import Optional
 import logging
 
 from scheduler_models import BlockedTimeCreate
+from routes.scheduler.middleware import deprecated_endpoint
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+_deprecated_router = APIRouter()  # DEPRECATED: do not import or register
 
 # ============================================================================
 # DEPENDENCY INJECTION STORAGE
@@ -109,7 +107,8 @@ def _audit_log(db, org_id, user_id, action, entity_type, entity_id=None, changes
 # BLOCKED TIME ENDPOINTS
 # ============================================================================
 
-@router.get("/blocked-times")
+@_deprecated_router.get("/blocked-times")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/blocked-times")
 async def list_blocked_times(
     request: Request,
     start_date: Optional[date] = None,
@@ -158,7 +157,8 @@ async def list_blocked_times(
     }
 
 
-@router.post("/blocked-times")
+@_deprecated_router.post("/blocked-times")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/blocked-times")
 async def create_blocked_time(
     block_data: BlockedTimeCreate,
     request: Request,
@@ -202,7 +202,8 @@ async def create_blocked_time(
     return {"message": "Blocked time created", "blocked_time_id": blocked.id}
 
 
-@router.delete("/blocked-times/{block_id}")
+@_deprecated_router.delete("/blocked-times/{block_id}")
+@deprecated_endpoint(sunset_date="2026-09-01", replacement="/api/v1/scheduler/blocked-times/{block_id}")
 async def delete_blocked_time(
     block_id: int,
     request: Request,

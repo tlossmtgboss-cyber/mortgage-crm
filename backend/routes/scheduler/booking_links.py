@@ -13,6 +13,7 @@ Endpoints:
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import logging
+import secrets
 
 from smart_scheduler_models import RoutingStrategy
 from scheduler_models import BookingLinkCreate
@@ -129,13 +130,18 @@ async def create_booking_link(
     _models = get_models()
     BookingLink = _models['BookingLink']
 
+    # Append a random suffix to the slug to prevent enumeration attacks
+    random_suffix = secrets.token_hex(3)  # 6 hex chars (e.g. "a1b2c3")
+    slug_with_suffix = f"{link_data.slug}-{random_suffix}"
+
     # Check for duplicate slug globally -- public lookup is cross-org so slugs must be unique
     existing = db.query(BookingLink).filter(
-        BookingLink.slug == link_data.slug,
+        BookingLink.slug == slug_with_suffix,
         BookingLink.is_active == True
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="This booking link slug is already in use. Please choose a different one.")
+        # Extremely unlikely collision with random suffix, but handle it
+        slug_with_suffix = f"{link_data.slug}-{secrets.token_hex(3)}"
 
     # Parse routing strategy
     routing_strategy = RoutingStrategy.RELATIONSHIP
@@ -148,7 +154,7 @@ async def create_booking_link(
     link = BookingLink(
         organization_id=org_id,
         user_id=user.id,
-        slug=link_data.slug,
+        slug=slug_with_suffix,
         link_name=link_data.link_name,
         description=link_data.description,
         appointment_type_ids=link_data.appointment_type_ids,
@@ -162,7 +168,7 @@ async def create_booking_link(
 
     db.add(link)
     _audit_log(db, org_id, user.id, 'created', 'booking_link',
-               changes={'slug': link_data.slug, 'link_name': link_data.link_name}, request=request)
+               changes={'slug': slug_with_suffix, 'link_name': link_data.link_name}, request=request)
     db.commit()
     db.refresh(link)
 

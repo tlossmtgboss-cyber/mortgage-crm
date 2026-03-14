@@ -1,0 +1,167 @@
+/* ==========================================================================
+   Calendar Design Tokens
+   ==========================================================================
+   Single source of truth for all calendar feature design values.
+   Extracted from 18 calendar CSS files (17,613 lines).
+
+   Usage: @import in each calendar CSS file, then reference via var(--cal-*).
+   ========================================================================== */
+
+:root {
+  /* ---- Brand Primary (Perennia Teal) ---- */
+  --cal-primary: #218D8D;
+  --cal-primary-hover: #1a7a7a;
+  --cal-primary-dark: #1a7070;
+  --cal-primary-deeper: #155e5e;
+  --cal-primary-light: #e6f5f5;
+  --cal-primary-lighter: #f0fafa;
+  --cal-primary-disabled: #7cc5c5;
+
+  /* ---- Text (Slate palette) ---- */
+  --cal-text-primary: #1e293b;
+  --cal-text-dark: #334155;
+  --cal-text-body: #475569;
+  --cal-text-secondary: #64748b;
+  --cal-text-muted: #94a3b8;
+  --cal-text-placeholder: #94a3b8;
+
+  /* ---- Backgrounds ---- */
+  --cal-bg: #ffffff;
+  --cal-bg-secondary: #f8fafc;
+  --cal-bg-tertiary: #f1f5f9;
+
+  /* ---- Borders ---- */
+  --cal-border: #e2e8f0;
+  --cal-border-hover: #cbd5e1;
+  --cal-border-light: #f1f5f9;
+  --cal-border-input: #d1d5db;
+
+  /* ---- Status: Success / Green ---- */
+  --cal-success: #10b981;
+  --cal-success-dark: #059669;
+  --cal-success-darker: #16a34a;
+  --cal-success-text: #166534;
+  --cal-success-light: #dcfce7;
+  --cal-success-lighter: #f0fdf4;
+  --cal-success-border: #bbf7d0;
+  --cal-success-border-bright: #86efac;
+
+  /* ---- Status: Warning / Amber ---- */
+  --cal-warning: #f59e0b;
+  --cal-warning-dark: #d97706;
+  --cal-warning-darker: #a16207;
+  --cal-warning-light: #fef3c7;
+  --cal-warning-lighter: #fefce8;
+  --cal-warning-border: #fde68a;
+
+  /* ---- Status: Error / Red ---- */
+  --cal-error: #ef4444;
+  --cal-error-dark: #dc2626;
+  --cal-error-darker: #b91c1c;
+  --cal-error-darkest: #991b1b;
+  --cal-error-light: #fef2f2;
+  --cal-error-lighter: #fee2e2;
+  --cal-error-border: #fecaca;
+  --cal-error-border-bright: #fca5a5;
+
+  /* ---- Status: Info / Blue ---- */
+  --cal-info: #3b82f6;
+  --cal-info-dark: #2563eb;
+  --cal-info-darker: #1e40af;
+  --cal-info-light: #eff6ff;
+  --cal-info-border: #bfdbfe;
+
+  /* ---- Accent: Purple ---- */
+  --cal-purple: #8b5cf6;
+  --cal-purple-dark: #4f46e5;
+  --cal-purple-light: #eef2ff;
+
+  /* ---- Accent: Orange ---- */
+  --cal-orange: #ea580c;
+  --cal-orange-light: #fff7ed;
+
+  /* ---- Accent: Green (integration-specific) ---- */
+  --cal-green-meet: #059669;
+  --cal-green-meet-light: #ecfdf5;
+
+  /* ---- Tour overlay (Indigo palette) ---- */
+  --cal-tour-primary: #6366f1;
+  --cal-tour-primary-dark: #4f46e5;
+  --cal-tour-accent: #8b5cf6;
+  --cal-tour-accent-light: #a78bfa;
+
+  /* ---- Toggle switch ---- */
+  --cal-toggle-off: #cbd5e1;
+  --cal-toggle-on: var(--cal-primary);
+
+  /* ---- Focus ring ---- */
+  --cal-focus-ring: rgba(33, 141, 141, 0.1);
+  --cal-focus-ring-strong: rgba(33, 141, 141, 0.15);
+  --cal-focus-ring-stronger: rgba(33, 141, 141, 0.25);
+
+  /* ---- Shadows ---- */
+  --cal-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --cal-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --cal-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --cal-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --cal-shadow-xl: 0 12px 40px rgba(0, 0, 0, 0.15);
+  --cal-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --cal-shadow-subtle: 0 1px 4px rgba(0, 0, 0, 0.04);
+  --cal-shadow-primary: 0 4px 14px rgba(33, 141, 141, 0.3);
+  --cal-shadow-primary-hover: 0 6px 20px rgba(33, 141, 141, 0.4);
+  --cal-shadow-save-bar: 0 -4px 12px rgba(0, 0, 0, 0.08);
+
+  /* ---- Gradients ---- */
+  --cal-gradient-primary: linear-gradient(135deg, #218D8D 0%, #1a7070 50%, #10b981 100%);
+  --cal-gradient-cta: linear-gradient(135deg, #218D8D, #10b981);
+
+  /* ---- Border Radius ---- */
+  --cal-radius-xs: 3px;
+  --cal-radius-sm: 4px;
+  --cal-radius: 6px;
+  --cal-radius-md: 8px;
+  --cal-radius-lg: 10px;
+  --cal-radius-xl: 12px;
+  --cal-radius-2xl: 16px;
+  --cal-radius-pill: 20px;
+  --cal-radius-full: 50%;
+  --cal-radius-round: 100px;
+
+  /* ---- Transitions ---- */
+  --cal-transition-fast: all 0.15s ease;
+  --cal-transition: all 0.2s ease;
+  --cal-transition-slow: all 0.3s ease;
+
+  /* ---- Typography ---- */
+  --cal-font-xs: 11px;
+  --cal-font-sm: 12px;
+  --cal-font-base: 13px;
+  --cal-font-md: 14px;
+  --cal-font-lg: 15px;
+  --cal-font-xl: 16px;
+  --cal-font-2xl: 18px;
+  --cal-font-3xl: 20px;
+  --cal-font-4xl: 24px;
+
+  /* ---- Spacing ---- */
+  --cal-space-1: 4px;
+  --cal-space-2: 6px;
+  --cal-space-3: 8px;
+  --cal-space-4: 10px;
+  --cal-space-5: 12px;
+  --cal-space-6: 14px;
+  --cal-space-7: 16px;
+  --cal-space-8: 20px;
+  --cal-space-9: 24px;
+  --cal-space-10: 28px;
+  --cal-space-11: 32px;
+  --cal-space-12: 40px;
+
+  /* ---- Breakpoints (reference only, not usable in media queries) ---- */
+  /* 375px  - small mobile */
+  /* 400px  - mobile */
+  /* 640px  - large mobile / small tablet */
+  /* 768px  - tablet */
+  /* 900px  - large tablet */
+  /* 1024px - desktop */
+}

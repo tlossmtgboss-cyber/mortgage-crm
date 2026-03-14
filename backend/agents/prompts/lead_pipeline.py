@@ -55,18 +55,20 @@ Use them differently depending on what the user is asking.
 
 ---
 
-### Lead Statuses (All 9)
+### Lead Statuses (All 8)
 
-Both tools operate on these lead-stage statuses:
+Both tools operate on these lead-stage statuses (pre-contract only):
 - new
 - attempted_contact
 - prospect
-- application
 - pre_qualified
 - pre_approved
-- nurture
-- withdrawn
-- does_not_qualify
+- long_term_nurture
+- credit_repair
+- do_not_call
+
+Note: "application" and beyond are Active Loan stages, not lead stages.
+Once a lead moves to Application, it appears on the Active Loans page.
 
 ---
 

@@ -239,7 +239,17 @@ const TeamSetupStep = ({ onComplete, onBack, isManager: isManagerProp }) => {
         max_overflow_pct: maxOverflowPct,
       });
       toast.success('Team settings saved');
-      if (onComplete) onComplete();
+      if (onComplete) onComplete({
+        assignment_strategy: strategy,
+        members: members.map(m => ({
+          user_id: m.user_id,
+          name: m.name,
+          max_daily_appointments: m.max_daily_appointments,
+          is_accepting_appointments: m.is_accepting_appointments,
+        })),
+        overflow_enabled: overflowEnabled,
+        max_overflow_pct: maxOverflowPct,
+      });
     } catch (err) {
       console.error('Failed to save team settings:', err);
       toast.error('Failed to save team settings');
@@ -279,7 +289,7 @@ const TeamSetupStep = ({ onComplete, onBack, isManager: isManagerProp }) => {
               <i className="fas fa-arrow-left" aria-hidden="true" /> Back
             </button>
           )}
-          <button type="button" className="tss-btn tss-btn--primary" onClick={onComplete}>
+          <button type="button" className="tss-btn tss-btn--primary" onClick={() => onComplete && onComplete({ individual: true })}>
             Continue <i className="fas fa-arrow-right" aria-hidden="true" />
           </button>
         </div>

@@ -121,8 +121,8 @@ def mock_db():
 
 @pytest.fixture
 def setup_scheduler_routes(mock_models):
-    """Set up scheduler_appointment_routes with mocked dependencies."""
-    import scheduler_appointment_routes as sar
+    """Set up scheduler helpers with mocked dependencies."""
+    import routes.scheduler._helpers as sar
     sar.set_dependencies(
         get_db_func=lambda: iter([MagicMock()]),
         get_current_user_func=MagicMock(),
@@ -1163,6 +1163,7 @@ class TestMultiTenantIsolation:
             'routes/unified_calendar_routes.py',
             'routes/scheduler_routes.py',
             'routes/scheduler_appointment_routes.py',
+            'routes/scheduler/_helpers.py',
             'models/calendar_sync_models.py',
             'smart_scheduler_models.py',
             'scheduler_appointment_routes.py',
@@ -1181,11 +1182,11 @@ class TestMultiTenantIsolation:
                     f"{relpath} still uses deprecated datetime.utcnow()"
 
     def test_enhanced_routes_have_org_id_helper(self):
-        """Consolidated scheduler appointment routes must have _get_org_id helper."""
-        import routes.scheduler_appointment_routes as sar
+        """Consolidated scheduler helpers must have _get_org_id helper."""
+        import routes.scheduler._helpers as sar
         source = Path(sar.__file__).read_text()
         assert "_get_org_id" in source, \
-            "scheduler_appointment_routes (consolidated) should have _get_org_id helper"
+            "routes.scheduler._helpers should have _get_org_id helper"
 
     def test_scheduler_audit_log_has_foreign_key(self):
         """SchedulerAuditLog.organization_id must have ForeignKey."""

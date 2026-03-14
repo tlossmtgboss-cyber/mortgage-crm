@@ -132,43 +132,52 @@ class SyncResult:
 
 # Default field mappings for MtgPlanner_CRM__Transaction_Property__c
 # Format: salesforce_field -> (crm_field, transform_type)
+#
+# SIMPLIFIED (Mar 2026): Only sync fields that drive workflows or are
+# essential for loan identification. Dates are the engine; loan profile
+# fields are the dashboard. Everything else is noise.
 DEFAULT_FIELD_MAPPING = {
-    # Core identifiers
+    # ============================================================
+    # CORE IDENTIFIERS
+    # ============================================================
     "Id": ("salesforce_id", None),
     "Name": ("loan_number", None),
 
-    # Loan details
+    # ============================================================
+    # LOAN PROFILE (essential for pipeline dashboard + LTV/PMI)
+    # ============================================================
     "MtgPlanner_CRM__Loan_Amount__c": ("amount", "decimal"),
     "MtgPlanner_CRM__Loan_Type__c": ("loan_type", None),
-    "MtgPlanner_CRM__Loan_Program__c": ("program", None),
-    "MtgPlanner_CRM__Interest_Rate__c": ("interest_rate", "decimal"),
-    "MtgPlanner_CRM__Lender__c": ("lender", None),
+    "MtgPlanner_CRM__Appraised_Value__c": ("appraisal_value", "decimal"),
+    "MtgPlanner_CRM__Mortgage_Ins_1st_TD__c": ("mortgage_insurance", "decimal"),
 
-    # Property info
-    "MtgPlanner_CRM__Property_Address__c": ("property_address", None),
-    "MtgPlanner_CRM__Property_City__c": ("property_city", None),
-    "MtgPlanner_CRM__Property_State__c": ("property_state", None),
-    "MtgPlanner_CRM__Property_Zip__c": ("property_zip", None),
-    "MtgPlanner_CRM__Purchase_Price__c": ("purchase_price", "decimal"),
-    "MtgPlanner_CRM__Down_Payment__c": ("down_payment", "decimal"),
+    # Status → stage mapping (drives pipeline bucket routing)
+    "MtgPlanner_CRM__Status__c": ("stage", "stage_mapping"),
+    "MtgPlanner_CRM__Stage__c": ("stage", "stage_mapping"),
 
-    # Borrower info
+    # ============================================================
+    # BORROWER INFO (required for communication + portal access)
+    # ============================================================
     "MtgPlanner_CRM__Borrower_Name__c": ("borrower_name", None),
     "MtgPlanner_CRM__Borrower_First_Name__c": ("borrower_first_name", None),
     "MtgPlanner_CRM__Borrower_Last_Name__c": ("borrower_last_name", None),
     "MtgPlanner_CRM__Borrower_Email__c": ("borrower_email", None),
     "MtgPlanner_CRM__Borrower_Phone__c": ("borrower_phone", None),
-
-    # Co-borrower
     "MtgPlanner_CRM__CoBorrower_Name__c": ("coborrower_name", None),
     "MtgPlanner_CRM__CoBorrower_Email__c": ("co_borrower_email", None),
 
-    # Status and dates
-    "MtgPlanner_CRM__Status__c": ("stage", "stage_mapping"),
-    "MtgPlanner_CRM__Stage__c": ("stage", "stage_mapping"),
+    # ============================================================
+    # PROPERTY ADDRESS (loan identification)
+    # ============================================================
+    "MtgPlanner_CRM__Property_Address__c": ("property_address", None),
+    "MtgPlanner_CRM__Property_City__c": ("property_city", None),
+    "MtgPlanner_CRM__Property_State__c": ("property_state", None),
+    "MtgPlanner_CRM__Property_Zip__c": ("property_zip", None),
 
     # ============================================================
-    # JUNGO CUSTOM BYTE MAPPINGS - All 33 Date Fields
+    # ALL 33 SLA DATE FIELDS (workflow execution engine)
+    # These dates drive the entire SLA/task generation system.
+    # DO NOT REMOVE — they are the backbone of pipeline automation.
     # ============================================================
 
     # Lead & Application Phase
@@ -232,63 +241,8 @@ DEFAULT_FIELD_MAPPING = {
     "MtgPlanner_CRM__Contract_Date__c": ("contract_received_date", "date"),
 
     # ============================================================
-    # PROPERTY DETAILS
+    # TIMESTAMPS
     # ============================================================
-    "MtgPlanner_CRM__Property_Type__c": ("property_type", None),
-    "MtgPlanner_CRM__Occupancy_Type__c": ("occupancy_type", None),
-    "MtgPlanner_CRM__Property_County__c": ("property_county", None),
-    "MtgPlanner_CRM__Property_Ownership_Type__c": ("property_ownership_type", None),
-    "MtgPlanner_CRM__Property_Units__c": ("property_units", "integer"),
-    "MtgPlanner_CRM__Appraised_Value__c": ("appraisal_value", "decimal"),
-
-    # ============================================================
-    # 1ST LOAN DETAILS
-    # ============================================================
-    "MtgPlanner_CRM__Rate_Type_1st_TD__c": ("rate_type", None),
-    "MtgPlanner_CRM__Note_Rate__c": ("interest_rate", "decimal"),
-    "MtgPlanner_CRM__Property_Tax_1st_TD__c": ("property_tax", "decimal"),
-    "MtgPlanner_CRM__Est_Prepaid_Int_1st_TD__c": ("estimated_prepaid_interest", "decimal"),
-    "MtgPlanner_CRM__Hazard_Ins_1st_TD__c": ("hazard_insurance", "decimal"),
-    "MtgPlanner_CRM__Origination_1st_TD__c": ("origination_fee", "decimal"),
-    "MtgPlanner_CRM__Mortgage_Ins_1st_TD__c": ("mortgage_insurance", "decimal"),
-    "MtgPlanner_CRM__HOA_1st_TD__c": ("hoa_amount", "decimal"),
-    "MtgPlanner_CRM__Points_1st_TD__c": ("points", "decimal"),
-    "MtgPlanner_CRM__Index_1st_TD__c": ("index_rate", "decimal"),
-    "MtgPlanner_CRM__Margin_1st_TD__c": ("margin", "decimal"),
-    "MtgPlanner_CRM__Monthly_Payment_1st_TD__c": ("monthly_payment", "decimal"),
-    "MtgPlanner_CRM__Loan_Date_1st_TD__c": ("loan_date", "date"),
-    "MtgPlanner_CRM__AUS_DU_Run_Date_1st_TD__c": ("aus_du_run_date", "date"),
-    "MtgPlanner_CRM__Lender_State_Elig_1st_TD__c": ("lender_state_eligibility", None),
-
-    # ============================================================
-    # LTV / CLTV
-    # ============================================================
-    "MtgPlanner_CRM__LTV__c": ("ltv", "decimal"),
-    "MtgPlanner_CRM__CLTV__c": ("cltv", "decimal"),
-
-    # ============================================================
-    # LOAN PURPOSE & ADDITIONAL INFO
-    # ============================================================
-    "MtgPlanner_CRM__Loan_Purpose__c": ("loan_purpose", None),
-    "MtgPlanner_CRM__File_State__c": ("file_state", None),
-    "MtgPlanner_CRM__Account__c": ("borrower_account", None),
-
-    # ============================================================
-    # 2ND LOAN DETAILS
-    # ============================================================
-    "MtgPlanner_CRM__Loan_Amount_2nd_TD__c": ("second_loan_amount", "decimal"),
-    "MtgPlanner_CRM__Rate_2nd_TD__c": ("second_loan_rate", "decimal"),
-    "MtgPlanner_CRM__Monthly_Payment_2nd_TD__c": ("second_loan_payment", "decimal"),
-
-    # ============================================================
-    # PRESENT VS PROPOSED
-    # ============================================================
-    "MtgPlanner_CRM__Present_Total_Expenses__c": ("present_housing_expense", "decimal"),
-    "MtgPlanner_CRM__Proposed_Total_Expenses__c": ("proposed_housing_expense", "decimal"),
-    "MtgPlanner_CRM__Present_Monthly_Payment__c": ("present_monthly_payment", "decimal"),
-    "MtgPlanner_CRM__Proposed_Monthly_Payment_1st_TD__c": ("proposed_monthly_payment", "decimal"),
-
-    # Timestamps
     "CreatedDate": ("created_at", "datetime"),
     "LastModifiedDate": ("updated_at", "datetime"),
 }
@@ -592,15 +546,23 @@ class SalesforceSyncService:
             old_data = {}
 
             # Handle unmapped stage sentinel: for UPDATES, preserve existing stage;
-            # for CREATES, default to APPLICATION
+            # for CREATES, infer from date fields instead of blindly defaulting
             stage_unmapped = loan_data.pop("_stage_unmapped", False)
             if stage_unmapped:
                 if existing:
                     # UPDATE: don't overwrite the existing stage with a guess
                     loan_data.pop("stage", None)
                 else:
-                    # CREATE: APPLICATION is a reasonable default for new records
-                    loan_data["stage"] = "APPLICATION"
+                    # CREATE: infer stage from the date fields that were synced.
+                    # Dates are the source of truth — if funded_date is set, the
+                    # loan is funded even if Salesforce Status__c was empty.
+                    from services.salesforce.stage_mapping import infer_stage_from_dates
+                    inferred = infer_stage_from_dates(loan_data)
+                    loan_data["stage"] = inferred
+                    logger.info(
+                        f"Inferred stage '{inferred}' from date fields "
+                        f"(raw SF stage: {loan_data.get('salesforce_raw_stage', 'empty')})"
+                    )
 
             if existing:
                 # Capture old data for SLA trigger comparison

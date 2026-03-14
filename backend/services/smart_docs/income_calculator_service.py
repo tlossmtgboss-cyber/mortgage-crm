@@ -147,8 +147,9 @@ class IncomeCalculatorService:
     - Variable income with high variance
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, org_id: Optional[int] = None):
         self.db = db
+        self.org_id = org_id
         self._anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         self._model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
@@ -167,6 +168,34 @@ class IncomeCalculatorService:
         """
         start_ms = int(time.time() * 1000)
         try:
+            # Validate loan belongs to the caller's organization
+            if self.org_id is not None:
+                loan_org_check = self.db.execute(
+                    text("SELECT organization_id FROM loans WHERE id = :lid"),
+                    {"lid": loan_id},
+                ).fetchone()
+                if loan_org_check and loan_org_check.organization_id != self.org_id:
+                    logger.warning(
+                        "Tenant isolation violation in income calc: loan %d belongs to org %s, caller org %s",
+                        loan_id, loan_org_check.organization_id, self.org_id,
+                    )
+                    return IncomeCalculationResult(
+                        loan_id=loan_id,
+                        borrower_id=borrower_id,
+                        sources=[],
+                        total_qualifying_monthly=ZERO,
+                        total_qualifying_annual=ZERO,
+                        calculation_method="error",
+                        dti_front_end=None,
+                        dti_back_end=None,
+                        confidence=0,
+                        flags=["TENANT_ISOLATION_ERROR"],
+                        recommendations=[],
+                        tasks_to_create=[],
+                        success=False,
+                        error="Access denied: loan does not belong to your organization.",
+                    )
+
             # Step 1: gather all income-related documents with extractions
             docs = self._gather_income_documents(loan_id, borrower_id)
 
@@ -312,8 +341,13 @@ class IncomeCalculatorService:
         Returns list of dicts with keys: id, doc_type, extracted_fields,
         confidence_scores, ocr_text, uploaded_at.
         """
+        _org_join = (
+            "JOIN loans _org_l ON _org_l.id = sd.loan_id AND _org_l.organization_id = :_org_id"
+            if self.org_id is not None else ""
+        )
+        _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
         rows = self.db.execute(
-            text("""
+            text(f"""
                 SELECT
                     sd.id              AS doc_id,
                     sd.doc_type        AS doc_type,
@@ -326,6 +360,7 @@ class IncomeCalculatorService:
                 FROM smart_documents sd
                 LEFT JOIN smart_document_extractions sde
                     ON sde.document_id = sd.id
+                {_org_join}
                 WHERE sd.loan_id = :loan_id
                   AND sd.borrower_id = :borrower_id
                   AND sd.doc_type IN :doc_types
@@ -336,6 +371,7 @@ class IncomeCalculatorService:
                 "loan_id": loan_id,
                 "borrower_id": borrower_id,
                 "doc_types": tuple(INCOME_DOC_TYPES),
+                **_org_params,
             },
         ).fetchall()
 
@@ -917,16 +953,18 @@ class IncomeCalculatorService:
         if monthly_income <= ZERO:
             return (None, None)
 
-        # Query loan for proposed housing payment and obligations
+        # Query loan for proposed housing payment and obligations (with org_id filter)
+        _loan_org_filter = "AND organization_id = :_org_id" if self.org_id is not None else ""
+        _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
         row = self.db.execute(
-            text("""
+            text(f"""
                 SELECT
                     COALESCE(proposed_monthly_payment, 0) AS pitia,
                     COALESCE(total_monthly_obligations, 0) AS obligations
                 FROM loans
-                WHERE id = :loan_id
+                WHERE id = :loan_id {_loan_org_filter}
             """),
-            {"loan_id": loan_id},
+            {"loan_id": loan_id, **_org_params},
         ).fetchone()
 
         if not row:
@@ -1379,7 +1417,7 @@ class IncomeCalculatorService:
                                 created_at, updated_at
                             ) VALUES (
                                 :calc_id, :source_id,
-                                :loan_id, NULL,
+                                :loan_id, :org_id,
                                 :task_type, :title, :description,
                                 :priority, 'open',
                                 :ai_rec,
@@ -1390,6 +1428,7 @@ class IncomeCalculatorService:
                             "calc_id": calculation_id,
                             "source_id": source_id,
                             "loan_id": result.loan_id,
+                            "org_id": self.org_id,
                             "task_type": task["task_type"],
                             "title": task["title"],
                             "description": task["description"],
@@ -1584,13 +1623,20 @@ Respond with ONLY the JSON object."""
         Looks up the existing calculation to get loan_id and borrower_id,
         then runs a fresh calculation (persisted as a new 'recalculation' row).
         """
+        # When org_id is set, verify the calculation belongs to a loan in our org
+        _org_join = (
+            "JOIN loans _org_l ON _org_l.id = ic.loan_id AND _org_l.organization_id = :_org_id"
+            if self.org_id is not None else ""
+        )
+        _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
         existing = self.db.execute(
-            text("""
-                SELECT loan_id, borrower_id
-                FROM income_calculations
-                WHERE id = :calc_id
+            text(f"""
+                SELECT ic.loan_id, ic.borrower_id
+                FROM income_calculations ic
+                {_org_join}
+                WHERE ic.id = :calc_id
             """),
-            {"calc_id": calculation_id},
+            {"calc_id": calculation_id, **_org_params},
         ).fetchone()
 
         if not existing:
@@ -1687,11 +1733,16 @@ Respond with ONLY the JSON object."""
 # SINGLETON ACCESSOR
 # =============================================================================
 
-def get_income_calculator_service(db: Session) -> IncomeCalculatorService:
+def get_income_calculator_service(db: Session, org_id: Optional[int] = None) -> IncomeCalculatorService:
     """
     Factory function returning an IncomeCalculatorService for the given session.
 
     Not a true singleton because each request may have a different DB session,
     but the service itself is lightweight and stateless beyond the session.
+
+    Args:
+        db: SQLAlchemy database session.
+        org_id: Organization ID for tenant isolation.  When provided, all
+                queries are scoped to loans/documents belonging to that org.
     """
-    return IncomeCalculatorService(db)
+    return IncomeCalculatorService(db, org_id=org_id)

@@ -125,11 +125,11 @@ def mock_db():
 
 @pytest.fixture
 def setup_scheduler_routes(mock_models):
-    """Set up scheduler_appointment_routes with mocked dependencies.
-    Import the routes module directly (not the thin wrapper) so that
+    """Set up scheduler helpers with mocked dependencies.
+    Import the _helpers module directly so that
     internal helpers like _generate_available_slots are accessible.
     """
-    from routes import scheduler_appointment_routes as sar
+    import routes.scheduler._helpers as sar
     sar.set_dependencies(
         get_db_func=lambda: iter([MagicMock()]),
         get_current_user_func=MagicMock(),
@@ -744,7 +744,7 @@ class TestCrossTimezoneConflictDetection:
         An existing appointment at 21:00 UTC should conflict with a proposed
         slot also at 21:00 UTC (regardless of what local timezone each was
         booked from)."""
-        from routes.scheduler_appointment_routes import _has_cross_source_conflict
+        from routes.scheduler._helpers import _has_cross_source_conflict
 
         # Existing appointment: 21:00-21:30 UTC (which is 5pm-5:30pm ET)
         busy_times = [
@@ -764,7 +764,7 @@ class TestCrossTimezoneConflictDetection:
 
     def test_no_conflict_when_different_utc_times(self):
         """No conflict when slots don't overlap in UTC."""
-        from routes.scheduler_appointment_routes import _has_cross_source_conflict
+        from routes.scheduler._helpers import _has_cross_source_conflict
 
         # Existing: 15:00-15:30 UTC
         busy_times = [
@@ -783,7 +783,7 @@ class TestCrossTimezoneConflictDetection:
 
     def test_conflict_with_buffer_time(self):
         """Conflict detection should account for buffer_before and buffer_after."""
-        from routes.scheduler_appointment_routes import _has_cross_source_conflict
+        from routes.scheduler._helpers import _has_cross_source_conflict
 
         # Existing: 15:00-15:30 UTC
         busy_times = [
@@ -806,7 +806,7 @@ class TestCrossTimezoneConflictDetection:
 
     def test_partial_overlap_detected(self):
         """Partial overlaps should be detected as conflicts."""
-        from routes.scheduler_appointment_routes import _has_cross_source_conflict
+        from routes.scheduler._helpers import _has_cross_source_conflict
 
         # Existing: 14:00-15:00 UTC
         busy_times = [

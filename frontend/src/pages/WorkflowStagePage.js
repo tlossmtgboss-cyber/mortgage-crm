@@ -8,20 +8,23 @@ const LEAD_STATUSES = {
   new: { name: 'New', color: '#6b7280' },
   attempted_contact: { name: 'Attempted Contact', color: '#f59e0b' },
   prospect: { name: 'Prospect', color: '#3b82f6' },
-  application: { name: 'Application', color: '#8b5cf6' },
   pre_qualified: { name: 'Pre-Qualified', color: '#06b6d4' },
   pre_approved: { name: 'Pre-Approved', color: '#10b981' },
-  withdrawn: { name: 'Withdrawn', color: '#ef4444' },
-  does_not_qualify: { name: 'Does Not Qualify', color: '#dc2626' }
+  long_term_nurture: { name: 'Long-Term Nurture', color: '#8b5cf6' },
+  credit_repair: { name: 'Credit Repair', color: '#f97316' },
+  do_not_call: { name: 'Do Not Call', color: '#dc2626' }
 };
 
 const ACTIVE_LOAN_STATUSES = {
+  application: { name: 'Application', color: '#8b5cf6' },
   disclosed: { name: 'Disclosed', color: '#6366f1' },
   in_processing: { name: 'In Processing', color: '#3b82f6' },
   underwriting_received: { name: 'Underwriting Received', color: '#8b5cf6' },
   approved: { name: 'Approved', color: '#10b981' },
   clear_to_close: { name: 'Clear to Close', color: '#f59e0b' },
-  suspended: { name: 'Suspended', color: '#ef4444' }
+  suspended: { name: 'Suspended', color: '#ef4444' },
+  withdrawn: { name: 'Withdrawn', color: '#9ca3af' },
+  does_not_qualify: { name: 'Does Not Qualify', color: '#dc2626' }
 };
 
 const PORTFOLIO_STATUSES = {
@@ -48,11 +51,6 @@ const STAGE_CONFIG = {
         { id: 6, title: 'Schedule Discovery Call', description: 'Set up initial consultation', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
         { id: 7, title: 'Send Loan Options', description: 'Email loan product info', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
       ],
-      application: [
-        { id: 8, title: 'Send Application Link', description: 'Email application portal', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 9, title: 'Collect Documents', description: 'Request income and assets', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
-        { id: 10, title: 'Credit Authorization', description: 'Get credit check consent', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
-      ],
       pre_qualified: [
         { id: 11, title: 'Run Credit Check', description: 'Pull credit report', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
         { id: 12, title: 'Verify Income', description: 'Review income documents', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
@@ -61,16 +59,15 @@ const STAGE_CONFIG = {
       pre_approved: [
         { id: 14, title: 'Generate Pre-Approval', description: 'Create pre-approval letter', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
         { id: 15, title: 'Send Pre-Approval', description: 'Email to client', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
-        { id: 16, title: 'Convert to Active Loan', description: 'Move to processing', order: 3, auto_trigger: 'manual', days_offset: 0 }
+        { id: 16, title: 'Convert to Active Loan', description: 'Move to application', order: 3, auto_trigger: 'manual', days_offset: 0 }
       ],
-      withdrawn: [
-        { id: 17, title: 'Send Exit Survey', description: 'Request feedback', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 18, title: 'Add to Nurture List', description: 'Future follow-up', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+      long_term_nurture: [
+        { id: 17, title: 'Add to Drip Campaign', description: 'Enroll in long-term nurture sequence', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 18, title: 'Schedule 6-Month Check-in', description: 'Calendar follow-up', order: 2, auto_trigger: 'scheduled', days_offset: 180 }
       ],
-      does_not_qualify: [
-        { id: 19, title: 'Send DNQ Letter', description: 'Explain reasons', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 20, title: 'Refer to Resources', description: 'Credit repair/savings tips', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
-        { id: 21, title: 'Schedule Follow-up', description: 'Check back in 6 months', order: 3, auto_trigger: 'scheduled', days_offset: 180 }
+      credit_repair: [
+        { id: 19, title: 'Refer to Credit Counselor', description: 'Send credit repair resources', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 20, title: 'Schedule 90-Day Review', description: 'Check credit progress', order: 2, auto_trigger: 'scheduled', days_offset: 90 }
       ]
     }
   },
@@ -80,6 +77,11 @@ const STAGE_CONFIG = {
     color: '#10b981',
     statuses: ACTIVE_LOAN_STATUSES,
     defaultTasksByStatus: {
+      application: [
+        { id: 8, title: 'Send Application Link', description: 'Email application portal', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 9, title: 'Collect Documents', description: 'Request income and assets', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
+        { id: 10, title: 'Credit Authorization', description: 'Get credit check consent', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
       disclosed: [
         { id: 22, title: 'Generate Loan Estimate', description: 'Create LE with loan terms, rates, closing costs, and cash to close', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
         { id: 23, title: 'Generate Initial Disclosures', description: 'Prepare TRID disclosures, state disclosures, and acknowledgment forms', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
@@ -148,6 +150,15 @@ const STAGE_CONFIG = {
         { id: 76, title: 'Day 3 Escalation', description: 'Manager notification if no progress', order: 6, auto_trigger: 'scheduled', days_offset: 3 },
         { id: 77, title: 'Day 7 Review', description: 'Manager meeting to assess viability', order: 7, auto_trigger: 'scheduled', days_offset: 7 },
         { id: 78, title: 'Day 14 Decision', description: 'Executive review - resolve, extend, or decline', order: 8, auto_trigger: 'scheduled', days_offset: 14 }
+      ],
+      withdrawn: [
+        { id: 79, title: 'Send Exit Survey', description: 'Request feedback on why they withdrew', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 80, title: 'Add to Nurture List', description: 'Future follow-up opportunity', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      does_not_qualify: [
+        { id: 81, title: 'Send DNQ Letter', description: 'Explain reasons and next steps', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 82, title: 'Refer to Resources', description: 'Credit repair/savings tips', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 83, title: 'Schedule Follow-up', description: 'Check back in 6 months', order: 3, auto_trigger: 'scheduled', days_offset: 180 }
       ]
     }
   },

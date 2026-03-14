@@ -71,7 +71,7 @@ class TestC2_DuplicateBookingFunctional:
     def test_function_signature(self):
         """Should have correct parameters."""
         import inspect
-        from scheduler_appointment_routes import _check_duplicate_booking
+        from routes.scheduler._helpers import _check_duplicate_booking
         sig = inspect.signature(_check_duplicate_booking)
         params = list(sig.parameters.keys())
         assert "db" in params
@@ -83,7 +83,7 @@ class TestC2_DuplicateBookingFunctional:
     def test_raises_409_on_duplicate(self):
         """Verify function raises HTTPException(409) path via source inspection."""
         import ast
-        with open(os.path.join(BACKEND_DIR, "scheduler_appointment_routes.py")) as f:
+        with open(os.path.join(BACKEND_DIR, "routes", "scheduler", "_helpers.py")) as f:
             source = f.read()
         # Find _check_duplicate_booking and verify it contains 409
         tree = ast.parse(source)
@@ -113,7 +113,7 @@ class TestC3_LOLicensingFunctional:
         mock_query.filter.return_value.first.return_value = MockUser()
         mock_db.query.return_value = mock_query
 
-        from scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._helpers import _check_lo_licensing
         # Patch User model at import target so filter(User.id == ...) works
         mock_user_class = MagicMock()
         with patch("database.models.core.User", mock_user_class):
@@ -127,7 +127,7 @@ class TestC3_LOLicensingFunctional:
         """Should return None when no state provided."""
         mock_db = MagicMock()
 
-        from scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._helpers import _check_lo_licensing
         result = _check_lo_licensing(mock_db, assigned_user_id=1, attendee_state="")
 
         assert result is None
@@ -136,7 +136,7 @@ class TestC3_LOLicensingFunctional:
         """Should return None when state is None."""
         mock_db = MagicMock()
 
-        from scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._helpers import _check_lo_licensing
         result = _check_lo_licensing(mock_db, assigned_user_id=1, attendee_state=None)
 
         assert result is None
@@ -156,7 +156,7 @@ class TestCRM1_LeadCreationFunctional:
         mock_lead.id = 99
         mock_db.query.return_value.filter.return_value.first.return_value = mock_lead
 
-        from scheduler_appointment_routes import _ensure_lead_for_booking
+        from routes.scheduler._helpers import _ensure_lead_for_booking
         result = _ensure_lead_for_booking(
             db=mock_db,
             attendee_email="existing@test.com",
@@ -172,7 +172,7 @@ class TestCRM1_LeadCreationFunctional:
         """Should return None if no email provided."""
         mock_db = MagicMock()
 
-        from scheduler_appointment_routes import _ensure_lead_for_booking
+        from routes.scheduler._helpers import _ensure_lead_for_booking
         result = _ensure_lead_for_booking(
             db=mock_db,
             attendee_email="",
@@ -192,7 +192,7 @@ class TestCRM2_ActivityLoggingFunctional:
         """Should create Activity record without raising."""
         mock_db = MagicMock()
 
-        from scheduler_appointment_routes import _log_appointment_activity
+        from routes.scheduler._helpers import _log_appointment_activity
         _log_appointment_activity(
             db=mock_db,
             org_id=1,
@@ -210,7 +210,7 @@ class TestCRM2_ActivityLoggingFunctional:
         mock_db = MagicMock()
         mock_db.add.side_effect = Exception("DB error")
 
-        from scheduler_appointment_routes import _log_appointment_activity
+        from routes.scheduler._helpers import _log_appointment_activity
         # Should not raise
         _log_appointment_activity(
             db=mock_db,
@@ -229,7 +229,7 @@ class TestCRM3_FollowupTasksFunctional:
         """Should create a Task record."""
         mock_db = MagicMock()
 
-        from scheduler_appointment_routes import _create_followup_task
+        from routes.scheduler._helpers import _create_followup_task
         _create_followup_task(
             db=mock_db,
             org_id=1,
@@ -364,7 +364,7 @@ class TestR4_MemoryRateLimiter:
 
     def test_allows_under_limit(self):
         """Should allow requests under the limit."""
-        from scheduler_appointment_routes import _check_memory_rate_limit, _memory_rate_limits
+        from routes.scheduler._helpers import _check_memory_rate_limit, _memory_rate_limits
 
         _memory_rate_limits.clear()
 
@@ -374,7 +374,7 @@ class TestR4_MemoryRateLimiter:
 
     def test_blocks_over_limit(self):
         """Should block requests over the limit."""
-        from scheduler_appointment_routes import _check_memory_rate_limit, _memory_rate_limits
+        from routes.scheduler._helpers import _check_memory_rate_limit, _memory_rate_limits
 
         _memory_rate_limits.clear()
 
@@ -392,7 +392,7 @@ class TestR5_EscalationTask:
         """Should create a high-priority task."""
         mock_db = MagicMock()
 
-        from scheduler_appointment_routes import _create_comm_failure_task
+        from routes.scheduler._helpers import _create_comm_failure_task
         _create_comm_failure_task(
             db=mock_db,
             org_id=1,
