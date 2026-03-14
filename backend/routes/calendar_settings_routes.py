@@ -152,12 +152,17 @@ class BookingPageSettings(BaseModel):
         v = v[:10000]
         # Strip HTML tags
         css = re.sub(r'<[^>]*>', '', v)
+        # Strip CSS comments BEFORE checking for dangerous patterns.
+        # This prevents bypass via comment-wrapping, e.g. "u/**/rl(" or
+        # "/* url( */". Without this step, an attacker can split dangerous
+        # tokens across comment boundaries to evade pattern matching.
+        css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
         # Remove dangerous CSS constructs that enable XSS (case-insensitive)
         dangerous_patterns = [
-            r'javascript\s*:',         # javascript: protocol
-            r'expression\s*\(',        # IE CSS expression()
-            r'url\s*\(',               # url() can load external resources
+            r'url\s*\(',               # url() can load external resources / exfiltrate data
             r'@import',                # @import can load external stylesheets
+            r'expression\s*\(',        # IE CSS expression() - legacy but still a vector
+            r'javascript\s*:',         # javascript: protocol in CSS values
             r'behavior\s*:',           # IE behavior: directive
             r'-moz-binding\s*:',       # Firefox XBL binding
         ]

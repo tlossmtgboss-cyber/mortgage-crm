@@ -274,6 +274,84 @@ def _estimate_available_minutes(
     return total * user_count
 
 
+def _batch_estimate_available_minutes(
+    db: Session,
+    models: dict,
+    org_id: int,
+    start: datetime,
+    end: datetime,
+    user_ids: List[int],
+) -> Dict[int, float]:
+    """
+    Estimate available minutes for multiple users in a single batch query.
+
+    Fetches all SchedulerConfig rows for the given user_ids at once, then
+    computes per-user available minutes in Python. This avoids the N+1 pattern
+    of calling _estimate_available_minutes() in a loop.
+    """
+    if not user_ids:
+        return {}
+
+    SchedulerConfig = models.get("SchedulerConfig")
+
+    # Default working hours used when no config exists for a user
+    default_working_hours = {
+        "monday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "tuesday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "wednesday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "thursday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "friday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "saturday": {"start": "09:00", "end": "17:00", "enabled": False},
+        "sunday": {"start": "09:00", "end": "17:00", "enabled": False},
+    }
+
+    # Batch-fetch all scheduler configs for these users in one query
+    user_working_hours: Dict[int, dict] = {}
+    if SchedulerConfig:
+        configs = db.query(SchedulerConfig).filter(
+            SchedulerConfig.organization_id == org_id,
+            SchedulerConfig.user_id.in_(user_ids),
+        ).all()
+        for cfg in configs:
+            if cfg.working_hours:
+                user_working_hours[cfg.user_id] = cfg.working_hours
+
+    day_name_map = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+
+    # Pre-compute the list of weekday indices in the date range
+    start_date = start.date() if isinstance(start, datetime) else start
+    end_date = end.date() if isinstance(end, datetime) else end
+    weekday_counts: Dict[int, int] = defaultdict(int)
+    current = start_date
+    while current <= end_date:
+        weekday_counts[current.weekday()] += 1
+        current += timedelta(days=1)
+
+    def _minutes_for_working_hours(working_hours: dict) -> float:
+        """Compute total available minutes over the date range for one set of working hours."""
+        total = 0.0
+        for weekday_idx, count in weekday_counts.items():
+            day_name = day_name_map[weekday_idx]
+            day_cfg = working_hours.get(day_name, {})
+            if not day_cfg.get("enabled", False):
+                continue
+            try:
+                s = datetime.strptime(day_cfg.get("start", "09:00"), "%H:%M")
+                e = datetime.strptime(day_cfg.get("end", "17:00"), "%H:%M")
+                total += max(0, (e - s).total_seconds() / 60) * count
+            except (ValueError, TypeError):
+                total += 480 * count  # fallback 8h
+        return total
+
+    # Compute available minutes per user
+    result: Dict[int, float] = {}
+    for uid in user_ids:
+        wh = user_working_hours.get(uid, default_working_hours)
+        result[uid] = _minutes_for_working_hours(wh)
+
+    return result
+
+
 # =============================================================================
 # TRENDS
 # =============================================================================
@@ -594,20 +672,48 @@ def get_by_lo_breakdown(
         func.avg(Appointment.duration_minutes).label("avg_duration"),
     ).filter(and_(*filters)).group_by(Appointment.assigned_user_id).all()
 
-    # Fetch user names
+    # Batch-fetch user names in a single query instead of N+1 individual lookups.
     user_names = {}
-    if rows:
-        user_ids = [r.assigned_user_id for r in rows if r.assigned_user_id]
-        if user_ids:
-            try:
-                from database.models.core import User
-                users = db.query(User).filter(User.id.in_(user_ids)).all()
-                user_names = {
-                    u.id: f"{getattr(u, 'first_name', '') or ''} {getattr(u, 'last_name', '') or ''}".strip() or f"User {u.id}"
-                    for u in users
-                }
-            except ImportError:
-                logger.debug("User model not available for LO name lookup")
+    user_ids = [r.assigned_user_id for r in rows if r.assigned_user_id]
+    if user_ids:
+        try:
+            from database.models.core import User
+            users = db.query(User.id, User.first_name, User.last_name).filter(
+                User.id.in_(user_ids),
+            ).all()
+            user_names = {
+                u.id: f"{u.first_name or ''} {u.last_name or ''}".strip() or f"User {u.id}"
+                for u in users
+            }
+        except ImportError:
+            logger.debug("User model not available for LO name lookup")
+
+    # Batch-fetch booked minutes for ALL loan officers in a single query
+    # instead of calling calculate_utilization() per LO (which was N+1).
+    booked_by_user = {}
+    if user_ids:
+        booked_rows = db.query(
+            Appointment.assigned_user_id,
+            func.sum(Appointment.duration_minutes).label("total_minutes"),
+        ).filter(
+            and_(
+                Appointment.organization_id == org_id,
+                Appointment.scheduled_start >= start,
+                Appointment.scheduled_start <= end,
+                Appointment.status.notin_([AppointmentStatus.CANCELLED.value]),
+                Appointment.assigned_user_id.in_(user_ids),
+            )
+        ).group_by(Appointment.assigned_user_id).all()
+        booked_by_user = {
+            r.assigned_user_id: float(r.total_minutes or 0)
+            for r in booked_rows
+        }
+
+    # Batch-fetch available minutes per LO. _estimate_available_minutes
+    # queries SchedulerConfig per user; batch all configs in one query.
+    available_by_user = _batch_estimate_available_minutes(
+        db, models, org_id, start, end, user_ids,
+    )
 
     grand_total = sum(r.total for r in rows) or 1
 
@@ -616,12 +722,16 @@ def get_by_lo_breakdown(
         total = row.total or 0
         completed = row.completed or 0
         completion_rate = round((completed / total) * 100, 1) if total > 0 else 0
-        utilization = calculate_utilization(
-            db, models, org_id, start, end, user_id=row.assigned_user_id
-        )
+
+        # Compute utilization from pre-fetched batch data
+        uid = row.assigned_user_id
+        booked = booked_by_user.get(uid, 0)
+        available = available_by_user.get(uid, 0)
+        utilization = round((booked / available) * 100, 1) if available > 0 else 0.0
+
         result.append({
-            "user_id": row.assigned_user_id,
-            "name": user_names.get(row.assigned_user_id, f"User {row.assigned_user_id}"),
+            "user_id": uid,
+            "name": user_names.get(uid, f"User {uid}"),
             "total": total,
             "completed": completed,
             "cancelled": row.cancelled or 0,

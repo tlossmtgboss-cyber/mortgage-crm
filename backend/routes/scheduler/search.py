@@ -63,7 +63,7 @@ class PaginationMeta(BaseModel):
     """Pagination metadata for search results."""
     total: int = 0
     page: int = 1
-    page_size: int = 25
+    page_size: int = 50
     total_pages: int = 1
     has_next: bool = False
     has_prev: bool = False
@@ -90,7 +90,7 @@ class SearchResponse(BaseModel):
     """Response for the appointment search endpoint."""
     success: bool = True
     data: List[SearchResultItem] = []
-    meta: PaginationMeta = PaginationMeta()
+    pagination: PaginationMeta = PaginationMeta()
     filters_applied: FiltersApplied = FiltersApplied()
 
 
@@ -268,7 +268,7 @@ async def search_appointments(
     sort_by: str = Query("scheduled_start", description="Sort field"),
     sort_order: str = Query("desc", description="Sort order (asc or desc)"),
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(25, ge=1, le=100, description="Results per page"),
+    page_size: int = Query(50, ge=1, le=500, description="Results per page"),
     db: Session = Depends(get_db),
 ):
     """Advanced appointment search with full-text, filters, and pagination.
@@ -357,7 +357,7 @@ async def search_appointments(
     return SearchResponse(
         success=True,
         data=[SearchResultItem(**_serialize_appointment(a)) for a in appointments],
-        meta=PaginationMeta(
+        pagination=PaginationMeta(
             total=total,
             page=page,
             page_size=page_size,

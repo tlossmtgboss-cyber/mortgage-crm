@@ -10,6 +10,7 @@ Endpoints:
 All endpoints require authentication and are scoped to the user's organization.
 """
 
+import math
 from datetime import date as date_type, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -126,13 +127,20 @@ class TypeBreakdownEntry(BaseModel):
     percentage: float = Field(0.0, description="Percentage of total appointments")
 
 
+class PaginationMeta(BaseModel):
+    """Standard pagination metadata."""
+    page: int = Field(..., description="Current page number (1-indexed)")
+    page_size: int = Field(..., description="Number of items per page")
+    total: int = Field(..., description="Total number of items")
+    total_pages: int = Field(..., description="Total number of pages")
+    has_next: bool = Field(..., description="Whether there is a next page")
+
+
 class AnalyticsByType(BaseModel):
     """Paginated appointment breakdown by type."""
     period: str = Field(..., description="Time period code")
-    total_count: int = Field(0, description="Total number of appointment types (before pagination)")
-    limit: int = Field(50, description="Page size")
-    offset: int = Field(0, description="Page offset")
     types: List[TypeBreakdownEntry] = Field(default_factory=list, description="Type breakdown rows")
+    pagination: PaginationMeta = Field(..., description="Pagination metadata")
 
     class Config:
         from_attributes = True
@@ -155,10 +163,8 @@ class LOBreakdownEntry(BaseModel):
 class AnalyticsByLO(BaseModel):
     """Paginated appointment breakdown by loan officer."""
     period: str = Field(..., description="Time period code")
-    total_count: int = Field(0, description="Total number of loan officers (before pagination)")
-    limit: int = Field(50, description="Page size")
-    offset: int = Field(0, description="Page offset")
     loan_officers: List[LOBreakdownEntry] = Field(default_factory=list, description="LO breakdown rows")
+    pagination: PaginationMeta = Field(..., description="Pagination metadata")
 
     class Config:
         from_attributes = True
@@ -302,8 +308,8 @@ async def analytics_by_type(
     request: Request,
     period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
     user_id: Optional[int] = Query(None, description="Filter by specific user (admin only)"),
-    limit: int = Query(50, ge=1, le=200, description="Maximum number of type rows to return"),
-    offset: int = Query(0, ge=0, description="Number of type rows to skip"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
     db: Session = Depends(get_db),
 ):
     """
@@ -329,13 +335,19 @@ async def analytics_by_type(
         data = get_by_type_breakdown(db, models, org_id, period=period, user_id=effective_user_id)
         all_types = data.get("types", [])
         total_count = len(all_types)
-        paginated_types = all_types[offset:offset + limit]
+        total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
+        offset = (page - 1) * page_size
+        paginated_types = all_types[offset:offset + page_size]
         return AnalyticsByType(
             period=data.get("period", period),
-            total_count=total_count,
-            limit=limit,
-            offset=offset,
             types=[TypeBreakdownEntry(**t) for t in paginated_types],
+            pagination=PaginationMeta(
+                page=page,
+                page_size=page_size,
+                total=total_count,
+                total_pages=total_pages,
+                has_next=page < total_pages,
+            ),
         )
     except Exception as e:
         logger.exception(f"Analytics by-type failed: {e}")
@@ -350,8 +362,8 @@ async def analytics_by_type(
 async def analytics_by_lo(
     request: Request,
     period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
-    limit: int = Query(50, ge=1, le=200, description="Maximum number of LO rows to return"),
-    offset: int = Query(0, ge=0, description="Number of LO rows to skip"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
     db: Session = Depends(get_db),
 ):
     """
@@ -375,13 +387,19 @@ async def analytics_by_lo(
         data = get_by_lo_breakdown(db, models, org_id, period=period)
         all_los = data.get("loan_officers", [])
         total_count = len(all_los)
-        paginated_los = all_los[offset:offset + limit]
+        total_pages = math.ceil(total_count / page_size) if total_count > 0 else 0
+        offset = (page - 1) * page_size
+        paginated_los = all_los[offset:offset + page_size]
         return AnalyticsByLO(
             period=data.get("period", period),
-            total_count=total_count,
-            limit=limit,
-            offset=offset,
             loan_officers=[LOBreakdownEntry(**lo) for lo in paginated_los],
+            pagination=PaginationMeta(
+                page=page,
+                page_size=page_size,
+                total=total_count,
+                total_pages=total_pages,
+                has_next=page < total_pages,
+            ),
         )
     except Exception as e:
         logger.exception(f"Analytics by-lo failed: {e}")

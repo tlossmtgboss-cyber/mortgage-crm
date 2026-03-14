@@ -800,8 +800,8 @@ export const crmCalendarAPI = {
 
 // Unified Calendar API (merges calendar, scheduler, and CRM events server-side)
 export const unifiedCalendarAPI = {
-  getAll: async (params = {}) => {
-    const response = await api.get('/api/v1/calendar/unified', { params });
+  getAll: async (params = {}, { signal } = {}) => {
+    const response = await api.get('/api/v1/calendar/unified', { params, signal });
     return response.data;
   },
 };

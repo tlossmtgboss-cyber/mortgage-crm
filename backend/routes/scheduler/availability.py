@@ -50,6 +50,7 @@ from scheduler_models import (
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id,
+    _is_scheduler_admin,
     _generate_available_slots,
 )
 from db import get_db
@@ -84,7 +85,11 @@ async def get_availability(
     target_user_id = user_id or user.id
 
     # S1: Validate target user belongs to same organization (prevent cross-tenant IDOR)
-    if user_id and user_id != user.id:
+    # S2: Check permission level — non-admins viewing other users get redacted personal details
+    is_viewing_other_user = user_id is not None and user_id != user.id
+    is_admin = _is_scheduler_admin(user)
+
+    if is_viewing_other_user:
         User = _models.get('User')
         if User:
             target_user = db.query(User).filter(
@@ -146,6 +151,11 @@ async def get_availability(
         Appointment.scheduled_start <= end_dt
     ).all()
 
+    # Non-admins viewing another user's availability get redacted personal details:
+    # blocked time titles/descriptions and appointment titles are stripped to prevent
+    # leaking personal information (e.g., "Doctor appointment", "Therapy session").
+    redact_details = is_viewing_other_user and not is_admin
+
     return {
         "availability": [
             {
@@ -163,18 +173,18 @@ async def get_availability(
         "blocked_times": [
             {
                 "id": b.id,
-                "title": b.title,
+                "title": "Blocked" if redact_details else b.title,
                 "start": b.start_datetime.isoformat(),
                 "end": b.end_datetime.isoformat(),
                 "all_day": b.all_day,
-                "block_type": b.block_type
+                "block_type": b.block_type if not redact_details else "blocked"
             }
             for b in blocked
         ],
         "existing_appointments": [
             {
                 "id": a.id,
-                "title": a.title,
+                "title": "Busy" if redact_details else a.title,
                 "start": a.scheduled_start.isoformat(),
                 "end": a.scheduled_end.isoformat(),
                 "status": a.status.value if a.status else "booked"
@@ -299,6 +309,22 @@ async def get_available_slots(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
     user_ids = slot_request.user_ids if slot_request.user_ids else [user.id]
+
+    # Validate that all requested user_ids belong to the same organization
+    other_user_ids = [uid for uid in user_ids if uid != user.id]
+    if other_user_ids:
+        _models = get_models()
+        User = _models.get('User')
+        if User:
+            valid_count = db.query(User).filter(
+                User.id.in_(other_user_ids),
+                User.organization_id == org_id
+            ).count()
+            if valid_count != len(other_user_ids):
+                raise HTTPException(
+                    status_code=403,
+                    detail="One or more user IDs not found in your organization"
+                )
 
     available_slots = _generate_available_slots(
         db=db,

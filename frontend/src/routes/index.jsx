@@ -129,7 +129,7 @@ const Tasks = lazyRetry(() => import('../pages/Tasks'));
 const Calendar = lazyRetry(() => import('../pages/Calendar'));
 const CalendarSettings = lazyRetry(() => import('../pages/CalendarSettings'));
 const CalendarSetupWizard = lazyRetry(() => import('../components/calendar/setup/CalendarSetupWizard'));
-const CalendarAnalyticsPage = lazyRetry(() => import('../components/calendar/CalendarAnalytics'));
+const CalendarAnalyticsPage = lazyRetry(() => import('../pages/CalendarAnalyticsPage'));
 const Scorecard = lazyRetry(() => import('../pages/Scorecard'));
 const Assistant = lazyRetry(() => import('../pages/Assistant'));
 const ClientProfile = lazyRetry(() => import('../pages/ClientProfile'));

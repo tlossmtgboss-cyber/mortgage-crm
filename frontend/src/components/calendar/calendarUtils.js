@@ -92,6 +92,42 @@ export const DURATION_OPTIONS = [
   { value: '120', label: '2 hours' },
 ];
 
+// Format event start/end into a display string and duration in minutes.
+// Used by Calendar.js and other views that show event time ranges.
+export const formatEventTime = (startTime, endTime) => {
+  const start = new Date(normalizeUTCDate(startTime));
+  const end = new Date(normalizeUTCDate(endTime));
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const duration = Math.round((end - start) / (1000 * 60));
+  return { startStr, duration };
+};
+
+// Format an ISO date string for search result display (e.g. "Mar 14, 2026")
+export const formatSearchDate = (isoStr) => {
+  if (!isoStr) return '';
+  const d = new Date(normalizeUTCDate(isoStr));
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// Format a date as a human-readable relative time string.
+// Returns "Just now", "5 min ago", "2 hours ago", "3 days ago",
+// or falls back to a short date for anything older than a week.
+export const formatRelativeTime = (isoString) => {
+  if (!isoString) return '';
+  const date = new Date(normalizeUTCDate(isoString));
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHrs = Math.floor(diffMin / 60);
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
+  const diffDays = Math.floor(diffHrs / 24);
+  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 export const MEETING_TYPE_OPTIONS = [
   { value: 'PHONE', label: '\u{1F4DE} Phone Call' },
   { value: 'VIDEO', label: '\u{1F4F9} Video Call' },

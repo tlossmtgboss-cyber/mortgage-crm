@@ -250,31 +250,54 @@ _MEMORY_CLEANUP_INTERVAL = int(os.getenv("SCHEDULER_RATE_LIMIT_CLEANUP_INTERVAL"
                                           os.getenv("RATE_LIMIT_CLEANUP_INTERVAL", "500")))
 
 
+class _RateLimitCapacityExhausted(Exception):
+    """Raised when the in-memory rate limiter has no capacity for new keys."""
+    pass
+
+
 async def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: int = _RATE_LIMIT_WINDOW) -> bool:
     """
     In-memory sliding window rate limit. Returns True if allowed, False if over limit.
+    Raises _RateLimitCapacityExhausted if the in-memory store is full and the key is
+    not already tracked (cannot safely admit new clients).
+
     Uses asyncio.Lock for safe use in async FastAPI handlers. Not multi-process safe
     (per-worker protection only).
 
-    Uses an OrderedDict with LRU eviction: accessed keys are moved to the end,
-    and when the dict exceeds _MAX_RATE_LIMIT_KEYS, the oldest (least recently
-    accessed) entries are evicted first. Also periodically purges empty keys.
+    Uses an OrderedDict with LRU ordering: accessed keys are moved to the end.
+    Periodically purges keys whose timestamp deques are empty. When the store is at
+    capacity and a genuinely new key arrives, we raise instead of silently evicting
+    -- evicting would destroy rate-limit state for existing clients, effectively
+    bypassing protection for rotated IPs.
     """
     global _memory_rate_check_count
     now = _time.time()
     async with _memory_rate_lock:
+        # Periodic cleanup first: remove keys with empty deques to free capacity
+        _memory_rate_check_count += 1
+        if _memory_rate_check_count >= _MEMORY_CLEANUP_INTERVAL:
+            _memory_rate_check_count = 0
+            empty_keys = [k for k, v in _memory_rate_limits.items() if not v]
+            for k in empty_keys:
+                del _memory_rate_limits[k]
+            if empty_keys:
+                logger.debug(f"Rate limiter cleanup: evicted {len(empty_keys)} expired keys")
+
         if key in _memory_rate_limits:
             timestamps = _memory_rate_limits[key]
             # Move to end (most recently accessed) for LRU ordering
             _memory_rate_limits.move_to_end(key)
         else:
-            # New key -- check capacity before inserting
+            # New key -- check capacity before inserting.
+            # SECURITY: Do NOT silently evict old entries to make room. Evicting
+            # destroys rate-limit state for those clients, which means an attacker
+            # rotating source IPs could flush legitimate tracking entries and never
+            # be rate-limited. Instead, refuse new keys when at capacity.
             if len(_memory_rate_limits) >= _MAX_RATE_LIMIT_KEYS:
-                # Evict oldest entries (front of OrderedDict) until under capacity
-                evict_count = max(1, len(_memory_rate_limits) - _MAX_RATE_LIMIT_KEYS + 1)
-                for _ in range(evict_count):
-                    evicted_key, _ = _memory_rate_limits.popitem(last=False)
-                    logger.debug(f"Rate limiter LRU eviction: removed key {evicted_key}")
+                raise _RateLimitCapacityExhausted(
+                    f"In-memory rate limiter at capacity ({_MAX_RATE_LIMIT_KEYS} keys). "
+                    "Cannot track new clients safely."
+                )
             timestamps = deque()
             _memory_rate_limits[key] = timestamps
 
@@ -285,16 +308,6 @@ async def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: 
             return False
         timestamps.append(now)
 
-        # Periodic cleanup: remove keys with empty deques to prevent memory growth
-        _memory_rate_check_count += 1
-        if _memory_rate_check_count >= _MEMORY_CLEANUP_INTERVAL:
-            _memory_rate_check_count = 0
-            empty_keys = [k for k, v in _memory_rate_limits.items() if not v]
-            for k in empty_keys:
-                del _memory_rate_limits[k]
-            if empty_keys:
-                logger.debug(f"Rate limiter cleanup: evicted {len(empty_keys)} expired keys")
-
         return True
 
 
@@ -302,6 +315,17 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
     """
     Redis-backed rate limiter keyed by client IP + path.
     Falls back to async in-memory rate limiting if Redis is unavailable.
+
+    SECURITY RATIONALE: Public booking endpoints (no auth required) are the primary
+    consumers of this function. If rate limiting is completely bypassed, these
+    endpoints are vulnerable to:
+      - Brute-force appointment enumeration and scraping
+      - Denial-of-service via booking slot exhaustion
+      - Spam booking / resource exhaustion attacks
+    Therefore, when Redis is unavailable, we use an in-memory fallback with bounded
+    capacity. If the fallback is also exhausted (too many distinct client keys), we
+    return HTTP 503 rather than silently allowing unlimited requests. Availability
+    is less important than allowing unbounded abuse of public endpoints.
     """
     client_ip = _get_client_ip(request)
 
@@ -309,14 +333,33 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
 
     r = _get_rate_limit_redis()
     if r is None:
-        # Fallback: in-memory rate limiting (per-worker only -- degraded protection)
-        logger.error("Rate limiter: Redis unavailable, using per-worker memory fallback. "
-                      "Effective limit is multiplied by worker count. Restore Redis ASAP.")
-        if not await _check_memory_rate_limit(key, max_requests):
+        # Fallback: in-memory rate limiting (per-worker only -- degraded protection).
+        # The effective limit is multiplied by worker count since each process has
+        # its own in-memory store.
+        logger.warning("Rate limiter: Redis unavailable, using per-worker memory fallback. "
+                        "Effective limit is multiplied by worker count. Restore Redis ASAP.")
+        try:
+            if not await _check_memory_rate_limit(key, max_requests):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many requests. Please try again later.",
+                    headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+                )
+        except _RateLimitCapacityExhausted:
+            # SECURITY: In-memory fallback is full and cannot track this new client.
+            # Refusing the request (503) is safer than allowing it through unmetered.
+            # This scenario indicates Redis has been down long enough for the fallback
+            # to accumulate _MAX_RATE_LIMIT_KEYS distinct clients -- an operational
+            # emergency that needs immediate attention.
+            logger.error(
+                "Rate limiter: in-memory fallback capacity exhausted "
+                f"({_MAX_RATE_LIMIT_KEYS} keys). Rejecting request with 503. "
+                "Restore Redis immediately to resume normal operation."
+            )
             raise HTTPException(
-                status_code=429,
-                detail="Too many requests. Please try again later.",
-                headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+                status_code=503,
+                detail="Service temporarily unavailable. Please try again later.",
+                headers={"Retry-After": "30"}
             )
         return
 
@@ -334,13 +377,25 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
     except HTTPException:
         raise
     except Exception as e:
-        # Redis command error -- fall back to in-memory
+        # Redis command error mid-request -- fall back to in-memory
         logger.warning(f"Rate limit Redis error, using memory fallback: {e}")
-        if not await _check_memory_rate_limit(key, max_requests):
+        try:
+            if not await _check_memory_rate_limit(key, max_requests):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many requests. Please try again later.",
+                    headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+                )
+        except _RateLimitCapacityExhausted:
+            logger.error(
+                "Rate limiter: in-memory fallback capacity exhausted "
+                f"({_MAX_RATE_LIMIT_KEYS} keys). Rejecting request with 503. "
+                "Restore Redis immediately to resume normal operation."
+            )
             raise HTTPException(
-                status_code=429,
-                detail="Too many requests. Please try again later.",
-                headers={"Retry-After": str(_RATE_LIMIT_WINDOW)}
+                status_code=503,
+                detail="Service temporarily unavailable. Please try again later.",
+                headers={"Retry-After": "30"}
             )
 
 

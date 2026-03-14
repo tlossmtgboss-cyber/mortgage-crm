@@ -303,6 +303,156 @@
 }
 
 /* =============================================================
+   Today Tab — Priority Alerts
+   ============================================================= */
+
+.ops-today-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ops-priority-section {
+  margin-top: var(--cal-space-4);
+  border-top: 1px solid var(--cal-border-light);
+  padding-top: var(--cal-space-4);
+}
+
+.ops-priority-header {
+  font-size: var(--cal-font-xs);
+  font-weight: 700;
+  color: var(--cal-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 var(--cal-space-2) var(--cal-space-3);
+}
+
+.ops-priority-clear {
+  display: flex;
+  align-items: center;
+  gap: var(--cal-space-3);
+  padding: var(--cal-space-4) var(--cal-space-4);
+  background: var(--cal-success-lighter, #ecfdf5);
+  border-radius: var(--cal-radius-md);
+  color: var(--cal-success-dark, #065f46);
+}
+
+.ops-priority-clear-icon {
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.ops-priority-clear-text {
+  font-size: var(--cal-font-sm);
+  font-weight: 500;
+}
+
+.ops-priority-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ops-priority-item {
+  display: flex;
+  align-items: center;
+  gap: var(--cal-space-2);
+  padding: var(--cal-space-3) var(--cal-space-3);
+  border-radius: var(--cal-radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: var(--cal-transition-fast);
+}
+
+.ops-priority-item:hover {
+  background: var(--cal-bg-secondary);
+}
+
+.ops-priority-indicator {
+  width: 4px;
+  height: 28px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.ops-priority-indicator--red {
+  background: var(--cal-error);
+}
+
+.ops-priority-indicator--orange {
+  background: var(--cal-warning);
+}
+
+.ops-priority-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+  color: var(--cal-text-muted);
+}
+
+.ops-priority-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ops-priority-text {
+  font-size: var(--cal-font-sm);
+  font-weight: 500;
+  color: var(--cal-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ops-priority-detail {
+  display: flex;
+  gap: var(--cal-space-2);
+  font-size: 10px;
+  color: var(--cal-text-muted);
+  margin-top: 1px;
+}
+
+.ops-priority-late {
+  color: var(--cal-error);
+  font-weight: 600;
+}
+
+.ops-priority-category {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cal-text-muted);
+  background: var(--cal-bg-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--cal-radius-xs);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.ops-priority-viewall {
+  display: block;
+  width: 100%;
+  padding: var(--cal-space-2) var(--cal-space-3);
+  background: none;
+  border: none;
+  font-size: var(--cal-font-xs);
+  color: var(--cal-primary);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  margin-bottom: var(--cal-space-2);
+  transition: var(--cal-transition-fast);
+}
+
+.ops-priority-viewall:hover {
+  color: var(--cal-primary-hover);
+  text-decoration: underline;
+}
+
+/* =============================================================
    Tasks Tab
    ============================================================= */
 

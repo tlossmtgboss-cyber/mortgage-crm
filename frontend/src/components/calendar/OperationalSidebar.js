@@ -98,39 +98,138 @@ function SidebarError({ message, onRetry }) {
 // =============================================================================
 
 /**
- * TodayTab -- Timeline view of today's appointments with "NOW" indicator on the active one.
+ * TodayTab -- Timeline view of today's appointments with "NOW" indicator on the active one,
+ * plus a Priority Alerts feed showing the most urgent items from Tasks, Leads, and SLA tabs.
  *
- * Self-contained: fetches today's schedule from schedulerAPI on mount.
+ * Self-contained: fetches today's schedule, pending tasks, leads, and loans on mount.
  *
  * Used in: OperationalSidebar
  *
+ * @param {Object} props
+ * @param {Function} props.onSwitchTab - Callback(tabKey) to switch the active sidebar tab
  * @returns {React.ReactElement}
  */
-function TodayTab() {
+function TodayTab({ onSwitchTab }) {
   const [appointments, setAppointments] = useState([]);
+  const [priorityAlerts, setPriorityAlerts] = useState({ tasks: [], leads: [], sla: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetch = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
       const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
       const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
-      const data = await schedulerAPI.getAppointments({ start_date: start, end_date: end });
-      const sorted = (Array.isArray(data) ? data : []).sort(
+
+      // Fetch all four data sources in parallel
+      const [scheduleData, tasksData, leadsData, loansData] = await Promise.allSettled([
+        schedulerAPI.getAppointments({ start_date: start, end_date: end }),
+        tasksAPI.getAll({ status: 'pending' }),
+        leadsAPI.getAll(),
+        loansAPI.getAll(),
+      ]);
+
+      // --- Appointments ---
+      const appts = scheduleData.status === 'fulfilled' ? scheduleData.value : [];
+      const sorted = (Array.isArray(appts) ? appts : []).sort(
         (a, b) => new Date(a.start_time || a.starts_at || 0) - new Date(b.start_time || b.starts_at || 0)
       );
       setAppointments(sorted);
+
+      // --- Overdue tasks (up to 3) ---
+      let overdueTasks = [];
+      if (tasksData.status === 'fulfilled') {
+        const allTasks = Array.isArray(tasksData.value) ? tasksData.value : [];
+        overdueTasks = allTasks
+          .filter(t => {
+            if (t.status === 'completed' || t.status === 'cancelled' || !t.due_date) return false;
+            return (t.due_date || '').split('T')[0] < todayStr;
+          })
+          .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+          .slice(0, 3)
+          .map(t => ({
+            id: t.id,
+            text: t.title || t.description || 'Task',
+            detail: t.loan_number ? `#${t.loan_number}` : '',
+            daysLate: Math.abs(daysBetween((t.due_date || '').split('T')[0])),
+            link: t.loan_id ? `/loans/${t.loan_id}` : '/tasks',
+          }));
+      }
+
+      // --- Leads needing follow-up > 5 days (up to 3) ---
+      let staleLeads = [];
+      if (leadsData.status === 'fulfilled') {
+        const allLeads = Array.isArray(leadsData.value) ? leadsData.value : [];
+        const closedStages = ['Funded', 'Closed', 'Dead', 'Lost', 'Cancelled', 'Withdrawn'];
+        staleLeads = allLeads
+          .filter(lead => {
+            if (closedStages.includes(lead.stage)) return false;
+            const last = lead.last_contact || lead.last_contacted_at || lead.updated_at;
+            const days = daysBetween(last);
+            return days === null || days > 5;
+          })
+          .sort((a, b) => {
+            const ad = daysBetween(a.last_contact || a.last_contacted_at || a.updated_at) || 999;
+            const bd = daysBetween(b.last_contact || b.last_contacted_at || b.updated_at) || 999;
+            return bd - ad;
+          })
+          .slice(0, 3)
+          .map(lead => {
+            const name = lead.first_name && lead.last_name
+              ? `${lead.first_name} ${lead.last_name}`
+              : lead.first_name || lead.name || 'Unknown';
+            const last = lead.last_contact || lead.last_contacted_at || lead.updated_at;
+            const days = daysBetween(last);
+            return {
+              id: lead.id,
+              text: name,
+              detail: days === null ? 'Never contacted' : `${days}d since contact`,
+              link: `/leads/${lead.id}`,
+            };
+          });
+      }
+
+      // --- Critical SLA alerts (remaining < 0, up to 3) ---
+      let slaAlerts = [];
+      if (loansData.status === 'fulfilled') {
+        const allLoans = Array.isArray(loansData.value) ? loansData.value : [];
+        const slaItems = [];
+        for (const loan of allLoans) {
+          const stage = (loan.stage || '').toUpperCase();
+          if (TERMINAL.includes(stage)) continue;
+          const changed = loan.stage_changed_at || loan.updated_at;
+          const days = daysBetween(changed);
+          if (days === null) continue;
+          const target = SLA_TARGETS[stage] || 7;
+          const remaining = target - days;
+          if (remaining < 0) {
+            slaItems.push({
+              id: loan.id,
+              text: loan.loan_number ? `#${loan.loan_number}` : 'Loan',
+              detail: `${stage.replace(/_/g, ' ')} - ${Math.abs(remaining)}d over SLA`,
+              borrower: loan.borrower_name || loan.borrower || '',
+              remaining,
+              link: `/loans/${loan.id}`,
+            });
+          }
+        }
+        slaAlerts = slaItems
+          .sort((a, b) => a.remaining - b.remaining)
+          .slice(0, 3);
+      }
+
+      setPriorityAlerts({ tasks: overdueTasks, leads: staleLeads, sla: slaAlerts });
     } catch (err) {
-      setError('Failed to load schedule');
+      setError('Failed to load today view');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const currentIdx = useMemo(() => {
     const now = new Date();
@@ -145,43 +244,123 @@ function TodayTab() {
     return -1;
   }, [appointments]);
 
+  const totalAlerts = priorityAlerts.tasks.length + priorityAlerts.leads.length + priorityAlerts.sla.length;
+
   if (loading) return <SidebarSkeleton rows={5} />;
-  if (error) return <SidebarError message={error} onRetry={fetch} />;
-  if (appointments.length === 0) {
-    return <SidebarEmpty icon="&#128197;" title="No appointments today" subtitle="Your schedule is clear" />;
-  }
+  if (error) return <SidebarError message={error} onRetry={fetchAll} />;
 
   return (
-    <div className="ops-today-list">
-      {appointments.map((appt, idx) => {
-        const startKey = appt.start_time || appt.starts_at;
-        const endKey = appt.end_time || appt.ends_at;
-        const isCurrent = idx === currentIdx && !isPast(endKey);
-        const past = isPast(endKey) && !isCurrent;
-        const name = appt.client_name || appt.borrower_name || appt.attendee_name || appt.name || 'Client';
-        const type = appt.appointment_type_name || appt.type || appt.title || '';
-        const mode = appt.meeting_mode || appt.mode || '';
+    <div className="ops-today-container">
+      {/* --- Timeline section (existing) --- */}
+      {appointments.length === 0 ? (
+        <SidebarEmpty icon="&#128197;" title="No appointments today" subtitle="Your schedule is clear" />
+      ) : (
+        <div className="ops-today-list">
+          {appointments.map((appt, idx) => {
+            const startKey = appt.start_time || appt.starts_at;
+            const endKey = appt.end_time || appt.ends_at;
+            const isCurrent = idx === currentIdx && !isPast(endKey);
+            const past = isPast(endKey) && !isCurrent;
+            const name = appt.client_name || appt.borrower_name || appt.attendee_name || appt.name || 'Client';
+            const type = appt.appointment_type_name || appt.type || appt.title || '';
+            const mode = appt.meeting_mode || appt.mode || '';
 
-        return (
-          <div
-            key={appt.id || idx}
-            className={`ops-timeline-item${isCurrent ? ' ops-timeline-item--active' : ''}${past ? ' ops-timeline-item--past' : ''}`}
-          >
-            <div className="ops-timeline-dot" />
-            <div className="ops-timeline-time">
-              {formatTime(startKey)} - {formatTime(endKey)}
-            </div>
-            <div className="ops-timeline-body">
-              <div className="ops-timeline-name">{name}</div>
-              <div className="ops-timeline-meta">
-                {type && <span>{type}</span>}
-                {mode && <span className="ops-timeline-mode">{mode}</span>}
+            return (
+              <div
+                key={appt.id || idx}
+                className={`ops-timeline-item${isCurrent ? ' ops-timeline-item--active' : ''}${past ? ' ops-timeline-item--past' : ''}`}
+              >
+                <div className="ops-timeline-dot" />
+                <div className="ops-timeline-time">
+                  {formatTime(startKey)} - {formatTime(endKey)}
+                </div>
+                <div className="ops-timeline-body">
+                  <div className="ops-timeline-name">{name}</div>
+                  <div className="ops-timeline-meta">
+                    {type && <span>{type}</span>}
+                    {mode && <span className="ops-timeline-mode">{mode}</span>}
+                  </div>
+                </div>
+                {isCurrent && <span className="ops-timeline-live">NOW</span>}
               </div>
-            </div>
-            {isCurrent && <span className="ops-timeline-live">NOW</span>}
+            );
+          })}
+        </div>
+      )}
+
+      {/* --- Priority Alerts section --- */}
+      <div className="ops-priority-section">
+        <div className="ops-priority-header">Priority Alerts</div>
+
+        {totalAlerts === 0 ? (
+          <div className="ops-priority-clear">
+            <span className="ops-priority-clear-icon">&#10004;</span>
+            <span className="ops-priority-clear-text">All clear — no urgent items</span>
           </div>
-        );
-      })}
+        ) : (
+          <div className="ops-priority-list">
+            {/* Overdue tasks */}
+            {priorityAlerts.tasks.map(item => (
+              <Link key={`task-${item.id}`} to={item.link} className="ops-priority-item">
+                <span className="ops-priority-indicator ops-priority-indicator--red" />
+                <span className="ops-priority-icon" title="Overdue task">&#9745;</span>
+                <div className="ops-priority-body">
+                  <div className="ops-priority-text">{item.text}</div>
+                  <div className="ops-priority-detail">
+                    {item.detail && <span>{item.detail}</span>}
+                    <span className="ops-priority-late">{item.daysLate}d overdue</span>
+                  </div>
+                </div>
+                <span className="ops-priority-category">Tasks</span>
+              </Link>
+            ))}
+            {priorityAlerts.tasks.length > 0 && (
+              <button className="ops-priority-viewall" onClick={() => onSwitchTab && onSwitchTab('tasks')}>
+                View all tasks &rarr;
+              </button>
+            )}
+
+            {/* Stale leads */}
+            {priorityAlerts.leads.map(item => (
+              <Link key={`lead-${item.id}`} to={item.link} className="ops-priority-item">
+                <span className="ops-priority-indicator ops-priority-indicator--orange" />
+                <span className="ops-priority-icon" title="Lead needs follow-up">&#9733;</span>
+                <div className="ops-priority-body">
+                  <div className="ops-priority-text">{item.text}</div>
+                  <div className="ops-priority-detail">{item.detail}</div>
+                </div>
+                <span className="ops-priority-category">Leads</span>
+              </Link>
+            ))}
+            {priorityAlerts.leads.length > 0 && (
+              <button className="ops-priority-viewall" onClick={() => onSwitchTab && onSwitchTab('leads')}>
+                View all leads &rarr;
+              </button>
+            )}
+
+            {/* SLA breaches */}
+            {priorityAlerts.sla.map(item => (
+              <Link key={`sla-${item.id}`} to={item.link} className="ops-priority-item">
+                <span className="ops-priority-indicator ops-priority-indicator--red" />
+                <span className="ops-priority-icon" title="SLA breach">&#9888;</span>
+                <div className="ops-priority-body">
+                  <div className="ops-priority-text">{item.text}</div>
+                  <div className="ops-priority-detail">
+                    {item.borrower && <span>{item.borrower}</span>}
+                    <span>{item.detail}</span>
+                  </div>
+                </div>
+                <span className="ops-priority-category">SLA</span>
+              </Link>
+            ))}
+            {priorityAlerts.sla.length > 0 && (
+              <button className="ops-priority-viewall" onClick={() => onSwitchTab && onSwitchTab('sla')}>
+                View all SLA alerts &rarr;
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -592,7 +771,7 @@ const OperationalSidebar = React.memo(function OperationalSidebar({
   const renderContent = () => {
     switch (activeTab) {
       case 'today':
-        return <TodayTab />;
+        return <TodayTab onSwitchTab={setActiveTab} />;
       case 'events':
         return (
           <AppointmentsTab

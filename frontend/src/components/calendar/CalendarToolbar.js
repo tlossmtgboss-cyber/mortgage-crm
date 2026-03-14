@@ -1,4 +1,5 @@
 import React from 'react';
+import './CalendarToolbar.css';
 
 /**
  * CalendarToolbar -- Page-level header with view switcher, date navigation, search, and action buttons.
@@ -109,17 +110,6 @@ const CalendarToolbar = React.memo(function CalendarToolbar({
               onClick={onShortcutsOpen}
               title="Keyboard shortcuts (?)"
               aria-label="Show keyboard shortcuts"
-              style={{
-                background: 'none',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                padding: '6px 10px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-                color: '#6b7280',
-                lineHeight: 1,
-              }}
             >
               ?
             </button>
@@ -130,18 +120,6 @@ const CalendarToolbar = React.memo(function CalendarToolbar({
               onClick={onTourStart}
               title="Start guided tour"
               aria-label="Start guided tour"
-              style={{
-                background: 'none',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                padding: '6px 8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                color: '#6b7280',
-                lineHeight: 1,
-                display: 'flex',
-                alignItems: 'center',
-              }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />

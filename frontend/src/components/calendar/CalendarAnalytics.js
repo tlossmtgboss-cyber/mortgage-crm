@@ -13,7 +13,6 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { calendarAnalyticsAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 import '../../styles/calendar-analytics.css';
@@ -102,12 +101,7 @@ export default function CalendarAnalytics() {
 
   return (
     <div className="cal-analytics">
-      <Link to="/calendar" className="cal-analytics__back-link">
-        &larr; Back to Calendar
-      </Link>
-
       <div className="cal-analytics__header">
-        <h1 className="cal-analytics__title">Calendar Analytics</h1>
         <div className="cal-analytics__period-selector">
           {PERIODS.map((p) => (
             <button

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { schedulerAPI } from '../../services/api';
 import StatusBadge, { STATUS_CONFIG } from './StatusBadge';
+import { formatSearchDate, formatTime } from './calendarUtils';
 
 /**
  * CalendarSearch -- Full-screen search overlay with typeahead suggestions, advanced filters,
@@ -139,11 +140,11 @@ function CalendarSearch({ onSelectAppointment, onClose, visible }) {
 
       const resp = await schedulerAPI.searchAppointments(params);
       setResults(resp?.data || []);
-      setMeta(resp?.meta || { total: 0, page: 1, page_size: 25, total_pages: 1 });
+      setMeta(resp?.pagination || resp?.meta || { total: 0, page: 1, page_size: 50, total_pages: 1 });
     } catch (err) {
       console.error('Search failed:', err);
       setResults([]);
-      setMeta({ total: 0, page: 1, page_size: 25, total_pages: 1 });
+      setMeta({ total: 0, page: 1, page_size: 50, total_pages: 1 });
     } finally {
       setLoading(false);
     }
@@ -188,18 +189,6 @@ function CalendarSearch({ onSelectAppointment, onClose, visible }) {
 
   const hasActiveFilters = query.trim() || filters.status.length > 0 || filters.dateFrom
     || filters.dateTo || filters.appointmentTypeId || filters.assignedUserId || filters.bookedByAi;
-
-  const formatDate = (isoStr) => {
-    if (!isoStr) return '';
-    const d = new Date(isoStr);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const formatTime = (isoStr) => {
-    if (!isoStr) return '';
-    const d = new Date(isoStr);
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  };
 
   if (!visible) return null;
 
@@ -449,7 +438,7 @@ function CalendarSearch({ onSelectAppointment, onClose, visible }) {
                       </div>
                     </div>
                     <div className="result-row-time">
-                      <span className="result-date">{formatDate(apt.scheduled_start)}</span>
+                      <span className="result-date">{formatSearchDate(apt.scheduled_start)}</span>
                       <span className="result-time">{formatTime(apt.scheduled_start)}</span>
                       {apt.duration_minutes && (
                         <span className="result-duration">{apt.duration_minutes} min</span>

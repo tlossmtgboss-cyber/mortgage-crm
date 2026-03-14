@@ -1,0 +1,41 @@
+/* ==========================================================================
+   CalendarToolbar — icon button styles
+   Uses calendar design tokens (--cal-*) from calendar-design-tokens.css
+   ========================================================================== */
+
+.btn-calendar-shortcuts {
+  background: none;
+  border: 1px solid var(--cal-border-input);
+  border-radius: var(--cal-radius);
+  padding: var(--cal-space-2) var(--cal-space-4);
+  cursor: pointer;
+  font-size: var(--cal-font-md);
+  font-weight: 600;
+  color: var(--cal-text-secondary);
+  line-height: 1;
+  transition: var(--cal-transition-fast);
+}
+
+.btn-calendar-shortcuts:hover {
+  border-color: var(--cal-border-hover);
+  color: var(--cal-text-body);
+}
+
+.btn-calendar-tour {
+  background: none;
+  border: 1px solid var(--cal-border-input);
+  border-radius: var(--cal-radius);
+  padding: var(--cal-space-2) var(--cal-space-3);
+  cursor: pointer;
+  font-size: var(--cal-font-md);
+  color: var(--cal-text-secondary);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: var(--cal-transition-fast);
+}
+
+.btn-calendar-tour:hover {
+  border-color: var(--cal-border-hover);
+  color: var(--cal-text-body);
+}

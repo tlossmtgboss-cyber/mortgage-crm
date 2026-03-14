@@ -102,6 +102,7 @@ function Calendar() {
   const [viewHours, setViewHours] = useState(DEFAULT_VIEW_HOURS);
   const [selectedEventIndex, setSelectedEventIndex] = useState(-1);
   const liveAnnouncerRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   // ── Setup banner ──
   const [showSetupBanner, setShowSetupBanner] = useState(() => {
@@ -131,44 +132,46 @@ function Calendar() {
   // ══════════════════════════════════════════════════════════
 
   const loadEvents = useCallback(async () => {
+    // Abort any in-flight fetch (prevents stale responses from rapid navigation)
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setLoading(true);
-      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+      // Fetch a wide window around currentDate so sidebar + all views have data
+      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 6, 1);
+      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 7, 0);
       const response = await unifiedCalendarAPI.getAll({
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
-      });
+      }, { signal: controller.signal });
       setAllEvents(mapUnifiedEvents(response.events));
       setError(null);
-    } catch {
+    } catch (err) {
+      // Ignore aborted requests — a newer fetch has already been issued
+      if (err?.name === 'AbortError' || err?.code === 'ERR_CANCELED') return;
       setError('Unable to load calendar events. Please try again.');
       setAllEvents([]);
     } finally {
-      setLoading(false);
+      // Only clear loading if this controller is still the active one
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, [currentDate]);
 
-  const loadAllEvents = useCallback(async () => {
-    try {
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 6);
-      const endDate = new Date();
-      endDate.setMonth(endDate.getMonth() + 6);
-      const response = await unifiedCalendarAPI.getAll({
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-      });
-      setAllEvents(mapUnifiedEvents(response.events));
-      setError(null);
-    } catch {
-      setError('Unable to load calendar events. Please try again.');
-      setAllEvents([]);
-    }
-  }, []);
-
   useEffect(() => { loadEvents(); }, [loadEvents]);
-  useEffect(() => { loadAllEvents(); }, [loadAllEvents]);
+  // Clean up AbortController on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
   useEffect(() => {
     teamAPI.getMembers().then(members => setTeamMembers(members)).catch(() => {});
   }, []);
@@ -192,23 +195,21 @@ function Calendar() {
     try {
       await calendarAPI.create(eventData);
       loadEvents();
-      loadAllEvents();
       setShowAddModal(false);
     } catch {
       setError('Failed to create event. Please try again.');
     }
-  }, [loadEvents, loadAllEvents]);
+  }, [loadEvents]);
 
   const handleAddAppointment = useCallback(async (appointmentData) => {
     try {
       await schedulerAPI.createAppointment(appointmentData);
       loadEvents();
-      loadAllEvents();
       setShowAddModal(false);
     } catch {
       setError('Failed to create appointment. Please try again.');
     }
-  }, [loadEvents, loadAllEvents]);
+  }, [loadEvents]);
 
   const handleDeleteEvent = useCallback((event) => {
     const message = event.isAppointment && event.appointmentId
@@ -226,13 +227,12 @@ function Calendar() {
             await calendarAPI.delete(eventId);
           }
           loadEvents();
-          loadAllEvents();
         } catch (err) {
           setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
         }
       },
     });
-  }, [loadEvents, loadAllEvents]);
+  }, [loadEvents]);
 
   const handleEditAppointment = useCallback((event) => {
     if (!event.isAppointment) return;
@@ -286,13 +286,12 @@ function Calendar() {
       setShowEditModal(false);
       setEditingAppointment(null);
       loadEvents();
-      loadAllEvents();
     } catch (err) {
       setError('Failed to reschedule: ' + (err.response?.data?.detail || err.message));
     } finally {
       setSaving(false);
     }
-  }, [editingAppointment, loadEvents, loadAllEvents]);
+  }, [editingAppointment, loadEvents]);
 
   const handleCancelFromModal = useCallback(() => {
     if (!editingAppointment) return;
@@ -306,7 +305,6 @@ function Calendar() {
           setShowEditModal(false);
           setEditingAppointment(null);
           loadEvents();
-          loadAllEvents();
         } catch (err) {
           setError('Failed to cancel: ' + (err.response?.data?.detail || err.message));
         } finally {
@@ -314,7 +312,7 @@ function Calendar() {
         }
       },
     });
-  }, [editingAppointment, loadEvents, loadAllEvents]);
+  }, [editingAppointment, loadEvents]);
 
   // ══════════════════════════════════════════════════════════
   // SEARCH
@@ -660,7 +658,7 @@ function Calendar() {
       {error && (
         <div className="calendar-error-banner" role="alert">
           <span>{error}</span>
-          <button onClick={() => { setError(null); loadEvents(); loadAllEvents(); }}>
+          <button onClick={() => { setError(null); loadEvents(); }}>
             Retry
           </button>
         </div>
