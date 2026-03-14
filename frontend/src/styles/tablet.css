@@ -1,0 +1,35 @@
+/* Tablet-specific responsive styles */
+
+/* Tablet breakpoint: 768px - 1023px */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .booking-container {
+    max-width: 700px;
+    padding: 20px;
+  }
+
+  .booking-header {
+    padding: 16px 20px;
+  }
+
+  .booking-form {
+    padding: 20px;
+  }
+
+  .time-slots-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Portrait tablet */
+@media (min-width: 768px) and (max-width: 1023px) and (orientation: portrait) {
+  .booking-container {
+    max-width: 600px;
+  }
+}
+
+/* Landscape tablet */
+@media (min-width: 768px) and (max-width: 1023px) and (orientation: landscape) {
+  .booking-container {
+    max-width: 800px;
+  }
+}
