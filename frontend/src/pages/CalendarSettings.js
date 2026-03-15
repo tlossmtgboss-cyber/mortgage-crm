@@ -24,6 +24,8 @@ import IntegrationsSection from './calendar-settings/IntegrationsSection';
 import TeamSection from './calendar-settings/TeamSection';
 import LocationsLabelsSection from './calendar-settings/LocationsLabelsSection';
 import AdvancedSection from './calendar-settings/AdvancedSection';
+import AISchedulingSection from './calendar-settings/AISchedulingSection';
+import FollowUpCadenceSection from './calendar-settings/FollowUpCadenceSection';
 
 // ============================================================================
 // Navigation constants
@@ -50,6 +52,13 @@ const NAV_SECTIONS = [
     items: [
       { id: 'notifications', label: 'Notifications', icon: 'fa-bell', description: 'Email and SMS reminder settings, quiet hours, and digests' },
       { id: 'integrations', label: 'Integrations', icon: 'fa-plug', description: 'Connect external calendars and third-party tools' },
+    ],
+  },
+  {
+    group: 'AI & Automation',
+    items: [
+      { id: 'ai-scheduling', label: 'AI Scheduling', icon: 'fa-robot', description: 'Configure how AI agents schedule appointments on your calendar' },
+      { id: 'follow-up-cadence', label: 'Follow-Up Cadence', icon: 'fa-sync-alt', description: 'Automated outreach sequences for document collection and borrower follow-up' },
     ],
   },
   {
@@ -979,6 +988,16 @@ function CalendarSettings() {
             appointmentTypes={appointmentTypes}
             loadTabData={loadTabData}
           />
+        );
+      case 'ai-scheduling':
+        return (
+          <AISchedulingSection
+            markChanged={markChanged}
+          />
+        );
+      case 'follow-up-cadence':
+        return (
+          <FollowUpCadenceSection />
         );
       case 'advanced':
         return (
