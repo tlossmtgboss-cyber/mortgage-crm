@@ -40,8 +40,8 @@ class QualificationStatus(str, Enum):
 
 
 # Loan program limits and requirements
-CONFORMING_LOAN_LIMIT = 766550  # 2024 conforming loan limit
-CONFORMING_HIGH_COST_LIMIT = 1149825  # High-cost area limit
+CONFORMING_LOAN_LIMIT = 832750  # 2026 conforming loan limit
+CONFORMING_HIGH_COST_LIMIT = 1249125  # High-cost area limit
 
 PROGRAM_REQUIREMENTS = {
     LoanProgram.CONVENTIONAL: {

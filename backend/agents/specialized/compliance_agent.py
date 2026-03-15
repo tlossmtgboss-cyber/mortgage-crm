@@ -480,21 +480,21 @@ class ComplianceAgent(SpecializedAgent):
         state = input_data["state"].upper()
         units = input_data.get("units", 1)
 
-        # 2025 Conforming loan limits
+        # 2026 Conforming loan limits (FHFA announcement Nov 2025)
         # In production, this would come from a database
         base_limits = {
-            1: 806500,
-            2: 1032650,
-            3: 1248150,
-            4: 1551250
+            1: 832750,
+            2: 1066050,
+            3: 1288650,
+            4: 1601550
         }
 
         # High-cost area limits (150% of base)
         high_cost_limits = {
-            1: 1209750,
-            2: 1548975,
-            3: 1872225,
-            4: 2326875
+            1: 1249125,
+            2: 1599075,
+            3: 1932975,
+            4: 2402325
         }
 
         # High-cost areas (simplified - in production use FHFA data)
@@ -511,12 +511,12 @@ class ComplianceAgent(SpecializedAgent):
             if county.lower() in high_cost_areas[state]:
                 is_high_cost = True
 
-        limit = high_cost_limits.get(units, 1209750) if is_high_cost else base_limits.get(units, 806500)
+        limit = high_cost_limits.get(units, 1249125) if is_high_cost else base_limits.get(units, 832750)
 
         if loan_amount <= limit:
             classification = "conforming"
             eligible_programs = ["Conventional", "FHA", "VA"]
-        elif is_high_cost and loan_amount <= high_cost_limits.get(units, 1209750):
+        elif is_high_cost and loan_amount <= high_cost_limits.get(units, 1249125):
             classification = "high_balance_conforming"
             eligible_programs = ["Conventional High-Balance"]
         else:

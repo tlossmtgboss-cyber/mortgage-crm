@@ -1351,10 +1351,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     # Include Team Calendar routes (multi-LO side-by-side schedule view)
     try:
         from routes.team_calendar_routes import register_team_calendar_routes
+        _models = smart_scheduler_models if 'smart_scheduler_models' in dir() else {}
         register_team_calendar_routes(
             app=app,
             get_current_user=get_current_user,
-            models_dict=smart_scheduler_models,
+            models_dict=_models,
         )
         logger.info("✅ Team Calendar routes loaded (team view, capacity, reassign, availability matrix)")
     except Exception as e:
@@ -2175,13 +2176,18 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Calendar routes (consolidated: Salesforce sync, CalendarEvent CRUD, unified view)
     # All calendar sub-routers are now in routes/calendar_sync_routes.py
+    # Table creation is separated from route registration so DB issues don't block routes
     try:
         from models.calendar_sync_models import CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings
         for model in [CRMCalendarEvent, CalendarEventSyncMap, CalendarSyncLog, CalendarSyncSettings]:
             try:
                 model.__table__.create(engine, checkfirst=True)
             except Exception as e:
-                logger.error(f"Error creating calendar sync table {model.__tablename__}: {e}")
+                logger.warning(f"Calendar sync table {model.__tablename__}: {e}")
+    except Exception as e:
+        logger.warning(f"⚠️ Calendar sync models import: {e}")
+
+    try:
         from routes.calendar_sync_routes import router as calendar_sync_router
         app.include_router(calendar_sync_router, tags=["Calendar Sync"])
         logger.info("✅ Calendar routes loaded (sync, events, unified view)")

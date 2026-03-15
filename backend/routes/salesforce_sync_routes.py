@@ -1094,6 +1094,7 @@ async def _sync_all_loans_inner(
             "Processing": "PROCESSING",
             "Processed": "PROCESSING",
             "In Processing": "PROCESSING",
+            "In Process": "PROCESSING",
             "Loan in Process": "PROCESSING",
             "Submitted to UW": "SUBMITTED",
             "Submitted to Underwriting": "SUBMITTED",

@@ -35,11 +35,15 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
     from services.dre_helpers import calculate_lead_score
 
     def _org_scoped_lead(db, lead_id, current_user):
-        """Query a lead with organization scoping to prevent cross-tenant access."""
+        """Query a lead with organization scoping to prevent cross-tenant access.
+        Platform admins bypass org scoping (matches filter_leads_by_permissions logic).
+        """
         query = db.query(Lead).filter(Lead.id == lead_id)
-        org_id = getattr(current_user, 'organization_id', None)
-        if org_id:
-            query = query.filter(Lead.organization_id == org_id)
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+        if not is_platform_admin:
+            org_id = getattr(current_user, 'organization_id', None)
+            if org_id:
+                query = query.filter(Lead.organization_id == org_id)
         return query.first()
 
     # IMPORTANT: This route MUST be defined BEFORE /leads/{lead_id} to avoid route conflicts

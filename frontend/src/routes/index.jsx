@@ -218,6 +218,7 @@ const ConversationIntelligenceRecordingDetail = lazyRetry(() => import('../pages
 const SmartDocs = lazyRetry(() => import('../pages/SmartDocs'));
 const SmartDocsClientDetail = lazyRetry(() => import('../pages/SmartDocsClientDetail'));
 const SmartDocsDashboard = lazyRetry(() => import('../pages/SmartDocsDashboard'));
+const SmartDocsCadence = lazyRetry(() => import('../pages/SmartDocsCadence'));
 const AIDailyBlog = lazyRetry(() => import('../pages/AIDailyBlog'));
 const AvatarStudio = lazyRetry(() => import('../pages/AvatarStudio'));
 const PublicBooking = lazyRetry(() => import('../pages/PublicBooking'));
@@ -649,6 +650,7 @@ export function getRoutes(layoutProps) {
     <Route key="/smart-docs" path="/smart-docs" element={withMainLayout(SmartDocs)} />,
     <Route key="/smart-docs/dashboard" path="/smart-docs/dashboard" element={withMainLayout(SmartDocsDashboard)} />,
     <Route key="/smart-docs/client/:loanId" path="/smart-docs/client/:loanId" element={withMainLayout(SmartDocsClientDetail)} />,
+    <Route key="/smart-docs/cadence" path="/smart-docs/cadence" element={withMainLayout(SmartDocsCadence)} />,
 
     // E-Signature
     <Route key="/esign/envelope/:envelopeId" path="/esign/envelope/:envelopeId" element={withMainLayout(FieldPlacementBuilder)} />,

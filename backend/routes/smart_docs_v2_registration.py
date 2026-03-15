@@ -185,6 +185,14 @@ def register_smart_docs_v2_routes(app):
     except Exception as e:
         logger.warning(f"Failed to register health check routes: {e}")
 
+    # Cadence Management routes (followup cadence template CRUD, execution lifecycle, analytics)
+    try:
+        from routes.smart_docs_cadence_routes import router as cadence_router
+        app.include_router(cadence_router, prefix=prefix)
+        registered.append("cadence")
+    except Exception as e:
+        logger.warning(f"Failed to register cadence routes: {e}")
+
     # IRS Transcript (4506-C) routes
     try:
         from routes.smart_docs_transcript_routes import router as transcript_router

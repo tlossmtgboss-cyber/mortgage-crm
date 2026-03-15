@@ -240,6 +240,15 @@ export const PermissionProvider = ({ children }) => {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          const isLoginPage = window.location.pathname === '/login';
+          if (!isLoginPage) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+          }
+          return;
+        }
         throw new Error(`Failed to fetch permissions: ${response.status}`);
       }
 
@@ -300,6 +309,15 @@ export const PermissionProvider = ({ children }) => {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          const isLoginPage = window.location.pathname === '/login';
+          if (!isLoginPage) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+          }
+          return;
+        }
         // If endpoint doesn't exist yet (404), silently continue
         if (response.status === 404) {
           return;

@@ -930,7 +930,7 @@ function AIUnderwriter() {
                 </div>
                 <div className="reference-item">
                   <span className="ref-label">Conforming Limit</span>
-                  <span className="ref-value">$806,500</span>
+                  <span className="ref-value">$832,750</span>
                 </div>
               </div>
             </div>

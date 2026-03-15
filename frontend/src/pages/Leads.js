@@ -758,9 +758,10 @@ function Leads() {
 
   // Active Loan stages that require loan creation (not valid LeadStage values)
   const ACTIVE_LOAN_STAGES = [
-    'Disclosed', 'Processing', 'Submitted', 'Underwriting', 'UW Received',
+    'Application', 'Disclosed', 'Processing', 'Submitted', 'Underwriting', 'UW Received',
     'Conditional Approval', 'Approved', 'Suspended', 'CTC', 'Clear to Close',
     'Closing', 'Docs', 'Docs Out', 'Funded', 'Cancelled', 'Denied', 'Dead',
+    'Withdrawn', 'Does Not Qualify',
   ];
 
   const executeStatusChange = async (newStatus, leadId, lead) => {
@@ -776,12 +777,13 @@ function Leads() {
 
         // Map display names to DB stage values (UPPERCASE)
         const STAGE_MAP = {
-          'Disclosed': 'DISCLOSED', 'Processing': 'PROCESSING', 'Submitted': 'SUBMITTED',
-          'Underwriting': 'UNDERWRITING', 'UW Received': 'UW_RECEIVED',
+          'Application': 'APPLICATION', 'Disclosed': 'DISCLOSED', 'Processing': 'PROCESSING',
+          'Submitted': 'SUBMITTED', 'Underwriting': 'UNDERWRITING', 'UW Received': 'UW_RECEIVED',
           'Conditional Approval': 'CONDITIONAL_APPROVAL', 'Approved': 'APPROVED',
           'Suspended': 'SUSPENDED', 'CTC': 'CTC', 'Clear to Close': 'CLEAR_TO_CLOSE',
           'Closing': 'CLOSING', 'Docs': 'DOCS', 'Docs Out': 'DOCS_OUT',
           'Funded': 'FUNDED', 'Cancelled': 'CANCELLED', 'Denied': 'DENIED', 'Dead': 'DEAD',
+          'Withdrawn': 'WITHDRAWN', 'Does Not Qualify': 'DOES_NOT_QUALIFY',
         };
         const dbStage = STAGE_MAP[newStatus] || newStatus;
 

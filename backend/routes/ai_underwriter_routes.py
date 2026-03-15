@@ -105,9 +105,9 @@ GUIDELINE_KNOWLEDGE = {
             "description": "Primary: No reserves required (may need 2 months with layered risk). Second home: 2 months. Investment: 6 months."
         },
         "loan_limits": {
-            "standard": 806500,
-            "high_cost": 1209750,
-            "description": "2025 conforming loan limit: $806,500 (standard), $1,209,750 (high-cost areas)."
+            "standard": 832750,
+            "high_cost": 1249125,
+            "description": "2026 conforming loan limit: $832,750 (standard), $1,249,125 (high-cost areas)."
         }
     },
     "fha": {
@@ -206,7 +206,7 @@ GUIDELINE_KNOWLEDGE = {
             "description": "Typically require 12 months of reserves. Higher loan amounts may require 18-24 months."
         },
         "loan_amounts": {
-            "description": "Loans exceeding conforming limits ($806,500 standard, $1,209,750 high-cost). No maximum set by agencies."
+            "description": "Loans exceeding conforming limits ($832,750 standard, $1,249,125 high-cost). No maximum set by agencies."
         }
     },
     "non-qm": {

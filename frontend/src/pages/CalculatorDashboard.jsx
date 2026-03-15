@@ -4982,7 +4982,7 @@ const ClientDataView = ({ data, onUpdateProfile, onUpdateMarket, onUpdatePropert
                   { id: 'fha', name: 'FHA', desc: '3.5% down, 580+ credit', minDown: 3.5 },
                   { id: 'va', name: 'VA', desc: '0% down, veterans only', minDown: 0 },
                   { id: 'usda', name: 'USDA', desc: '0% down, rural areas', minDown: 0 },
-                  { id: 'jumbo', name: 'Jumbo', desc: 'Loans over $766,550', minDown: 10 },
+                  { id: 'jumbo', name: 'Jumbo', desc: 'Loans over $832,750', minDown: 10 },
                   { id: 'allinone', name: 'All In One', desc: 'First-lien HELOC, 680+ credit', minDown: 20, special: true },
                 ].map(program => (
                   <button
@@ -5882,7 +5882,7 @@ const ScenarioSelector = ({
     { id: 'fha', name: 'FHA', desc: '3.5% down, 580+ credit', minDown: 3.5 },
     { id: 'va', name: 'VA', desc: '0% down, veterans only', minDown: 0 },
     { id: 'usda', name: 'USDA', desc: '0% down, rural areas', minDown: 0 },
-    { id: 'jumbo', name: 'Jumbo', desc: 'Loans over $766,550', minDown: 10 },
+    { id: 'jumbo', name: 'Jumbo', desc: 'Loans over $832,750', minDown: 10 },
     { id: 'allinone', name: 'All In One', desc: 'First-lien HELOC, 680+ credit', minDown: 20, special: true },
   ];
 

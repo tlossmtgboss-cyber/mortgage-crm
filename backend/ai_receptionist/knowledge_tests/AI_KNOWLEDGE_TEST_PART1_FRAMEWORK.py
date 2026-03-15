@@ -327,7 +327,7 @@ class MortgageKnowledgeBase:
             "max_dti": 50,
             "min_down_payment": 3,
             "requires_pmi": True,
-            "conforming_limit": 766550,
+            "conforming_limit": 832750,
         },
         "fha": {
             "display_name": "FHA",

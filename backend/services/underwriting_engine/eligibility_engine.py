@@ -130,11 +130,11 @@ class LoanScenario:
     va_funding_fee_exempt: bool = False
 
 
-# 2025 Conforming Loan Limits
+# 2026 Conforming Loan Limits (FHFA announcement, effective Jan 1 2026)
 CONFORMING_LIMITS = {
-    "standard": Decimal("806500"),
-    "high_cost": Decimal("1209750"),
-    "super_conforming": Decimal("1209750"),
+    "standard": Decimal("832750"),
+    "high_cost": Decimal("1249125"),
+    "super_conforming": Decimal("1249125"),
     # High-cost areas (subset for reference)
     "high_cost_areas": {
         "CA": ["Los Angeles", "San Francisco", "Orange", "Santa Clara", "San Mateo", "Marin", "Alameda"],
@@ -146,10 +146,10 @@ CONFORMING_LIMITS = {
 }
 
 
-# FHA Loan Limits by floor/ceiling
+# 2026 FHA Loan Limits (HUD announcement, effective Jan 1 2026)
 FHA_LIMITS = {
-    "floor": Decimal("498257"),
-    "ceiling": Decimal("1149825"),
+    "floor": Decimal("541287"),
+    "ceiling": Decimal("1249125"),
 }
 
 

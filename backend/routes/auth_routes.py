@@ -1043,6 +1043,7 @@ async def normalize_loan_stages(current_user=Depends(get_current_user_dep()), db
             'Disclosed': 'DISCLOSED',
             'Processing': 'PROCESSING',
             'In Processing': 'PROCESSING',
+            'In Process': 'PROCESSING',
             'Submitted': 'SUBMITTED',
             'Underwriting': 'UNDERWRITING',
             'In Underwriting': 'UNDERWRITING',

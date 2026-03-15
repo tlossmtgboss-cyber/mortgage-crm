@@ -45,8 +45,18 @@ export const ModuleProvider = ({ children }) => {
       });
 
       if (!response.ok) {
-        // If 401/403, user might not be logged in - use defaults
-        if (response.status === 401 || response.status === 403) {
+        // If 401, token is expired/invalid — redirect to login
+        if (response.status === 401) {
+          const isLoginPage = window.location.pathname === '/login';
+          if (!isLoginPage) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+          }
+          return;
+        }
+        // If 403, user is logged in but lacks permission — use defaults
+        if (response.status === 403) {
           setEnabledModules(['base']);
           setAllModules([]);
           return;

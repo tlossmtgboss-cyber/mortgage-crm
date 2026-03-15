@@ -921,7 +921,7 @@ Still keep responses reasonably short, but DO include the value messaging when o
 - 15-Year Fixed Conventional: 5.875% - 6.375%
 - FHA 30-Year: 6.375% - 6.875% (lower credit requirements)
 - VA 30-Year: 6.250% - 6.750% (for eligible veterans)
-- Jumbo 30-Year: 6.875% - 7.375% (loans over $806,500)
+- Jumbo 30-Year: 6.875% - 7.375% (loans over $832,750)
 
 Note: Rates change daily based on market conditions. These are approximate ranges - your actual rate depends on credit score, down payment, property type, and other factors."""
 

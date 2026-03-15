@@ -1967,7 +1967,7 @@ class UnderwriterAssistantAgent(SpecializedAgent):
 
             # Loan amount (conforming limits)
             amount = float(loan.amount or 0)
-            conforming_limit = 766550  # 2024 conforming limit — single unit
+            conforming_limit = 832750  # 2026 conforming limit — single unit
             if loan_type == "conventional":
                 checks.append({
                     "guideline": "Conforming Loan Limit",

@@ -90,8 +90,8 @@ _MANUFACTURED_PATTERNS = {"manufactured", "mobile", "modular"}
 _COMMISSION_BONUS_THRESHOLD = 0.25  # 25% of income from variable sources triggers tax return requirement
 
 # Jumbo threshold (for auto-detection when loan_type is blank)
-_CONFORMING_LIMIT_2025 = 806_500
-_HIGH_COST_LIMIT_2025 = 1_209_750
+_CONFORMING_LIMIT_2026 = 832_750
+_HIGH_COST_LIMIT_2026 = 1_249_125
 
 # States with notable additional requirements
 _STATES_REQUIRING_EXTRA_DISCLOSURES = {
@@ -730,7 +730,7 @@ class POSAnalyzerService:
         else:
             # Auto-detect jumbo based on loan amount
             loan_amount = data.get("loan_amount", 0) or 0
-            if loan_amount > _CONFORMING_LIMIT_2025:
+            if loan_amount > _CONFORMING_LIMIT_2026:
                 data["program_type"] = "JUMBO"
             else:
                 data["program_type"] = "CONVENTIONAL"

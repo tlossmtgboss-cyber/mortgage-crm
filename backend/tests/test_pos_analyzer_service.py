@@ -12,7 +12,7 @@ from services.smart_docs.pos_analyzer_service import (
     POSAnalyzerService,
     POSAnalysisResult,
     RequiredDocument,
-    _CONFORMING_LIMIT_2025,
+    _CONFORMING_LIMIT_2026,
 )
 from models.smart_docs_models import DocType, RequestPriority, AppliesTo
 
@@ -826,7 +826,7 @@ class TestNormalization:
         """Loan amount above conforming limit should auto-detect as JUMBO."""
         data = _base_loan_data(
             loan_type="",
-            loan_amount=_CONFORMING_LIMIT_2025 + 1,
+            loan_amount=_CONFORMING_LIMIT_2026 + 1,
         )
         normalized = service._normalize_loan_data(data)
         assert normalized["program_type"] == "JUMBO"

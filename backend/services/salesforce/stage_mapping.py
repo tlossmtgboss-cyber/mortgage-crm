@@ -34,6 +34,7 @@ SALESFORCE_STAGE_MAPPING = {
     "In Processing": "PROCESSING",
     "Contract Received": "PROCESSING",
     "Submitted to Processing": "PROCESSING",
+    "In Process": "PROCESSING",
     "Loan in Process": "PROCESSING",
     "Document Collection": "PROCESSING",
     "Documents Requested": "PROCESSING",
