@@ -13,6 +13,7 @@ const DAY_LABELS = {
   monday: 'Monday', tuesday: 'Tuesday', wednesday: 'Wednesday',
   thursday: 'Thursday', friday: 'Friday', saturday: 'Saturday', sunday: 'Sunday',
 };
+const DAY_ABBREV = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
 
 const SCHEDULE_TEMPLATES = [
   {
@@ -221,6 +222,58 @@ export default function AvailabilitySection({
     }
   }, [availability.business_hours]);
 
+  // ---- Time Block handlers ----
+  const addTimeBlock = useCallback(() => {
+    setAvailability(prev => ({
+      ...prev,
+      time_blocks: [
+        ...(prev.time_blocks || []),
+        {
+          id: Date.now().toString(),
+          label: '',
+          start: '12:00',
+          end: '13:00',
+          days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+          enabled: true,
+        },
+      ],
+    }));
+    markChanged();
+  }, [setAvailability, markChanged]);
+
+  const updateTimeBlock = useCallback((id, field, value) => {
+    setAvailability(prev => ({
+      ...prev,
+      time_blocks: (prev.time_blocks || []).map(b =>
+        b.id === id ? { ...b, [field]: value } : b
+      ),
+    }));
+    markChanged();
+  }, [setAvailability, markChanged]);
+
+  const toggleTimeBlockDay = useCallback((id, day) => {
+    setAvailability(prev => ({
+      ...prev,
+      time_blocks: (prev.time_blocks || []).map(b => {
+        if (b.id !== id) return b;
+        const days = b.days || [];
+        return {
+          ...b,
+          days: days.includes(day) ? days.filter(d => d !== day) : [...days, day],
+        };
+      }),
+    }));
+    markChanged();
+  }, [setAvailability, markChanged]);
+
+  const removeTimeBlock = useCallback((id) => {
+    setAvailability(prev => ({
+      ...prev,
+      time_blocks: (prev.time_blocks || []).filter(b => b.id !== id),
+    }));
+    markChanged();
+  }, [setAvailability, markChanged]);
+
   return (
     <div role="tabpanel" id="panel-availability" aria-labelledby="calnav-availability">
 
@@ -300,6 +353,122 @@ export default function AvailabilitySection({
                 </button>
               ))}
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* ---- Time Blocks ---- */}
+      <section className="cal-settings-section">
+        <button
+          type="button"
+          className="collapsible-header"
+          onClick={() => toggleExpandedSection('time-blocks')}
+          aria-expanded={expandedSections['time-blocks']}
+        >
+          <div className="collapsible-header-left">
+            <i className={`fas fa-chevron-${expandedSections['time-blocks'] ? 'down' : 'right'} collapsible-chevron`}></i>
+            <div>
+              <h2>Time Blocks</h2>
+              <p className="section-description">
+                Block off recurring time on your calendar. Appointments cannot be scheduled during blocked times.
+                {(availability.time_blocks || []).length > 0 && (
+                  <span className="inline-count"> ({(availability.time_blocks || []).filter(b => b.enabled).length} active)</span>
+                )}
+              </p>
+            </div>
+          </div>
+          <span className="collapsible-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+            </svg>
+          </span>
+        </button>
+        {expandedSections['time-blocks'] && (
+          <div className="collapsible-body">
+            {(availability.time_blocks || []).length === 0 ? (
+              <p className="empty-hint">
+                No time blocks configured. Add one below to protect time on your calendar.
+              </p>
+            ) : (
+              <div className="time-blocks-list">
+                {(availability.time_blocks || []).map(block => (
+                  <div key={block.id} className={`time-block-card ${!block.enabled ? 'time-block-disabled' : ''}`}>
+                    <div className="time-block-header">
+                      <label className="time-block-toggle">
+                        <input
+                          type="checkbox"
+                          checked={block.enabled}
+                          onChange={e => updateTimeBlock(block.id, 'enabled', e.target.checked)}
+                        />
+                        <input
+                          type="text"
+                          className="time-block-label-input"
+                          value={block.label}
+                          onChange={e => updateTimeBlock(block.id, 'label', e.target.value)}
+                          placeholder="Label (e.g., Lunch, Focus Time)"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="icon-btn danger"
+                        onClick={() => removeTimeBlock(block.id)}
+                        title="Remove time block"
+                        aria-label="Remove time block"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="time-block-config">
+                      <div className="time-block-times">
+                        <input
+                          type="time"
+                          value={block.start}
+                          onChange={e => updateTimeBlock(block.id, 'start', e.target.value)}
+                          disabled={!block.enabled}
+                        />
+                        <span className="time-block-to">to</span>
+                        <input
+                          type="time"
+                          value={block.end}
+                          onChange={e => updateTimeBlock(block.id, 'end', e.target.value)}
+                          disabled={!block.enabled}
+                        />
+                      </div>
+                      <div className="time-block-days">
+                        {DAYS_OF_WEEK.map(day => (
+                          <button
+                            key={day}
+                            type="button"
+                            className={`time-block-day-btn ${(block.days || []).includes(day) ? 'active' : ''}`}
+                            onClick={() => toggleTimeBlockDay(block.id, day)}
+                            disabled={!block.enabled}
+                            title={DAY_LABELS[day]}
+                          >
+                            {DAY_ABBREV[day]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              className="btn-add-time-block"
+              onClick={addTimeBlock}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Time Block
+            </button>
           </div>
         )}
       </section>

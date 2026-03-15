@@ -645,15 +645,159 @@
   padding: 0 2px;
 }
 
-/* Lunch break row */
-.lunch-break-row {
+/* Time Blocks */
+.time-blocks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.time-block-card {
+  background: white;
+  border: 1px solid var(--cal-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: border-color 0.15s;
+}
+
+.time-block-card:hover {
+  border-color: var(--cal-accent, #4f46e5);
+}
+
+.time-block-card.time-block-disabled {
+  opacity: 0.55;
+  background: var(--cal-bg-secondary);
+}
+
+.time-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.time-block-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.time-block-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--cal-accent, #4f46e5);
+  cursor: pointer;
+}
+
+.time-block-label-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cal-text-dark);
+  padding: 4px 0;
+  outline: none;
+}
+
+.time-block-label-input::placeholder {
+  color: var(--cal-text-muted);
+  font-weight: 400;
+}
+
+.time-block-label-input:focus {
+  border-bottom: 2px solid var(--cal-accent, #4f46e5);
+}
+
+.time-block-config {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 16px;
-  background: var(--cal-warning-lighter);
-  border: 1px solid var(--cal-warning-border);
+  flex-wrap: wrap;
+}
+
+.time-block-times {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-block-times input[type="time"] {
+  padding: 6px 10px;
+  border: 1px solid var(--cal-border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: white;
+}
+
+.time-block-times input[type="time"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.time-block-to {
+  font-size: 13px;
+  color: var(--cal-text-muted);
+}
+
+.time-block-days {
+  display: flex;
+  gap: 4px;
+}
+
+.time-block-day-btn {
+  width: 36px;
+  height: 28px;
+  border: 1px solid var(--cal-border);
+  border-radius: 5px;
+  background: white;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--cal-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.time-block-day-btn:hover:not(:disabled) {
+  border-color: var(--cal-accent, #4f46e5);
+  color: var(--cal-accent, #4f46e5);
+}
+
+.time-block-day-btn.active {
+  background: var(--cal-accent, #4f46e5);
+  border-color: var(--cal-accent, #4f46e5);
+  color: white;
+}
+
+.time-block-day-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-add-time-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px dashed var(--cal-border);
   border-radius: 8px;
+  background: none;
+  color: var(--cal-accent, #4f46e5);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-add-time-block:hover {
+  background: var(--cal-bg-secondary);
+  border-color: var(--cal-accent, #4f46e5);
 }
 
 .quiet-hours-row {
@@ -3104,7 +3248,15 @@
     grid-template-columns: 1fr;
   }
 
-  .lunch-break-row,
+  .time-block-config {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .time-block-days {
+    flex-wrap: wrap;
+  }
+
   .quiet-hours-row {
     flex-wrap: wrap;
   }

@@ -35,7 +35,7 @@ const NAV_SECTIONS = [
   {
     group: 'Schedule',
     items: [
-      { id: 'availability', label: 'Availability', icon: 'fa-clock', description: 'Business hours, lunch breaks, buffer time, and booking window' },
+      { id: 'availability', label: 'Availability', icon: 'fa-clock', description: 'Business hours, time blocks, buffer time, and booking window' },
       { id: 'appointment-types', label: 'Appointment Types', icon: 'fa-list-alt', description: 'Define the types of meetings clients can book' },
       { id: 'locations-labels', label: 'Locations & Labels', icon: 'fa-map-marker-alt', description: 'Meeting locations, calendar labels, and appointment templates' },
     ],
@@ -101,7 +101,9 @@ const DEFAULT_AVAILABILITY = {
     saturday: { start: '10:00', end: '14:00', enabled: false },
     sunday: { start: '10:00', end: '14:00', enabled: false },
   },
-  lunch_break: { enabled: true, start: '12:00', end: '13:00' },
+  time_blocks: [
+    { id: '1', label: 'Lunch Break', start: '12:00', end: '13:00', days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'], enabled: true },
+  ],
   buffer_minutes: 5,
   min_booking_notice_hours: 2,
   max_advance_booking_days: 60,
