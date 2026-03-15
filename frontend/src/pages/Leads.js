@@ -788,19 +788,36 @@ function Leads() {
         const dbStage = STAGE_MAP[newStatus] || newStatus;
 
         try {
-          await loansAPI.create({
-            loan_number: loanNumber,
-            borrower_name: borrowerName,
-            borrower_email: lead?.email,
-            borrower_phone: lead?.phone,
-            amount: loanAmount,
-            stage: dbStage,
-            property_address: lead?.property_address,
-          }, true);
+          // Check if a loan already exists for this borrower (prevent duplicates)
+          let existingLoan = null;
+          if (lead?.email) {
+            try {
+              const allLoans = await loansAPI.getAll({ search: lead.email });
+              existingLoan = allLoans.find(l =>
+                l.borrower_email === lead.email &&
+                !['FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY'].includes(l.stage)
+              );
+            } catch (e) { /* search failed, proceed with create */ }
+          }
 
-          // Update lead stage too (use Disclosed for all active loan stages since they've converted)
+          if (existingLoan) {
+            // Update existing loan stage instead of creating a duplicate
+            await loansAPI.update(existingLoan.id, { stage: dbStage });
+          } else {
+            await loansAPI.create({
+              loan_number: loanNumber,
+              borrower_name: borrowerName,
+              borrower_email: lead?.email,
+              borrower_phone: lead?.phone,
+              amount: loanAmount,
+              stage: dbStage,
+              property_address: lead?.property_address,
+            });
+          }
+
+          // Update lead stage (use Disclosed for active loan stages, Funded for funded)
           const leadStage = newStatus === 'Funded' ? 'Funded' : 'Disclosed';
-          try { await leadsAPI.update(leadId, { stage: leadStage }); } catch (e) { /* loan created, lead update optional */ }
+          await leadsAPI.update(leadId, { stage: leadStage });
 
           localStorage.removeItem('leads_data');
           localStorage.removeItem('leads_data_time');
