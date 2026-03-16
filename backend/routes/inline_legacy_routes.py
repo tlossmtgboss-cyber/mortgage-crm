@@ -344,8 +344,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load CSRF routes: {e}")
 
     # Include public routes - Import AFTER defining functions it needs
-    from public_routes import router as public_router
-    app.include_router(public_router, tags=["Public"])
+    try:
+        from public_routes import router as public_router
+        app.include_router(public_router, tags=["Public"])
+    except Exception as e:
+        logger.warning(f"⚠️ Public routes not loaded: {e}")
 
     # Include organization (multi-tenant) management routes
     try:
@@ -356,8 +359,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load organization routes: {e}")
 
     # Include microsite routes (public LO profiles, lead capture)
-    from microsite_routes import router as microsite_router
-    app.include_router(microsite_router, tags=["Microsite"])
+    try:
+        from microsite_routes import router as microsite_router
+        app.include_router(microsite_router, tags=["Microsite"])
+    except Exception as e:
+        logger.warning(f"⚠️ Microsite routes not loaded: {e}")
 
     # Include microsite theme marketplace routes
     try:
@@ -377,8 +383,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load microsite platform routes: {e}")
 
     # Include borrower authentication routes (social login for applicants)
-    from borrower_auth_routes import router as borrower_auth_router
-    app.include_router(borrower_auth_router, tags=["Borrower Auth"])
+    try:
+        from borrower_auth_routes import router as borrower_auth_router
+        app.include_router(borrower_auth_router, tags=["Borrower Auth"])
+    except Exception as e:
+        logger.warning(f"⚠️ Borrower Auth routes not loaded: {e}")
 
     # Include secure auth routes (token refresh, logout, introspection)
     try:
@@ -445,8 +454,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load MUM Portal routes: {e}")
 
     # Include application analytics routes
-    from analytics_routes import router as analytics_router
-    app.include_router(analytics_router, tags=["Analytics"])
+    try:
+        from analytics_routes import router as analytics_router
+        app.include_router(analytics_router, tags=["Analytics"])
+    except Exception as e:
+        logger.warning(f"⚠️ Analytics routes not loaded: {e}")
 
     # Include Visitor Tracking routes
     try:
@@ -457,8 +469,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load visitor tracking routes: {e}")
 
     # Include AI API routes
-    from ai_api_endpoints import router as ai_router
-    app.include_router(ai_router, tags=["AI System"])
+    try:
+        from ai_api_endpoints import router as ai_router
+        app.include_router(ai_router, tags=["AI System"])
+    except Exception as e:
+        logger.warning(f"⚠️ AI System routes not loaded: {e}")
 
     # Include SSE Streaming Chat routes
     try:
@@ -541,12 +556,18 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load credit report routes: {e}")
 
     # Include Mission Control routes
-    from mission_control_routes import router as mission_control_router
-    app.include_router(mission_control_router, tags=["Mission Control"])
+    try:
+        from mission_control_routes import router as mission_control_router
+        app.include_router(mission_control_router, tags=["Mission Control"])
+    except Exception as e:
+        logger.warning(f"⚠️ Mission Control routes not loaded: {e}")
 
     # Include A/B Testing routes
-    from ab_testing_routes import router as ab_testing_router
-    app.include_router(ab_testing_router, tags=["A/B Testing"])
+    try:
+        from ab_testing_routes import router as ab_testing_router
+        app.include_router(ab_testing_router, tags=["A/B Testing"])
+    except Exception as e:
+        logger.warning(f"⚠️ A/B Testing routes not loaded: {e}")
 
     # AI Receptionist Dashboard routes — registered in main.py (REC-001)
     # from ai_receptionist_dashboard_routes import router as ai_receptionist_dashboard_router
@@ -554,8 +575,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Include Voice AI Receptionist routes
     # ✅ FIXED: Circular import resolved by using lazy imports in voice_routes.py
-    from voice_routes import router as voice_router
-    app.include_router(voice_router, tags=["Voice AI"])
+    try:
+        from voice_routes import router as voice_router
+        app.include_router(voice_router, tags=["Voice AI"])
+    except Exception as e:
+        logger.warning(f"⚠️ Voice AI routes not loaded: {e}")
 
     # Include AMD Outbound Call routes (Telnyx AMD for voicemail detection)
     try:
@@ -600,13 +624,19 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Could not load Quote Language Presets routes: {e}")
 
     # Include Voice OS API routes (agents, phone numbers, call sessions, analytics)
-    from voice_os_routes import router as voice_os_router, set_auth_dependency as set_voice_os_auth
-    set_voice_os_auth(get_current_user)
-    app.include_router(voice_os_router, tags=["Voice OS"])
+    try:
+        from voice_os_routes import router as voice_os_router, set_auth_dependency as set_voice_os_auth
+        set_voice_os_auth(get_current_user)
+        app.include_router(voice_os_router, tags=["Voice OS"])
+    except Exception as e:
+        logger.warning(f"⚠️ Voice OS routes not loaded: {e}")
 
     # Include Mobile Voice routes for real-time voice conversations
-    from mobile_voice_routes import router as mobile_voice_router
-    app.include_router(mobile_voice_router, tags=["Mobile Voice"])
+    try:
+        from mobile_voice_routes import router as mobile_voice_router
+        app.include_router(mobile_voice_router, tags=["Mobile Voice"])
+    except Exception as e:
+        logger.warning(f"⚠️ Mobile Voice routes not loaded: {e}")
 
     # Include Voice Workflow routes for conversational task completion
     try:
@@ -651,32 +681,53 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Could not load Conference routes: {e}")
 
     # Include Deepgram Voice Agent routes (new all-in-one voice API)
-    from deepgram_voice_agent import router as deepgram_voice_agent_router
-    app.include_router(deepgram_voice_agent_router, tags=["Voice Agent"])
+    try:
+        from deepgram_voice_agent import router as deepgram_voice_agent_router
+        app.include_router(deepgram_voice_agent_router, tags=["Voice Agent"])
+    except Exception as e:
+        logger.warning(f"⚠️ Voice Agent routes not loaded: {e}")
 
     # Include Vapi AI Receptionist routes
-    from vapi_routes import router as vapi_router
-    app.include_router(vapi_router, tags=["Vapi AI"])
+    try:
+        from vapi_routes import router as vapi_router
+        app.include_router(vapi_router, tags=["Vapi AI"])
+    except Exception as e:
+        logger.warning(f"⚠️ Vapi AI routes not loaded: {e}")
 
     # Include Guideline Updates routes
-    from guideline_updates_routes import router as guideline_updates_router
-    app.include_router(guideline_updates_router, tags=["Guideline Updates"])
+    try:
+        from guideline_updates_routes import router as guideline_updates_router
+        app.include_router(guideline_updates_router, tags=["Guideline Updates"])
+    except Exception as e:
+        logger.warning(f"⚠️ Guideline Updates routes not loaded: {e}")
 
     # Include Escalation routes
-    from escalation_routes import router as escalation_router
-    app.include_router(escalation_router, tags=["Escalations"])
+    try:
+        from escalation_routes import router as escalation_router
+        app.include_router(escalation_router, tags=["Escalations"])
+    except Exception as e:
+        logger.warning(f"⚠️ Escalation routes not loaded: {e}")
 
     # Include Migrations API routes
-    from migrations_api import router as migrations_router
-    app.include_router(migrations_router, tags=["Migrations"])
+    try:
+        from migrations_api import router as migrations_router
+        app.include_router(migrations_router, tags=["Migrations"])
+    except Exception as e:
+        logger.warning(f"⚠️ Migrations API routes not loaded: {e}")
 
     # Include Circle of Cashflow routes
-    from circle_of_cashflow_routes import router as circle_of_cashflow_router
-    app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
+    try:
+        from circle_of_cashflow_routes import router as circle_of_cashflow_router
+        app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
+    except Exception as e:
+        logger.warning(f"⚠️ Circle of Cashflow routes not loaded: {e}")
 
     # Include AI Command routes for Perennia AI Landing Page
-    from ai_command_routes import router as ai_command_router
-    app.include_router(ai_command_router, tags=["AI Commands"])
+    try:
+        from ai_command_routes import router as ai_command_router
+        app.include_router(ai_command_router, tags=["AI Commands"])
+    except Exception as e:
+        logger.warning(f"⚠️ AI Commands routes not loaded: {e}")
 
     # Include AI Smart File Analysis routes for loan file analysis
     try:
@@ -1007,8 +1058,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Could not load Loans CRUD routes: {e}")
 
     # Include Subscription routes for Perennia AI
-    from subscription_routes import router as subscription_router
-    app.include_router(subscription_router, tags=["Subscriptions"])
+    try:
+        from subscription_routes import router as subscription_router
+        app.include_router(subscription_router, tags=["Subscriptions"])
+    except Exception as e:
+        logger.warning(f"⚠️ Subscription routes not loaded: {e}")
 
     # Include Module Subscription routes for modular a-la-carte pricing
     try:
@@ -1131,8 +1185,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"⚠️ Could not load Contract Automation routes: {e}")
 
     # Include Workflow System routes
-    from workflow_routes import router as workflow_router
-    app.include_router(workflow_router, tags=["Workflow"])
+    try:
+        from workflow_routes import router as workflow_router
+        app.include_router(workflow_router, tags=["Workflow"])
+    except Exception as e:
+        logger.warning(f"⚠️ Workflow routes not loaded: {e}")
 
     # Include Workflow Configuration routes (editable workflow definitions)
     try:
@@ -1470,16 +1527,25 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         return {"status": "loaded"}
 
     # Include Market Chat routes
-    from market_chat_routes import router as market_chat_router
-    app.include_router(market_chat_router, tags=["Market Chat"])
+    try:
+        from market_chat_routes import router as market_chat_router
+        app.include_router(market_chat_router, tags=["Market Chat"])
+    except Exception as e:
+        logger.warning(f"⚠️ Market Chat routes not loaded: {e}")
 
     # Include Market Data routes (scrapers)
-    from market_data_routes import router as market_data_router
-    app.include_router(market_data_router, tags=["Market Data"])
+    try:
+        from market_data_routes import router as market_data_router
+        app.include_router(market_data_router, tags=["Market Data"])
+    except Exception as e:
+        logger.warning(f"⚠️ Market Data routes not loaded: {e}")
 
     # Include Rate Lock Intelligence routes (integrated from external microservice)
-    from routes.rate_lock_intelligence_routes import router as rate_lock_intelligence_router
-    app.include_router(rate_lock_intelligence_router, tags=["Rate Lock Intelligence"])
+    try:
+        from routes.rate_lock_intelligence_routes import router as rate_lock_intelligence_router
+        app.include_router(rate_lock_intelligence_router, tags=["Rate Lock Intelligence"])
+    except Exception as e:
+        logger.warning(f"⚠️ Rate Lock Intelligence routes not loaded: {e}")
 
     # Include Rate Monitor routes (MUM refinance opportunity tracking)
     try:
@@ -1496,16 +1562,25 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load rate sheet routes: {e}")
 
     # Include Gmail Integration routes
-    from gmail_routes import router as gmail_router
-    app.include_router(gmail_router, tags=["Gmail Integration"])
+    try:
+        from gmail_routes import router as gmail_router
+        app.include_router(gmail_router, tags=["Gmail Integration"])
+    except Exception as e:
+        logger.warning(f"⚠️ Gmail Integration routes not loaded: {e}")
 
     # Include Email Drop routes (drag-and-drop email processing)
-    from email_drop_routes import router as email_drop_router
-    app.include_router(email_drop_router, tags=["Email Drop"])
+    try:
+        from email_drop_routes import router as email_drop_router
+        app.include_router(email_drop_router, tags=["Email Drop"])
+    except Exception as e:
+        logger.warning(f"⚠️ Email Drop routes not loaded: {e}")
 
     # Include Document Drop routes (drag-and-drop document upload)
-    from document_drop_routes import router as document_drop_router
-    app.include_router(document_drop_router, tags=["Document Drop"])
+    try:
+        from document_drop_routes import router as document_drop_router
+        app.include_router(document_drop_router, tags=["Document Drop"])
+    except Exception as e:
+        logger.warning(f"⚠️ Document Drop routes not loaded: {e}")
 
     # Include Smart Documents routes (intelligent document collection)
     try:
@@ -1594,8 +1669,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load unified income routes: {e}")
 
     # Include Morning Check-in routes
-    from morning_checkin_routes import router as morning_checkin_router
-    app.include_router(morning_checkin_router, tags=["Morning Check-in"])
+    try:
+        from morning_checkin_routes import router as morning_checkin_router
+        app.include_router(morning_checkin_router, tags=["Morning Check-in"])
+    except Exception as e:
+        logger.warning(f"⚠️ Morning Check-in routes not loaded: {e}")
 
     # Include Call Recording routes (mobile app call recording + AI summary)
     try:
@@ -1605,20 +1683,32 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load call recording routes: {e}")
 
     # Include AI Task Automation routes
-    from ai_automation_routes import router as ai_automation_router
-    app.include_router(ai_automation_router, tags=["AI Task Automation"])
+    try:
+        from ai_automation_routes import router as ai_automation_router
+        app.include_router(ai_automation_router, tags=["AI Task Automation"])
+    except Exception as e:
+        logger.warning(f"⚠️ AI Task Automation routes not loaded: {e}")
 
     # Include Task Workflow routes
-    from task_workflow_routes import router as task_workflow_router
-    app.include_router(task_workflow_router, tags=["Task Workflow"])
+    try:
+        from task_workflow_routes import router as task_workflow_router
+        app.include_router(task_workflow_router, tags=["Task Workflow"])
+    except Exception as e:
+        logger.warning(f"⚠️ Task Workflow routes not loaded: {e}")
 
     # Include Integration routes (SMS, Email, Teams)
-    from integration_routes import router as integration_router
-    app.include_router(integration_router, tags=["Integrations"])
+    try:
+        from integration_routes import router as integration_router
+        app.include_router(integration_router, tags=["Integrations"])
+    except Exception as e:
+        logger.warning(f"⚠️ Integration routes not loaded: {e}")
 
     # Include Profitability Intelligence routes
-    from profitability_routes import router as profitability_router
-    app.include_router(profitability_router, tags=["Profitability"])
+    try:
+        from profitability_routes import router as profitability_router
+        app.include_router(profitability_router, tags=["Profitability"])
+    except Exception as e:
+        logger.warning(f"⚠️ Profitability routes not loaded: {e}")
 
     # Include Pipeline Probability routes (Advanced Analytics)
     try:
@@ -1629,12 +1719,18 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load Pipeline Probability routes: {e}")
 
     # Include AI Insights routes for profitability
-    from ai_insights_routes import router as ai_insights_router
-    app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
+    try:
+        from ai_insights_routes import router as ai_insights_router
+        app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
+    except Exception as e:
+        logger.warning(f"⚠️ AI Profitability Insights routes not loaded: {e}")
 
     # Include Financial Intelligence routes (Phase 3)
-    from financial_intelligence_routes import router as financial_intelligence_router
-    app.include_router(financial_intelligence_router, tags=["Financial Intelligence"])
+    try:
+        from financial_intelligence_routes import router as financial_intelligence_router
+        app.include_router(financial_intelligence_router, tags=["Financial Intelligence"])
+    except Exception as e:
+        logger.warning(f"⚠️ Financial Intelligence routes not loaded: {e}")
 
     # Include Accounting System routes (Full Double-Entry Accounting)
     try:
@@ -1655,8 +1751,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load Accounting System routes: {e}")
 
     # Include Business Operations Dashboard routes
-    from routes.business_operations_routes import router as business_ops_router
-    app.include_router(business_ops_router, tags=["Business Operations"])
+    try:
+        from routes.business_operations_routes import router as business_ops_router
+        app.include_router(business_ops_router, tags=["Business Operations"])
+    except Exception as e:
+        logger.warning(f"⚠️ Business Operations routes not loaded: {e}")
 
     # Note: Master Manager routes already loaded above (line ~5084)
 
@@ -1765,8 +1864,11 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         logger.warning(f"Could not load Acquisition Engine routes: {e}")
 
     # Include AI Daily Blog + PDF Content Factory routes
-    from blog_routes import router as blog_router
-    app.include_router(blog_router, tags=["AI Daily Blog"])
+    try:
+        from blog_routes import router as blog_router
+        app.include_router(blog_router, tags=["AI Daily Blog"])
+    except Exception as e:
+        logger.warning(f"⚠️ AI Daily Blog routes not loaded: {e}")
 
     # Include Content Marketing Automation routes (Vocable.ai-style)
     try:
@@ -1799,36 +1901,57 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
 
     # Include Email Monitor routes
-    from email_monitor_routes import router as email_monitor_router
-    app.include_router(email_monitor_router, tags=["Email Monitor"])
+    try:
+        from email_monitor_routes import router as email_monitor_router
+        app.include_router(email_monitor_router, tags=["Email Monitor"])
+    except Exception as e:
+        logger.warning(f"⚠️ Email Monitor routes not loaded: {e}")
 
     # Include Data Import routes (CSV/Excel upload)
-    from data_import_routes import router as data_import_router
-    app.include_router(data_import_router, tags=["Data Import"])
+    try:
+        from data_import_routes import router as data_import_router
+        app.include_router(data_import_router, tags=["Data Import"])
+    except Exception as e:
+        logger.warning(f"⚠️ Data Import routes not loaded: {e}")
 
     # Include Auto Import routes (intelligent field mapping)
-    from auto_import_routes import router as auto_import_router
-    app.include_router(auto_import_router, tags=["Auto Import"])
+    try:
+        from auto_import_routes import router as auto_import_router
+        app.include_router(auto_import_router, tags=["Auto Import"])
+    except Exception as e:
+        logger.warning(f"⚠️ Auto Import routes not loaded: {e}")
 
     # Include Disposition routes (voice notes + AI summarization)
-    from telephony.disposition_router import router as disposition_router, set_dependencies as set_disposition_deps
-    set_disposition_deps(get_db, get_current_user)
-    app.include_router(disposition_router, prefix="/api/v1/dialer", tags=["Dialer Dispositions"])
+    try:
+        from telephony.disposition_router import router as disposition_router, set_dependencies as set_disposition_deps
+        set_disposition_deps(get_db, get_current_user)
+        app.include_router(disposition_router, prefix="/api/v1/dialer", tags=["Dialer Dispositions"])
+    except Exception as e:
+        logger.warning(f"⚠️ Dialer Dispositions routes not loaded: {e}")
 
     # Include Dialer Analytics routes
-    from telephony.analytics_router import router as dialer_analytics_router, set_dependencies as set_analytics_deps
-    set_analytics_deps(get_db, get_current_user)
-    app.include_router(dialer_analytics_router, prefix="/api/v1/dialer", tags=["Dialer Analytics"])
+    try:
+        from telephony.analytics_router import router as dialer_analytics_router, set_dependencies as set_analytics_deps
+        set_analytics_deps(get_db, get_current_user)
+        app.include_router(dialer_analytics_router, prefix="/api/v1/dialer", tags=["Dialer Analytics"])
+    except Exception as e:
+        logger.warning(f"⚠️ Dialer Analytics routes not loaded: {e}")
 
     # Include Dialer Admin routes (caller ID management)
-    from telephony.admin_router import router as dialer_admin_router, set_dependencies as set_admin_deps
-    set_admin_deps(get_db, get_current_user)
-    app.include_router(dialer_admin_router, prefix="/api/v1/dialer", tags=["Dialer Admin"])
+    try:
+        from telephony.admin_router import router as dialer_admin_router, set_dependencies as set_admin_deps
+        set_admin_deps(get_db, get_current_user)
+        app.include_router(dialer_admin_router, prefix="/api/v1/dialer", tags=["Dialer Admin"])
+    except Exception as e:
+        logger.warning(f"⚠️ Dialer Admin routes not loaded: {e}")
 
     # Include main Dialer router (TwiML webhooks, click-to-dial, sessions)
-    from telephony.router import router as dialer_main_router, set_dependencies as set_dialer_deps
-    set_dialer_deps(get_db, get_current_user)
-    app.include_router(dialer_main_router, tags=["Dialer"])  # Router already has /api/v1/dialer prefix
+    try:
+        from telephony.router import router as dialer_main_router, set_dependencies as set_dialer_deps
+        set_dialer_deps(get_db, get_current_user)
+        app.include_router(dialer_main_router, tags=["Dialer"])  # Router already has /api/v1/dialer prefix
+    except Exception as e:
+        logger.warning(f"⚠️ Dialer routes not loaded: {e}")
 
     # Include User Onboarding System routes
     try:

@@ -257,3 +257,23 @@ def get_scheduler(sms_service=None, db=None) -> SMSScheduler:
     if _scheduler is None:
         _scheduler = SMSScheduler(sms_service=sms_service, db=db)
     return _scheduler
+
+
+def schedule_sms(db, to_phone: str, message: str, schedule_at=None, lead_id=None) -> Optional[str]:
+    """Schedule an SMS for future delivery.
+
+    Convenience wrapper around the SMSScheduler singleton.
+    Returns the job_id on success, None on failure.
+    """
+    try:
+        scheduler = get_scheduler(db=db)
+        job = scheduler.schedule(
+            to=to_phone,
+            body=message,
+            send_at=schedule_at,
+            metadata={"lead_id": lead_id} if lead_id else None,
+        )
+        return job.job_id if job else None
+    except Exception as e:
+        logger.error(f"Failed to schedule SMS to {to_phone}: {e}")
+        return None
