@@ -5567,3 +5567,120 @@
     flex-wrap: wrap;
   }
 }
+
+/* ============================================================================
+   Meeting Defaults (merged from Smart Scheduler)
+   ============================================================================ */
+
+.intg-meeting-defaults {
+  background: var(--cal-bg-primary);
+  border: 1px solid var(--cal-border);
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+
+.intg-meeting-defaults h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--cal-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px 0;
+}
+
+.meeting-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.meeting-mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 2px solid var(--cal-border);
+  border-radius: 8px;
+  background: var(--cal-bg-primary);
+  color: var(--cal-text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.meeting-mode-btn:hover {
+  border-color: var(--cal-primary);
+  color: var(--cal-primary);
+}
+
+.meeting-mode-btn.active {
+  background: var(--cal-primary-light, #e6f5f5);
+  border-color: var(--cal-primary);
+  color: var(--cal-primary);
+  font-weight: 600;
+}
+
+.meeting-mode-btn i {
+  font-size: 1.1rem;
+}
+
+/* ============================================================================
+   Test Result Banner
+   ============================================================================ */
+
+.cal-settings-test-result {
+  border-bottom: 1px solid var(--cal-border);
+  padding: 12px 24px;
+}
+
+.cal-settings-test-result.success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.cal-settings-test-result.warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.test-result-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.test-result-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.cal-settings-test-result.success .test-result-header i { color: #059669; }
+.cal-settings-test-result.warning .test-result-header i { color: #d97706; }
+
+.test-result-header strong {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.test-result-inner p {
+  font-size: 0.85rem;
+  color: var(--cal-text-secondary);
+  margin: 4px 0 0 24px;
+}
+
+.test-result-issues {
+  margin: 8px 0 0 24px;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  color: var(--cal-text-secondary);
+}
+
+.test-result-issues li {
+  margin-bottom: 4px;
+}

@@ -202,7 +202,7 @@ const PartnerRecruitingDashboard = lazyRetry(() => import('./pages/PartnerRecrui
 const PartnerRecruitDetail = lazyRetry(() => import('./pages/PartnerRecruiting/PartnerRecruitDetail'));
 const AgentGym = lazyRetry(() => import('./pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('./pages/AgentGovernanceSettings'));
-const SmartSchedulerSettings = lazyRetry(() => import('./pages/SmartSchedulerSettings'));
+// SmartSchedulerSettings merged into CalendarSettings — route redirects to /calendar-settings
 const EmailIntegrationSettings = lazyRetry(() => import('./pages/EmailIntegrationSettings'));
 const UserProfileSettings = lazyRetry(() => import('./pages/UserProfileSettings'));
 const DocumentUploadSettings = lazyRetry(() => import('./pages/DocumentUploadSettings'));
@@ -2651,27 +2651,10 @@ function App() {
               </PrivateRoute>
             }
           />
+          {/* Smart Scheduler merged into Calendar Settings */}
           <Route
             path="/settings/smart-scheduler"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><SmartSchedulerSettings /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
+            element={<Navigate to="/calendar-settings" replace />}
           />
           <Route
             path="/settings/email-integration"

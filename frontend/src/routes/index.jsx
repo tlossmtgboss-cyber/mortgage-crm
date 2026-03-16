@@ -219,6 +219,7 @@ const SmartDocs = lazyRetry(() => import('../pages/SmartDocs'));
 const SmartDocsClientDetail = lazyRetry(() => import('../pages/SmartDocsClientDetail'));
 const SmartDocsDashboard = lazyRetry(() => import('../pages/SmartDocsDashboard'));
 const SmartDocsCadence = lazyRetry(() => import('../pages/SmartDocsCadence'));
+const AppCompletionScoring = lazyRetry(() => import('../pages/AppCompletionScoring'));
 const AIDailyBlog = lazyRetry(() => import('../pages/AIDailyBlog'));
 const AvatarStudio = lazyRetry(() => import('../pages/AvatarStudio'));
 const PublicBooking = lazyRetry(() => import('../pages/PublicBooking'));
@@ -271,7 +272,7 @@ const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 
 // Settings pages
-const SmartSchedulerSettings = lazyRetry(() => import('../pages/SmartSchedulerSettings'));
+// SmartSchedulerSettings merged into CalendarSettings — route redirects to /calendar-settings
 const EmailIntegrationSettings = lazyRetry(() => import('../pages/EmailIntegrationSettings'));
 const UserProfileSettings = lazyRetry(() => import('../pages/UserProfileSettings'));
 const DocumentUploadSettings = lazyRetry(() => import('../pages/DocumentUploadSettings'));
@@ -602,7 +603,7 @@ export function getRoutes(layoutProps) {
 
     // Settings
     <Route key="/settings" path="/settings" element={withMainLayout(Settings)} />,
-    <Route key="/settings/smart-scheduler" path="/settings/smart-scheduler" element={withMainLayout(SmartSchedulerSettings)} />,
+    <Route key="/settings/smart-scheduler" path="/settings/smart-scheduler" element={<Navigate to="/calendar-settings" replace />} />,
     <Route key="/settings/email-integration" path="/settings/email-integration" element={withMainLayout(EmailIntegrationSettings)} />,
     <Route key="/settings/user-profile" path="/settings/user-profile" element={withMainLayout(UserProfileSettings)} />,
     <Route key="/settings/document-upload" path="/settings/document-upload" element={withMainLayout(DocumentUploadSettings)} />,
@@ -651,6 +652,8 @@ export function getRoutes(layoutProps) {
     <Route key="/smart-docs/dashboard" path="/smart-docs/dashboard" element={withMainLayout(SmartDocsDashboard)} />,
     <Route key="/smart-docs/client/:loanId" path="/smart-docs/client/:loanId" element={withMainLayout(SmartDocsClientDetail)} />,
     <Route key="/smart-docs/cadence" path="/smart-docs/cadence" element={withMainLayout(SmartDocsCadence)} />,
+    <Route key="/smart-docs/app-scoring" path="/smart-docs/app-scoring" element={withMainLayout(AppCompletionScoring)} />,
+    <Route key="/smart-docs/app-scoring/:loanId" path="/smart-docs/app-scoring/:loanId" element={withMainLayout(AppCompletionScoring)} />,
 
     // E-Signature
     <Route key="/esign/envelope/:envelopeId" path="/esign/envelope/:envelopeId" element={withMainLayout(FieldPlacementBuilder)} />,

@@ -8,7 +8,6 @@ import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
 import EmailSignatureTab from '../components/EmailSignatureTab';
-import SmartSchedulerSettings from './SmartSchedulerSettings';
 import VideoMeetings from '../components/VideoMeetings';
 import AIFeedbackLog from '../components/AIFeedbackLog';
 import ITHelpdeskAdmin from '../components/ITHelpdeskAdmin';
@@ -2783,7 +2782,7 @@ const API_BASE_URL = isProduction
                   </button>
                   {expandedSections.production && (
                     <div className="sidebar-children">
-                      <button className={`sidebar-btn child ${activeSection === 'smart-scheduler' ? 'active' : ''}`} onClick={() => setActiveSection('smart-scheduler')}><span>Smart Scheduler</span></button>
+                      <button className={`sidebar-btn child`} onClick={() => navigate('/calendar-settings')}><span>Smart Calendar</span><i className="fas fa-external-link-alt" style={{ fontSize: '0.7em', marginLeft: 6, opacity: 0.5 }}></i></button>
                       <button className={`sidebar-btn child ${activeSection === 'video-meetings' ? 'active' : ''}`} onClick={() => setActiveSection('video-meetings')}><span>Video Meetings</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'dialer-settings' ? 'active' : ''}`} onClick={() => setActiveSection('dialer-settings')}><span>Power Dialer</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'voice-os' ? 'active' : ''}`} onClick={() => navigate('/voice-os-dashboard')}><span>Voice OS</span></button>
@@ -5631,10 +5630,7 @@ const API_BASE_URL = isProduction
             </div>
           )}
 
-          {/* Smart Scheduler Settings */}
-          {activeSection === 'smart-scheduler' && (
-            <SmartSchedulerSettings />
-          )}
+          {/* Smart Scheduler — merged into Calendar Settings (sidebar navigates to /calendar-settings) */}
 
           {/* Video Meetings */}
           {activeSection === 'video-meetings' && (

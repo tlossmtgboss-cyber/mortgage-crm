@@ -13,9 +13,19 @@ const DEFAULT_COLORS = ['#218D8D', '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '
 
 const ASSIGNMENT_STRATEGIES = [
   {
+    value: 'direct', label: 'Direct', tagline: 'Book directly with you',
+    description: 'Appointments go straight to the LO — no routing or team distribution. Best for solo loan officers.',
+    icon: 'fa-user',
+  },
+  {
     value: 'round_robin', label: 'Round Robin', tagline: 'Distribute evenly',
     description: 'Appointments rotate through team members in order, ensuring everyone gets an equal share regardless of schedule density.',
     icon: 'fa-sync-alt',
+  },
+  {
+    value: 'first_available', label: 'First Available', tagline: 'Fastest booking',
+    description: 'Appointments go to whoever has the earliest open slot, minimizing wait time for borrowers.',
+    icon: 'fa-bolt',
   },
   {
     value: 'load_balanced', label: 'Load Balanced', tagline: 'Assign to least busy',

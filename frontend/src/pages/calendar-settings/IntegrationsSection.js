@@ -8,6 +8,12 @@ import React, { useState } from 'react';
 import { API_BASE_URL } from '../../services/api';
 import { toast } from '../../utils/toast';
 
+const MEETING_MODES = [
+  { value: 'video', label: 'Video', icon: 'fa-video', description: 'Default to video conferencing' },
+  { value: 'phone', label: 'Phone', icon: 'fa-phone', description: 'Default to phone calls' },
+  { value: 'in_person', label: 'In Person', icon: 'fa-building', description: 'Default to in-person meetings' },
+];
+
 export default function IntegrationsSection({
   integrations,
   setIntegrations,
@@ -17,6 +23,8 @@ export default function IntegrationsSection({
   setSyncErrors,
   webhookSettings,
   setWebhookSettings,
+  meetingDefaults,
+  setMeetingDefaults,
   markChanged,
 }) {
   const [showSyncErrors, setShowSyncErrors] = useState(false);
@@ -245,9 +253,47 @@ export default function IntegrationsSection({
 
   const connectedServices = ['google', 'outlook', 'zoom', 'google_meet', 'ical'].filter(s => integrations[s]?.connected);
 
+  // Meeting defaults (from merged Smart Scheduler)
+  const defaults = meetingDefaults || { default_meeting_mode: 'video', auto_create_meeting_link: true };
+
   return (
     <section className="cal-settings-section" role="tabpanel" id="panel-integrations" aria-labelledby="calnav-integrations">
-      <h2>Calendar Integrations</h2>
+      {/* Meeting Defaults — merged from Smart Scheduler */}
+      <div className="intg-meeting-defaults">
+        <h3><i className="fas fa-sliders-h"></i> Meeting Defaults</h3>
+        <p className="section-description">Default meeting mode for new appointments.</p>
+        <div className="meeting-mode-toggle" role="radiogroup" aria-label="Default meeting mode">
+          {MEETING_MODES.map(mode => (
+            <button
+              key={mode.value}
+              type="button"
+              role="radio"
+              aria-checked={defaults.default_meeting_mode === mode.value}
+              className={`meeting-mode-btn ${defaults.default_meeting_mode === mode.value ? 'active' : ''}`}
+              onClick={() => {
+                setMeetingDefaults?.(prev => ({ ...prev, default_meeting_mode: mode.value }));
+                markChanged();
+              }}
+            >
+              <i className={`fas ${mode.icon}`}></i>
+              <span>{mode.label}</span>
+            </button>
+          ))}
+        </div>
+        <label className="intg-toggle-row" style={{ marginTop: 12 }}>
+          <span>Auto-create meeting links when booking</span>
+          <input
+            type="checkbox"
+            checked={defaults.auto_create_meeting_link}
+            onChange={(e) => {
+              setMeetingDefaults?.(prev => ({ ...prev, auto_create_meeting_link: e.target.checked }));
+              markChanged();
+            }}
+          />
+        </label>
+      </div>
+
+      <h2 style={{ marginTop: 24 }}>Calendar Integrations</h2>
       <p className="section-description">Connect external calendars and tools to sync events and streamline scheduling.</p>
 
       {/* Sync Status Dashboard */}

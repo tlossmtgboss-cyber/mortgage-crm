@@ -8,9 +8,9 @@
  * State is centralized via useReducer (settingsReducer).
  */
 
-import { useReducer, useEffect, useCallback, useRef } from 'react';
+import { useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { calendarSettingsAPI } from '../services/api';
+import { calendarSettingsAPI, API_BASE_URL } from '../services/api';
 import { toast } from '../utils/toast';
 import '../styles/calendar-settings.css';
 
@@ -51,7 +51,7 @@ const NAV_SECTIONS = [
     group: 'Communication',
     items: [
       { id: 'notifications', label: 'Notifications', icon: 'fa-bell', description: 'Email and SMS reminder settings, quiet hours, and digests' },
-      { id: 'integrations', label: 'Integrations', icon: 'fa-plug', description: 'Connect external calendars and third-party tools' },
+      { id: 'integrations', label: 'Integrations', icon: 'fa-plug', description: 'Meeting defaults, external calendars, and third-party tools' },
     ],
   },
   {
@@ -152,6 +152,11 @@ const DEFAULT_INTEGRATIONS = {
   google_meet: { connected: false }, ical: { connected: false, feed_url: '', subscriber_count: 0 },
 };
 
+const DEFAULT_MEETING_DEFAULTS = {
+  default_meeting_mode: 'video',
+  auto_create_meeting_link: true,
+};
+
 const DEFAULT_INTEGRATION_SETTINGS = {
   google: { two_way_sync: true, conflict_resolution: 'crm_wins', sync_frequency: '15' },
   outlook: { two_way_sync: true, conflict_resolution: 'crm_wins', sync_frequency: '15' },
@@ -244,6 +249,7 @@ const initialState = {
       integrationSettings: DEFAULT_INTEGRATION_SETTINGS,
       syncErrors: [],
       webhookSettings: DEFAULT_WEBHOOK_SETTINGS,
+      meetingDefaults: DEFAULT_MEETING_DEFAULTS,
       loading: false,
       error: null,
       dirty: false,
@@ -430,6 +436,8 @@ function CalendarSettings() {
   const navigate = useNavigate();
   const contentRef = useRef(null);
   const [state, dispatch] = useReducer(settingsReducer, initialState);
+  const [testResult, setTestResult] = useState(null);
+  const [isTesting, setIsTesting] = useState(false);
 
   // Destructure top-level state for convenience
   const { activeSection, loading, saving, hasChanges, saveStatus, sections } = state;
@@ -448,6 +456,7 @@ function CalendarSettings() {
   const integrationSettings = sections.integrations.integrationSettings;
   const syncErrors = sections.integrations.syncErrors;
   const webhookSettings = sections.integrations.webhookSettings;
+  const meetingDefaults = sections.integrations.meetingDefaults;
   const team = sections.team.data;
   const isManager = sections.team.isManager;
   const locations = sections['locations-labels'].locations;
@@ -516,6 +525,10 @@ function CalendarSettings() {
 
   const setWebhookSettings = useCallback((valueOrFn) => {
     dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'webhookSettings', value: valueOrFn });
+  }, []);
+
+  const setMeetingDefaults = useCallback((valueOrFn) => {
+    dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'meetingDefaults', value: valueOrFn });
   }, []);
 
   const setTeam = useCallback((valueOrFn) => {
@@ -645,6 +658,9 @@ function CalendarSettings() {
                 integrationSettings: res.data.integration_settings
                   ? { ...prev.integrationSettings, ...res.data.integration_settings }
                   : prev.integrationSettings,
+                meetingDefaults: res.data.meeting_defaults
+                  ? { ...prev.meetingDefaults, ...res.data.meeting_defaults }
+                  : prev.meetingDefaults,
               },
             });
           } else {
@@ -792,6 +808,34 @@ function CalendarSettings() {
       value: (prev) => ({ ...prev, [key]: !prev[key] }),
     });
   }, []);
+
+  const handleTestConfig = async () => {
+    setTestResult(null);
+    setIsTesting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/smart-scheduler-settings/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ test_duration: availability.buffer_minutes || 30 }),
+      });
+      const data = await response.json();
+      if (response.ok && data.data) {
+        setTestResult(data.data);
+        if (data.data.success) {
+          toast.success('Configuration test passed!');
+        } else {
+          toast.warning('Configuration test found issues');
+        }
+      } else {
+        toast.error('Test failed — check your settings');
+      }
+    } catch (err) {
+      toast.error('Configuration test failed');
+    } finally {
+      setIsTesting(false);
+    }
+  };
 
   const handleSave = async () => {
     switch (activeSection) {
@@ -955,6 +999,8 @@ function CalendarSettings() {
             setSyncErrors={setSyncErrors}
             webhookSettings={webhookSettings}
             setWebhookSettings={setWebhookSettings}
+            meetingDefaults={meetingDefaults}
+            setMeetingDefaults={setMeetingDefaults}
             markChanged={markChanged}
           />
         );
@@ -1054,6 +1100,19 @@ function CalendarSettings() {
 
             <button
               className="btn-outline"
+              onClick={handleTestConfig}
+              disabled={isTesting || saving}
+              title="Test your scheduler configuration"
+            >
+              {isTesting ? (
+                <><i className="fas fa-spinner fa-spin"></i><span>Testing...</span></>
+              ) : (
+                <><i className="fas fa-vial"></i><span>Test Config</span></>
+              )}
+            </button>
+
+            <button
+              className="btn-outline"
               onClick={() => navigate('/calendar/setup')}
               title="Run Setup Wizard"
             >
@@ -1086,6 +1145,29 @@ function CalendarSettings() {
           </div>
         </div>
       </header>
+
+      {/* Test Result Banner */}
+      {testResult && (
+        <div className={`cal-settings-test-result ${testResult.success ? 'success' : 'warning'}`} role="status">
+          <div className="test-result-inner">
+            <div className="test-result-header">
+              <i className={`fas ${testResult.success ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
+              <strong>{testResult.success ? 'Test Passed' : 'Issues Found'}</strong>
+              <button className="btn-icon-sm" onClick={() => setTestResult(null)} aria-label="Dismiss">
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            {testResult.loan_officers_available !== undefined && (
+              <p>Loan officers available: {testResult.loan_officers_available}</p>
+            )}
+            {testResult.issues?.length > 0 && (
+              <ul className="test-result-issues">
+                {testResult.issues.map((issue, idx) => <li key={idx}>{issue}</li>)}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Mobile Tabs (visible < 768px) */}
       <div className="cal-settings-mobile-tabs" role="tablist" aria-label="Calendar settings sections">
