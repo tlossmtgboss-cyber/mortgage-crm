@@ -1,0 +1,68 @@
+<!-- No-Show Follow-up Email Template -->
+<!-- Variables: attendee_name, appointment_title, appointment_date, appointment_time,
+     team_member_with, reschedule_button, lo_contact_section -->
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
+    Hi {{attendee_name}},
+</p>
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 24px;">
+    We missed you at your appointment{{team_member_with}} today. We hope everything is okay!
+</p>
+
+<!-- Missed Appointment Card -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="detail-card" style="background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; margin: 0 0 24px;">
+    <tr>
+        <td style="padding: 24px;">
+            <p style="margin: 0 0 16px; color: #9a3412; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Missed Appointment
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                    <td style="padding: 0 0 10px;">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Title</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{appointment_title}}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 10px;">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Date</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{appointment_date}}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Time</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{appointment_time}}</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 8px;">
+    Life happens, and we completely understand. We would love to find a time that works better for you.
+</p>
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 24px;">
+    Rescheduling only takes a moment:
+</p>
+
+<!-- Reschedule CTA Button -->
+{{reschedule_button}}
+
+<!-- LO Contact Card -->
+{{lo_contact_section}}
+
+<!-- Opt-out -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 24px 0 0; border-top: 1px solid #e5e7eb;">
+    <tr>
+        <td style="padding: 20px 0 0; text-align: center;">
+            <p style="margin: 0; font-size: 13px; color: #9ca3af; line-height: 1.6;">
+                If you are no longer interested or have any questions, simply reply to
+                this email and we will be happy to help.
+            </p>
+        </td>
+    </tr>
+</table>

@@ -1,0 +1,57 @@
+<!-- Appointment Cancelled Email Template -->
+<!-- Variables: attendee_name, appointment_title, appointment_date, appointment_time,
+     team_member_with, reason_section, reschedule_button, lo_contact_section -->
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
+    Hi {{attendee_name}},
+</p>
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 24px;">
+    Your appointment{{team_member_with}} has been cancelled.
+</p>
+
+<!-- Cancelled Appointment Card -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="detail-card" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; margin: 0 0 24px;">
+    <tr>
+        <td style="padding: 24px;">
+            <p style="margin: 0 0 16px; color: #991b1b; font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Cancelled Appointment
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                    <td style="padding: 0 0 10px;">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Title</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{appointment_title}}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 10px;">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Date</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{appointment_date}}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 {{reason_bottom_pad}};">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Time</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{appointment_time}}</p>
+                    </td>
+                </tr>
+                {{reason_section}}
+            </table>
+        </td>
+    </tr>
+</table>
+
+<!-- Reschedule CTA -->
+{{reschedule_button}}
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
+    If you would like to reschedule, please click the button above or contact us directly.
+</p>
+
+<!-- LO Contact Card -->
+{{lo_contact_section}}
+
+<p class="body-text" style="font-size: 14px; color: #6b7280; line-height: 1.6; margin: 24px 0 0;">
+    We apologize for any inconvenience and look forward to connecting with you soon.
+</p>

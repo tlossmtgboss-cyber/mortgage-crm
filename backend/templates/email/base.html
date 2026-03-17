@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+    <title>{{email_title}}</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:AllowPNG/>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        /* Reset */
+        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+
+        /* Base */
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Responsive */
+        @media only screen and (max-width: 620px) {
+            .container { width: 100% !important; max-width: 100% !important; }
+            .content-padding { padding: 24px 16px !important; }
+            .header-padding { padding: 24px 16px !important; }
+            .detail-card { padding: 16px !important; }
+            .btn-primary { padding: 14px 24px !important; font-size: 15px !important; }
+            .btn-secondary { padding: 10px 20px !important; font-size: 14px !important; }
+            .heading { font-size: 22px !important; }
+            .body-text { font-size: 15px !important; }
+            .stack-column { display: block !important; width: 100% !important; }
+        }
+
+        /* Dark mode */
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #1a1a2e !important; }
+            .email-body { background-color: #16213e !important; }
+            .body-text, .detail-label, .detail-value { color: #e0e0e0 !important; }
+            .detail-card { background-color: #1a1a2e !important; border-color: #2a2a4a !important; }
+            .footer-text { color: #8888aa !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9;">
+    <!-- Preheader (hidden preview text) -->
+    <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">
+        {{preheader_text}}
+    </div>
+
+    <!-- Outer wrapper table for full-width background -->
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color: #f4f6f9;">
+        <tr>
+            <td align="center" style="padding: 32px 16px;">
+                <!-- Container -->
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);">
+
+                    <!-- Header -->
+                    <tr>
+                        <td class="header-padding" style="background: {{header_gradient}}; padding: 32px 40px; text-align: center;">
+                            {{header_icon}}
+                            <h1 class="heading" style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; line-height: 1.3;">
+                                {{heading}}
+                            </h1>
+                            {{header_subtitle}}
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td class="content-padding email-body" style="padding: 32px 40px; background-color: #ffffff;">
+                            {{body_content}}
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 24px 40px; background-color: #fafbfc; border-top: 1px solid #eef0f3; text-align: center;">
+                            <p class="footer-text" style="margin: 0 0 8px; color: #9ca3af; font-size: 12px; line-height: 1.5;">
+                                {{footer_text}}
+                            </p>
+                            <p class="footer-text" style="margin: 0; color: #c0c5ce; font-size: 11px; line-height: 1.5;">
+                                {{org_name}} {{org_address}}
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

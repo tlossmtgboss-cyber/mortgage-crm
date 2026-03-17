@@ -1,0 +1,115 @@
+<!-- Appointment Rescheduled Email Template -->
+<!-- Variables: attendee_name, appointment_date, appointment_time, duration,
+     meeting_mode, team_member_section, old_date, old_time,
+     video_button, calendar_notice, reschedule_section -->
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
+    Hi {{attendee_name}},
+</p>
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 24px;">
+    Your appointment has been rescheduled. Please review the updated details below.
+</p>
+
+<!-- Change Comparison Card -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 0 0 24px;">
+    <tr>
+        <td>
+            <!-- Old Time -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="detail-card" style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 12px 12px 0 0; border-bottom: none;">
+                <tr>
+                    <td style="padding: 16px 24px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                            <tr>
+                                <td style="width: 28px; vertical-align: middle;">
+                                    <span style="font-size: 16px; color: #dc2626;">&#10005;</span>
+                                </td>
+                                <td>
+                                    <p style="margin: 0; font-size: 12px; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Previous</p>
+                                    <p style="margin: 2px 0 0; font-size: 15px; color: #991b1b; text-decoration: line-through;">
+                                        {{old_date}} at {{old_time}}
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+            <!-- New Time -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="detail-card" style="background-color: #ecfdf5; border: 2px solid #86efac; border-radius: 0 0 12px 12px;">
+                <tr>
+                    <td style="padding: 16px 24px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                            <tr>
+                                <td style="width: 28px; vertical-align: middle;">
+                                    <span style="font-size: 16px; color: #16a34a;">&#10003;</span>
+                                </td>
+                                <td>
+                                    <p style="margin: 0; font-size: 12px; color: #065f46; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">New Time</p>
+                                    <p style="margin: 2px 0 0; font-size: 16px; color: #065f46; font-weight: 700;">
+                                        {{appointment_date}} at {{appointment_time}}
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<!-- Full Appointment Details Card -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="detail-card" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin: 0 0 24px;">
+    <tr>
+        <td style="padding: 24px;">
+            <p style="margin: 0 0 16px; color: #374151; font-weight: 700; font-size: 14px;">Updated Details</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                    <td style="padding: 0 0 10px;">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Date</p>
+                        <p class="detail-value" style="margin: 0; font-size: 16px; color: #111827; font-weight: 600;">{{appointment_date}}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 10px;">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Time</p>
+                        <p class="detail-value" style="margin: 0; font-size: 16px; color: #111827; font-weight: 600;">{{appointment_time}}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 10px;">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Duration</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{duration}}</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 {{team_member_bottom_pad}};">
+                        <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Meeting Type</p>
+                        <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{meeting_mode}}</p>
+                    </td>
+                </tr>
+                {{team_member_section}}
+            </table>
+        </td>
+    </tr>
+</table>
+
+<!-- Video Call Button -->
+{{video_button}}
+
+<!-- Calendar Notice -->
+{{calendar_notice}}
+
+<!-- Confirm / Reschedule Buttons -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 24px 0;">
+    <tr>
+        <td align="center">
+            {{reschedule_section}}
+        </td>
+    </tr>
+</table>
+
+<p class="body-text" style="font-size: 14px; color: #6b7280; line-height: 1.6; margin: 16px 0 0;">
+    If you have any questions about this change, please contact us.
+</p>

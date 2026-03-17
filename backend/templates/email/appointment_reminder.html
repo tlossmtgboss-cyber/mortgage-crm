@@ -1,0 +1,102 @@
+<!-- Appointment Reminder Email Template -->
+<!-- Variables: attendee_name, reminder_message, appointment_date, appointment_time,
+     duration, meeting_mode, team_member_section, video_button,
+     reschedule_section, prep_checklist -->
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
+    Hi {{attendee_name}},
+</p>
+
+<p class="body-text" style="font-size: 16px; color: #374151; line-height: 1.6; margin: 0 0 24px;">
+    {{reminder_message}}
+</p>
+
+<!-- Appointment Details Card -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="detail-card" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin: 0 0 24px;">
+    <tr>
+        <td style="padding: 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                    <td style="padding: 0 0 12px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top; padding-top: 2px;">
+                                    <img src="https://app.perenniaai.com/email-icons/calendar.png" alt="" width="20" height="20" style="display: block;" onerror="this.style.display='none'">
+                                </td>
+                                <td>
+                                    <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Date</p>
+                                    <p class="detail-value" style="margin: 0; font-size: 16px; color: #111827; font-weight: 600;">{{appointment_date}}</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 12px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top; padding-top: 2px;">
+                                    <img src="https://app.perenniaai.com/email-icons/clock.png" alt="" width="20" height="20" style="display: block;" onerror="this.style.display='none'">
+                                </td>
+                                <td>
+                                    <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Time</p>
+                                    <p class="detail-value" style="margin: 0; font-size: 16px; color: #111827; font-weight: 600;">{{appointment_time}}</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 12px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top; padding-top: 2px;">
+                                    <img src="https://app.perenniaai.com/email-icons/hourglass.png" alt="" width="20" height="20" style="display: block;" onerror="this.style.display='none'">
+                                </td>
+                                <td>
+                                    <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Duration</p>
+                                    <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{duration}}</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding: 0 0 {{team_member_bottom_pad}};">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                            <tr>
+                                <td style="width: 32px; vertical-align: top; padding-top: 2px;">
+                                    <img src="https://app.perenniaai.com/email-icons/video.png" alt="" width="20" height="20" style="display: block;" onerror="this.style.display='none'">
+                                </td>
+                                <td>
+                                    <p class="detail-label" style="margin: 0 0 2px; font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Meeting Type</p>
+                                    <p class="detail-value" style="margin: 0; font-size: 15px; color: #111827;">{{meeting_mode}}</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                {{team_member_section}}
+            </table>
+        </td>
+    </tr>
+</table>
+
+<!-- Quick Confirm / Video Call Button -->
+{{video_button}}
+
+<!-- Preparation Checklist -->
+{{prep_checklist}}
+
+<!-- Reschedule/Cancel Link -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 24px 0;">
+    <tr>
+        <td align="center">
+            {{reschedule_section}}
+        </td>
+    </tr>
+</table>
+
+<p class="body-text" style="font-size: 14px; color: #6b7280; line-height: 1.6; margin: 16px 0 0;">
+    If you need to reschedule or cancel, please contact us as soon as possible.
+</p>

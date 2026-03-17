@@ -1367,6 +1367,96 @@ except Exception as e:
     logger.warning(f"Pipeline appointment trigger routes skipped: {e}")
 
 # ============================================================================
+# SCHEDULER ENHANCEMENT ROUTES (March 2026 sprint)
+# ============================================================================
+
+# Audit trail routes (scheduler compliance logging)
+try:
+    from routes.audit_routes import router as audit_router, set_dependencies as audit_set_deps
+    audit_set_deps(get_db, get_current_user, {})
+    app.include_router(audit_router, prefix="/api/v1/scheduler", tags=["Scheduler Audit"])
+    logger.info("Scheduler audit routes loaded")
+except Exception as e:
+    logger.warning(f"Scheduler audit routes skipped: {e}")
+
+# Scheduling rules engine routes
+try:
+    from routes.scheduler_rules_routes import router as rules_router, set_dependencies as rules_set_deps
+    rules_set_deps(get_db, get_current_user, {})
+    app.include_router(rules_router, prefix="/api/v1/scheduler", tags=["Scheduling Rules"])
+    logger.info("Scheduling rules routes loaded")
+except Exception as e:
+    logger.warning(f"Scheduling rules routes skipped: {e}")
+
+# Slot hold routes (TTL-based reservation during AI conversations)
+try:
+    from routes.slot_hold_routes import router as slot_hold_router, set_dependencies as hold_set_deps
+    hold_set_deps(get_db, get_current_user, {})
+    app.include_router(slot_hold_router, prefix="/api/v1/scheduler", tags=["Slot Holds"])
+    logger.info("Slot hold routes loaded")
+except Exception as e:
+    logger.warning(f"Slot hold routes skipped: {e}")
+
+# Scheduling optimizer routes (AI-powered slot ranking)
+try:
+    from routes.scheduling_optimizer_routes import router as optimizer_router, set_dependencies as opt_set_deps
+    opt_set_deps(get_db, get_current_user)
+    app.include_router(optimizer_router, prefix="/api/v1/scheduler", tags=["Scheduling Optimizer"])
+    logger.info("Scheduling optimizer routes loaded")
+except Exception as e:
+    logger.warning(f"Scheduling optimizer routes skipped: {e}")
+
+# AI outbound calling routes
+try:
+    from routes.ai_outbound_routes import router as ai_outbound_router
+    app.include_router(ai_outbound_router, tags=["AI Outbound Calling"])
+    logger.info("AI outbound calling routes loaded")
+except Exception as e:
+    logger.warning(f"AI outbound calling routes skipped: {e}")
+
+# SMS scheduler webhook routes
+try:
+    from routes.sms_scheduler_webhook import router as sms_sched_router, set_dependencies as sms_set_deps
+    sms_set_deps(get_db, {})
+    app.include_router(sms_sched_router, prefix="/api/v1/scheduler", tags=["Scheduler SMS"])
+    logger.info("SMS scheduler webhook routes loaded")
+except Exception as e:
+    logger.warning(f"SMS scheduler webhook routes skipped: {e}")
+
+# No-show recovery opt-out routes
+try:
+    from routes.recovery_opt_out_routes import router as recovery_router, set_dependencies as recovery_set_deps
+    recovery_set_deps(get_current_user_func=get_current_user)
+    app.include_router(recovery_router, prefix="/api/v1/scheduler", tags=["No-Show Recovery"])
+    logger.info("Recovery opt-out routes loaded")
+except Exception as e:
+    logger.warning(f"Recovery opt-out routes skipped: {e}")
+
+# Scheduler analytics routes (conversion funnel, source performance)
+try:
+    from routes.scheduler_analytics_routes import router as sched_analytics_router
+    app.include_router(sched_analytics_router, tags=["Scheduler Analytics"])
+    logger.info("Scheduler analytics routes loaded")
+except Exception as e:
+    logger.warning(f"Scheduler analytics routes skipped: {e}")
+
+# Capacity dashboard routes (team scheduling load)
+try:
+    from routes.capacity_dashboard_routes import register_capacity_dashboard_routes
+    register_capacity_dashboard_routes(app, get_current_user, {})
+    logger.info("Capacity dashboard routes loaded")
+except Exception as e:
+    logger.warning(f"Capacity dashboard routes skipped: {e}")
+
+# API V2 routes (cursor pagination, RFC 7807 errors)
+try:
+    from routes.api_v2 import v2_router
+    app.include_router(v2_router, tags=["API V2"])
+    logger.info("API V2 routes loaded")
+except Exception as e:
+    logger.warning(f"API V2 routes skipped: {e}")
+
+# ============================================================================
 # DB MIGRATION ROUTES
 # DISABLED: Schema mutations must not be exposed via HTTP (security audit March 2026)
 # ============================================================================
@@ -1502,6 +1592,22 @@ async def startup_event():
         logger.error(f"❌ Scheduler failed to start: {e}")
         import traceback
         traceback.print_exc()
+
+    # Register scheduler error handler (SchedulerError hierarchy → JSON responses)
+    try:
+        from middleware.scheduler_error_handler import register_scheduler_error_handlers
+        register_scheduler_error_handlers(app)
+        logger.info("✅ Scheduler exception handler registered")
+    except Exception as e:
+        logger.warning(f"⚠️ Scheduler error handler skipped: {e}")
+
+    # Register event bus subscribers (appointment lifecycle events)
+    try:
+        from services.event_subscribers import register_all_subscribers
+        register_all_subscribers()
+        logger.info("✅ Event bus subscribers registered")
+    except Exception as e:
+        logger.warning(f"⚠️ Event bus subscribers skipped: {e}")
 
     # Register SOC 2 compliance scheduled jobs
     try:

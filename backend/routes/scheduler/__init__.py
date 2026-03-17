@@ -125,6 +125,13 @@ from .cancellation_policy import router as cancellation_policy_router
 from .analytics import router as analytics_router
 from .today_summary import router as today_summary_router
 from .data_compliance import router as data_compliance_router
+from .bulk_operations import router as bulk_operations_router
+from .compliance_scheduling import router as compliance_scheduling_router
+from .health import router as health_router
+from .metrics import router as metrics_router
+from .sla import router as sla_router
+from .webhooks import router as webhooks_router
+from .widget_config import router as widget_config_router
 
 # ============================================================================
 # API VERSION INTROSPECTION ENDPOINT
@@ -179,4 +186,11 @@ scheduler_router.include_router(cancellation_policy_router)
 scheduler_router.include_router(analytics_router)
 scheduler_router.include_router(today_summary_router)
 scheduler_router.include_router(data_compliance_router)
+scheduler_router.include_router(bulk_operations_router)
+scheduler_router.include_router(compliance_scheduling_router)
+scheduler_router.include_router(health_router)
+scheduler_router.include_router(metrics_router)
+scheduler_router.include_router(sla_router)
+scheduler_router.include_router(webhooks_router)
+scheduler_router.include_router(widget_config_router)
 scheduler_router.include_router(_api_versions_router)

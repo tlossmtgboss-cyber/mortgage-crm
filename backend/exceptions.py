@@ -257,6 +257,159 @@ class ConflictError(PerenniaError):
         )
 
 
+# =============================================================================
+# Scheduler / Appointment Errors
+# =============================================================================
+
+class SchedulerError(PerenniaError):
+    """Base exception for all scheduler/appointment domain errors."""
+    status_code: int = 500
+
+    def __init__(self, message: str, details: Optional[dict] = None,
+                 code: str = "SCHEDULER_ERROR", status_code: Optional[int] = None):
+        if status_code is not None:
+            self.status_code = status_code
+        super().__init__(message, code=code, details=details)
+
+
+class AppointmentNotFoundError(SchedulerError):
+    status_code = 404
+
+    def __init__(self, appointment_id: Any):
+        super().__init__(
+            f"Appointment with id '{appointment_id}' not found",
+            code="APPOINTMENT_NOT_FOUND",
+        )
+
+
+class AppointmentConflictError(SchedulerError):
+    status_code = 409
+
+    def __init__(self, message: str = "This time slot is no longer available",
+                 conflicts: Optional[list] = None):
+        super().__init__(message, code="APPOINTMENT_CONFLICT",
+                         details={"conflicts": conflicts or []})
+
+
+class SlotUnavailableError(SchedulerError):
+    status_code = 409
+
+    def __init__(self, message: str = "Requested slot is not available"):
+        super().__init__(message, code="SLOT_UNAVAILABLE")
+
+
+class DuplicateBookingError(SchedulerError):
+    status_code = 409
+
+    def __init__(self, attendee_email: str = ""):
+        super().__init__(
+            "A booking already exists for this attendee at the requested time",
+            code="DUPLICATE_BOOKING",
+            details={"attendee_email": attendee_email},
+        )
+
+
+class InvalidAppointmentStateError(SchedulerError):
+    status_code = 422
+
+    def __init__(self, from_status: str, to_status: str,
+                 allowed: Optional[list] = None):
+        super().__init__(
+            f"Cannot transition appointment from '{from_status}' to '{to_status}'",
+            code="INVALID_APPOINTMENT_STATE",
+            details={"from": from_status, "to": to_status,
+                      "allowed": allowed or []},
+        )
+
+
+class InvalidStateTransitionError(PerenniaError):
+    """Raised when an invalid state transition is attempted."""
+
+    def __init__(self, from_status: str, to_status: str,
+                 entity_type: str = "Appointment",
+                 allowed_transitions: Optional[list] = None):
+        self.from_status = from_status
+        self.to_status = to_status
+        self.entity_type = entity_type
+        self.allowed_transitions = allowed_transitions or []
+        super().__init__(
+            f"Cannot transition {entity_type} from '{from_status}' to '{to_status}'",
+            code="INVALID_STATE_TRANSITION",
+            details={"from_status": from_status, "to_status": to_status,
+                      "allowed_transitions": self.allowed_transitions},
+        )
+
+
+class BookingLinkNotFoundError(SchedulerError):
+    status_code = 404
+
+    def __init__(self, slug: str = ""):
+        super().__init__(f"Booking link '{slug}' not found",
+                         code="BOOKING_LINK_NOT_FOUND")
+
+
+class BookingLinkExpiredError(SchedulerError):
+    status_code = 410
+
+    def __init__(self, slug: str = ""):
+        super().__init__(f"Booking link '{slug}' is no longer available",
+                         code="BOOKING_LINK_EXPIRED")
+
+
+class CapacityExceededError(SchedulerError):
+    status_code = 429
+
+    def __init__(self, message: str = "Maximum appointment capacity reached"):
+        super().__init__(message, code="CAPACITY_EXCEEDED")
+
+
+class CalendarSyncError(SchedulerError):
+    status_code = 502
+
+    def __init__(self, message: str = "Calendar sync failed",
+                 provider: Optional[str] = None):
+        super().__init__(message, code="CALENDAR_SYNC_ERROR",
+                         details={"provider": provider})
+
+
+class SchedulerRateLimitError(SchedulerError):
+    status_code = 429
+
+    def __init__(self, retry_after: int = 60):
+        super().__init__("Rate limit exceeded", code="SCHEDULER_RATE_LIMIT",
+                         details={"retry_after": retry_after})
+
+
+class SchedulerValidationError(SchedulerError):
+    status_code = 422
+
+    def __init__(self, message: str = "Validation error",
+                 field: Optional[str] = None):
+        super().__init__(message, code="SCHEDULER_VALIDATION",
+                         details={"field": field})
+
+
+class SchedulerPermissionError(SchedulerError):
+    status_code = 403
+
+    def __init__(self, message: str = "Permission denied"):
+        super().__init__(message, code="SCHEDULER_PERMISSION")
+
+
+class SchedulerConfigNotFoundError(SchedulerError):
+    status_code = 404
+
+    def __init__(self, message: str = "Scheduler configuration not found"):
+        super().__init__(message, code="SCHEDULER_CONFIG_NOT_FOUND")
+
+
+class OptimisticLockError(SchedulerError):
+    status_code = 409
+
+    def __init__(self, message: str = "Resource is being modified by another user"):
+        super().__init__(message, code="OPTIMISTIC_LOCK_CONFLICT")
+
+
 __all__ = [
     # Base
     'PerenniaError',
@@ -275,13 +428,30 @@ __all__ = [
     'SLABreachError',
     # Data integrity
     'InvalidStageError',
+    'InvalidStateTransitionError',
     'DuplicateEntityError',
     # Concurrency
     'ConflictError',
+    'OptimisticLockError',
     # Integrations
     'SalesforceError',
     'TelephonyError',
     # AI
     'AgentToolError',
     'AgentTimeoutError',
+    # Scheduler
+    'SchedulerError',
+    'AppointmentNotFoundError',
+    'AppointmentConflictError',
+    'SlotUnavailableError',
+    'DuplicateBookingError',
+    'InvalidAppointmentStateError',
+    'BookingLinkNotFoundError',
+    'BookingLinkExpiredError',
+    'CapacityExceededError',
+    'CalendarSyncError',
+    'SchedulerRateLimitError',
+    'SchedulerValidationError',
+    'SchedulerPermissionError',
+    'SchedulerConfigNotFoundError',
 ]
