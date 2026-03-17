@@ -272,7 +272,6 @@ const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 
 // Settings pages
-// SmartSchedulerSettings merged into CalendarSettings — route redirects to /calendar-settings
 const EmailIntegrationSettings = lazyRetry(() => import('../pages/EmailIntegrationSettings'));
 const UserProfileSettings = lazyRetry(() => import('../pages/UserProfileSettings'));
 const DocumentUploadSettings = lazyRetry(() => import('../pages/DocumentUploadSettings'));

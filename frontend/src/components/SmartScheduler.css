@@ -32,23 +32,10 @@
   min-height: 340px;
 }
 
-@media (max-width: 700px) {
-  .scheduler-content {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Calendar Section */
 .scheduler-calendar {
   padding: 20px;
   border-right: 1px solid #e5e7eb;
-}
-
-@media (max-width: 700px) {
-  .scheduler-calendar {
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
-  }
 }
 
 .calendar-nav {
@@ -380,4 +367,421 @@
 
 .scheduler-error button:hover {
   background: #1a7070;
+}
+
+/* ==========================================================================
+   Loading Skeleton
+   Matches the calendar + time slot layout so the transition is smooth.
+   ========================================================================== */
+
+.scheduler-loading-skeleton {
+  display: none; /* Shown alongside spinner; skeleton provides visual shape */
+}
+
+.scheduler-loading .scheduler-loading-skeleton {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 20px;
+}
+
+.skeleton-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.skeleton-line {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 60%;
+  margin: 0 auto 8px;
+}
+
+.skeleton-subtitle {
+  height: 14px;
+  width: 80%;
+  margin: 0 auto;
+}
+
+.skeleton-calendar {
+  margin-bottom: 16px;
+}
+
+.skeleton-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.skeleton-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-month {
+  height: 16px;
+  width: 120px;
+}
+
+.skeleton-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.skeleton-weekday {
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.skeleton-day {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-times {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.skeleton-slot {
+  height: 42px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ==========================================================================
+   Mobile Sticky Header
+   Hidden on desktop. Shows selected date + back button on mobile.
+   ========================================================================== */
+
+.scheduler-mobile-sticky-header {
+  display: none;
+}
+
+/* ==========================================================================
+   Keyboard Focus Indicators
+   ========================================================================== */
+
+.calendar-day:focus {
+  outline: 2px solid #218D8D;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.calendar-day:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.calendar-day:focus-visible {
+  outline: 2px solid #218D8D;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.time-slot:focus {
+  outline: 2px solid #218D8D;
+  outline-offset: -2px;
+}
+
+.time-slot:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.time-slot:focus-visible {
+  outline: 2px solid #218D8D;
+  outline-offset: -2px;
+}
+
+.mobile-back-btn:focus-visible {
+  outline: 2px solid #218D8D;
+  outline-offset: -2px;
+}
+
+/* ==========================================================================
+   Mobile-Responsive Styles (max-width: 768px)
+   All additive — desktop layout is untouched.
+   ========================================================================== */
+
+@media (max-width: 768px) {
+
+  /* Stack calendar and time slots vertically */
+  .scheduler-content {
+    grid-template-columns: 1fr;
+  }
+
+  .scheduler-calendar {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 16px;
+  }
+
+  /* Touch-friendly nav buttons: minimum 44x44 tap target */
+  .nav-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+    border-radius: 8px;
+  }
+
+  /* Calendar day cells: enforce minimum 44x44 tap target */
+  .calendar-day {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Larger day number for touch */
+  .calendar-day .day-number {
+    font-size: 15px;
+  }
+
+  .calendar-day.today .day-number {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+
+  /* Slightly bigger slot indicator on mobile */
+  .slot-indicator {
+    width: 5px;
+    height: 5px;
+    bottom: 3px;
+  }
+
+  /* Weekday labels — larger on mobile */
+  .weekday {
+    font-size: 12px;
+    padding: 6px 0;
+  }
+
+  /* Time slots: single column, full-width, larger font (16px prevents iOS zoom) */
+  .time-slots {
+    grid-template-columns: 1fr;
+    max-height: none; /* No scroll constraint on mobile — let page scroll */
+    gap: 10px;
+  }
+
+  .time-slot {
+    font-size: 16px;
+    padding: 14px 16px;
+    width: 100%;
+    min-height: 48px;
+    -webkit-appearance: none; /* Prevent iOS button styling quirks */
+  }
+
+  .time-slot:active {
+    background: #e0f2f1;
+    transform: scale(0.98);
+  }
+
+  /* Time section padding on mobile */
+  .scheduler-times {
+    padding: 16px;
+  }
+
+  .scheduler-times h4 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* Show sticky header on mobile when date is selected */
+  .scheduler-mobile-sticky-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .mobile-back-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    border-radius: 8px;
+    font-size: 20px;
+    color: #374151;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-back-btn:active {
+    background: #f3f4f6;
+  }
+
+  .mobile-selected-date {
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  /* Scheduler header: tighter on mobile */
+  .scheduler-header {
+    padding: 16px;
+  }
+
+  .scheduler-header h3 {
+    font-size: 17px;
+  }
+
+  .scheduler-header p {
+    font-size: 13px;
+  }
+
+  /* Confirmation bar: wrap on narrow screens */
+  .scheduler-confirmation {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+
+  .confirmation-text {
+    font-size: 14px;
+    text-align: center;
+    width: 100%;
+  }
+
+  /* Select-date prompt: smaller icon on mobile */
+  .calendar-icon {
+    font-size: 36px;
+  }
+
+  .select-date-prompt p {
+    font-size: 14px;
+    max-width: 220px;
+  }
+
+  /* Legend: slightly larger on mobile */
+  .legend-item {
+    font-size: 12px;
+  }
+
+  /* Loading skeleton adapts to mobile single-column layout */
+  .skeleton-times {
+    grid-template-columns: 1fr;
+  }
+
+  .skeleton-slot {
+    height: 48px;
+  }
+
+  /* Error state: larger retry button for touch */
+  .scheduler-error button {
+    padding: 14px 28px;
+    font-size: 16px;
+    min-height: 48px;
+  }
+}
+
+/* Extra-small screens (iPhone SE, small Androids) */
+@media (max-width: 375px) {
+  .scheduler-calendar {
+    padding: 12px;
+  }
+
+  .scheduler-times {
+    padding: 12px;
+  }
+
+  .calendar-day {
+    min-width: 38px;
+    min-height: 38px;
+    font-size: 13px;
+  }
+
+  .calendar-day.today .day-number {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .current-month {
+    font-size: 14px;
+  }
+
+  .scheduler-header h3 {
+    font-size: 16px;
+  }
+}
+
+/* Touch interaction feedback — only on touch-capable devices */
+@media (hover: none) and (pointer: coarse) {
+  .calendar-day.has-slots:active {
+    background: #e0f2f1;
+    transform: scale(0.95);
+    transition: transform 0.1s;
+  }
+
+  .calendar-day.has-slots:hover {
+    /* Disable hover effect on touch devices to avoid sticky hover */
+    background: transparent;
+  }
+
+  .calendar-day.selected:hover,
+  .calendar-day.selected:active {
+    background: #218D8D;
+  }
+
+  .time-slot:hover {
+    /* Disable hover on touch — rely on :active instead */
+    background: #fff;
+    border-color: #e5e7eb;
+    color: #374151;
+  }
+
+  .time-slot.selected:hover {
+    background: #218D8D;
+    border-color: #218D8D;
+    color: #fff;
+  }
+
+  .nav-btn:hover:not(:disabled) {
+    background: #fff;
+    border-color: #e5e7eb;
+  }
+
+  .nav-btn:active:not(:disabled) {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+  }
 }

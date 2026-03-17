@@ -21,6 +21,7 @@ import logging
 
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class SurveyResponseBody(BaseModel):
 # ============================================================================
 
 @router.post("/surveys/send/{appointment_id}", status_code=201)
+@require_feature_tier("scheduler_surveys")
 async def send_survey(
     appointment_id: int,
     request: Request,
@@ -191,6 +193,7 @@ async def submit_survey_response(
 # ============================================================================
 
 @router.get("/surveys/results")
+@require_feature_tier("scheduler_surveys")
 async def get_survey_results(
     request: Request,
     days: int = Query(90, ge=1, le=365, description="Lookback period in days"),
@@ -223,6 +226,7 @@ async def get_survey_results(
 # ============================================================================
 
 @router.get("/surveys/results/{lo_id}")
+@require_feature_tier("scheduler_surveys")
 async def get_lo_survey_results(
     lo_id: int,
     request: Request,

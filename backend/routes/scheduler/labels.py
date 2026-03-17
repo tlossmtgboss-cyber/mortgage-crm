@@ -21,6 +21,7 @@ import logging
 
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ router = APIRouter()
 # ============================================================================
 
 @router.get("/labels")
+@require_feature_tier("scheduler_labels")
 async def list_labels(
     request: Request,
     include_personal: bool = Query(True, description="Include personal labels"),
@@ -80,6 +82,7 @@ async def list_labels(
 # ============================================================================
 
 @router.post("/labels", status_code=201)
+@require_feature_tier("scheduler_labels")
 async def create_label(
     request: Request,
     db: Session = Depends(get_db),
@@ -173,6 +176,7 @@ async def create_label(
 # ============================================================================
 
 @router.put("/labels/reorder")
+@require_feature_tier("scheduler_labels")
 async def reorder_labels(
     request: Request,
     db: Session = Depends(get_db),
@@ -236,6 +240,7 @@ async def reorder_labels(
 # ============================================================================
 
 @router.put("/labels/{label_id}")
+@require_feature_tier("scheduler_labels")
 async def update_label(
     label_id: int,
     request: Request,
@@ -292,6 +297,7 @@ async def update_label(
 # ============================================================================
 
 @router.delete("/labels/{label_id}")
+@require_feature_tier("scheduler_labels")
 async def delete_label(
     label_id: int,
     request: Request,
@@ -327,6 +333,7 @@ async def delete_label(
 # ============================================================================
 
 @router.post("/labels/assign")
+@require_feature_tier("scheduler_labels")
 async def assign_labels(
     request: Request,
     db: Session = Depends(get_db),
@@ -408,6 +415,7 @@ async def assign_labels(
 
 
 @router.delete("/labels/assign")
+@require_feature_tier("scheduler_labels")
 async def unassign_labels(
     request: Request,
     db: Session = Depends(get_db),
@@ -465,6 +473,7 @@ async def unassign_labels(
 # ============================================================================
 
 @router.get("/labels/appointment/{appointment_id}")
+@require_feature_tier("scheduler_labels")
 async def get_appointment_labels(
     appointment_id: int,
     request: Request,

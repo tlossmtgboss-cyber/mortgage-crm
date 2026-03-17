@@ -14,6 +14,7 @@ import html
 import logging
 
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ def _escape_xml(value):
 
 
 @router.get("/sitemap.xml")
+@require_feature_tier("scheduler_sitemap")
 async def get_sitemap(
     request: Request,
     db: Session = Depends(get_db),
@@ -216,6 +218,7 @@ async def get_sitemap(
 
 
 @router.get("/robots.txt")
+@require_feature_tier("scheduler_sitemap")
 async def get_robots(request: Request):
     """
     Standard robots.txt that points crawlers to the sitemap.

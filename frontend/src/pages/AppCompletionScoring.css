@@ -1,0 +1,1176 @@
+/* =============================================================================
+   AppCompletionScoring.css — ACO Scoring Dashboard
+   Light theme, 8px base spacing, teal primary (#218D8D)
+   ============================================================================= */
+
+/* Page layout */
+.aco-page {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+   Header
+   --------------------------------------------------------------------------- */
+.aco-header {
+  margin-bottom: 24px;
+}
+
+.aco-title {
+  margin: 0 0 4px;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.aco-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #6b7280;
+}
+
+/* ---------------------------------------------------------------------------
+   Search
+   --------------------------------------------------------------------------- */
+.aco-search-section {
+  position: relative;
+  margin-bottom: 24px;
+  max-width: 560px;
+}
+
+.aco-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.aco-search-icon {
+  position: absolute;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.aco-search-input {
+  width: 100%;
+  padding: 12px 40px 12px 44px;
+  font-size: 0.95rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1f2937;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.aco-search-input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.12);
+}
+
+.aco-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.aco-search-spinner {
+  position: absolute;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #218D8D;
+  border-radius: 50%;
+  animation: aco-spin 0.6s linear infinite;
+}
+
+@keyframes aco-spin {
+  to { transform: rotate(360deg); }
+}
+
+.aco-search-clear {
+  position: absolute;
+  right: 12px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.aco-search-clear:hover {
+  background: #d1d5db;
+  color: #374151;
+}
+
+/* Dropdown */
+.aco-search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.aco-search-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.aco-search-result:hover {
+  background: #f3f4f6;
+}
+
+.aco-search-result + .aco-search-result {
+  border-top: 1px solid #f3f4f6;
+}
+
+.aco-result-number {
+  font-weight: 600;
+  color: #218D8D;
+  min-width: 100px;
+}
+
+.aco-result-borrower {
+  flex: 1;
+  color: #374151;
+}
+
+.aco-result-stage {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aco-search-empty {
+  padding: 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Empty State
+   --------------------------------------------------------------------------- */
+.aco-empty-state {
+  text-align: center;
+  padding: 64px 24px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.aco-empty-icon {
+  margin-bottom: 16px;
+}
+
+.aco-empty-title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.aco-empty-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #6b7280;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Cards — shared
+   --------------------------------------------------------------------------- */
+.aco-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.aco-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.aco-card-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.aco-empty-card {
+  text-align: center;
+  padding: 40px 24px;
+  color: #6b7280;
+}
+
+.aco-empty-card p {
+  margin: 0 0 16px;
+}
+
+/* ---------------------------------------------------------------------------
+   Loan Banner
+   --------------------------------------------------------------------------- */
+.aco-loan-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0fdfa;
+  border: 1px solid #ccfbf1;
+  border-radius: 10px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+}
+
+.aco-loan-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.aco-loan-banner-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+
+.aco-loan-banner-number {
+  font-weight: 700;
+  color: #218D8D;
+  font-size: 0.95rem;
+}
+
+.aco-loan-banner-sep {
+  color: #d1d5db;
+}
+
+.aco-loan-banner-borrower {
+  color: #374151;
+  font-size: 0.95rem;
+}
+
+.aco-loan-banner-stage {
+  font-size: 0.8rem;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons
+   --------------------------------------------------------------------------- */
+.aco-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  padding: 10px 18px;
+  transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+
+.aco-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.aco-btn-primary {
+  background: #218D8D;
+  color: #ffffff;
+}
+
+.aco-btn-primary:hover:not(:disabled) {
+  background: #1a7070;
+}
+
+.aco-btn-outline {
+  background: #ffffff;
+  color: #218D8D;
+  border: 1px solid #218D8D;
+}
+
+.aco-btn-outline:hover:not(:disabled) {
+  background: #f0fdfa;
+}
+
+.aco-btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+}
+
+.aco-btn-success {
+  background: #10B981;
+  color: #ffffff;
+}
+
+.aco-btn-success:hover:not(:disabled) {
+  background: #059669;
+}
+
+.aco-btn-info {
+  background: #3B82F6;
+  color: #ffffff;
+}
+
+.aco-btn-info:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.aco-btn-warning {
+  background: #F59E0B;
+  color: #ffffff;
+}
+
+.aco-btn-warning:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.aco-btn-ghost {
+  background: transparent;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+}
+
+.aco-btn-ghost:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* ---------------------------------------------------------------------------
+   Score Card
+   --------------------------------------------------------------------------- */
+.aco-score-card-inner {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.aco-score-gauge-col {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.aco-score-gauge {
+  display: flex;
+  justify-content: center;
+}
+
+/* Animated gauge stroke */
+.aco-gauge-progress {
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.aco-gauge-score {
+  font-size: 36px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.aco-gauge-label {
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.aco-complexity-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.aco-complexity-badge[data-level="low"] {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.aco-complexity-badge[data-level="medium"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.aco-complexity-badge[data-level="high"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.aco-complexity-badge[data-level="simple"] {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.aco-complexity-badge[data-level="complex"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.aco-score-details-col {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Breakdown Bars
+   --------------------------------------------------------------------------- */
+.aco-breakdown-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.aco-breakdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aco-breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.aco-breakdown-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.aco-breakdown-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.aco-breakdown-weight {
+  font-weight: 400;
+  color: #9ca3af;
+}
+
+.aco-breakdown-track {
+  height: 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.aco-breakdown-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Next Action */
+.aco-next-action {
+  margin-top: 20px;
+  padding: 12px 16px;
+  background: #f0fdfa;
+  border: 1px solid #ccfbf1;
+  border-radius: 8px;
+}
+
+.aco-next-action-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #218D8D;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.aco-next-action-text {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+/* ---------------------------------------------------------------------------
+   Missing Items
+   --------------------------------------------------------------------------- */
+.aco-items-count {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* Severity Tabs */
+.aco-severity-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.aco-severity-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.aco-severity-tab:hover {
+  color: #374151;
+}
+
+.aco-severity-tab.active {
+  color: #218D8D;
+  border-bottom-color: #218D8D;
+}
+
+.aco-severity-tab.active[data-severity="critical"] {
+  color: #EF4444;
+  border-bottom-color: #EF4444;
+}
+
+.aco-severity-tab.active[data-severity="high"] {
+  color: #F97316;
+  border-bottom-color: #F97316;
+}
+
+.aco-severity-tab.active[data-severity="medium"] {
+  color: #F59E0B;
+  border-bottom-color: #F59E0B;
+}
+
+.aco-severity-tab.active[data-severity="low"] {
+  color: #3B82F6;
+  border-bottom-color: #3B82F6;
+}
+
+.aco-tab-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.aco-severity-tab.active .aco-tab-count {
+  background: rgba(33, 141, 141, 0.1);
+  color: #218D8D;
+}
+
+/* Items list */
+.aco-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aco-items-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+.aco-item-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.aco-item-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Severity left border */
+.aco-item-card[data-severity="critical"] {
+  border-left: 3px solid #EF4444;
+}
+
+.aco-item-card[data-severity="high"] {
+  border-left: 3px solid #F97316;
+}
+
+.aco-item-card[data-severity="medium"] {
+  border-left: 3px solid #F59E0B;
+}
+
+.aco-item-card[data-severity="low"] {
+  border-left: 3px solid #3B82F6;
+}
+
+.aco-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.aco-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.aco-item-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1f2937;
+}
+
+.aco-item-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.aco-item-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.aco-item-severity-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.aco-item-severity-badge[data-severity="critical"] {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.aco-item-severity-badge[data-severity="high"] {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.aco-item-severity-badge[data-severity="medium"] {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.aco-item-severity-badge[data-severity="low"] {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.aco-item-suggestion {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.aco-item-status {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Item actions */
+.aco-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+/* Inline resolve */
+.aco-resolve-inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.aco-resolve-input {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  width: 160px;
+  color: #1f2937;
+  background: #ffffff;
+}
+
+.aco-resolve-input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.1);
+}
+
+/* ---------------------------------------------------------------------------
+   Document Staging
+   --------------------------------------------------------------------------- */
+.aco-docs-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.aco-docs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.aco-doc-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.aco-doc-card:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.aco-doc-card[data-status="received"],
+.aco-doc-card[data-status="active"],
+.aco-doc-card[data-status="complete"] {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+
+.aco-doc-card[data-status="pending"],
+.aco-doc-card[data-status="requested"] {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.aco-doc-card[data-status="rejected"],
+.aco-doc-card[data-status="expired"] {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.aco-doc-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  border-radius: 6px;
+}
+
+.aco-doc-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.aco-doc-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1f2937;
+  text-transform: capitalize;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aco-doc-category {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: capitalize;
+}
+
+.aco-doc-status-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.aco-doc-status-badge[data-status="received"],
+.aco-doc-status-badge[data-status="active"],
+.aco-doc-status-badge[data-status="complete"] {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.aco-doc-status-badge[data-status="pending"],
+.aco-doc-status-badge[data-status="requested"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.aco-doc-status-badge[data-status="rejected"],
+.aco-doc-status-badge[data-status="expired"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.aco-doc-status-badge[data-status="selected"] {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+/* ---------------------------------------------------------------------------
+   Communication Log
+   --------------------------------------------------------------------------- */
+.aco-comms-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.aco-comms-count {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.aco-chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.aco-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.aco-comms-content {
+  margin-top: 16px;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 16px;
+}
+
+.aco-comms-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+/* Timeline */
+.aco-comms-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding-left: 24px;
+}
+
+.aco-comms-timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: #e5e7eb;
+}
+
+.aco-comm-entry {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  position: relative;
+}
+
+.aco-comm-entry + .aco-comm-entry {
+  border-top: 1px solid #f9fafb;
+}
+
+.aco-comm-dot {
+  position: absolute;
+  left: -20px;
+  top: 18px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #d1d5db;
+  border: 2px solid #ffffff;
+  z-index: 1;
+}
+
+.aco-comm-dot[data-channel="email"] {
+  background: #3B82F6;
+}
+
+.aco-comm-dot[data-channel="sms"] {
+  background: #10B981;
+}
+
+.aco-comm-dot[data-channel="call"] {
+  background: #8B5CF6;
+}
+
+.aco-comm-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.aco-comm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.aco-comm-channel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.aco-comm-sender {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.aco-comm-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-left: auto;
+}
+
+.aco-comm-preview {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #4b5563;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.aco-comm-sentiment {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.aco-comm-sentiment[data-sentiment="positive"] {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.aco-comm-sentiment[data-sentiment="neutral"] {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.aco-comm-sentiment[data-sentiment="negative"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.aco-comm-sentiment[data-sentiment="frustrated"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* ---------------------------------------------------------------------------
+   Trend Chart
+   --------------------------------------------------------------------------- */
+.aco-trend-section {
+  margin-bottom: 32px;
+}
+
+.aco-trend-chart {
+  margin-top: 12px;
+}
+
+.aco-trend-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------------
+   Skeleton
+   --------------------------------------------------------------------------- */
+.aco-skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: aco-shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+@keyframes aco-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive
+   --------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .aco-docs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .aco-score-card-inner {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .aco-score-details-col {
+    width: 100%;
+  }
+
+  .aco-item-card {
+    flex-direction: column;
+  }
+
+  .aco-item-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .aco-page {
+    padding: 16px;
+  }
+
+  .aco-docs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aco-severity-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .aco-severity-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .aco-severity-tab {
+    white-space: nowrap;
+  }
+
+  .aco-loan-banner {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .aco-card-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .aco-docs-actions {
+    width: 100%;
+  }
+
+  .aco-docs-actions .aco-btn {
+    flex: 1;
+  }
+
+  .aco-comm-time {
+    margin-left: 0;
+    width: 100%;
+    display: block;
+  }
+
+  .aco-resolve-inline {
+    flex-wrap: wrap;
+  }
+
+  .aco-resolve-input {
+    width: 100%;
+  }
+}

@@ -19,6 +19,7 @@ from routes.scheduler._helpers import (
     _check_appointment_conflict, _audit_log,
 )
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 from services.conflict_resolution_service import (
     detect_conflicts,
     suggest_alternatives,
@@ -123,6 +124,7 @@ class ConflictResolveResponse(BaseModel):
 # ============================================================================
 
 @router.get("/conflicts/check", response_model=ConflictCheckResponse)
+@require_feature_tier("scheduler_conflicts")
 async def check_conflicts(
     request: Request,
     user_id: Optional[int] = Query(None, description="User ID to check (defaults to current user)"),
@@ -197,6 +199,7 @@ async def check_conflicts(
 # ============================================================================
 
 @router.get("/conflicts/list", response_model=ConflictListResponse)
+@require_feature_tier("scheduler_conflicts")
 async def list_conflicts(
     request: Request,
     user_id: Optional[int] = Query(None, description="User ID (defaults to current user)"),
@@ -248,6 +251,7 @@ async def list_conflicts(
 # ============================================================================
 
 @router.post("/conflicts/resolve/{appointment_id}", response_model=ConflictResolveResponse)
+@require_feature_tier("scheduler_conflicts")
 async def resolve_conflict(
     appointment_id: int,
     body: ResolveConflictRequest,

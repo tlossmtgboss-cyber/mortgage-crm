@@ -368,6 +368,50 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     except Exception as e:
         logger.error(f"AI re-engagement intercept error (falling through): {e}")
 
+    # ======================================================================
+    # ACO (Application Completion Orchestrator) Intercept
+    # Check if SMS is a response to an active application review
+    # before standard intelligence processing.
+    # ======================================================================
+    try:
+        from services.smart_docs.app_completion_orchestrator import AppCompletionOrchestrator
+        aco_orchestrator = AppCompletionOrchestrator(db)
+        aco_result = aco_orchestrator.handle_borrower_response(
+            from_number=normalized_from,
+            to_number=normalized_to,
+            message_body=message_body,
+            raw_payload={"message_id": event.message_id},
+        )
+        if aco_result and aco_result.get("status") == "processed":
+            # ACO handled this SMS — store for audit trail, skip intelligence queue
+            try:
+                db.execute(sa_text("""
+                    INSERT INTO sms_messages (
+                        direction, from_number, to_number, body,
+                        provider, provider_message_id, status, created_at
+                    ) VALUES (
+                        'inbound', :from_number, :to_number, :body,
+                        'telnyx', :message_id, 'received', NOW()
+                    )
+                """), {
+                    "from_number": from_number,
+                    "to_number": to_number,
+                    "body": message_body,
+                    "message_id": event.message_id,
+                })
+                db.commit()
+            except Exception as e:
+                logger.error(f"Failed to store ACO-intercepted SMS: {e}")
+            return {
+                "status": "received",
+                "handler": "aco",
+                "review_id": aco_result.get("review_id"),
+            }
+    except ImportError:
+        pass  # ACO module not available
+    except Exception as e:
+        logger.error(f"ACO intercept error (falling through): {e}")
+
     # Store inbound SMS in sms_messages table
     try:
         db.execute(sa_text("""

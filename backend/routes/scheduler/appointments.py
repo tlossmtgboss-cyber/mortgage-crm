@@ -45,6 +45,7 @@ from routes.scheduler._helpers import (
     _ensure_lead_for_booking, _log_appointment_activity, _create_followup_task,
     _audit_log, _validate_url, _mask_email,
 )
+from services.scheduler_audit_logger import scheduler_audit
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -647,6 +648,9 @@ async def create_appointment(
     db.commit()
     db.refresh(appointment)
 
+    # Enterprise audit: structured log for compliance
+    scheduler_audit.log_appointment_created(appointment, user, request=request)
+
     # Send confirmation email if attendee email is provided
     email_sent = False
     email_error = None
@@ -986,6 +990,42 @@ async def update_appointment(
     db.commit()
     db.refresh(appointment)
 
+    # Enterprise audit: structured log for compliance
+    if is_cancellation:
+        scheduler_audit.log_appointment_cancelled(
+            appointment, user, reason=audit_changes.get("cancellation_reason", {}).get("new"),
+            request=request,
+        )
+    elif is_reschedule:
+        old_start_val = audit_changes.get("scheduled_start", {}).get("old")
+        new_start_val = audit_changes.get("scheduled_start", {}).get("new")
+        old_end_val = audit_changes.get("scheduled_end", {}).get("old")
+        new_end_val = audit_changes.get("scheduled_end", {}).get("new")
+        scheduler_audit.log_appointment_rescheduled(
+            appointment,
+            old_time=old_start_val,
+            new_time=new_start_val,
+            user=user,
+            request=request,
+            old_end=old_end_val,
+            new_end=new_end_val,
+            reschedule_count=appointment.reschedule_count,
+            initiated_by="lo",
+        )
+    else:
+        # Check for no-show status transition
+        new_status = audit_changes.get("status", {}).get("new")
+        if new_status == "no_show":
+            user_name = f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+            scheduler_audit.log_no_show(
+                appointment, detected_by=user_name or "manual",
+                user=user, request=request,
+            )
+        # Log the general update for all non-cancel, non-reschedule changes
+        scheduler_audit.log_appointment_updated(
+            appointment, user, changes=audit_changes, request=request,
+        )
+
     # Get updated appointment details for notifications
     attendee_email = appointment.attendee_email
     attendee_name = appointment.attendee_name or 'Valued Client'
@@ -1200,6 +1240,28 @@ async def cancel_appointment(
 
     # H-2: Single atomic commit -- cancellation + audit + activity + task
     db.commit()
+
+    # Enterprise audit: structured log for compliance
+    # Determine if cancellation is within the org's cancellation policy
+    within_policy = None
+    is_late_cancellation = None
+    try:
+        from services.cancellation_policy_service import CancellationPolicyService
+        policy_svc = CancellationPolicyService(db)
+        policy = policy_svc.get_or_create_policy(org_id)
+        if policy and appointment.scheduled_start:
+            min_notice_hours = getattr(policy, "min_notice_hours", 24)
+            notice_given = (appointment.scheduled_start - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds() / 3600
+            is_late_cancellation = notice_given < min_notice_hours
+            within_policy = not is_late_cancellation
+    except Exception as e:
+        logger.debug(f"Could not check cancellation policy for audit: {e}")
+
+    scheduler_audit.log_appointment_cancelled(
+        appointment, user, reason=reason, request=request,
+        within_policy=within_policy,
+        is_late_cancellation=is_late_cancellation,
+    )
 
     logger.info(f"Appointment {appointment_id} cancelled by user {user.id}")
 

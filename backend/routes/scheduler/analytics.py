@@ -19,6 +19,7 @@ from typing import List, Optional
 import logging
 
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
 )
@@ -199,6 +200,7 @@ def _effective_date_range(
 # =============================================================================
 
 @router.get("/analytics/overview", response_model=AnalyticsOverview)
+@require_feature_tier("scheduler_analytics")
 async def analytics_overview(
     request: Request,
     period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
@@ -247,6 +249,7 @@ async def analytics_overview(
 # =============================================================================
 
 @router.get("/analytics/trends", response_model=AnalyticsTrends)
+@require_feature_tier("scheduler_analytics")
 async def analytics_trends(
     request: Request,
     period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
@@ -304,6 +307,7 @@ async def analytics_trends(
 # =============================================================================
 
 @router.get("/analytics/by-type", response_model=AnalyticsByType)
+@require_feature_tier("scheduler_analytics")
 async def analytics_by_type(
     request: Request,
     period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
@@ -359,6 +363,7 @@ async def analytics_by_type(
 # =============================================================================
 
 @router.get("/analytics/by-lo", response_model=AnalyticsByLO)
+@require_feature_tier("scheduler_analytics")
 async def analytics_by_lo(
     request: Request,
     period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),

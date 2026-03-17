@@ -6,7 +6,7 @@
  *   2. Smart Scheduler Settings API -- the authoritative source
  *   3. Fallback: Intl.DateTimeFormat().resolvedOptions().timeZone (browser default)
  *
- * SmartSchedulerSettings.js writes the timezone to the API on save.
+ * CalendarSettings writes the timezone to the API on save.
  * This module caches it in localStorage so other components can read it
  * synchronously without waiting for an API call.
  */
@@ -36,7 +36,7 @@ export function getUserTimezone() {
 
 /**
  * Set the timezone in localStorage cache.
- * Called by SmartSchedulerSettings when the user saves, and by refreshTimezoneCache.
+ * Called by CalendarSettings when the user saves, and by refreshTimezoneCache.
  */
 export function setUserTimezone(timezone) {
   try {

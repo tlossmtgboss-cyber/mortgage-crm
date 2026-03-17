@@ -1949,6 +1949,22 @@ class SalesforceSyncService:
             except Exception as e:
                 logger.warning(f"TRID compliance check failed for loan {loan_id}: {e}")
 
+        # ACO hook: trigger completeness review on key stage transitions from SF
+        ACO_TRIGGER_STAGES = (
+            "APPLICATION", "DISCLOSED", "SUBMITTED",
+            "UW_RECEIVED", "CONDITIONAL_APPROVAL",
+        )
+        if new_stage and new_stage != old_stage and new_stage in ACO_TRIGGER_STAGES:
+            try:
+                from tasks.app_completion_tasks import trigger_application_review_task
+                trigger_application_review_task.delay(
+                    loan_id=loan_id,
+                    triggered_by=f"SF_SYNC_{new_stage}",
+                )
+                logger.info(f"ACO review queued for loan {loan_id} via SF sync stage {new_stage}")
+            except Exception as e:
+                logger.warning(f"ACO review trigger failed for loan {loan_id}: {e}")
+
         return True
 
     def _map_sf_lead_status_to_crm(self, sf_status: str) -> str:

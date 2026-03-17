@@ -46,12 +46,15 @@ URL Prefix Map (all under /api/v1/scheduler):
   /cancellation-policy*         Cancellation policy CRUD + enforcement      (cancellation_policy.py)
   /cancel/{appointment_id}      Cancel with policy enforcement (POST)       (cancellation_policy.py)
   /cancellation-stats           Cancellation analytics                      (cancellation_policy.py)
+  /data-export/{email}          GDPR data export for a borrower (admin)     (data_compliance.py)
+  /data-delete/{email}          GDPR data deletion for a borrower (admin)   (data_compliance.py)
+  /data-retention/report        Data retention status report (admin)         (data_compliance.py)
   /email-service-status         Email service health check                  (email_testing.py)
   /test-email                   Send test email (POST)                      (email_testing.py)
   /sitemap.xml                  XML sitemap for search engines              (sitemap.py)
   /robots.txt                   Robots.txt for crawler control              (sitemap.py)
 
-Active modules (25):
+Active modules (26):
   appointments.py             Appointment CRUD, status transitions, timeline
   availability.py             Availability slots CRUD, authenticated available-slots
   recurring_availability.py   Recurring weekly patterns, date exceptions, org templates
@@ -78,6 +81,7 @@ Active modules (25):
   cancellation_policy.py      Cancellation policy CRUD, enforcement, and analytics
   analytics.py                Calendar analytics dashboard (overview, trends, by-type, by-LO)
   today_summary.py            Aggregated LO "Today" dashboard (appointments, tasks, leads, SLA)
+  data_compliance.py          GDPR/CCPA data export, deletion, and retention reporting (admin)
 
 Internal helpers (not a router):
   _helpers.py                 Shared auth, rate limiting, sanitization, conflict detection, CRM, slot engine
@@ -120,6 +124,7 @@ from .ab_testing import router as ab_testing_router
 from .cancellation_policy import router as cancellation_policy_router
 from .analytics import router as analytics_router
 from .today_summary import router as today_summary_router
+from .data_compliance import router as data_compliance_router
 
 # ============================================================================
 # API VERSION INTROSPECTION ENDPOINT
@@ -173,4 +178,5 @@ scheduler_router.include_router(ab_testing_router)
 scheduler_router.include_router(cancellation_policy_router)
 scheduler_router.include_router(analytics_router)
 scheduler_router.include_router(today_summary_router)
+scheduler_router.include_router(data_compliance_router)
 scheduler_router.include_router(_api_versions_router)

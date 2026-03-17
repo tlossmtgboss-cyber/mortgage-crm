@@ -63,9 +63,19 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "salesforce_sync": FeatureTier.CORE,
     "encompass_sync": FeatureTier.CORE,
 
+    # Scheduler modules
+    "scheduler_analytics": FeatureTier.CORE,
+    "scheduler_conflicts": FeatureTier.CORE,
+    "scheduler_reschedule": FeatureTier.CORE,
+
     # PREMIUM - maintained when resources allow
     "microsite_builder": FeatureTier.PREMIUM,
     "video_meetings": FeatureTier.PREMIUM,
+    "scheduler_surveys": FeatureTier.PREMIUM,
+    "scheduler_labels": FeatureTier.PREMIUM,
+    "scheduler_booking_meta": FeatureTier.PREMIUM,
+    "scheduler_sitemap": FeatureTier.PREMIUM,
+    "scheduler_waitlist": FeatureTier.PREMIUM,
 
     # EXPERIMENTAL - frozen, no SLA, not exposed to production orgs
     "avatar_studio": FeatureTier.EXPERIMENTAL,
@@ -73,6 +83,7 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "it_helpdesk": FeatureTier.EXPERIMENTAL,
     "decision_lab": FeatureTier.EXPERIMENTAL,
     "circle_of_cashflow": FeatureTier.EXPERIMENTAL,
+    "scheduler_ab_testing": FeatureTier.EXPERIMENTAL,
 }
 
 

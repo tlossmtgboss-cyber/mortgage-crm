@@ -22,7 +22,9 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _check_rate_limit,
     _sanitize_text, _audit_log,
 )
+from services.scheduler_audit_logger import scheduler_audit
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,7 @@ def _get_reschedule_service(db: Session):
 # ============================================================================
 
 @router.post("/reschedule/{appointment_id}")
+@require_feature_tier("scheduler_reschedule")
 async def initiate_reschedule(
     request: Request,
     appointment_id: int,
@@ -101,6 +104,25 @@ async def initiate_reschedule(
     )
 
     db.commit()
+
+    # Enterprise audit: structured log for compliance
+    # Fetch the appointment to include full details in the audit entry
+    try:
+        models = get_models()
+        Appointment = models["Appointment"]
+        appt = db.query(Appointment).filter(
+            Appointment.id == appointment_id,
+            Appointment.organization_id == org_id,
+        ).first()
+        if appt:
+            scheduler_audit.log_reschedule_initiated(
+                appt, user,
+                reason=reason,
+                reschedule_count=result.get("reschedule_count"),
+                request=request,
+            )
+    except Exception as e:
+        logger.debug(f"Could not write scheduler audit for reschedule initiation: {e}")
 
     return {
         "status": "ok",
@@ -162,6 +184,21 @@ async def generate_reschedule_link(
     )
 
     db.commit()
+
+    # Enterprise audit: structured log for compliance
+    try:
+        models = get_models()
+        Appointment = models["Appointment"]
+        appt = db.query(Appointment).filter(
+            Appointment.id == appointment_id,
+            Appointment.organization_id == org_id,
+        ).first()
+        if appt:
+            scheduler_audit.log_reschedule_link_generated(
+                appt, user, request=request,
+            )
+    except Exception as e:
+        logger.debug(f"Could not write scheduler audit for reschedule link: {e}")
 
     return {
         "status": "ok",
@@ -274,6 +311,15 @@ async def public_reschedule_confirm(
     if new_start < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=400, detail="Cannot reschedule to a past time")
 
+    # Capture old time before the reschedule for audit logging
+    try:
+        appt_before = svc._get_appointment(appointment_id, org_id)
+        old_start = appt_before.scheduled_start
+        old_end = appt_before.scheduled_end
+    except Exception:
+        old_start = None
+        old_end = None
+
     try:
         result = svc.confirm_reschedule(
             appointment_id=appointment_id,
@@ -289,6 +335,25 @@ async def public_reschedule_confirm(
         raise
 
     db.commit()
+
+    # Enterprise audit: structured log for borrower self-service reschedule
+    try:
+        models = get_models()
+        Appointment = models["Appointment"]
+        appt = db.query(Appointment).filter(
+            Appointment.id == appointment_id,
+        ).first()
+        if appt:
+            scheduler_audit.log_borrower_reschedule_confirmed(
+                appt,
+                old_start=old_start,
+                new_start=new_start,
+                old_end=old_end,
+                new_end=new_end,
+                request=request,
+            )
+    except Exception as e:
+        logger.debug(f"Could not write scheduler audit for borrower reschedule confirm: {e}")
 
     return {
         "status": "ok",

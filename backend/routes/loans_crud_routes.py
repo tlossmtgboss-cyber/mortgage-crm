@@ -644,6 +644,22 @@ async def update_loan(
                 except Exception as e:
                     logger.warning(f"Portal stage sync failed for loan {loan.id}: {e}")
 
+                # ACO trigger — run completeness review on key stage transitions
+                ACO_TRIGGER_STAGES = (
+                    "APPLICATION", "DISCLOSED", "SUBMITTED",
+                    "UW_RECEIVED", "CONDITIONAL_APPROVAL",
+                )
+                if new_stage in ACO_TRIGGER_STAGES:
+                    try:
+                        from tasks.app_completion_tasks import trigger_application_review_task
+                        trigger_application_review_task.delay(
+                            loan_id=loan.id,
+                            triggered_by=f"STAGE_CHANGE_{new_stage}",
+                        )
+                        logger.info(f"ACO review queued for loan {loan.id} on stage {new_stage}")
+                    except Exception as e:
+                        logger.warning(f"ACO review trigger failed for loan {loan.id}: {e}")
+
         result = _loan_to_dict(loan)
 
         # Include compliance actions in the response so the frontend can alert users

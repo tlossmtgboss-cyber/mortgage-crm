@@ -30,6 +30,7 @@ from routes.scheduler._helpers import (
     _audit_log,
 )
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 from database.models.ab_test import ABTest, ABTestResult, ABTestStatus, ABTestElementType
 from services.ab_test_service import ABTestService
 
@@ -111,6 +112,7 @@ def _test_to_dict(test: ABTest) -> dict:
 # ============================================================================
 
 @router.post("/ab-tests")
+@require_feature_tier("scheduler_ab_testing")
 async def create_ab_test(
     body: CreateABTestRequest,
     request: Request,
@@ -176,6 +178,7 @@ async def create_ab_test(
 
 
 @router.get("/ab-tests")
+@require_feature_tier("scheduler_ab_testing")
 async def list_ab_tests(
     request: Request,
     status: Optional[str] = Query(None, description="Filter by status: draft, active, completed"),
@@ -237,6 +240,7 @@ async def list_ab_tests(
 
 
 @router.get("/ab-tests/{test_id}/results")
+@require_feature_tier("scheduler_ab_testing")
 async def get_ab_test_results(
     test_id: int,
     request: Request,
@@ -268,6 +272,7 @@ async def get_ab_test_results(
 
 
 @router.put("/ab-tests/{test_id}/status")
+@require_feature_tier("scheduler_ab_testing")
 async def update_ab_test_status(
     test_id: int,
     body: UpdateStatusRequest,

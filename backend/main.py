@@ -1353,6 +1353,20 @@ except Exception as e:
     logger.warning(f"SOC 2 Compliance admin routes skipped: {e}")
 
 # ============================================================================
+# PIPELINE APPOINTMENT TRIGGER ROUTES — Auto-schedule from stage changes
+# ============================================================================
+try:
+    from routes.pipeline_appointment_routes import register_pipeline_appointment_routes
+    register_pipeline_appointment_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("Pipeline appointment trigger routes loaded")
+except Exception as e:
+    logger.warning(f"Pipeline appointment trigger routes skipped: {e}")
+
+# ============================================================================
 # DB MIGRATION ROUTES
 # DISABLED: Schema mutations must not be exposed via HTTP (security audit March 2026)
 # ============================================================================

@@ -35,6 +35,7 @@ from routes.scheduler._helpers import (
     _audit_log,
 )
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 from services.waitlist_service import WaitlistService
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,7 @@ def _get_waitlist_service(db: Session) -> WaitlistService:
 # ============================================================================
 
 @router.post("/waitlist")
+@require_feature_tier("scheduler_waitlist")
 async def join_waitlist_authenticated(
     body: WaitlistJoinRequest,
     request: Request,
@@ -139,6 +141,7 @@ async def join_waitlist_authenticated(
 
 
 @router.get("/waitlist")
+@require_feature_tier("scheduler_waitlist")
 async def get_waitlist(
     request: Request,
     appointment_type_id: Optional[int] = None,
@@ -170,6 +173,7 @@ async def get_waitlist(
 
 
 @router.get("/waitlist/{entry_id}/position")
+@require_feature_tier("scheduler_waitlist")
 async def get_waitlist_position(
     entry_id: int,
     request: Request,
@@ -188,6 +192,7 @@ async def get_waitlist_position(
 
 
 @router.delete("/waitlist/{entry_id}")
+@require_feature_tier("scheduler_waitlist")
 async def leave_waitlist(
     entry_id: int,
     request: Request,
@@ -208,6 +213,7 @@ async def leave_waitlist(
 
 
 @router.post("/waitlist/{entry_id}/offer")
+@require_feature_tier("scheduler_waitlist")
 async def offer_slot_to_entry(
     entry_id: int,
     body: OfferSlotRequest,
@@ -244,6 +250,7 @@ async def offer_slot_to_entry(
 
 
 @router.post("/waitlist/{entry_id}/reorder")
+@require_feature_tier("scheduler_waitlist")
 async def reorder_waitlist_entry(
     entry_id: int,
     body: ReorderRequest,
@@ -273,6 +280,7 @@ async def reorder_waitlist_entry(
 
 
 @router.post("/waitlist/expire-offers")
+@require_feature_tier("scheduler_waitlist")
 async def expire_stale_offers(
     request: Request,
     db: Session = Depends(get_db),

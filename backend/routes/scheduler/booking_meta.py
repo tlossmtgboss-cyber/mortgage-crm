@@ -14,6 +14,7 @@ import json
 import logging
 
 from db import get_db
+from middleware.feature_gate import require_feature_tier
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ def _get_models():
 
 
 @router.get("/public/booking/{slug}/meta")
+@require_feature_tier("scheduler_booking_meta")
 async def get_booking_meta(
     slug: str,
     request: Request,
@@ -178,6 +180,7 @@ async def get_booking_meta(
 
 
 @router.get("/public/booking/{slug}/meta.html", response_class=HTMLResponse)
+@require_feature_tier("scheduler_booking_meta")
 async def get_booking_meta_html(
     slug: str,
     request: Request,
