@@ -65,11 +65,15 @@ URL Prefix Map (all under /api/v1/scheduler):
   /pipeline-triggers/failures/{id}/acknowledge  Acknowledge a failure       (trigger_failures.py)
   /email-service-status         Email service health check                  (email_testing.py)
   /test-email                   Send test email (POST)                      (email_testing.py)
+  /booking-links/{id}/analytics  Per-link performance analytics             (booking_links.py)
+  /booking-links/analytics/summary  Org-wide booking link analytics (admin) (booking_links.py)
+  /settings/all                 Get all scheduler settings                  (settings.py)
+  /settings/{section}           Update settings by section (PUT, admin)     (settings.py)
   /maintenance/cleanup-holds    Delete expired SlotHold records (admin)     (maintenance.py)
   /sitemap.xml                  XML sitemap for search engines              (sitemap.py)
   /robots.txt                   Robots.txt for crawler control              (sitemap.py)
 
-Active modules (30):
+Active modules (32):
   appointments.py             Appointment CRUD, status transitions, timeline
   availability.py             Availability slots CRUD, authenticated available-slots
   recurring_availability.py   Recurring weekly patterns, date exceptions, org templates
@@ -101,6 +105,8 @@ Active modules (30):
   maintenance.py              Periodic cleanup tasks (expired slot holds)
   calendar_sync_inbound.py   Bidirectional calendar sync (Google/Outlook inbound webhooks)
   trigger_failures.py         Pipeline trigger failure viewing and acknowledgment
+  settings.py                 Scheduler config CRUD (availability, notifications, etc.)
+  error_responses.py          Standardized error response helpers (not a router, re-exported)
 
 Internal helpers (not a router):
   _helpers.py                 Shared auth, rate limiting, sanitization, conflict detection, CRM, slot engine
@@ -155,6 +161,12 @@ from .widget_config import router as widget_config_router
 from .maintenance import router as maintenance_router
 from .calendar_sync_inbound import router as calendar_sync_inbound_router
 from .trigger_failures import router as trigger_failures_router
+from .settings import router as settings_router
+from .error_responses import (  # noqa: F401 — re-export for other modules
+    scheduler_error, validation_error, not_found_error,
+    conflict_error, rate_limit_error, internal_error,
+    forbidden_error, unauthorized_error, service_unavailable_error,
+)
 
 # ============================================================================
 # API VERSION INTROSPECTION ENDPOINT
@@ -220,4 +232,5 @@ scheduler_router.include_router(widget_config_router)
 scheduler_router.include_router(maintenance_router)
 scheduler_router.include_router(calendar_sync_inbound_router)
 scheduler_router.include_router(trigger_failures_router)
+scheduler_router.include_router(settings_router)
 scheduler_router.include_router(_api_versions_router)
