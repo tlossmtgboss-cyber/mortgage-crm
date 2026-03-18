@@ -10,8 +10,9 @@ Endpoints:
   - DELETE /booking-links/{link_id}    Delete (deactivate) a booking link
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func, case, text
 from datetime import datetime, timedelta, timezone
 import logging
 import secrets
@@ -216,3 +217,118 @@ async def delete_booking_link(
     db.commit()
 
     return {"message": "Booking link deactivated"}
+
+
+# ============================================================================
+# BOOKING LINK ANALYTICS
+# ============================================================================
+
+@router.get("/booking-links/{link_id}/analytics")
+async def get_booking_link_analytics(
+    link_id: int,
+    request: Request,
+    days: int = Query(30, ge=1, le=365, description="Analytics window in days"),
+    db: Session = Depends(get_db),
+):
+    """Get performance analytics for a booking link.
+
+    Returns view count, booking count, conversion rate, recent booking
+    activity from the audit log, and appointment outcome breakdown.
+    """
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    _models = get_models()
+    BookingLink = _models['BookingLink']
+
+    link = db.query(BookingLink).filter(
+        BookingLink.id == link_id,
+        BookingLink.organization_id == org_id,
+    ).first()
+
+    if not link:
+        raise HTTPException(status_code=404, detail="Booking link not found")
+
+    # Only allow the owner or admins to view analytics
+    user_role = getattr(user, 'permission_role', '') or getattr(user, 'role', '') or ''
+    is_admin = user_role.lower() in ('admin', 'leadership', 'management', 'site_admin', 'platform_admin')
+    if link.user_id != user.id and not is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized to view this link's analytics")
+
+    # Basic metrics from the BookingLink counters
+    views = link.view_count or 0
+    bookings = link.booking_count or 0
+    conversion_rate = round((bookings / views) * 100, 1) if views > 0 else 0.0
+
+    days_active = max((datetime.now(timezone.utc) - link.created_at).days, 1) if link.created_at else 1
+    avg_daily_views = round(views / days_active, 1)
+    avg_daily_bookings = round(bookings / days_active, 2)
+
+    # Query audit log for recent booking activity via this link
+    SchedulerAuditLog = _models.get('SchedulerAuditLog')
+    recent_bookings = []
+    if SchedulerAuditLog:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        audit_rows = (
+            db.query(SchedulerAuditLog)
+            .filter(
+                SchedulerAuditLog.organization_id == org_id,
+                SchedulerAuditLog.entity_type == 'appointment',
+                SchedulerAuditLog.action == 'created',
+                SchedulerAuditLog.booking_source == 'public_booking',
+                SchedulerAuditLog.created_at >= cutoff,
+            )
+            .order_by(SchedulerAuditLog.created_at.desc())
+            .limit(100)
+            .all()
+        )
+
+        # Filter to this specific booking link by checking changes JSON for slug
+        for row in audit_rows:
+            changes = row.changes or {}
+            if changes.get("booking_link_slug") == link.slug or changes.get("slug") == link.slug:
+                recent_bookings.append({
+                    "appointment_id": row.entity_id,
+                    "booked_at": row.created_at.isoformat() if row.created_at else None,
+                    "ip_address": row.ip_address,
+                })
+
+    # Appointment outcome breakdown (if we can correlate)
+    Appointment = _models.get('Appointment')
+    outcome_breakdown = {}
+    if Appointment and recent_bookings:
+        appt_ids = [b["appointment_id"] for b in recent_bookings if b["appointment_id"]]
+        if appt_ids:
+            outcomes = (
+                db.query(
+                    Appointment.status,
+                    func.count(Appointment.id).label("count"),
+                )
+                .filter(Appointment.id.in_(appt_ids))
+                .group_by(Appointment.status)
+                .all()
+            )
+            for status_val, count in outcomes:
+                status_str = status_val.value if hasattr(status_val, 'value') else str(status_val)
+                outcome_breakdown[status_str] = count
+
+    return {
+        "link_id": link.id,
+        "slug": link.slug,
+        "link_name": link.link_name,
+        "is_active": link.is_active,
+        "created_at": link.created_at.isoformat() if link.created_at else None,
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
+        "metrics": {
+            "total_views": views,
+            "total_bookings": bookings,
+            "conversion_rate_pct": conversion_rate,
+            "days_active": days_active,
+            "avg_daily_views": avg_daily_views,
+            "avg_daily_bookings": avg_daily_bookings,
+            "last_booked_at": link.last_booked_at.isoformat() if link.last_booked_at else None,
+        },
+        "recent_bookings": recent_bookings[:20],
+        "outcome_breakdown": outcome_breakdown,
+        "period_days": days,
+    }

@@ -239,6 +239,22 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # WEBHOOK AUTO-RETRY JOBS
+        # =================================================================
+
+        # Auto-retry dead-lettered webhook deliveries - runs every 2 hours at :22
+        # Picks up failed deliveries that entered the dead-letter queue >1 hour ago
+        # and retries them once. Also disables subscriptions with >10 consecutive
+        # failures (circuit breaker).
+        self.scheduler.add_job(
+            func=self.retry_dead_letter_webhooks,
+            trigger=CronTrigger(minute=22, hour="1,3,5,7,9,11,13,15,17,19,21,23"),
+            id="webhook_dead_letter_retry",
+            name="Auto-Retry Dead-Letter Webhooks",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
@@ -1176,6 +1192,139 @@ class SchedulerService:
         except Exception as e:
             session.rollback()
             logger.error(f"Slot hold cleanup job failed: {e}", exc_info=True)
+        finally:
+            session.close()
+
+    # =========================================================================
+    # WEBHOOK AUTO-RETRY METHODS
+    # =========================================================================
+
+    def retry_dead_letter_webhooks(self):
+        """Auto-retry dead-lettered webhook deliveries and apply circuit breaker.
+
+        Phase 1: Retry failed deliveries that have been in the dead-letter queue
+                 for >1 hour (to avoid retrying during transient outages).
+        Phase 2: Circuit breaker — disable subscriptions with >10 consecutive
+                 failures to preserve resources.
+        """
+        import asyncio
+
+        logger.info("Running webhook dead-letter retry job")
+
+        session = get_db_session()
+
+        try:
+            from database.models.webhook import WebhookDeliveryLog, WebhookSubscription
+            from sqlalchemy import func
+
+            cutoff = datetime.now() - timedelta(hours=1)
+            max_auto_retries = 1  # Only auto-retry once; manual retry for further attempts
+
+            # Phase 1: Find dead-lettered deliveries eligible for auto-retry
+            eligible = (
+                session.query(WebhookDeliveryLog)
+                .filter(
+                    WebhookDeliveryLog.status == "failed",
+                    WebhookDeliveryLog.dead_letter_at.isnot(None),
+                    WebhookDeliveryLog.dead_letter_at < cutoff,
+                    WebhookDeliveryLog.attempt_number <= 3,  # Original 3 attempts exhausted
+                )
+                .limit(50)
+                .all()
+            )
+
+            retried = 0
+            retry_succeeded = 0
+            for delivery in eligible:
+                subscription = (
+                    session.query(WebhookSubscription)
+                    .filter(WebhookSubscription.id == delivery.subscription_id)
+                    .first()
+                )
+                if not subscription or not subscription.is_active:
+                    continue
+
+                try:
+                    # Re-attempt delivery synchronously using httpx
+                    import httpx
+
+                    headers = {"Content-Type": "application/json"}
+                    if subscription.secret:
+                        import hashlib
+                        import hmac
+                        import json
+                        payload_bytes = json.dumps(delivery.payload).encode()
+                        signature = hmac.new(
+                            subscription.secret.encode(),
+                            payload_bytes,
+                            hashlib.sha256,
+                        ).hexdigest()
+                        headers["X-Webhook-Signature"] = f"sha256={signature}"
+
+                    with httpx.Client(timeout=10.0) as client:
+                        resp = client.post(
+                            subscription.endpoint_url,
+                            json=delivery.payload,
+                            headers=headers,
+                        )
+
+                    delivery.attempt_number += 1
+                    if 200 <= resp.status_code < 300:
+                        delivery.status = "success"
+                        delivery.response_code = resp.status_code
+                        delivery.delivered_at = datetime.now()
+                        delivery.dead_letter_at = None
+                        retry_succeeded += 1
+                    else:
+                        delivery.response_code = resp.status_code
+                        delivery.error_message = f"Auto-retry failed: HTTP {resp.status_code}"
+
+                    retried += 1
+                except Exception as e:
+                    delivery.attempt_number += 1
+                    delivery.error_message = f"Auto-retry error: {str(e)[:200]}"
+                    retried += 1
+
+            # Phase 2: Circuit breaker — disable subscriptions with >10 consecutive failures
+            # Find subscriptions where the last 10 deliveries all failed
+            unhealthy_subs = (
+                session.query(WebhookSubscription.id)
+                .filter(
+                    WebhookSubscription.is_active == True,
+                )
+                .all()
+            )
+
+            disabled_count = 0
+            for (sub_id,) in unhealthy_subs:
+                recent = (
+                    session.query(WebhookDeliveryLog.status)
+                    .filter(WebhookDeliveryLog.subscription_id == sub_id)
+                    .order_by(WebhookDeliveryLog.created_at.desc())
+                    .limit(10)
+                    .all()
+                )
+                if len(recent) >= 10 and all(r.status == "failed" for r in recent):
+                    sub = session.query(WebhookSubscription).get(sub_id)
+                    if sub:
+                        sub.is_active = False
+                        logger.warning(
+                            "Circuit breaker: disabled webhook subscription %s (%s) "
+                            "after 10 consecutive failures",
+                            sub_id, sub.name,
+                        )
+                        disabled_count += 1
+
+            session.commit()
+            logger.info(
+                "Webhook auto-retry complete: %d retried (%d succeeded), "
+                "%d subscriptions disabled by circuit breaker",
+                retried, retry_succeeded, disabled_count,
+            )
+
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Webhook dead-letter retry job failed: {e}", exc_info=True)
         finally:
             session.close()
 
