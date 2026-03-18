@@ -332,3 +332,63 @@ async def get_booking_link_analytics(
         "outcome_breakdown": outcome_breakdown,
         "period_days": days,
     }
+
+
+@router.get("/booking-links/analytics/summary")
+async def get_booking_links_summary_analytics(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Get aggregate analytics across all booking links for the organization.
+
+    Admin-only endpoint providing total views, bookings, conversion rate,
+    and per-link breakdown sorted by performance.
+    """
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    user_role = getattr(user, 'permission_role', '') or getattr(user, 'role', '') or ''
+    if user_role.lower() not in ('admin', 'leadership', 'management', 'site_admin', 'platform_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    _models = get_models()
+    BookingLink = _models['BookingLink']
+
+    links = db.query(BookingLink).filter(
+        BookingLink.organization_id == org_id,
+        BookingLink.is_active == True,
+    ).all()
+
+    total_views = sum(link.view_count or 0 for link in links)
+    total_bookings = sum(link.booking_count or 0 for link in links)
+    conversion_rate = round((total_bookings / total_views) * 100, 1) if total_views > 0 else 0.0
+
+    # Per-link breakdown sorted by bookings desc
+    per_link = sorted(
+        [
+            {
+                "id": link.id,
+                "slug": link.slug,
+                "link_name": link.link_name,
+                "owner_id": link.user_id,
+                "views": link.view_count or 0,
+                "bookings": link.booking_count or 0,
+                "conversion_rate_pct": round(
+                    ((link.booking_count or 0) / (link.view_count or 1)) * 100, 1
+                ) if (link.view_count or 0) > 0 else 0.0,
+                "last_booked_at": link.last_booked_at.isoformat() if link.last_booked_at else None,
+            }
+            for link in links
+        ],
+        key=lambda x: x["bookings"],
+        reverse=True,
+    )
+
+    return {
+        "organization_id": org_id,
+        "total_links": len(links),
+        "total_views": total_views,
+        "total_bookings": total_bookings,
+        "overall_conversion_rate_pct": conversion_rate,
+        "links": per_link,
+    }

@@ -263,6 +263,79 @@ def _check_upcoming_appointments(db: Session, org_id: int) -> dict:
     return {"count": total_upcoming, "next_24h": next_24h_count}
 
 
+def _check_webhook_health(db: Session, org_id: int) -> dict:
+    """Check webhook subscription health for the organization."""
+    from database.models.webhook import WebhookSubscription, WebhookDeliveryLog
+
+    active_subs = (
+        db.query(func.count(WebhookSubscription.id))
+        .filter(
+            WebhookSubscription.organization_id == org_id,
+            WebhookSubscription.is_active == True,
+        )
+        .scalar()
+    ) or 0
+
+    if active_subs == 0:
+        return {"status": "ok", "active_subscriptions": 0, "note": "No webhooks configured"}
+
+    # Count recent failures (last 24h)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    recent_failures = (
+        db.query(func.count(WebhookDeliveryLog.id))
+        .join(WebhookSubscription)
+        .filter(
+            WebhookSubscription.organization_id == org_id,
+            WebhookDeliveryLog.status == "failed",
+            WebhookDeliveryLog.created_at >= cutoff,
+        )
+        .scalar()
+    ) or 0
+
+    recent_total = (
+        db.query(func.count(WebhookDeliveryLog.id))
+        .join(WebhookSubscription)
+        .filter(
+            WebhookSubscription.organization_id == org_id,
+            WebhookDeliveryLog.created_at >= cutoff,
+        )
+        .scalar()
+    ) or 0
+
+    success_rate = round((1 - recent_failures / recent_total) * 100, 1) if recent_total > 0 else 100.0
+    status = "ok" if success_rate >= 90 else "warning" if success_rate >= 50 else "error"
+
+    return {
+        "status": status,
+        "active_subscriptions": active_subs,
+        "deliveries_24h": recent_total,
+        "failures_24h": recent_failures,
+        "success_rate_pct": success_rate,
+    }
+
+
+def _check_scheduler_jobs() -> dict:
+    """Check APScheduler background job status."""
+    from services.scheduler_service import scheduler_service
+
+    if not scheduler_service.scheduler.running:
+        return {"status": "warning", "running": False, "job_count": 0}
+
+    jobs = scheduler_service.get_job_status()
+    overdue = 0
+    now = datetime.now(timezone.utc)
+    for job in jobs:
+        if job.get("next_run") and datetime.fromisoformat(job["next_run"]) < now - timedelta(minutes=30):
+            overdue += 1
+
+    return {
+        "status": "ok" if overdue == 0 else "warning",
+        "running": True,
+        "job_count": len(jobs),
+        "overdue_jobs": overdue,
+    }
+
+
 # =============================================================================
 # REGISTERED MODULE COUNT
 # =============================================================================
@@ -373,6 +446,22 @@ async def scheduler_health(
     except Exception as e:
         logger.exception(f"Health check: upcoming_appointments failed: {e}")
         checks["upcoming_appointments"] = {"count": 0, "next_24h": 0, "error": str(e)}
+
+    # --- webhook_health ---
+    try:
+        checks["webhooks"] = _check_webhook_health(db, org_id)
+        if checks["webhooks"]["status"] == "warning":
+            any_degraded = True
+    except Exception as e:
+        logger.debug(f"Health check: webhooks skipped: {e}")
+        checks["webhooks"] = {"status": "ok", "note": "Webhook system not initialized"}
+
+    # --- scheduler_jobs ---
+    try:
+        checks["scheduler_jobs"] = _check_scheduler_jobs()
+    except Exception as e:
+        logger.debug(f"Health check: scheduler_jobs skipped: {e}")
+        checks["scheduler_jobs"] = {"status": "ok", "note": "Scheduler not running"}
 
     # --- overall status ---
     if critical_failed:
