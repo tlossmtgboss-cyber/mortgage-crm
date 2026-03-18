@@ -17,29 +17,11 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import logging
 
+from db import get_db
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ============================================================================
-# DEPENDENCY INJECTION (set by parent module)
-# ============================================================================
-
-_get_db = None
-_models = None
-
-
-def set_dependencies(get_db_func, models_dict):
-    """Set dependencies from parent module."""
-    global _get_db, _models
-    _get_db = get_db_func
-    _models = models_dict
-
-
-def get_db():
-    if _get_db is None:
-        raise RuntimeError("Widget config dependencies not set")
-    yield from _get_db()
 
 
 # ============================================================================
@@ -133,9 +115,14 @@ async def _get_widget_config_impl(
     try:
         from smart_scheduler_models import BookingLink, AppointmentType
     except ImportError:
-        # Models may live inside _models dict if set via dependency injection
-        BookingLink = _models.get("BookingLink") if _models else None
-        AppointmentType = _models.get("AppointmentType") if _models else None
+        try:
+            from routes.scheduler._helpers import get_models
+            _m = get_models()
+            BookingLink = _m.get("BookingLink") if _m else None
+            AppointmentType = _m.get("AppointmentType") if _m else None
+        except Exception:
+            BookingLink = None
+            AppointmentType = None
 
     if not BookingLink or not AppointmentType:
         # Scheduler models not available -- return partial config

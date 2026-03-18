@@ -1,0 +1,98 @@
+/**
+ * Calendar Settings - Reminder Tab Styles
+ *
+ * Reminder timeline visualization with markers, labels, and tracks.
+ * Perennia brand colors (#218D8D).
+ */
+
+/* ============================================================================
+   Reminder Timeline
+   ============================================================================ */
+
+.reminder-timeline {
+  margin-bottom: 24px;
+  padding: 16px 20px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+}
+
+.reminder-timeline-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #166534;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.reminder-timeline-track {
+  position: relative;
+  height: 60px;
+  margin: 0 16px;
+}
+
+.reminder-timeline-line {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #86efac;
+  border-radius: 2px;
+}
+
+.reminder-timeline-marker {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.reminder-marker-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin: 6px auto 4px;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.marker-email {
+  background: #3b82f6;
+}
+
+.marker-sms {
+  background: #8b5cf6;
+}
+
+.marker-event {
+  background: #218D8D;
+  width: 14px;
+  height: 14px;
+  margin-top: 5px;
+}
+
+.reminder-marker-label {
+  font-size: 10px;
+  color: #475569;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.reminder-timeline-start-label,
+.reminder-timeline-end-label {
+  position: absolute;
+  bottom: -4px;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.reminder-timeline-start-label {
+  left: 0;
+}
+
+.reminder-timeline-end-label {
+  right: 0;
+}

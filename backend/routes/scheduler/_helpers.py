@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Optional
+import pytz
 from collections import OrderedDict, deque
 import asyncio
 import html
@@ -36,6 +37,12 @@ except ImportError:
 
 from smart_scheduler_models import (
     AppointmentStatus, DayOfWeek, SlotPriority, DEFAULT_WORKING_HOURS,
+)
+from routes.scheduler.constants import (
+    DEFAULT_APPOINTMENT_DURATION_MINUTES,
+    DEFAULT_BUFFER_BEFORE_MINUTES,
+    DEFAULT_BUFFER_AFTER_MINUTES,
+    DEFAULT_MIN_NOTICE_HOURS,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,6 +131,24 @@ def _get_user_timezone(db, user_id: int, org_id: int = None) -> str:
         if config and getattr(config, 'timezone', None):
             return config.timezone
     return 'America/Chicago'
+
+
+def _convert_utc_to_user_tz(
+    utc_datetime: datetime,
+    user_id: int,
+    db,
+    org_id: int = None,
+) -> datetime:
+    """Convert a UTC datetime to the user's configured timezone.
+
+    Centralizes timezone conversion logic to prevent DST edge-case bugs
+    from divergent implementations across endpoints.
+    """
+    user_tz_name = _get_user_timezone(db, user_id, org_id)
+    tz = pytz.timezone(user_tz_name)
+    if utc_datetime.tzinfo is None:
+        utc_datetime = utc_datetime.replace(tzinfo=pytz.UTC)
+    return utc_datetime.astimezone(tz)
 
 
 # ============================================================================
@@ -705,7 +730,7 @@ def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time,
 
 
 def _check_duplicate_booking(db, attendee_email: str, assigned_user_id: int,
-                              start_time, org_id: int = None, window_minutes=30):
+                              start_time, org_id: int = None, window_minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES):
     """
     Check for an existing booking with the same attendee_email + same LO
     within +/-window_minutes of the proposed start_time.
@@ -918,7 +943,7 @@ def _generate_available_slots(
     user_ids: list,
     start_date: date,
     end_date: date,
-    duration_minutes: int = 30,
+    duration_minutes: int = DEFAULT_APPOINTMENT_DURATION_MINUTES,
     org_id: int = None,
     max_per_day: int = None,
     check_cross_source: bool = True,
@@ -928,6 +953,12 @@ def _generate_available_slots(
 ) -> list:
     """
     Unified slot generator used by all availability endpoints.
+
+    This is a synchronous function. It is safe to call from async FastAPI
+    endpoints because the DB session is obtained via ``Depends(get_db)``
+    which runs in a threadpool, and FastAPI transparently awaits sync
+    ``def`` dependencies when they are injected into ``async def`` route
+    handlers.  No manual ``run_in_executor`` wrapping is needed.
 
     Computes available time slots for one or more users by checking:
     - Working hours from SchedulerConfig
@@ -1002,9 +1033,9 @@ def _generate_available_slots(
         config = config_query.first()
 
         working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
-        buffer_before = config.buffer_before_minutes if config else 5
-        buffer_after = config.buffer_after_minutes if config else 5
-        min_notice = config.min_notice_hours if config else 2
+        buffer_before = config.buffer_before_minutes if config else DEFAULT_BUFFER_BEFORE_MINUTES
+        buffer_after = config.buffer_after_minutes if config else DEFAULT_BUFFER_AFTER_MINUTES
+        min_notice = config.min_notice_hours if config else DEFAULT_MIN_NOTICE_HOURS
         user_max_per_day = max_per_day or (config.max_meetings_per_day if config else None)
         enforce_lunch = getattr(config, 'enforce_lunch_break', True) if config else True
         lunch_start_time = getattr(config, 'lunch_break_start', time(12, 0)) if config else time(12, 0)
@@ -1105,12 +1136,12 @@ def _generate_available_slots(
 
                 # Skip past/too-soon slots
                 if slot_start < min_booking_time:
-                    slot_start += timedelta(minutes=30)
+                    slot_start += timedelta(minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES)
                     continue
 
                 # Skip lunch break (only when not using recurring availability, which handles gaps natively)
                 if not _recurring_schedule and lunch_start and lunch_end and slot_start < lunch_end and slot_end > lunch_start:
-                    slot_start += timedelta(minutes=30)
+                    slot_start += timedelta(minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES)
                     continue
 
                 # When recurring availability is active, verify slot falls within an effective block
@@ -1123,7 +1154,7 @@ def _generate_available_slots(
                             in_block = True
                             break
                     if not in_block:
-                        slot_start += timedelta(minutes=30)
+                        slot_start += timedelta(minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES)
                         continue
 
                 # Check blocked times
@@ -1132,7 +1163,7 @@ def _generate_available_slots(
                     for bt in blocked_times
                 )
                 if is_blocked:
-                    slot_start += timedelta(minutes=30)
+                    slot_start += timedelta(minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES)
                     continue
 
                 # Check appointment conflicts (with buffers)
@@ -1169,7 +1200,7 @@ def _generate_available_slots(
                         slot["day"] = day_name
                     all_slots.append(slot)
 
-                slot_start += timedelta(minutes=30)
+                slot_start += timedelta(minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES)
 
             current_date += timedelta(days=1)
 
@@ -1194,6 +1225,7 @@ def get_shared_helpers() -> dict:
         '_create_followup_task': _create_followup_task,
         '_check_lo_licensing': _check_lo_licensing,
         '_get_user_timezone': _get_user_timezone,
+        '_convert_utc_to_user_tz': _convert_utc_to_user_tz,
         '_generate_available_slots': _generate_available_slots,
         '_audit_log': _audit_log,
         '_validate_url': _validate_url,

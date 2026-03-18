@@ -15,6 +15,7 @@ import logging
 
 from db import get_db
 from middleware.feature_gate import require_feature_tier
+from routes.scheduler._helpers import _check_rate_limit, _sanitize_public_error
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +32,13 @@ def _get_models():
     try:
         from smart_scheduler_models import define_models
         return define_models()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"define_models not available: {e}")
     try:
         from routes.scheduler._helpers import get_models
         return get_models()
-    except Exception:
+    except Exception as e:
+        logger.debug(f"get_models fallback failed: {e}")
         return None
 
 
@@ -59,124 +61,139 @@ async def get_booking_meta(
     Returns JSON with title, description, og_image, org_name, lo_name,
     appointment_types, structured_data, and a pre-rendered HTML meta tags block.
     """
-    models = _get_models()
-    if not models:
-        raise HTTPException(status_code=503, detail="Service unavailable")
+    await _check_rate_limit(request, max_requests=100)
 
-    BookingLink = models.get("BookingLink")
-    User = models.get("User")
-
-    if not BookingLink:
-        raise HTTPException(status_code=503, detail="Service unavailable")
-
-    link = db.query(BookingLink).filter(
-        BookingLink.slug == slug,
-        BookingLink.is_active == True,
-        BookingLink.is_public == True,
-    ).first()
-
-    if not link:
-        raise HTTPException(status_code=404, detail="Booking page not found")
-
-    # Gather org info
-    org_name = None
-    org_logo = None
     try:
-        from database.models.core import Organization
-        org = db.query(Organization).filter(Organization.id == link.organization_id).first()
-        if org:
-            org_name = org.name
-            org_logo = getattr(org, "booking_logo_url", None)
-    except Exception as e:
-        logger.debug(f"Could not load org info for booking meta: {e}")
+        models = _get_models()
+        if not models:
+            raise HTTPException(status_code=503, detail="Service unavailable")
 
-    # Gather LO info
-    lo_name = None
-    if link.user_id and User:
+        BookingLink = models.get("BookingLink")
+        User = models.get("User")
+
+        if not BookingLink:
+            raise HTTPException(status_code=503, detail="Service unavailable")
+
+        link = db.query(BookingLink).filter(
+            BookingLink.slug == slug,
+            BookingLink.is_active == True,
+            BookingLink.is_public == True,
+        ).first()
+
+        if not link:
+            raise HTTPException(status_code=404, detail="Booking page not found")
+
+        # Gather org info
+        org_name = None
+        org_logo = None
         try:
-            user = db.query(User).filter(User.id == link.user_id).first()
-            if user:
-                lo_name = (
-                    getattr(user, "full_name", None)
-                    or f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
-                    or None
-                )
+            from database.models.core import Organization
+            org = db.query(Organization).filter(Organization.id == link.organization_id).first()
+            if org:
+                org_name = org.name
+                org_logo = getattr(org, "booking_logo_url", None)
         except Exception as e:
-            logger.debug(f"Could not load user info for booking meta: {e}")
+            logger.debug(f"Could not load org info for booking meta: {e}")
 
-    # Gather appointment types
-    appointment_type_names = []
-    try:
-        AppointmentType = models.get("AppointmentType")
-        if AppointmentType and link.appointment_type_ids:
-            types = db.query(AppointmentType).filter(
-                AppointmentType.id.in_(link.appointment_type_ids),
-                AppointmentType.is_active == True,
-            ).all()
-            appointment_type_names = [t.type_name for t in types if t.type_name]
-        elif AppointmentType and link.single_appointment_type_id:
-            t = db.query(AppointmentType).filter(
-                AppointmentType.id == link.single_appointment_type_id,
-            ).first()
-            if t and t.type_name:
-                appointment_type_names = [t.type_name]
-    except Exception as e:
-        logger.debug(f"Could not load appointment types for booking meta: {e}")
+        # Gather LO info
+        lo_name = None
+        if link.user_id and User:
+            try:
+                user = db.query(User).filter(User.id == link.user_id).first()
+                if user:
+                    lo_name = (
+                        getattr(user, "full_name", None)
+                        or f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
+                        or None
+                    )
+            except Exception as e:
+                logger.debug(f"Could not load user info for booking meta: {e}")
 
-    # Build SEO metadata
-    first_type = appointment_type_names[0] if appointment_type_names else None
+        # Gather appointment types
+        appointment_type_names = []
+        try:
+            AppointmentType = models.get("AppointmentType")
+            if AppointmentType and link.appointment_type_ids:
+                types = db.query(AppointmentType).filter(
+                    AppointmentType.id.in_(link.appointment_type_ids),
+                    AppointmentType.is_active == True,
+                ).all()
+                appointment_type_names = [t.type_name for t in types if t.type_name]
+            elif AppointmentType and link.single_appointment_type_id:
+                t = db.query(AppointmentType).filter(
+                    AppointmentType.id == link.single_appointment_type_id,
+                ).first()
+                if t and t.type_name:
+                    appointment_type_names = [t.type_name]
+        except Exception as e:
+            logger.debug(f"Could not load appointment types for booking meta: {e}")
 
-    title_parts = []
-    if first_type:
-        title_parts.append(f"Book {first_type}")
-    else:
-        title_parts.append("Book an Appointment")
-    if lo_name:
-        title_parts.append(f"with {lo_name}")
+        # Build SEO metadata
+        first_type = appointment_type_names[0] if appointment_type_names else None
 
-    title_core = " ".join(title_parts)
-    title = f"{title_core} | {org_name}" if org_name else f"{title_core} | {SITE_NAME}"
+        title_parts = []
+        if first_type:
+            title_parts.append(f"Book {first_type}")
+        else:
+            title_parts.append("Book an Appointment")
+        if lo_name:
+            title_parts.append(f"with {lo_name}")
 
-    desc_parts = []
-    if first_type:
-        desc_parts.append(f"Schedule your {first_type}")
-    else:
-        desc_parts.append("Schedule your appointment")
-    if lo_name:
-        desc_parts.append(f"with {lo_name}")
-    desc_parts.append(". Choose from available times and book online.")
-    description = " ".join(desc_parts).strip()
+        title_core = " ".join(title_parts)
+        title = f"{title_core} | {org_name}" if org_name else f"{title_core} | {SITE_NAME}"
 
-    og_image = link.custom_logo_url or org_logo or DEFAULT_OG_IMAGE
-    canonical_url = f"{BASE_URL}/book/{slug}"
+        desc_parts = []
+        if first_type:
+            desc_parts.append(f"Schedule your {first_type}")
+        else:
+            desc_parts.append("Schedule your appointment")
+        if lo_name:
+            desc_parts.append(f"with {lo_name}")
+        desc_parts.append(". Choose from available times and book online.")
+        description = " ".join(desc_parts).strip()
 
-    # Build JSON-LD structured data
-    structured_data = _build_structured_data(
-        canonical_url=canonical_url,
-        lo_name=lo_name,
-        org_name=org_name,
-        description=description,
-        og_image=og_image,
-        appointment_type_names=appointment_type_names,
-    )
+        og_image = link.custom_logo_url or org_logo or DEFAULT_OG_IMAGE
+        canonical_url = f"{BASE_URL}/book/{slug}"
 
-    meta_data = {
-        "title": title,
-        "description": description,
-        "og_image": og_image,
-        "canonical_url": canonical_url,
-        "org_name": org_name,
-        "lo_name": lo_name,
-        "appointment_types": appointment_type_names,
-        "slug": slug,
-        "structured_data": structured_data,
-    }
+        # Build JSON-LD structured data
+        structured_data = _build_structured_data(
+            canonical_url=canonical_url,
+            lo_name=lo_name,
+            org_name=org_name,
+            description=description,
+            og_image=og_image,
+            appointment_type_names=appointment_type_names,
+        )
 
-    # Generate pre-rendered HTML meta tags for crawlers
-    meta_html = _render_meta_html(meta_data)
-    meta_data["meta_html"] = meta_html
+        meta_data = {
+            "title": title,
+            "description": description,
+            "og_image": og_image,
+            "canonical_url": canonical_url,
+            "org_name": org_name,
+            "lo_name": lo_name,
+            "appointment_types": appointment_type_names,
+            "slug": slug,
+            "structured_data": structured_data,
+        }
 
-    return meta_data
+        # Generate pre-rendered HTML meta tags for crawlers
+        meta_html = _render_meta_html(meta_data)
+        meta_data["meta_html"] = meta_html
+
+        return meta_data
+
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
+        )
+    except Exception as exc:
+        logger.exception(f"Unexpected error in get_booking_meta for slug={slug}")
+        raise HTTPException(
+            status_code=500,
+            detail=_sanitize_public_error(500, ""),
+        )
 
 
 @router.get("/public/booking/{slug}/meta.html", response_class=HTMLResponse)
@@ -190,29 +207,43 @@ async def get_booking_meta_html(
     Return a minimal HTML page with meta tags and JSON-LD for crawlers that don't execute JS.
     This enables proper Open Graph, Twitter Card, and structured data previews for booking links.
     """
-    # Reuse the JSON endpoint logic
-    meta = await get_booking_meta(slug, request, db)
+    await _check_rate_limit(request, max_requests=100)
 
-    title = html.escape(meta["title"])
-    description = html.escape(meta["description"])
-    og_image = html.escape(meta["og_image"])
-    canonical = html.escape(meta["canonical_url"])
-    lo_name_escaped = html.escape(meta.get("lo_name") or "")
-    type_names = meta.get("appointment_types", [])
+    try:
+        # Reuse the JSON endpoint logic
+        meta = await get_booking_meta(slug, request, db)
 
-    # Build JSON-LD script tags
-    json_ld_tags = ""
-    for sd in meta.get("structured_data", []):
-        if sd:
-            json_ld_tags += f'\n    <script type="application/ld+json">{json.dumps(sd)}</script>'
+        title = html.escape(meta["title"])
+        description = html.escape(meta["description"])
+        og_image = html.escape(meta["og_image"])
+        canonical = html.escape(meta["canonical_url"])
+        lo_name_escaped = html.escape(meta.get("lo_name") or "")
+        type_names = meta.get("appointment_types", [])
 
-    # Build semantic heading for crawlers
-    heading = title
-    subheadings = ""
-    if lo_name_escaped:
-        subheadings += f'\n    <p>with <strong>{lo_name_escaped}</strong></p>'
-    for tn in type_names:
-        subheadings += f'\n    <h2>{html.escape(tn)}</h2>'
+        # Build JSON-LD script tags
+        json_ld_tags = ""
+        for sd in meta.get("structured_data", []):
+            if sd:
+                json_ld_tags += f'\n    <script type="application/ld+json">{json.dumps(sd)}</script>'
+
+        # Build semantic heading for crawlers
+        heading = title
+        subheadings = ""
+        if lo_name_escaped:
+            subheadings += f'\n    <p>with <strong>{lo_name_escaped}</strong></p>'
+        for tn in type_names:
+            subheadings += f'\n    <h2>{html.escape(tn)}</h2>'
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
+        )
+    except Exception as exc:
+        logger.exception(f"Unexpected error in get_booking_meta_html for slug={slug}")
+        raise HTTPException(
+            status_code=500,
+            detail=_sanitize_public_error(500, ""),
+        )
 
     return f"""<!DOCTYPE html>
 <html lang="en">

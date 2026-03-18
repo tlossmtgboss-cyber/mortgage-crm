@@ -56,6 +56,9 @@ logger = logging.getLogger("perennia.scheduler.audit")
 # Audit file handler setup
 # ---------------------------------------------------------------------------
 
+import threading
+
+_audit_handler_lock = threading.Lock()
 _audit_handler_installed = False
 
 
@@ -67,12 +70,15 @@ def _ensure_audit_handler() -> None:
     (if the logs/ directory exists). If neither is available, audit
     entries still flow through the main log via the parent logger.
 
-    Safe to call multiple times; installs at most once.
+    Safe to call multiple times; installs at most once. Thread-safe.
     """
     global _audit_handler_installed
     if _audit_handler_installed:
         return
-    _audit_handler_installed = True
+    with _audit_handler_lock:
+        if _audit_handler_installed:
+            return
+        _audit_handler_installed = True
 
     audit_log_path = os.getenv("SCHEDULER_AUDIT_LOG")
     if not audit_log_path:

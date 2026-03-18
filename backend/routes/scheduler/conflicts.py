@@ -18,6 +18,7 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id,
     _check_appointment_conflict, _audit_log,
 )
+from routes.scheduler.constants import DEFAULT_APPOINTMENT_DURATION_MINUTES
 from db import get_db
 from middleware.feature_gate import require_feature_tier
 from services.conflict_resolution_service import (
@@ -131,7 +132,7 @@ async def check_conflicts(
     start: str = Query(..., description="ISO 8601 start datetime"),
     end: str = Query(..., description="ISO 8601 end datetime"),
     exclude_appointment_id: Optional[int] = Query(None, description="Appointment ID to exclude (for edits)"),
-    duration_minutes: Optional[int] = Query(30, description="Duration in minutes for alternative suggestions"),
+    duration_minutes: Optional[int] = Query(DEFAULT_APPOINTMENT_DURATION_MINUTES, description="Duration in minutes for alternative suggestions"),
     db: Session = Depends(get_db),
 ):
     """

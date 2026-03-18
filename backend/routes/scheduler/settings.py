@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import json
 import logging
@@ -451,11 +451,10 @@ def _serialize_location(loc) -> dict:
 
 
 # ============================================================================
-# In-memory reset token store (keyed by user_id)
-# Tokens expire after 5 minutes. For production, consider Redis.
+# Reset tokens are stored in the SchedulerConfig.feature_toggles JSON field
+# under the '_reset_token' key: {"token": str, "expires_at": ISO string}
+# This ensures multi-worker safety (no in-memory state).
 # ============================================================================
-
-_reset_tokens: Dict[int, tuple] = {}  # user_id -> (token, expires_at)
 
 RESET_TOKEN_TTL_SECONDS = 300
 
@@ -882,19 +881,22 @@ async def reset_settings(
     org_id = _get_org_id(user)
     user_id = getattr(user, "id", None)
 
-    # Validate token
-    stored = _reset_tokens.pop(user_id, None)
+    # Validate token (stored in DB, not in-memory)
+    config = _get_or_create_config(db, user_id, org_id)
+    toggles = config.feature_toggles or {}
+    stored = toggles.pop("_reset_token", None)
+    config.feature_toggles = toggles  # clear the token immediately (single-use)
+    db.flush()
+
     if not stored:
         raise HTTPException(status_code=400, detail="No reset token found. Request one first via GET /settings/reset-token.")
-    token, expires_at = stored
-    if datetime.now(timezone.utc) > expires_at:
+    if datetime.now(timezone.utc) > datetime.fromisoformat(stored["expires_at"]):
         raise HTTPException(status_code=400, detail="Reset token has expired. Request a new one.")
+    token = stored["token"]
     if not secrets.compare_digest(token, body.confirmation_token):
         raise HTTPException(status_code=400, detail="Invalid confirmation token.")
 
     from smart_scheduler_models import DEFAULT_WORKING_HOURS
-
-    config = _get_or_create_config(db, user_id, org_id)
 
     # Reset all fields to defaults
     config.timezone = "America/Chicago"
@@ -958,12 +960,20 @@ async def get_reset_token(
     Token expires after 5 minutes.
     """
     user = await get_current_user(request, db)
-    _get_org_id(user)  # validate org context
+    org_id = _get_org_id(user)
     user_id = getattr(user, "id", None)
 
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + __import__("datetime").timedelta(seconds=RESET_TOKEN_TTL_SECONDS)
-    _reset_tokens[user_id] = (token, expires_at)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=RESET_TOKEN_TTL_SECONDS)
+
+    config = _get_or_create_config(db, user_id, org_id)
+    toggles = config.feature_toggles or {}
+    toggles["_reset_token"] = {
+        "token": token,
+        "expires_at": expires_at.isoformat(),
+    }
+    config.feature_toggles = toggles
+    db.flush()
 
     return {
         "confirmation_token": token,

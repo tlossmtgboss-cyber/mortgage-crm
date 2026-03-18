@@ -127,8 +127,8 @@ async def generate_feed_token(
     try:
         body = await request.json()
         include_details = body.get("include_details", True)
-    except Exception:
-        pass  # No body or invalid JSON — use defaults
+    except Exception as e:
+        logger.debug(f"No JSON body for feed token request (using defaults): {e}")
 
     # Revoke any existing active tokens for this user
     existing_tokens = (

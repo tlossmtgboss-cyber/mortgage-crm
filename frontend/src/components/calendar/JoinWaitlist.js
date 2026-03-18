@@ -21,7 +21,7 @@ const JoinWaitlist = ({ organizationId, appointmentTypeId, appointmentTypeName, 
   const [step, setStep] = useState('form'); // 'form' | 'success' | 'check'
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [entryId, setEntryId] = useState(null);
+  const [waitlistToken, setWaitlistToken] = useState(null);
   const [position, setPosition] = useState(null);
   const [totalWaiting, setTotalWaiting] = useState(null);
   const [status, setStatus] = useState(null);
@@ -92,7 +92,7 @@ const JoinWaitlist = ({ organizationId, appointmentTypeId, appointmentTypeName, 
         return;
       }
 
-      setEntryId(data.entry_id);
+      setWaitlistToken(data.token);
       setPosition(data.position);
       setStep('success');
     } catch (err) {
@@ -103,9 +103,11 @@ const JoinWaitlist = ({ organizationId, appointmentTypeId, appointmentTypeName, 
   };
 
   const checkPosition = useCallback(async () => {
-    if (!entryId) return;
+    if (!waitlistToken) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/scheduler/public/waitlist/${entryId}/position`);
+      const res = await fetch(
+        `${API_BASE}/api/v1/scheduler/public/waitlist/position?token=${encodeURIComponent(waitlistToken)}`
+      );
       if (res.ok) {
         const data = await res.json();
         setPosition(data.position);
@@ -115,7 +117,7 @@ const JoinWaitlist = ({ organizationId, appointmentTypeId, appointmentTypeName, 
     } catch (err) {
       // Silently ignore position check errors
     }
-  }, [entryId]);
+  }, [waitlistToken]);
 
   // Poll position every 30 seconds when in success/check mode
   useEffect(() => {

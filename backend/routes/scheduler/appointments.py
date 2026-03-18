@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 import html
 import logging
-import pytz
 
 from smart_scheduler_models import (
     AppointmentStatus, MeetingType, MeetingMode,
@@ -41,10 +40,12 @@ from services.microsoft_graph import create_event_via_graph, CalendarResult
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
-    _get_user_timezone, _check_appointment_conflict, _check_duplicate_booking,
+    _convert_utc_to_user_tz,
+    _check_appointment_conflict, _check_duplicate_booking,
     _ensure_lead_for_booking, _log_appointment_activity, _create_followup_task,
     _audit_log, _validate_url, _mask_email,
 )
+from routes.scheduler.constants import DEFAULT_APPOINTMENT_DURATION_MINUTES
 from services.scheduler_audit_logger import scheduler_audit
 from db import get_db
 
@@ -207,7 +208,7 @@ async def list_appointments(
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
-    """List appointments with filters - includes both Appointment and ScheduledAppointment tables"""
+    """List appointments with filters."""
     # S11: Cap pagination bounds to prevent abuse
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
@@ -270,77 +271,11 @@ async def list_appointments(
         for a in appointments
     ]
 
-    # DEPRECATED: Also query legacy ScheduledAppointment table (scheduled_appointments)
-    # This table is from the v1 SmartSchedulerService. New bookings go to scheduler_appointments (v2).
-    # Kept here temporarily to surface any legacy data that hasn't been migrated.
-    ai_appointments_data = []
-    ai_total = 0
-    try:
-        from services.smart_scheduler_service import ScheduledAppointment
-
-        ai_query = db.query(ScheduledAppointment).filter(
-            ScheduledAppointment.loan_officer_id == user.id,
-            ScheduledAppointment.organization_id == org_id
-        )
-
-        if start_date:
-            ai_query = ai_query.filter(ScheduledAppointment.start_time >= datetime.combine(start_date, time.min))
-
-        if end_date:
-            ai_query = ai_query.filter(ScheduledAppointment.start_time <= datetime.combine(end_date, time.max))
-
-        if status:
-            ai_query = ai_query.filter(ScheduledAppointment.status == status)
-
-        # Get total count for AI appointments
-        ai_total = ai_query.count()
-
-        # Apply same offset/limit as main query for consistent pagination
-        ai_results = ai_query.order_by(ScheduledAppointment.start_time.desc()).offset(offset).limit(limit).all()
-
-        # Convert legacy AI appointments to same response format
-        for a in ai_results:
-            ai_appointments_data.append({
-                "id": f"ai-{a.id}",
-                "appointment_id": a.appointment_id,
-                "title": f"Appointment with {a.contact_name}",
-                "description": a.notes,
-                "meeting_type": a.appointment_type,
-                "meeting_mode": "PHONE",
-                "scheduled_start": a.start_time.isoformat() if a.start_time else None,
-                "scheduled_end": a.end_time.isoformat() if a.end_time else None,
-                "start_time": a.start_time.isoformat() if a.start_time else None,
-                "end_time": a.end_time.isoformat() if a.end_time else None,
-                "duration_minutes": a.duration_minutes,
-                "status": a.status.upper() if a.status else "BOOKED",
-                "attendee_name": a.contact_name,
-                "contact_name": a.contact_name,
-                "attendee_email": a.contact_email,
-                "contact_email": a.contact_email,
-                "contact_phone": a.contact_phone,
-                "video_link": a.meeting_link,
-                "lead_id": a.contact_id,
-                "loan_id": None,
-                "booked_by_ai": True,
-                "booked_via": a.booked_via,
-                "created_at": a.created_at.isoformat() if a.created_at else None
-            })
-    except Exception as e:
-        logger.debug(f"Legacy ScheduledAppointments query skipped: {e}")
-
-    # Merge and sort the page-slice from both sources
-    result_appointments.extend(ai_appointments_data)
-    result_appointments.sort(
-        key=lambda x: x.get('scheduled_start') or x.get('start_time') or '',
-        reverse=True
-    )
-
-    # Get accurate total count from main Appointment table
-    main_total = query.order_by(None).count()
-    total = main_total + ai_total
+    # Get total count from Appointment table
+    total = query.order_by(None).count()
 
     return {
-        "appointments": result_appointments[:limit],  # Cap to limit after merge
+        "appointments": result_appointments,
         "total": total,
         "limit": limit,
         "offset": offset
@@ -915,9 +850,10 @@ async def update_appointment(
     # Store OLD date/time before any updates for comparison
     old_date = None
     old_time = None
-    tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id, org_id=org_id))
     if appointment.scheduled_start:
-        old_local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
+        old_local_start = _convert_utc_to_user_tz(
+            appointment.scheduled_start, appointment.assigned_user_id, db, org_id=org_id
+        )
         old_date = old_local_start.strftime('%B %d, %Y')
         old_time = old_local_start.strftime('%I:%M %p %Z')
 
@@ -952,7 +888,7 @@ async def update_appointment(
         if "scheduled_end" in update_fields:
             new_end = update_fields["scheduled_end"]
         else:
-            duration = appt_data.duration_minutes or appointment.duration_minutes or 30
+            duration = appt_data.duration_minutes or appointment.duration_minutes or DEFAULT_APPOINTMENT_DURATION_MINUTES
             new_end = new_start + timedelta(minutes=duration)
             update_fields["scheduled_end"] = new_end
 
@@ -1031,7 +967,7 @@ async def update_appointment(
     attendee_name = appointment.attendee_name or 'Valued Client'
     attendee_phone = getattr(appointment, 'attendee_phone', None)
     appointment_title = appointment.title or 'Appointment'
-    duration_minutes = appointment.duration_minutes or 30
+    duration_minutes = appointment.duration_minutes or DEFAULT_APPOINTMENT_DURATION_MINUTES
     if duration_minutes < 60:
         duration_str = f"{duration_minutes} minutes"
     else:
@@ -1047,7 +983,9 @@ async def update_appointment(
     new_date = 'TBD'
     new_time = 'TBD'
     if appointment.scheduled_start:
-        new_local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
+        new_local_start = _convert_utc_to_user_tz(
+            appointment.scheduled_start, appointment.assigned_user_id, db, org_id=org_id
+        )
         new_date = new_local_start.strftime('%B %d, %Y')
         new_time = new_local_start.strftime('%I:%M %p %Z')
 
@@ -1192,8 +1130,9 @@ async def cancel_appointment(
 
     # Format date and time for emails
     if appointment.scheduled_start:
-        tz = pytz.timezone(_get_user_timezone(db, appointment.assigned_user_id, org_id=org_id))
-        local_start = appointment.scheduled_start.replace(tzinfo=pytz.UTC).astimezone(tz)
+        local_start = _convert_utc_to_user_tz(
+            appointment.scheduled_start, appointment.assigned_user_id, db, org_id=org_id
+        )
         appointment_date = local_start.strftime('%B %d, %Y')
         appointment_time = local_start.strftime('%I:%M %p %Z')
     else:

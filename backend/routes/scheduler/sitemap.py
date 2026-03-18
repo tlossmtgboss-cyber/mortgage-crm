@@ -29,12 +29,13 @@ def _get_models():
     try:
         from smart_scheduler_models import define_models
         return define_models()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"define_models not available: {e}")
     try:
         from routes.scheduler._helpers import get_models
         return get_models()
-    except Exception:
+    except Exception as e:
+        logger.debug(f"get_models fallback failed: {e}")
         return None
 
 

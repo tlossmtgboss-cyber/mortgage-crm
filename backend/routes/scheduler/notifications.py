@@ -12,18 +12,28 @@ Endpoints:
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, and_, or_
+from sqlalchemy import desc
+from sqlalchemy.exc import OperationalError
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 import hashlib
 import logging
 
 from routes.scheduler._helpers import get_current_user, get_models, _get_org_id
+from routes.scheduler.constants import (
+    NOTIFICATION_LOOKBACK_HOURS,
+    APPOINTMENT_REMINDER_WINDOW_MINUTES,
+    NOTIFICATION_FETCH_LIMIT,
+    MAX_REMINDERS_PER_APPOINTMENT,
+)
+from smart_scheduler_models import AppointmentStatus
 from db import get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Canonical cancelled status value from enum — used in all status filters
+_CANCELLED_STATUSES = [AppointmentStatus.CANCELLED.value]
 
 
 # ============================================================================
@@ -31,14 +41,15 @@ router = APIRouter()
 # ============================================================================
 
 def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
-                                      limit: int = 50, since_hours: int = 72):
+                                      limit: int = NOTIFICATION_FETCH_LIMIT,
+                                      since_hours: int = NOTIFICATION_LOOKBACK_HOURS):
     """
     Generate a notification feed by querying recent appointment events.
 
     Sources:
       1. Recent bookings (created in the last N hours, assigned to this user)
       2. Cancellations (status changed to cancelled in the last N hours)
-      3. Upcoming reminders (appointments starting within the next 60 minutes)
+      3. Upcoming reminders (appointments starting within the reminder window)
       4. Reschedule-related updates (appointments modified after creation)
 
     Each notification is assigned a deterministic ID derived from
@@ -47,8 +58,13 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
     notification table.
     """
     models = get_models()
+    if models is None:
+        logger.error("Scheduler models not initialized (get_models() returned None)")
+        return []
+
     Appointment = models.get("Appointment")
     if not Appointment:
+        logger.warning("Appointment model not found in models dict")
         return []
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -65,7 +81,7 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
                 Appointment.assigned_user_id == user_id,
                 Appointment.organization_id == org_id,
                 Appointment.created_at >= cutoff,
-                Appointment.status.notin_(["cancelled", "CANCELLED"]),
+                Appointment.status.notin_(_CANCELLED_STATUSES),
             )
             .order_by(desc(Appointment.created_at))
             .limit(limit)
@@ -87,8 +103,12 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
                 "description": f"{attendee} booked \"{title_text}\" for {start_str}" if start_str else f"{attendee} booked \"{title_text}\"",
                 "created_at": (appt.created_at or now).isoformat() + "Z",
             })
+    except OperationalError as e:
+        logger.error(f"DB connection error querying booking notifications: {e}")
+    except (KeyError, AttributeError) as e:
+        logger.warning(f"Model/attribute access error in booking notifications: {e}")
     except Exception as e:
-        logger.warning(f"Error generating booking notifications: {e}")
+        logger.exception(f"Unexpected error generating booking notifications: {e}")
 
     # ------------------------------------------------------------------
     # 2. Cancellations
@@ -99,7 +119,7 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
             .filter(
                 Appointment.assigned_user_id == user_id,
                 Appointment.organization_id == org_id,
-                Appointment.status.in_(["cancelled", "CANCELLED"]),
+                Appointment.status.in_(_CANCELLED_STATUSES),
                 Appointment.updated_at >= cutoff,
             )
             .order_by(desc(Appointment.updated_at))
@@ -120,25 +140,29 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
                 "description": f"{attendee} cancelled \"{title_text}\"",
                 "created_at": (appt.updated_at or now).isoformat() + "Z",
             })
+    except OperationalError as e:
+        logger.error(f"DB connection error querying cancellation notifications: {e}")
+    except (KeyError, AttributeError) as e:
+        logger.warning(f"Model/attribute access error in cancellation notifications: {e}")
     except Exception as e:
-        logger.warning(f"Error generating cancellation notifications: {e}")
+        logger.exception(f"Unexpected error generating cancellation notifications: {e}")
 
     # ------------------------------------------------------------------
-    # 3. Upcoming reminders (appointments starting within 60 min)
+    # 3. Upcoming reminders (appointments starting within reminder window)
     # ------------------------------------------------------------------
     try:
-        reminder_window = now + timedelta(minutes=60)
+        reminder_window = now + timedelta(minutes=APPOINTMENT_REMINDER_WINDOW_MINUTES)
         upcoming = (
             db.query(Appointment)
             .filter(
                 Appointment.assigned_user_id == user_id,
                 Appointment.organization_id == org_id,
-                Appointment.status.notin_(["cancelled", "CANCELLED"]),
+                Appointment.status.notin_(_CANCELLED_STATUSES),
                 Appointment.scheduled_start >= now,
                 Appointment.scheduled_start <= reminder_window,
             )
             .order_by(Appointment.scheduled_start)
-            .limit(10)
+            .limit(MAX_REMINDERS_PER_APPOINTMENT)
             .all()
         )
 
@@ -161,8 +185,12 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
                 "description": " ".join(desc_parts),
                 "created_at": now.isoformat() + "Z",
             })
+    except OperationalError as e:
+        logger.error(f"DB connection error querying reminder notifications: {e}")
+    except (KeyError, AttributeError) as e:
+        logger.warning(f"Model/attribute access error in reminder notifications: {e}")
     except Exception as e:
-        logger.warning(f"Error generating reminder notifications: {e}")
+        logger.exception(f"Unexpected error generating reminder notifications: {e}")
 
     # ------------------------------------------------------------------
     # 4. Reschedule requests (appointments updated after initial creation)
@@ -173,7 +201,7 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
             .filter(
                 Appointment.assigned_user_id == user_id,
                 Appointment.organization_id == org_id,
-                Appointment.status.notin_(["cancelled", "CANCELLED"]),
+                Appointment.status.notin_(_CANCELLED_STATUSES),
                 Appointment.updated_at >= cutoff,
                 Appointment.updated_at > Appointment.created_at + timedelta(minutes=1),
             )
@@ -197,8 +225,12 @@ def _generate_notifications_for_user(db: Session, user_id: int, org_id: int,
                 "description": f"{attendee} rescheduled \"{title_text}\" to {start_str}" if start_str else f"{attendee} rescheduled \"{title_text}\"",
                 "created_at": (appt.updated_at or now).isoformat() + "Z",
             })
+    except OperationalError as e:
+        logger.error(f"DB connection error querying reschedule notifications: {e}")
+    except (KeyError, AttributeError) as e:
+        logger.warning(f"Model/attribute access error in reschedule notifications: {e}")
     except Exception as e:
-        logger.warning(f"Error generating reschedule notifications: {e}")
+        logger.exception(f"Unexpected error generating reschedule notifications: {e}")
 
     # ------------------------------------------------------------------
     # Deduplicate by ID (a single appointment may appear in multiple categories)
@@ -240,7 +272,8 @@ def _format_datetime(dt) -> str:
         return ""
     try:
         return dt.strftime("%b %d at %I:%M %p")
-    except Exception:
+    except (AttributeError, ValueError) as e:
+        logger.debug(f"Datetime formatting failed for {type(dt).__name__}, using str fallback: {e}")
         return str(dt)
 
 
@@ -251,8 +284,8 @@ def _format_datetime(dt) -> str:
 @router.get("/notifications")
 async def get_notifications(
     request: Request,
-    limit: int = Query(50, ge=1, le=100, description="Max notifications to return"),
-    since_hours: int = Query(72, ge=1, le=720, description="Look back window in hours"),
+    limit: int = Query(NOTIFICATION_FETCH_LIMIT, ge=1, le=100, description="Max notifications to return"),
+    since_hours: int = Query(NOTIFICATION_LOOKBACK_HOURS, ge=1, le=720, description="Look back window in hours"),
     db: Session = Depends(get_db),
 ):
     """Get notifications for the authenticated user.

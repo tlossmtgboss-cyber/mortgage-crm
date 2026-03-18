@@ -19,7 +19,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 import logging
 
-from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
+from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log, _check_rate_limit, _sanitize_public_error
 from db import get_db
 from middleware.feature_gate import require_feature_tier
 
@@ -98,6 +98,7 @@ async def send_survey(
 @router.get("/public/surveys/respond/{token}")
 async def get_survey_form(
     token: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -107,16 +108,17 @@ async def get_survey_form(
     Returns survey metadata needed to render the form, or status if
     the survey is expired/completed.
     """
+    await _check_rate_limit(request, max_requests=30)
     from services.survey_service import AppointmentSurveyService
 
     if not token or len(token) < 20:
-        raise HTTPException(status_code=400, detail="Invalid survey token")
+        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid survey token"))
 
     service = AppointmentSurveyService(db)
     result = service.get_survey_by_token(token)
 
     if result is None:
-        raise HTTPException(status_code=404, detail="Survey not found")
+        raise HTTPException(status_code=404, detail=_sanitize_public_error(404, "Survey not found"))
 
     if result.get("expired"):
         return {
@@ -145,6 +147,7 @@ async def get_survey_form(
 async def submit_survey_response(
     token: str,
     body: SurveyResponseBody,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
@@ -153,10 +156,11 @@ async def submit_survey_response(
     No authentication required. The token itself serves as authorization.
     Records the borrower's ratings and feedback.
     """
+    await _check_rate_limit(request, max_requests=15)
     from services.survey_service import AppointmentSurveyService
 
     if not token or len(token) < 20:
-        raise HTTPException(status_code=400, detail="Invalid survey token")
+        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid survey token"))
 
     service = AppointmentSurveyService(db)
     result = service.submit_response(
@@ -178,7 +182,7 @@ async def submit_survey_response(
             status = 404
         else:
             status = 400
-        raise HTTPException(status_code=status, detail=error_msg)
+        raise HTTPException(status_code=status, detail=_sanitize_public_error(status, error_msg))
 
     db.commit()
 

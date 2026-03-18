@@ -21,13 +21,6 @@ from smart_scheduler_models import (
 
 logger = logging.getLogger(__name__)
 
-# In-memory soft holds: {hold_id: {user_id, start, end, expires_at, phone}}
-# In production, consider Redis for multi-process safety.
-_slot_holds: Dict[str, Dict[str, Any]] = {}
-
-# Hold duration in seconds
-HOLD_DURATION_SECONDS = 300  # 5 minutes
-
 
 # =============================================================================
 # MODEL LOADING
@@ -53,7 +46,8 @@ def _load_scheduler_models():
             'AppointmentType': getattr(main, 'AppointmentType', None),
             'BookingLink': getattr(main, 'BookingLink', None),
         }
-    except Exception:
+    except Exception as e:
+        logger.error(f"Failed to load scheduler models from main: {e}")
         return {}
 
 
@@ -121,8 +115,8 @@ def get_available_slots_for_vapi(
                     User.is_active == True,
                 ).limit(5).all()
                 user_ids = [u.id for u in users]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"User fallback lookup failed for org {org_id}: {e}")
 
     if not user_ids:
         logger.warning(f"No users found for org {org_id}")
@@ -255,7 +249,7 @@ def get_available_slots_for_vapi(
 
                 # Check soft holds
                 if not has_conflict:
-                    has_conflict = _is_slot_held(uid, slot_start, slot_end)
+                    has_conflict = _is_slot_held(uid, slot_start, slot_end, db=db, org_id=org_id)
 
                 if not has_conflict:
                     all_slots.append({
@@ -371,72 +365,148 @@ def hold_slot(
     start: datetime,
     end: datetime,
     caller_phone: str,
+    db: Session,
+    org_id: int,
 ) -> Dict[str, Any]:
     """
     Place a soft hold on a time slot during conversation.
+    DB-backed via SlotHold model for multi-worker safety.
     Prevents double-booking while AI confirms with caller.
-    Auto-expires after HOLD_DURATION_SECONDS.
+    Auto-expires after 5 minutes (TTL enforced at DB level).
     """
-    _cleanup_expired_holds()
+    from smart_scheduler_models import SlotHoldStatus
 
-    hold_id = str(uuid_lib.uuid4())[:12].upper()
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=HOLD_DURATION_SECONDS)
+    models = _get_models()
+    SlotHold = models.get('SlotHold') if models else None
 
-    _slot_holds[hold_id] = {
-        "user_id": user_id,
-        "start": start,
-        "end": end,
-        "expires_at": expires_at,
-        "phone": caller_phone,
-        "created_at": datetime.now(timezone.utc),
-    }
+    if not SlotHold:
+        # Fallback: log warning, return a transient hold ID (no persistence)
+        logger.warning("SlotHold model not available — hold is not persisted")
+        hold_id = str(uuid_lib.uuid4())[:12].upper()
+        return {
+            "hold_id": hold_id,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=300)).isoformat(),
+            "expires_in_seconds": 300,
+            "persisted": False,
+        }
+
+    now = datetime.now(timezone.utc)
+    ttl_seconds = 300
+    expires_at = now + timedelta(seconds=ttl_seconds)
+
+    hold = SlotHold(
+        organization_id=org_id,
+        lo_id=user_id,
+        start_time=start,
+        end_time=end,
+        held_by="ai_conversation",
+        held_for_phone=caller_phone,
+        expires_at=expires_at,
+        status=SlotHoldStatus.ACTIVE.value,
+    )
+
+    db.add(hold)
+    db.flush()
 
     logger.info(
-        f"Slot hold {hold_id} created: user={user_id}, "
+        f"Slot hold {hold.id} created: user={user_id}, "
         f"{start.strftime('%m/%d %H:%M')}-{end.strftime('%H:%M')}, "
         f"expires={expires_at.strftime('%H:%M:%S')}"
     )
 
     return {
-        "hold_id": hold_id,
+        "hold_id": hold.id,
         "expires_at": expires_at.isoformat(),
-        "expires_in_seconds": HOLD_DURATION_SECONDS,
+        "expires_in_seconds": ttl_seconds,
+        "persisted": True,
     }
 
 
-def release_hold(hold_id: str) -> bool:
-    """Release a held slot."""
-    if hold_id in _slot_holds:
-        del _slot_holds[hold_id]
-        logger.info(f"Slot hold {hold_id} released")
-        return True
-    return False
+def release_hold(hold_id, db: Optional[Session] = None, org_id: Optional[int] = None) -> bool:
+    """Release a held slot. DB-backed."""
+    if db is None:
+        logger.warning(f"Cannot release hold {hold_id} — no DB session")
+        return False
+
+    from smart_scheduler_models import SlotHoldStatus
+
+    models = _get_models()
+    SlotHold = models.get('SlotHold') if models else None
+
+    if not SlotHold:
+        logger.warning(f"SlotHold model not available — cannot release hold {hold_id}")
+        return False
+
+    hold = db.query(SlotHold).filter(SlotHold.id == hold_id).first()
+    if not hold:
+        logger.info(f"Hold {hold_id} not found (may have expired)")
+        return False
+
+    hold.status = SlotHoldStatus.RELEASED.value
+    hold.released_at = datetime.now(timezone.utc)
+    logger.info(f"Slot hold {hold_id} released")
+    return True
 
 
-def get_hold(hold_id: str) -> Optional[Dict[str, Any]]:
-    """Get hold details, returning None if expired."""
-    _cleanup_expired_holds()
-    return _slot_holds.get(hold_id)
+def get_hold(hold_id, db: Optional[Session] = None) -> Optional[Dict[str, Any]]:
+    """Get hold details from DB, returning None if expired or not found."""
+    if db is None:
+        return None
 
+    from smart_scheduler_models import SlotHoldStatus
 
-def _is_slot_held(user_id: int, slot_start: datetime, slot_end: datetime) -> bool:
-    """Check if a slot overlaps with any active hold."""
-    _cleanup_expired_holds()
-    for hold in _slot_holds.values():
-        if (hold["user_id"] == user_id and
-                slot_start < hold["end"] and slot_end > hold["start"]):
-            return True
-    return False
+    models = _get_models()
+    SlotHold = models.get('SlotHold') if models else None
 
+    if not SlotHold:
+        return None
 
-def _cleanup_expired_holds():
-    """Remove expired holds."""
     now = datetime.now(timezone.utc)
-    expired = [hid for hid, h in _slot_holds.items() if h["expires_at"] < now]
-    for hid in expired:
-        del _slot_holds[hid]
-    if expired:
-        logger.debug(f"Cleaned up {len(expired)} expired slot holds")
+    hold = db.query(SlotHold).filter(
+        SlotHold.id == hold_id,
+        SlotHold.status == SlotHoldStatus.ACTIVE.value,
+        SlotHold.expires_at > now,
+    ).first()
+
+    if not hold:
+        return None
+
+    return {
+        "user_id": hold.lo_id,
+        "start": hold.start_time,
+        "end": hold.end_time,
+        "expires_at": hold.expires_at,
+        "phone": hold.held_for_phone,
+        "created_at": hold.created_at,
+    }
+
+
+def _is_slot_held(user_id: int, slot_start: datetime, slot_end: datetime,
+                  db: Optional[Session] = None, org_id: Optional[int] = None) -> bool:
+    """Check if a slot overlaps with any active DB-backed hold."""
+    if db is None:
+        return False
+
+    from smart_scheduler_models import SlotHoldStatus
+
+    models = _get_models()
+    SlotHold = models.get('SlotHold') if models else None
+
+    if not SlotHold:
+        return False
+
+    now = datetime.now(timezone.utc)
+    filters = [
+        SlotHold.lo_id == user_id,
+        SlotHold.status == SlotHoldStatus.ACTIVE.value,
+        SlotHold.expires_at > now,
+        SlotHold.start_time < slot_end,
+        SlotHold.end_time > slot_start,
+    ]
+    if org_id:
+        filters.append(SlotHold.organization_id == org_id)
+
+    return db.query(SlotHold).filter(*filters).first() is not None
 
 
 # =============================================================================
@@ -545,7 +615,7 @@ def book_appointment(
 
     # Release hold if one was used
     if hold_id:
-        release_hold(hold_id)
+        release_hold(hold_id, db=db, org_id=org_id)
 
     # Log CRM activity
     _log_ai_booking_activity(
@@ -589,7 +659,7 @@ def confirm_booking(
     Convert a soft hold into a confirmed appointment.
     This is the final step after the caller verbally agrees.
     """
-    hold = get_hold(hold_id)
+    hold = get_hold(hold_id, db=db)
     if not hold:
         raise ValueError(
             "The held time slot has expired. Let me check for new availability."
@@ -775,8 +845,8 @@ def _get_cross_source_conflicts(
         for a in sa_query.all():
             if a.start_time and a.end_time:
                 conflicts.append((a.start_time, a.end_time))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"ScheduledAppointment cross-source lookup skipped: {e}")
 
     # Source 2: CalendarEvent
     try:
@@ -793,8 +863,8 @@ def _get_cross_source_conflicts(
         for e in cal_query.all():
             if e.start_time and e.end_time:
                 conflicts.append((e.start_time, e.end_time))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"CalendarEvent cross-source lookup skipped: {e}")
 
     # Source 3: CRMCalendarEvent (Salesforce-synced)
     try:
@@ -810,8 +880,8 @@ def _get_cross_source_conflicts(
         for e in crm_query.all():
             if e.start_at and e.end_at:
                 conflicts.append((e.start_at, e.end_at))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"CRMCalendarEvent cross-source lookup skipped: {e}")
 
     return conflicts
 
@@ -907,8 +977,8 @@ def _get_user_display_name(db: Session, user_id: int) -> str:
         user = db.query(User).filter(User.id == user_id).first()
         if user:
             return f"{user.first_name or ''} {user.last_name or ''}".strip() or "Loan Officer"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"User display name lookup failed for user {user_id}: {e}")
     return "Loan Officer"
 
 
@@ -989,7 +1059,8 @@ def get_default_org_id(db: Session) -> Optional[int]:
             Organization.is_active == True
         ).first()
         return org.id if org else 1
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Organization lookup failed for default org: {e}")
         return 1
 
 
@@ -1006,8 +1077,8 @@ def get_default_user_id(db: Session, org_id: int) -> Optional[int]:
             ).first()
             if config:
                 return config.user_id
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"SchedulerConfig lookup failed for default user: {e}")
 
     try:
         from database.models import User
@@ -1016,5 +1087,6 @@ def get_default_user_id(db: Session, org_id: int) -> Optional[int]:
             User.is_active == True,
         ).first()
         return user.id if user else 1
-    except Exception:
+    except Exception as e:
+        logger.debug(f"User lookup failed for default user in org {org_id}: {e}")
         return 1

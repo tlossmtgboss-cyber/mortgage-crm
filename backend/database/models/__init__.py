@@ -591,6 +591,21 @@ from .app_completion import (
     ActorType,
 )
 
+# Smart Scheduler models (appointment scheduling, availability, booking)
+from .scheduler import (
+    SchedulerConfig,
+    AvailabilitySlot,
+    SchedulerAppointmentType,
+    Appointment as SchedulerAppointment,
+    SchedulerRoutingRule,
+    BlockedTime,
+    BookingLink,
+    AppointmentReminder as SchedulerAppointmentReminder,
+    AppointmentStatusHistory,
+    SchedulerAuditLog,
+    SlotHold,
+)
+
 
 __all__ = [
     # =====================
@@ -1188,4 +1203,19 @@ __all__ = [
     "BookingStatus",
     "ScoreChangeReason",
     "ActorType",
+
+    # =====================
+    # Smart Scheduler
+    # =====================
+    "SchedulerConfig",
+    "AvailabilitySlot",
+    "SchedulerAppointmentType",
+    "SchedulerAppointment",
+    "SchedulerRoutingRule",
+    "BlockedTime",
+    "BookingLink",
+    "SchedulerAppointmentReminder",
+    "AppointmentStatusHistory",
+    "SchedulerAuditLog",
+    "SlotHold",
 ]

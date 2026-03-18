@@ -26,6 +26,7 @@ from db import get_db
 from routes.scheduler._helpers import (
     get_current_user, get_models, get_enhanced_models, _get_org_id,
 )
+from routes.scheduler.constants import DEFAULT_MIN_NOTICE_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -99,12 +100,12 @@ def _check_calendar_sync(db: Session, org_id: int) -> dict:
     status = "ok"
     if last_sync_row and last_sync_row[0]:
         last_sync = last_sync_row[0].isoformat() + "Z" if last_sync_row[0].tzinfo is None else last_sync_row[0].isoformat()
-        # Warn if no sync in the last 2 hours for orgs that have synced calendars
+        # Warn if no sync in the last DEFAULT_MIN_NOTICE_HOURS for orgs that have synced calendars
         if synced_calendars > 0:
             age = datetime.now(timezone.utc) - (
                 last_sync_row[0] if last_sync_row[0].tzinfo else last_sync_row[0].replace(tzinfo=timezone.utc)
             )
-            if age > timedelta(hours=2):
+            if age > timedelta(hours=DEFAULT_MIN_NOTICE_HOURS):
                 status = "warning"
     elif synced_calendars > 0:
         # Calendars configured but never synced
@@ -282,7 +283,8 @@ def _count_registered_modules() -> int:
                     prefixes.add(segment)
         # Include the router itself even if prefix counting is imperfect
         return max(len(prefixes), len(scheduler_router.routes))
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Could not count registered modules: {e}")
         return 0
 
 

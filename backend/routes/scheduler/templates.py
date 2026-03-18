@@ -386,8 +386,8 @@ async def duplicate_appointment_template(
     body = {}
     try:
         body = await request.json()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"No JSON body for clone request (using defaults): {e}")
     clone_name = (body.get("name") or "").strip() or f"Copy of {source.name}"
     if len(clone_name) > 200:
         clone_name = clone_name[:200]

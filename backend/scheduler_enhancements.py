@@ -833,26 +833,11 @@ def parse_natural_language_time(text: str, base_date: date = None) -> Optional[d
 
 
 def generate_ics_content(appointment: dict) -> str:
-    """Generate ICS content. Delegates to canonical RFC 5545 implementation."""
-    from scheduler_email_service import generate_ics_content as _canonical_ics
+    """Generate ICS content. Delegates to canonical RFC 5545 implementation.
 
-    start_dt = appointment.get('scheduled_start')
-    end_dt = appointment.get('scheduled_end')
-    if isinstance(start_dt, str):
-        start_dt = datetime.fromisoformat(start_dt.replace('Z', '+00:00'))
-    if isinstance(end_dt, str):
-        end_dt = datetime.fromisoformat(end_dt.replace('Z', '+00:00'))
-    duration_minutes = int((end_dt - start_dt).total_seconds() / 60) if end_dt and start_dt else 30
-    return _canonical_ics(
-        appointment_title=appointment.get('title', 'Appointment'),
-        start_datetime=start_dt,
-        duration_minutes=duration_minutes,
-        attendee_email=appointment.get('attendee_email', ''),
-        attendee_name=appointment.get('attendee_name', ''),
-        organizer_email=appointment.get('organizer_email', 'sarah@reply.perenniaai.com'),
-        organizer_name=appointment.get('organizer_name', 'Perennia AI'),
-        description=appointment.get('description', ''),
-        location=appointment.get('location', '') or appointment.get('video_link', ''),
-        video_link=appointment.get('video_link'),
-        appointment_id=appointment.get('id'),
-    )
+    Uses ``services.ics_generator.generate_appointment_ics`` which accepts
+    a dict and returns bytes; this wrapper decodes to str for backward compat.
+    """
+    from services.ics_generator import generate_appointment_ics
+
+    return generate_appointment_ics(appointment).decode("utf-8")

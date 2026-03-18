@@ -20,7 +20,7 @@ import logging
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _check_rate_limit,
-    _sanitize_text, _audit_log,
+    _sanitize_text, _sanitize_public_error, _audit_log,
 )
 from services.scheduler_audit_logger import scheduler_audit
 from db import get_db
@@ -222,14 +222,14 @@ async def public_reschedule_slots(
 
     The token is a JWT from the reschedule link.  No login needed.
     """
-    await _check_rate_limit(request, max_requests=20)
+    await _check_rate_limit(request, max_requests=30)
 
     svc = _get_reschedule_service(db)
 
     try:
         payload = svc.verify_reschedule_token(token)
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=_sanitize_public_error(401, str(e)))
 
     appointment_id = payload["appt_id"]
     org_id = payload.get("org_id")
@@ -240,12 +240,12 @@ async def public_reschedule_slots(
         try:
             parsed_date = date.fromisoformat(target_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+            raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid date format"))
 
     try:
         appt = svc._get_appointment(appointment_id, org_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=_sanitize_public_error(404, str(e)))
 
     try:
         slots = svc.get_available_slots(
@@ -254,7 +254,7 @@ async def public_reschedule_slots(
             org_id=org_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, str(e)))
 
     return {
         "appointment_id": appointment_id,
@@ -287,7 +287,7 @@ async def public_reschedule_confirm(
     try:
         payload = svc.verify_reschedule_token(token)
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=401, detail=_sanitize_public_error(401, str(e)))
 
     appointment_id = payload["appt_id"]
     org_id = payload.get("org_id")
@@ -297,7 +297,7 @@ async def public_reschedule_confirm(
         new_start = datetime.fromisoformat(body.new_start.replace("Z", "+00:00"))
         new_end = datetime.fromisoformat(body.new_end.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
-        raise HTTPException(status_code=400, detail="Invalid datetime format")
+        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid datetime format"))
 
     # Make naive (consistent with DB storage)
     if new_start.tzinfo is not None:
@@ -307,16 +307,17 @@ async def public_reschedule_confirm(
 
     # Basic validation
     if new_end <= new_start:
-        raise HTTPException(status_code=400, detail="End time must be after start time")
+        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "End time must be after start time"))
     if new_start < datetime.now(timezone.utc).replace(tzinfo=None):
-        raise HTTPException(status_code=400, detail="Cannot reschedule to a past time")
+        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Cannot reschedule to a past time"))
 
     # Capture old time before the reschedule for audit logging
     try:
         appt_before = svc._get_appointment(appointment_id, org_id)
         old_start = appt_before.scheduled_start
         old_end = appt_before.scheduled_end
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Could not retrieve appointment {appointment_id} for audit logging: {e}")
         old_start = None
         old_end = None
 
@@ -329,10 +330,10 @@ async def public_reschedule_confirm(
             confirmed_by="borrower",
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except HTTPException:
+        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, str(e)))
+    except HTTPException as e:
         # Conflict from _check_appointment_conflict bubbles up as 409
-        raise
+        raise HTTPException(status_code=e.status_code, detail=_sanitize_public_error(e.status_code, str(e.detail)))
 
     db.commit()
 

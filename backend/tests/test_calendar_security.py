@@ -10,7 +10,7 @@ Security-focused tests covering:
 6. CSRF / Webhook Security (signature verification, idempotency)
 
 Target: 40+ test methods covering scheduler_appointment_routes, scheduler/public_booking,
-scheduler/appointments_crud, booking_branding_routes, and scheduler_routes.
+scheduler/appointments, scheduler/_helpers, booking_branding_routes, and scheduler_routes.
 """
 
 import pytest
@@ -124,8 +124,8 @@ class TestAuthentication:
         assert callable(_gcu)
 
     def test_appointments_crud_auth_enforcement(self):
-        """appointments_crud.get_current_user extracts Bearer token and delegates to auth func."""
-        from routes.scheduler.appointments_crud import get_current_user as crud_gcu
+        """_helpers.get_current_user extracts Bearer token and delegates to auth func."""
+        from routes.scheduler._helpers import get_current_user as crud_gcu
         assert callable(crud_gcu)
 
     def test_unauthenticated_access_to_branding_admin(self, client):
@@ -191,8 +191,8 @@ class TestAuthorization:
 
     def test_lo_can_only_see_own_appointments(self):
         """list_appointments filters by assigned_user_id == current user OR created_by == current user."""
-        # Verify the query filtering logic in appointments_crud.py
-        from routes.scheduler.appointments_crud import _is_scheduler_admin
+        # Verify the query filtering logic in appointments module
+        from routes.scheduler._helpers import _is_scheduler_admin
         user = MockUser(id=5, role="loan_officer")
         assert _is_scheduler_admin(user) is False
 

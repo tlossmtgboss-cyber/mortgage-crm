@@ -86,9 +86,9 @@ Active modules (26):
 Internal helpers (not a router):
   _helpers.py                 Shared auth, rate limiting, sanitization, conflict detection, CRM, slot engine
 
-Superseded modules (neutered routers, kept for reference only):
-  appointments_crud.py        Original combined module -> appointments + booking_links + ai_scheduling
-  blocked_time.py             Original blocked time module -> blocked_times
+Removed modules (deleted after decomposition):
+  appointments_crud.py        Superseded by appointments + booking_links + ai_scheduling (deleted)
+  blocked_time.py             Superseded by blocked_times (deleted)
 """
 
 from fastapi import APIRouter

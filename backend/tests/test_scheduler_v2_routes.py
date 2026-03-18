@@ -626,8 +626,8 @@ class TestWaitlistRouterEndpoints:
         """Public waitlist endpoints exist (no auth required)."""
         paths = [route.path for route in self.router.routes]
         assert "/public/waitlist/join" in paths
-        assert "/public/waitlist/{entry_id}/accept" in paths
-        assert "/public/waitlist/{entry_id}/position" in paths
+        assert "/public/waitlist/accept" in paths
+        assert "/public/waitlist/position" in paths
 
     def test_all_endpoints_are_async(self):
         """Every endpoint handler should be async."""

@@ -14,6 +14,10 @@
  *   embedded    - Whether running inside an iframe (default false)
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import BookingTypeSelector from './booking/BookingTypeSelector';
+import BookingSlotPicker from './booking/BookingSlotPicker';
+import BookingForm from './booking/BookingForm';
+import BookingWidgetConfirmation from './booking/BookingWidgetConfirmation';
 
 const DEFAULT_COLOR = '#1a73e8';
 
@@ -296,7 +300,7 @@ export default function BookingWidget({
     }
   };
 
-  // ---- Date helpers ----
+  // ---- Date / week helpers ----
   function getWeekDates() {
     const dates = [];
     const start = new Date(weekStart);
@@ -314,24 +318,10 @@ export default function BookingWidget({
     return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   }
 
-  function formatDayShort(date) {
-    return date.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase();
-  }
-
   function formatFullDate(date) {
     return date.toLocaleDateString(undefined, {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
     });
-  }
-
-  function isPast(date) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return date < today;
-  }
-
-  function isToday(date) {
-    return date.toDateString() === new Date().toDateString();
   }
 
   const prevWeek = () => {
@@ -346,6 +336,13 @@ export default function BookingWidget({
     const newStart = new Date(weekStart);
     newStart.setDate(weekStart.getDate() + 7);
     setWeekStart(newStart);
+  };
+
+  const handleScheduleAnother = () => {
+    setStep('datetime');
+    setConfirmedBooking(null);
+    setForm({ first_name: '', last_name: '', email: '', phone: '', notes: '' });
+    setSelectedTime('');
   };
 
   const weekDates = getWeekDates();
@@ -421,97 +418,26 @@ export default function BookingWidget({
           {/* Step: Date/Time selection */}
           {step === 'datetime' && (
             <div>
-              {/* Appointment type selector */}
-              {appointmentTypes.length > 1 && (
-                <div style={styles.section}>
-                  <label style={styles.label}>Appointment Type</label>
-                  <div style={styles.typePills}>
-                    {appointmentTypes.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => setSelectedType(t)}
-                        style={{
-                          ...styles.typePill,
-                          ...(selectedType?.id === t.id ? styles.typePillActive : {}),
-                        }}
-                      >
-                        {t.type_name}
-                        <span style={styles.typeDuration}>{t.default_duration_minutes}m</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <BookingTypeSelector
+                appointmentTypes={appointmentTypes}
+                selectedType={selectedType}
+                onSelect={setSelectedType}
+                styles={styles}
+                accentColor={accentColor}
+              />
 
-              {/* Date picker */}
-              <div style={styles.section}>
-                <label style={styles.label}>Select a Date</label>
-                <div style={styles.weekNav}>
-                  <button
-                    onClick={prevWeek}
-                    disabled={isPast(weekDates[0])}
-                    style={styles.navBtn}
-                    aria-label="Previous week"
-                  >
-                    &lsaquo;
-                  </button>
-                  <div style={styles.weekDates}>
-                    {weekDates.map((date, idx) => {
-                      const disabled = isPast(date);
-                      const selected = selectedDate && date.toDateString() === selectedDate.toDateString();
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => !disabled && setSelectedDate(date)}
-                          disabled={disabled}
-                          style={{
-                            ...styles.dateCard,
-                            ...(selected ? { ...styles.dateCardSelected, backgroundColor: accentColor, borderColor: accentColor } : {}),
-                            ...(disabled ? styles.dateCardDisabled : {}),
-                            ...(isToday(date) && !selected ? styles.dateCardToday : {}),
-                          }}
-                          aria-label={date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-                        >
-                          <span style={styles.dayName}>{formatDayShort(date)}</span>
-                          <span style={{
-                            ...styles.dayNumber,
-                            ...(selected ? { color: '#fff' } : {}),
-                          }}>{date.getDate()}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button onClick={nextWeek} style={styles.navBtn} aria-label="Next week">
-                    &rsaquo;
-                  </button>
-                </div>
-              </div>
-
-              {/* Time slot picker */}
-              <div style={styles.section}>
-                <label style={styles.label}>Select a Time</label>
-                {availableSlots.length === 0 ? (
-                  <p style={styles.noSlots}>No available times for this date.</p>
-                ) : (
-                  <div style={styles.timeGrid}>
-                    {availableSlots.map((slot, idx) => {
-                      const selected = selectedTime === slot.start_time;
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => setSelectedTime(slot.start_time)}
-                          style={{
-                            ...styles.timeSlot,
-                            ...(selected ? { ...styles.timeSlotSelected, backgroundColor: accentColor, borderColor: accentColor } : {}),
-                          }}
-                        >
-                          {slot.display}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <BookingSlotPicker
+                weekDates={weekDates}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                onPrevWeek={prevWeek}
+                onNextWeek={nextWeek}
+                availableSlots={availableSlots}
+                selectedTime={selectedTime}
+                onSelectTime={setSelectedTime}
+                styles={styles}
+                accentColor={accentColor}
+              />
 
               <button
                 onClick={() => setStep('form')}
@@ -535,159 +461,32 @@ export default function BookingWidget({
 
           {/* Step: Contact form */}
           {step === 'form' && (
-            <div>
-              <button
-                onClick={() => { setStep('datetime'); setError(null); }}
-                style={styles.backLink}
-              >
-                &lsaquo; Back
-              </button>
-
-              {selectedDate && selectedTime && (
-                <div style={styles.summaryBadge}>
-                  {selectedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                  {' at '}
-                  {formatTime(selectedTime)}
-                  {selectedType ? ` - ${selectedType.type_name}` : ''}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} style={styles.form}>
-                <div style={styles.formRow}>
-                  <div style={styles.formGroup}>
-                    <label style={styles.formLabel}>First Name *</label>
-                    <input
-                      type="text"
-                      value={form.first_name}
-                      onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-                      placeholder="Jane"
-                      style={{
-                        ...styles.input,
-                        ...(formErrors.first_name ? styles.inputError : {}),
-                      }}
-                      required
-                    />
-                    {formErrors.first_name && <span style={styles.fieldError}>{formErrors.first_name}</span>}
-                  </div>
-                  <div style={styles.formGroup}>
-                    <label style={styles.formLabel}>Last Name *</label>
-                    <input
-                      type="text"
-                      value={form.last_name}
-                      onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-                      placeholder="Doe"
-                      style={{
-                        ...styles.input,
-                        ...(formErrors.last_name ? styles.inputError : {}),
-                      }}
-                      required
-                    />
-                    {formErrors.last_name && <span style={styles.fieldError}>{formErrors.last_name}</span>}
-                  </div>
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Email *</label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="jane@email.com"
-                    style={{
-                      ...styles.input,
-                      ...(formErrors.email ? styles.inputError : {}),
-                    }}
-                    required
-                  />
-                  {formErrors.email && <span style={styles.fieldError}>{formErrors.email}</span>}
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Phone</label>
-                  <input
-                    type="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    placeholder="(555) 555-5555"
-                    style={{
-                      ...styles.input,
-                      ...(formErrors.phone ? styles.inputError : {}),
-                    }}
-                  />
-                  {formErrors.phone && <span style={styles.fieldError}>{formErrors.phone}</span>}
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Notes</label>
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    placeholder="Anything we should know?"
-                    rows={2}
-                    maxLength={500}
-                    style={styles.textarea}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{
-                    ...styles.primaryBtn,
-                    backgroundColor: submitting ? '#ccc' : accentColor,
-                    cursor: submitting ? 'wait' : 'pointer',
-                  }}
-                >
-                  {submitting ? 'Scheduling...' : 'Schedule Appointment'}
-                </button>
-              </form>
-            </div>
+            <BookingForm
+              form={form}
+              onFormChange={setForm}
+              formErrors={formErrors}
+              onSubmit={handleSubmit}
+              onBack={() => { setStep('datetime'); setError(null); }}
+              submitting={submitting}
+              selectedDate={selectedDate}
+              selectedTime={selectedTime}
+              selectedType={selectedType}
+              formatTime={formatTime}
+              styles={styles}
+              accentColor={accentColor}
+            />
           )}
 
           {/* Step: Confirmation */}
-          {step === 'confirmation' && confirmedBooking && (
-            <div style={styles.confirmContainer}>
-              <div style={{ ...styles.checkCircle, borderColor: accentColor }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="3">
-                  <path d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 style={styles.confirmTitle}>Appointment Confirmed</h3>
-              <p style={styles.confirmSubtitle}>A confirmation email has been sent.</p>
-
-              <div style={styles.confirmDetails}>
-                <div style={styles.confirmRow}>
-                  <span style={styles.confirmLabel}>Date</span>
-                  <span style={styles.confirmValue}>{formatFullDate(confirmedBooking.date)}</span>
-                </div>
-                <div style={styles.confirmRow}>
-                  <span style={styles.confirmLabel}>Time</span>
-                  <span style={styles.confirmValue}>{formatTime(confirmedBooking.time)}</span>
-                </div>
-                {confirmedBooking.type && (
-                  <div style={styles.confirmRow}>
-                    <span style={styles.confirmLabel}>Type</span>
-                    <span style={styles.confirmValue}>{confirmedBooking.type.type_name}</span>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => {
-                  setStep('datetime');
-                  setConfirmedBooking(null);
-                  setForm({ first_name: '', last_name: '', email: '', phone: '', notes: '' });
-                  setSelectedTime('');
-                }}
-                style={{
-                  ...styles.secondaryBtn,
-                  borderColor: accentColor,
-                  color: accentColor,
-                }}
-              >
-                Schedule Another
-              </button>
-            </div>
+          {step === 'confirmation' && (
+            <BookingWidgetConfirmation
+              confirmedBooking={confirmedBooking}
+              formatTime={formatTime}
+              formatFullDate={formatFullDate}
+              onScheduleAnother={handleScheduleAnother}
+              styles={styles}
+              accentColor={accentColor}
+            />
           )}
 
           {/* Footer */}

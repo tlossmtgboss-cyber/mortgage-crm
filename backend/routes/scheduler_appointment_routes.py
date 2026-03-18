@@ -95,18 +95,8 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
     # Public booking still has its own set_dependencies for historical reasons
     _set_public_booking_deps(get_db_func, get_current_user_func, models_dict, helpers=_shared_helpers)
 
-    # Wire up the old appointments_crud and blocked_time modules if they're still imported
-    try:
-        from routes.scheduler.appointments_crud import set_dependencies as _set_appt_crud_deps
-        _set_appt_crud_deps(get_db_func, get_current_user_func, models_dict, helpers=_shared_helpers)
-    except ImportError:
-        pass
-
-    try:
-        from routes.scheduler.blocked_time import set_dependencies as _set_bt_deps
-        _set_bt_deps(get_db_func, get_current_user_func, models_dict, helpers={'_audit_log': _audit_log})
-    except ImportError:
-        pass
+    # Note: appointments_crud.py and blocked_time.py were deprecated and removed.
+    # Their routers were superseded by appointments.py and blocked_times.py.
 
 
 # ============================================================================

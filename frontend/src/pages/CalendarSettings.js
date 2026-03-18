@@ -5,14 +5,28 @@
  * and save dispatch. Each tab's UI is delegated to a section component in
  * ./calendar-settings/.
  *
- * State is centralized via useReducer (settingsReducer).
+ * Infrastructure (defaults, reducer, loader, saver) is extracted to
+ * components/calendar/settings/ for testability.
  */
 
 import { useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { calendarSettingsAPI, API_BASE_URL } from '../services/api';
+import { API_BASE_URL } from '../services/api';
 import { toast } from '../utils/toast';
 import '../styles/calendar-settings.css';
+
+// Infrastructure
+import {
+  NAV_SECTIONS,
+  ALL_NAV_ITEMS,
+  SAVEABLE_SECTIONS,
+  settingsReducer,
+  initialState,
+  SET_TAB,
+  UPDATE_FIELD,
+} from '../components/calendar/settings';
+import { loadTabData } from '../components/calendar/settings/calendarSettingsLoader';
+import { handleSave as dispatchSave } from '../components/calendar/settings/calendarSettingsSaver';
 
 // Section components
 import AvailabilitySection from './calendar-settings/AvailabilitySection';
@@ -28,407 +42,6 @@ import AISchedulingSection from './calendar-settings/AISchedulingSection';
 import FollowUpCadenceSection from './calendar-settings/FollowUpCadenceSection';
 
 // ============================================================================
-// Navigation constants
-// ============================================================================
-
-const NAV_SECTIONS = [
-  {
-    group: 'Schedule',
-    items: [
-      { id: 'availability', label: 'Availability', icon: 'fa-clock', description: 'Business hours, time blocks, buffer time, and booking window' },
-      { id: 'appointment-types', label: 'Appointment Types', icon: 'fa-list-alt', description: 'Define the types of meetings clients can book' },
-      { id: 'locations-labels', label: 'Locations & Labels', icon: 'fa-map-marker-alt', description: 'Meeting locations, calendar labels, and appointment templates' },
-    ],
-  },
-  {
-    group: 'Booking',
-    items: [
-      { id: 'booking-page', label: 'Booking Page', icon: 'fa-palette', description: 'Customize your public booking page appearance and branding' },
-      { id: 'cancellation-policy', label: 'Cancellation Policy', icon: 'fa-ban', description: 'Set cancellation and rescheduling rules for appointments' },
-    ],
-  },
-  {
-    group: 'Communication',
-    items: [
-      { id: 'notifications', label: 'Notifications', icon: 'fa-bell', description: 'Email and SMS reminder settings, quiet hours, and digests' },
-      { id: 'integrations', label: 'Integrations', icon: 'fa-plug', description: 'Meeting defaults, external calendars, and third-party tools' },
-    ],
-  },
-  {
-    group: 'AI & Automation',
-    items: [
-      { id: 'ai-scheduling', label: 'AI Scheduling', icon: 'fa-robot', description: 'Configure how AI agents schedule appointments on your calendar' },
-      { id: 'follow-up-cadence', label: 'Follow-Up Cadence', icon: 'fa-sync-alt', description: 'Automated outreach sequences for document collection and borrower follow-up' },
-    ],
-  },
-  {
-    group: 'Management',
-    items: [
-      { id: 'team', label: 'Team', icon: 'fa-users', description: 'Manage team assignment strategy and capacity', badge: 'Manager' },
-      { id: 'advanced', label: 'Advanced', icon: 'fa-cog', description: 'Data export, calendar feeds, and developer options' },
-    ],
-  },
-];
-
-const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(s => s.items);
-
-// ============================================================================
-// Action types
-// ============================================================================
-
-const SET_TAB = 'SET_TAB';
-const LOAD_SECTION_START = 'LOAD_SECTION_START';
-const LOAD_SECTION_SUCCESS = 'LOAD_SECTION_SUCCESS';
-const LOAD_SECTION_ERROR = 'LOAD_SECTION_ERROR';
-const UPDATE_FIELD = 'UPDATE_FIELD';
-const SAVE_START = 'SAVE_START';
-const SAVE_SUCCESS = 'SAVE_SUCCESS';
-const SAVE_ERROR = 'SAVE_ERROR';
-const RESET_SECTION = 'RESET_SECTION';
-
-// ============================================================================
-// Default data for each section
-// ============================================================================
-
-const DEFAULT_AVAILABILITY = {
-  timezone: 'America/Chicago',
-  business_hours: {
-    monday: { start: '09:00', end: '17:00', enabled: true },
-    tuesday: { start: '09:00', end: '17:00', enabled: true },
-    wednesday: { start: '09:00', end: '17:00', enabled: true },
-    thursday: { start: '09:00', end: '17:00', enabled: true },
-    friday: { start: '09:00', end: '17:00', enabled: true },
-    saturday: { start: '10:00', end: '14:00', enabled: false },
-    sunday: { start: '10:00', end: '14:00', enabled: false },
-  },
-  time_blocks: [
-    { id: '1', label: 'Lunch Break', start: '12:00', end: '13:00', days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'], enabled: true },
-  ],
-  buffer_minutes: 5,
-  min_booking_notice_hours: 2,
-  max_advance_booking_days: 60,
-  block_us_holidays: false,
-  blocked_holidays: {},
-  custom_blocked_dates: [],
-  max_meetings_per_day: 0,
-  max_consecutive_meetings: 0,
-  min_break_between_meetings: 0,
-};
-
-const DEFAULT_NOTIFICATIONS = {
-  email_reminder_24h: true, email_reminder_2h: true, email_reminder_15m: false,
-  sms_reminder_24h: false, sms_reminder_2h: true, sms_reminder_15m: false,
-  quiet_hours_enabled: false, quiet_hours_start: '21:00', quiet_hours_end: '08:00',
-  notify_on_booking: true, notify_on_cancellation: true, notify_on_reschedule: true,
-  alert_new_booking: 'both', alert_cancellation: 'email', alert_reschedule: 'email',
-  alert_no_show: 'push', alert_waitlist_opened: 'none', alert_survey_response: 'email',
-  digest: {
-    enabled: false, frequency: 'daily', send_time: '07:00',
-    include_cancelled: false, include_no_shows: true, day_of_week: 'monday',
-  },
-  quiet_hours_include_weekends: false,
-  browser_notifications_enabled: false,
-};
-
-const DEFAULT_BOOKING_PAGE = {
-  branding: {
-    logo_url: null, primary_color: '#218D8D', secondary_color: '#e6f5f5',
-    tagline: '', welcome_message: 'Schedule a time to meet with us', show_branding: true,
-  },
-  booking_links: [],
-};
-
-const DEFAULT_CANCELLATION_POLICY = {
-  policy: 'moderate', allow_reschedule: true, reschedule_limit: 2, require_reason: false,
-};
-
-const DEFAULT_ADVANCED = {
-  calendar_feed_enabled: false, auto_confirm_appointments: true,
-  show_timezone_selector: true, enable_waitlist: false,
-};
-
-const DEFAULT_INTEGRATIONS = {
-  google: { connected: false }, outlook: { connected: false }, zoom: { connected: false },
-  google_meet: { connected: false }, ical: { connected: false, feed_url: '', subscriber_count: 0 },
-};
-
-const DEFAULT_MEETING_DEFAULTS = {
-  default_meeting_mode: 'video',
-  auto_create_meeting_link: true,
-};
-
-const DEFAULT_INTEGRATION_SETTINGS = {
-  google: { two_way_sync: true, conflict_resolution: 'crm_wins', sync_frequency: '15' },
-  outlook: { two_way_sync: true, conflict_resolution: 'crm_wins', sync_frequency: '15' },
-  zoom: { auto_generate_links: true, waiting_room: true, require_password: true, default_duration: 30 },
-  google_meet: { auto_add: true, default_duration: 30 },
-};
-
-const DEFAULT_WEBHOOK_SETTINGS = {
-  api_key: '', webhook_url: '',
-  events: {
-    'appointment.created': true, 'appointment.updated': true,
-    'appointment.cancelled': true, 'appointment.rescheduled': true,
-    'appointment.reminder': false, 'appointment.no_show': false,
-  },
-};
-
-const DEFAULT_TEAM = {
-  assignment_strategy: 'round_robin', apply_to_new_only: true,
-  members: [], total_members: 0,
-  overflow: { enabled: false, max_overflow_pct: 20, notify_user_ids: [], auto_expand_hours: false },
-  permissions: { members_see_calendars: true, members_reschedule_others: false, only_managers_modify: true },
-  weekly_coverage: null, utilization_pct: 0,
-};
-
-const DEFAULT_EXPANDED_SECTIONS = {
-  'weekly-schedule': true, 'week-overview': true, 'schedule-templates': false,
-  'buffer-times': true, 'date-overrides': false, 'holidays': false,
-  'seasonal-hours': false, 'override-days': false, 'daily-limits': false,
-};
-
-// ============================================================================
-// Initial state
-// ============================================================================
-
-const initialState = {
-  activeSection: 'availability',
-  loading: true,
-  saving: false,
-  hasChanges: false,
-  saveStatus: 'saved', // 'saved' | 'saving' | 'unsaved'
-
-  sections: {
-    availability: {
-      data: DEFAULT_AVAILABILITY,
-      seasonalHours: [],
-      overrideDays: [],
-      expandedSections: DEFAULT_EXPANDED_SECTIONS,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    'appointment-types': {
-      data: [],
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    notifications: {
-      data: DEFAULT_NOTIFICATIONS,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    'booking-page': {
-      data: DEFAULT_BOOKING_PAGE,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    'cancellation-policy': {
-      data: DEFAULT_CANCELLATION_POLICY,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    advanced: {
-      data: DEFAULT_ADVANCED,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    integrations: {
-      data: DEFAULT_INTEGRATIONS,
-      integrationSettings: DEFAULT_INTEGRATION_SETTINGS,
-      syncErrors: [],
-      webhookSettings: DEFAULT_WEBHOOK_SETTINGS,
-      meetingDefaults: DEFAULT_MEETING_DEFAULTS,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    team: {
-      data: DEFAULT_TEAM,
-      isManager: false,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-    'locations-labels': {
-      locations: [],
-      locationsLoading: false,
-      labels: [],
-      labelsLoading: false,
-      templates: [],
-      templatesLoading: false,
-      autoAssignLabels: false,
-      labelMappings: {},
-      defaultLabelId: null,
-      loading: false,
-      error: null,
-      dirty: false,
-      lastSaved: null,
-    },
-  },
-};
-
-// ============================================================================
-// Reducer
-// ============================================================================
-
-function settingsReducer(state, action) {
-  switch (action.type) {
-    case SET_TAB:
-      return {
-        ...state,
-        activeSection: action.payload,
-        hasChanges: false,
-        saveStatus: 'saved',
-      };
-
-    case LOAD_SECTION_START:
-      return {
-        ...state,
-        loading: true,
-        sections: {
-          ...state.sections,
-          [action.section]: {
-            ...state.sections[action.section],
-            loading: true,
-            error: null,
-          },
-        },
-      };
-
-    case LOAD_SECTION_SUCCESS: {
-      const section = action.section;
-      const currentSection = state.sections[section];
-      return {
-        ...state,
-        loading: false,
-        hasChanges: false,
-        saveStatus: 'saved',
-        sections: {
-          ...state.sections,
-          [section]: {
-            ...currentSection,
-            ...action.payload,
-            loading: false,
-            error: null,
-            dirty: false,
-            lastSaved: action.payload.data || currentSection.data,
-          },
-        },
-      };
-    }
-
-    case LOAD_SECTION_ERROR:
-      return {
-        ...state,
-        loading: false,
-        hasChanges: false,
-        saveStatus: 'saved',
-        sections: {
-          ...state.sections,
-          [action.section]: {
-            ...state.sections[action.section],
-            loading: false,
-            error: action.error,
-          },
-        },
-      };
-
-    case UPDATE_FIELD: {
-      const { section, field, value } = action;
-      const currentSection = state.sections[section];
-
-      // Support functional updates (same as useState callback pattern)
-      const resolvedValue = typeof value === 'function' ? value(currentSection[field]) : value;
-
-      return {
-        ...state,
-        hasChanges: true,
-        saveStatus: 'unsaved',
-        sections: {
-          ...state.sections,
-          [section]: {
-            ...currentSection,
-            [field]: resolvedValue,
-            dirty: true,
-          },
-        },
-      };
-    }
-
-    case SAVE_START:
-      return {
-        ...state,
-        saving: true,
-        saveStatus: 'saving',
-      };
-
-    case SAVE_SUCCESS: {
-      const section = action.section;
-      const currentSection = state.sections[section];
-      return {
-        ...state,
-        saving: false,
-        hasChanges: false,
-        saveStatus: 'saved',
-        sections: {
-          ...state.sections,
-          [section]: {
-            ...currentSection,
-            dirty: false,
-            lastSaved: currentSection.data,
-          },
-        },
-      };
-    }
-
-    case SAVE_ERROR:
-      return {
-        ...state,
-        saving: false,
-        saveStatus: 'unsaved',
-      };
-
-    case RESET_SECTION: {
-      const section = action.section;
-      const currentSection = state.sections[section];
-      if (currentSection.lastSaved) {
-        return {
-          ...state,
-          hasChanges: false,
-          saveStatus: 'saved',
-          sections: {
-            ...state.sections,
-            [section]: {
-              ...currentSection,
-              data: currentSection.lastSaved,
-              dirty: false,
-            },
-          },
-        };
-      }
-      return state;
-    }
-
-    default:
-      return state;
-  }
-}
-
-// ============================================================================
 // Component
 // ============================================================================
 
@@ -438,6 +51,11 @@ function CalendarSettings() {
   const [state, dispatch] = useReducer(settingsReducer, initialState);
   const [testResult, setTestResult] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
+
+  // Stable ref for accessing current state in async callbacks
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const getState = useCallback(() => stateRef.current, []);
 
   // Destructure top-level state for convenience
   const { activeSection, loading, saving, hasChanges, saveStatus, sections } = state;
@@ -473,296 +91,44 @@ function CalendarSettings() {
 
   const activeNavItem = ALL_NAV_ITEMS.find(item => item.id === activeSection);
   const activeGroupName = NAV_SECTIONS.find(s => s.items.some(i => i.id === activeSection))?.group || '';
-  const showSaveButton = ['availability', 'notifications', 'booking-page', 'team', 'integrations', 'cancellation-policy', 'locations-labels', 'advanced'].includes(activeSection);
+  const showSaveButton = SAVEABLE_SECTIONS.includes(activeSection);
 
   // ============================================================================
   // Setter factories (stable callbacks that mimic useState setters for children)
   // ============================================================================
 
-  const setAvailability = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'availability', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setSeasonalHours = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'availability', field: 'seasonalHours', value: valueOrFn });
-  }, []);
-
-  const setOverrideDays = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'availability', field: 'overrideDays', value: valueOrFn });
-  }, []);
-
-  const setAppointmentTypes = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'appointment-types', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setNotifications = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'notifications', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setBookingPage = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'booking-page', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setCancellationPolicy = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'cancellation-policy', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setAdvancedSettings = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'advanced', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setIntegrations = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setIntegrationSettings = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'integrationSettings', value: valueOrFn });
-  }, []);
-
-  const setSyncErrors = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'syncErrors', value: valueOrFn });
-  }, []);
-
-  const setWebhookSettings = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'webhookSettings', value: valueOrFn });
-  }, []);
-
-  const setMeetingDefaults = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'meetingDefaults', value: valueOrFn });
-  }, []);
-
-  const setTeam = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'team', field: 'data', value: valueOrFn });
-  }, []);
-
-  const setLocations = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'locations', value: valueOrFn });
-  }, []);
-
-  const setLabels = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'labels', value: valueOrFn });
-  }, []);
-
-  const setTemplates = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'templates', value: valueOrFn });
-  }, []);
-
-  const setAutoAssignLabels = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'autoAssignLabels', value: valueOrFn });
-  }, []);
-
-  const setLabelMappings = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'labelMappings', value: valueOrFn });
-  }, []);
-
-  const setDefaultLabelId = useCallback((valueOrFn) => {
-    dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'defaultLabelId', value: valueOrFn });
-  }, []);
+  const setAvailability = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'availability', field: 'data', value: v }), []);
+  const setSeasonalHours = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'availability', field: 'seasonalHours', value: v }), []);
+  const setOverrideDays = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'availability', field: 'overrideDays', value: v }), []);
+  const setAppointmentTypes = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'appointment-types', field: 'data', value: v }), []);
+  const setNotifications = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'notifications', field: 'data', value: v }), []);
+  const setBookingPage = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'booking-page', field: 'data', value: v }), []);
+  const setCancellationPolicy = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'cancellation-policy', field: 'data', value: v }), []);
+  const setAdvancedSettings = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'advanced', field: 'data', value: v }), []);
+  const setIntegrations = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'data', value: v }), []);
+  const setIntegrationSettings = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'integrationSettings', value: v }), []);
+  const setSyncErrors = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'syncErrors', value: v }), []);
+  const setWebhookSettings = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'webhookSettings', value: v }), []);
+  const setMeetingDefaults = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'integrations', field: 'meetingDefaults', value: v }), []);
+  const setTeam = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'team', field: 'data', value: v }), []);
+  const setLocations = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'locations', value: v }), []);
+  const setLabels = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'labels', value: v }), []);
+  const setTemplates = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'templates', value: v }), []);
+  const setAutoAssignLabels = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'autoAssignLabels', value: v }), []);
+  const setLabelMappings = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'labelMappings', value: v }), []);
+  const setDefaultLabelId = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'defaultLabelId', value: v }), []);
 
   // ============================================================================
   // Data Loading
   // ============================================================================
 
+  const doLoadTab = useCallback((tab) => {
+    loadTabData(tab, dispatch, getState);
+  }, [getState]);
+
   useEffect(() => {
-    loadTabData(activeSection);
+    doLoadTab(activeSection);
   }, [activeSection]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadTabData = async (tab) => {
-    dispatch({ type: LOAD_SECTION_START, section: tab });
-    try {
-      switch (tab) {
-        case 'availability': {
-          const res = await calendarSettingsAPI.getAvailability();
-          if (res?.data) {
-            const prev = sections.availability;
-            dispatch({
-              type: LOAD_SECTION_SUCCESS,
-              section: 'availability',
-              payload: {
-                data: {
-                  ...prev.data, ...res.data,
-                  blocked_holidays: res.data.blocked_holidays || prev.data.blocked_holidays,
-                  custom_blocked_dates: res.data.custom_blocked_dates || prev.data.custom_blocked_dates,
-                },
-                seasonalHours: res.data.seasonal_hours || prev.seasonalHours,
-                overrideDays: res.data.override_days || prev.overrideDays,
-              },
-            });
-          } else {
-            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'availability', payload: {} });
-          }
-          break;
-        }
-        case 'appointment-types': {
-          const res = await calendarSettingsAPI.getAppointmentTypes();
-          dispatch({
-            type: LOAD_SECTION_SUCCESS,
-            section: 'appointment-types',
-            payload: {
-              data: res?.data?.appointment_types || sections['appointment-types'].data,
-            },
-          });
-          break;
-        }
-        case 'notifications': {
-          const res = await calendarSettingsAPI.getNotifications();
-          const prev = sections.notifications.data;
-          dispatch({
-            type: LOAD_SECTION_SUCCESS,
-            section: 'notifications',
-            payload: {
-              data: res?.data ? { ...prev, ...res.data } : prev,
-            },
-          });
-          break;
-        }
-        case 'booking-page': {
-          const res = await calendarSettingsAPI.getBookingPage();
-          if (res?.data) {
-            const prev = sections['booking-page'].data;
-            dispatch({
-              type: LOAD_SECTION_SUCCESS,
-              section: 'booking-page',
-              payload: {
-                data: {
-                  branding: { ...prev.branding, ...(res.data.branding || {}) },
-                  booking_links: res.data.booking_links || [],
-                },
-              },
-            });
-          } else {
-            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'booking-page', payload: {} });
-          }
-          break;
-        }
-        case 'integrations': {
-          const res = await calendarSettingsAPI.getIntegrations();
-          if (res?.data) {
-            const prev = sections.integrations;
-            dispatch({
-              type: LOAD_SECTION_SUCCESS,
-              section: 'integrations',
-              payload: {
-                data: {
-                  ...prev.data, ...res.data,
-                  google: { ...prev.data.google, ...(res.data.google || {}) },
-                  outlook: { ...prev.data.outlook, ...(res.data.outlook || {}) },
-                  zoom: { ...prev.data.zoom, ...(res.data.zoom || {}) },
-                  google_meet: { ...prev.data.google_meet, ...(res.data.google_meet || {}) },
-                  ical: { ...prev.data.ical, ...(res.data.ical || {}) },
-                },
-                syncErrors: res.data.sync_errors || prev.syncErrors,
-                webhookSettings: res.data.webhook_settings
-                  ? { ...prev.webhookSettings, ...res.data.webhook_settings }
-                  : prev.webhookSettings,
-                integrationSettings: res.data.integration_settings
-                  ? { ...prev.integrationSettings, ...res.data.integration_settings }
-                  : prev.integrationSettings,
-                meetingDefaults: res.data.meeting_defaults
-                  ? { ...prev.meetingDefaults, ...res.data.meeting_defaults }
-                  : prev.meetingDefaults,
-              },
-            });
-          } else {
-            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'integrations', payload: {} });
-          }
-          break;
-        }
-        case 'team': {
-          try {
-            const res = await calendarSettingsAPI.getTeam();
-            if (res?.data) {
-              const prev = sections.team.data;
-              dispatch({
-                type: LOAD_SECTION_SUCCESS,
-                section: 'team',
-                payload: {
-                  data: {
-                    ...prev, ...res.data,
-                    overflow: { ...prev.overflow, ...(res.data.overflow || {}) },
-                    permissions: { ...prev.permissions, ...(res.data.permissions || {}) },
-                    members: (res.data.members || []).map(m => ({
-                      ...m,
-                      specialties: m.specialties || [],
-                      weekly_appointments: m.weekly_appointments || 0,
-                      weekly_capacity: m.weekly_capacity || (m.max_daily_appointments || 8) * 5,
-                    })),
-                  },
-                  isManager: true,
-                },
-              });
-            } else {
-              dispatch({ type: LOAD_SECTION_SUCCESS, section: 'team', payload: { isManager: true } });
-            }
-          } catch (err) {
-            if (err.response?.status === 403) {
-              dispatch({
-                type: LOAD_SECTION_SUCCESS,
-                section: 'team',
-                payload: { isManager: false },
-              });
-            } else {
-              throw err;
-            }
-          }
-          break;
-        }
-        case 'locations-labels': {
-          // Locations, labels, and templates load independently with sub-loading states
-          const payload = {};
-
-          // Locations
-          dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'locationsLoading', value: true });
-          try {
-            const locRes = await calendarSettingsAPI.getLocations();
-            if (locRes?.data?.locations) payload.locations = locRes.data.locations;
-          } catch (err) {
-            console.error('Failed to load locations:', err);
-          }
-          dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'locationsLoading', value: false });
-
-          // Labels
-          dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'labelsLoading', value: true });
-          try {
-            const labelsRes = await calendarSettingsAPI.getLabels();
-            if (labelsRes?.data?.labels) payload.labels = labelsRes.data.labels;
-            if (labelsRes?.data?.auto_assign_enabled !== undefined) payload.autoAssignLabels = labelsRes.data.auto_assign_enabled;
-            if (labelsRes?.data?.label_mappings) payload.labelMappings = labelsRes.data.label_mappings;
-            if (labelsRes?.data?.default_label_id) payload.defaultLabelId = labelsRes.data.default_label_id;
-          } catch (err) {
-            console.error('Failed to load labels:', err);
-          }
-          dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'labelsLoading', value: false });
-
-          // Templates
-          dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'templatesLoading', value: true });
-          try {
-            const templatesRes = await calendarSettingsAPI.getTemplates();
-            if (templatesRes?.data?.templates) payload.templates = templatesRes.data.templates;
-          } catch (err) {
-            console.error('Failed to load templates:', err);
-          }
-          dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'templatesLoading', value: false });
-
-          dispatch({ type: LOAD_SECTION_SUCCESS, section: 'locations-labels', payload });
-          break;
-        }
-        case 'cancellation-policy':
-        case 'advanced':
-          dispatch({ type: LOAD_SECTION_SUCCESS, section: tab, payload: {} });
-          break;
-        default:
-          dispatch({ type: LOAD_SECTION_SUCCESS, section: tab, payload: {} });
-          break;
-      }
-    } catch (err) {
-      console.error(`Failed to load ${tab}:`, err);
-      if (err.response?.status !== 403) {
-        toast.error(`Failed to load ${tab} settings`);
-      }
-      dispatch({ type: LOAD_SECTION_ERROR, section: tab, error: err.message || 'Load failed' });
-    }
-  };
 
   // ============================================================================
   // Navigation
@@ -793,7 +159,7 @@ function CalendarSettings() {
   }, [handleSectionChange]);
 
   // ============================================================================
-  // Save dispatch
+  // Save & Test
   // ============================================================================
 
   const markChanged = useCallback(() => {
@@ -837,94 +203,9 @@ function CalendarSettings() {
     }
   };
 
-  const handleSave = async () => {
-    switch (activeSection) {
-      case 'availability':
-        dispatch({ type: SAVE_START });
-        try {
-          await calendarSettingsAPI.updateAvailability({
-            ...availability, seasonal_hours: seasonalHours, override_days: overrideDays,
-          });
-          toast.success('Availability settings saved');
-          dispatch({ type: SAVE_SUCCESS, section: 'availability' });
-        } catch (err) {
-          toast.error('Failed to save availability settings');
-          dispatch({ type: SAVE_ERROR });
-        }
-        return;
-
-      case 'notifications':
-        dispatch({ type: SAVE_START });
-        try {
-          await calendarSettingsAPI.updateNotifications(notifications);
-          toast.success('Notification preferences saved');
-          dispatch({ type: SAVE_SUCCESS, section: 'notifications' });
-        } catch (err) {
-          toast.error('Failed to save notification preferences');
-          dispatch({ type: SAVE_ERROR });
-        }
-        return;
-
-      case 'booking-page':
-        dispatch({ type: SAVE_START });
-        try {
-          await calendarSettingsAPI.updateBookingPage(bookingPage.branding);
-          toast.success('Booking page settings saved');
-          dispatch({ type: SAVE_SUCCESS, section: 'booking-page' });
-        } catch (err) {
-          toast.error('Failed to save booking page settings');
-          dispatch({ type: SAVE_ERROR });
-        }
-        return;
-
-      case 'team':
-        dispatch({ type: SAVE_START });
-        try {
-          await calendarSettingsAPI.updateTeam({
-            assignment_strategy: team.assignment_strategy,
-            apply_to_new_only: team.apply_to_new_only,
-            members: team.members?.map(m => ({
-              user_id: m.user_id,
-              max_daily_appointments: m.max_daily_appointments,
-              is_accepting_appointments: m.is_accepting_appointments,
-              specialties: m.specialties || [],
-            })),
-            overflow: team.overflow,
-            permissions: team.permissions,
-          });
-          toast.success('Team settings saved');
-          dispatch({ type: SAVE_SUCCESS, section: 'team' });
-        } catch (err) {
-          toast.error('Failed to save team settings');
-          dispatch({ type: SAVE_ERROR });
-        }
-        return;
-
-      case 'integrations':
-        dispatch({ type: SAVE_START });
-        try {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          toast.success('Integration settings saved');
-          dispatch({ type: SAVE_SUCCESS, section: 'integrations' });
-        } catch (err) {
-          toast.error('Failed to save integration settings');
-          dispatch({ type: SAVE_ERROR });
-        }
-        return;
-
-      case 'cancellation-policy':
-      case 'locations-labels':
-      case 'advanced':
-        dispatch({ type: SAVE_START });
-        setTimeout(() => {
-          dispatch({ type: SAVE_SUCCESS, section: activeSection });
-          toast.success('Settings saved');
-        }, 500);
-        return;
-
-      default: return;
-    }
-  };
+  const handleSave = useCallback(() => {
+    dispatchSave(activeSection, sections, dispatch);
+  }, [activeSection, sections]);
 
   // ============================================================================
   // Section router
@@ -961,7 +242,7 @@ function CalendarSettings() {
             appointmentTypes={appointmentTypes}
             setAppointmentTypes={setAppointmentTypes}
             loading={loading}
-            loadTabData={loadTabData}
+            loadTabData={doLoadTab}
           />
         );
       case 'notifications':
@@ -1012,7 +293,7 @@ function CalendarSettings() {
             isManager={isManager}
             appointmentTypes={appointmentTypes}
             markChanged={markChanged}
-            loadTabData={loadTabData}
+            loadTabData={doLoadTab}
           />
         );
       case 'locations-labels':
@@ -1034,7 +315,7 @@ function CalendarSettings() {
             defaultLabelId={defaultLabelId}
             setDefaultLabelId={setDefaultLabelId}
             appointmentTypes={appointmentTypes}
-            loadTabData={loadTabData}
+            loadTabData={doLoadTab}
           />
         );
       case 'ai-scheduling':
@@ -1245,7 +526,7 @@ function CalendarSettings() {
             <div className="save-bar-actions">
               <button
                 type="button"
-                onClick={() => loadTabData(activeSection)}
+                onClick={() => doLoadTab(activeSection)}
                 className="btn-secondary"
                 disabled={saving}
               >

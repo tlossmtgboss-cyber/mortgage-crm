@@ -221,7 +221,7 @@ def _build_app():
             db.close()
 
     # Override the production get_db so that Depends(get_db) in sub-modules
-    # (e.g. appointments_crud.py line 86) resolves to our test session.
+    # (e.g. _helpers.py get_db override) resolves to our test session.
     from db import get_db as _prod_get_db
     app.dependency_overrides[_prod_get_db] = override_get_db
 
@@ -344,9 +344,9 @@ def _build_app():
     }
 
     # Appointments CRUD
-    from routes.scheduler.appointments_crud import router as ac_router
-    from routes.scheduler.appointments_crud import set_dependencies as ac_set_deps
-    ac_set_deps(override_get_db, mock_get_current_user, _models_dict, helpers=helpers)
+    from routes.scheduler.appointments import router as ac_router
+    from routes.scheduler._helpers import set_dependencies as ac_set_deps
+    ac_set_deps(override_get_db, mock_get_current_user, _models_dict)
 
     # Booking links
     from routes.scheduler.booking_links import router as bl_router

@@ -38,6 +38,19 @@ from scheduler_email_service import (
 )
 from services.notification_service import notification_service
 from services.microsoft_graph import create_event_via_graph, CalendarResult
+from routes.scheduler.constants import (
+    DEFAULT_APPOINTMENT_DURATION_MINUTES,
+    ALLOWED_APPOINTMENT_DURATIONS,
+    DEFAULT_BUFFER_BEFORE_MINUTES,
+    DEFAULT_BUFFER_AFTER_MINUTES,
+    DEFAULT_MIN_NOTICE_HOURS,
+    DEFAULT_MAX_ADVANCE_DAYS,
+    SLOT_GENERATION_MAX_DAYS,
+    BOOKING_RATE_LIMIT_PER_EMAIL,
+    BOOKING_RATE_LIMIT_PER_IP,
+    DEMO_CREATE_RATE_LIMIT,
+    PUBLIC_BOOKING_RATE_LIMIT,
+)
 
 # Import shared utilities from _helpers.py (single source of truth)
 from routes.scheduler._helpers import (
@@ -54,7 +67,17 @@ from routes.scheduler._helpers import (
     _RATE_LIMIT_WINDOW,
     _IS_PRODUCTION,
     _TURNSTILE_SECRET_KEY,
+    get_models,
+    _check_appointment_conflict,
+    _check_duplicate_booking,
+    _log_appointment_activity,
+    _create_followup_task,
+    _check_lo_licensing,
+    _get_user_timezone,
+    _generate_available_slots,
+    _audit_log,
 )
+from db import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -62,43 +85,13 @@ router = APIRouter()
 
 
 # ============================================================================
-# DEPENDENCY INJECTION STORAGE (set by parent module)
+# BACKWARD COMPATIBILITY — set_dependencies is a no-op now that we use
+# direct imports from _helpers.py and db.py.
 # ============================================================================
 
-_get_db = None
-_get_current_user_func = None
-_models = None
-
-# Parent module helpers (injected via set_dependencies)
-_parent_helpers = {}
-
-
-def set_dependencies(get_db_func, get_current_user_func, models_dict, helpers: dict = None):
-    """Set dependencies from parent module.
-
-    helpers dict should contain:
-      - _check_appointment_conflict
-      - _check_duplicate_booking
-      - _log_appointment_activity
-      - _ensure_lead_for_booking
-      - _create_followup_task
-      - _check_lo_licensing
-      - _get_user_timezone
-      - _generate_available_slots
-      - _audit_log
-    """
-    global _get_db, _get_current_user_func, _models, _parent_helpers
-    _get_db = get_db_func
-    _get_current_user_func = get_current_user_func
-    _models = models_dict
-    if helpers:
-        _parent_helpers.update(helpers)
-
-
-def get_db():
-    if _get_db is None:
-        raise RuntimeError("Dependencies not set")
-    yield from _get_db()
+def set_dependencies(get_db_func=None, get_current_user_func=None, models_dict=None, helpers: dict = None):
+    """No-op — kept for backward compatibility with scheduler_appointment_routes.py."""
+    pass
 
 
 # ============================================================================
@@ -108,8 +101,8 @@ def get_db():
 # ============================================================================
 
 _BOOKING_RATE_LIMIT_WINDOW = int(os.getenv("SCHEDULER_BOOKING_RATE_LIMIT_WINDOW", "3600"))  # 1 hour default
-_BOOKING_MAX_PER_EMAIL = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_EMAIL", "5"))
-_BOOKING_MAX_PER_IP = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_IP", "5"))
+_BOOKING_MAX_PER_EMAIL = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_EMAIL", str(BOOKING_RATE_LIMIT_PER_EMAIL)))
+_BOOKING_MAX_PER_IP = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_IP", str(BOOKING_RATE_LIMIT_PER_IP)))
 
 
 async def _check_booking_ip_rate_limit(request: Request):
@@ -181,53 +174,10 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str):
         )
 
 
-# ============================================================================
-# HELPER ACCESSORS (delegate to _helpers.py shared functions)
-# ============================================================================
-
-def _check_appointment_conflict(db, assigned_user_id, start_time, end_time, org_id=None, exclude_appointment_id=None):
-    return _parent_helpers['_check_appointment_conflict'](
-        db, assigned_user_id, start_time, end_time, org_id=org_id,
-        exclude_appointment_id=exclude_appointment_id
-    )
-
-
-def _check_duplicate_booking(db, attendee_email, assigned_user_id, start_time, org_id=None):
-    return _parent_helpers['_check_duplicate_booking'](
-        db, attendee_email, assigned_user_id, start_time, org_id=org_id
-    )
-
-
-def _log_appointment_activity(db, org_id, user_id, lead_id, loan_id, content, activity_type="Meeting"):
-    return _parent_helpers['_log_appointment_activity'](
-        db, org_id, user_id, lead_id, loan_id, content, activity_type=activity_type
-    )
-
-
-def _create_followup_task(db, org_id, owner_id, lead_id, loan_id, title, description, due_date, priority="medium"):
-    return _parent_helpers['_create_followup_task'](
-        db, org_id, owner_id, lead_id, loan_id, title=title, description=description,
-        due_date=due_date, priority=priority
-    )
-
-
-def _check_lo_licensing(db, assigned_user_id, attendee_state, org_id=None):
-    return _parent_helpers['_check_lo_licensing'](
-        db, assigned_user_id, attendee_state, org_id=org_id
-    )
-
-
-def _get_user_timezone(db, user_id, org_id=None):
-    return _parent_helpers['_get_user_timezone'](db, user_id, org_id=org_id)
-
-
-def _generate_available_slots(db, user_ids, start_date, end_date, duration_minutes=30,
-                               org_id=None, check_cross_source=True, **kwargs):
-    return _parent_helpers['_generate_available_slots'](
-        db=db, user_ids=user_ids, start_date=start_date, end_date=end_date,
-        duration_minutes=duration_minutes, org_id=org_id,
-        check_cross_source=check_cross_source, **kwargs
-    )
+# Helper functions (_check_appointment_conflict, _check_duplicate_booking,
+# _log_appointment_activity, _create_followup_task, _check_lo_licensing,
+# _get_user_timezone, _generate_available_slots, _audit_log) are now
+# imported directly from _helpers.py above.
 
 
 # ============================================================================
@@ -243,10 +193,12 @@ async def get_public_booking_page(
     """Get public booking page data"""
     try:
         await _check_rate_limit(request)
-        BookingLink = _models['BookingLink']
-        AppointmentType = _models['AppointmentType']
-        User = _models.get('User')
+        BookingLink = get_models()['BookingLink']
+        AppointmentType = get_models()['AppointmentType']
+        User = get_models().get('User')
 
+        # Slug must be globally unique (enforced by DB constraint).
+        # Query by slug + active + public; org_id derived from the link itself.
         link = db.query(BookingLink).filter(
             BookingLink.slug == slug,
             BookingLink.is_active == True,
@@ -259,10 +211,10 @@ async def get_public_booking_page(
                 raise HTTPException(status_code=404, detail="Booking page not found")
 
             # Tighter rate limit for demo auto-creation to prevent spam
-            await _check_rate_limit(request, max_requests=3, custom_key=f"sched_demo_create:{_get_client_ip(request)}")
+            await _check_rate_limit(request, max_requests=DEMO_CREATE_RATE_LIMIT, custom_key=f"sched_demo_create:{_get_client_ip(request)}")
 
             try:
-                SchedulerConfig = _models['SchedulerConfig']
+                SchedulerConfig = get_models()['SchedulerConfig']
 
                 if User:
                     # For demo slug, use a user who already has a scheduler config (not just any admin)
@@ -295,9 +247,9 @@ async def get_public_booking_page(
                                 config_name=f"{first_name}'s Schedule",
                                 description=f"Availability settings for {user_name}",
                                 timezone="America/New_York",
-                                default_duration_minutes=30,
-                                min_notice_hours=2,
-                                max_advance_days=60,
+                                default_duration_minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES,
+                                min_notice_hours=DEFAULT_MIN_NOTICE_HOURS,
+                                max_advance_days=DEFAULT_MAX_ADVANCE_DAYS,
                                 is_active=True
                             )
                             db.add(user_config)
@@ -319,8 +271,8 @@ async def get_public_booking_page(
                                 type_name="Product Demo",
                                 type_key="demo_consultation",
                                 description="Schedule a personalized demo of our platform",
-                                default_duration_minutes=30,
-                                allowed_durations=[15, 30, 45, 60],
+                                default_duration_minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES,
+                                allowed_durations=ALLOWED_APPOINTMENT_DURATIONS,
                                 meeting_type="consultation",
                                 default_mode="phone",
                                 color="#2563eb",
@@ -328,8 +280,8 @@ async def get_public_booking_page(
                                 is_public=True,
                                 is_active=True,
                                 requires_confirmation=False,
-                                buffer_before_minutes=5,
-                                buffer_after_minutes=5
+                                buffer_before_minutes=DEFAULT_BUFFER_BEFORE_MINUTES,
+                                buffer_after_minutes=DEFAULT_BUFFER_AFTER_MINUTES
                             )
                             db.add(user_type)
                             db.flush()
@@ -368,15 +320,14 @@ async def get_public_booking_page(
                         db.commit()
                         logger.info(f"Auto-created booking link for slug: {slug}")
             except Exception as e:
-                logger.error(f"Error auto-creating booking link for {slug}: {e}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
+                logger.exception(f"Error auto-creating booking link for {slug}")
+                # Creation was attempted but failed — return 500, not 404
+                raise HTTPException(status_code=500, detail="Unable to create booking page")
 
         if not link:
             raise HTTPException(status_code=404, detail="Booking page not found")
 
         # H8: Atomic view count increment to prevent lost updates under concurrency
-        BookingLink = _models['BookingLink']
         db.query(BookingLink).filter(BookingLink.id == link.id).update(
             {BookingLink.view_count: func.coalesce(BookingLink.view_count, 0) + 1},
             synchronize_session=False
@@ -456,7 +407,7 @@ async def get_public_available_slots(
     date: Optional[date] = Query(None, description="Single date to get slots for (legacy)"),
     start_date: Optional[date] = Query(None, description="Start of date range"),
     end_date: Optional[date] = Query(None, description="End of date range"),
-    duration_minutes: int = Query(30),
+    duration_minutes: int = Query(DEFAULT_APPOINTMENT_DURATION_MINUTES),
     request: Request = None,
     db: Session = Depends(get_db)
 ):
@@ -466,7 +417,7 @@ async def get_public_available_slots(
     - Single date: ?date=YYYY-MM-DD (legacy, backward compatible)
     - Date range: ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD (preferred)
 
-    Date range is capped at 45 days to prevent abuse.
+    Date range is capped at SLOT_GENERATION_MAX_DAYS days to prevent abuse.
     """
     try:
         if request:
@@ -476,9 +427,9 @@ async def get_public_available_slots(
         if start_date and end_date:
             query_start = start_date
             query_end = end_date
-            # Cap range at 45 days for public endpoint
-            if (query_end - query_start).days > 45:
-                query_end = query_start + timedelta(days=45)
+            # Cap range at SLOT_GENERATION_MAX_DAYS for public endpoint
+            if (query_end - query_start).days > SLOT_GENERATION_MAX_DAYS:
+                query_end = query_start + timedelta(days=SLOT_GENERATION_MAX_DAYS)
         elif date:
             query_start = date
             query_end = date
@@ -488,7 +439,7 @@ async def get_public_available_slots(
                 detail="Please provide a date or date range."
             )
 
-        BookingLink = _models['BookingLink']
+        BookingLink = get_models()['BookingLink']
         link = db.query(BookingLink).filter(
             BookingLink.slug == slug,
             BookingLink.is_active == True,
@@ -536,12 +487,12 @@ async def confirm_public_booking(
     """Confirm a public booking"""
     try:
         # Rate limit public booking endpoint
-        await _check_rate_limit(request, max_requests=5)
+        await _check_rate_limit(request, max_requests=BOOKING_RATE_LIMIT_PER_EMAIL)
 
-        # Anti-spam: per-IP booking rate limit (max 5 bookings/hour/IP)
+        # Anti-spam: per-IP booking rate limit
         await _check_booking_ip_rate_limit(request)
 
-        # Anti-spam: per-email booking rate limit (max 3 bookings/hour/email)
+        # Anti-spam: per-email booking rate limit
         _check_booking_email_rate_limit(db, booking_data.attendee_email)
 
         # Bot protection: Cloudflare Turnstile verification
@@ -565,9 +516,9 @@ async def confirm_public_booking(
         attendee_phone = _sanitize_text(attendee_phone)
         notes_text = _sanitize_text(booking_data.notes)
         intake_responses = {"notes": notes_text} if notes_text else {}
-        BookingLink = _models['BookingLink']
-        AppointmentType = _models['AppointmentType']
-        Appointment = _models['Appointment']
+        BookingLink = get_models()['BookingLink']
+        AppointmentType = get_models()['AppointmentType']
+        Appointment = get_models()['Appointment']
 
         link = db.query(BookingLink).filter(
             BookingLink.slug == slug,
@@ -764,7 +715,7 @@ async def confirm_public_booking(
         team_member_name = booking_data.team_member_name
         team_member_email = None
 
-        User = _models.get('User')
+        User = get_models().get('User')
         if assigned_user_id and User:
             assigned_user = db.query(User).filter(User.id == assigned_user_id).first()
             if assigned_user:
@@ -991,7 +942,7 @@ async def get_website_demo_available_slots(
 
         # If there's a booking link configured, use it
         if booking_link_id and _models:
-            BookingLink = _models.get('BookingLink')
+            BookingLink = get_models().get('BookingLink')
             if BookingLink:
                 link = db.query(BookingLink).filter(
                     BookingLink.id == booking_link_id,
@@ -1045,7 +996,7 @@ async def _generate_slots_for_users(
     user_ids: List[int],
     start_date: date,
     end_date: date,
-    duration_minutes: int = 30,
+    duration_minutes: int = DEFAULT_APPOINTMENT_DURATION_MINUTES,
     org_id: Optional[int] = None
 ) -> dict:
     """Generate available slots for a list of users. Delegates to unified slot engine."""
@@ -1083,12 +1034,12 @@ async def confirm_website_demo_booking(
     """
     try:
         # Rate limit public demo booking endpoint
-        await _check_rate_limit(http_request, max_requests=5)
+        await _check_rate_limit(http_request, max_requests=BOOKING_RATE_LIMIT_PER_EMAIL)
 
-        # Anti-spam: per-IP booking rate limit (max 5 bookings/hour/IP)
+        # Anti-spam: per-IP booking rate limit
         await _check_booking_ip_rate_limit(http_request)
 
-        # Anti-spam: per-email booking rate limit (max 3 bookings/hour/email)
+        # Anti-spam: per-email booking rate limit
         _check_booking_email_rate_limit(db, request.attendee_email)
 
         from sqlalchemy import text
@@ -1131,7 +1082,7 @@ async def confirm_website_demo_booking(
         end_time = start_time + timedelta(minutes=request.duration_minutes)
 
         # Create the appointment
-        Appointment = _models.get('Appointment') if _models else None
+        Appointment = get_models().get('Appointment')
         if not Appointment:
             logger.error("Scheduler models not initialized for demo booking")
             raise HTTPException(status_code=500, detail="Something went wrong. Please try again later.")

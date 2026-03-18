@@ -34,9 +34,16 @@ from services.notification_service import notification_service
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
-    _get_user_timezone, _check_appointment_conflict, _check_duplicate_booking,
+    _convert_utc_to_user_tz,
+    _check_appointment_conflict, _check_duplicate_booking,
     _ensure_lead_for_booking, _log_appointment_activity, _create_followup_task,
     _audit_log,
+)
+from routes.scheduler.constants import (
+    DEFAULT_APPOINTMENT_DURATION_MINUTES,
+    MIN_APPOINTMENT_DURATION_MINUTES,
+    MAX_APPOINTMENT_DURATION_MINUTES,
+    MAX_BULK_OPERATION_SIZE,
 )
 from db import get_db
 
@@ -44,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-MAX_BULK_SIZE = 50
+MAX_BULK_SIZE = MAX_BULK_OPERATION_SIZE
 
 
 # ============================================================================
@@ -59,7 +66,7 @@ class BulkAppointmentItem(BaseModel):
     meeting_type: Optional[str] = "custom"
     meeting_mode: str = "video"
     scheduled_start: datetime
-    duration_minutes: int = Field(30, ge=5, le=480)
+    duration_minutes: int = Field(DEFAULT_APPOINTMENT_DURATION_MINUTES, ge=MIN_APPOINTMENT_DURATION_MINUTES, le=MAX_APPOINTMENT_DURATION_MINUTES)
     timezone: str = "America/Chicago"
 
     attendee_name: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -105,7 +112,7 @@ class BulkRescheduleItem(BaseModel):
     """A single appointment to reschedule."""
     appointment_id: int
     new_scheduled_start: datetime
-    new_duration_minutes: Optional[int] = Field(None, ge=5, le=480, description="New duration; if omitted, keeps original")
+    new_duration_minutes: Optional[int] = Field(None, ge=MIN_APPOINTMENT_DURATION_MINUTES, le=MAX_APPOINTMENT_DURATION_MINUTES, description="New duration; if omitted, keeps original")
 
 
 class BulkRescheduleRequest(BaseModel):
@@ -531,7 +538,7 @@ async def bulk_reschedule_appointments(
                 raise ValueError(f"Appointment {item.appointment_id} is cancelled and cannot be rescheduled")
 
             # Calculate new end time
-            duration = item.new_duration_minutes or appointment.duration_minutes or 30
+            duration = item.new_duration_minutes or appointment.duration_minutes or DEFAULT_APPOINTMENT_DURATION_MINUTES
             new_end = item.new_scheduled_start + timedelta(minutes=duration)
 
             # Conflict check (exclude self)
@@ -801,13 +808,11 @@ async def bulk_assign_appointments(
 
 def _send_create_notification(db, _models, appointment, item, org_id):
     """Send confirmation email for a newly created appointment (best-effort)."""
-    import pytz
-
-    tz = pytz.timezone(
-        _get_user_timezone(db, appointment.assigned_user_id, org_id=org_id)
+    local_start = _convert_utc_to_user_tz(
+        appointment.scheduled_start, appointment.assigned_user_id, db, org_id=org_id
     )
-    appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
-    appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
+    appointment_date = local_start.strftime("%A, %B %d, %Y")
+    appointment_time = local_start.strftime("%I:%M %p %Z")
     duration_str = f"{appointment.duration_minutes} minutes"
 
     meeting_mode_str = "Phone Call"
@@ -853,14 +858,10 @@ def _send_create_notification(db, _models, appointment, item, org_id):
 
 def _send_cancel_notification(db, UserModel, info, reason, org_id, user):
     """Send cancellation emails for a cancelled appointment (best-effort)."""
-    import pytz
-
-    tz = pytz.timezone(
-        _get_user_timezone(db, info['assigned_user_id'], org_id=org_id)
-    )
-
     if info['scheduled_start']:
-        local_start = info['scheduled_start'].replace(tzinfo=pytz.UTC).astimezone(tz)
+        local_start = _convert_utc_to_user_tz(
+            info['scheduled_start'], info['assigned_user_id'], db, org_id=org_id
+        )
         appointment_date = local_start.strftime('%B %d, %Y')
         appointment_time = local_start.strftime('%I:%M %p %Z')
     else:
@@ -904,14 +905,10 @@ def _send_cancel_notification(db, UserModel, info, reason, org_id, user):
 
 def _send_reschedule_notification(db, UserModel, info, org_id):
     """Send update emails for a rescheduled appointment (best-effort)."""
-    import pytz
-
-    tz = pytz.timezone(
-        _get_user_timezone(db, info['assigned_user_id'], org_id=org_id)
-    )
-
     # Format new date/time
-    new_local = info['new_start'].replace(tzinfo=pytz.UTC).astimezone(tz)
+    new_local = _convert_utc_to_user_tz(
+        info['new_start'], info['assigned_user_id'], db, org_id=org_id
+    )
     new_date = new_local.strftime('%B %d, %Y')
     new_time = new_local.strftime('%I:%M %p %Z')
 
@@ -919,11 +916,13 @@ def _send_reschedule_notification(db, UserModel, info, org_id):
     old_date = None
     old_time = None
     if info['old_start']:
-        old_local = info['old_start'].replace(tzinfo=pytz.UTC).astimezone(tz)
+        old_local = _convert_utc_to_user_tz(
+            info['old_start'], info['assigned_user_id'], db, org_id=org_id
+        )
         old_date = old_local.strftime('%B %d, %Y')
         old_time = old_local.strftime('%I:%M %p %Z')
 
-    duration_minutes = info['duration_minutes'] or 30
+    duration_minutes = info['duration_minutes'] or DEFAULT_APPOINTMENT_DURATION_MINUTES
     duration_str = f"{duration_minutes} minutes"
 
     meeting_mode = "Phone Call"
@@ -966,21 +965,17 @@ def _send_reschedule_notification(db, UserModel, info, org_id):
 
 def _send_assign_notification(db, UserModel, info, org_id):
     """Send notification emails when an appointment is reassigned (best-effort)."""
-    import pytz
-
-    tz = pytz.timezone(
-        _get_user_timezone(db, info['new_lo_id'], org_id=org_id)
-    )
-
     # Format date/time
     appointment_date = 'TBD'
     appointment_time = 'TBD'
     if info['scheduled_start']:
-        local_start = info['scheduled_start'].replace(tzinfo=pytz.UTC).astimezone(tz)
+        local_start = _convert_utc_to_user_tz(
+            info['scheduled_start'], info['new_lo_id'], db, org_id=org_id
+        )
         appointment_date = local_start.strftime('%B %d, %Y')
         appointment_time = local_start.strftime('%I:%M %p %Z')
 
-    duration_minutes = info['duration_minutes'] or 30
+    duration_minutes = info['duration_minutes'] or DEFAULT_APPOINTMENT_DURATION_MINUTES
     duration_str = f"{duration_minutes} minutes"
 
     meeting_mode_str = "Phone Call"

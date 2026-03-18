@@ -3,7 +3,6 @@ Scheduler Email/SMS Notification Service
 Extracted from smart_scheduler_routes.py
 
 Provides:
-- ICS calendar file generation
 - Appointment confirmation emails (SendGrid)
 - Appointment confirmation SMS (Telnyx)
 - Appointment update emails with calendar invite
@@ -16,6 +15,10 @@ Provides:
 - No-show recovery emails
 - Async wrappers for all email functions (via asyncio.to_thread)
 - Retry with exponential backoff (max 3 retries) for transient SMTP failures
+
+ICS calendar generation has been extracted to ``services.ics_generator``.
+SMS sending has been extracted to ``services.scheduler_sms_sender``.
+Email HTML templates have been extracted to ``services.scheduler_email_templates``.
 """
 
 import asyncio
@@ -26,11 +29,62 @@ import logging
 import uuid as uuid_lib
 from datetime import datetime, timedelta, timezone
 
-import pytz
-
 from services.notification_service import notification_service
 
+# --- Re-exports from extracted sub-modules (backward compatibility) ---
+# SMS sender: consent checking, contact hours, all SMS functions
+from services.scheduler_sms_sender import (  # noqa: F401
+    check_sms_consent,
+    _check_contact_hours,
+    send_appointment_confirmation_sms,
+    send_appointment_update_sms,
+    send_appointment_reminder_sms,
+)
+
+# Email templates: HTML builders, color constants, prep items
+from services.scheduler_email_templates import (
+    build_scheduler_email_html,
+    video_button_html,
+    calendar_notice_html,
+    default_prep_items,
+    HEADER_COLOR_TEAL,
+    HEADER_COLOR_AMBER,
+    HEADER_COLOR_RED,
+    HEADER_COLOR_BLUE,
+    HEADER_COLOR_GREEN,
+    HEADER_COLOR_PURPLE,
+)
+
 logger = logging.getLogger(__name__)
+
+
+# --- Backward-compatible aliases for underscore-prefixed names ---
+_HEADER_COLOR_TEAL = HEADER_COLOR_TEAL
+_HEADER_COLOR_AMBER = HEADER_COLOR_AMBER
+_HEADER_COLOR_RED = HEADER_COLOR_RED
+_HEADER_COLOR_BLUE = HEADER_COLOR_BLUE
+_HEADER_COLOR_GREEN = HEADER_COLOR_GREEN
+_HEADER_COLOR_PURPLE = HEADER_COLOR_PURPLE
+
+
+def _build_scheduler_email_html(header_color, heading, body_content, footer_text=None):
+    """Backward-compatible wrapper for build_scheduler_email_html."""
+    return build_scheduler_email_html(header_color, heading, body_content, footer_text)
+
+
+def _video_button_html(safe_video_link, show_copy_link=False):
+    """Backward-compatible wrapper for video_button_html."""
+    return video_button_html(safe_video_link, show_copy_link)
+
+
+def _calendar_notice_html(text=None):
+    """Backward-compatible wrapper for calendar_notice_html."""
+    return calendar_notice_html(text)
+
+
+def _default_prep_items(meeting_type_key=None):
+    """Backward-compatible wrapper for default_prep_items."""
+    return default_prep_items(meeting_type_key)
 
 
 # ============================================================================
@@ -125,204 +179,6 @@ async def send_with_sms_fallback(
             logger.error(f"Escalation creation failed: {esc_err}")
 
     return {"email_sent": email_sent, "sms_sent": sms_sent, "error": error}
-
-
-# ============================================================================
-# C1: TCPA/DNC consent check before SMS
-# ============================================================================
-
-def check_sms_consent(phone: str, organization_id: int = None) -> tuple:
-    """
-    Check DNC list, ChannelPreference, and TCPA contact hours before sending SMS.
-    Returns (can_send: bool, reason: str).
-
-    Policy:
-    - Outside 8am-9pm recipient local time -> BLOCK (TCPA)
-    - DNC list match -> BLOCK
-    - DNC check error -> BLOCK (fail-closed for compliance)
-    - ChannelPreference.do_not_sms=True -> BLOCK
-    - ChannelPreference.sms_consent=False -> BLOCK
-    - No lead/preference found -> ALLOW (transactional SMS exemption)
-    - Consent check error -> BLOCK (fail-safe)
-    """
-    if not phone:
-        return False, "No phone number provided"
-
-    # TCPA: Check contact hours (8am-9pm recipient local time)
-    contact_hours_ok, hours_reason = _check_contact_hours()
-    if not contact_hours_ok:
-        return False, hours_reason
-
-    try:
-        from database import SessionLocal
-        db = SessionLocal()
-        try:
-            # 1. DNC check using existing ComplianceChecker
-            try:
-                from telephony.compliance import ComplianceChecker
-                checker = ComplianceChecker(db)
-                is_dnc, dnc_reason = checker.check_dnc(phone)
-                if is_dnc:
-                    logger.warning(f"SMS blocked - DNC: {phone}")
-                    return False, f"DNC: {dnc_reason}"
-            except ImportError:
-                logger.debug("telephony.compliance not available, skipping DNC check")
-            except Exception as dnc_err:
-                # CF-6: Fail-closed -- block SMS when DNC check errors (TCPA compliance)
-                logger.error(f"DNC check failed, blocking SMS for safety: {dnc_err}")
-                return False, f"DNC check unavailable: {dnc_err}"
-
-            # 2. ChannelPreference check (scoped by organization_id)
-            try:
-                from database.models.communication import ChannelPreference
-                from database.models.lead_loan import Lead
-
-                # Normalize phone to last 10 digits for matching
-                digits = ''.join(c for c in phone if c.isdigit())
-                if len(digits) == 11 and digits.startswith('1'):
-                    digits = digits[1:]
-
-                # Scope lead lookup by organization_id to prevent cross-tenant leakage
-                lead = None
-                if len(digits) >= 10:
-                    lead_query = db.query(Lead).filter(
-                        Lead.phone.ilike(f"%{digits[-10:]}")
-                    )
-                    if organization_id:
-                        lead_query = lead_query.filter(Lead.organization_id == organization_id)
-                    lead = lead_query.first()
-
-                if lead:
-                    pref = db.query(ChannelPreference).filter(
-                        ChannelPreference.lead_id == lead.id
-                    ).first()
-                    if pref:
-                        if getattr(pref, 'do_not_sms', False):
-                            logger.warning(f"SMS blocked - do_not_sms flag: {phone}")
-                            return False, "Contact has opted out of SMS"
-                        if hasattr(pref, 'sms_consent') and pref.sms_consent is False:
-                            logger.warning(f"SMS blocked - no sms_consent: {phone}")
-                            return False, "No SMS consent on file"
-            except ImportError:
-                logger.debug("ChannelPreference model not available, skipping consent check")
-
-            # No block found -- allow transactional SMS
-            return True, "OK"
-        finally:
-            db.close()
-    except Exception as e:
-        logger.error(f"SMS consent check failed, defaulting to BLOCK: {e}")
-        return False, f"Consent check error: {e}"
-
-
-def _check_contact_hours(recipient_tz_name: str = None) -> tuple:
-    """
-    CF-7: TCPA time-of-day restriction -- block SMS outside 8am-9pm recipient local time.
-    Returns (can_send: bool, reason: str).
-    If recipient timezone is unknown, defaults to America/New_York (earliest US timezone = most conservative).
-    """
-    try:
-        tz_name = recipient_tz_name or "America/New_York"
-        tz = pytz.timezone(tz_name)
-        local_now = datetime.now(timezone.utc).astimezone(tz)
-        local_hour = local_now.hour
-
-        if local_hour < 8 or local_hour >= 21:
-            return False, f"TCPA: Outside contact hours (8am-9pm). Local time: {local_now.strftime('%I:%M %p %Z')}"
-        return True, "OK"
-    except Exception as e:
-        # Unknown timezone -- use conservative block during late/early hours UTC
-        utc_hour = datetime.now(timezone.utc).hour
-        if utc_hour >= 2 and utc_hour < 13:
-            # 2am-1pm UTC = could be nighttime somewhere in the US
-            return True, "OK"
-        logger.warning(f"Contact hours check failed, allowing: {e}")
-        return True, "OK"
-
-
-# ============================================================================
-# Shared base email template
-# ============================================================================
-
-_HEADER_COLOR_TEAL = "linear-gradient(135deg, #217F8D 0%, #1a6670 100%)"
-_HEADER_COLOR_AMBER = "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
-_HEADER_COLOR_RED = "linear-gradient(135deg, #dc2626 0%, #991b1b 100%)"
-
-
-def _build_scheduler_email_html(
-    header_color: str,
-    heading: str,
-    body_content: str,
-    footer_text: str = None,
-) -> str:
-    """Build a complete HTML email from shared boilerplate.
-
-    Args:
-        header_color: CSS gradient for the header bar,
-            e.g. ``"linear-gradient(135deg, #217F8D 0%, #1a6670 100%)"``
-        heading: Text shown inside the colored header bar.
-        body_content: Pre-escaped HTML that goes inside the white content area.
-        footer_text: Optional override for the small footer line.
-            Defaults to ``"Sent from Perennia AI"``.
-    """
-    footer = footer_text or "Sent from Perennia AI"
-    return f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); overflow: hidden;">
-                    <div style="background: {header_color}; padding: 30px; text-align: center;">
-                        <h1 style="color: white; margin: 0; font-size: 24px;">{heading}</h1>
-                    </div>
-
-                    <div style="padding: 30px;">
-                        {body_content}
-                    </div>
-                </div>
-
-                <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
-                    {footer}
-                </p>
-            </div>
-        </body>
-        </html>
-        """
-
-
-def _video_button_html(safe_video_link: str, show_copy_link: bool = False) -> str:
-    """Return HTML for the video-call button (and optional copy-link line)."""
-    if not safe_video_link:
-        return ""
-    copy_line = ""
-    if show_copy_link:
-        copy_line = f"""
-                    <p style="text-align: center; font-size: 12px; color: #666; margin-top: 8px;">
-                        Or copy this link: <a href="{safe_video_link}" style="color: #217F8D;">{safe_video_link}</a>
-                    </p>"""
-    return f"""
-                    <div style="text-align: center; margin: 25px 0;">
-                        <a href="{safe_video_link}" style="display: inline-block; background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
-                            Join Video Call
-                        </a>
-                    </div>{copy_line}
-            """
-
-
-def _calendar_notice_html(text: str = None) -> str:
-    """Return the blue calendar-invite notice box."""
-    msg = text or "A calendar invite is attached to this email. Click on the attachment to add this appointment to your calendar."
-    return f"""
-                        <div style="background: #e0f2fe; border-radius: 8px; padding: 16px; margin: 20px 0; text-align: center;">
-                            <p style="margin: 0; color: #0369a1; font-size: 14px;">
-                                {msg}
-                            </p>
-                        </div>
-        """
 
 
 # ============================================================================
@@ -577,51 +433,6 @@ Looking forward to speaking with you!
         return {"success": False, "error": "Internal server error"}
 
 
-def send_appointment_confirmation_sms(
-    attendee_phone: str,
-    attendee_name: str,
-    appointment_date: str,
-    appointment_time: str,
-    team_member_name: str = None,
-    organization_id: int = None,
-):
-    """Send appointment confirmation SMS via Telnyx"""
-    try:
-        # TCPA/DNC consent check (scoped by org)
-        can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
-        if not can_send:
-            logger.info(f"SMS consent check blocked confirmation to {attendee_phone}: {reason}")
-            return False
-
-        from_number = os.getenv("TELNYX_PHONE_NUMBER")
-
-        if not from_number:
-            logger.warning("TELNYX_PHONE_NUMBER not configured - skipping SMS confirmation")
-            return False
-
-        import telnyx
-
-        team_member_text = f" with {team_member_name}" if team_member_name else ""
-        message_body = f"Hi {attendee_name}! Your appointment{team_member_text} is confirmed for {appointment_date} at {appointment_time}. We'll send a reminder before your call. Reply HELP for assistance."
-
-        if len(message_body) > 160:
-            logger.warning(f"SMS body is {len(message_body)} chars (>160), will be sent as multi-segment")
-
-        message = telnyx.Message.create(
-            from_=from_number,
-            to=attendee_phone,
-            text=message_body,
-        )
-
-        msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
-        logger.info(f"Appointment confirmation SMS sent to {attendee_phone}, ID: {msg_id}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to send appointment confirmation SMS: {e}")
-        return False
-
-
 def send_appointment_update_email(
     attendee_email: str,
     attendee_name: str,
@@ -759,48 +570,6 @@ An updated calendar invite is attached to this email.
     except Exception as e:
         logger.error(f"Exception in send_appointment_update_email: {e}", exc_info=True)
         return {"success": False, "error": "Internal server error"}
-
-
-def send_appointment_update_sms(
-    attendee_phone: str,
-    attendee_name: str,
-    appointment_date: str,
-    appointment_time: str,
-    team_member_name: str = None,
-    organization_id: int = None,
-):
-    """Send appointment update SMS via Telnyx"""
-    try:
-        # TCPA/DNC consent check (scoped by org)
-        can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
-        if not can_send:
-            logger.info(f"SMS consent check blocked update to {attendee_phone}: {reason}")
-            return False
-
-        from_number = os.getenv("TELNYX_PHONE_NUMBER")
-
-        if not from_number:
-            logger.warning("TELNYX_PHONE_NUMBER not configured - skipping SMS update")
-            return False
-
-        import telnyx
-
-        team_member_text = f" with {team_member_name}" if team_member_name else ""
-        message_body = f"Hi {attendee_name}! Your appointment{team_member_text} has been UPDATED to {appointment_date} at {appointment_time}. Please check your email for the updated calendar invite."
-
-        message = telnyx.Message.create(
-            from_=from_number,
-            to=attendee_phone,
-            text=message_body,
-        )
-
-        msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
-        logger.info(f"Appointment update SMS sent to {attendee_phone}, ID: {msg_id}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to send appointment update SMS: {e}")
-        return False
 
 
 def send_team_member_notification_email(
@@ -1253,68 +1022,9 @@ If you need to reschedule or cancel, please contact us as soon as possible.
         return {"success": False, "error": "Internal server error"}
 
 
-def send_appointment_reminder_sms(
-    attendee_phone: str,
-    attendee_name: str,
-    appointment_date: str,
-    appointment_time: str,
-    hours_before: int = 24,
-    team_member_name: str = None,
-    video_link: str = None,
-    organization_id: int = None,
-):
-    """Send appointment reminder SMS via Telnyx."""
-    try:
-        # TCPA/DNC consent check (scoped by org)
-        can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
-        if not can_send:
-            logger.info(f"SMS consent check blocked reminder to {attendee_phone}: {reason}")
-            return {"success": False, "error": f"Consent blocked: {reason}"}
-
-        from_number = os.getenv("TELNYX_PHONE_NUMBER")
-        if not from_number:
-            logger.warning("TELNYX_PHONE_NUMBER not configured - skipping reminder SMS")
-            return {"success": False, "error": "SMS not configured"}
-
-        import telnyx
-
-        if hours_before >= 24:
-            time_msg = "tomorrow"
-        else:
-            time_msg = "soon"
-
-        team_msg = f" with {team_member_name}" if team_member_name else ""
-        link_msg = f"\nJoin: {video_link}" if video_link else ""
-
-        message_body = (
-            f"Hi {attendee_name}! Reminder: Your appointment{team_msg} is {time_msg} "
-            f"on {appointment_date} at {appointment_time}.{link_msg} "
-            f"Reply HELP for assistance."
-        )
-
-        message = telnyx.Message.create(
-            from_=from_number,
-            to=attendee_phone,
-            text=message_body,
-        )
-
-        msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
-        logger.info(f"Appointment reminder SMS sent to {attendee_phone}, ID: {msg_id}")
-        return {"success": True, "message_id": msg_id}
-
-    except Exception as e:
-        logger.error(f"Failed to send appointment reminder SMS: {e}")
-        return {"success": False, "error": str(e)}
-
-
 # ============================================================================
 # New email templates: AI booking, pre-appointment prep, no-show recovery
 # ============================================================================
-
-_HEADER_COLOR_BLUE = "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)"
-_HEADER_COLOR_GREEN = "linear-gradient(135deg, #059669 0%, #047857 100%)"
-_HEADER_COLOR_PURPLE = "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)"
-
 
 def send_ai_booking_confirmation_email(
     attendee_email: str,
@@ -1653,57 +1363,6 @@ Having these items ready will help us make the most of our time together.
     except Exception as e:
         logger.error(f"Exception in send_pre_appointment_prep_email: {e}", exc_info=True)
         return {"success": False, "error": "Internal server error"}
-
-
-def _default_prep_items(meeting_type_key: str = None) -> list:
-    """Return default preparation checklist items based on meeting type."""
-    defaults = {
-        "discovery_call": [
-            "Think about your home buying timeline and budget",
-            "Have a rough idea of your desired location and property type",
-            "Know your current employment and income situation",
-            "Prepare any questions you have about the mortgage process",
-        ],
-        "pre_approval_review": [
-            "Have your most recent pay stubs available (last 30 days)",
-            "Know your approximate credit score",
-            "Have your bank/asset statements handy",
-            "Prepare your target home price range",
-        ],
-        "application_walkthrough": [
-            "Gather your last 2 years of W-2s or tax returns",
-            "Have your most recent pay stubs (last 30 days)",
-            "Prepare 2 months of bank statements for all accounts",
-            "Have your driver's license or government ID ready",
-            "Know your current debts and monthly payments",
-        ],
-        "document_review": [
-            "Have any documents you were asked to provide",
-            "Prepare questions about items on your to-do list",
-            "Have access to your email to share documents if needed",
-        ],
-        "rate_lock_discussion": [
-            "Know your expected closing date",
-            "Review your current rate quote",
-            "Consider how long you plan to stay in the home",
-            "Think about your preference: lowest rate vs. lowest payment",
-        ],
-        "closing_prep": [
-            "Review your Closing Disclosure (CD) document",
-            "Confirm your closing date and time",
-            "Have your cashier's check or wire transfer ready",
-            "Bring a valid photo ID to closing",
-            "Prepare any questions about closing costs",
-        ],
-    }
-    if meeting_type_key and meeting_type_key in defaults:
-        return defaults[meeting_type_key]
-    # Generic fallback
-    return [
-        "Review any documents or information previously discussed",
-        "Prepare questions you would like to ask",
-        "Ensure you are in a quiet place with good connectivity",
-    ]
 
 
 def send_no_show_recovery_email(

@@ -69,8 +69,8 @@ def _calculate_no_show_risk(appointment, db, Appointment, AppointmentStatusEnum,
                 elif lead.source in {'cold_list', 'purchased'}:
                     score += 15
                     factors.append({"factor": "cold_lead_source", "impact": +15})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Lead source scoring failed for lead {appointment.lead_id}: {e}")
 
     # Factor: Historical no-shows for this attendee
     if appointment.attendee_email:
@@ -92,8 +92,8 @@ def _calculate_no_show_risk(appointment, db, Appointment, AppointmentStatusEnum,
             if past_completed >= 2:
                 score -= 10
                 factors.append({"factor": "reliable_attendee", "completed": past_completed, "impact": -10})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"No-show history lookup failed for {appointment.attendee_email}: {e}")
 
     # Factor: Time until appointment (further out = higher risk)
     if appointment.scheduled_start:

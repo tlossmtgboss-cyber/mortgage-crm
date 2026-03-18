@@ -27,10 +27,8 @@ import jwt
 from smart_scheduler_models import (
     AppointmentStatus, MeetingType, MeetingMode,
 )
-from scheduler_email_service import (
-    generate_ics_content,
-    generate_reschedule_url,
-)
+from services.ics_generator import generate_ics_content
+from scheduler_email_service import generate_reschedule_url
 from routes.scheduler._helpers import (
     get_models, _check_rate_limit, _sanitize_text,
 )

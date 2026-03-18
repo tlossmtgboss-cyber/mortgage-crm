@@ -27,7 +27,7 @@ except ImportError:
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
-    _audit_log,
+    _audit_log, _check_rate_limit, _sanitize_public_error,
 )
 from db import get_db
 from middleware.feature_gate import require_feature_tier
@@ -372,53 +372,71 @@ async def public_assign_variant(
 
     This endpoint is public and does not require authentication.
     """
-    models = get_models()
-    BookingLink = models.get("BookingLink") if models else None
+    try:
+        await _check_rate_limit(request, max_requests=30)
 
-    if not BookingLink:
-        raise HTTPException(status_code=503, detail="Booking system not available")
+        models = get_models()
+        BookingLink = models.get("BookingLink") if models else None
 
-    # Look up the booking link to find the org
-    link = db.query(BookingLink).filter(BookingLink.id == booking_link_id).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="Booking link not found")
+        if not BookingLink:
+            raise HTTPException(status_code=503, detail="Booking system not available")
 
-    org_id = link.organization_id
+        # Look up the booking link to find the org — only public links
+        link = db.query(BookingLink).filter(
+            BookingLink.id == booking_link_id,
+            BookingLink.is_public == True,
+        ).first()
+        if not link:
+            raise HTTPException(status_code=404, detail="Booking link not found")
 
-    # Get all active tests for this org
-    active_tests = db.query(ABTest).filter(
-        ABTest.organization_id == org_id,
-        ABTest.status == ABTestStatus.ACTIVE.value,
-    ).all()
+        org_id = link.organization_id
 
-    if not active_tests:
+        # Get all active tests for this org
+        active_tests = db.query(ABTest).filter(
+            ABTest.organization_id == org_id,
+            ABTest.status == ABTestStatus.ACTIVE.value,
+        ).all()
+
+        if not active_tests:
+            return {
+                "assignments": [],
+                "message": "No active A/B tests",
+            }
+
+        service = ABTestService(db)
+
+        assignments = []
+        for test in active_tests:
+            variant = service.assign_variant(test.id, visitor_id)
+            service.record_impression(test.id, variant, visitor_id)
+
+            variant_config = test.variant_a if variant == "A" else test.variant_b
+
+            assignments.append({
+                "test_id": test.id,
+                "element_type": test.element_type,
+                "variant": variant,
+                "config": variant_config,
+            })
+
+        db.commit()
+
         return {
-            "assignments": [],
-            "message": "No active A/B tests",
+            "assignments": assignments,
+            "visitor_id": visitor_id,
         }
-
-    service = ABTestService(db)
-
-    assignments = []
-    for test in active_tests:
-        variant = service.assign_variant(test.id, visitor_id)
-        service.record_impression(test.id, variant, visitor_id)
-
-        variant_config = test.variant_a if variant == "A" else test.variant_b
-
-        assignments.append({
-            "test_id": test.id,
-            "element_type": test.element_type,
-            "variant": variant,
-            "config": variant_config,
-        })
-
-    db.commit()
-
-    return {
-        "assignments": assignments,
-        "visitor_id": visitor_id,
-    }
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
+            headers=getattr(exc, 'headers', None),
+        )
+    except Exception:
+        logger.exception("Error in public_assign_variant")
+        raise HTTPException(
+            status_code=500,
+            detail=_sanitize_public_error(500, ""),
+        )
 
 
 @router.post("/public/ab-tests/record")
@@ -432,17 +450,19 @@ async def public_record_event(
     This endpoint is public and does not require authentication.
     Used by the booking page frontend to track visitor interactions.
     """
-    service = ABTestService(db)
-
-    # Verify test exists and is active
-    test = db.query(ABTest).filter(
-        ABTest.id == body.test_id,
-        ABTest.status == ABTestStatus.ACTIVE.value,
-    ).first()
-    if not test:
-        raise HTTPException(status_code=404, detail="Active A/B test not found")
-
     try:
+        await _check_rate_limit(request, max_requests=60)
+
+        service = ABTestService(db)
+
+        # Verify test exists and is active
+        test = db.query(ABTest).filter(
+            ABTest.id == body.test_id,
+            ABTest.status == ABTestStatus.ACTIVE.value,
+        ).first()
+        if not test:
+            raise HTTPException(status_code=404, detail="Active A/B test not found")
+
         if body.event_type == "impression":
             service.record_impression(body.test_id, body.variant, body.visitor_id)
         elif body.event_type == "conversion":
@@ -452,9 +472,19 @@ async def public_record_event(
                 status_code=400,
                 detail="event_type must be 'impression' or 'conversion'",
             )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
-    db.commit()
+        db.commit()
 
-    return {"success": True, "event_type": body.event_type}
+        return {"success": True, "event_type": body.event_type}
+    except HTTPException as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
+            headers=getattr(exc, 'headers', None),
+        )
+    except Exception:
+        logger.exception("Error in public_record_event")
+        raise HTTPException(
+            status_code=500,
+            detail=_sanitize_public_error(500, ""),
+        )

@@ -11,19 +11,25 @@ Endpoints:
     - POST   /waitlist/{id}/reorder       Reorder entry position
     - POST   /waitlist/expire-offers      Manually expire stale offers
 
-  Public (no auth):
+  Public (no auth, token-protected):
     - POST   /public/waitlist/join        Public waitlist join
-    - POST   /public/waitlist/{id}/accept Accept offered slot
-    - GET    /public/waitlist/{id}/position Check position (public)
+    - POST   /public/waitlist/accept      Accept offered slot (token required)
+    - GET    /public/waitlist/position     Check position (token required)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field
 import html
 import logging
+import os
+
+try:
+    import jwt
+except ImportError:
+    jwt = None
 
 try:
     import nh3
@@ -32,11 +38,13 @@ except ImportError:
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
-    _audit_log,
+    _audit_log, _check_rate_limit,
 )
 from db import get_db
 from middleware.feature_gate import require_feature_tier
 from services.waitlist_service import WaitlistService
+
+SECRET_KEY = os.getenv("SECRET_KEY", "")
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +67,17 @@ class WaitlistJoinRequest(BaseModel):
 
 class PublicWaitlistJoinRequest(BaseModel):
     appointment_type_id: int
-    organization_id: int
+    organization_id: Optional[int] = None  # Deprecated: derived from appointment_type_id
     name: str = Field(..., min_length=1, max_length=255)
     email: str = Field(..., min_length=3, max_length=255)
     phone: Optional[str] = Field(None, max_length=30)
     preferred_dates: Optional[List[str]] = None
     preferred_times: Optional[List[str]] = None
     notes: Optional[str] = Field(None, max_length=1000)
+
+
+class PublicAcceptRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
 
 
 class OfferSlotRequest(BaseModel):
@@ -87,6 +99,83 @@ def _sanitize(value: Optional[str]) -> Optional[str]:
     if nh3:
         return nh3.clean(value, tags=set())
     return html.escape(value)
+
+
+# ============================================================================
+# WAITLIST TOKEN HELPERS
+# ============================================================================
+
+def _generate_waitlist_token(entry_id: int, email: str) -> str:
+    """Generate a JWT token scoped to a specific waitlist entry.
+
+    The token encodes the entry_id and email so that public endpoints can
+    authenticate callers without exposing sequential entry IDs.
+    Tokens expire after 7 days (waitlist offers are typically shorter-lived).
+    """
+    if not jwt:
+        raise RuntimeError("PyJWT is required for waitlist token generation")
+    if not SECRET_KEY:
+        raise RuntimeError("SECRET_KEY required for waitlist token generation")
+    payload = {
+        "wl_entry_id": entry_id,
+        "email": email,
+        "purpose": "waitlist",
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+
+def _verify_waitlist_token(token: str) -> dict:
+    """Verify a waitlist token and return the decoded payload.
+
+    Returns dict with 'wl_entry_id' and 'email' on success.
+    Raises HTTPException on failure.
+    """
+    if not jwt:
+        raise HTTPException(status_code=500, detail="Server configuration error")
+    if not SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Server configuration error")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Waitlist link has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid waitlist link")
+
+    if payload.get("purpose") != "waitlist":
+        raise HTTPException(status_code=401, detail="Invalid waitlist link")
+
+    entry_id = payload.get("wl_entry_id")
+    email = payload.get("email")
+    if not entry_id or not email:
+        raise HTTPException(status_code=401, detail="Invalid waitlist link")
+
+    return {"entry_id": entry_id, "email": email}
+
+
+def _resolve_org_from_appointment_type(appointment_type_id: int, db: Session) -> int:
+    """Look up the organization_id from an appointment_type_id.
+
+    This prevents clients from supplying an arbitrary organization_id.
+    Raises HTTPException if the appointment type does not exist or is inactive.
+    """
+    models = get_models()
+    AppointmentType = models.get("AppointmentType")
+    if not AppointmentType:
+        raise HTTPException(status_code=500, detail="Server configuration error")
+
+    appt_type = db.query(AppointmentType).filter(
+        AppointmentType.id == appointment_type_id
+    ).first()
+
+    if not appt_type:
+        raise HTTPException(status_code=404, detail="Appointment type not found")
+
+    # Verify the appointment type is active if it has an is_active flag
+    if hasattr(appt_type, "is_active") and not appt_type.is_active:
+        raise HTTPException(status_code=404, detail="Appointment type not found")
+
+    return appt_type.organization_id
 
 
 # ============================================================================
@@ -313,15 +402,29 @@ async def public_join_waitlist(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Public endpoint for joining a waitlist (no authentication required)."""
+    """Public endpoint for joining a waitlist (no authentication required).
+
+    The organization_id is derived from the appointment_type_id to prevent
+    callers from associating entries with arbitrary orgs. A legacy
+    organization_id field in the request body is accepted but ignored.
+
+    Returns a signed token that the caller must use for subsequent
+    accept/position requests (prevents IDOR on sequential entry IDs).
+    """
+    await _check_rate_limit(request, max_requests=10)
+
+    # Derive org_id from appointment_type_id (never trust client-supplied org_id)
+    org_id = _resolve_org_from_appointment_type(body.appointment_type_id, db)
+
     service = _get_waitlist_service(db)
 
     try:
+        sanitized_email = _sanitize(body.email) or ""
         entry = service.join_waitlist({
-            "organization_id": body.organization_id,
+            "organization_id": org_id,
             "appointment_type_id": body.appointment_type_id,
             "name": _sanitize(body.name),
-            "email": _sanitize(body.email),
+            "email": sanitized_email,
             "phone": _sanitize(body.phone),
             "preferred_dates": body.preferred_dates or [],
             "preferred_times": body.preferred_times or [],
@@ -330,9 +433,13 @@ async def public_join_waitlist(
 
         db.commit()
 
+        # Generate a signed token so the caller can accept/check position
+        # without exposing the raw entry_id to IDOR attacks.
+        token = _generate_waitlist_token(entry.id, sanitized_email)
+
         return {
             "success": True,
-            "entry_id": entry.id,
+            "token": token,
             "position": entry.position,
             "message": f"You are #{entry.position} on the waitlist",
         }
@@ -340,13 +447,30 @@ async def public_join_waitlist(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/public/waitlist/{entry_id}/accept")
+@router.post("/public/waitlist/accept")
 async def public_accept_offer(
-    entry_id: int,
+    body: PublicAcceptRequest,
     request: Request,
+    token: str = Query(..., description="Signed waitlist token from join response"),
     db: Session = Depends(get_db),
 ):
-    """Public endpoint for accepting a waitlist offer (no auth, identified by entry ID)."""
+    """Accept a waitlist offer using a signed token.
+
+    The token (from the join response or notification email) encodes the
+    entry_id and email. The request body must include the matching email
+    as a second verification factor.
+    """
+    await _check_rate_limit(request, max_requests=5)
+
+    # Verify the signed token
+    payload = _verify_waitlist_token(token)
+    entry_id = payload["entry_id"]
+    token_email = payload["email"]
+
+    # Double-check: body email must match the token's email
+    if (body.email or "").strip().lower() != (token_email or "").strip().lower():
+        raise HTTPException(status_code=403, detail="Email does not match waitlist entry")
+
     service = _get_waitlist_service(db)
 
     try:
@@ -363,13 +487,23 @@ async def public_accept_offer(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/public/waitlist/{entry_id}/position")
+@router.get("/public/waitlist/position")
 async def public_check_position(
-    entry_id: int,
     request: Request,
+    token: str = Query(..., description="Signed waitlist token from join response"),
     db: Session = Depends(get_db),
 ):
-    """Public endpoint for checking waitlist position."""
+    """Check waitlist position using a signed token.
+
+    The token (from the join response) encodes the entry_id, preventing
+    enumeration of other users' waitlist entries.
+    """
+    await _check_rate_limit(request, max_requests=30)
+
+    # Verify the signed token
+    payload = _verify_waitlist_token(token)
+    entry_id = payload["entry_id"]
+
     service = _get_waitlist_service(db)
 
     try:
