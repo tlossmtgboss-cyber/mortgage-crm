@@ -606,6 +606,9 @@ from .scheduler import (
     SlotHold,
 )
 
+# Agent performance metrics (AI agent invocation tracking)
+from .agent_metrics import AgentInvocation
+
 
 __all__ = [
     # =====================
@@ -1218,4 +1221,9 @@ __all__ = [
     "AppointmentStatusHistory",
     "SchedulerAuditLog",
     "SlotHold",
+
+    # =====================
+    # Agent Performance Metrics
+    # =====================
+    "AgentInvocation",
 ]

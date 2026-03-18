@@ -1389,6 +1389,162 @@
   background: #dc2626;
 }
 
+/* ─── Scheduling Alerts ─── */
+.scheduling-alerts {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-base, 8px);
+  margin-bottom: var(--space-md, 16px);
+  overflow: hidden;
+}
+
+.scheduling-alerts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #fde68a;
+  border-bottom: 1px solid #f59e0b;
+}
+
+.scheduling-alerts-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.scheduling-alerts-title svg {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.scheduling-alerts-dismiss-all {
+  background: transparent;
+  border: 1px solid #d97706;
+  color: #92400e;
+  border-radius: 4px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.scheduling-alerts-dismiss-all:hover {
+  background: #fbbf24;
+}
+
+.scheduling-alerts-list {
+  padding: 0;
+}
+
+.scheduling-alert-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.2);
+  transition: opacity 0.2s ease;
+}
+
+.scheduling-alert-item:last-child {
+  border-bottom: none;
+}
+
+.scheduling-alert-item.dismissing {
+  opacity: 0.5;
+}
+
+.scheduling-alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduling-alert-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 2px;
+}
+
+.scheduling-alert-message {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #78350f;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.scheduling-alert-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: #a16207;
+}
+
+.scheduling-alert-meta span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.scheduling-alert-loan::before,
+.scheduling-alert-stage::before,
+.scheduling-alert-time::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  background: #a16207;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.scheduling-alert-loan::before {
+  display: none; /* First item has no dot prefix */
+}
+
+.scheduling-alert-dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid #d97706;
+  color: #92400e;
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  align-self: center;
+}
+
+.scheduling-alert-dismiss:hover:not(:disabled) {
+  background: #fbbf24;
+}
+
+.scheduling-alert-dismiss:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Mobile: stack alerts vertically, make dismiss full-width */
+@media (max-width: 640px) {
+  .scheduling-alert-item {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .scheduling-alert-dismiss {
+    align-self: flex-end;
+  }
+}
+
 /* Mode toggle for Add modal */
 .modal-mode-toggle {
   display: flex;

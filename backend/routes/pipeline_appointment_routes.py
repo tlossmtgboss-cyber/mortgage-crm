@@ -450,3 +450,110 @@ def register_pipeline_appointment_routes(app, get_db, get_current_user, **kwargs
             "count": len(logs),
             "history": [log.to_dict() for log in logs],
         }
+
+    # =========================================================================
+    # GET /api/v1/pipeline-appointments/failures — Unacknowledged failures
+    # =========================================================================
+
+    @app.get("/api/v1/pipeline-appointments/failures", tags=["Pipeline Appointments"])
+    async def list_failures(
+        limit: int = Query(default=10, ge=1, le=50),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """List recent scheduling failures that the LO has not yet acknowledged.
+
+        Returns failed trigger log entries for the current user's organization
+        that have not been marked as acknowledged, ordered by most recent first.
+        """
+        org_id = _get_org_id(current_user)
+        user_id = getattr(current_user, "id", None)
+
+        filters = [
+            PipelineAppointmentTriggerLog.organization_id == org_id,
+            PipelineAppointmentTriggerLog.status == "failed",
+        ]
+
+        # Scope to the current LO's loans unless they have no user ID
+        if user_id:
+            filters.append(PipelineAppointmentTriggerLog.loan_officer_id == user_id)
+
+        logs = (
+            db.query(PipelineAppointmentTriggerLog)
+            .filter(*filters)
+            .order_by(desc(PipelineAppointmentTriggerLog.created_at))
+            .limit(limit)
+            .all()
+        )
+
+        # Enrich with loan number for display
+        loan_ids = list({log.loan_id for log in logs if log.loan_id})
+        loan_numbers = {}
+        if loan_ids:
+            from database.models.lead_loan import Loan
+            loans = (
+                db.query(Loan.id, Loan.loan_number)
+                .filter(Loan.id.in_(loan_ids), Loan.organization_id == org_id)
+                .all()
+            )
+            loan_numbers = {l.id: l.loan_number for l in loans}
+
+        failures = []
+        for log in logs:
+            entry = log.to_dict()
+            entry["loan_number"] = loan_numbers.get(log.loan_id, "")
+            entry["message"] = (
+                log.error_message[:300] if log.error_message
+                else f"Failed to schedule {log.appointment_title} for loan {loan_numbers.get(log.loan_id, log.loan_id)}"
+            )
+            failures.append(entry)
+
+        return {
+            "status": "success",
+            "count": len(failures),
+            "failures": failures,
+        }
+
+    # =========================================================================
+    # POST /api/v1/pipeline-appointments/failures/{log_id}/acknowledge
+    # =========================================================================
+
+    @app.post("/api/v1/pipeline-appointments/failures/{log_id}/acknowledge", tags=["Pipeline Appointments"])
+    async def acknowledge_failure(
+        log_id: int,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Mark a scheduling failure as acknowledged so it no longer appears in the alert list.
+
+        Sets the trigger log status from 'failed' to 'acknowledged'.
+        """
+        org_id = _get_org_id(current_user)
+
+        log_entry = (
+            db.query(PipelineAppointmentTriggerLog)
+            .filter(
+                PipelineAppointmentTriggerLog.id == log_id,
+                PipelineAppointmentTriggerLog.organization_id == org_id,
+            )
+            .first()
+        )
+
+        if not log_entry:
+            raise HTTPException(status_code=404, detail=f"Trigger log {log_id} not found")
+
+        if log_entry.status != "failed":
+            return {
+                "status": "success",
+                "message": f"Log {log_id} already has status '{log_entry.status}'",
+            }
+
+        log_entry.status = "acknowledged"
+        db.commit()
+
+        logger.info(f"Acknowledged scheduling failure {log_id}, org={org_id}")
+
+        return {
+            "status": "success",
+            "message": f"Failure {log_id} acknowledged",
+        }

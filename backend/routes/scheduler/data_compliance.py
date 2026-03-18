@@ -1,21 +1,36 @@
 """
-Scheduler Data Compliance Routes - GDPR/CCPA data export and deletion.
+Scheduler Data Compliance Routes
+==================================
 
-Enterprise mortgage lenders need data portability and right-to-erasure
-capabilities for borrower appointment data.
+GDPR/CCPA data export and deletion, plus TCPA, DNC, and contact hours
+compliance monitoring across all scheduling communication channels.
+
+Enterprise mortgage lenders need data portability, right-to-erasure
+capabilities, and real-time compliance dashboards for borrower
+appointment data.
 
 Endpoints (all admin-only, tenant-isolated):
+
+  GDPR / CCPA:
   - GET    /data-export/{borrower_email}       Export all appointment data for a borrower
   - DELETE /data-delete/{borrower_email}        Anonymize/delete borrower PII
   - GET    /data-retention/report               Data retention status report
+
+  TCPA / DNC / Contact Hours:
+  - GET    /compliance/status                   Overall compliance health dashboard
+  - GET    /compliance/opt-outs                 Recent opt-out requests
+  - GET    /compliance/consent-audit            SMS consent coverage for scheduler contacts
+  - GET    /compliance/contact-hours-violations Contact-hours violation detail
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_, text
 from datetime import datetime, timedelta, timezone
 import logging
 import re
+
+import pytz
 
 from routes.scheduler._helpers import (
     get_current_user,
@@ -37,6 +52,10 @@ _ANON_EMAIL = "redacted@anonymized.invalid"
 
 # Simple email validation pattern
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+# TCPA Safe Harbor calling/texting hours
+_TCPA_START_HOUR = 8   # 8 AM local
+_TCPA_END_HOUR = 21    # 9 PM local
 
 
 # ============================================================================
@@ -568,3 +587,688 @@ async def get_data_retention_report(
     db.commit()
 
     return report
+
+
+# ============================================================================
+# TCPA / DNC / CONTACT HOURS COMPLIANCE
+# ============================================================================
+
+def _normalize_phone(phone: str) -> str:
+    """Strip a phone string to its last 10 digits for consistent matching."""
+    digits = "".join(c for c in (phone or "") if c.isdigit())
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return digits
+
+
+def _check_reminder_contact_hours(sent_at, recipient_tz_name: str = None):
+    """
+    Evaluate whether a reminder was sent within TCPA 8am-9pm local time.
+
+    Returns (is_within_hours: bool, local_hour: int, tz_used: str).
+    """
+    tz_name = recipient_tz_name or "America/New_York"
+    try:
+        tz = pytz.timezone(tz_name)
+    except pytz.UnknownTimeZoneError:
+        tz = pytz.timezone("America/New_York")
+        tz_name = "America/New_York"
+
+    if sent_at.tzinfo is None:
+        sent_at = pytz.utc.localize(sent_at)
+
+    local_time = sent_at.astimezone(tz)
+    local_hour = local_time.hour
+    return (_TCPA_START_HOUR <= local_hour < _TCPA_END_HOUR, local_hour, tz_name)
+
+
+@router.get("/compliance/status")
+async def get_compliance_status(
+    request: Request,
+    days: int = Query(7, ge=1, le=90, description="Lookback period in days"),
+    db: Session = Depends(get_db),
+):
+    """
+    Overall TCPA/DNC/contact hours compliance dashboard for scheduling.
+
+    Runs four checks against the organization's recent scheduler
+    communications and returns a per-check pass/warning/fail status plus
+    an overall compliance verdict.
+
+    Checks performed:
+      1. **SMS consent coverage** -- What percentage of SMS reminder
+         recipients have an active consent record (ChannelPreference
+         sms_consent or TCPAConsent).
+      2. **Contact hours enforcement** -- Were any SMS reminders sent
+         outside the TCPA 8am-9pm window in the recipient's local time?
+      3. **DNC list compliance** -- Were any SMS reminders sent to phone
+         numbers on the internal Do Not Call list?
+      4. **Opt-out handling** -- Are opt-outs being honoured (no sends
+         to contacts with do_not_sms=True)?
+
+    Requires admin-level authentication.
+    """
+    user = await get_current_user(request, db)
+    _require_admin(user)
+    org_id = _get_org_id(user)
+
+    models = get_models()
+    Appointment = models["Appointment"]
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    checks = []
+
+    # ---- Gather recent SMS reminder logs ----
+    sms_reminders = []
+    try:
+        from database.models.reminder_config import ReminderLog
+
+        sms_reminders = (
+            db.query(
+                ReminderLog.id,
+                ReminderLog.recipient_phone,
+                ReminderLog.sent_at,
+                ReminderLog.status,
+                Appointment.timezone,
+                Appointment.attendee_phone,
+            )
+            .join(Appointment, Appointment.id == ReminderLog.appointment_id)
+            .filter(
+                Appointment.organization_id == org_id,
+                ReminderLog.channel == "sms",
+                ReminderLog.sent_at >= cutoff,
+            )
+            .all()
+        )
+    except Exception as e:
+        logger.warning(f"Could not query SMS reminder logs for compliance status: {e}")
+
+    total_sms = len(sms_reminders)
+
+    # ------------------------------------------------------------------
+    # CHECK 1: SMS consent coverage
+    # ------------------------------------------------------------------
+    consent_verified = 0
+    consent_missing = 0
+
+    if total_sms > 0:
+        # Collect unique phone numbers from SMS reminders
+        unique_phones = set()
+        for r in sms_reminders:
+            phone = _normalize_phone(r.recipient_phone or r.attendee_phone or "")
+            if phone:
+                unique_phones.add(phone)
+
+        # Look up consent via ChannelPreference
+        consented_phones = set()
+        try:
+            from database.models.communication import ChannelPreference
+            from database.models.lead_loan import Lead
+
+            for phone in unique_phones:
+                if len(phone) < 10:
+                    continue
+                lead = (
+                    db.query(Lead.id)
+                    .filter(
+                        Lead.phone.ilike(f"%{phone[-10:]}"),
+                        Lead.organization_id == org_id,
+                    )
+                    .first()
+                )
+                if lead:
+                    pref = (
+                        db.query(ChannelPreference)
+                        .filter(ChannelPreference.lead_id == lead.id)
+                        .first()
+                    )
+                    if pref and getattr(pref, "sms_consent", False):
+                        consented_phones.add(phone)
+                        continue
+
+                # Fallback: check TCPAConsent table
+                try:
+                    from database.models.tcpa_consent import TCPAConsent
+
+                    tcpa = (
+                        db.query(TCPAConsent.id)
+                        .filter(
+                            TCPAConsent.phone_number.ilike(f"%{phone[-10:]}"),
+                            TCPAConsent.organization_id == org_id,
+                            TCPAConsent.is_active == True,  # noqa: E712
+                            TCPAConsent.consent_channel.in_(["sms", "both"]),
+                        )
+                        .first()
+                    )
+                    if tcpa:
+                        consented_phones.add(phone)
+                except Exception:
+                    pass
+
+            consent_verified = len(consented_phones)
+            consent_missing = len(unique_phones) - consent_verified
+            pct = (consent_verified / len(unique_phones) * 100) if unique_phones else 100
+
+            checks.append({
+                "check": "sms_consent",
+                "status": "pass" if pct >= 99 else "warning" if pct >= 90 else "fail",
+                "detail": f"{pct:.0f}% of SMS recipient phones ({consent_verified}/{len(unique_phones)}) have consent on file",
+                "total_unique_phones": len(unique_phones),
+                "with_consent": consent_verified,
+                "without_consent": consent_missing,
+            })
+        except Exception as e:
+            logger.warning(f"Consent coverage check error: {e}")
+            checks.append({
+                "check": "sms_consent",
+                "status": "error",
+                "detail": f"Could not verify consent records: {e}",
+            })
+    else:
+        checks.append({
+            "check": "sms_consent",
+            "status": "pass",
+            "detail": "No SMS reminders sent in this period",
+            "total_unique_phones": 0,
+        })
+
+    # ------------------------------------------------------------------
+    # CHECK 2: Contact hours enforcement (8am-9pm local)
+    # ------------------------------------------------------------------
+    outside_hours_count = 0
+    outside_hours_examples = []
+
+    for r in sms_reminders:
+        if r.sent_at is None:
+            continue
+        tz_name = r.timezone if r.timezone else None
+        within, local_hour, tz_used = _check_reminder_contact_hours(r.sent_at, tz_name)
+        if not within:
+            outside_hours_count += 1
+            if len(outside_hours_examples) < 5:
+                outside_hours_examples.append({
+                    "reminder_id": r.id,
+                    "sent_at_utc": r.sent_at.isoformat() if r.sent_at else None,
+                    "local_hour": local_hour,
+                    "timezone": tz_used,
+                })
+
+    checks.append({
+        "check": "contact_hours",
+        "status": "pass" if outside_hours_count == 0 else "fail",
+        "detail": (
+            f"{outside_hours_count} SMS reminder(s) sent outside 8am-9pm local time"
+            if outside_hours_count > 0
+            else "All SMS reminders sent within TCPA 8am-9pm window"
+        ),
+        "violations": outside_hours_count,
+        "total_sms": total_sms,
+        "examples": outside_hours_examples,
+    })
+
+    # ------------------------------------------------------------------
+    # CHECK 3: DNC list compliance
+    # ------------------------------------------------------------------
+    dnc_violations = 0
+    dnc_examples = []
+
+    try:
+        from database.models.dialer import ContactDNCStatus
+
+        # Get all DNC phone numbers
+        dnc_phones = set()
+        dnc_entries = db.query(ContactDNCStatus.phone_number).all()
+        for entry in dnc_entries:
+            dnc_phones.add(_normalize_phone(entry.phone_number))
+
+        if dnc_phones:
+            for r in sms_reminders:
+                phone = _normalize_phone(r.recipient_phone or "")
+                if phone and phone in dnc_phones:
+                    dnc_violations += 1
+                    if len(dnc_examples) < 5:
+                        dnc_examples.append({
+                            "reminder_id": r.id,
+                            "sent_at_utc": r.sent_at.isoformat() if r.sent_at else None,
+                            "phone_last4": phone[-4:] if len(phone) >= 4 else "****",
+                        })
+    except Exception as e:
+        logger.warning(f"DNC compliance check error: {e}")
+
+    checks.append({
+        "check": "dnc_compliance",
+        "status": "pass" if dnc_violations == 0 else "fail",
+        "detail": (
+            f"{dnc_violations} SMS reminder(s) sent to DNC-listed numbers"
+            if dnc_violations > 0
+            else "No SMS reminders sent to DNC-listed numbers"
+        ),
+        "violations": dnc_violations,
+        "examples": dnc_examples,
+    })
+
+    # ------------------------------------------------------------------
+    # CHECK 4: Opt-out handling (do_not_sms honoured)
+    # ------------------------------------------------------------------
+    optout_violations = 0
+
+    try:
+        from database.models.communication import ChannelPreference
+        from database.models.lead_loan import Lead
+
+        # Find leads with do_not_sms=True who still received SMS
+        opted_out_phones = set()
+        opted_out_leads = (
+            db.query(Lead.phone)
+            .join(ChannelPreference, ChannelPreference.lead_id == Lead.id)
+            .filter(
+                Lead.organization_id == org_id,
+                ChannelPreference.do_not_sms == True,  # noqa: E712
+                Lead.phone.isnot(None),
+            )
+            .all()
+        )
+        for row in opted_out_leads:
+            norm = _normalize_phone(row.phone)
+            if norm:
+                opted_out_phones.add(norm)
+
+        if opted_out_phones:
+            for r in sms_reminders:
+                phone = _normalize_phone(r.recipient_phone or "")
+                if phone and phone in opted_out_phones:
+                    optout_violations += 1
+    except Exception as e:
+        logger.warning(f"Opt-out compliance check error: {e}")
+
+    checks.append({
+        "check": "opt_out_handling",
+        "status": "pass" if optout_violations == 0 else "fail",
+        "detail": (
+            f"{optout_violations} SMS sent to contacts who opted out"
+            if optout_violations > 0
+            else "All opt-out preferences honoured"
+        ),
+        "violations": optout_violations,
+    })
+
+    # ------------------------------------------------------------------
+    # Overall verdict
+    # ------------------------------------------------------------------
+    statuses = [c["status"] for c in checks]
+    if "fail" in statuses:
+        overall = "non_compliant"
+    elif "warning" in statuses or "error" in statuses:
+        overall = "review_required"
+    else:
+        overall = "compliant"
+
+    _audit_log(
+        db, org_id, getattr(user, "id", None), "viewed",
+        "compliance_status", None,
+        changes={"period_days": days, "overall": overall},
+        request=request,
+    )
+    db.commit()
+
+    return {
+        "overall_status": overall,
+        "period_days": days,
+        "total_sms_checked": total_sms,
+        "checks": checks,
+        "last_checked": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/compliance/opt-outs")
+async def get_opt_outs(
+    request: Request,
+    days: int = Query(30, ge=1, le=365, description="Lookback period in days"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get recent opt-out events relevant to scheduler communications.
+
+    Aggregates opt-out signals from three sources:
+      1. ChannelPreference records with do_not_sms=True
+      2. ContactDNCStatus entries (internal DNC list)
+      3. TCPAConsent revocations (is_active=False with revoked_at set)
+
+    All results are scoped to the caller's organization.
+    Requires admin-level authentication.
+    """
+    user = await get_current_user(request, db)
+    _require_admin(user)
+    org_id = _get_org_id(user)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    opt_outs = []
+
+    # 1. ChannelPreference opt-outs (do_not_sms flipped to True)
+    try:
+        from database.models.communication import ChannelPreference
+        from database.models.lead_loan import Lead
+
+        pref_optouts = (
+            db.query(
+                Lead.id.label("lead_id"),
+                func.concat(Lead.first_name, " ", Lead.last_name).label("name"),
+                Lead.phone,
+                ChannelPreference.updated_at,
+            )
+            .join(ChannelPreference, ChannelPreference.lead_id == Lead.id)
+            .filter(
+                Lead.organization_id == org_id,
+                ChannelPreference.do_not_sms == True,  # noqa: E712
+                ChannelPreference.updated_at >= cutoff,
+            )
+            .order_by(ChannelPreference.updated_at.desc())
+            .limit(100)
+            .all()
+        )
+
+        for row in pref_optouts:
+            opt_outs.append({
+                "source": "channel_preference",
+                "lead_id": row.lead_id,
+                "name": row.name,
+                "phone_last4": row.phone[-4:] if row.phone and len(row.phone) >= 4 else None,
+                "opted_out_at": row.updated_at.isoformat() if row.updated_at else None,
+                "channel": "sms",
+            })
+    except Exception as e:
+        logger.warning(f"ChannelPreference opt-out query failed: {e}")
+
+    # 2. DNC list entries
+    try:
+        from database.models.dialer import ContactDNCStatus
+
+        dnc_entries = (
+            db.query(ContactDNCStatus)
+            .filter(ContactDNCStatus.created_at >= cutoff)
+            .order_by(ContactDNCStatus.created_at.desc())
+            .limit(100)
+            .all()
+        )
+
+        for entry in dnc_entries:
+            opt_outs.append({
+                "source": "dnc_list",
+                "phone_last4": entry.phone_number[-4:] if entry.phone_number and len(entry.phone_number) >= 4 else None,
+                "reason": entry.reason,
+                "opted_out_at": entry.created_at.isoformat() if entry.created_at else None,
+                "channel": "call_and_sms",
+            })
+    except Exception as e:
+        logger.warning(f"DNC opt-out query failed: {e}")
+
+    # 3. TCPAConsent revocations
+    try:
+        from database.models.tcpa_consent import TCPAConsent
+
+        revocations = (
+            db.query(TCPAConsent)
+            .filter(
+                TCPAConsent.organization_id == org_id,
+                TCPAConsent.is_active == False,  # noqa: E712
+                TCPAConsent.revoked_at >= cutoff,
+            )
+            .order_by(TCPAConsent.revoked_at.desc())
+            .limit(100)
+            .all()
+        )
+
+        for rev in revocations:
+            opt_outs.append({
+                "source": "tcpa_consent_revoked",
+                "phone_last4": rev.phone_number[-4:] if rev.phone_number and len(rev.phone_number) >= 4 else None,
+                "consent_channel": rev.consent_channel,
+                "revocation_method": getattr(rev, "revocation_method", None),
+                "opted_out_at": rev.revoked_at.isoformat() if rev.revoked_at else None,
+                "channel": rev.consent_channel,
+            })
+    except Exception as e:
+        logger.warning(f"TCPAConsent revocation query failed: {e}")
+
+    # Sort all opt-outs by date descending
+    opt_outs.sort(
+        key=lambda x: x.get("opted_out_at") or "",
+        reverse=True,
+    )
+
+    return {
+        "period_days": days,
+        "total": len(opt_outs),
+        "opt_outs": opt_outs,
+    }
+
+
+@router.get("/compliance/consent-audit")
+async def get_consent_audit(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Audit SMS consent coverage for contacts who have scheduler appointments.
+
+    Scans all contacts with upcoming or recent appointments that include
+    a phone number and checks whether each has a valid consent record.
+    This supports proactive remediation before reminders are sent.
+
+    Requires admin-level authentication.
+    """
+    user = await get_current_user(request, db)
+    _require_admin(user)
+    org_id = _get_org_id(user)
+
+    models = get_models()
+    Appointment = models["Appointment"]
+
+    # Get distinct phones from upcoming/recent appointments (last 30 days + future)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    appointments_with_phone = (
+        db.query(
+            Appointment.attendee_phone,
+            Appointment.attendee_name,
+            Appointment.attendee_email,
+            func.count(Appointment.id).label("appointment_count"),
+            func.min(Appointment.scheduled_start).label("next_appointment"),
+        )
+        .filter(
+            Appointment.organization_id == org_id,
+            Appointment.attendee_phone.isnot(None),
+            Appointment.attendee_phone != "",
+            Appointment.attendee_email != _ANON_EMAIL,
+            Appointment.scheduled_start >= cutoff,
+        )
+        .group_by(
+            Appointment.attendee_phone,
+            Appointment.attendee_name,
+            Appointment.attendee_email,
+        )
+        .all()
+    )
+
+    contacts = []
+    with_consent = 0
+    without_consent = 0
+
+    for row in appointments_with_phone:
+        phone = _normalize_phone(row.attendee_phone)
+        if len(phone) < 10:
+            continue
+
+        has_consent = False
+        consent_source = None
+
+        # Check ChannelPreference
+        try:
+            from database.models.communication import ChannelPreference
+            from database.models.lead_loan import Lead
+
+            lead = (
+                db.query(Lead.id)
+                .filter(
+                    Lead.phone.ilike(f"%{phone[-10:]}"),
+                    Lead.organization_id == org_id,
+                )
+                .first()
+            )
+            if lead:
+                pref = (
+                    db.query(ChannelPreference)
+                    .filter(ChannelPreference.lead_id == lead.id)
+                    .first()
+                )
+                if pref:
+                    if getattr(pref, "do_not_sms", False):
+                        consent_source = "opted_out"
+                    elif getattr(pref, "sms_consent", False):
+                        has_consent = True
+                        consent_source = "channel_preference"
+        except Exception:
+            pass
+
+        # Fallback: TCPAConsent table
+        if not has_consent and consent_source != "opted_out":
+            try:
+                from database.models.tcpa_consent import TCPAConsent
+
+                tcpa = (
+                    db.query(TCPAConsent.id, TCPAConsent.consent_type, TCPAConsent.consent_source)
+                    .filter(
+                        TCPAConsent.phone_number.ilike(f"%{phone[-10:]}"),
+                        TCPAConsent.organization_id == org_id,
+                        TCPAConsent.is_active == True,  # noqa: E712
+                        TCPAConsent.consent_channel.in_(["sms", "both"]),
+                    )
+                    .first()
+                )
+                if tcpa:
+                    has_consent = True
+                    consent_source = f"tcpa_consent ({tcpa.consent_type})"
+            except Exception:
+                pass
+
+        if has_consent:
+            with_consent += 1
+        elif consent_source != "opted_out":
+            without_consent += 1
+
+        contacts.append({
+            "phone_last4": phone[-4:] if len(phone) >= 4 else "****",
+            "name": row.attendee_name,
+            "appointment_count": row.appointment_count,
+            "next_appointment": row.next_appointment.isoformat() if row.next_appointment else None,
+            "has_sms_consent": has_consent,
+            "consent_source": consent_source,
+            "opted_out": consent_source == "opted_out",
+        })
+
+    # Sort: contacts without consent first (actionable items at top)
+    contacts.sort(key=lambda c: (c["has_sms_consent"], c["opted_out"]))
+
+    total = with_consent + without_consent
+    coverage_pct = (with_consent / total * 100) if total > 0 else 100.0
+
+    return {
+        "organization_id": org_id,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total_contacts_with_phone": len(contacts),
+            "with_consent": with_consent,
+            "without_consent": without_consent,
+            "opted_out": len([c for c in contacts if c["opted_out"]]),
+            "coverage_percent": round(coverage_pct, 1),
+        },
+        "contacts": contacts,
+    }
+
+
+@router.get("/compliance/contact-hours-violations")
+async def get_contact_hours_violations(
+    request: Request,
+    days: int = Query(30, ge=1, le=365, description="Lookback period in days"),
+    db: Session = Depends(get_db),
+):
+    """
+    Detailed report of scheduler SMS reminders sent outside the TCPA
+    8am-9pm window in the recipient's local timezone.
+
+    Each violation includes the send time, the local hour, and the
+    timezone used for evaluation. This helps compliance officers
+    investigate and remediate contact-hours issues.
+
+    Requires admin-level authentication.
+    """
+    user = await get_current_user(request, db)
+    _require_admin(user)
+    org_id = _get_org_id(user)
+
+    models = get_models()
+    Appointment = models["Appointment"]
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    violations = []
+    total_sms = 0
+
+    try:
+        from database.models.reminder_config import ReminderLog
+
+        sms_reminders = (
+            db.query(
+                ReminderLog.id,
+                ReminderLog.recipient_phone,
+                ReminderLog.sent_at,
+                ReminderLog.status,
+                ReminderLog.appointment_id,
+                Appointment.timezone,
+                Appointment.attendee_name,
+                Appointment.scheduled_start,
+            )
+            .join(Appointment, Appointment.id == ReminderLog.appointment_id)
+            .filter(
+                Appointment.organization_id == org_id,
+                ReminderLog.channel == "sms",
+                ReminderLog.sent_at >= cutoff,
+            )
+            .order_by(ReminderLog.sent_at.desc())
+            .all()
+        )
+
+        total_sms = len(sms_reminders)
+
+        for r in sms_reminders:
+            if r.sent_at is None:
+                continue
+            within, local_hour, tz_used = _check_reminder_contact_hours(
+                r.sent_at, r.timezone
+            )
+            if not within:
+                violations.append({
+                    "reminder_id": r.id,
+                    "appointment_id": r.appointment_id,
+                    "attendee_name": r.attendee_name,
+                    "phone_last4": (
+                        r.recipient_phone[-4:]
+                        if r.recipient_phone and len(r.recipient_phone) >= 4
+                        else "****"
+                    ),
+                    "sent_at_utc": r.sent_at.isoformat(),
+                    "local_hour": local_hour,
+                    "timezone": tz_used,
+                    "appointment_start": (
+                        r.scheduled_start.isoformat() if r.scheduled_start else None
+                    ),
+                    "status": r.status,
+                })
+    except Exception as e:
+        logger.warning(f"Contact hours violation query failed: {e}")
+
+    return {
+        "period_days": days,
+        "total_sms_checked": total_sms,
+        "violation_count": len(violations),
+        "violations": violations,
+        "tcpa_window": f"{_TCPA_START_HOUR}:00 - {_TCPA_END_HOUR}:00 local time",
+    }

@@ -86,6 +86,7 @@ function CalendarSettings() {
   const autoAssignLabels = sections['locations-labels'].autoAssignLabels;
   const labelMappings = sections['locations-labels'].labelMappings;
   const defaultLabelId = sections['locations-labels'].defaultLabelId;
+  const aiScheduling = sections['ai-scheduling'].data;
 
   // ========== Derived ==========
 
@@ -117,6 +118,7 @@ function CalendarSettings() {
   const setAutoAssignLabels = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'autoAssignLabels', value: v }), []);
   const setLabelMappings = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'labelMappings', value: v }), []);
   const setDefaultLabelId = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'locations-labels', field: 'defaultLabelId', value: v }), []);
+  const setAIScheduling = useCallback((v) => dispatch({ type: UPDATE_FIELD, section: 'ai-scheduling', field: 'data', value: v }), []);
 
   // ============================================================================
   // Data Loading
@@ -318,23 +320,23 @@ function CalendarSettings() {
             loadTabData={doLoadTab}
           />
         );
-      case 'ai-scheduling':
+      case 'ai-automation':
         return (
-          <AISchedulingSection
-            markChanged={markChanged}
-          />
-        );
-      case 'follow-up-cadence':
-        return (
-          <FollowUpCadenceSection />
-        );
-      case 'advanced':
-        return (
-          <AdvancedSection
-            advancedSettings={advancedSettings}
-            setAdvancedSettings={setAdvancedSettings}
-            markChanged={markChanged}
-          />
+          <>
+            <AISchedulingSection
+              config={aiScheduling}
+              setConfig={setAIScheduling}
+              markChanged={markChanged}
+            />
+            <hr className="ai-automation-divider" />
+            <FollowUpCadenceSection />
+            <hr className="ai-automation-divider" />
+            <AdvancedSection
+              advancedSettings={advancedSettings}
+              setAdvancedSettings={setAdvancedSettings}
+              markChanged={markChanged}
+            />
+          </>
         );
       default:
         return (

@@ -4,7 +4,8 @@ import './Marketing.css';
 
 // Lazy load the marketing tool components
 const AIOutreach = lazy(() => import('./AIOutreach'));
-const AvatarStudio = lazy(() => import('./AvatarStudio'));
+// DEPRECATED: Experimental feature deregistered
+// const AvatarStudio = lazy(() => import('./AvatarStudio'));
 const CommunicationIntelligence = lazy(() => import('./CommunicationIntelligence'));
 const AcquisitionDashboard = lazy(() => import('./AcquisitionDashboard'));
 const ConversationIntelligence = lazy(() => import('./ConversationIntelligence'));
@@ -89,7 +90,8 @@ const MARKETING_CATEGORIES = {
     icon: '🎬',
     tools: [
       { id: 'video-os', name: 'Video OS', description: 'Record and manage personalized video messages' },
-      { id: 'avatar-studio', name: 'Avatar Studio', description: 'AI video avatar creation' },
+      // DEPRECATED: Experimental feature deregistered
+      // { id: 'avatar-studio', name: 'Avatar Studio', description: 'AI video avatar creation' },
       { id: 'ai-blog', name: 'AI Blog', description: 'AI-generated blog content' },
       { id: 'carousel-builder', name: 'Carousel Builder', description: 'Create engaging social media carousels' },
       { id: 'content-marketing', name: 'Content Marketing', description: 'Brand voice, calendars, briefs, and SEO keywords' },
@@ -225,8 +227,9 @@ function Marketing() {
       // Content & Media
       case 'video-os':
         return <VideoOS />;
-      case 'avatar-studio':
-        return <AvatarStudio />;
+      // DEPRECATED: Experimental feature deregistered
+      // case 'avatar-studio':
+      //   return <AvatarStudio />;
       case 'ai-blog':
         return <AIDailyBlog />;
       case 'carousel-builder':

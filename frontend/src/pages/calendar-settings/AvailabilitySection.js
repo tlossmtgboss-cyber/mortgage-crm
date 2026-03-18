@@ -4,8 +4,9 @@
  * Handles weekly hours overview, schedule templates, holidays/blocked dates,
  * seasonal hours, override days, and booking window settings.
  */
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import AvailabilityPreferences from '../../components/calendar/AvailabilityPreferences';
+import { calendarSettingsAPI } from '../../services/api';
 import { toast } from '../../utils/toast';
 
 const DAYS_OF_WEEK = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -63,6 +64,23 @@ export default function AvailabilitySection({
   toggleExpandedSection,
   markChanged,
 }) {
+  // ---- Availability source divergence check ----
+  const [availabilityDiverged, setAvailabilityDiverged] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    calendarSettingsAPI.getAvailabilitySource()
+      .then(res => {
+        if (!cancelled && res?.data?.is_diverged) {
+          setAvailabilityDiverged(true);
+        }
+      })
+      .catch(() => {
+        // Silently ignore — non-critical check
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   // ---- Local form state ----
   const [newBlockedRange, setNewBlockedRange] = useState({
     start_date: '', end_date: '', reason: '',
@@ -276,6 +294,26 @@ export default function AvailabilitySection({
 
   return (
     <div role="tabpanel" id="panel-availability" aria-labelledby="calnav-availability">
+
+      {/* ---- Availability Source Warning ---- */}
+      {availabilityDiverged && (
+        <div className="availability-warning-banner" style={{
+          background: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: 8,
+          padding: '12px 16px',
+          marginBottom: 16,
+          color: '#92400e',
+          fontSize: '0.9rem',
+        }}>
+          <strong>Availability Source Mismatch</strong>
+          <p style={{ margin: '4px 0 0', color: '#78350f' }}>
+            Your availability is being read from recurring availability rules, which may differ from
+            the working hours shown below. Changes made here may not take effect until the recurring
+            rules are updated.
+          </p>
+        </div>
+      )}
 
       {/* ---- Visual Week Overview ---- */}
       <section className="cal-settings-section avail-week-overview">

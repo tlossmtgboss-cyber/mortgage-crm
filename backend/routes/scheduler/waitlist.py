@@ -40,6 +40,10 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
     _audit_log, _check_rate_limit,
 )
+from routes.scheduler.error_responses import (
+    validation_error, not_found_error, forbidden_error,
+    unauthorized_error, internal_error, service_unavailable_error,
+)
 from db import get_db
 from middleware.feature_gate import require_feature_tier
 from services.waitlist_service import WaitlistService
@@ -132,23 +136,23 @@ def _verify_waitlist_token(token: str) -> dict:
     Raises HTTPException on failure.
     """
     if not jwt:
-        raise HTTPException(status_code=500, detail="Server configuration error")
+        internal_error("Server configuration error")
     if not SECRET_KEY:
-        raise HTTPException(status_code=500, detail="Server configuration error")
+        internal_error("Server configuration error")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Waitlist link has expired")
+        unauthorized_error("Waitlist link has expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid waitlist link")
+        unauthorized_error("Invalid waitlist link")
 
     if payload.get("purpose") != "waitlist":
-        raise HTTPException(status_code=401, detail="Invalid waitlist link")
+        unauthorized_error("Invalid waitlist link")
 
     entry_id = payload.get("wl_entry_id")
     email = payload.get("email")
     if not entry_id or not email:
-        raise HTTPException(status_code=401, detail="Invalid waitlist link")
+        unauthorized_error("Invalid waitlist link")
 
     return {"entry_id": entry_id, "email": email}
 
@@ -162,18 +166,18 @@ def _resolve_org_from_appointment_type(appointment_type_id: int, db: Session) ->
     models = get_models()
     AppointmentType = models.get("AppointmentType")
     if not AppointmentType:
-        raise HTTPException(status_code=500, detail="Server configuration error")
+        service_unavailable_error("Server configuration error")
 
     appt_type = db.query(AppointmentType).filter(
         AppointmentType.id == appointment_type_id
     ).first()
 
     if not appt_type:
-        raise HTTPException(status_code=404, detail="Appointment type not found")
+        not_found_error("Appointment type not found")
 
     # Verify the appointment type is active if it has an is_active flag
     if hasattr(appt_type, "is_active") and not appt_type.is_active:
-        raise HTTPException(status_code=404, detail="Appointment type not found")
+        not_found_error("Appointment type not found")
 
     return appt_type.organization_id
 
@@ -226,7 +230,7 @@ async def join_waitlist_authenticated(
             "message": f"Added to waitlist at position {entry.position}",
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        validation_error(str(e))
 
 
 @router.get("/waitlist")
@@ -244,7 +248,7 @@ async def get_waitlist(
     org_id = _get_org_id(user)
 
     if not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        forbidden_error("Admin access required")
 
     service = _get_waitlist_service(db)
 
@@ -258,7 +262,7 @@ async def get_waitlist(
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        validation_error(str(e))
 
 
 @router.get("/waitlist/{entry_id}/position")
@@ -277,7 +281,7 @@ async def get_waitlist_position(
     try:
         return service.get_position(entry_id, org_id=org_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        not_found_error(str(e))
 
 
 @router.delete("/waitlist/{entry_id}")
@@ -298,7 +302,7 @@ async def leave_waitlist(
         db.commit()
         return {"success": True, "message": "Removed from waitlist"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        validation_error(str(e))
 
 
 @router.post("/waitlist/{entry_id}/offer")
@@ -314,14 +318,14 @@ async def offer_slot_to_entry(
     org_id = _get_org_id(user)
 
     if not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        forbidden_error("Admin access required")
 
     service = _get_waitlist_service(db)
 
     try:
         slot_time = datetime.fromisoformat(body.slot_time.replace("Z", "+00:00"))
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid slot_time format. Use ISO 8601.")
+        validation_error("Invalid slot_time format. Use ISO 8601.")
 
     try:
         entry = service.offer_slot(entry_id, slot_time, org_id=org_id)
@@ -335,7 +339,7 @@ async def offer_slot_to_entry(
             "message": f"Slot offered to {entry.name}",
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        validation_error(str(e))
 
 
 @router.post("/waitlist/{entry_id}/reorder")
@@ -351,7 +355,7 @@ async def reorder_waitlist_entry(
     org_id = _get_org_id(user)
 
     if not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        forbidden_error("Admin access required")
 
     service = _get_waitlist_service(db)
 
@@ -365,7 +369,7 @@ async def reorder_waitlist_entry(
             "message": f"Moved to position {entry.position}",
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        validation_error(str(e))
 
 
 @router.post("/waitlist/expire-offers")
@@ -379,7 +383,7 @@ async def expire_stale_offers(
     _get_org_id(user)  # Ensure user is in an org
 
     if not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        forbidden_error("Admin access required")
 
     service = _get_waitlist_service(db)
     count = service.expire_offers()

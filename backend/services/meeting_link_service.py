@@ -25,6 +25,8 @@ from typing import Any, Dict, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from routes.scheduler.constants import DEFAULT_TIMEZONE
+
 logger = logging.getLogger(__name__)
 
 
@@ -260,7 +262,7 @@ class MeetingLinkService:
             topic = getattr(appointment, "title", "Perennia AI Meeting") or "Meeting"
             start_time = getattr(appointment, "scheduled_start", datetime.utcnow())
             duration = getattr(appointment, "duration_minutes", 30) or 30
-            tz = getattr(appointment, "timezone", "America/Chicago") or "America/Chicago"
+            tz = getattr(appointment, "timezone", DEFAULT_TIMEZONE) or DEFAULT_TIMEZONE
 
             meeting_data = await zoom_client.async_create_meeting(
                 access_token=access_token,

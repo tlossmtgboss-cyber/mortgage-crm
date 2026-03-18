@@ -12,6 +12,7 @@ Endpoints:
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
 import logging
 import secrets
 
@@ -151,6 +152,12 @@ async def create_booking_link(
         except ValueError:
             pass
 
+    # Default expiration: 90 days from creation if not explicitly set
+    DEFAULT_BOOKING_LINK_EXPIRY_DAYS = 90
+    expires_at = link_data.expires_at
+    if expires_at is None:
+        expires_at = datetime.now(timezone.utc) + timedelta(days=DEFAULT_BOOKING_LINK_EXPIRY_DAYS)
+
     link = BookingLink(
         organization_id=org_id,
         user_id=user.id,
@@ -163,7 +170,8 @@ async def create_booking_link(
         custom_title=link_data.custom_title,
         custom_description=link_data.custom_description,
         routing_strategy=routing_strategy,
-        assigned_users=link_data.assigned_users
+        assigned_users=link_data.assigned_users,
+        expires_at=expires_at,
     )
 
     db.add(link)
@@ -175,7 +183,8 @@ async def create_booking_link(
     return {
         "message": "Booking link created",
         "link_id": link.id,
-        "url": f"/book/{link.slug}"
+        "url": f"/book/{link.slug}",
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
     }
 
 

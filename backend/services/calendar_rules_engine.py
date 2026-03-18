@@ -39,6 +39,8 @@ from pydantic import BaseModel, Field, validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from routes.scheduler.constants import DEFAULT_TIMEZONE
+
 logger = logging.getLogger(__name__)
 
 
@@ -147,7 +149,7 @@ class SchedulingRules(BaseModel):
     vip_extended_hours_minutes: int = Field(default=0, ge=0, le=120)
 
     # Timezone
-    timezone: str = "America/Chicago"
+    timezone: str = DEFAULT_TIMEZONE
 
     # Source metadata (not a rule, just tracking)
     source: str = "defaults"  # "defaults", "org", "lo"
@@ -332,7 +334,7 @@ def _build_rules_from_config(
         min_duration_minutes=_get("min_duration_minutes", 15),
         max_duration_minutes=_get("max_duration_minutes", 120),
         default_duration_minutes=_get("default_duration_minutes", 30),
-        timezone=_get("timezone", "America/Chicago"),
+        timezone=_get("timezone", DEFAULT_TIMEZONE),
         source=source,
         lo_id=lo_id,
         org_id=_get("organization_id", org_id),

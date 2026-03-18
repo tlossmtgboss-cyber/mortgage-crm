@@ -19,13 +19,16 @@ Every message includes an opt-out mechanism:
 """
 
 import html
+import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import jwt
+from sqlalchemy import and_, text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -36,6 +39,16 @@ logger = logging.getLogger(__name__)
 
 CHRONIC_NO_SHOW_THRESHOLD = 3
 CHRONIC_NO_SHOW_WINDOW_DAYS = 90
+
+# Grace period after scheduled_end before marking as no-show (minutes)
+NO_SHOW_GRACE_MINUTES = 15
+
+# Stop processing recovery for appointments older than this (hours)
+# Step 4 fires at 72h, so 96h gives a comfortable buffer
+MAX_RECOVERY_WINDOW_HOURS = 96
+
+# Batch size for queries to avoid excessive memory usage
+RECOVERY_BATCH_SIZE = 200
 
 _SECRET_KEY: Optional[str] = None
 
@@ -361,6 +374,319 @@ class NoShowRecoveryService:
             "next_delay_minutes": next_delay,
             "error": result.get("error"),
         }
+
+    # ------------------------------------------------------------------
+    # Execution engine
+    # ------------------------------------------------------------------
+
+    async def check_and_mark_no_shows(
+        self,
+        db: Session,
+        organization_id: Optional[int] = None,
+    ) -> Dict:
+        """Mark BOOKED appointments as NO_SHOW if past their end time + grace period.
+
+        Queries appointments where:
+        - status is BOOKED (or CONFIRMED/REMINDED -- the attendee was expected)
+        - scheduled_end + grace period has passed
+        - not already marked as no-show
+
+        Starts recovery sequence for each newly-detected no-show.
+
+        Returns:
+            Dict with count of detected no-shows and their IDs.
+        """
+        from database.models.scheduler import (
+            Appointment,
+            AppointmentStatus,
+            AppointmentStatusHistory,
+        )
+
+        now = datetime.now(timezone.utc)
+        grace_cutoff = now - timedelta(minutes=NO_SHOW_GRACE_MINUTES)
+        # Don't look back more than 24 hours to avoid processing very old appointments
+        lookback = now - timedelta(hours=24)
+
+        filters = [
+            Appointment.status.in_([
+                AppointmentStatus.BOOKED,
+                AppointmentStatus.CONFIRMED,
+                AppointmentStatus.REMINDED,
+            ]),
+            Appointment.scheduled_end < grace_cutoff,
+            Appointment.scheduled_end > lookback,
+        ]
+        if organization_id is not None:
+            filters.append(Appointment.organization_id == organization_id)
+
+        appointments = (
+            db.query(Appointment)
+            .filter(and_(*filters))
+            .limit(RECOVERY_BATCH_SIZE)
+            .all()
+        )
+
+        if not appointments:
+            return {"detected": 0, "appointment_ids": []}
+
+        detected_ids = []
+        recovery_results = []
+
+        for appt in appointments:
+            previous_status = appt.status.value if appt.status else None
+
+            # Mark as NO_SHOW
+            appt.status = AppointmentStatus.NO_SHOW
+            appt.no_show_at = now
+            appt.status_changed_at = now
+            appt.updated_at = now
+
+            # Record status history for audit trail
+            try:
+                history = AppointmentStatusHistory(
+                    organization_id=appt.organization_id,
+                    appointment_id=appt.id,
+                    previous_status=previous_status,
+                    new_status=AppointmentStatus.NO_SHOW.value,
+                    change_source="system",
+                    notes="Auto-detected: appointment end time + grace period elapsed with no check-in",
+                    changed_at=now,
+                )
+                db.add(history)
+            except Exception as e:
+                logger.warning(f"Failed to record status history for appointment {appt.id}: {e}")
+
+            detected_ids.append(appt.id)
+
+            # Start recovery sequence for this appointment
+            try:
+                result = await self.start_recovery(db, appt)
+                recovery_results.append({
+                    "appointment_id": appt.id,
+                    "recovery": result,
+                })
+            except Exception as e:
+                logger.error(
+                    f"Failed to start recovery for appointment {appt.id}: {e}",
+                    exc_info=True,
+                )
+                recovery_results.append({
+                    "appointment_id": appt.id,
+                    "recovery": {"action": "error", "error": str(e)},
+                })
+
+        try:
+            db.flush()
+        except Exception as e:
+            logger.error(f"Failed to flush no-show updates: {e}", exc_info=True)
+            db.rollback()
+            return {"detected": 0, "appointment_ids": [], "error": str(e)}
+
+        logger.info(f"Detected and marked {len(detected_ids)} no-show appointments")
+        return {
+            "detected": len(detected_ids),
+            "appointment_ids": detected_ids,
+            "recovery_results": recovery_results,
+        }
+
+    async def execute_no_show_recovery(
+        self,
+        db: Session,
+        organization_id: Optional[int] = None,
+    ) -> Dict:
+        """Find no-show appointments and execute the next due recovery step.
+
+        For each NO_SHOW appointment within the recovery window:
+        1. Determine which steps have already been completed (from internal_notes)
+        2. Check if enough time has elapsed for the next step
+        3. Execute the step if due
+
+        This is designed to be called periodically (e.g., every 5-10 minutes)
+        so that each step fires close to its configured delay time.
+
+        Returns:
+            Dict with counts of steps executed, skipped, and errors.
+        """
+        from database.models.scheduler import Appointment, AppointmentStatus
+
+        now = datetime.now(timezone.utc)
+        # Only process appointments within the recovery window
+        window_start = now - timedelta(hours=MAX_RECOVERY_WINDOW_HOURS)
+
+        filters = [
+            Appointment.status == AppointmentStatus.NO_SHOW,
+            Appointment.no_show_at.isnot(None),
+            Appointment.no_show_at >= window_start,
+        ]
+        if organization_id is not None:
+            filters.append(Appointment.organization_id == organization_id)
+
+        appointments = (
+            db.query(Appointment)
+            .filter(and_(*filters))
+            .limit(RECOVERY_BATCH_SIZE)
+            .all()
+        )
+
+        if not appointments:
+            return {"processed": 0, "steps_executed": 0, "skipped": 0, "errors": 0}
+
+        stats = {
+            "processed": 0,
+            "steps_executed": 0,
+            "skipped": 0,
+            "errors": 0,
+            "completed_sequences": 0,
+            "details": [],
+        }
+
+        for appt in appointments:
+            stats["processed"] += 1
+            try:
+                result = await self._process_appointment_recovery(db, appt, now)
+                if result["action"] == "executed":
+                    stats["steps_executed"] += 1
+                elif result["action"] == "skipped":
+                    stats["skipped"] += 1
+                elif result["action"] == "sequence_complete":
+                    stats["completed_sequences"] += 1
+                    stats["skipped"] += 1
+                elif result["action"] == "error":
+                    stats["errors"] += 1
+                stats["details"].append(result)
+            except Exception as e:
+                stats["errors"] += 1
+                logger.error(
+                    f"Recovery processing failed for appointment {appt.id}: {e}",
+                    exc_info=True,
+                )
+                stats["details"].append({
+                    "appointment_id": appt.id,
+                    "action": "error",
+                    "error": str(e),
+                })
+
+        try:
+            db.flush()
+        except Exception as e:
+            logger.error(f"Failed to flush recovery updates: {e}", exc_info=True)
+
+        logger.info(
+            f"Recovery cycle: {stats['processed']} processed, "
+            f"{stats['steps_executed']} steps executed, "
+            f"{stats['skipped']} skipped, {stats['errors']} errors"
+        )
+        return stats
+
+    async def _process_appointment_recovery(
+        self,
+        db: Session,
+        appointment,
+        now: datetime,
+    ) -> Dict:
+        """Process recovery for a single no-show appointment.
+
+        Determines the next step to execute based on:
+        - Which steps have already been completed (parsed from internal_notes)
+        - How much time has elapsed since the appointment was marked no-show
+
+        Returns a dict describing what action was taken.
+        """
+        appt_id = appointment.id
+        no_show_at = appointment.no_show_at
+
+        if no_show_at is None:
+            return {
+                "appointment_id": appt_id,
+                "action": "skipped",
+                "reason": "no_show_at_not_set",
+            }
+
+        # Make no_show_at timezone-aware if needed
+        if no_show_at.tzinfo is None:
+            no_show_at = no_show_at.replace(tzinfo=timezone.utc)
+
+        # Determine which steps have already been completed
+        last_completed = self._get_last_completed_step(appointment)
+
+        if last_completed >= len(RECOVERY_STEPS):
+            return {
+                "appointment_id": appt_id,
+                "action": "sequence_complete",
+                "reason": "all_steps_executed",
+            }
+
+        # Determine the next step
+        next_step_num = last_completed + 1
+        next_step_config = RECOVERY_STEPS[next_step_num - 1]
+        delay_minutes = next_step_config["delay_minutes"]
+
+        # Check if enough time has elapsed for the next step
+        elapsed_minutes = (now - no_show_at).total_seconds() / 60
+        if elapsed_minutes < delay_minutes:
+            return {
+                "appointment_id": appt_id,
+                "action": "skipped",
+                "reason": "not_yet_due",
+                "next_step": next_step_num,
+                "minutes_remaining": round(delay_minutes - elapsed_minutes, 1),
+            }
+
+        # Pre-check opt-out before executing (avoid unnecessary work)
+        email = appointment.attendee_email
+        org_id = appointment.organization_id
+        if not email:
+            return {
+                "appointment_id": appt_id,
+                "action": "skipped",
+                "reason": "no_email",
+            }
+
+        if self.is_opted_out(db, email, org_id):
+            return {
+                "appointment_id": appt_id,
+                "action": "skipped",
+                "reason": "opted_out",
+            }
+
+        # Execute the step (execute_step does its own re-checks)
+        result = await self.execute_step(
+            db,
+            appointment_id=appt_id,
+            step=next_step_num,
+        )
+
+        return {
+            "appointment_id": appt_id,
+            "action": "executed" if result.get("sent") else "error",
+            "step": next_step_num,
+            "channel": next_step_config["channel"],
+            "result": result,
+        }
+
+    def _get_last_completed_step(self, appointment) -> int:
+        """Parse internal_notes to determine the last completed recovery step.
+
+        The _log_recovery_step method writes notes in the format:
+            [Recovery Step N/4] SMS template=gentle_sms sent=YES at 2026-03-18 14:30 UTC
+
+        We look for the highest step number with sent=YES.
+
+        Returns:
+            The highest completed step number (0 if none completed).
+        """
+        notes = appointment.internal_notes or ""
+        if not notes:
+            return 0
+
+        # Pattern matches "[Recovery Step N/M] ... sent=YES ..."
+        pattern = r"\[Recovery Step (\d+)/\d+\].*?sent=YES"
+        matches = re.findall(pattern, notes)
+
+        if not matches:
+            return 0
+
+        return max(int(m) for m in matches)
 
     # ------------------------------------------------------------------
     # Opt-out management
@@ -747,3 +1073,96 @@ class NoShowRecoveryService:
 # ---------------------------------------------------------------------------
 
 no_show_recovery_service = NoShowRecoveryService()
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience functions for periodic task integration
+# ---------------------------------------------------------------------------
+
+async def check_and_mark_no_shows(
+    db: Session,
+    organization_id: Optional[int] = None,
+) -> Dict:
+    """Mark past-due BOOKED appointments as NO_SHOW and start recovery.
+
+    Convenience wrapper around the service singleton. Suitable for calling
+    from a background task scheduler.
+
+    Args:
+        db: Active database session.
+        organization_id: Optional filter to process a single org.
+
+    Returns:
+        Dict with detection results (count, IDs, recovery outcomes).
+    """
+    return await no_show_recovery_service.check_and_mark_no_shows(db, organization_id)
+
+
+async def execute_no_show_recovery(
+    db: Session,
+    organization_id: Optional[int] = None,
+) -> Dict:
+    """Execute pending recovery steps for existing no-show appointments.
+
+    Convenience wrapper around the service singleton. Suitable for calling
+    from a background task scheduler.
+
+    Args:
+        db: Active database session.
+        organization_id: Optional filter to process a single org.
+
+    Returns:
+        Dict with execution stats (processed, steps executed, skipped, errors).
+    """
+    return await no_show_recovery_service.execute_no_show_recovery(db, organization_id)
+
+
+async def run_no_show_recovery_cycle(
+    db: Session,
+    organization_id: Optional[int] = None,
+) -> Dict:
+    """Main entry point for periodic execution.
+
+    Performs two phases:
+    1. Detect new no-shows (BOOKED appointments past their end time) and
+       mark them as NO_SHOW, triggering step 1 of the recovery sequence.
+    2. Advance the recovery sequence for all existing no-show appointments,
+       executing the next due step based on elapsed time.
+
+    Designed to be called every 5-10 minutes by a periodic task. Each call
+    is idempotent -- steps that have already been executed will not repeat,
+    and steps that are not yet due will be skipped.
+
+    Args:
+        db: Active database session.
+        organization_id: Optional filter to process a single org.
+
+    Returns:
+        Dict with combined results from both phases.
+    """
+    detection_result = {"detected": 0, "appointment_ids": []}
+    recovery_result = {
+        "processed": 0,
+        "steps_executed": 0,
+        "skipped": 0,
+        "errors": 0,
+    }
+
+    # Phase 1: detect and mark new no-shows
+    try:
+        detection_result = await check_and_mark_no_shows(db, organization_id)
+    except Exception as e:
+        logger.error(f"No-show detection phase failed: {e}", exc_info=True)
+        detection_result["error"] = str(e)
+
+    # Phase 2: advance recovery for existing no-shows
+    try:
+        recovery_result = await execute_no_show_recovery(db, organization_id)
+    except Exception as e:
+        logger.error(f"Recovery execution phase failed: {e}", exc_info=True)
+        recovery_result["error"] = str(e)
+
+    return {
+        "detection": detection_result,
+        "recovery": recovery_result,
+    }

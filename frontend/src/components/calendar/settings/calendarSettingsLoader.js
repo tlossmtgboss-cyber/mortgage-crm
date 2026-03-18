@@ -211,10 +211,92 @@ export async function loadTabData(tab, dispatch, getState) {
         break;
       }
 
-      case 'cancellation-policy':
+      case 'cancellation-policy': {
+        try {
+          const cpRes = await calendarSettingsAPI.getCancellationPolicy();
+          if (cpRes) {
+            const prev = sections['cancellation-policy'].data;
+            // Map backend fields back to frontend model
+            let policyPreset = 'moderate';
+            if (cpRes.min_notice_hours <= 1) policyPreset = 'flexible';
+            else if (cpRes.min_notice_hours >= 24) policyPreset = 'strict';
+            dispatch({
+              type: LOAD_SECTION_SUCCESS,
+              section: 'cancellation-policy',
+              payload: {
+                data: {
+                  ...prev,
+                  policy: policyPreset,
+                  allow_reschedule: cpRes.allow_borrower_cancel !== false,
+                  reschedule_limit: cpRes.max_cancellations_per_borrower || prev.reschedule_limit,
+                  require_reason: cpRes.require_reason || false,
+                },
+              },
+            });
+          } else {
+            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'cancellation-policy', payload: {} });
+          }
+        } catch (err) {
+          // Endpoint may not exist yet; fall back to defaults silently
+          console.warn('Cancellation policy load fell back to defaults:', err.message);
+          dispatch({ type: LOAD_SECTION_SUCCESS, section: 'cancellation-policy', payload: {} });
+        }
+        break;
+      }
+
       case 'advanced':
         dispatch({ type: LOAD_SECTION_SUCCESS, section: tab, payload: {} });
         break;
+
+      case 'ai-scheduling': {
+        try {
+          const res = await calendarSettingsAPI.getAIScheduling();
+          if (res?.data) {
+            const prev = sections['ai-scheduling'].data;
+            dispatch({
+              type: LOAD_SECTION_SUCCESS,
+              section: 'ai-scheduling',
+              payload: {
+                data: { ...prev, ...res.data },
+              },
+            });
+          } else {
+            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'ai-scheduling', payload: {} });
+          }
+        } catch (err) {
+          // Endpoint may not exist yet; fall back to defaults silently
+          console.warn('AI scheduling settings load fell back to defaults:', err.message);
+          dispatch({ type: LOAD_SECTION_SUCCESS, section: 'ai-scheduling', payload: {} });
+        }
+        break;
+      }
+
+      case 'ai-automation': {
+        // Merged tab: load ai-scheduling data, then mark advanced as loaded too
+        try {
+          const res = await calendarSettingsAPI.getAIScheduling();
+          if (res?.data) {
+            const prev = sections['ai-scheduling'].data;
+            dispatch({
+              type: LOAD_SECTION_SUCCESS,
+              section: 'ai-scheduling',
+              payload: {
+                data: { ...prev, ...res.data },
+              },
+            });
+          } else {
+            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'ai-scheduling', payload: {} });
+          }
+        } catch (err) {
+          console.warn('AI scheduling settings load fell back to defaults:', err.message);
+          dispatch({ type: LOAD_SECTION_SUCCESS, section: 'ai-scheduling', payload: {} });
+        }
+        // Advanced section uses local defaults only (no API endpoint)
+        dispatch({ type: LOAD_SECTION_SUCCESS, section: 'advanced', payload: {} });
+        // Mark the merged tab itself as loaded
+        dispatch({ type: LOAD_SECTION_SUCCESS, section: 'ai-automation', payload: {} });
+        break;
+      }
 
       default:
         dispatch({ type: LOAD_SECTION_SUCCESS, section: tab, payload: {} });

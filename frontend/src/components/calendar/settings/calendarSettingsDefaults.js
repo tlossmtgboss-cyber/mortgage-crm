@@ -35,15 +35,13 @@ export const NAV_SECTIONS = [
   {
     group: 'AI & Automation',
     items: [
-      { id: 'ai-scheduling', label: 'AI Scheduling', icon: 'fa-robot', description: 'Configure how AI agents schedule appointments on your calendar' },
-      { id: 'follow-up-cadence', label: 'Follow-Up Cadence', icon: 'fa-sync-alt', description: 'Automated outreach sequences for document collection and borrower follow-up' },
+      { id: 'ai-automation', label: 'AI & Automation', icon: 'fa-robot', description: 'AI scheduling, follow-up cadence, and advanced calendar options' },
     ],
   },
   {
     group: 'Management',
     items: [
       { id: 'team', label: 'Team', icon: 'fa-users', description: 'Manage team assignment strategy and capacity', badge: 'Manager' },
-      { id: 'advanced', label: 'Advanced', icon: 'fa-cog', description: 'Data export, calendar feeds, and developer options' },
     ],
   },
 ];
@@ -111,6 +109,35 @@ export const DEFAULT_ADVANCED = {
   show_timezone_selector: true, enable_waitlist: false,
 };
 
+export const DEFAULT_AI_SCHEDULING = {
+  enabled: true,
+  auto_book_enabled: false,
+  preferred_times: ['10:00', '14:00', '16:00'],
+  max_ai_bookings_per_day: 5,
+  buffer_before_minutes: 15,
+  buffer_after_minutes: 10,
+  allowed_appointment_types: ['discovery_call', 'pre_purchase_consultation', 'document_review'],
+  require_confirmation: true,
+  confirmation_method: 'sms',
+  smart_scheduling: {
+    avoid_back_to_back: true,
+    cluster_similar_meetings: true,
+    protect_focus_time: true,
+    focus_time_blocks: ['08:00-09:30'],
+  },
+  sms_triggers: {
+    send_booking_link: true,
+    follow_up_no_response_hours: 24,
+    max_follow_ups: 3,
+    include_calendar_preview: true,
+  },
+  ai_response_handling: {
+    auto_reschedule_on_cancel: true,
+    suggest_alternatives: 3,
+    respect_borrower_timezone: true,
+  },
+};
+
 export const DEFAULT_INTEGRATIONS = {
   google: { connected: false }, outlook: { connected: false }, zoom: { connected: false },
   google_meet: { connected: false }, ical: { connected: false, feed_url: '', subscriber_count: 0 },
@@ -157,5 +184,6 @@ export const DEFAULT_EXPANDED_SECTIONS = {
 
 export const SAVEABLE_SECTIONS = [
   'availability', 'notifications', 'booking-page', 'team',
-  'integrations', 'cancellation-policy', 'locations-labels', 'advanced',
+  'integrations', 'cancellation-policy', 'locations-labels',
+  'ai-automation',
 ];

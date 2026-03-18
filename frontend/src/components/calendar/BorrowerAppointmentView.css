@@ -1,0 +1,366 @@
+/* BorrowerAppointmentView.css - Borrower-facing appointment list */
+
+/* =============================================================================
+   CONTAINER
+   ============================================================================= */
+
+.bav-container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.bav-container.bav-compact {
+  padding: 12px 0;
+  max-width: 100%;
+}
+
+/* =============================================================================
+   HEADING
+   ============================================================================= */
+
+.bav-heading {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.bav-compact .bav-heading {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.bav-heading-past {
+  margin-top: 32px;
+  color: #64748b;
+  font-size: 16px;
+}
+
+/* =============================================================================
+   DAY GROUPS
+   ============================================================================= */
+
+.bav-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bav-groups-past {
+  opacity: 0.75;
+}
+
+.bav-group-label {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* =============================================================================
+   APPOINTMENT CARD
+   ============================================================================= */
+
+.bav-card {
+  display: flex;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 8px;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.bav-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.bav-card[role='button'] {
+  cursor: pointer;
+}
+
+.bav-card[role='button']:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+/* Time column */
+.bav-card-time {
+  flex-shrink: 0;
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 2px;
+}
+
+.bav-card-time-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.bav-card-time-duration {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* Details column */
+.bav-card-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.bav-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.bav-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bav-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.bav-card-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bav-card-lo {
+  color: #475569;
+}
+
+.bav-card-location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+/* Card actions */
+.bav-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* =============================================================================
+   BUTTONS
+   ============================================================================= */
+
+.bav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  line-height: 1.4;
+}
+
+.bav-btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.bav-btn-primary:hover {
+  background: #4f46e5;
+}
+
+.bav-btn-secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.bav-btn-secondary:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* =============================================================================
+   ICONS
+   ============================================================================= */
+
+.bav-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* =============================================================================
+   EMPTY STATE
+   ============================================================================= */
+
+.bav-empty {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.bav-empty-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  color: #94a3b8;
+}
+
+.bav-empty-icon .bav-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.bav-empty-title {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.bav-empty-text {
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* =============================================================================
+   ERROR STATE
+   ============================================================================= */
+
+.bav-error {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.bav-error-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 12px;
+  color: #ef4444;
+  display: block;
+}
+
+.bav-error-title {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.bav-error-text {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* =============================================================================
+   LOADING SKELETON
+   ============================================================================= */
+
+.bav-skeleton-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.bav-skeleton-time {
+  flex-shrink: 0;
+  width: 72px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.bav-skeleton-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bav-skeleton-line {
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: bav-shimmer 1.5s infinite;
+}
+
+@keyframes bav-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* =============================================================================
+   RESPONSIVE
+   ============================================================================= */
+
+@media (max-width: 480px) {
+  .bav-container {
+    padding: 16px;
+  }
+
+  .bav-card {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .bav-card-time {
+    width: auto;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .bav-card-time-duration {
+    margin-top: 0;
+  }
+
+  .bav-card-actions {
+    flex-wrap: wrap;
+  }
+}

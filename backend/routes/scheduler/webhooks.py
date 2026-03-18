@@ -24,6 +24,7 @@ import logging
 from routes.scheduler._helpers import (
     get_current_user, _get_org_id, _is_scheduler_admin, _audit_log,
 )
+from routes.scheduler.constants import DEFAULT_TIMEZONE
 from db import get_db
 from database.models.webhook import WebhookSubscription, WebhookDeliveryLog
 from services.scheduler_webhook_service import (
@@ -345,7 +346,7 @@ async def test_webhook(
         "scheduled_start": datetime.now(timezone.utc).isoformat(),
         "scheduled_end": datetime.now(timezone.utc).isoformat(),
         "duration_minutes": 30,
-        "timezone": "America/Chicago",
+        "timezone": DEFAULT_TIMEZONE,
         "location": None,
         "video_link": "https://meet.example.com/test",
         "lead_id": None,

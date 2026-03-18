@@ -29,6 +29,10 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
     _audit_log, _check_rate_limit, _sanitize_public_error,
 )
+from routes.scheduler.error_responses import (
+    validation_error, not_found_error, conflict_error,
+    forbidden_error, service_unavailable_error, internal_error,
+)
 from db import get_db
 from middleware.feature_gate import require_feature_tier
 from database.models.ab_test import ABTest, ABTestResult, ABTestStatus, ABTestElementType
@@ -85,7 +89,7 @@ def _parse_optional_datetime(value: Optional[str]) -> Optional[datetime]:
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail=f"Invalid datetime format: {value}. Use ISO 8601.")
+        validation_error(f"Invalid datetime format: {value}. Use ISO 8601.")
 
 
 def _test_to_dict(test: ABTest) -> dict:
@@ -123,14 +127,13 @@ async def create_ab_test(
     org_id = _get_org_id(user)
 
     if not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        forbidden_error("Admin access required")
 
     # Validate element type
     valid_types = [e.value for e in ABTestElementType]
     if body.element_type not in valid_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid element_type. Must be one of: {', '.join(valid_types)}",
+        validation_error(
+            f"Invalid element_type. Must be one of: {', '.join(valid_types)}",
         )
 
     # Check for active test on same element type (only one active per element type per org)
@@ -141,10 +144,9 @@ async def create_ab_test(
     ).first()
 
     if existing_active:
-        raise HTTPException(
-            status_code=409,
-            detail=f"An active A/B test already exists for element type '{body.element_type}'. "
-                   f"Complete or delete test '{existing_active.name}' first.",
+        conflict_error(
+            f"An active A/B test already exists for element type '{body.element_type}'. "
+            f"Complete or delete test '{existing_active.name}' first.",
         )
 
     test = ABTest(
@@ -195,9 +197,8 @@ async def list_ab_tests(
     if status:
         valid_statuses = [s.value for s in ABTestStatus]
         if status not in valid_statuses:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
+            validation_error(
+                f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
             )
         query = query.filter(ABTest.status == status)
 
@@ -256,14 +257,14 @@ async def get_ab_test_results(
         ABTest.organization_id == org_id,
     ).first()
     if not test:
-        raise HTTPException(status_code=404, detail=f"A/B test {test_id} not found")
+        not_found_error(f"A/B test {test_id} not found")
 
     service = ABTestService(db)
 
     try:
         results = service.calculate_results(test_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        not_found_error(str(e))
 
     # Add test config to results
     results["test_config"] = _test_to_dict(test)
@@ -284,20 +285,19 @@ async def update_ab_test_status(
     org_id = _get_org_id(user)
 
     if not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        forbidden_error("Admin access required")
 
     test = db.query(ABTest).filter(
         ABTest.id == test_id,
         ABTest.organization_id == org_id,
     ).first()
     if not test:
-        raise HTTPException(status_code=404, detail=f"A/B test {test_id} not found")
+        not_found_error(f"A/B test {test_id} not found")
 
     valid_statuses = [s.value for s in ABTestStatus]
     if body.status not in valid_statuses:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
+        validation_error(
+            f"Invalid status. Must be one of: {', '.join(valid_statuses)}",
         )
 
     # Validate status transitions
@@ -312,10 +312,9 @@ async def update_ab_test_status(
 
     allowed = valid_transitions.get(old_status, [])
     if new_status not in allowed:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot transition from '{old_status}' to '{new_status}'. "
-                   f"Allowed transitions: {', '.join(allowed) if allowed else 'none (terminal state)'}",
+        validation_error(
+            f"Cannot transition from '{old_status}' to '{new_status}'. "
+            f"Allowed transitions: {', '.join(allowed) if allowed else 'none (terminal state)'}",
         )
 
     # If activating, check no other active test for same element type
@@ -327,9 +326,8 @@ async def update_ab_test_status(
             ABTest.id != test_id,
         ).first()
         if existing_active:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Another active test exists for '{test.element_type}': '{existing_active.name}'",
+            conflict_error(
+                f"Another active test exists for '{test.element_type}': '{existing_active.name}'",
             )
         test.start_date = test.start_date or datetime.now(timezone.utc)
 
@@ -379,7 +377,7 @@ async def public_assign_variant(
         BookingLink = models.get("BookingLink") if models else None
 
         if not BookingLink:
-            raise HTTPException(status_code=503, detail="Booking system not available")
+            service_unavailable_error("Booking system not available")
 
         # Look up the booking link to find the org — only public links
         link = db.query(BookingLink).filter(
@@ -387,7 +385,7 @@ async def public_assign_variant(
             BookingLink.is_public == True,
         ).first()
         if not link:
-            raise HTTPException(status_code=404, detail="Booking link not found")
+            not_found_error("Booking link not found")
 
         org_id = link.organization_id
 
@@ -461,17 +459,14 @@ async def public_record_event(
             ABTest.status == ABTestStatus.ACTIVE.value,
         ).first()
         if not test:
-            raise HTTPException(status_code=404, detail="Active A/B test not found")
+            not_found_error("Active A/B test not found")
 
         if body.event_type == "impression":
             service.record_impression(body.test_id, body.variant, body.visitor_id)
         elif body.event_type == "conversion":
             service.record_conversion(body.test_id, body.variant, body.visitor_id)
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="event_type must be 'impression' or 'conversion'",
-            )
+            validation_error("event_type must be 'impression' or 'conversion'")
 
         db.commit()
 

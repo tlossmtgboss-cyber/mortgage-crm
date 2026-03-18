@@ -1,0 +1,28 @@
+Alembic Migration Environment — Perennia AI
+
+This directory contains the Alembic migration environment for the
+Perennia AI Mortgage CRM backend.
+
+Migration files live in versions/ and form a linear revision chain.
+The current head is 013_rls_remaining_tables.
+
+To create a new migration:
+    cd backend && alembic revision --autogenerate -m "description_here"
+
+To run pending migrations:
+    cd backend && alembic upgrade head
+
+To check current state:
+    cd backend && alembic current
+
+To rollback one step:
+    cd backend && alembic downgrade -1
+
+Or use the helper script:
+    cd backend && python scripts/migrate.py upgrade
+    cd backend && python scripts/migrate.py current
+    cd backend && python scripts/migrate.py downgrade -1
+
+IMPORTANT: The existing init_db.py handles schema creation for the
+production deployment. Alembic is used for incremental schema changes
+after the initial setup.

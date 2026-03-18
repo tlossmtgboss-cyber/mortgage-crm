@@ -37,6 +37,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from routes.scheduler.constants import DEFAULT_TIMEZONE
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +62,7 @@ class MeetingDetails:
     scheduled_end: datetime
     duration_minutes: int = 30
     description: str = ""
-    timezone: str = "America/Chicago"
+    timezone: str = DEFAULT_TIMEZONE
     attendee_emails: List[str] = field(default_factory=list)
     attendee_name: str = ""
     appointment_id: Optional[int] = None
@@ -1100,7 +1102,7 @@ async def create_meeting_for_appointment(
         ),
         duration_minutes=getattr(appointment, "duration_minutes", 30) or 30,
         description=getattr(appointment, "description", "") or "",
-        timezone=getattr(appointment, "timezone", "America/Chicago") or "America/Chicago",
+        timezone=getattr(appointment, "timezone", DEFAULT_TIMEZONE) or DEFAULT_TIMEZONE,
         attendee_emails=(
             [getattr(appointment, "attendee_email", "")]
             if getattr(appointment, "attendee_email", None)

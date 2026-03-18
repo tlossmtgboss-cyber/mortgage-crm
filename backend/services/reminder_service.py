@@ -28,6 +28,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
+from routes.scheduler.constants import DEFAULT_TIMEZONE
+
 logger = logging.getLogger(__name__)
 
 # Maximum reminders that may be sent per appointment (across all templates)
@@ -113,7 +115,7 @@ class ReminderService:
 
         # Format date and time
         start = appointment.scheduled_start
-        tz_name = appointment.timezone or "America/Chicago"
+        tz_name = appointment.timezone or DEFAULT_TIMEZONE
         try:
             import pytz
             tz = pytz.timezone(tz_name)

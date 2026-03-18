@@ -41,6 +41,7 @@ from routes.scheduler._helpers import (
 )
 from routes.scheduler.constants import (
     DEFAULT_APPOINTMENT_DURATION_MINUTES,
+    DEFAULT_TIMEZONE,
     MIN_APPOINTMENT_DURATION_MINUTES,
     MAX_APPOINTMENT_DURATION_MINUTES,
     MAX_BULK_OPERATION_SIZE,
@@ -67,7 +68,7 @@ class BulkAppointmentItem(BaseModel):
     meeting_mode: str = "video"
     scheduled_start: datetime
     duration_minutes: int = Field(DEFAULT_APPOINTMENT_DURATION_MINUTES, ge=MIN_APPOINTMENT_DURATION_MINUTES, le=MAX_APPOINTMENT_DURATION_MINUTES)
-    timezone: str = "America/Chicago"
+    timezone: str = DEFAULT_TIMEZONE
 
     attendee_name: Optional[str] = Field(None, min_length=1, max_length=200)
     attendee_email: Optional[EmailStr] = None

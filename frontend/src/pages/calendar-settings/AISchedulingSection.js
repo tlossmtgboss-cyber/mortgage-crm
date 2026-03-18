@@ -8,40 +8,7 @@
  * - Smart conflict resolution
  */
 
-import { useState } from 'react';
-
-const DEFAULT_AI_CONFIG = {
-  enabled: true,
-  auto_book_enabled: false,
-  preferred_times: ['10:00', '14:00', '16:00'],
-  max_ai_bookings_per_day: 5,
-  buffer_before_minutes: 15,
-  buffer_after_minutes: 10,
-  allowed_appointment_types: ['discovery_call', 'pre_purchase_consultation', 'document_review'],
-  require_confirmation: true,
-  confirmation_method: 'sms',
-  smart_scheduling: {
-    avoid_back_to_back: true,
-    cluster_similar_meetings: true,
-    protect_focus_time: true,
-    focus_time_blocks: ['08:00-09:30'],
-  },
-  sms_triggers: {
-    send_booking_link: true,
-    follow_up_no_response_hours: 24,
-    max_follow_ups: 3,
-    include_calendar_preview: true,
-  },
-  ai_response_handling: {
-    auto_reschedule_on_cancel: true,
-    suggest_alternatives: 3,
-    respect_borrower_timezone: true,
-  },
-};
-
-export default function AISchedulingSection({ markChanged }) {
-  const [config, setConfig] = useState(DEFAULT_AI_CONFIG);
-
+export default function AISchedulingSection({ config, setConfig, markChanged }) {
   const update = (field, value) => {
     setConfig(prev => ({ ...prev, [field]: value }));
     if (markChanged) markChanged();

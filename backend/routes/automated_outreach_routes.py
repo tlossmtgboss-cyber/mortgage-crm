@@ -18,6 +18,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
+
+import os
+try:
+    from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_ORGANIZER_EMAIL
+except ImportError:
+    _DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
+
 router = APIRouter(prefix="/api/v1/automated-outreach", tags=["Automated Outreach"], dependencies=[Depends(require_auth)])
 
 
@@ -856,7 +863,7 @@ async def execute_trigger(
                 if trigger["channel"] == "email" and email:
                     from email_service import email_service
                     import os
-                    ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                    ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
 
                     html_body = f"""<!DOCTYPE html>
 <html><body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt;">

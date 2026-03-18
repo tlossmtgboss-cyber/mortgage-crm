@@ -64,7 +64,11 @@ async def process_drip_campaigns(db_session):
                 success = False
                 if assignment["channel"] == "email" and assignment["email"]:
                     import os
-                    ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                    try:
+                        from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _fallback_email
+                    except ImportError:
+                        _fallback_email = "sarah@reply.perenniaai.com"
+                    ai_from_email = os.getenv("AI_FROM_EMAIL", _fallback_email)
                     html_body = f"""<!DOCTYPE html>
 <html><body style="font-family: Calibri, Arial, sans-serif; font-size: 11pt;">
 {message.replace(chr(10), '<br>')}

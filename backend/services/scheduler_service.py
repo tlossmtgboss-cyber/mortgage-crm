@@ -211,6 +211,19 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # NO-SHOW RECOVERY JOBS
+        # =================================================================
+
+        # No-show detection + recovery step execution - every 15 min at :08, :23, :38, :53
+        self.scheduler.add_job(
+            func=self.run_no_show_recovery,
+            trigger=CronTrigger(minute="8,23,38,53"),
+            id="no_show_recovery",
+            name="No-Show Detection & Recovery",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
@@ -1062,6 +1075,67 @@ class SchedulerService:
             run_prospect_reengagement_expiry()
         except Exception as e:
             logger.error(f"Prospect re-engagement expiry job failed: {e}")
+
+    # =========================================================================
+    # NO-SHOW RECOVERY METHODS
+    # =========================================================================
+
+    def run_no_show_recovery(self):
+        """Detect no-show appointments and execute pending recovery steps.
+
+        This job runs two phases:
+        1. Detection: Mark overdue BOOKED/CONFIRMED/REMINDED appointments as NO_SHOW
+           and start recovery step 1 (gentle SMS).
+        2. Follow-up: For existing NO_SHOW appointments, execute the next due
+           recovery step (understanding email, reschedule SMS, final email).
+
+        The NoShowRecoveryService methods are async, so we bridge via
+        asyncio.run() since BackgroundScheduler runs in a thread.
+        """
+        import asyncio
+
+        logger.info("Running no-show recovery job")
+        session = get_db_session()
+
+        try:
+            # Phase 1: Detect new no-shows and start recovery
+            detect_result = asyncio.run(
+                self._run_no_show_detection(session)
+            )
+            if detect_result.get("detected", 0) > 0:
+                logger.info(
+                    "No-show detection: %d new no-shows detected",
+                    detect_result["detected"],
+                )
+
+            # Phase 2: Execute pending recovery steps for existing no-shows
+            recovery_result = asyncio.run(
+                self._run_no_show_follow_up(session)
+            )
+            if recovery_result.get("steps_executed", 0) > 0:
+                logger.info(
+                    "No-show recovery: %d steps executed, %d skipped, %d errors",
+                    recovery_result.get("steps_executed", 0),
+                    recovery_result.get("skipped", 0),
+                    recovery_result.get("errors", 0),
+                )
+
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"No-show recovery job failed: {e}", exc_info=True)
+        finally:
+            session.close()
+
+    async def _run_no_show_detection(self, session) -> Dict:
+        """Async helper: detect new no-shows and start recovery sequences."""
+        from services.no_show_recovery import no_show_recovery_service
+        return await no_show_recovery_service.check_and_mark_no_shows(session)
+
+    async def _run_no_show_follow_up(self, session) -> Dict:
+        """Async helper: execute pending recovery steps for existing no-shows."""
+        from services.no_show_recovery import no_show_recovery_service
+        return await no_show_recovery_service.execute_no_show_recovery(session)
 
     def get_job_status(self) -> List[Dict[str, Any]]:
         """Get status of all scheduled jobs."""

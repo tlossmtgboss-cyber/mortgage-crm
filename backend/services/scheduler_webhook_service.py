@@ -7,6 +7,10 @@ Provides:
   - register_webhook() to create new webhook subscriptions
   - HMAC-SHA256 signature generation for payload verification
   - Retry logic with exponential backoff (3 attempts)
+  - Dead-letter queue for failed deliveries with admin notifications
+  - retry_failed_webhook() for manual retry of dead-lettered deliveries
+  - get_failed_webhooks() for admin review of failed deliveries
+  - check_webhook_health() for subscription health monitoring
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ import json
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -216,17 +220,35 @@ async def _deliver_to_subscription(
             import asyncio
             await asyncio.sleep(backoff)
 
-    # All attempts exhausted
+    # All attempts exhausted — enter dead-letter queue
     delivery.status = "failed"
     delivery.error_message = last_error
+    delivery.dead_letter_at = datetime.now(timezone.utc)
     subscription.failure_count = (subscription.failure_count or 0) + 1
     subscription.last_triggered_at = datetime.now(timezone.utc)
     db.commit()
 
-    logger.error(
-        "Webhook delivery exhausted: subscription=%s event=%s error=%s",
-        subscription.id, event_type, last_error,
+    logger.warning(
+        "Webhook dead-lettered: subscription_id=%s subscription_name=%s "
+        "url=%s event=%s delivery_id=%s attempts=%d last_error=%s",
+        subscription.id,
+        subscription.name,
+        subscription.url,
+        event_type,
+        delivery.id,
+        _MAX_ATTEMPTS,
+        last_error,
     )
+
+    # Create admin notification for failed webhook delivery
+    _create_dead_letter_notification(
+        db=db,
+        subscription=subscription,
+        delivery=delivery,
+        event_type=event_type,
+        last_error=last_error,
+    )
+
     return delivery
 
 
@@ -412,3 +434,353 @@ def _isoformat(dt) -> Optional[str]:
     if hasattr(dt, "isoformat"):
         return dt.isoformat()
     return str(dt)
+
+
+# ============================================================================
+# DEAD-LETTER NOTIFICATION
+# ============================================================================
+
+def _create_dead_letter_notification(
+    db: Session,
+    subscription: WebhookSubscription,
+    delivery: WebhookDeliveryLog,
+    event_type: str,
+    last_error: str,
+) -> None:
+    """Create an in-app notification for org admins when a webhook enters the dead-letter queue.
+
+    Targets users with permission_role 'admin' or 'site_admin' in the same
+    organization as the webhook subscription.
+    """
+    try:
+        from database.models.core import User
+        from database.models.security import Notification
+
+        admin_users = (
+            db.query(User)
+            .filter(
+                User.organization_id == subscription.organization_id,
+                User.permission_role.in_(["admin", "site_admin"]),
+                User.is_active == True,  # noqa: E712
+            )
+            .all()
+        )
+
+        if not admin_users:
+            logger.debug(
+                "No admin users found for org=%s to notify about dead-lettered webhook",
+                subscription.organization_id,
+            )
+            return
+
+        truncated_error = (last_error or "Unknown error")[:500]
+
+        for admin in admin_users:
+            notification = Notification(
+                organization_id=subscription.organization_id,
+                user_id=admin.id,
+                type="webhook_delivery_failed",
+                title=f"Webhook delivery failed: {subscription.name}",
+                message=(
+                    f"Webhook \"{subscription.name}\" ({subscription.url}) failed to deliver "
+                    f"event \"{event_type}\" after {_MAX_ATTEMPTS} attempts. "
+                    f"Error: {truncated_error}"
+                ),
+                link=f"/settings/webhooks?delivery_id={delivery.id}",
+                is_read=False,
+            )
+            db.add(notification)
+
+        db.commit()
+
+        logger.info(
+            "Dead-letter notifications created for %d admin(s) in org=%s",
+            len(admin_users),
+            subscription.organization_id,
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to create dead-letter notification for delivery=%s: %s",
+            delivery.id, e,
+        )
+        # Don't let notification failure break the main flow
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+# ============================================================================
+# DEAD-LETTER QUEUE — MANUAL RETRY
+# ============================================================================
+
+async def retry_failed_webhook(
+    db: Session,
+    delivery_id: int,
+) -> WebhookDeliveryLog:
+    """Manually retry a failed/dead-lettered webhook delivery.
+
+    Resets the delivery status to 'pending', clears attempt tracking,
+    and re-executes delivery against the original subscription with
+    full retry logic.
+
+    Args:
+        db: SQLAlchemy session.
+        delivery_id: The WebhookDeliveryLog.id to retry.
+
+    Returns:
+        The updated WebhookDeliveryLog after re-delivery attempt.
+
+    Raises:
+        ValueError: If delivery_id not found or not in a retryable state.
+    """
+    delivery = (
+        db.query(WebhookDeliveryLog)
+        .filter(WebhookDeliveryLog.id == delivery_id)
+        .first()
+    )
+
+    if not delivery:
+        raise ValueError(f"Webhook delivery {delivery_id} not found")
+
+    if delivery.status not in ("failed",):
+        raise ValueError(
+            f"Webhook delivery {delivery_id} is in status '{delivery.status}' "
+            f"and cannot be retried. Only 'failed' deliveries can be retried."
+        )
+
+    subscription = (
+        db.query(WebhookSubscription)
+        .filter(WebhookSubscription.id == delivery.subscription_id)
+        .first()
+    )
+
+    if not subscription:
+        raise ValueError(
+            f"Subscription {delivery.subscription_id} not found for delivery {delivery_id}"
+        )
+
+    if not subscription.is_active:
+        raise ValueError(
+            f"Subscription {subscription.id} ({subscription.name}) is inactive. "
+            f"Re-activate it before retrying."
+        )
+
+    # Reset delivery for fresh attempt
+    delivery.status = "pending"
+    delivery.attempt_number = 0
+    delivery.error_message = None
+    delivery.response_code = None
+    delivery.response_body = None
+    delivery.response_time_ms = None
+    delivery.delivered_at = None
+    delivery.dead_letter_at = None
+    db.flush()
+
+    logger.info(
+        "Manual retry initiated: delivery_id=%s subscription=%s event=%s",
+        delivery_id, subscription.id, delivery.event_type,
+    )
+
+    # Re-deliver using the stored payload
+    result = await _deliver_to_subscription(db, subscription, delivery.payload)
+
+    # The _deliver_to_subscription creates a new delivery log, but we want
+    # to keep the original entry updated. Copy final state back.
+    delivery.status = result.status
+    delivery.attempt_number = result.attempt_number
+    delivery.response_code = result.response_code
+    delivery.response_body = result.response_body
+    delivery.response_time_ms = result.response_time_ms
+    delivery.error_message = result.error_message
+    delivery.delivered_at = result.delivered_at
+    delivery.dead_letter_at = result.dead_letter_at
+
+    # Remove the duplicate delivery log that _deliver_to_subscription created
+    if result.id != delivery.id:
+        db.delete(result)
+
+    db.commit()
+
+    return delivery
+
+
+# ============================================================================
+# DEAD-LETTER QUEUE — QUERY
+# ============================================================================
+
+async def get_failed_webhooks(
+    db: Session,
+    organization_id: Optional[int] = None,
+    subscription_id: Optional[int] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    """Get list of failed/dead-lettered webhook deliveries for admin review.
+
+    Args:
+        db: SQLAlchemy session.
+        organization_id: Filter by organization (optional).
+        subscription_id: Filter by specific subscription (optional).
+        limit: Max results to return (default 50).
+        offset: Pagination offset (default 0).
+
+    Returns:
+        Dict with 'deliveries' list, 'total' count, and 'pagination' info.
+    """
+    query = (
+        db.query(WebhookDeliveryLog)
+        .join(WebhookSubscription, WebhookDeliveryLog.subscription_id == WebhookSubscription.id)
+        .filter(WebhookDeliveryLog.status == "failed")
+    )
+
+    if organization_id is not None:
+        query = query.filter(WebhookSubscription.organization_id == organization_id)
+
+    if subscription_id is not None:
+        query = query.filter(WebhookDeliveryLog.subscription_id == subscription_id)
+
+    total = query.count()
+
+    deliveries = (
+        query
+        .order_by(WebhookDeliveryLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for d in deliveries:
+        sub = d.subscription
+        results.append({
+            "delivery_id": d.id,
+            "subscription_id": d.subscription_id,
+            "subscription_name": sub.name if sub else None,
+            "subscription_url": sub.url if sub else None,
+            "organization_id": sub.organization_id if sub else None,
+            "event_type": d.event_type,
+            "status": d.status,
+            "attempt_number": d.attempt_number,
+            "max_attempts": d.max_attempts,
+            "response_code": d.response_code,
+            "error_message": d.error_message,
+            "dead_letter_at": _isoformat(d.dead_letter_at),
+            "created_at": _isoformat(d.created_at),
+            "payload_event_id": (d.payload or {}).get("id"),
+        })
+
+    return {
+        "deliveries": results,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": (offset + limit) < total,
+    }
+
+
+# ============================================================================
+# WEBHOOK HEALTH CHECK
+# ============================================================================
+
+async def check_webhook_health(
+    db: Session,
+    subscription_id: int,
+    window_hours: int = 24,
+) -> Dict[str, Any]:
+    """Check if a webhook subscription is healthy based on recent delivery success rate.
+
+    Examines deliveries within the specified time window and computes a
+    success rate.  A subscription is considered:
+      - 'healthy' if success rate >= 90%
+      - 'degraded' if success rate >= 50%
+      - 'unhealthy' if success rate < 50%
+      - 'inactive' if no deliveries in the window
+
+    Args:
+        db: SQLAlchemy session.
+        subscription_id: The WebhookSubscription.id to check.
+        window_hours: How far back to look (default 24 hours).
+
+    Returns:
+        Dict with health status, success rate, and delivery counts.
+
+    Raises:
+        ValueError: If subscription_id not found.
+    """
+    subscription = (
+        db.query(WebhookSubscription)
+        .filter(WebhookSubscription.id == subscription_id)
+        .first()
+    )
+
+    if not subscription:
+        raise ValueError(f"Webhook subscription {subscription_id} not found")
+
+    window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+
+    recent_deliveries = (
+        db.query(WebhookDeliveryLog)
+        .filter(
+            WebhookDeliveryLog.subscription_id == subscription_id,
+            WebhookDeliveryLog.created_at >= window_start,
+        )
+        .all()
+    )
+
+    total = len(recent_deliveries)
+    if total == 0:
+        return {
+            "subscription_id": subscription_id,
+            "subscription_name": subscription.name,
+            "subscription_url": subscription.url,
+            "is_active": subscription.is_active,
+            "health_status": "inactive",
+            "window_hours": window_hours,
+            "total_deliveries": 0,
+            "successful": 0,
+            "failed": 0,
+            "success_rate": None,
+            "last_triggered_at": _isoformat(subscription.last_triggered_at),
+            "lifetime_success_count": subscription.success_count or 0,
+            "lifetime_failure_count": subscription.failure_count or 0,
+        }
+
+    successful = sum(1 for d in recent_deliveries if d.status == "success")
+    failed = sum(1 for d in recent_deliveries if d.status == "failed")
+    pending_or_retrying = total - successful - failed
+    success_rate = round((successful / total) * 100, 1) if total > 0 else 0.0
+
+    if success_rate >= 90:
+        health_status = "healthy"
+    elif success_rate >= 50:
+        health_status = "degraded"
+    else:
+        health_status = "unhealthy"
+
+    # Count consecutive recent failures (most recent first)
+    consecutive_failures = 0
+    sorted_deliveries = sorted(recent_deliveries, key=lambda d: d.created_at, reverse=True)
+    for d in sorted_deliveries:
+        if d.status == "failed":
+            consecutive_failures += 1
+        else:
+            break
+
+    return {
+        "subscription_id": subscription_id,
+        "subscription_name": subscription.name,
+        "subscription_url": subscription.url,
+        "is_active": subscription.is_active,
+        "health_status": health_status,
+        "window_hours": window_hours,
+        "total_deliveries": total,
+        "successful": successful,
+        "failed": failed,
+        "pending_or_retrying": pending_or_retrying,
+        "success_rate": success_rate,
+        "consecutive_recent_failures": consecutive_failures,
+        "last_triggered_at": _isoformat(subscription.last_triggered_at),
+        "lifetime_success_count": subscription.success_count or 0,
+        "lifetime_failure_count": subscription.failure_count or 0,
+    }

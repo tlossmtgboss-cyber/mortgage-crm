@@ -712,6 +712,7 @@ class SchedulerAuditLog(Base):
     entity_type = Column(String(50), nullable=False)  # appointment, booking_link, blocked_time, settings, appointment_type
     entity_id = Column(Integer, nullable=True)
     changes = Column(JSON, nullable=True)  # {field: {old: x, new: y}}
+    booking_source = Column(String(30), nullable=True)  # authenticated, public_booking, ai_pipeline
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -741,7 +742,7 @@ class SlotHold(Base):
     conversation_id = Column(String(100), nullable=True)  # Vapi call/conversation ID
     expires_at = Column(DateTime, nullable=False)
     status = Column(String(20), nullable=False, default=SlotHoldStatus.ACTIVE.value)
-    converted_to_appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=True)
+    converted_to_appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id"), nullable=True)
     converted_at = Column(DateTime, nullable=True)
     released_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

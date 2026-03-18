@@ -28,6 +28,7 @@ export { default as SetupBanner } from './SetupBanner';
 export { default as CalendarToolbar } from './CalendarToolbar';
 export { default as CommandCenterHeader } from './CommandCenterHeader';
 export { default as OperationalSidebar } from './OperationalSidebar';
+export { default as NoShowRecoveryDashboard } from './NoShowRecoveryDashboard';
 export {
   normalizeUTCDate,
   formatDateForAPI,

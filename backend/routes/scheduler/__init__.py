@@ -28,6 +28,10 @@ URL Prefix Map (all under /api/v1/scheduler):
   /analytics/by-type            Breakdown by appointment type               (analytics.py)
   /analytics/by-lo              Breakdown by loan officer                   (analytics.py)
   /analytics/no-show-risks      Batch no-show risk for a date              (ai_scheduling.py)
+  /analytics/appointment-outcomes       AI vs manual appointment funding conversion  (outcome_tracking.py)
+  /analytics/appointment-type-effectiveness  Conversion by appointment type        (outcome_tracking.py)
+  /analytics/lo-outcome-comparison      Per-LO appointment outcome breakdown     (outcome_tracking.py)
+  /analytics/outcome-timeline           Time-series of appointment outcomes      (outcome_tracking.py)
   /today-summary                Aggregated LO "Today" dashboard summary    (today_summary.py)
   /search                       Full-text appointment search                (search.py)
   /search/suggestions           Search autocomplete suggestions             (search.py)
@@ -49,12 +53,23 @@ URL Prefix Map (all under /api/v1/scheduler):
   /data-export/{email}          GDPR data export for a borrower (admin)     (data_compliance.py)
   /data-delete/{email}          GDPR data deletion for a borrower (admin)   (data_compliance.py)
   /data-retention/report        Data retention status report (admin)         (data_compliance.py)
+  /compliance/status            TCPA/DNC/contact-hours compliance dashboard (data_compliance.py)
+  /compliance/opt-outs          Recent opt-out requests across channels     (data_compliance.py)
+  /compliance/consent-audit     SMS consent coverage for scheduler contacts (data_compliance.py)
+  /compliance/contact-hours-violations  Contact-hours violation detail      (data_compliance.py)
+  /calendar/sync/google/webhook  Google Calendar push notification receiver   (calendar_sync_inbound.py)
+  /calendar/sync/outlook/webhook Outlook/Graph change notification receiver  (calendar_sync_inbound.py)
+  /calendar/sync/google/register Register Google Calendar watch channel      (calendar_sync_inbound.py)
+  /calendar/sync/outlook/register Register Outlook Graph subscription        (calendar_sync_inbound.py)
+  /pipeline-triggers/failures   List pipeline trigger failures for LO       (trigger_failures.py)
+  /pipeline-triggers/failures/{id}/acknowledge  Acknowledge a failure       (trigger_failures.py)
   /email-service-status         Email service health check                  (email_testing.py)
   /test-email                   Send test email (POST)                      (email_testing.py)
+  /maintenance/cleanup-holds    Delete expired SlotHold records (admin)     (maintenance.py)
   /sitemap.xml                  XML sitemap for search engines              (sitemap.py)
   /robots.txt                   Robots.txt for crawler control              (sitemap.py)
 
-Active modules (26):
+Active modules (30):
   appointments.py             Appointment CRUD, status transitions, timeline
   availability.py             Availability slots CRUD, authenticated available-slots
   recurring_availability.py   Recurring weekly patterns, date exceptions, org templates
@@ -80,8 +95,12 @@ Active modules (26):
   ab_testing.py               A/B testing for public booking page optimization
   cancellation_policy.py      Cancellation policy CRUD, enforcement, and analytics
   analytics.py                Calendar analytics dashboard (overview, trends, by-type, by-LO)
+  outcome_tracking.py         Appointment-to-funding conversion analytics (AI vs manual, by-type, by-LO, timeline)
   today_summary.py            Aggregated LO "Today" dashboard (appointments, tasks, leads, SLA)
-  data_compliance.py          GDPR/CCPA data export, deletion, and retention reporting (admin)
+  data_compliance.py          GDPR/CCPA data export, deletion, retention + TCPA/DNC/contact-hours compliance (admin)
+  maintenance.py              Periodic cleanup tasks (expired slot holds)
+  calendar_sync_inbound.py   Bidirectional calendar sync (Google/Outlook inbound webhooks)
+  trigger_failures.py         Pipeline trigger failure viewing and acknowledgment
 
 Internal helpers (not a router):
   _helpers.py                 Shared auth, rate limiting, sanitization, conflict detection, CRM, slot engine
@@ -123,6 +142,7 @@ from .conflicts import router as conflicts_router
 from .ab_testing import router as ab_testing_router
 from .cancellation_policy import router as cancellation_policy_router
 from .analytics import router as analytics_router
+from .outcome_tracking import router as outcome_tracking_router
 from .today_summary import router as today_summary_router
 from .data_compliance import router as data_compliance_router
 from .bulk_operations import router as bulk_operations_router
@@ -132,6 +152,9 @@ from .metrics import router as metrics_router
 from .sla import router as sla_router
 from .webhooks import router as webhooks_router
 from .widget_config import router as widget_config_router
+from .maintenance import router as maintenance_router
+from .calendar_sync_inbound import router as calendar_sync_inbound_router
+from .trigger_failures import router as trigger_failures_router
 
 # ============================================================================
 # API VERSION INTROSPECTION ENDPOINT
@@ -184,6 +207,7 @@ scheduler_router.include_router(conflicts_router)
 scheduler_router.include_router(ab_testing_router)
 scheduler_router.include_router(cancellation_policy_router)
 scheduler_router.include_router(analytics_router)
+scheduler_router.include_router(outcome_tracking_router)
 scheduler_router.include_router(today_summary_router)
 scheduler_router.include_router(data_compliance_router)
 scheduler_router.include_router(bulk_operations_router)
@@ -193,4 +217,7 @@ scheduler_router.include_router(metrics_router)
 scheduler_router.include_router(sla_router)
 scheduler_router.include_router(webhooks_router)
 scheduler_router.include_router(widget_config_router)
+scheduler_router.include_router(maintenance_router)
+scheduler_router.include_router(calendar_sync_inbound_router)
+scheduler_router.include_router(trigger_failures_router)
 scheduler_router.include_router(_api_versions_router)

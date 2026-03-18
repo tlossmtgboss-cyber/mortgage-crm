@@ -20,6 +20,9 @@ from typing import Optional
 import logging
 
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
+from routes.scheduler.error_responses import (
+    validation_error, not_found_error, conflict_error,
+)
 from db import get_db
 from middleware.feature_gate import require_feature_tier
 
@@ -98,15 +101,15 @@ async def create_label(
     # Validate required fields
     name = (body.get("name") or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="name is required")
+        validation_error("name is required")
     if len(name) > 50:
-        raise HTTPException(status_code=400, detail="name must be 50 characters or fewer")
+        validation_error("name must be 50 characters or fewer")
 
     color = (body.get("color") or "").strip()
     if not color:
-        raise HTTPException(status_code=400, detail="color is required")
+        validation_error("color is required")
     if not _is_valid_hex_color(color):
-        raise HTTPException(status_code=400, detail="color must be a valid hex color (e.g. #4A90D9)")
+        validation_error("color must be a valid hex color (e.g. #4A90D9)")
 
     icon = (body.get("icon") or "").strip() or None
     is_personal = body.get("is_personal", False)
@@ -121,7 +124,7 @@ async def create_label(
         .count()
     )
     if existing_count >= 30:
-        raise HTTPException(status_code=400, detail="Maximum of 30 labels per organization")
+        validation_error("Maximum of 30 labels per organization")
 
     # Check for duplicate name within scope
     from sqlalchemy import or_
@@ -137,7 +140,7 @@ async def create_label(
 
     existing = db.query(CalendarLabel).filter(*duplicate_filter).first()
     if existing:
-        raise HTTPException(status_code=409, detail=f"Label '{name}' already exists")
+        conflict_error(f"Label '{name}' already exists")
 
     # Get next sort_order
     max_sort = (
@@ -195,7 +198,7 @@ async def reorder_labels(
 
     order = body.get("order")
     if not order or not isinstance(order, list):
-        raise HTTPException(status_code=400, detail="order must be a non-empty list of label IDs")
+        validation_error("order must be a non-empty list of label IDs")
 
     from sqlalchemy import or_
 
@@ -255,7 +258,7 @@ async def update_label(
 
     label = _get_label_for_user(db, label_id, org_id, user_id)
     if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+        not_found_error("Label not found")
 
     body = await request.json()
     changes = {}
@@ -263,16 +266,16 @@ async def update_label(
     if "name" in body:
         name = (body["name"] or "").strip()
         if not name:
-            raise HTTPException(status_code=400, detail="name cannot be empty")
+            validation_error("name cannot be empty")
         if len(name) > 50:
-            raise HTTPException(status_code=400, detail="name must be 50 characters or fewer")
+            validation_error("name must be 50 characters or fewer")
         changes["name"] = {"old": label.name, "new": name}
         label.name = name
 
     if "color" in body:
         color = (body["color"] or "").strip()
         if not _is_valid_hex_color(color):
-            raise HTTPException(status_code=400, detail="color must be a valid hex color (e.g. #4A90D9)")
+            validation_error("color must be a valid hex color (e.g. #4A90D9)")
         changes["color"] = {"old": label.color, "new": color}
         label.color = color
 
@@ -312,7 +315,7 @@ async def delete_label(
 
     label = _get_label_for_user(db, label_id, org_id, user_id)
     if not label:
-        raise HTTPException(status_code=404, detail="Label not found")
+        not_found_error("Label not found")
 
     label_name = label.name
     db.delete(label)
@@ -353,9 +356,9 @@ async def assign_labels(
     label_ids = body.get("label_ids", [])
 
     if not appointment_id:
-        raise HTTPException(status_code=400, detail="appointment_id is required")
+        validation_error("appointment_id is required")
     if not label_ids or not isinstance(label_ids, list):
-        raise HTTPException(status_code=400, detail="label_ids must be a non-empty list")
+        validation_error("label_ids must be a non-empty list")
 
     # Verify appointment belongs to this org
     from routes.scheduler._helpers import get_models
@@ -371,7 +374,7 @@ async def assign_labels(
         .first()
     )
     if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        not_found_error("Appointment not found")
 
     # Verify all labels belong to this org
     from sqlalchemy import or_
@@ -434,9 +437,9 @@ async def unassign_labels(
     label_ids = body.get("label_ids", [])
 
     if not appointment_id:
-        raise HTTPException(status_code=400, detail="appointment_id is required")
+        validation_error("appointment_id is required")
     if not label_ids or not isinstance(label_ids, list):
-        raise HTTPException(status_code=400, detail="label_ids must be a non-empty list")
+        validation_error("label_ids must be a non-empty list")
 
     # Verify appointment belongs to this org
     from routes.scheduler._helpers import get_models
@@ -452,7 +455,7 @@ async def unassign_labels(
         .first()
     )
     if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        not_found_error("Appointment not found")
 
     deleted = (
         db.query(AppointmentLabel)
@@ -499,7 +502,7 @@ async def get_appointment_labels(
         .first()
     )
     if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        not_found_error("Appointment not found")
 
     labels = (
         db.query(CalendarLabel)

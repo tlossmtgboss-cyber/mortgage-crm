@@ -437,13 +437,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"Could not load borrower portal routes: {e}")
 
+    # DEPRECATED: Experimental feature deregistered
     # Include Decision Lab routes (Borrower Confidence Engine + Mortgage Decision Lab)
-    try:
-        from routes.decision_lab_routes import router as decision_lab_router
-        app.include_router(decision_lab_router, tags=["Decision Lab"])
-        logger.info("✅ Decision Lab routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Decision Lab routes: {e}")
+    # try:
+    #     from routes.decision_lab_routes import router as decision_lab_router
+    #     app.include_router(decision_lab_router, tags=["Decision Lab"])
+    #     logger.info("✅ Decision Lab routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Decision Lab routes: {e}")
 
     # Include MUM Portal routes (public client portal for post-close clients)
     try:
@@ -715,12 +716,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Migrations API routes not loaded: {e}")
 
-    # Include Circle of Cashflow routes
-    try:
-        from circle_of_cashflow_routes import router as circle_of_cashflow_router
-        app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
-    except Exception as e:
-        logger.warning(f"⚠️ Circle of Cashflow routes not loaded: {e}")
+    # DEPRECATED: Experimental feature deregistered
+    # # Include Circle of Cashflow routes
+    # try:
+    #     from circle_of_cashflow_routes import router as circle_of_cashflow_router
+    #     app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
+    # except Exception as e:
+    #     logger.warning(f"⚠️ Circle of Cashflow routes not loaded: {e}")
 
     # Include AI Command routes for Perennia AI Landing Page
     try:
@@ -994,17 +996,18 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Permission Core routes: {e}")
 
-    # Include HR Management routes (EXPERIMENTAL tier - gated)
-    try:
-        from feature_tiers import get_tier, FeatureTier
-        if get_tier("hr_management") != FeatureTier.EXPERIMENTAL:
-            from routes.hr_management_routes import router as hr_management_router
-            app.include_router(hr_management_router, tags=["HR Management"])
-            logger.info("✅ HR Management routes loaded")
-        else:
-            logger.info("⏸️ HR Management routes skipped (EXPERIMENTAL tier)")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not load HR Management routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include HR Management routes (EXPERIMENTAL tier - gated)
+    # try:
+    #     from feature_tiers import get_tier, FeatureTier
+    #     if get_tier("hr_management") != FeatureTier.EXPERIMENTAL:
+    #         from routes.hr_management_routes import router as hr_management_router
+    #         app.include_router(hr_management_router, tags=["HR Management"])
+    #         logger.info("✅ HR Management routes loaded")
+    #     else:
+    #         logger.info("⏸️ HR Management routes skipped (EXPERIMENTAL tier)")
+    # except Exception as e:
+    #     logger.warning(f"⚠️ Could not load HR Management routes: {e}")
 
     # Include IT Helpdesk routes (EXPERIMENTAL tier - gated)
     try:
@@ -1759,93 +1762,104 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Note: Master Manager routes already loaded above (line ~5084)
 
-    # Include Recruiting Engine routes (Phase 2)
-    try:
-        from routes.recruiting_routes import router as recruiting_router
-        app.include_router(recruiting_router, tags=["Recruiting"])
-        logger.info("✅ Recruiting Engine routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruiting routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Recruiting Engine routes (Phase 2)
+    # try:
+    #     from routes.recruiting_routes import router as recruiting_router
+    #     app.include_router(recruiting_router, tags=["Recruiting"])
+    #     logger.info("✅ Recruiting Engine routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruiting routes: {e}")
 
-    # Include Candidate Grading routes (LO Assessment & Scoring)
-    try:
-        from routes.candidate_grading_routes import router as grading_router
-        app.include_router(grading_router, tags=["Candidate Grading"])
-        logger.info("✅ Candidate Grading routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Candidate Grading routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Candidate Grading routes (LO Assessment & Scoring)
+    # try:
+    #     from routes.candidate_grading_routes import router as grading_router
+    #     app.include_router(grading_router, tags=["Candidate Grading"])
+    #     logger.info("✅ Candidate Grading routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Candidate Grading routes: {e}")
 
-    # Include Recruit Assessment routes (Quiz System + Calculator)
-    try:
-        from routes.recruit_assessment_routes import router as recruit_assessment_router
-        app.include_router(recruit_assessment_router, tags=["Recruit Assessment"])
-        logger.info("✅ Recruit Assessment routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruit Assessment routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Recruit Assessment routes (Quiz System + Calculator)
+    # try:
+    #     from routes.recruit_assessment_routes import router as recruit_assessment_router
+    #     app.include_router(recruit_assessment_router, tags=["Recruit Assessment"])
+    #     logger.info("✅ Recruit Assessment routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruit Assessment routes: {e}")
 
-    # Include DISC + Motivators Assessment routes
-    try:
-        from routes.disc_assessment_routes import router as disc_assessment_router
-        app.include_router(disc_assessment_router, tags=["DISC Assessment"])
-        logger.info("✅ DISC Assessment routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load DISC Assessment routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include DISC + Motivators Assessment routes
+    # try:
+    #     from routes.disc_assessment_routes import router as disc_assessment_router
+    #     app.include_router(disc_assessment_router, tags=["DISC Assessment"])
+    #     logger.info("✅ DISC Assessment routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load DISC Assessment routes: {e}")
 
-    # Include Recruiting Workflow routes (Automated Tasks)
-    try:
-        from routes.recruiting_workflow_routes import router as recruiting_workflow_router
-        app.include_router(recruiting_workflow_router, tags=["Recruiting Workflow"])
-        logger.info("✅ Recruiting Workflow routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruiting Workflow routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Recruiting Workflow routes (Automated Tasks)
+    # try:
+    #     from routes.recruiting_workflow_routes import router as recruiting_workflow_router
+    #     app.include_router(recruiting_workflow_router, tags=["Recruiting Workflow"])
+    #     logger.info("✅ Recruiting Workflow routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruiting Workflow routes: {e}")
 
-    # Include Recruiting Dialer routes (Click-to-Call)
-    try:
-        from routes.recruiting_dialer_routes import router as recruiting_dialer_router
-        app.include_router(recruiting_dialer_router, tags=["Recruiting Dialer"])
-        logger.info("✅ Recruiting Dialer routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruiting Dialer routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Recruiting Dialer routes (Click-to-Call)
+    # try:
+    #     from routes.recruiting_dialer_routes import router as recruiting_dialer_router
+    #     app.include_router(recruiting_dialer_router, tags=["Recruiting Dialer"])
+    #     logger.info("✅ Recruiting Dialer routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruiting Dialer routes: {e}")
 
-    # Include Recruit Portal routes (public candidate portal)
-    try:
-        from routes.recruit_portal_routes import router as recruit_portal_router
-        app.include_router(recruit_portal_router, tags=["Recruit Portal"])
-        logger.info("✅ Recruit Portal routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruit Portal routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Recruit Portal routes (public candidate portal)
+    # try:
+    #     from routes.recruit_portal_routes import router as recruit_portal_router
+    #     app.include_router(recruit_portal_router, tags=["Recruit Portal"])
+    #     logger.info("✅ Recruit Portal routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruit Portal routes: {e}")
 
-    # Include Recruit Social Media routes (LinkedIn, Facebook, Instagram)
-    try:
-        from routes.recruit_social_routes import router as recruit_social_router
-        app.include_router(recruit_social_router, tags=["Recruit Social"])
-        logger.info("✅ Recruit Social Media routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruit Social Media routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Recruit Social Media routes (LinkedIn, Facebook, Instagram)
+    # try:
+    #     from routes.recruit_social_routes import router as recruit_social_router
+    #     app.include_router(recruit_social_router, tags=["Recruit Social"])
+    #     logger.info("✅ Recruit Social Media routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruit Social Media routes: {e}")
 
-    # Include Recruiting Video routes (video recording for candidates)
-    try:
-        from routes.recruiting_video_routes import router as recruiting_video_router
-        app.include_router(recruiting_video_router, tags=["Recruiting Video"])
-        logger.info("✅ Recruiting Video routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruiting Video routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Recruiting Video routes (video recording for candidates)
+    # try:
+    #     from routes.recruiting_video_routes import router as recruiting_video_router
+    #     app.include_router(recruiting_video_router, tags=["Recruiting Video"])
+    #     logger.info("✅ Recruiting Video routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruiting Video routes: {e}")
 
-    # Include Partner Recruiting routes (LO partner recruitment)
-    try:
-        from routes.partner_recruiting_routes import router as partner_recruiting_router
-        app.include_router(partner_recruiting_router, tags=["Partner Recruiting"])
-        logger.info("✅ Partner Recruiting routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Partner Recruiting routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include Partner Recruiting routes (LO partner recruitment)
+    # try:
+    #     from routes.partner_recruiting_routes import router as partner_recruiting_router
+    #     app.include_router(partner_recruiting_router, tags=["Partner Recruiting"])
+    #     logger.info("✅ Partner Recruiting routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Partner Recruiting routes: {e}")
 
-    # Include EEOC compliance routes
-    try:
-        from routes.recruit_eeoc_routes import router as recruit_eeoc_router
-        app.include_router(recruit_eeoc_router, tags=["Recruiting EEOC"])
-        logger.info("✅ Recruiting EEOC routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load Recruiting EEOC routes: {e}")
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # # Include EEOC compliance routes
+    # try:
+    #     from routes.recruit_eeoc_routes import router as recruit_eeoc_router
+    #     app.include_router(recruit_eeoc_router, tags=["Recruiting EEOC"])
+    #     logger.info("✅ Recruiting EEOC routes loaded")
+    # except Exception as e:
+    #     logger.warning(f"Could not load Recruiting EEOC routes: {e}")
 
     # Include Portal Video routes (video recording for client/realtor portals)
     try:
@@ -2408,18 +2422,19 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Video OS routes not loaded: {e}")
 
-    # Avatar routes (EXPERIMENTAL tier - gated)
-    try:
-        from feature_tiers import get_tier, FeatureTier
-        if get_tier("avatar_studio") != FeatureTier.EXPERIMENTAL:
-            from routes.avatar_routes import router as avatar_router, set_dependencies as set_avatar_deps
-            set_avatar_deps(get_db, get_current_user)
-            app.include_router(avatar_router, tags=["AI Avatars"])
-            logger.info("✅ Avatar routes loaded")
-        else:
-            logger.info("⏸️ Avatar routes skipped (EXPERIMENTAL tier)")
-    except Exception as e:
-        logger.warning(f"⚠️ Avatar routes not loaded: {e}")
+    # DEPRECATED: Experimental feature deregistered
+    # # Avatar routes (EXPERIMENTAL tier - gated)
+    # try:
+    #     from feature_tiers import get_tier, FeatureTier
+    #     if get_tier("avatar_studio") != FeatureTier.EXPERIMENTAL:
+    #         from routes.avatar_routes import router as avatar_router, set_dependencies as set_avatar_deps
+    #         set_avatar_deps(get_db, get_current_user)
+    #         app.include_router(avatar_router, tags=["AI Avatars"])
+    #         logger.info("✅ Avatar routes loaded")
+    #     else:
+    #         logger.info("⏸️ Avatar routes skipped (EXPERIMENTAL tier)")
+    # except Exception as e:
+    #     logger.warning(f"⚠️ Avatar routes not loaded: {e}")
 
     # Vidyard routes (AI Avatar video generation via Vidyard API)
     try:

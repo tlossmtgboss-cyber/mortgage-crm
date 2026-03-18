@@ -86,6 +86,9 @@ class WebhookDeliveryLog(Base):
     max_attempts = Column(Integer, default=3)
     next_retry_at = Column(DateTime, nullable=True)
 
+    # Dead-letter queue tracking
+    dead_letter_at = Column(DateTime, nullable=True, index=True)
+
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     delivered_at = Column(DateTime, nullable=True)

@@ -34,6 +34,11 @@ import logging
 from openai import OpenAI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import time
+import signal as _signal_module
+
+# Graceful shutdown and startup utilities
+from utils.shutdown import GracefulShutdown, RequestTrackingMiddleware, install_signal_handlers
+from utils.startup import startup_checks
 
 # Import security middleware
 from security_middleware import (
@@ -74,13 +79,12 @@ from models.financial_intelligence import (
 # Import rate sheet models for table creation
 from models.rate_sheet import RateSheet, RateSheetRate, RefinanceOpportunity
 
-# Setup logging - reduce verbosity in production to avoid Railway rate limits
-_is_production = os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production"
-_log_level = logging.WARNING if _is_production else logging.INFO
-logging.basicConfig(
-    level=_log_level,
-    format='%(levelname)s:%(name)s:%(message)s'
-)
+# Setup structured logging - JSON in production, human-readable in development
+# Installs RequestContextFilter so all loggers automatically get request_id,
+# user_id, org_id injected from contextvars set by RequestContextMiddleware.
+# Must be called before any logger.info() calls to install the correct formatter.
+from utils.logging_config import configure_logging as _configure_logging
+_configure_logging()
 logger = logging.getLogger(__name__)
 
 # Install PII redaction filter on root logger to prevent SSN/PII leakage in logs
@@ -90,16 +94,6 @@ try:
     install_pii_filter()
 except Exception as _pii_err:
     logger.warning(f"PII log filter not installed: {_pii_err}")
-
-# Suppress noisy loggers in production
-if _log_level == logging.WARNING:
-    logging.getLogger("apscheduler").setLevel(logging.WARNING)
-    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
-    logging.getLogger("apscheduler.executors").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # ============================================================================
 # CONFIGURATION
@@ -358,6 +352,9 @@ app = FastAPI(
     redirect_slashes=False  # Prevent HTTP redirects that cause mixed content errors
 )
 
+# Graceful shutdown handler — tracks in-flight requests, coordinates shutdown sequence
+graceful_shutdown = GracefulShutdown(drain_timeout=30.0)
+
 # CORS - Dynamic custom domain support
 # Custom domains are stored in the database and checked dynamically
 # No code changes needed to add new user domains
@@ -368,6 +365,10 @@ from middleware.impersonation_middleware import ImpersonationEnforcementMiddlewa
 
 # Multi-Tenant: Tenant context middleware for organization isolation
 from middleware.tenant_context_middleware import TenantContextMiddleware
+
+# Request tracking for graceful shutdown (innermost middleware — added first)
+# Tracks in-flight requests and returns 503 during shutdown to drain traffic
+app.add_middleware(RequestTrackingMiddleware, shutdown_handler=graceful_shutdown)
 
 # Add security middleware FIRST (order matters - last added = outermost = first to execute)
 # Security middleware runs first, then CORS wraps everything including error responses
@@ -409,6 +410,16 @@ try:
     logger.info("✅ Performance monitoring middleware enabled")
 except Exception as e:
     logger.warning(f"⚠️ Performance monitoring middleware not loaded: {e}")
+
+# Per-Tenant Rate Limiting — in-memory sliding window, no Redis required
+# Must be added BEFORE TenantContextMiddleware (LIFO: Tenant Context added later
+# = outermost = runs first, then this middleware reads request.state.organization_id)
+try:
+    from middleware.tenant_rate_limiter import TenantRateLimitMiddleware
+    app.add_middleware(TenantRateLimitMiddleware)
+    logger.info("Tenant rate limiting middleware enabled")
+except Exception as e:
+    logger.warning(f"Tenant rate limiting middleware not loaded: {e}")
 
 # Multi-Tenant: Add tenant context middleware
 # This sets request.state.user and request.state.tenant_context for authenticated requests
@@ -516,14 +527,35 @@ try:
             "X-Request-ID", "X-Visitor-ID", "X-Impersonation-Token",
         ],
         expose_headers=[
-            "Content-Length", "Content-Type", "X-Request-ID",
+            "Content-Length", "Content-Type", "X-Request-ID", "X-Response-Time",
             "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
         ],
         max_age=3600,
     )
-    logger.info("✅ CORS middleware enabled (outermost — added last for correct ordering)")
+    logger.info("✅ CORS middleware enabled")
 except Exception as e:
     logger.warning(f"⚠️ CORS middleware not loaded: {e}")
+
+# ============================================================================
+# REQUEST CONTEXT MIDDLEWARE — Correlation IDs and structured request logging
+# Added AFTER CORS so it is the absolute outermost middleware (LIFO order).
+# Every request gets a unique X-Request-ID (generated or propagated from
+# incoming header) stored in contextvars for automatic injection into all
+# log records via RequestContextFilter.
+# ============================================================================
+try:
+    from middleware.request_context import RequestContextMiddleware
+    app.add_middleware(RequestContextMiddleware)
+    logger.info("✅ Request context middleware enabled (correlation IDs + structured request logging)")
+except Exception as e:
+    logger.warning(f"⚠️ Request context middleware not loaded: {e}")
+
+# ============================================================================
+# SIGNAL HANDLERS — Cooperative shutdown with uvicorn
+# ============================================================================
+# Sets the shutdown flag on SIGTERM/SIGINT so health checks return 503 immediately.
+# The actual cleanup runs in the @app.on_event("shutdown") handler below.
+install_signal_handlers(graceful_shutdown)
 
 # ============================================================================
 # SECURITY CONFIGURATION VALIDATION
@@ -1477,6 +1509,7 @@ except Exception as e:
 # EXPERIMENTAL MODULE ROUTES
 # ARCHIVED: Experimental modules frozen - no SLA (March 2026)
 # ============================================================================
+# DEPRECATED: Experimental feature deregistered
 # try:
 #     from routes.decision_lab_routes import register_decision_lab_routes
 #     register_decision_lab_routes(app=app, get_db=get_db, get_current_user=get_current_user)
@@ -1484,6 +1517,7 @@ except Exception as e:
 # except Exception as e:
 #     logger.error(f"❌ Decision Lab routes failed to load: {e}")
 #
+# DEPRECATED: Experimental feature deregistered
 # try:
 #     from routes.circle_of_cashflow_routes import register_circle_of_cashflow_routes
 #     register_circle_of_cashflow_routes(app=app, get_db=get_db, get_current_user=get_current_user)
@@ -1491,6 +1525,7 @@ except Exception as e:
 # except Exception as e:
 #     logger.error(f"❌ Circle of Cashflow routes failed to load: {e}")
 #
+# DEPRECATED: Premium feature deregistered — not yet launched
 # try:
 #     from routes.hr_management_routes import register_hr_management_routes
 #     register_hr_management_routes(app=app, get_db=get_db, get_current_user=get_current_user)
@@ -1505,6 +1540,7 @@ except Exception as e:
 # except Exception as e:
 #     logger.error(f"❌ IT Helpdesk routes failed to load: {e}")
 #
+# DEPRECATED: Experimental feature deregistered
 # try:
 #     from routes.avatar_studio_routes import register_avatar_studio_routes
 #     register_avatar_studio_routes(app=app, get_db=get_db, get_current_user=get_current_user)
@@ -1634,6 +1670,14 @@ async def startup_event():
         cms_session.close()
     except Exception as e:
         logger.debug(f"SOC 2 deployment record skipped: {e}")
+
+    # Start DB connection pool monitor (background thread, logs every 60s)
+    try:
+        from services.db_monitor import start_pool_monitor
+        start_pool_monitor()
+        logger.info("DB connection pool monitor started")
+    except Exception as e:
+        logger.warning(f"DB pool monitor failed to start: {e}")
 
     # Post-startup route health check
     critical_paths = ["/api/v1/leads", "/api/v1/loans", "/api/v1/pipeline", "/api/v1/auth", "/api/v1/ai"]

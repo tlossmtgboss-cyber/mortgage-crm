@@ -33,9 +33,15 @@ from routes.scheduler._helpers import (
     _is_scheduler_admin,
     _audit_log,
 )
+from routes.scheduler.error_responses import (
+    scheduler_error,
+    VALIDATION_ERROR, FORBIDDEN, INVALID_SECTION, SERVICE_UNAVAILABLE,
+    RESET_ERROR, IMPORT_ERROR,
+)
 from routes.scheduler.recurring_availability import (
     _sync_working_hours_json_to_recurring,
 )
+from routes.scheduler.constants import DEFAULT_TIMEZONE
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -154,6 +160,21 @@ class AdvancedUpdate(BaseModel):
     feature_toggles: Optional[Dict[str, bool]] = None
 
 
+class AISchedulingUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    auto_book_enabled: Optional[bool] = None
+    preferred_times: Optional[List[str]] = None
+    max_ai_bookings_per_day: Optional[int] = Field(None, ge=1, le=20)
+    buffer_before_minutes: Optional[int] = Field(None, ge=0, le=60)
+    buffer_after_minutes: Optional[int] = Field(None, ge=0, le=60)
+    allowed_appointment_types: Optional[List[str]] = None
+    require_confirmation: Optional[bool] = None
+    confirmation_method: Optional[str] = Field(None, max_length=20)
+    smart_scheduling: Optional[Dict[str, Any]] = None
+    sms_triggers: Optional[Dict[str, Any]] = None
+    ai_response_handling: Optional[Dict[str, Any]] = None
+
+
 class SetupStatusUpdate(BaseModel):
     completed_steps: List[str] = Field(default_factory=list)
     current_step: int = Field(0, ge=0)
@@ -174,7 +195,7 @@ class SettingsImport(BaseModel):
 
 VALID_SECTIONS = {
     "availability", "notifications", "booking_page",
-    "integrations", "team", "advanced",
+    "integrations", "team", "advanced", "ai_scheduling",
 }
 
 SECTION_MODELS = {
@@ -184,6 +205,7 @@ SECTION_MODELS = {
     "integrations": IntegrationsUpdate,
     "team": TeamUpdate,
     "advanced": AdvancedUpdate,
+    "ai_scheduling": AISchedulingUpdate,
 }
 
 
@@ -195,7 +217,7 @@ def _get_or_create_config(db: Session, user_id: int, org_id: int):
     """Get the user's SchedulerConfig, creating one with defaults if needed."""
     models = get_models()
     if not models:
-        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+        scheduler_error(500, SERVICE_UNAVAILABLE, "Scheduler service is not available")
     SchedulerConfig = models["SchedulerConfig"]
 
     config = (
@@ -228,7 +250,7 @@ def _get_or_create_config(db: Session, user_id: int, org_id: int):
         organization_id=org_id,
         user_id=user_id,
         config_name="Default Settings",
-        timezone="America/Chicago",
+        timezone=DEFAULT_TIMEZONE,
         working_hours=DEFAULT_WORKING_HOURS,
         notification_settings={},
         landing_page_settings={},
@@ -246,7 +268,7 @@ def _serialize_config_availability(config) -> dict:
     lunch_start = config.lunch_break_start
     lunch_end = config.lunch_break_end
     return {
-        "timezone": config.timezone or "America/Chicago",
+        "timezone": config.timezone or DEFAULT_TIMEZONE,
         "working_hours": config.working_hours or {},
         "lunch_break": {
             "start": lunch_start.strftime("%H:%M") if isinstance(lunch_start, time) else str(lunch_start or "12:00"),
@@ -418,6 +440,39 @@ def _serialize_advanced(config) -> dict:
     }
 
 
+def _serialize_ai_scheduling(config) -> dict:
+    """Build the AI scheduling section from a SchedulerConfig."""
+    stored = config.ai_scheduling_config or {} if hasattr(config, "ai_scheduling_config") else {}
+    return {
+        "enabled": config.ai_scheduling_enabled if config.ai_scheduling_enabled is not None else True,
+        "auto_book_enabled": stored.get("auto_book_enabled", False),
+        "preferred_times": stored.get("preferred_times", ["10:00", "14:00", "16:00"]),
+        "max_ai_bookings_per_day": stored.get("max_ai_bookings_per_day", 5),
+        "buffer_before_minutes": stored.get("buffer_before_minutes", 15),
+        "buffer_after_minutes": stored.get("buffer_after_minutes", 10),
+        "allowed_appointment_types": stored.get("allowed_appointment_types", ["discovery_call", "pre_purchase_consultation", "document_review"]),
+        "require_confirmation": stored.get("require_confirmation", True),
+        "confirmation_method": stored.get("confirmation_method", "sms"),
+        "smart_scheduling": stored.get("smart_scheduling", {
+            "avoid_back_to_back": True,
+            "cluster_similar_meetings": True,
+            "protect_focus_time": True,
+            "focus_time_blocks": ["08:00-09:30"],
+        }),
+        "sms_triggers": stored.get("sms_triggers", {
+            "send_booking_link": True,
+            "follow_up_no_response_hours": 24,
+            "max_follow_ups": 3,
+            "include_calendar_preview": True,
+        }),
+        "ai_response_handling": stored.get("ai_response_handling", {
+            "auto_reschedule_on_cancel": True,
+            "suggest_alternatives": 3,
+            "respect_borrower_timezone": True,
+        }),
+    }
+
+
 def _serialize_label(label) -> dict:
     """Serialize a CalendarLabel row."""
     return {
@@ -568,11 +623,30 @@ async def get_all_settings(
         "cancellation_policy": cancellation_policy,
         "team": _serialize_team(config),
         "advanced": _serialize_advanced(config),
+        "ai_scheduling": _serialize_ai_scheduling(config),
         "locations": locations_list,
         "labels": labels_list,
         "setup_completed": setup_completed,
         "setup_progress": setup_progress,
     }
+
+
+# ============================================================================
+# GET /settings/ai-scheduling - AI scheduling settings
+# ============================================================================
+
+@router.get("/settings/ai-scheduling")
+async def get_ai_scheduling_settings(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Get AI scheduling settings for the current user."""
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+    user_id = getattr(user, "id", None)
+    config = _get_or_create_config(db, user_id, org_id)
+    db.commit()
+    return {"data": _serialize_ai_scheduling(config)}
 
 
 # ============================================================================
@@ -592,9 +666,10 @@ async def update_settings_section(
     integrations, team, advanced.
     """
     if section not in VALID_SECTIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid section '{section}'. Valid: {sorted(VALID_SECTIONS)}",
+        scheduler_error(
+            400, INVALID_SECTION,
+            f"Invalid settings section '{section}'",
+            detail=f"Valid sections: {sorted(VALID_SECTIONS)}",
         )
 
     user = await get_current_user(request, db)
@@ -603,7 +678,7 @@ async def update_settings_section(
 
     # Team section requires admin
     if section == "team" and not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required to modify team settings")
+        scheduler_error(403, FORBIDDEN, "Admin access required to modify team settings")
 
     # Parse and validate body
     body_json = await request.json()
@@ -611,7 +686,11 @@ async def update_settings_section(
     try:
         payload = model_cls(**body_json)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Validation error: {e}")
+        scheduler_error(
+            422, VALIDATION_ERROR,
+            "Invalid settings data",
+            detail=str(e),
+        )
 
     config = _get_or_create_config(db, user_id, org_id)
     changes = {}
@@ -628,13 +707,15 @@ async def update_settings_section(
         _apply_team(config, payload, changes)
     elif section == "advanced":
         _apply_advanced(config, payload, changes)
+    elif section == "ai_scheduling":
+        _apply_ai_scheduling(config, payload, changes)
 
     # Phase 2 reverse sync: if working_hours JSON was updated, propagate to
     # RecurringAvailability structured tables so both sources stay consistent.
     if section == "availability" and changes.get("working_hours"):
         _sync_working_hours_json_to_recurring(
             db, user_id, org_id, config.working_hours,
-            timezone_str=config.timezone or "America/Chicago",
+            timezone_str=config.timezone or DEFAULT_TIMEZONE,
         )
 
     config.updated_at = datetime.now(timezone.utc)
@@ -655,6 +736,7 @@ async def update_settings_section(
         "integrations": _serialize_integrations,
         "team": _serialize_team,
         "advanced": _serialize_advanced,
+        "ai_scheduling": _serialize_ai_scheduling,
     }
 
     return {
@@ -795,6 +877,28 @@ def _apply_advanced(config, payload: AdvancedUpdate, changes: dict):
         changes["feature_toggles"] = payload.feature_toggles
 
 
+def _apply_ai_scheduling(config, payload: AISchedulingUpdate, changes: dict):
+    """Apply AI scheduling section updates to config."""
+    # Master toggle stored as dedicated column
+    if payload.enabled is not None:
+        config.ai_scheduling_enabled = payload.enabled
+        changes["ai_scheduling_enabled"] = payload.enabled
+
+    # Everything else stored in JSON config
+    current = dict(config.ai_scheduling_config or {}) if hasattr(config, "ai_scheduling_config") else {}
+
+    for field in ("auto_book_enabled", "preferred_times", "max_ai_bookings_per_day",
+                  "buffer_before_minutes", "buffer_after_minutes", "allowed_appointment_types",
+                  "require_confirmation", "confirmation_method", "smart_scheduling",
+                  "sms_triggers", "ai_response_handling"):
+        val = getattr(payload, field, None)
+        if val is not None:
+            current[field] = val
+            changes[field] = val
+
+    config.ai_scheduling_config = current
+
+
 # ============================================================================
 # GET /settings/setup-status
 # ============================================================================
@@ -889,17 +993,17 @@ async def reset_settings(
     db.flush()
 
     if not stored:
-        raise HTTPException(status_code=400, detail="No reset token found. Request one first via GET /settings/reset-token.")
+        scheduler_error(400, RESET_ERROR, "No reset token found. Request one first via GET /settings/reset-token.")
     if datetime.now(timezone.utc) > datetime.fromisoformat(stored["expires_at"]):
-        raise HTTPException(status_code=400, detail="Reset token has expired. Request a new one.")
+        scheduler_error(400, RESET_ERROR, "Reset token has expired. Request a new one.")
     token = stored["token"]
     if not secrets.compare_digest(token, body.confirmation_token):
-        raise HTTPException(status_code=400, detail="Invalid confirmation token.")
+        scheduler_error(400, RESET_ERROR, "Invalid confirmation token.")
 
     from smart_scheduler_models import DEFAULT_WORKING_HOURS
 
     # Reset all fields to defaults
-    config.timezone = "America/Chicago"
+    config.timezone = DEFAULT_TIMEZONE
     config.working_hours = DEFAULT_WORKING_HOURS
     config.default_duration_minutes = 30
     config.min_duration_minutes = 15
@@ -935,7 +1039,7 @@ async def reset_settings(
     # Phase 2 reverse sync: reset RecurringAvailability to match defaults
     _sync_working_hours_json_to_recurring(
         db, user_id, org_id, DEFAULT_WORKING_HOURS,
-        timezone_str="America/Chicago",
+        timezone_str=DEFAULT_TIMEZONE,
     )
 
     db.flush()
@@ -1075,14 +1179,18 @@ async def import_settings(
     user_id = getattr(user, "id", None)
 
     if not _is_scheduler_admin(user):
-        raise HTTPException(status_code=403, detail="Admin access required to import settings")
+        scheduler_error(403, FORBIDDEN, "Admin access required to import settings")
 
     data = body.data
 
     # Basic version check
     version = data.get("version", "1.0")
     if version not in ("1.0",):
-        raise HTTPException(status_code=400, detail=f"Unsupported settings version: {version}")
+        scheduler_error(
+            400, IMPORT_ERROR,
+            "Unsupported settings version",
+            detail=f"Got version '{version}', supported versions: ['1.0']",
+        )
 
     config = _get_or_create_config(db, user_id, org_id)
     applied_sections = []
@@ -1127,7 +1235,7 @@ async def import_settings(
         if wh:
             _sync_working_hours_json_to_recurring(
                 db, user_id, org_id, wh,
-                timezone_str=avail.get("timezone", config.timezone or "America/Chicago"),
+                timezone_str=avail.get("timezone", config.timezone or DEFAULT_TIMEZONE),
             )
         applied_sections.append("availability")
 
@@ -1248,4 +1356,58 @@ async def import_settings(
         "status": "ok",
         "applied_sections": applied_sections,
         "message": f"Imported {len(applied_sections)} section(s) successfully.",
+    }
+
+
+# ============================================================================
+# GET /settings/availability-source - Check availability source divergence
+# ============================================================================
+
+@router.get("/settings/availability-source")
+async def get_availability_source_info(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Check which availability source is active and whether the two sources
+    (RecurringAvailability rows vs SchedulerConfig.working_hours JSON) are
+    diverged.
+
+    When both exist, the RecurringAvailability tables take precedence and the
+    JSON blob is effectively ignored by slot generation -- but the settings UI
+    may still display/edit the JSON blob without the user realizing it has no
+    effect.
+    """
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+    user_id = getattr(user, "id", None)
+
+    # Check if RecurringAvailability rows exist for this user
+    has_recurring = False
+    try:
+        from services.recurring_availability_service import RecurringAvailabilityService
+        ra_service = RecurringAvailabilityService(db)
+        recurring_rows = ra_service.get_weekly_schedule(user_id, org_id)
+        has_recurring = bool(recurring_rows)
+    except Exception as e:
+        logger.debug(f"RecurringAvailability check failed: {e}")
+
+    # Check if working_hours JSON exists in SchedulerConfig
+    config = _get_or_create_config(db, user_id, org_id)
+    has_json = bool(config.working_hours and len(config.working_hours) > 0)
+
+    active_source = "recurring" if has_recurring else "json"
+    # Both exist means the JSON blob may be stale / out of sync
+    is_diverged = has_recurring and has_json
+
+    return {
+        "active_source": active_source,
+        "has_recurring_availability": has_recurring,
+        "has_working_hours_json": has_json,
+        "is_diverged": is_diverged,
+        "warning": (
+            "Your availability settings may be out of sync. Changes made in "
+            "Settings may not take effect because recurring availability rules "
+            "take precedence."
+        ) if is_diverged else None,
     }

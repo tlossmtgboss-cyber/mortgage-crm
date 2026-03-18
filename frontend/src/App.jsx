@@ -133,7 +133,7 @@ const PartnerROIDashboard = lazyRetry(() => import('./pages/PartnerROIDashboard'
 const ProfitabilityDashboard = lazyRetry(() => import('./pages/ProfitabilityDashboard'));
 const UsageIntelligenceDashboard = lazyRetry(() => import('./pages/UsageIntelligenceDashboard'));
 const ScenarioModeling = lazyRetry(() => import('./pages/ScenarioModeling'));
-const DecisionLab = lazyRetry(() => import('./pages/DecisionLab'));
+// const DecisionLab = lazyRetry(() => import('./pages/DecisionLab')); // DEPRECATED: Experimental feature deregistered
 const MortgageCalculator = lazyRetry(() => import('./pages/MortgageCalculator'));
 const AllInOneLoan = lazyRetry(() => import('./pages/AllInOneLoan'));
 const PipelineProbability = lazyRetry(() => import('./pages/PipelineProbability'));
@@ -159,9 +159,11 @@ const SmartDocs = lazyRetry(() => import('./pages/SmartDocs'));
 const SmartDocsClientDetail = lazyRetry(() => import('./pages/SmartDocsClientDetail'));
 const SmartDocsDashboard = lazyRetry(() => import('./pages/SmartDocsDashboard'));
 const AIDailyBlog = lazyRetry(() => import('./pages/AIDailyBlog'));
-const AvatarStudio = lazyRetry(() => import('./pages/AvatarStudio'));
+// DEPRECATED: Experimental feature deregistered
+// const AvatarStudio = lazyRetry(() => import('./pages/AvatarStudio'));
 const PublicBooking = lazyRetry(() => import('./pages/PublicBooking'));
 const BookingConfirmationPage = lazyRetry(() => import('./pages/BookingConfirmationPage'));
+const EmbedBooking = lazyRetry(() => import('./pages/EmbedBooking'));
 const BorrowerApplication = lazyRetry(() => import('./pages/BorrowerApplication'));
 const AdaptiveURLA = lazyRetry(() => import('./pages/AdaptiveURLA'));
 const PurchaseApplication = lazyRetry(() => import('./pages/PurchaseApplication'));
@@ -196,10 +198,11 @@ const AcquisitionDashboard = lazyRetry(() => import('./pages/AcquisitionDashboar
 const Marketing = lazyRetry(() => import('./pages/Marketing'));
 const CarouselBuilder = lazyRetry(() => import('./pages/CarouselBuilder/CarouselBuilderPage'));
 const MasterManagerCapacity = lazyRetry(() => import('./pages/MasterManager/CapacityCommandCenter'));
-const MasterManagerRecruiting = lazyRetry(() => import('./pages/MasterManager/RecruitingDashboard'));
-const RecruitDetail = lazyRetry(() => import('./pages/MasterManager/RecruitDetail'));
-const PartnerRecruitingDashboard = lazyRetry(() => import('./pages/PartnerRecruiting/PartnerRecruitingDashboard'));
-const PartnerRecruitDetail = lazyRetry(() => import('./pages/PartnerRecruiting/PartnerRecruitDetail'));
+// DEPRECATED: Premium feature deregistered — not yet launched
+// const MasterManagerRecruiting = lazyRetry(() => import('./pages/MasterManager/RecruitingDashboard'));
+// const RecruitDetail = lazyRetry(() => import('./pages/MasterManager/RecruitDetail'));
+// const PartnerRecruitingDashboard = lazyRetry(() => import('./pages/PartnerRecruiting/PartnerRecruitingDashboard'));
+// const PartnerRecruitDetail = lazyRetry(() => import('./pages/PartnerRecruiting/PartnerRecruitDetail'));
 const AgentGym = lazyRetry(() => import('./pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('./pages/AgentGovernanceSettings'));
 const EmailIntegrationSettings = lazyRetry(() => import('./pages/EmailIntegrationSettings'));
@@ -228,8 +231,9 @@ const IntakeEngine = lazyRetry(() => import('./components/intake/IntakeEngine'))
 const ListingPortalTransactions = lazyRetry(() => import('./pages/ListingPortalTransactions'));
 const ListingPortalTransactionDetail = lazyRetry(() => import('./pages/ListingPortalTransactionDetail'));
 const ListingAgentPortal = lazyRetry(() => import('./pages/ListingAgentPortal'));
-const RecruitPortal = lazyRetry(() => import('./pages/RecruitPortal/RecruitPortal'));
-const DISCAssessment = lazyRetry(() => import('./pages/DISCAssessment'));
+// DEPRECATED: Premium feature deregistered — not yet launched
+// const RecruitPortal = lazyRetry(() => import('./pages/RecruitPortal/RecruitPortal'));
+// const DISCAssessment = lazyRetry(() => import('./pages/DISCAssessment'));
 const PrivacyPolicy = lazyRetry(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazyRetry(() => import('./pages/TermsOfService'));
 const LiveCallWhisper = lazyRetry(() => import('./pages/LiveCallWhisper'));
@@ -530,7 +534,7 @@ function App() {
           <Route path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
-          <Route path="/decision-lab" element={<LazyPage><DecisionLab /></LazyPage>} />
+          {/* <Route path="/decision-lab" element={<LazyPage><DecisionLab /></LazyPage>} /> */}{/* DEPRECATED: Experimental feature deregistered */}
           <Route path="/mortgage-calculator" element={<LazyPage><MortgageCalculator /></LazyPage>} />
           <Route path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />
           <Route path="/register" element={<Registration />} />
@@ -551,13 +555,13 @@ function App() {
           {/* Listing Agent Portal (public - magic link auth) */}
           <Route path="/listing-agent-portal" element={<LazyPage><ListingAgentPortal /></LazyPage>} />
 
-          {/* Recruit Portal (public - candidate PURL portal with calculator) */}
-          <Route path="/recruit-portal/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />
-          <Route path="/join/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />
+          {/* DEPRECATED: Premium feature deregistered — not yet launched */}
+          {/* <Route path="/recruit-portal/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} /> */}
+          {/* <Route path="/join/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} /> */}
 
-          {/* DISC Assessment (public - candidate takes assessment via token) */}
-          <Route path="/disc-assessment/:token" element={<LazyPage><DISCAssessment /></LazyPage>} />
-          <Route path="/assessment/disc" element={<LazyPage><DISCAssessment /></LazyPage>} />
+          {/* DEPRECATED: Premium feature deregistered — not yet launched */}
+          {/* <Route path="/disc-assessment/:token" element={<LazyPage><DISCAssessment /></LazyPage>} /> */}
+          {/* <Route path="/assessment/disc" element={<LazyPage><DISCAssessment /></LazyPage>} /> */}
 
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />
@@ -571,6 +575,9 @@ function App() {
 
           {/* Public Booking Page */}
           <Route path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />
+
+          {/* Embeddable Booking Widget (standalone page for iframe embedding) */}
+          <Route path="/embed/book/:slug" element={<LazyPage><EmbedBooking /></LazyPage>} />
 
           {/* Public Booking Confirmation (standalone, token-based) */}
           <Route path="/booking/confirmation/:appointmentId" element={<LazyPage><BookingConfirmationPage /></LazyPage>} />
@@ -2540,6 +2547,8 @@ function App() {
               </PrivateRoute>
             }
           />
+          {/* DEPRECATED: Premium feature deregistered — not yet launched */}
+          {/*
           <Route
             path="/master-manager/recruiting"
             element={
@@ -2628,6 +2637,7 @@ function App() {
               </PrivateRoute>
             }
           />
+          */}
           <Route
             path="/agent/:agentId/settings"
             element={
@@ -3367,6 +3377,7 @@ function App() {
               </PrivateRoute>
             }
           />
+          {/* DEPRECATED: Experimental feature deregistered
           <Route
             path="/avatar-studio"
             element={
@@ -3389,6 +3400,7 @@ function App() {
               </PrivateRoute>
             }
           />
+          */}
           <Route
             path="/conversation-intelligence"
             element={

@@ -18,6 +18,7 @@ from services.notification_service import notification_service
 from routes.scheduler._helpers import (
     get_current_user, _is_scheduler_admin,
 )
+from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ async def get_email_service_status(
 ):
     """Check if email service is properly configured (authenticated)"""
     sendgrid_configured = bool(os.getenv("SENDGRID_API_KEY"))
-    sendgrid_from_email = os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
+    sendgrid_from_email = os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL)
 
     return {
         "sendgrid_configured": sendgrid_configured,
@@ -73,7 +74,7 @@ async def test_email_send(
         return {
             "test_result": result,
             "to_email": to_email,
-            "from_email": os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"),
+            "from_email": os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL),
             "sendgrid_key_present": bool(os.getenv("SENDGRID_API_KEY")),
         }
     except Exception as e:

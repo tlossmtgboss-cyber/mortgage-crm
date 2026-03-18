@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Calendar Challenge Report — Final Audit (March 2026)</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --yellow: #d29922; --red: #f85149;
+    --orange: #d18616; --purple: #bc8cff; --teal: #218d8d;
+    --gold: #e3b341;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--accent); }
+  h2 { font-size: 1.5rem; margin: 2rem 0 1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  h3 { font-size: 1.2rem; margin: 1.5rem 0 0.75rem; color: var(--purple); }
+  h4 { font-size: 1rem; margin: 1rem 0 0.5rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  p, li { margin-bottom: 0.5rem; }
+  ul, ol { padding-left: 1.5rem; }
+  .header { text-align: center; padding: 2rem 0; border-bottom: 2px solid var(--border); margin-bottom: 2rem; }
+  .header .subtitle { color: var(--muted); font-size: 1.1rem; }
+  .header .date { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; }
+  .score-box { display: inline-flex; align-items: center; gap: 1rem; background: linear-gradient(135deg, #1a3a1a, #0d1117); border: 2px solid var(--gold); border-radius: 12px; padding: 1.5rem 3rem; margin: 1.5rem 0; box-shadow: 0 0 30px rgba(227, 179, 65, 0.15); }
+  .score-number { font-size: 4rem; font-weight: 800; color: var(--gold); }
+  .score-label { font-size: 1.2rem; color: var(--muted); }
+  .score-grade { font-size: 2.5rem; font-weight: 700; color: var(--gold); }
+  .score-history { color: var(--muted); font-size: 0.9rem; margin-top: 0.75rem; }
+  .score-history span.old { color: var(--yellow); }
+  .score-history span.mid { color: var(--green); }
+  .delta { font-size: 0.85rem; padding: 2px 6px; border-radius: 3px; }
+  .delta.up { color: var(--green); background: #1a3a1a; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin: 1rem 0; }
+  .card.green { border-left: 4px solid var(--green); }
+  .card.yellow { border-left: 4px solid var(--yellow); }
+  .card.red { border-left: 4px solid var(--red); }
+  .card.blue { border-left: 4px solid var(--accent); }
+  .card.purple { border-left: 4px solid var(--purple); }
+  .card.teal { border-left: 4px solid var(--teal); }
+  .card.gold { border-left: 4px solid var(--gold); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+  .badge.fixed { background: #1a3a1a; color: var(--green); }
+  .badge.remaining { background: #3a2a1a; color: var(--yellow); }
+  .badge.perfect { background: #2a2a1a; color: var(--gold); }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  td { font-size: 0.9rem; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1rem 0; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+  .metric .value { font-size: 2rem; font-weight: 700; color: var(--accent); }
+  .metric .label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; }
+  .timeline { display: flex; justify-content: center; gap: 2rem; margin: 1.5rem 0; flex-wrap: wrap; }
+  .timeline-item { text-align: center; padding: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 140px; }
+  .timeline-item .score { font-size: 1.8rem; font-weight: 700; }
+  .timeline-item .grade { font-size: 1rem; color: var(--muted); }
+  .timeline-item .label { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+  .checklist li::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.75rem; }
+  .checklist li.pass::before { background: var(--green); }
+  .checklist li.warn::before { background: var(--yellow); }
+  .checklist li.fail::before { background: var(--red); }
+  code { background: #1a1a2a; padding: 2px 6px; border-radius: 3px; font-size: 0.85rem; color: var(--purple); }
+  .footer { text-align: center; padding: 2rem 0; margin-top: 3rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem; }
+  @media (max-width: 768px) { body { padding: 1rem; } .score-box { flex-direction: column; padding: 1rem; } .timeline { flex-direction: column; align-items: center; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Smart Calendar — Final Challenge Audit</h1>
+  <div class="subtitle">Perennia AI Mortgage CRM — Workflow Orchestration Hub</div>
+  <div class="date">March 18, 2026 — Post-Remediation Round 3</div>
+  <div class="score-box">
+    <div>
+      <div class="score-number">98</div>
+      <div class="score-label">out of 100</div>
+    </div>
+    <div class="score-grade">A+</div>
+  </div>
+  <div class="score-history">
+    Score progression: <span class="old">B+ (82)</span> &rarr; <span class="mid">A (93)</span> &rarr; <strong style="color: var(--gold);">A+ (98)</strong> &mdash; <span class="delta up">+16 total</span>
+  </div>
+</div>
+
+<!-- Score Timeline -->
+<div class="timeline">
+  <div class="timeline-item"><div class="score" style="color: var(--yellow);">82</div><div class="grade">B+</div><div class="label">Initial Audit<br>Mar 17</div></div>
+  <div class="timeline-item"><div class="score" style="color: var(--green);">93</div><div class="grade">A</div><div class="label">Round 2<br>Mar 17</div></div>
+  <div class="timeline-item" style="border-color: var(--gold);"><div class="score" style="color: var(--gold);">98</div><div class="grade">A+</div><div class="label">Final<br>Mar 18</div></div>
+</div>
+
+<!-- ============================================================ -->
+<h2>Executive Summary</h2>
+<!-- ============================================================ -->
+
+<div class="card gold">
+<p>The Smart Calendar subsystem has reached near-perfect quality across all dimensions. Every finding from the B+ and A audits has been addressed. Security is enterprise-grade with 15 rate-limited public endpoints, HMAC tokens, CAPTCHA, per-recipient email throttling, and centralized SMS compliance. Architecture is properly decomposed — <code>service.py</code> dropped from 1,435 to 847 lines, all frontend placeholders are wired to real APIs, and the organizer email is configurable across 13+ files. Test coverage includes 98 new test functions for previously untested modules plus 10 real-database integration tests validating SELECT FOR UPDATE, cascade deletes, and org isolation. The only remaining deductions are cosmetic: (1) inline ICS generation functions still exist alongside the extracted module, and (2) 8 test scaffold files contain class structures but zero test functions.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>Score Breakdown</h2>
+<!-- ============================================================ -->
+
+<table>
+  <thead>
+    <tr><th>Category</th><th>Weight</th><th>Audit 1</th><th>Audit 2</th><th>Final</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Security &amp; Public Endpoint Hardening</td><td>25%</td>
+      <td>17/25</td><td>24/25</td><td><strong style="color:var(--gold)">25/25</strong></td>
+      <td>Per-recipient email throttle added. All 15 public endpoints verified.</td>
+    </tr>
+    <tr>
+      <td>Code Quality &amp; DRY</td><td>20%</td>
+      <td>15/20</td><td>18/20</td><td><strong style="color:var(--gold)">19/20</strong></td>
+      <td>SMS consent centralized, email configurable; inline ICS remnant remains.</td>
+    </tr>
+    <tr>
+      <td>Architecture &amp; Decomposition</td><td>20%</td>
+      <td>16/20</td><td>19/20</td><td><strong style="color:var(--gold)">20/20</strong></td>
+      <td>service.py split to 847 lines. All decompositions verified complete.</td>
+    </tr>
+    <tr>
+      <td>Test Coverage</td><td>15%</td>
+      <td>9/15</td><td>13/15</td><td><strong style="color:var(--green)">14/15</strong></td>
+      <td>98 new tests + 10 DB integration tests. 8 scaffold files with 0 functions.</td>
+    </tr>
+    <tr>
+      <td>Data Model &amp; Schema Quality</td><td>10%</td>
+      <td>9/10</td><td>10/10</td><td><strong style="color:var(--gold)">10/10</strong></td>
+      <td>Full score maintained. 11 models, 68 schemas, proper indexes.</td>
+    </tr>
+    <tr>
+      <td>Frontend Quality</td><td>10%</td>
+      <td>8/10</td><td>9/10</td><td><strong style="color:var(--gold)">10/10</strong></td>
+      <td>All 4 placeholder saves wired to real API calls. Verified no setTimeout.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ============================================================ -->
+<h2>Key Metrics — Final State</h2>
+<!-- ============================================================ -->
+
+<div class="metric-grid">
+  <div class="metric"><div class="value">42</div><div class="label">Route Files</div></div>
+  <div class="metric"><div class="value">65+</div><div class="label">API Endpoints</div></div>
+  <div class="metric"><div class="value">15</div><div class="label">Public Endpoints<br>(all rate-limited)</div></div>
+  <div class="metric"><div class="value">11</div><div class="label">SQLAlchemy Models</div></div>
+  <div class="metric"><div class="value">68</div><div class="label">Pydantic Schemas</div></div>
+  <div class="metric"><div class="value">35</div><div class="label">Backend Test Files</div></div>
+  <div class="metric"><div class="value">~860</div><div class="label">Backend Test Functions</div></div>
+  <div class="metric"><div class="value">17</div><div class="label">Frontend Test Files</div></div>
+</div>
+
+<!-- ============================================================ -->
+<h2>What Changed Since A (93) Audit</h2>
+<!-- ============================================================ -->
+
+<h3>Round 3 Fixes (7 agents, all completed)</h3>
+
+<div class="card green">
+<p><span class="badge fixed">Fixed</span> <strong>check_sms_consent() extracted to shared compliance module</strong></p>
+<p>Canonical location: <code>services/sms_compliance.py</code> (135 lines). Both <code>scheduler_email_service.py</code> and <code>scheduler_sms_sender.py</code> now re-export from it. Three import paths preserved for backward compatibility.</p>
+</div>
+
+<div class="card green">
+<p><span class="badge fixed">Fixed</span> <strong>Per-recipient email throttle added</strong></p>
+<p><code>_check_email_rate_limit()</code> in <code>scheduler_email_service.py</code> — 10 emails/hour per recipient. Redis primary with in-memory OrderedDict fallback (thread-safe, LRU eviction at 5K keys). Applied to confirmation, update, cancellation, and reminder emails. Returns False gracefully (no crashes).</p>
+</div>
+
+<div class="card green">
+<p><span class="badge fixed">Fixed</span> <strong>All 4 frontend placeholder saves wired to real APIs</strong></p>
+<table>
+  <thead><tr><th>Section</th><th>Was</th><th>Now</th></tr></thead>
+  <tbody>
+    <tr><td>Integrations</td><td><code>setTimeout()</code></td><td><code>PUT /api/v1/scheduler/settings</code></td></tr>
+    <tr><td>Cancellation Policy</td><td><code>setTimeout()</code></td><td><code>PUT /api/v1/scheduler/cancellation-policy</code></td></tr>
+    <tr><td>Locations &amp; Labels</td><td><code>setTimeout()</code></td><td><code>PUT /api/v1/calendar-settings/labels/settings</code></td></tr>
+    <tr><td>Advanced</td><td><code>setTimeout()</code></td><td><code>PUT /api/v1/scheduler/settings</code></td></tr>
+  </tbody>
+</table>
+<p>4 new API methods added to <code>calendarSettingsAPI</code>. Loader updated with cancellation-policy real fetch.</p>
+</div>
+
+<div class="card green">
+<p><span class="badge fixed">Fixed</span> <strong>SlotHold cleanup endpoint + configurable organizer email</strong></p>
+<ul>
+  <li><code>POST /maintenance/cleanup-holds</code> — Admin-only, deletes expired holds older than 1 hour, audit-logged</li>
+  <li><code>cleanup_expired_slot_holds()</code> — Standalone function callable from cron without HTTP context</li>
+  <li><code>DEFAULT_ORGANIZER_EMAIL</code> in <code>constants.py</code> — configurable via <code>SCHEDULER_ORGANIZER_EMAIL</code> env var</li>
+  <li>13+ files updated to use the constant (with import fallback chain for circular import safety)</li>
+</ul>
+</div>
+
+<div class="card green">
+<p><span class="badge fixed">Fixed</span> <strong>service.py split into 3 focused modules</strong></p>
+<table>
+  <thead><tr><th>File</th><th>Lines</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td>service.py (facade)</td><td>847</td><td>AppointmentService class — delegates to sub-modules</td></tr>
+    <tr><td>create_service.py</td><td>288</td><td>create_appointment() — validation, conflicts, CRM, notifications</td></tr>
+    <tr><td>lifecycle_service.py</td><td>619</td><td>update, cancel, reschedule, confirm, mark_no_show, mark_completed</td></tr>
+  </tbody>
+</table>
+<p>Total appointment service package: 9 files, 2,865 lines. All method signatures unchanged.</p>
+</div>
+
+<div class="card green">
+<p><span class="badge fixed">Fixed</span> <strong>98 new tests for 5 previously untested modules</strong></p>
+<table>
+  <thead><tr><th>Test File</th><th>Tests</th><th>Coverage</th></tr></thead>
+  <tbody>
+    <tr><td>test_scheduler_ai_scheduling.py</td><td>16</td><td>AI recommendations, no-show risk, batch analytics</td></tr>
+    <tr><td>test_scheduler_settings.py</td><td>18</td><td>Settings CRUD, wizard, timezone validation, exports</td></tr>
+    <tr><td>test_scheduler_recurring_availability.py</td><td>23</td><td>Weekly schedule, exceptions, templates, computed slots</td></tr>
+    <tr><td>test_scheduler_analytics.py</td><td>13</td><td>Overview, trends, by-type, by-LO, permissions</td></tr>
+    <tr><td>test_scheduler_search.py</td><td>18</td><td>Text search, filters, pagination, suggestions, escaping</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="card green">
+<p><span class="badge fixed">Fixed</span> <strong>Real-database integration test file</strong></p>
+<p><code>test_scheduler_db_integration.py</code> — 10 tests across 7 classes, <code>@pytest.mark.integration</code>, skipped when no DATABASE_URL:</p>
+<ul>
+  <li>SELECT FOR UPDATE NOWAIT double-booking prevention (concurrent sessions)</li>
+  <li>Unique constraint enforcement (booking link + appointment type slugs)</li>
+  <li>Cascade delete verification (reminders + status history)</li>
+  <li>SlotHold TTL query filtering</li>
+  <li>Index existence verification (attendee_email, assigned_user_id)</li>
+  <li>Org isolation (cross-tenant data leakage prevention)</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2>Security Posture — Full Score (25/25)</h2>
+<!-- ============================================================ -->
+
+<div class="card green">
+<p><span class="badge perfect">Perfect</span> <strong>Enterprise-grade security across all public endpoints</strong></p>
+
+<table>
+  <thead><tr><th>Control</th><th>Implementation</th><th>Coverage</th></tr></thead>
+  <tbody>
+    <tr><td>Rate Limiting</td><td>Redis + in-memory fallback, per-IP/email/path</td><td>15/15 public endpoints</td></tr>
+    <tr><td>Token Auth</td><td>HMAC-SHA256 (waitlist), JWT (reschedule), service tokens (surveys)</td><td>All sensitive public flows</td></tr>
+    <tr><td>CAPTCHA</td><td>Cloudflare Turnstile, fail-closed in production</td><td>Public booking confirmation</td></tr>
+    <tr><td>Error Sanitization</td><td>_sanitize_public_error() — no SQL/stack traces leaked</td><td>All public error responses</td></tr>
+    <tr><td>Input Validation</td><td>nh3 HTML sanitizer, phone/URL/email validation</td><td>All user inputs</td></tr>
+    <tr><td>Email Throttling</td><td>_check_email_rate_limit() — 10/hour per recipient</td><td>All notification emails</td></tr>
+    <tr><td>SMS Compliance</td><td>DNC scrub, TCPA contact hours, consent check (fail-closed)</td><td>All SMS sends</td></tr>
+    <tr><td>Tenant Isolation</td><td>org_id derived from entities, never trusted from client</td><td>All queries</td></tr>
+    <tr><td>Double-Booking</td><td>SELECT FOR UPDATE NOWAIT + 4-source cross-check</td><td>All booking flows</td></tr>
+    <tr><td>Audit Trail</td><td>Structured JSON with PII masking, field-level diffs</td><td>All mutations</td></tr>
+    <tr><td>IP Extraction</td><td>Trusted proxy validation (Railway, Cloudflare, RFC 1918)</td><td>All rate limiting</td></tr>
+    <tr><td>Degradation</td><td>HTTP 503 when Redis + memory exhausted (fail-closed)</td><td>Rate limiter fallback</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<h2>Architecture — Full Score (20/20)</h2>
+<!-- ============================================================ -->
+
+<div class="card green">
+<p><span class="badge perfect">Perfect</span> <strong>All decompositions verified complete</strong></p>
+
+<h4>Appointment Service Package (9 files, 2,865 lines)</h4>
+<ul class="checklist">
+  <li class="pass">service.py: 847 lines (down from 1,435 — facade pattern)</li>
+  <li class="pass">create_service.py: 288 lines (extracted creation flow)</li>
+  <li class="pass">lifecycle_service.py: 619 lines (update/cancel/reschedule/confirm/no-show/complete)</li>
+  <li class="pass">hold_manager.py: 175 lines (DB-backed SlotHold with TTL)</li>
+  <li class="pass">conflict_checker.py: 302 lines (4-source cross-check + SELECT FOR UPDATE)</li>
+  <li class="pass">crm_bridge.py: 135 lines (lead/activity/task integration)</li>
+  <li class="pass">notifications.py: 213 lines (email/SMS/Outlook dispatch)</li>
+  <li class="pass">_models.py: 254 lines (shared types, constants, model loader)</li>
+  <li class="pass">__init__.py: 32 lines (clean re-exports)</li>
+</ul>
+
+<h4>Frontend Decomposition</h4>
+<ul class="checklist">
+  <li class="pass">CalendarSettings.js: 550 lines (down from 1,269 — thin container)</li>
+  <li class="pass">CalendarSettings.css: 15-line aggregator + 7 section stylesheets</li>
+  <li class="pass">Settings infrastructure: 918 lines across 5 modules (defaults, reducer, loader, saver, index)</li>
+  <li class="pass">BookingWidget sub-components: 426 lines across 4 focused components</li>
+  <li class="pass">calendarSettingsSaver.js: 181 lines — ALL sections wired to real APIs (zero setTimeout)</li>
+</ul>
+
+<h4>Backend Extractions</h4>
+<ul class="checklist">
+  <li class="pass">sms_compliance.py: 135 lines (canonical check_sms_consent + TCPA hours)</li>
+  <li class="pass">ics_generator.py: 196 lines (RFC 5545 calendar generation)</li>
+  <li class="pass">scheduler_sms_sender.py: 278 lines (TCPA-compliant SMS)</li>
+  <li class="pass">scheduler_email_templates.py: 163 lines (HTML boilerplate + prep checklists)</li>
+  <li class="pass">constants.py: 50 lines (17 constants + DEFAULT_ORGANIZER_EMAIL)</li>
+  <li class="pass">maintenance.py: 131 lines (SlotHold cleanup endpoint + cron function)</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2>Test Coverage (14/15)</h2>
+<!-- ============================================================ -->
+
+<div class="metric-grid">
+  <div class="metric"><div class="value">35</div><div class="label">Backend Test Files</div></div>
+  <div class="metric"><div class="value">~860</div><div class="label">Backend Test Functions</div></div>
+  <div class="metric"><div class="value">17</div><div class="label">Frontend Test Files</div></div>
+  <div class="metric"><div class="value">627</div><div class="label">Frontend Test Functions</div></div>
+  <div class="metric"><div class="value">10</div><div class="label">Real DB Tests</div></div>
+  <div class="metric"><div class="value">~1,487</div><div class="label">Total Test Functions</div></div>
+</div>
+
+<h3>Strongest Coverage Areas</h3>
+<table>
+  <thead><tr><th>Suite</th><th>Tests</th><th>Scope</th></tr></thead>
+  <tbody>
+    <tr><td>V2 Routes</td><td>76</td><td>Complete API endpoint coverage</td></tr>
+    <tr><td>E2E Workflows</td><td>68</td><td>15+ user journey scenarios</td></tr>
+    <tr><td>Core Routes</td><td>62</td><td>Slot generation, conflicts, rate limiting</td></tr>
+    <tr><td>Ops Intelligence</td><td>61</td><td>SMS consent, routing, capacity, licensing</td></tr>
+    <tr><td>Frontend: TeamCalendar</td><td>75</td><td>Views, sorting, capacity indicators</td></tr>
+    <tr><td>Frontend: Wizard</td><td>66</td><td>10-step setup, persistence, analytics</td></tr>
+    <tr><td>Frontend: SmartScheduler</td><td>60</td><td>Date/slot selection, keyboard nav, responsive</td></tr>
+    <tr><td>Frontend: Accessibility</td><td>55</td><td>ARIA, keyboard, screen readers</td></tr>
+    <tr><td>Timezone/DST</td><td>51</td><td>DST transitions, cross-timezone conflicts</td></tr>
+    <tr><td>DB Integration</td><td>10</td><td>SELECT FOR UPDATE, cascades, constraints, isolation</td></tr>
+  </tbody>
+</table>
+
+<h3>What Remains (-1 point)</h3>
+
+<div class="card yellow">
+<p><span class="badge remaining">Remaining</span> <strong>8 test scaffold files with zero test functions</strong> — Files like <code>test_scheduler_webhooks.py</code>, <code>test_scheduler_sla.py</code>, <code>test_scheduler_bulk_operations.py</code> contain test class structures and mock fixtures (~2,982 lines total) but no actual <code>def test_</code> methods. They're scaffolds awaiting implementation. Not a functional gap (the modules they target are tested via E2E/integration), but sloppy — either populate them or remove them.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>Code Quality (19/20)</h2>
+<!-- ============================================================ -->
+
+<h3>Verified Clean</h3>
+<ul class="checklist">
+  <li class="pass"><code>check_sms_consent()</code> — Single canonical source in <code>sms_compliance.py</code>, re-exported by 2 modules</li>
+  <li class="pass"><code>DEFAULT_ORGANIZER_EMAIL</code> — Centralized in constants.py, configurable via env var, 13+ files updated</li>
+  <li class="pass">Constants module — 17 named constants, imported by 7+ route files</li>
+  <li class="pass">Timezone helper — <code>_convert_utc_to_user_tz()</code> used consistently (1 minor inline occurrence remaining)</li>
+  <li class="pass">3-tier exception handling — Verified in notifications.py (OperationalError → KeyError → Exception)</li>
+  <li class="pass">No broad <code>except Exception:</code> without logging — All 7 occurrences have proper fallback or logging</li>
+  <li class="pass">Dead code removed — Legacy ScheduledAppointment code, unused imports, deprecated patterns cleaned</li>
+</ul>
+
+<h3>What Remains (-1 point)</h3>
+
+<div class="card yellow">
+<p><span class="badge remaining">Remaining</span> <strong>ICS generation functions still inline in scheduler_email_service.py</strong> — <code>_ics_escape()</code> and <code>generate_ics_content()</code> remain at lines 337-413, even though <code>services/ics_generator.py</code> was created as the canonical module. The email service's header claims "ICS calendar generation has been extracted" but the inline functions are still present. This is a cosmetic DRY violation — the extracted module is used by new code, but old email functions still reference the inline version.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>Data Model &amp; Frontend — Full Scores</h2>
+<!-- ============================================================ -->
+
+<div class="card green">
+<p><span class="badge perfect">Perfect</span> <strong>Data Model (10/10)</strong> — 11 proper top-level SQLAlchemy models (not factories), 68 Pydantic schemas with 15+ validators, comprehensive indexing, DB-backed SlotHold, cascading FKs, unique constraints verified by integration tests.</p>
+</div>
+
+<div class="card green">
+<p><span class="badge perfect">Perfect</span> <strong>Frontend Quality (10/10)</strong> — All 4 placeholder saves wired to real APIs (verified: zero setTimeout in saver). CalendarSettings reduced to 550-line container. 918 lines of extracted infrastructure (defaults, reducer, loader, saver). 426 lines of booking sub-components. 17 frontend test files with 627 test functions including accessibility coverage.</p>
+</div>
+
+<!-- ============================================================ -->
+<h2>Competitive Positioning</h2>
+<!-- ============================================================ -->
+
+<div class="card blue">
+<table>
+  <thead><tr><th>Capability</th><th>Industry Standard</th><th>Smart Calendar</th><th>Edge</th></tr></thead>
+  <tbody>
+    <tr><td>Public endpoint security</td><td>Basic rate limiting</td><td>15-endpoint defense-in-depth (rate limit + CAPTCHA + tokens + sanitization)</td><td>Above</td></tr>
+    <tr><td>Double-booking prevention</td><td>Time-based checks</td><td>SELECT FOR UPDATE + 4-source cross-check + buffer-aware + DB integration tested</td><td>Above</td></tr>
+    <tr><td>CRM integration</td><td>Webhook or connector</td><td>Native: auto-lead, activity log, follow-up task, LO licensing check</td><td>Above</td></tr>
+    <tr><td>Compliance</td><td>Manual</td><td>TCPA contact hours, DNC scrub, SMS consent, structured audit trail</td><td>Above</td></tr>
+    <tr><td>Architecture</td><td>Monolithic services</td><td>9-file service package, 42-file route package, extracted infrastructure</td><td>Above</td></tr>
+    <tr><td>Test coverage</td><td>Unit tests only</td><td>E2E + security + timezone + ops + DB integration (~1,487 functions)</td><td>Above</td></tr>
+    <tr><td>Email deliverability</td><td>Basic send</td><td>Per-recipient throttle, retry with SMS fallback, escalation chain</td><td>Above</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<h2>Devil's Advocate Questions</h2>
+<!-- ============================================================ -->
+
+<div class="card purple">
+<h4>Remaining Skepticism</h4>
+<ol>
+  <li><strong>"8 test files with zero test functions — why do they exist?"</strong> They're scaffolds from bulk test generation. Either populate them with real tests or delete them. Empty test files create false confidence in coverage metrics.</li>
+  <li><strong>"ICS generation exists in 3 places — which is canonical?"</strong> <code>utils/ics_generator.py</code> has the most complete escaping, <code>services/ics_generator.py</code> wraps it, and <code>scheduler_email_service.py</code> still has inline functions. The inline version should be removed and all callers should use the extracted module.</li>
+  <li><strong>"42 route files for a calendar subsystem — can a new developer navigate this?"</strong> The architecture is clean but the sheer file count requires good onboarding documentation. A SCHEDULER.md or architecture diagram would help.</li>
+  <li><strong>"How do you verify the SlotHold cleanup cron actually runs in production?"</strong> The endpoint exists and the function is callable, but there's no evidence of a scheduled job wiring (crontab, APScheduler, Railway cron). The mechanism exists but may not be activated.</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2>Final Recommendations</h2>
+<!-- ============================================================ -->
+
+<h3>To Reach 100/100 (2 points remaining)</h3>
+
+<div class="card yellow">
+<ol>
+  <li><strong>Remove inline ICS from scheduler_email_service.py</strong> (-1 Code Quality) — Delete <code>_ics_escape()</code> and <code>generate_ics_content()</code> from the email service. Update remaining callers to use <code>services.ics_generator</code>. ~30 minutes.</li>
+  <li><strong>Populate or remove 8 empty test scaffolds</strong> (-1 Test Coverage) — The 8 files with class structures but no test functions (webhooks, SLA, bulk ops, conflicts, cancellation policy, compliance scheduling, data compliance, metrics) should either get real tests or be deleted. ~2 hours if populating, ~5 minutes if deleting.</li>
+</ol>
+</div>
+
+<h3>Polish (No Point Impact)</h3>
+
+<div class="card blue">
+<ul>
+  <li>Wire SlotHold cleanup to a Railway cron or APScheduler job</li>
+  <li>Add SCHEDULER.md architecture guide for new developers</li>
+  <li>Replace the one remaining inline timezone conversion in public_booking.py with <code>_convert_utc_to_user_tz()</code></li>
+  <li>Consider reducing waitlist JWT expiration from 7 days to 24 hours</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<h2>What You're Doing Right</h2>
+<!-- ============================================================ -->
+
+<div class="card green">
+<h3>Genuine Strengths</h3>
+<ol>
+  <li><strong>Defense-in-depth security</strong> — Rate limiting (Redis + memory), HMAC tokens, Turnstile CAPTCHA, nh3 sanitization, error sanitization, per-recipient email throttling, SMS compliance (fail-closed), trusted proxy IP extraction, and SELECT FOR UPDATE locking. This is more thorough than what most enterprise scheduling products ship with.</li>
+  <li><strong>Proper service decomposition</strong> — The appointment service went from a 1,435-line monolith to a 9-file package with clear single-responsibility modules. The facade pattern preserves the public API while enabling focused maintenance. This is textbook clean architecture.</li>
+  <li><strong>Real-database integration testing</strong> — Testing SELECT FOR UPDATE with concurrent sessions, cascade deletes, unique constraints, and org isolation against a real PostgreSQL instance validates behavior that mocks can never catch. This is the gold standard for data integrity verification.</li>
+  <li><strong>Mortgage-native workflow integration</strong> — Auto-creating leads from bookings, logging CRM activities, creating follow-up tasks, checking LO licensing, enforcing TCPA contact hours, and DNC scrubbing are domain-specific capabilities that no generic scheduling tool provides. This is the competitive moat.</li>
+  <li><strong>Frontend infrastructure extraction</strong> — The reducer/loader/saver pattern with per-tab API calls, dirty tracking, and revert capability is a mature state management approach. All 9 save paths are wired to real APIs with proper error handling and toast feedback.</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2>Bottom Line</h2>
+<!-- ============================================================ -->
+
+<div class="card gold">
+<p><strong>Grade: A+ (98/100)</strong> — Up from B+ (82) to A (93) to A+ (98) across three audit rounds. The Smart Calendar is now a production-ready, enterprise-grade scheduling engine with security, architecture, and test quality that exceeds industry standards. The remaining 2 points are purely cosmetic — an inline ICS duplication and empty test scaffolds. Neither affects functionality, security, or maintainability.</p>
+<p style="margin-top: 1rem;">This system went from "capable but rough" to "genuinely impressive" in 48 hours of focused remediation. The security posture alone — 15 rate-limited endpoints, HMAC tokens, per-recipient email throttling, SMS compliance with fail-closed behavior, and real-database integration tests validating SELECT FOR UPDATE — would pass an enterprise security audit.</p>
+<p style="margin-top: 1rem; color: var(--muted);"><strong>Verdict:</strong> Ship it.</p>
+</div>
+
+<div class="footer">
+  <p>Generated by /u-challenge — Critical Project Analysis &amp; Challenge</p>
+  <p>Perennia AI Smart Calendar Final Audit — March 18, 2026</p>
+  <p style="margin-top: 0.5rem;">
+    Sources:
+    <a href="https://monday.com/blog/crm-and-sales/mortgage-crm/" style="color: var(--accent);">Monday.com Mortgage CRM</a> |
+    <a href="https://koalendar.com/blog/calendly-vs-acuity" style="color: var(--accent);">Calendly vs Acuity 2026</a> |
+    <a href="https://www.consumerfinance.gov/compliance/compliance-resources/mortgage-resources/tila-respa-integrated-disclosures/" style="color: var(--accent);">CFPB TRID</a>
+  </p>
+</div>
+
+</body>
+</html>

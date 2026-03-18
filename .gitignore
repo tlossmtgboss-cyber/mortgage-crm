@@ -80,3 +80,4 @@ landing-page/
 # Playwright
 frontend/playwright-report/
 frontend/test-results/
+.claude/worktrees/

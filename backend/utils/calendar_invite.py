@@ -15,6 +15,7 @@ from utils.ics_generator import (  # noqa: F401
     generate_lo_appointment_ics,
     generate_milestone_calendar_ics,
     APPOINTMENT_TYPE_TITLES,
+    DEFAULT_ORGANIZER_EMAIL,
 )
 
 
@@ -24,7 +25,7 @@ def generate_ics_content(
     end_time: datetime,
     description: str = "",
     location: str = "",
-    organizer_email: str = "sarah@reply.perenniaai.com",
+    organizer_email: str = DEFAULT_ORGANIZER_EMAIL,
     organizer_name: str = "Sarah - Perennia AI",
     attendee_email: Optional[str] = None,
     attendee_name: Optional[str] = None,

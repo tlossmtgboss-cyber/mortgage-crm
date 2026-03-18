@@ -13,6 +13,7 @@ import AddEventModal from '../components/calendar/AddEventModal';
 import EditAppointmentModal from '../components/calendar/EditAppointmentModal';
 import ConfirmDialog from '../components/calendar/ConfirmDialog';
 import SetupBanner from '../components/calendar/SetupBanner';
+import SchedulingAlerts from '../components/calendar/SchedulingAlerts';
 import './Calendar.css';
 
 // Lazy load heavy modal/overlay components that are conditionally rendered
@@ -638,6 +639,8 @@ function Calendar() {
       {showSetupBanner && <SetupBanner onDismiss={dismissSetupBanner} />}
 
       <CommandCenterHeader />
+
+      <SchedulingAlerts />
 
       <CalendarToolbar
         headerSubtitle={headerSubtitle}

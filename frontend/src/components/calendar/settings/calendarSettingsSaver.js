@@ -94,7 +94,15 @@ export async function handleSave(activeSection, sections, dispatch) {
     case 'integrations': {
       dispatch({ type: SAVE_START });
       try {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const integrations = sections.integrations;
+        const meetingDefaults = integrations.meetingDefaults || {};
+        const integrationSettings = integrations.integrationSettings || {};
+        await calendarSettingsAPI.updateIntegrations({
+          default_meeting_mode: meetingDefaults.default_meeting_mode || 'video',
+          auto_create_meeting_link: meetingDefaults.auto_create_meeting_link !== false,
+          zoom_enabled: integrationSettings.zoom?.auto_generate_links !== false,
+          google_meet_enabled: integrationSettings.google_meet?.auto_add !== false,
+        });
         toast.success('Integration settings saved');
         dispatch({ type: SAVE_SUCCESS, section: 'integrations' });
       } catch (err) {
@@ -104,15 +112,107 @@ export async function handleSave(activeSection, sections, dispatch) {
       return;
     }
 
-    case 'cancellation-policy':
-    case 'locations-labels':
-    case 'advanced':
+    case 'cancellation-policy': {
       dispatch({ type: SAVE_START });
-      setTimeout(() => {
-        dispatch({ type: SAVE_SUCCESS, section: activeSection });
-        toast.success('Settings saved');
-      }, 500);
+      try {
+        const policy = sections['cancellation-policy'].data;
+        // Map frontend policy presets to backend fields
+        const policyMap = {
+          flexible:  { min_notice_hours: 1,  max_cancellations_per_borrower: 10 },
+          moderate:  { min_notice_hours: 4,  max_cancellations_per_borrower: 3 },
+          strict:    { min_notice_hours: 24, max_cancellations_per_borrower: 1 },
+        };
+        const preset = policyMap[policy.policy] || policyMap.moderate;
+        await calendarSettingsAPI.updateCancellationPolicy({
+          min_notice_hours: preset.min_notice_hours,
+          max_cancellations_per_borrower: preset.max_cancellations_per_borrower,
+          allow_borrower_cancel: policy.allow_reschedule !== false,
+          require_reason: policy.require_reason || false,
+        });
+        toast.success('Cancellation policy saved');
+        dispatch({ type: SAVE_SUCCESS, section: 'cancellation-policy' });
+      } catch (err) {
+        toast.error('Failed to save cancellation policy');
+        dispatch({ type: SAVE_ERROR });
+      }
       return;
+    }
+
+    case 'locations-labels': {
+      dispatch({ type: SAVE_START });
+      try {
+        const ll = sections['locations-labels'];
+        await calendarSettingsAPI.updateLabelSettings({
+          auto_assign_enabled: ll.autoAssignLabels || false,
+          default_label_id: ll.defaultLabelId || null,
+          label_mappings: ll.labelMappings || {},
+        });
+        toast.success('Label settings saved');
+        dispatch({ type: SAVE_SUCCESS, section: 'locations-labels' });
+      } catch (err) {
+        toast.error('Failed to save label settings');
+        dispatch({ type: SAVE_ERROR });
+      }
+      return;
+    }
+
+    case 'advanced': {
+      dispatch({ type: SAVE_START });
+      try {
+        const advanced = sections.advanced.data;
+        await calendarSettingsAPI.updateAdvancedSettings({
+          ai_settings: {
+            ai_scheduling_enabled: advanced.auto_confirm_appointments !== false,
+            smart_reminders_enabled: advanced.enable_waitlist || false,
+          },
+        });
+        toast.success('Advanced settings saved');
+        dispatch({ type: SAVE_SUCCESS, section: 'advanced' });
+      } catch (err) {
+        toast.error('Failed to save advanced settings');
+        dispatch({ type: SAVE_ERROR });
+      }
+      return;
+    }
+
+    case 'ai-scheduling': {
+      dispatch({ type: SAVE_START });
+      try {
+        await calendarSettingsAPI.updateAIScheduling(sections['ai-scheduling'].data);
+        toast.success('AI scheduling settings saved');
+        dispatch({ type: SAVE_SUCCESS, section: 'ai-scheduling' });
+      } catch (err) {
+        toast.error('Failed to save AI scheduling settings');
+        dispatch({ type: SAVE_ERROR });
+      }
+      return;
+    }
+
+    case 'ai-automation': {
+      // Merged tab: save both ai-scheduling and advanced sections
+      dispatch({ type: SAVE_START });
+      try {
+        // Save AI scheduling data
+        await calendarSettingsAPI.updateAIScheduling(sections['ai-scheduling'].data);
+        dispatch({ type: SAVE_SUCCESS, section: 'ai-scheduling' });
+
+        // Save Advanced data
+        const advanced = sections.advanced.data;
+        await calendarSettingsAPI.updateAdvancedSettings({
+          ai_settings: {
+            ai_scheduling_enabled: advanced.auto_confirm_appointments !== false,
+            smart_reminders_enabled: advanced.enable_waitlist || false,
+          },
+        });
+        dispatch({ type: SAVE_SUCCESS, section: 'advanced' });
+
+        toast.success('AI & Automation settings saved');
+      } catch (err) {
+        toast.error('Failed to save AI & Automation settings');
+        dispatch({ type: SAVE_ERROR });
+      }
+      return;
+    }
 
     default:
       return;

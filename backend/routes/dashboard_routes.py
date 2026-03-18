@@ -25,12 +25,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, case, text
 
-# Runtime imports from main.py to avoid circular imports
+# Runtime imports — use standalone modules to avoid circular imports with main.py
 from auth.dependencies import get_current_user
 from database import get_db
 from database.enums import LeadStage, LoanStage
 from database.models import User, Lead, Loan, Task, ReferralPartner, AIColleagueAction
-from main import get_cached, set_cached
+from performance_cache import get_cached, set_cached
 
 logger = logging.getLogger(__name__)
 

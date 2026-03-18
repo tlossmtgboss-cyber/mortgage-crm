@@ -61,6 +61,7 @@ from pydantic import BaseModel, Field
 import logging
 
 from routes.scheduler._helpers import get_current_user, _get_org_id
+from routes.scheduler.constants import DEFAULT_TIMEZONE
 from db import get_db
 from services.recurring_availability_service import RecurringAvailabilityService
 
@@ -84,7 +85,7 @@ class WeeklyScheduleUpdate(BaseModel):
     schedule: Dict[str, List[TimeBlock]] = Field(
         ..., description="Map of day_of_week (0-6) to list of time blocks"
     )
-    timezone: str = "America/Chicago"
+    timezone: str = DEFAULT_TIMEZONE
 
 
 class ExceptionCreate(BaseModel):
@@ -100,7 +101,7 @@ class TemplateCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=2000)
     schedule: Dict[str, List[TimeBlock]]
     is_default: bool = False
-    timezone: str = "America/Chicago"
+    timezone: str = DEFAULT_TIMEZONE
 
 
 # ==================================================================
@@ -568,7 +569,7 @@ def _sync_working_hours_json_to_recurring(
     user_id: int,
     org_id: int,
     working_hours_json: Dict[str, dict],
-    timezone_str: str = "America/Chicago",
+    timezone_str: str = DEFAULT_TIMEZONE,
 ) -> None:
     """
     Phase 2 reverse sync: propagate a working_hours JSON blob update into the

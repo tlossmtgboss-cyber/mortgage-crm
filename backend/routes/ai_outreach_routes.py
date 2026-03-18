@@ -18,6 +18,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+try:
+    from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_ORGANIZER_EMAIL
+except ImportError:
+    _DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
+
 def _get_current_user():
     """Lazy import auth dependency for router-level protection."""
     from auth.dependencies import get_current_user_flexible
@@ -380,7 +385,7 @@ This is an AI-assisted conversation. Simply reply to this email to continue chat
 
         # Use reply.perenniaai.com subdomain for SendGrid Inbound Parse
         # When user replies, SendGrid forwards to /api/v1/webhook/sendgrid-inbound
-        reply_to = os.getenv("REPLY_TO_EMAIL", "sarah@reply.perenniaai.com")
+        reply_to = os.getenv("REPLY_TO_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
 
         # Generate message ID for threading
         message_id = f"<{conv_id}@mortgagecrm.ai>"

@@ -37,6 +37,7 @@ from utils.ics_generator import (
     _escape_ics_text,
     _make_uid,
     PRODID_MORTGAGE,
+    DEFAULT_ORGANIZER_EMAIL,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,7 +163,7 @@ def generate_appointment_ics(appointment_data: dict) -> bytes:
         duration_minutes=duration_minutes,
         attendee_email=appointment_data.get("attendee_email", ""),
         attendee_name=appointment_data.get("attendee_name", ""),
-        organizer_email=appointment_data.get("organizer_email", "sarah@reply.perenniaai.com"),
+        organizer_email=appointment_data.get("organizer_email", DEFAULT_ORGANIZER_EMAIL),
         organizer_name=appointment_data.get("organizer_name", "Perennia AI"),
         description=appointment_data.get("description", ""),
         location=appointment_data.get("location", "") or appointment_data.get("video_link", ""),

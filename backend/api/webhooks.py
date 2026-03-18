@@ -14,6 +14,11 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
+try:
+    from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_ORGANIZER_EMAIL
+except ImportError:
+    _DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
+
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
 
@@ -716,7 +721,7 @@ async def execute_email_response_pattern(
                         reply_subject = f"Re: {original_subject}"
 
                     # Send the email
-                    from_email_addr = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                    from_email_addr = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
 
                     if template_row.is_html:
                         email_sent = email_service.send_html_email(
@@ -856,7 +861,7 @@ AI Assistant | Perennia AI"""
         reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
 
         # Send response from the reply subdomain
-        ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+        ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
         email_sent = email_service.send_html_email(
             to_email=from_email,
             subject=reply_subject,
@@ -1145,7 +1150,7 @@ AI Mortgage Assistant | Perennia AI"""
             reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
 
             # Send AI response FROM the reply subdomain so replies come back to us
-            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+            ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
             email_sent = email_service.send_html_email(
                 to_email=from_email,
                 subject=reply_subject,

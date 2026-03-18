@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 # SendGrid configuration
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
+try:
+    from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_EMAIL
+except ImportError:
+    _DEFAULT_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "sarah@reply.perenniaai.com")
+SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", _DEFAULT_EMAIL)
 SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME", "Sarah from Perennia AI")
 
 # Telnyx configuration

@@ -984,6 +984,10 @@ export const calendarSettingsAPI = {
     const response = await api.put('/api/v1/calendar-settings/availability', data);
     return response.data;
   },
+  getAvailabilitySource: async () => {
+    const response = await api.get('/api/v1/scheduler/settings/availability-source');
+    return response.data;
+  },
   // Appointment Types
   getAppointmentTypes: async () => {
     const response = await api.get('/api/v1/calendar-settings/appointment-types');
@@ -1026,6 +1030,24 @@ export const calendarSettingsAPI = {
   // Integrations
   getIntegrations: async () => {
     const response = await api.get('/api/v1/calendar-settings/integrations');
+    return response.data;
+  },
+  updateIntegrations: async (data) => {
+    const response = await api.put('/api/v1/scheduler/settings', data);
+    return response.data;
+  },
+  // Cancellation Policy
+  getCancellationPolicy: async () => {
+    const response = await api.get('/api/v1/scheduler/cancellation-policy');
+    return response.data;
+  },
+  updateCancellationPolicy: async (data) => {
+    const response = await api.put('/api/v1/scheduler/cancellation-policy', data);
+    return response.data;
+  },
+  // Advanced Settings
+  updateAdvancedSettings: async (data) => {
+    const response = await api.put('/api/v1/scheduler/settings', data);
     return response.data;
   },
   // Team
@@ -1118,6 +1140,15 @@ export const calendarSettingsAPI = {
   },
   setDefaultLabel: async (id) => {
     const response = await api.put(`/api/v1/calendar-settings/labels/${id}/default`);
+    return response.data;
+  },
+  // AI Scheduling
+  getAIScheduling: async () => {
+    const response = await api.get('/api/v1/scheduler/settings/ai-scheduling');
+    return response.data;
+  },
+  updateAIScheduling: async (data) => {
+    const response = await api.put('/api/v1/scheduler/settings/ai_scheduling', data);
     return response.data;
   },
 };
@@ -3514,6 +3545,22 @@ export const emailDraftsAPI = {
 
   delete: async (id) => {
     const response = await api.delete(`/api/v1/email-drafts/${id}`);
+    return response.data;
+  },
+};
+
+// Agent Performance Metrics API
+export const agentMetricsAPI = {
+  getAgentMetrics: async (days = 30) => {
+    const response = await api.get('/api/v1/agents/performance/metrics', { params: { days } });
+    return response.data;
+  },
+  getAgentToolMetrics: async (days = 30) => {
+    const response = await api.get('/api/v1/agents/performance/tools', { params: { days } });
+    return response.data;
+  },
+  getAgentErrors: async (days = 30, limit = 50) => {
+    const response = await api.get('/api/v1/agents/performance/errors', { params: { days, limit } });
     return response.data;
   },
 };

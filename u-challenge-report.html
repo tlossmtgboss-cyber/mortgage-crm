@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perennia AI — Critical Platform Analysis | March 2026</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #bc8cff;
+    --red: #f85149;
+    --orange: #d29922;
+    --green: #3fb950;
+    --yellow: #e3b341;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0;
+  }
+  .hero {
+    background: linear-gradient(135deg, #0d1117 0%, #1a1040 40%, #0d2137 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+  }
+  .hero h1 {
+    font-size: 2.8rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .hero .subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+  .hero .date { font-size: 0.9rem; color: var(--text-muted); opacity: 0.7; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Verdict Banner */
+  .verdict-banner {
+    background: linear-gradient(135deg, #1a1040 0%, #0d2137 100%);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 40px;
+    text-align: center;
+  }
+  .verdict-banner h2 { color: var(--accent); font-size: 1.3rem; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 2px; }
+  .verdict-banner .grade {
+    font-size: 5rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--orange), var(--yellow));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+    margin: 8px 0;
+  }
+  .verdict-banner .grade-label { font-size: 1.1rem; color: var(--text-muted); margin-bottom: 16px; }
+  .verdict-banner p { color: var(--text); font-size: 1.05rem; max-width: 800px; margin: 0 auto; }
+
+  /* Section */
+  section { margin-bottom: 48px; }
+  section > h2 {
+    font-size: 1.5rem;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+  h3 { font-size: 1.15rem; color: var(--text); margin: 20px 0 12px; }
+  h4 { font-size: 1rem; color: var(--accent2); margin: 16px 0 8px; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  .stat-card .num {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .stat-card .label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 20px;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface2);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  tr:hover td { background: rgba(88, 166, 255, 0.04); }
+
+  /* Severity badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-critical { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+  .badge-high { background: rgba(210,153,34,0.15); color: var(--orange); border: 1px solid rgba(210,153,34,0.3); }
+  .badge-medium { background: rgba(188,140,255,0.15); color: var(--accent2); border: 1px solid rgba(188,140,255,0.3); }
+  .badge-low { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
+  .badge-info { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+
+  /* Lists */
+  ul, ol { margin-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 6px; color: var(--text); }
+  li strong { color: var(--accent); }
+
+  /* Questions */
+  .question-list { counter-reset: q; list-style: none; margin-left: 0; }
+  .question-list li {
+    counter-increment: q;
+    padding: 14px 14px 14px 50px;
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
+  .question-list li::before {
+    content: counter(q);
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    width: 26px;
+    height: 26px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+  }
+  .question-list .q-cat {
+    display: inline-block;
+    font-size: 0.7rem;
+    color: var(--accent2);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  /* Competitor cards */
+  .competitor {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 12px;
+  }
+  .competitor h4 { margin-top: 0; color: var(--text); }
+  .competitor .threat { font-size: 0.8rem; color: var(--orange); margin-bottom: 8px; }
+  .competitor ul { margin-top: 8px; }
+
+  /* Progress bars */
+  .progress-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .progress-label { width: 180px; font-size: 0.85rem; color: var(--text-muted); }
+  .progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 12px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+  .progress-value { width: 40px; text-align: right; font-size: 0.85rem; font-weight: 600; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+  }
+
+  code {
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: var(--accent);
+  }
+  p { margin-bottom: 12px; }
+  .highlight { color: var(--accent); font-weight: 600; }
+  .warn { color: var(--orange); }
+  .danger { color: var(--red); }
+  .good { color: var(--green); }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- HERO -->
+<!-- ============================================================ -->
+<div class="hero">
+  <h1>Perennia AI &mdash; Critical Platform Analysis</h1>
+  <div class="subtitle">Comprehensive /u-challenge Audit &middot; Full-Stack Review</div>
+  <div class="date">March 9, 2026 &middot; Claude Code Deep Analysis</div>
+</div>
+
+<div class="container">
+
+<!-- ============================================================ -->
+<!-- VERDICT -->
+<!-- ============================================================ -->
+<div class="verdict-banner">
+  <h2>Overall Platform Verdict</h2>
+  <div class="grade">B-</div>
+  <div class="grade-label">Late Beta / Early Production &mdash; Ambitious but Overextended</div>
+  <p>
+    Perennia AI has the most sophisticated AI agent architecture in the mortgage CRM space &mdash; 25 specialized agents, 209+ tools, LangGraph orchestration, and hallucination verification. The telephony stack (Telnyx + Vapi + Slybroadcast) is production-grade. However, the platform is trying to be <strong>7+ products simultaneously</strong> (CRM + telephony suite + marketing platform + accounting system + recruiting ATS + AI platform + compliance engine), creating massive surface area with insufficient depth in critical areas. The path to enterprise requires <strong class="warn">SOC 2 Type II certification</strong>, <strong class="warn">Encompass bidirectional sync</strong>, and <strong class="warn">radical scope discipline</strong>.
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- PLATFORM SCALE -->
+<!-- ============================================================ -->
+<section>
+  <h2>1. Platform Scale &mdash; By the Numbers</h2>
+
+  <div class="card-grid">
+    <div class="stat-card"><div class="num">~420K</div><div class="label">Lines of Backend Python</div></div>
+    <div class="stat-card"><div class="num">~155K</div><div class="label">Lines of Frontend JS/JSX</div></div>
+    <div class="stat-card"><div class="num">3,664</div><div class="label">API Endpoints</div></div>
+    <div class="stat-card"><div class="num">259</div><div class="label">Route Files</div></div>
+    <div class="stat-card"><div class="num">339</div><div class="label">Service Files</div></div>
+    <div class="stat-card"><div class="num">160</div><div class="label">Database Models</div></div>
+    <div class="stat-card"><div class="num">25</div><div class="label">AI Agents</div></div>
+    <div class="stat-card"><div class="num">209+</div><div class="label">Registered AI Tools</div></div>
+    <div class="stat-card"><div class="num">148</div><div class="label">Python Dependencies</div></div>
+    <div class="stat-card"><div class="num">13+</div><div class="label">Third-Party Integrations</div></div>
+    <div class="stat-card"><div class="num">73</div><div class="label">Feature Modules</div></div>
+    <div class="stat-card"><div class="num">167</div><div class="label">Frontend Page Files</div></div>
+  </div>
+
+  <div class="card">
+    <h3>Feature Completeness by Area</h3>
+    <div class="progress-row">
+      <span class="progress-label">Lead Management</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:85%; background: var(--green);"></div></div>
+      <span class="progress-value good">85%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Loan Pipeline</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:90%; background: var(--green);"></div></div>
+      <span class="progress-value good">90%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Communications</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:90%; background: var(--green);"></div></div>
+      <span class="progress-value good">90%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Admin / Auth / RBAC</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:90%; background: var(--green);"></div></div>
+      <span class="progress-value good">90%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Marketing Tools</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:80%; background: var(--green);"></div></div>
+      <span class="progress-value good">80%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">AI Agent Fleet</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:80%; background: var(--green);"></div></div>
+      <span class="progress-value good">80%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Compliance (TRID/RESPA)</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:75%; background: var(--orange);"></div></div>
+      <span class="progress-value warn">75%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Integrations</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:70%; background: var(--orange);"></div></div>
+      <span class="progress-value warn">70%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Reporting/Analytics</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:70%; background: var(--orange);"></div></div>
+      <span class="progress-value warn">70%</span>
+    </div>
+    <div class="progress-row">
+      <span class="progress-label">Borrower Portal</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:80%; background: var(--green);"></div></div>
+      <span class="progress-value good">80%</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- COMPETITIVE ANALYSIS -->
+<!-- ============================================================ -->
+<section>
+  <h2>2. Competitive Landscape</h2>
+  <p>The mortgage CRM market ($221M in 2025, 9% CAGR) is consolidating around ICE Mortgage Technology. Eight primary competitors were researched.</p>
+
+  <div class="competitor">
+    <h4>Total Expert &mdash; <span class="badge badge-critical">Primary Threat</span></h4>
+    <div class="threat">Powers 36% of U.S. home loan volume &middot; 200+ enterprise customers &middot; HousingWire Tech100 8 consecutive years</div>
+    <ul>
+      <li><strong>Credit bureau monitoring</strong> &mdash; real-time alerts when borrowers' credit is pulled (recapture trigger). Perennia has no equivalent.</li>
+      <li><strong>Rate enrichment data</strong> &mdash; auto-calculates if each contact benefits from refi at current rates. Perennia has basic rate monitoring.</li>
+      <li><strong>Marketing governance</strong> &mdash; compliance approval workflows for all marketing content. Perennia has nothing comparable.</li>
+      <li><strong>AI Sales Assistant (beta)</strong> &mdash; in private beta with top-10 lenders, launching 2026.</li>
+      <li>Published ROI case studies: 12% recapture improvement, 20% more closed loans, 100% more conversions.</li>
+    </ul>
+  </div>
+
+  <div class="competitor">
+    <h4>ICE Ecosystem (Encompass + Velocify + Surefire) &mdash; <span class="badge badge-critical">Market Dominant</span></h4>
+    <div class="threat">The #1 LOS (Encompass) + #1 CRM (Surefire, 18.4% market share) + enterprise lead distribution (Velocify)</div>
+    <ul>
+      <li><strong>Surefire content library</strong> &mdash; 1,000+ pre-built compliant content pieces. Perennia has none. Building this takes years.</li>
+      <li><strong>Native Encompass data flow</strong> &mdash; zero-latency, no API sync needed. Perennia's integration is external.</li>
+      <li><strong>Velocify lead distribution</strong> &mdash; 1,400+ lead sources, millisecond routing, predictive dialing at call-center scale.</li>
+      <li><strong>"Client for Life" campaigns</strong> &mdash; multi-year post-close nurture including physical postcards and gifts.</li>
+    </ul>
+  </div>
+
+  <div class="competitor">
+    <h4>Shape Software &mdash; <span class="badge badge-high">Closest AI Competitor</span></h4>
+    <div class="threat">$99/user/month &middot; 500+ features &middot; AI-forward positioning</div>
+    <ul>
+      <li><strong>ShapeAI lead response &lt;10 seconds</strong> &mdash; autonomous borrower text conversations. Perennia doesn't market a speed SLA.</li>
+      <li><strong>ShapeAI Insights</strong> &mdash; call transcription + AI scoring + coaching summaries for every call.</li>
+      <li><strong>Built-in parallel dialer</strong> with local presence dialing. Eliminates separate vendor.</li>
+      <li><strong>Transparent pricing at $99/user</strong> &mdash; one of the lowest for a full-featured mortgage CRM.</li>
+    </ul>
+  </div>
+
+  <div class="competitor">
+    <h4>Aidium (formerly Whiteboard CRM) &mdash; <span class="badge badge-medium">Enterprise Benchmark</span></h4>
+    <div class="threat">SOC 2 Type II certified &middot; 80+ pre-built playbooks &middot; $19M Series A</div>
+    <ul>
+      <li><strong>SOC 2 Type II certification</strong> &mdash; explicitly marketed as enterprise requirement. <span class="danger">Perennia has no SOC 2.</span></li>
+      <li><strong>In-app A2P 10DLC registration</strong> with TCPA consent certificate storage and audit history.</li>
+      <li><strong>Granular compliance lockdowns</strong> &mdash; prevents LOs from sending unapproved texts, modifying restricted fields.</li>
+    </ul>
+  </div>
+
+  <h3>Competitive Gap Summary</h3>
+  <table>
+    <thead>
+      <tr><th>Capability</th><th>Perennia</th><th>Best-in-Class</th><th>Gap</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>SOC 2 Type II</td><td class="danger">Not certified</td><td>Aidium</td><td><span class="badge badge-critical">Blocks enterprise</span></td></tr>
+      <tr><td>Credit bureau monitoring</td><td class="danger">Not present</td><td>Total Expert</td><td><span class="badge badge-critical">Key differentiator</span></td></tr>
+      <tr><td>Pre-built content library</td><td class="danger">Not present</td><td>Surefire (1,000+)</td><td><span class="badge badge-high">Years to build</span></td></tr>
+      <tr><td>Marketing governance</td><td class="danger">Not present</td><td>Total Expert</td><td><span class="badge badge-high">Enterprise req</span></td></tr>
+      <tr><td>Encompass bidirectional sync</td><td class="warn">Deferred (Premium)</td><td>ICE (native)</td><td><span class="badge badge-critical">Table stakes</span></td></tr>
+      <tr><td>Digital 1003 application</td><td class="good">Present (borrower portal)</td><td>BNTouch</td><td><span class="badge badge-low">Competitive</span></td></tr>
+      <tr><td>AI agent fleet (25 agents)</td><td class="good">Industry-leading</td><td>Perennia</td><td><span class="badge badge-info">Advantage</span></td></tr>
+      <tr><td>Voice AI (receptionist)</td><td class="good">Production-grade</td><td>Shape, Perennia</td><td><span class="badge badge-info">Advantage</span></td></tr>
+      <tr><td>Multi-channel telephony</td><td class="good">Telnyx + Vapi + RVM</td><td>Shape dialer</td><td><span class="badge badge-info">Competitive</span></td></tr>
+      <tr><td>Transparent pricing</td><td class="danger">Not published</td><td>Shape ($99)</td><td><span class="badge badge-medium">Growth blocker</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- CRITICAL FINDINGS -->
+<!-- ============================================================ -->
+<section>
+  <h2>3. Critical Findings</h2>
+
+  <h3>3A. Major Concerns <span class="badge badge-critical">Critical</span></h3>
+
+  <div class="card">
+    <h4>1. Product Scope Explosion &mdash; 7+ Products in One</h4>
+    <p>Perennia is simultaneously building: (1) mortgage CRM, (2) telephony suite, (3) marketing platform, (4) double-entry accounting system (113 endpoints), (5) recruiting ATS with EEOC compliance (202 endpoints), (6) AI agent platform, (7) compliance engine, (8) video platform, (9) microsite builder. A typical mortgage CRM has 15&ndash;20 modules. Perennia has <strong>73</strong>.</p>
+    <p><strong>The accounting and recruiting modules alone represent ~315 endpoints</strong> &mdash; more than most entire CRMs. Unless these are core revenue drivers, they represent massive misallocated engineering effort.</p>
+  </div>
+
+  <div class="card">
+    <h4>2. <code>db_migration_routes.py</code> &mdash; HTTP Schema Mutation</h4>
+    <p><span class="badge badge-critical">Security Critical</span> A 2,907-line route file that exposes database schema mutations (CREATE TABLE, ALTER COLUMN, ADD INDEX) via HTTP endpoints. Even with authentication, a compromised token could allow schema destruction via API call. <strong>Migrations must never run via HTTP</strong> &mdash; only from a controlled CLI/deployment pipeline.</p>
+  </div>
+
+  <div class="card">
+    <h4>3. No SOC 2 Type II Certification</h4>
+    <p><span class="badge badge-critical">Enterprise Blocker</span> Over 73% of enterprises require SOC 2 reports before vendor onboarding. Aidium explicitly markets SOC 2 Type II as a competitive differentiator. Without this certification, enterprise mortgage lender procurement will not engage. The SOC 2 compliance framework exists in code but has not been audited.</p>
+  </div>
+
+  <div class="card">
+    <h4>4. Encompass Integration Deferred to Premium Tier</h4>
+    <p><span class="badge badge-critical">Market Blocker</span> Encompass is used by the majority of US mortgage lenders. Having the integration as "Premium/deferred" while Salesforce is fully built is a prioritization risk. Most mid-to-large lenders will not evaluate a CRM without bidirectional Encompass sync. The code exists (<code>encompass_integration_routes.py</code>, OAuth, field mapping) but is not production-active.</p>
+  </div>
+
+  <div class="card">
+    <h4>5. 43 Route Files Bypass RLS-Aware <code>get_db()</code></h4>
+    <p><span class="badge badge-critical">Tenant Isolation</span> 43 route files define their own local <code>get_db()</code> function instead of importing the RLS-aware version from <code>db.py</code>. While most correctly delegate, the inconsistency means tenant isolation depends on which route file handles a request. Any file that doesn't delegate correctly could leak cross-tenant data.</p>
+  </div>
+
+  <div class="card">
+    <h4>6. 185+ Ad-Hoc Migration Scripts Bypass Alembic</h4>
+    <p><span class="badge badge-critical">Schema Management</span> The backend root contains 185+ standalone Python migration scripts (<code>run_*migration*.py</code>, <code>add_*.py</code>) that bypass Alembic's version tracking. The database schema cannot be reliably reproduced from the migration history. Alembic exists (18 version files) but is largely unused.</p>
+  </div>
+
+  <h3>3B. Questionable Decisions <span class="badge badge-high">High</span></h3>
+
+  <div class="card">
+    <h4>7. Silent Route Failure at Startup</h4>
+    <p>All 40+ route registrations in <code>main.py</code> are wrapped in <code>try/except Exception</code>. A broken import in any route file silently drops that module's endpoints. The app starts "successfully" with missing routes, providing misleading health signals. There is no post-startup assertion that critical routes loaded.</p>
+  </div>
+
+  <div class="card">
+    <h4>8. In-Memory Rate Limiter (Per-Process)</h4>
+    <p><code>RateLimitMiddleware</code> stores counters in a per-process <code>defaultdict</code>. In multi-worker deployments (multiple uvicorn workers or Railway replicas), each worker has its own counter. A client can bypass rate limits by distributing requests across workers. Redis is already a dependency &mdash; the rate limiter should use it.</p>
+  </div>
+
+  <div class="card">
+    <h4>9. Dual Model Directories with Overlapping Classes</h4>
+    <p><code>database/models/</code> (30 files, canonical) and <code>models/</code> (64 files, secondary) both contain SQLAlchemy models. Four class names appear in both locations (<code>Responsibility</code>, <code>UserResponsibility</code>, <code>CampaignStatus</code>, <code>SyncStatus</code>). The canonical source of truth is ambiguous.</p>
+  </div>
+
+  <div class="card">
+    <h4>10. 4 Competing Auth Injection Patterns</h4>
+    <p>Auth is fragmented across: (1) <code>main.py</code> canonical functions, (2) <code>auth/dependencies.py</code> lazy proxy, (3) <code>set_dependencies()</code> closure pattern (15 files), (4) local <code>get_current_user</code> wrappers (30+ files). While the February 2026 consolidation improved this significantly (39 files migrated), the remaining fragmentation makes security auditing difficult.</p>
+  </div>
+
+  <h3>3C. Over-Engineering <span class="badge badge-medium">Medium</span></h3>
+
+  <div class="card">
+    <h4>11. Full Double-Entry Accounting System (113 Endpoints)</h4>
+    <p>Chart of accounts, AP/AR, journal entries, budget management, bank reconciliation, and a full frontend UI. This is a standalone product embedded inside a CRM. Unless this IS the billing infrastructure for the platform itself, this represents months of engineering on a non-core feature.</p>
+  </div>
+
+  <div class="card">
+    <h4>12. Recruiting ATS with EEOC Compliance (202 Endpoints)</h4>
+    <p>DISC assessments, EEOC compliance, candidate grading, recruiting dialer, social recruiting, ATS workflows, and a dedicated <code>RecruitPortal/</code> frontend. Loan officer recruiting is important but rarely requires a full ATS system inside the CRM.</p>
+  </div>
+
+  <div class="card">
+    <h4>13. 5 Experimental/Frozen Features Still in Codebase</h4>
+    <p>Decision Lab, Circle of Cashflow, Avatar Studio, HR Management, IT Helpdesk &mdash; all frozen with no SLA, still consuming route registrations, model definitions, and import overhead. Dead code that should be archived.</p>
+  </div>
+
+  <h3>3D. Missing Essentials <span class="badge badge-high">Enterprise Gaps</span></h3>
+
+  <table>
+    <thead><tr><th>Missing Feature</th><th>Why It Matters</th><th>Competitors Who Have It</th></tr></thead>
+    <tbody>
+      <tr><td>Credit bureau monitoring / recapture alerts</td><td>Highest-ROI feature in current rate cycle</td><td>Total Expert</td></tr>
+      <tr><td>Marketing content governance (approval workflows)</td><td>Enterprise compliance requirement</td><td>Total Expert, Aidium</td></tr>
+      <tr><td>Pre-built compliant content library</td><td>LOs won't create their own marketing</td><td>Surefire (1,000+), BNTouch</td></tr>
+      <tr><td>TCPA consent certificate storage/audit trail</td><td>FCC 1:1 consent rules April 2026</td><td>Aidium, Shape</td></tr>
+      <tr><td>Scheduled report delivery (email, Slack, FTP)</td><td>Enterprise BI integration</td><td>Most enterprise CRMs</td></tr>
+      <tr><td>Multi-LOS support (Calyx, Byte, LendingPad)</td><td>Only Encompass; limits addressable market</td><td>Jungo (5+ LOS)</td></tr>
+      <tr><td>Automated fair lending regression analysis</td><td>HMDA data exists; analysis layer doesn't</td><td>Specialized compliance tools</td></tr>
+      <tr><td>Native email delivery (SendGrid/SES fallback)</td><td>Currently requires Microsoft/Google OAuth</td><td>Most CRMs have native SMTP</td></tr>
+      <tr><td>Published ROI case studies</td><td>Enterprise sales proof points</td><td>Total Expert</td></tr>
+      <tr><td>Published transparent pricing</td><td>Self-serve LO acquisition</td><td>Shape ($99), BNTouch ($165)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- ARCHITECTURE DEEP DIVE -->
+<!-- ============================================================ -->
+<section>
+  <h2>4. Architecture Deep Dive</h2>
+
+  <h3>Backend Architecture</h3>
+  <div class="card">
+    <table>
+      <thead><tr><th>Component</th><th>State</th><th>Assessment</th></tr></thead>
+      <tbody>
+        <tr><td>main.py (1,711 LOC)</td><td class="good">Decomposed from 29K</td><td>Good progress; auth logic (300 LOC) should move to auth/ module</td></tr>
+        <tr><td>Route layer (259 files)</td><td class="warn">13 files &gt;2,000 LOC</td><td>scheduler_appointment_routes (5,390), salesforce_integration (3,743) need splitting</td></tr>
+        <tr><td>Service layer (339 files)</td><td class="warn">Duplicate SF sync services</td><td>salesforce/sync_service.py (3,981) AND salesforce_sync_service.py (1,631) coexist</td></tr>
+        <tr><td>Database (160 models)</td><td class="warn">Dual directories</td><td>database/models/ (30) + models/ (64) with 4 class name collisions</td></tr>
+        <tr><td>Middleware (12 layers)</td><td class="good">Well-ordered</td><td>In-memory rate limiter is the weak point; rest is solid</td></tr>
+        <tr><td>Auth (RS256 JWT + API key)</td><td class="good">Secure but fragmented</td><td>4 injection patterns still exist; canonical path is correct</td></tr>
+        <tr><td>AI agents (25 specialized)</td><td class="good">Industry-leading</td><td>LangGraph orchestrator, intent routing, hallucination verifier &mdash; production-grade</td></tr>
+        <tr><td>Background jobs</td><td class="warn">Celery AND APScheduler</td><td>Two task systems; unclear which is authoritative in production</td></tr>
+        <tr><td>Test suite (69 files)</td><td class="warn">167 pure tests pass</td><td>Good unit test foundation; TestClient tests need DB; no coverage %</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Frontend Architecture</h3>
+  <div class="card">
+    <table>
+      <thead><tr><th>Metric</th><th>Value</th><th>Assessment</th></tr></thead>
+      <tbody>
+        <tr><td>Total JS/JSX files</td><td>696</td><td>Large SPA</td></tr>
+        <tr><td>Total lines</td><td>~155K</td><td>Substantial frontend</td></tr>
+        <tr><td>TypeScript adoption</td><td class="danger">&lt;1%</td><td>JavaScript-only; no type safety in a financial app</td></tr>
+        <tr><td>Test files</td><td class="danger">3</td><td>Virtually untested frontend</td></tr>
+        <tr><td>Pages &gt;3,000 lines</td><td class="danger">10</td><td>CalculatorDashboard (6,847), Settings (6,723), PurchaseApplication (5,882)</td></tr>
+        <tr><td>localStorage.getItem('token')</td><td class="warn">Reduced (was 503)</td><td>Top 3 files cleaned up in hardening; others remain</td></tr>
+        <tr><td>CSRF protection</td><td class="good">Added in lib/api/client.js</td><td>Double-submit cookie pattern implemented</td></tr>
+        <tr><td>Token refresh</td><td class="good">Added to services/api.js</td><td>401 &rarr; refresh via cookie &rarr; retry or redirect</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Security Posture</h3>
+  <div class="card">
+    <table>
+      <thead><tr><th>Area</th><th>Status</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>Authentication</td><td><span class="badge badge-low">Strong</span></td><td>RS256 JWT, API keys, cookie auth, MFA, SSO/SAML, SCIM</td></tr>
+        <tr><td>SQL Injection</td><td><span class="badge badge-low">Safe</span></td><td>370+ text(f"...") patterns audited; parameterized queries throughout</td></tr>
+        <tr><td>XSS Prevention</td><td><span class="badge badge-low">Good</span></td><td>nh3 sanitization (replaced bleach), React's built-in escaping</td></tr>
+        <tr><td>CSRF</td><td><span class="badge badge-low">Good</span></td><td>Double-submit cookie on main API; bypassed for JWT/API-key auth</td></tr>
+        <tr><td>Security Headers</td><td><span class="badge badge-low">Hardened</span></td><td>11 headers: HSTS preload, CSP, COOP, CORP, Permissions-Policy</td></tr>
+        <tr><td>Tenant Isolation</td><td><span class="badge badge-medium">Mostly Good</span></td><td>RLS middleware works; 43 route files with local get_db() are risk</td></tr>
+        <tr><td>TCPA Compliance</td><td><span class="badge badge-low">Implemented</span></td><td>DNC scrub blocking, consent checks, calling window enforcement</td></tr>
+        <tr><td>TRID Compliance</td><td><span class="badge badge-low">Implemented</span></td><td>Disclosure timing checks, tolerance violation detection</td></tr>
+        <tr><td>Encryption at Rest</td><td><span class="badge badge-medium">Partial</span></td><td>Fernet encryption opt-in (EncompassConfig); not all PII encrypted</td></tr>
+        <tr><td>Debug Endpoints</td><td><span class="badge badge-high">Risk</span></td><td>debug_data_routes (2,747 LOC), debug_status_routes still deployed</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- AI AGENT FLEET -->
+<!-- ============================================================ -->
+<section>
+  <h2>5. AI Agent Fleet &mdash; The Differentiator</h2>
+
+  <div class="card">
+    <p>The AI agent system is Perennia's strongest competitive advantage. No competitor has anything close to a 25-agent fleet with intent routing, dynamic tool loading, and hallucination verification.</p>
+
+    <h4>Architecture</h4>
+    <p><strong>Intent Classifier</strong> (pattern match &lt;5ms, LLM fallback &lt;1s) &rarr; <strong>Dynamic Tool Loader</strong> (8&ndash;16 tools per intent, not all 209) &rarr; <strong>LangGraph Orchestrator</strong> (analyze &rarr; gather &rarr; reason &rarr; respond) &rarr; <strong>Hallucination Verifier</strong> (claim extraction + source matching + faithfulness score)</p>
+
+    <h4>Agent Fleet (25 Specialized Agents)</h4>
+    <table>
+      <thead><tr><th>Agent</th><th>Tools</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Pipeline Analyst</td><td>11</td><td>Pipeline metrics, aging, conversion, bottlenecks, benchmarks</td></tr>
+        <tr><td>Compliance Checker</td><td>8</td><td>TRID/RESPA, tolerance violations, state requirements, audits</td></tr>
+        <tr><td>Lead Nurturer</td><td>10</td><td>Scoring, engagement history, optimal contact time, message drafting</td></tr>
+        <tr><td>Document Tracker</td><td>8</td><td>Missing docs, conditions, expiration, third-party order status</td></tr>
+        <tr><td>Ops Manager</td><td>15</td><td>Pipeline sweeps, impediment detection, daily briefings</td></tr>
+        <tr><td>Rate Advisor</td><td>8</td><td>Lock strategy, float monitoring, market analysis</td></tr>
+        <tr><td>Profitability Analyst</td><td>8</td><td>Loan P&L, margin analysis, revenue forecasting</td></tr>
+        <tr><td>Team Coach</td><td>12</td><td>LO performance, peer comparison, training recommendations</td></tr>
+        <tr><td>Communication Agent</td><td>15+</td><td>Multi-channel outreach orchestration</td></tr>
+        <tr><td>Email Intelligence</td><td>20</td><td>Classification, sentiment, action items, thread reconstruction</td></tr>
+        <tr><td>Receptionist</td><td>11</td><td>Inbound call handling, qualification, routing</td></tr>
+        <tr><td>+ 14 more agents</td><td>~120</td><td>Scheduling, video, voice, content, onboarding, Salesforce, etc.</td></tr>
+      </tbody>
+    </table>
+
+    <h4>Prompt Quality Assessment: <span class="good">Production-Grade</span></h4>
+    <p>51 prompt markdown files, each 300&ndash;600 lines. Every prompt uses the "Decision Engine" framework (6 principles: Clarify, Schedule, Act, Focus, Evaluate, Learn). Includes concrete confidence thresholds (70%/90% for autonomous action), explicit tool ordering rules, severity definitions, and compliance checklists. This is more sophisticated than any competitor's AI implementation.</p>
+
+    <h4>Known Issues</h4>
+    <ul>
+      <li><strong>Hardcoded model names in 6+ files</strong> &mdash; <code>claude-sonnet-4-20250514</code> string literal instead of env var. One API change breaks multiple agents.</li>
+      <li><strong>26 inline tools have DB context; 160+ registry tools may not</strong> &mdash; context injection is partially incomplete.</li>
+      <li><strong>Legacy OpenAI autonomous-task endpoint</strong> still exists alongside LangGraph orchestrator &mdash; two AI execution paths.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- DEVIL'S ADVOCATE QUESTIONS -->
+<!-- ============================================================ -->
+<section>
+  <h2>6. Devil's Advocate Questions</h2>
+
+  <ol class="question-list">
+    <li>
+      <div class="q-cat">Strategic</div>
+      <strong>Why build 73 feature modules when your closest AI competitor (Shape) has 500+ features and charges $99/user/month?</strong> Shape has years of market presence and enterprise customer proof points. What is Perennia's pricing model, and how does the unit economics work when engineering is spread across CRM + accounting + recruiting + 5 frozen experiments?
+    </li>
+    <li>
+      <div class="q-cat">Strategic</div>
+      <strong>ICE is sunsetting Encompass CRM and migrating thousands of lenders to Surefire. This displacement creates a one-time acquisition window. Why is Encompass integration deferred to Premium tier?</strong> Every displaced lender will be evaluating alternatives. A CRM without production Encompass sync won't make the shortlist.
+    </li>
+    <li>
+      <div class="q-cat">Strategic</div>
+      <strong>Total Expert monitors credit bureaus and auto-alerts LOs when borrowers are shopping for a new loan. This is the #1 revenue-generating CRM feature in 2025&ndash;2026. Where is Perennia's recapture story?</strong>
+    </li>
+    <li>
+      <div class="q-cat">Technical</div>
+      <strong>With 3,664 API endpoints across 259 route files, how do you ensure every endpoint has authentication, tenant isolation, input validation, and rate limiting?</strong> The audit found 43 route files with local <code>get_db()</code> that may bypass RLS. At this scale, one missed endpoint is a data breach.
+    </li>
+    <li>
+      <div class="q-cat">Technical</div>
+      <strong>The frontend has 155K lines of JavaScript with &lt;1% TypeScript and 3 test files. How do you ship financial software with no frontend type safety and no frontend tests?</strong> One incorrect decimal display or rounding error in a loan calculator could create compliance exposure.
+    </li>
+    <li>
+      <div class="q-cat">Technical</div>
+      <strong>You have both Celery and APScheduler in requirements, both configured. Which is authoritative?</strong> Running two background task systems means operational ambiguity &mdash; when a scheduled task doesn't fire, which system do you troubleshoot?
+    </li>
+    <li>
+      <div class="q-cat">Security</div>
+      <strong><code>db_migration_routes.py</code> exposes 31 schema mutation endpoints over HTTP. A compromised JWT could DROP columns or ALTER tables via API call. Why does this exist?</strong>
+    </li>
+    <li>
+      <div class="q-cat">Security</div>
+      <strong>The FCC's new 1:1 TCPA consent rules take full effect April 11, 2026 &mdash; one month away. Does Perennia have consent certificate storage with audit trail for every contact method?</strong> Without this, customers face immediate legal exposure.
+    </li>
+    <li>
+      <div class="q-cat">Business</div>
+      <strong>Surefire has 1,000+ pre-built compliant marketing content pieces. BNTouch has 35+ mortgage tools. You have zero pre-built content. LOs don't create their own marketing &mdash; they want to "turn it on." How do you compete?</strong> AI-generated content could leapfrog static libraries, but only if it's compliant and brand-approved. Where is the content governance layer?
+    </li>
+    <li>
+      <div class="q-cat">Business</div>
+      <strong>What is the actual addressable market for a platform that requires a dedicated engineering team to customize?</strong> Jungo sits on Salesforce (admin-customizable). BNTouch has a plug-and-play content library. Perennia's customization is developer-dependent. The mid-market (solo LOs, small teams) needs self-serve. The enterprise needs SOC 2.
+    </li>
+    <li>
+      <div class="q-cat">Architecture</div>
+      <strong>185+ ad-hoc migration scripts outside Alembic means you cannot reproduce the production database schema from version control.</strong> If you lose the production database, can you rebuild it from code?
+    </li>
+    <li>
+      <div class="q-cat">Architecture</div>
+      <strong>The accounting module (113 endpoints, full GL, AP/AR, budgets, bank reconciliation) is a standalone SaaS product. Is this billing infrastructure for the platform, or did scope creep build an accounting system inside a CRM?</strong>
+    </li>
+    <li>
+      <div class="q-cat">UX</div>
+      <strong>Settings.js is 6,723 lines. CalculatorDashboard.jsx is 6,847 lines. LeadDetail.js is 5,059 lines. These are not components &mdash; they're monoliths.</strong> What is the page load time? What is the bundle size? Has any user tested the onboarding flow end-to-end?
+    </li>
+    <li>
+      <div class="q-cat">AI</div>
+      <strong>25 specialized agents with 209+ tools is impressive architecture. But how many loans has the AI actually processed? How many LOs have used it in production?</strong> Architecture without usage data is an expensive hypothesis.
+    </li>
+    <li>
+      <div class="q-cat">AI</div>
+      <strong>The hallucination verifier is production-grade. But do you have ground truth data to measure its accuracy?</strong> A faithfulness score is only meaningful if you've validated it against known-correct mortgage data.
+    </li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<!-- PRIORITIZED RECOMMENDATIONS -->
+<!-- ============================================================ -->
+<section>
+  <h2>7. Prioritized Recommendations</h2>
+
+  <h3><span class="danger">Critical &mdash; Fix Now</span></h3>
+  <table>
+    <thead><tr><th>#</th><th>Action</th><th>Impact</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>Remove <code>db_migration_routes.py</code> from the running application.</strong> Migrations must only run from CLI/deployment pipeline.</td><td>Eliminates schema-destruction-via-HTTP attack vector</td></tr>
+      <tr><td>2</td><td><strong>Audit and fix 43 local <code>get_db()</code> definitions.</strong> Each must import from <code>db.py</code> to ensure RLS.</td><td>Closes tenant isolation gaps</td></tr>
+      <tr><td>3</td><td><strong>Promote Encompass integration to CORE tier.</strong> Make bidirectional sync production-ready.</td><td>Unlocks enterprise addressable market</td></tr>
+      <tr><td>4</td><td><strong>Begin SOC 2 Type II certification process.</strong> Engage auditor, build evidence collection pipeline.</td><td>Removes #1 enterprise procurement blocker</td></tr>
+      <tr><td>5</td><td><strong>Implement TCPA consent certificate storage</strong> with per-contact audit trail before April 11, 2026 deadline.</td><td>Protects customers from regulatory exposure</td></tr>
+    </tbody>
+  </table>
+
+  <h3><span class="warn">Important &mdash; Address Soon</span></h3>
+  <table>
+    <thead><tr><th>#</th><th>Action</th><th>Impact</th></tr></thead>
+    <tbody>
+      <tr><td>6</td><td><strong>Adopt Alembic exclusively for schema changes.</strong> Archive 185+ ad-hoc scripts. Create rule: every DDL goes through Alembic.</td><td>Reproducible database schema from version control</td></tr>
+      <tr><td>7</td><td><strong>Add post-startup route health check.</strong> Assert critical endpoints loaded; fail hard, not silently.</td><td>Prevents silently broken deployments</td></tr>
+      <tr><td>8</td><td><strong>Migrate rate limiter to Redis.</strong> Already a dependency; fixes multi-worker bypass.</td><td>Actual rate limiting in production</td></tr>
+      <tr><td>9</td><td><strong>Consolidate dual model directories.</strong> Move <code>models/</code> into <code>database/models/</code>; resolve 4 class name collisions.</td><td>Single source of truth for data model</td></tr>
+      <tr><td>10</td><td><strong>Route AI model names through env vars.</strong> Replace 6+ hardcoded <code>claude-sonnet-4-20250514</code> strings.</td><td>One-change model upgrades across fleet</td></tr>
+      <tr><td>11</td><td><strong>Build marketing content governance layer</strong> (approval workflows for compliance review of LO materials).</td><td>Enterprise compliance requirement</td></tr>
+      <tr><td>12</td><td><strong>Add frontend TypeScript and test infrastructure.</strong> Start with financial calculation components.</td><td>Type safety for financial software</td></tr>
+    </tbody>
+  </table>
+
+  <h3><span class="highlight">Consider &mdash; Future</span></h3>
+  <table>
+    <thead><tr><th>#</th><th>Action</th><th>Impact</th></tr></thead>
+    <tbody>
+      <tr><td>13</td><td><strong>Credit bureau monitoring integration</strong> for recapture trigger alerts.</td><td>Highest-ROI feature in current rate environment</td></tr>
+      <tr><td>14</td><td><strong>Scope audit &mdash; archive or delete</strong> accounting (113 ep), recruiting (202 ep), and 5 frozen modules.</td><td>~315 endpoints of non-core surface area removed</td></tr>
+      <tr><td>15</td><td><strong>Publish transparent pricing.</strong> $99&ndash;$149/user/month with feature tiers.</td><td>Enables self-serve LO acquisition</td></tr>
+      <tr><td>16</td><td><strong>Build or license pre-built content library.</strong> AI-generated, compliance-reviewed templates.</td><td>Competes with Surefire's 1,000+ piece moat</td></tr>
+      <tr><td>17</td><td><strong>Sub-10-second AI lead response SLA</strong> as a measurable, marketed capability.</td><td>Matches Shape's marketing claim with Perennia's actual AI capability</td></tr>
+      <tr><td>18</td><td><strong>Expand LOS integrations</strong> beyond Encompass (Calyx Point, Byte, LendingPad).</td><td>Broadens addressable market</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- WHAT YOU'RE DOING RIGHT -->
+<!-- ============================================================ -->
+<section>
+  <h2>8. What You're Doing Right</h2>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4 class="good">1. AI Agent Architecture &mdash; Best in Class</h4>
+      <p>25 specialized agents with LangGraph orchestration, intent routing that loads only 8&ndash;16 tools per request (not all 209), and a hallucination verifier that extracts claims and validates against source data. No mortgage CRM competitor has anything close. The "Decision Engine" prompt framework with concrete confidence thresholds is production-grade system prompt engineering.</p>
+    </div>
+    <div class="card">
+      <h4 class="good">2. Telephony Stack &mdash; Production-Grade</h4>
+      <p>Telnyx (direct voice/SMS), Vapi/Retell (AI receptionist, outbound), Slybroadcast (RVM), power dialer, IVR, call routing, live whisper, call transcription. This is more comprehensive than Shape's built-in dialer and ahead of most competitors who require third-party integrations. DNC scrub blocking and TCPA compliance are enforced at the code level.</p>
+    </div>
+    <div class="card">
+      <h4 class="good">3. Security Posture &mdash; Genuinely Hardened</h4>
+      <p>RS256 JWT with Redis blacklisting, 11 security headers (HSTS preload, CSP, COOP, CORP), CSRF double-submit cookie, SQL injection audit clean across 370+ patterns, nh3 HTML sanitization, RLS tenant isolation, field-level Fernet encryption, PII log filtering. The February 2026 hardening sprint was substantial and effective.</p>
+    </div>
+    <div class="card">
+      <h4 class="good">4. Decomposition Discipline</h4>
+      <p><code>main.py</code> went from 29,522 to 1,711 lines. <code>inline_legacy_routes.py</code> from 23,612 to 3,010 lines. 6 large route files decomposed into 30+ focused modules. Auth consolidated from 3 patterns toward 1 canonical pattern. This shows the team recognizes tech debt and addresses it systematically.</p>
+    </div>
+    <div class="card">
+      <h4 class="good">5. Compliance Automation</h4>
+      <p>TRID disclosure timing checks, RESPA affiliated business flags, tolerance violation detection (zero and 10% categories), state-specific requirements lookup, loan file auditing, disclosure timeline tracking. Most competitors offer compliance features; Perennia's tool-based approach (8 compliance tools invokable by AI) is more flexible than rule-based competitors.</p>
+    </div>
+    <div class="card">
+      <h4 class="good">6. Multi-Tenant Architecture</h4>
+      <p>Proper RLS with <code>TenantContextMiddleware</code>, per-org credential storage for integrations, feature tier gating per organization, SCIM provisioning, SSO/SAML. The infrastructure for enterprise multi-tenancy is solid.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- BOTTOM LINE -->
+<!-- ============================================================ -->
+<section>
+  <h2>9. Bottom Line</h2>
+
+  <div class="card" style="border-color: var(--accent); background: linear-gradient(135deg, var(--surface) 0%, #0d2137 100%);">
+    <p style="font-size: 1.1rem;">
+      <strong>Perennia AI has the most sophisticated AI agent architecture in the mortgage CRM space and a telephony stack that matches or exceeds established competitors.</strong> The 25-agent fleet with LangGraph orchestration, intent routing, dynamic tool loading, and hallucination verification is genuinely differentiated &mdash; no competitor has this depth of AI integration.
+    </p>
+    <p style="font-size: 1.1rem;">
+      <strong>However, the platform is dangerously overextended.</strong> 73 feature modules, 3,664 endpoints, 420K lines of backend code &mdash; this is the surface area of a company with 50+ engineers, not a startup. The accounting system (113 endpoints) and recruiting ATS (202 endpoints) represent hundreds of hours of engineering on features that don't differentiate a mortgage CRM. Meanwhile, the three things that would actually unlock enterprise revenue &mdash; <strong class="warn">SOC 2 certification</strong>, <strong class="warn">production Encompass sync</strong>, and <strong class="warn">credit bureau monitoring</strong> &mdash; are either missing or deferred.
+    </p>
+    <p style="font-size: 1.1rem;">
+      <strong>The path forward is radical prioritization.</strong> Archive frozen experiments. Defer accounting and recruiting to post-launch. Pour engineering into the three enterprise blockers. Publish pricing. Get 10 paying LOs using the AI agents in production and build case studies from real data. The AI is the moat &mdash; but a moat without a castle is just a ditch.
+    </p>
+    <p style="font-size: 1.05rem; color: var(--text-muted); margin-bottom: 0;">
+      <em>Maturity: Late Beta / Early Production-Ready. The platform could be enterprise-ready in 60&ndash;90 days with focused execution on the 5 critical items. Without focus, it risks becoming an impressive demo that never ships.</em>
+    </p>
+  </div>
+</section>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- FOOTER -->
+<!-- ============================================================ -->
+<div class="footer">
+  <p>Generated by <strong>/u-challenge</strong> &middot; Claude Code Critical Analysis &middot; March 9, 2026</p>
+  <p>5 parallel research agents &middot; Backend architecture &middot; Frontend analysis &middot; Competitive research &middot; Security audit &middot; Feature inventory</p>
+  <p style="margin-top: 8px; opacity: 0.6;">Perennia AI Mortgage CRM &middot; Confidential</p>
+</div>
+
+</body>
+</html>

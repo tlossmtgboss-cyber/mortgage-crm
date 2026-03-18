@@ -32,6 +32,7 @@ from scheduler_email_service import generate_reschedule_url
 from routes.scheduler._helpers import (
     get_models, _check_rate_limit, _sanitize_text,
 )
+from routes.scheduler.constants import DEFAULT_TIMEZONE
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -445,7 +446,7 @@ async def get_confirmation_details(
             "scheduled_start": start_dt.isoformat() if start_dt else None,
             "scheduled_end": end_dt.isoformat() if end_dt else None,
             "duration_minutes": duration_min,
-            "timezone": appointment.timezone or "America/Chicago",
+            "timezone": appointment.timezone or DEFAULT_TIMEZONE,
             "location": appointment.location,
             "video_link": appointment.video_link,
             "phone_number": appointment.phone_number,

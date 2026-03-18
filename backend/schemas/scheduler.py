@@ -353,6 +353,7 @@ class BookingLinkCreate(BaseModel):
     custom_description: Optional[str] = Field(None, max_length=2000)
     routing_strategy: str = "relationship"
     assigned_users: List[int] = []
+    expires_at: Optional[datetime] = Field(None, description="When the booking link expires (ISO 8601). Defaults to 90 days from creation if not specified.")
 
     @validator('slug', pre=True)
     def lowercase_slug(cls, v):

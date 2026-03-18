@@ -17,9 +17,10 @@ Supports:
     - Delay-based scheduling (hours after stage change)
 """
 
+import asyncio
 import logging
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -27,6 +28,14 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Foreign
 from sqlalchemy.orm import Session
 
 from db import Base
+
+# Fallback timezone constant — matches SchedulerConfig default
+_FALLBACK_TIMEZONE = "America/Chicago"
+
+# Retry configuration for transient failures
+_MAX_RETRIES = 2
+_RETRY_DELAY_SECONDS = 1
+_TRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError)
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +266,7 @@ class PipelineAppointmentTriggerLog(Base):
     extra_data = Column("metadata", JSON, default=dict)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    acknowledged_at = Column(DateTime, nullable=True)  # When an LO acknowledged a failure
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize for API response."""
@@ -276,6 +286,7 @@ class PipelineAppointmentTriggerLog(Base):
             "status": self.status,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "acknowledged_at": self.acknowledged_at.isoformat() if self.acknowledged_at else None,
         }
 
 
@@ -316,6 +327,9 @@ class PipelineAppointmentTrigger:
             List of action results (one per triggered rule).
         """
         results = []
+
+        # Capture the trigger timestamp for speed-to-lead measurement
+        trigger_time = datetime.now(timezone.utc)
 
         # Get matching rules for the new stage
         rules = await self.get_rules(self.organization_id)
@@ -360,6 +374,20 @@ class PipelineAppointmentTrigger:
                     rule=rule,
                     result=result,
                 )
+
+                # Record speed-to-lead timing (non-fatal)
+                delivery_time = datetime.now(timezone.utc)
+                action = result.get("action", "")
+                if action in ("auto_booked", "booking_link_sent"):
+                    self._record_speed_to_lead(
+                        loan_id=loan_id,
+                        loan_officer_id=loan_officer_id,
+                        trigger_time=trigger_time,
+                        delivery_time=delivery_time,
+                        delivery_method=action,
+                        trigger_stage=new_stage,
+                    )
+
                 results.append(result)
 
             except Exception as e:
@@ -379,6 +407,13 @@ class PipelineAppointmentTrigger:
                     new_stage=new_stage,
                     rule=rule,
                     result=error_result,
+                )
+                # Notify the LO so failures are not silently swallowed
+                self._notify_lo_of_failure(
+                    loan_officer_id=loan_officer_id,
+                    loan_id=loan_id,
+                    rule=rule,
+                    error_message=str(e),
                 )
                 results.append(error_result)
 
@@ -421,9 +456,15 @@ class PipelineAppointmentTrigger:
     ) -> Dict[str, Any]:
         """Auto-book a draft appointment based on the rule.
 
-        Creates an appointment in the scheduler_appointments table with status BOOKED.
-        The scheduled time is calculated as: now + delay_hours, rounded to the next
-        available business hour slot.
+        Delegates appointment creation to the shared appointment_creation_service,
+        which handles conflict checking, lead linking, CRM activity logging,
+        follow-up task creation, and audit logging.
+
+        Pipeline-specific logic preserved here:
+          - Business hours snapping for the scheduled time
+          - Retry loop for transient errors (ConnectionError, TimeoutError, OSError)
+          - Fallback to booking link when auto-book fails
+          - LO failure notification when both paths fail
 
         Args:
             loan_id: Loan that triggered the rule.
@@ -448,76 +489,152 @@ class PipelineAppointmentTrigger:
         borrower_name = getattr(loan, "borrower_name", "Borrower") if loan else "Borrower"
         title = f"{rule.appointment_title} — {borrower_name}"
 
-        # Create the appointment via the scheduler_appointments table
-        try:
-            from smart_scheduler_models import AppointmentStatus, MeetingMode
+        # Resolve the LO's timezone from their SchedulerConfig
+        lo_timezone = self._get_lo_timezone(loan_officer_id)
 
-            meeting_mode_map = {
-                "video": MeetingMode.VIDEO,
-                "phone": MeetingMode.PHONE,
-                "in_person": MeetingMode.IN_PERSON,
-            }
-            mode = meeting_mode_map.get(rule.meeting_mode, MeetingMode.VIDEO)
+        # Extract borrower details from loan
+        borrower_email = getattr(loan, "borrower_email", None) if loan else None
+        borrower_phone = getattr(loan, "borrower_phone", None) if loan else None
 
-            # Lazy-import the Appointment model from smart_scheduler_models factory
-            from smart_scheduler_models import create_smart_scheduler_models
-            models = create_smart_scheduler_models(Base)
-            Appointment = models["Appointment"]
+        ai_context = {
+            "trigger": "pipeline_stage_change",
+            "from_stage": rule.from_stage,
+            "appointment_type": rule.appointment_type,
+            "rule_required": rule.required,
+        }
 
-            appointment = Appointment(
-                organization_id=self.organization_id,
-                assigned_user_id=loan_officer_id,
-                loan_id=loan_id,
-                title=title,
-                description=rule.description,
-                meeting_type=None,  # Will use CUSTOM default
-                meeting_mode=mode,
-                scheduled_start=target_start,
-                scheduled_end=target_end,
-                duration_minutes=rule.duration_minutes,
-                timezone="America/Chicago",
-                attendee_name=borrower_name,
-                attendee_email=getattr(loan, "borrower_email", None) if loan else None,
-                attendee_phone=getattr(loan, "borrower_phone", None) if loan else None,
-                status=AppointmentStatus.BOOKED,
-                booked_by_ai=True,
-                ai_booking_context={
-                    "trigger": "pipeline_stage_change",
-                    "from_stage": rule.from_stage,
+        # Retry transient errors (ConnectionError, TimeoutError) up to _MAX_RETRIES times
+        last_error = None
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                from services.appointment_creation_service import create_appointment
+
+                result = await create_appointment(
+                    db=self.db,
+                    organization_id=self.organization_id,
+                    assigned_user_id=loan_officer_id,
+                    created_by_user_id=None,  # AI-initiated, no user context
+                    source="ai_pipeline",
+                    title=title,
+                    scheduled_start=target_start,
+                    scheduled_end=target_end,
+                    duration_minutes=rule.duration_minutes,
+                    timezone=lo_timezone,
+                    attendee_name=borrower_name,
+                    attendee_email=borrower_email,
+                    attendee_phone=borrower_phone,
+                    loan_id=loan_id,
+                    description=rule.description,
+                    meeting_mode=rule.meeting_mode,
+                    booked_by_ai=True,
+                    ai_booking_context=ai_context,
+                    internal_notes=f"Auto-scheduled by pipeline trigger on stage change to {rule.from_stage}",
+                    external_source="pipeline_stage_change",
+                    # Pipeline path manages its own transaction — trigger log
+                    # entries and speed-to-lead metrics are written after this
+                    # returns, and the caller commits.
+                    auto_commit=False,
+                    # Enable conflict + cross-source checks and lead linking
+                    check_conflicts=True,
+                    check_cross_source=True,
+                    create_lead_if_missing=True,
+                    generate_meeting_link=True,
+                )
+
+                if not result.success:
+                    # Conflict or duplicate detected — treat as non-transient failure
+                    logger.warning(
+                        f"Auto-book blocked for loan {loan_id}: {result.error}"
+                    )
+                    last_error = Exception(result.error)
+                    break
+
+                appointment_id = result.appointment_id
+
+                # Audit: structured log for AI pipeline booking path (non-blocking)
+                try:
+                    from services.scheduler_audit_logger import scheduler_audit
+                    scheduler_audit.log_appointment_event(
+                        db=self.db,
+                        appointment_id=appointment_id,
+                        event_type="created",
+                        organization_id=self.organization_id,
+                        booking_source="ai_pipeline",
+                        details={
+                            "trigger": "pipeline_stage_change",
+                            "from_stage": rule.from_stage,
+                            "appointment_type": rule.appointment_type,
+                            "rule_required": rule.required,
+                            "loan_id": loan_id,
+                            "loan_officer_id": loan_officer_id,
+                            "auto_booked": True,
+                        },
+                    )
+                except Exception as audit_err:
+                    logger.debug(f"Pipeline audit log failed (non-blocking): {audit_err}")
+
+                logger.info(
+                    f"Auto-booked appointment {appointment_id} ({rule.appointment_type}) "
+                    f"for loan {loan_id}, LO {loan_officer_id}, org {self.organization_id}"
+                )
+
+                return {
+                    "action": "auto_booked",
+                    "appointment_id": appointment_id,
                     "appointment_type": rule.appointment_type,
-                    "rule_required": rule.required,
-                },
-                internal_notes=f"Auto-scheduled by pipeline trigger on stage change to {rule.from_stage}",
-            )
-            self.db.add(appointment)
-            self.db.flush()  # Get the ID without committing
+                    "appointment_title": title,
+                    "scheduled_start": target_start.isoformat(),
+                    "scheduled_end": target_end.isoformat(),
+                    "duration_minutes": rule.duration_minutes,
+                    "required": rule.required,
+                    "loan_id": loan_id,
+                }
 
-            logger.info(
-                f"Auto-booked appointment {appointment.id} ({rule.appointment_type}) "
-                f"for loan {loan_id}, LO {loan_officer_id}, org {self.organization_id}"
-            )
+            except _TRANSIENT_ERRORS as e:
+                last_error = e
+                if attempt < _MAX_RETRIES:
+                    logger.warning(
+                        f"Transient error on auto-book attempt {attempt + 1}/{_MAX_RETRIES + 1} "
+                        f"for loan {loan_id}: {e}. Retrying in {_RETRY_DELAY_SECONDS}s..."
+                    )
+                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
+                    continue
+                # Exhausted retries — fall through to fallback below
+                logger.exception(
+                    f"Failed to auto-book appointment for loan {loan_id} after "
+                    f"{_MAX_RETRIES + 1} attempts: {e}"
+                )
 
-            return {
-                "action": "auto_booked",
-                "appointment_id": appointment.id,
-                "appointment_type": rule.appointment_type,
-                "appointment_title": title,
-                "scheduled_start": target_start.isoformat(),
-                "scheduled_end": target_end.isoformat(),
-                "duration_minutes": rule.duration_minutes,
-                "required": rule.required,
-                "loan_id": loan_id,
-            }
+            except Exception as e:
+                # Non-transient error (validation, model loading, etc.) — do not retry
+                logger.exception(f"Failed to auto-book appointment for loan {loan_id}: {e}")
+                last_error = e
+                break
 
-        except Exception as e:
-            logger.exception(f"Failed to auto-book appointment for loan {loan_id}: {e}")
-            # Fall back to booking link if auto-book fails
-            return await self.send_booking_link(
+        # Fall back to booking link if auto-book failed
+        try:
+            fallback_result = await self.send_booking_link(
                 loan_id=loan_id,
                 rule=rule,
                 loan_officer_id=loan_officer_id,
                 loan=loan,
             )
+            return fallback_result
+        except Exception as fallback_err:
+            logger.exception(
+                f"Fallback booking link also failed for loan {loan_id}: {fallback_err}"
+            )
+            # Notify LO since both auto-book AND fallback failed
+            self._notify_lo_of_failure(
+                loan_officer_id=loan_officer_id,
+                loan_id=loan_id,
+                rule=rule,
+                error_message=(
+                    f"Auto-book failed: {last_error}. "
+                    f"Fallback booking link also failed: {fallback_err}"
+                ),
+            )
+            raise
 
     async def send_booking_link(
         self,
@@ -548,14 +665,18 @@ class PipelineAppointmentTrigger:
         loan_number = getattr(loan, "loan_number", "") if loan else ""
 
         # Generate a booking link with context
-        # Format: /book/{lo_id}?type={appointment_type}&loan={loan_id}&ref={token}
+        # Format: /book/{lo_id}?type={appointment_type}&loan={loan_id}&ref={token}&expires={iso}
+        # Default expiration: 7 days from now
+        PIPELINE_BOOKING_LINK_EXPIRY_DAYS = 7
         booking_token = uuid.uuid4().hex[:12]
+        link_expires_at = datetime.now(timezone.utc) + timedelta(days=PIPELINE_BOOKING_LINK_EXPIRY_DAYS)
         booking_link = (
             f"/book/{loan_officer_id}"
             f"?type={rule.appointment_type}"
             f"&loan_id={loan_id}"
             f"&ref={booking_token}"
             f"&duration={rule.duration_minutes}"
+            f"&expires={link_expires_at.strftime('%Y-%m-%dT%H:%M:%SZ')}"
         )
 
         # Queue notification to borrower (async, non-blocking)
@@ -721,3 +842,125 @@ class PipelineAppointmentTrigger:
             )
         except Exception as e:
             logger.warning(f"Booking notification send failed (non-fatal): {e}")
+
+    def _get_lo_timezone(self, loan_officer_id: Optional[int]) -> str:
+        """Get the loan officer's configured timezone from SchedulerConfig.
+
+        Queries the scheduler_configs table for the LO's timezone setting,
+        scoped by organization_id for tenant isolation. Falls back to
+        _FALLBACK_TIMEZONE ("America/Chicago") if no config exists.
+        """
+        if not loan_officer_id:
+            return _FALLBACK_TIMEZONE
+        try:
+            from database.models.scheduler import SchedulerConfig
+            config = (
+                self.db.query(SchedulerConfig)
+                .filter(
+                    SchedulerConfig.user_id == loan_officer_id,
+                    SchedulerConfig.organization_id == self.organization_id,
+                )
+                .first()
+            )
+            if config and getattr(config, "timezone", None):
+                return config.timezone
+        except Exception as e:
+            logger.warning(f"Failed to look up LO timezone for user {loan_officer_id}: {e}")
+        return _FALLBACK_TIMEZONE
+
+    def _record_speed_to_lead(
+        self,
+        loan_id: int,
+        loan_officer_id: Optional[int],
+        trigger_time: datetime,
+        delivery_time: datetime,
+        delivery_method: str,
+        trigger_stage: str,
+    ) -> None:
+        """Record speed-to-lead timing metric (non-fatal, best-effort).
+
+        Writes to speed_to_lead_metrics table to track how fast
+        booking links / auto-booked appointments reach borrowers.
+        """
+        try:
+            from services.speed_to_lead_tracker import record_trigger_timing
+            # Fire-and-forget using asyncio — don't await in the sync caller
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(record_trigger_timing(
+                    db=self.db,
+                    loan_id=loan_id,
+                    trigger_event="stage_change",
+                    trigger_time=trigger_time,
+                    delivery_time=delivery_time,
+                    delivery_method=delivery_method,
+                    organization_id=self.organization_id,
+                    loan_officer_id=loan_officer_id,
+                    trigger_stage=trigger_stage,
+                ))
+            except RuntimeError:
+                # No running event loop — call synchronously in a blocking manner
+                asyncio.run(record_trigger_timing(
+                    db=self.db,
+                    loan_id=loan_id,
+                    trigger_event="stage_change",
+                    trigger_time=trigger_time,
+                    delivery_time=delivery_time,
+                    delivery_method=delivery_method,
+                    organization_id=self.organization_id,
+                    loan_officer_id=loan_officer_id,
+                    trigger_stage=trigger_stage,
+                ))
+        except Exception as e:
+            # Never let speed-to-lead tracking break the trigger flow
+            logger.warning(f"Speed-to-lead recording failed (non-fatal) for loan {loan_id}: {e}")
+
+    def _notify_lo_of_failure(
+        self,
+        loan_officer_id: Optional[int],
+        loan_id: int,
+        rule: PipelineAppointmentRule,
+        error_message: str,
+    ) -> None:
+        """Create an in-app notification for the LO when auto-booking fails.
+
+        Uses the Notification model (notifications table) so the failure
+        surfaces in the LO's notification feed rather than being silently
+        buried in server logs.
+        """
+        if not loan_officer_id:
+            logger.warning(
+                f"Cannot notify LO of appointment failure — no loan_officer_id "
+                f"for loan {loan_id}, rule '{rule.appointment_type}'"
+            )
+            return
+
+        try:
+            from database.models.security import Notification
+
+            notification = Notification(
+                organization_id=self.organization_id,
+                user_id=loan_officer_id,
+                type="pipeline_appointment_failed",
+                title=f"Auto-scheduling failed: {rule.appointment_title}",
+                message=(
+                    f"An automatic '{rule.appointment_title}' appointment could not be "
+                    f"created for loan #{loan_id} after a stage change to "
+                    f"{rule.from_stage}. Please schedule this appointment manually. "
+                    f"Error: {error_message[:500]}"
+                ),
+                link=f"/pipeline/loans/{loan_id}",
+                is_read=False,
+            )
+            self.db.add(notification)
+            # Don't commit — let the caller's transaction manage the commit
+            logger.info(
+                f"Created failure notification for LO {loan_officer_id}, "
+                f"loan {loan_id}, rule '{rule.appointment_type}'"
+            )
+        except Exception as e:
+            logger.exception(
+                f"Failed to create LO notification for appointment failure "
+                f"(loan {loan_id}, rule '{rule.appointment_type}'): {e}"
+            )

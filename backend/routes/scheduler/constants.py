@@ -4,6 +4,8 @@ Smart Calendar Constants
 Central source of truth for all scheduler durations, limits, and defaults.
 """
 
+import os
+
 # Duration defaults (minutes)
 DEFAULT_APPOINTMENT_DURATION_MINUTES = 30
 MIN_APPOINTMENT_DURATION_MINUTES = 5
@@ -42,3 +44,10 @@ MAX_REMINDERS_PER_APPOINTMENT = 10
 
 # Hold TTL
 DEFAULT_HOLD_TTL_SECONDS = 300  # 5 minutes
+
+# Organizer email used in ICS generation, email templates, and calendar invites.
+# Override via SCHEDULER_ORGANIZER_EMAIL environment variable.
+DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "sarah@reply.perenniaai.com")
+
+# Timezone
+DEFAULT_TIMEZONE = "America/Chicago"

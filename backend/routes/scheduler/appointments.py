@@ -42,8 +42,8 @@ from services.microsoft_graph import create_event_via_graph, CalendarResult
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
     _convert_utc_to_user_tz,
-    _check_appointment_conflict, _check_duplicate_booking,
-    _ensure_lead_for_booking, _log_appointment_activity, _create_followup_task,
+    _check_appointment_conflict,
+    _log_appointment_activity, _create_followup_task,
     _audit_log, _validate_url, _mask_email,
 )
 from routes.scheduler.error_responses import (
@@ -621,53 +621,40 @@ async def get_appointment_audit_trail_endpoint(
 # ============================================================================
 
 @router.post("/appointments", response_model=AppointmentCreateResponse)
-async def create_appointment(
+async def create_appointment_endpoint(
     appt_data: AppointmentCreate,
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Create a new appointment"""
+    """Create a new appointment (authenticated path).
+
+    Delegates creation, conflict checking, CRM integration, and audit logging
+    to the shared appointment_creation_service.  This handler retains ownership
+    of auth, HTTP response shaping, and post-commit side effects (emails,
+    Outlook calendar sync, enterprise audit logging).
+    """
+    from services.appointment_creation_service import (
+        create_appointment as create_appointment_service,
+    )
+
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
     _models = get_models()
-    Appointment = _models['Appointment']
 
     # Calculate end time
     scheduled_end = appt_data.scheduled_start + timedelta(minutes=appt_data.duration_minutes)
-
-    # Check for conflicts before creating
     assigned_user = appt_data.assigned_user_id or user.id
-    _check_appointment_conflict(db, assigned_user, appt_data.scheduled_start, scheduled_end, org_id=org_id)
-    _check_duplicate_booking(db, appt_data.attendee_email, assigned_user, appt_data.scheduled_start, org_id=org_id)
 
-    # Parse enums
-    meeting_type = MeetingType.CUSTOM
-    if appt_data.meeting_type:
-        try:
-            meeting_type = MeetingType(appt_data.meeting_type)
-        except ValueError:
-            pass
-
-    meeting_mode = MeetingMode.VIDEO
-    if appt_data.meeting_mode:
-        try:
-            meeting_mode = MeetingMode(appt_data.meeting_mode)
-        except ValueError:
-            pass
-
-    appointment = Appointment(
+    # --- Delegate to shared service ---
+    result = await create_appointment_service(
+        db=db,
         organization_id=org_id,
-        appointment_type_id=appt_data.appointment_type_id,
-        assigned_user_id=appt_data.assigned_user_id or user.id,
+        assigned_user_id=assigned_user,
         created_by_user_id=user.id,
-        lead_id=appt_data.lead_id,
-        loan_id=appt_data.loan_id,
-        contact_id=appt_data.contact_id,
+        source="authenticated",
+        # Appointment fields
         title=appt_data.title,
-        description=appt_data.description,
-        meeting_type=meeting_type,
-        meeting_mode=meeting_mode,
         scheduled_start=appt_data.scheduled_start,
         scheduled_end=scheduled_end,
         duration_minutes=appt_data.duration_minutes,
@@ -675,75 +662,33 @@ async def create_appointment(
         attendee_name=appt_data.attendee_name,
         attendee_email=appt_data.attendee_email,
         attendee_phone=appt_data.attendee_phone,
-        attendee_notes=appt_data.attendee_notes,
+        # Optional fields
+        appointment_type_id=appt_data.appointment_type_id,
+        lead_id=appt_data.lead_id,
+        loan_id=appt_data.loan_id,
+        contact_id=appt_data.contact_id,
+        description=appt_data.description,
+        meeting_type=appt_data.meeting_type,
+        meeting_mode=appt_data.meeting_mode,
         intake_responses=appt_data.intake_responses,
-        status=AppointmentStatus.BOOKED,
-        status_changed_at=datetime.now(timezone.utc),
+        attendee_notes=appt_data.attendee_notes,
         booked_by_ai=appt_data.booked_by_ai,
-        ai_booking_context=appt_data.ai_booking_context
+        ai_booking_context=appt_data.ai_booking_context,
+        # Control flags
+        check_conflicts=True,
+        check_cross_source=True,
+        generate_meeting_link=True,
+        create_lead_if_missing=True,
     )
 
-    db.add(appointment)
-    _audit_log(db, org_id, user.id, 'created', 'appointment', changes={
-        'title': appt_data.title,
-        'attendee_email': appt_data.attendee_email,
-        'scheduled_start': appt_data.scheduled_start.isoformat() if appt_data.scheduled_start else None,
-    }, request=request, booking_source="authenticated")
-    db.flush()  # Get appointment.id without committing
-    # Backfill entity_id now that we have it
-    _audit_log(db, org_id, user.id, '_id_backfill', 'appointment', entity_id=appointment.id,
-               booking_source="authenticated")
+    if not result.success:
+        raise HTTPException(status_code=409, detail=result.error)
 
-    logger.info(f"Appointment created: {appointment.id} by user {user.id}")
+    appointment = result.appointment
 
-    # Auto-generate meeting link for video appointments
-    meeting_link_generated = False
-    if meeting_mode == MeetingMode.VIDEO and not appointment.video_link:
-        try:
-            from services.virtual_meeting_service import create_meeting_for_appointment
-            meeting_result = await create_meeting_for_appointment(
-                db=db, appointment=appointment, provider="auto",
-                user_id=user.id, org_id=org_id,
-            )
-            if meeting_result.success:
-                meeting_link_generated = True
-                logger.info(
-                    f"Auto-generated meeting link for appointment {appointment.id}: "
-                    f"provider={meeting_result.provider}, url={meeting_result.join_url}"
-                )
-        except Exception as ml_err:
-            logger.warning(f"Could not auto-generate meeting link for appointment {appointment.id}: {ml_err}")
-
-    # CRM Integration: Create/link lead if not already linked
-    if not appointment.lead_id and appt_data.attendee_email:
-        lead_id = _ensure_lead_for_booking(
-            db, appt_data.attendee_email, appt_data.attendee_name,
-            appt_data.attendee_phone, appointment.assigned_user_id, org_id
-        )
-        if lead_id:
-            appointment.lead_id = lead_id
-
-    # CRM: Log activity
-    _log_appointment_activity(
-        db, org_id, user.id, appointment.lead_id, appointment.loan_id,
-        f"Appointment scheduled: {appointment.title} on "
-        f"{appointment.scheduled_start.strftime('%m/%d/%Y %I:%M %p') if appointment.scheduled_start else 'TBD'}"
-    )
-
-    # CRM: Create follow-up task
-    if appointment.scheduled_end:
-        _create_followup_task(
-            db, org_id, appointment.assigned_user_id,
-            appointment.lead_id, appointment.loan_id,
-            title=f"Follow up after: {appointment.title}"[:255],
-            description=f"Follow up with {appt_data.attendee_name or 'attendee'} after "
-                        f"meeting on {appointment.scheduled_start.strftime('%m/%d/%Y') if appointment.scheduled_start else 'TBD'}",
-            due_date=appointment.scheduled_end + timedelta(days=1),
-        )
-
-    # H-2: Single atomic commit -- appointment + audit + lead + activity + task
-    db.commit()
-    db.refresh(appointment)
+    # Surface non-fatal warnings from the shared service (e.g. meeting link failure)
+    for warning in result.warnings:
+        logger.warning(f"Appointment {appointment.id} creation warning: {warning}")
 
     # Enterprise audit: structured log for compliance
     scheduler_audit.log_appointment_created(

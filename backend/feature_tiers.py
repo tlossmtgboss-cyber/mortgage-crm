@@ -58,7 +58,8 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "call_intelligence": FeatureTier.CORE,
     "referral_partners": FeatureTier.CORE,
     "rate_monitor": FeatureTier.CORE,
-    "recruiting": FeatureTier.CORE,
+    # DEPRECATED: Premium feature deregistered — not yet launched
+    # "recruiting": FeatureTier.CORE,
     # Promoted from PREMIUM to CORE - enterprise table stakes (March 2026)
     "salesforce_sync": FeatureTier.CORE,
     "encompass_sync": FeatureTier.CORE,
@@ -78,11 +79,11 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "scheduler_waitlist": FeatureTier.PREMIUM,
 
     # EXPERIMENTAL - frozen, no SLA, not exposed to production orgs
-    "avatar_studio": FeatureTier.EXPERIMENTAL,
-    "hr_management": FeatureTier.EXPERIMENTAL,
+    # "avatar_studio": FeatureTier.EXPERIMENTAL,  # DEPRECATED: Experimental feature deregistered
+    # "hr_management": FeatureTier.EXPERIMENTAL,  # DEPRECATED: Premium feature deregistered — not yet launched
     "it_helpdesk": FeatureTier.EXPERIMENTAL,
-    "decision_lab": FeatureTier.EXPERIMENTAL,
-    "circle_of_cashflow": FeatureTier.EXPERIMENTAL,
+    # "decision_lab": FeatureTier.EXPERIMENTAL,  # DEPRECATED: Experimental feature deregistered
+    # "circle_of_cashflow": FeatureTier.EXPERIMENTAL,  # DEPRECATED: Experimental feature deregistered
     "scheduler_ab_testing": FeatureTier.EXPERIMENTAL,
 }
 

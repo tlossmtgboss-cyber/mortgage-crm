@@ -22,6 +22,8 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
+from routes.scheduler.constants import DEFAULT_TIMEZONE
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,7 +95,7 @@ class RecurringAvailabilityService:
         user_id: int,
         org_id: int,
         schedule: Dict[int, List[Dict[str, str]]],
-        tz: str = "America/Chicago",
+        tz: str = DEFAULT_TIMEZONE,
     ) -> List[dict]:
         """
         Bulk-replace the weekly recurring schedule for a user.
@@ -306,7 +308,7 @@ class RecurringAvailabilityService:
         schedule: dict,
         description: Optional[str] = None,
         is_default: bool = False,
-        tz: str = "America/Chicago",
+        tz: str = DEFAULT_TIMEZONE,
     ) -> dict:
         """Create a reusable availability template."""
         _, _, AvailabilityTemplate = self._get_models()

@@ -26,20 +26,28 @@ import os
 import base64
 import html
 import logging
-import uuid as uuid_lib
+import time as _time
+import threading
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from services.notification_service import notification_service
+from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
 
 # --- Re-exports from extracted sub-modules (backward compatibility) ---
-# SMS sender: consent checking, contact hours, all SMS functions
+# SMS compliance: consent checking, contact hours (canonical source)
+from services.sms_compliance import check_sms_consent, _check_contact_hours  # noqa: F401
+
+# SMS sender: all SMS sending functions
 from services.scheduler_sms_sender import (  # noqa: F401
-    check_sms_consent,
-    _check_contact_hours,
     send_appointment_confirmation_sms,
     send_appointment_update_sms,
     send_appointment_reminder_sms,
 )
+
+# ICS calendar generation (canonical source: services.ics_generator)
+from services.ics_generator import generate_ics_content  # noqa: F401
 
 # Email templates: HTML builders, color constants, prep items
 from services.scheduler_email_templates import (
@@ -85,6 +93,131 @@ def _calendar_notice_html(text=None):
 def _default_prep_items(meeting_type_key=None):
     """Backward-compatible wrapper for default_prep_items."""
     return default_prep_items(meeting_type_key)
+
+
+# ============================================================================
+# Per-recipient email throttle
+# ============================================================================
+
+def _mask_email(email: Optional[str]) -> str:
+    """Mask email for logging: j***@example.com"""
+    if not email or '@' not in email:
+        return '***'
+    local, domain = email.split('@', 1)
+    return f"{local[0]}***@{domain}" if local else f"***@{domain}"
+
+
+# In-memory throttle state: {email -> list of timestamps}
+_email_throttle_store: OrderedDict = OrderedDict()
+_email_throttle_lock = threading.Lock()
+_EMAIL_THROTTLE_WINDOW = 3600  # 1 hour in seconds
+_EMAIL_THROTTLE_MAX_KEYS = 5000
+_email_throttle_cleanup_counter = 0
+_EMAIL_THROTTLE_CLEANUP_INTERVAL = 100
+
+# Lazy Redis connection for email throttle
+_email_throttle_redis = None
+_email_throttle_redis_checked = False
+
+
+def _get_email_throttle_redis():
+    """Get or create Redis connection for email throttle. Returns None if unavailable."""
+    global _email_throttle_redis, _email_throttle_redis_checked
+    if _email_throttle_redis_checked:
+        return _email_throttle_redis
+    _email_throttle_redis_checked = True
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        logger.debug("Email throttle: REDIS_URL not set, using in-memory fallback")
+        return None
+    try:
+        import redis as redis_lib
+        _email_throttle_redis = redis_lib.Redis.from_url(
+            redis_url, decode_responses=True, socket_connect_timeout=2
+        )
+        _email_throttle_redis.ping()
+        logger.info("Email throttle connected to Redis")
+    except Exception as e:
+        logger.warning(f"Email throttle: Redis unavailable, using in-memory fallback: {e}")
+        _email_throttle_redis = None
+    return _email_throttle_redis
+
+
+def _check_email_rate_limit(recipient_email: str, max_per_hour: int = 10) -> bool:
+    """
+    Check whether sending another email to recipient_email is allowed.
+
+    Returns True if under the limit, False if throttled.
+    Never raises -- email delivery should degrade gracefully, not crash.
+
+    Uses Redis if REDIS_URL is set (key ``sched_email:{email}``, 1-hour TTL).
+    Falls back to an in-memory dict with periodic cleanup otherwise.
+    """
+    if not recipient_email:
+        return True
+
+    email_lower = recipient_email.lower().strip()
+
+    # Try Redis first
+    r = _get_email_throttle_redis()
+    if r is not None:
+        try:
+            key = f"sched_email:{email_lower}"
+            current = r.incr(key)
+            if current == 1:
+                r.expire(key, _EMAIL_THROTTLE_WINDOW)
+            if current > max_per_hour:
+                logger.warning(
+                    f"Email throttle: Redis limit exceeded for {_mask_email(email_lower)} "
+                    f"({current}/{max_per_hour} in last hour)"
+                )
+                return False
+            return True
+        except Exception as e:
+            logger.warning(f"Email throttle: Redis error, falling back to memory: {e}")
+            # Fall through to in-memory
+
+    # In-memory fallback (thread-safe via threading.Lock since email functions are sync)
+    global _email_throttle_cleanup_counter
+    now = _time.time()
+    cutoff = now - _EMAIL_THROTTLE_WINDOW
+
+    with _email_throttle_lock:
+        # Periodic cleanup of expired entries
+        _email_throttle_cleanup_counter += 1
+        if _email_throttle_cleanup_counter >= _EMAIL_THROTTLE_CLEANUP_INTERVAL:
+            _email_throttle_cleanup_counter = 0
+            expired_keys = [
+                k for k, timestamps in _email_throttle_store.items()
+                if not timestamps or timestamps[-1] < cutoff
+            ]
+            for k in expired_keys:
+                del _email_throttle_store[k]
+
+        if email_lower in _email_throttle_store:
+            timestamps = _email_throttle_store[email_lower]
+            _email_throttle_store.move_to_end(email_lower)
+        else:
+            # Capacity check -- drop oldest if full (email throttle is less
+            # security-critical than the IP rate limiter, so LRU eviction is OK)
+            if len(_email_throttle_store) >= _EMAIL_THROTTLE_MAX_KEYS:
+                _email_throttle_store.popitem(last=False)
+            timestamps = []
+            _email_throttle_store[email_lower] = timestamps
+
+        # Remove expired timestamps
+        while timestamps and timestamps[0] < cutoff:
+            timestamps.pop(0)
+
+        if len(timestamps) >= max_per_hour:
+            logger.warning(
+                f"Email throttle: in-memory limit exceeded for {_mask_email(email_lower)} "
+                f"({len(timestamps)}/{max_per_hour} in last hour)"
+            )
+            return False
+
+        timestamps.append(now)
+        return True
 
 
 # ============================================================================
@@ -203,83 +336,10 @@ def generate_reschedule_url(appointment_id: int, attendee_email: str, slug: str 
     return f"{frontend_base}{book_path}?token={token}&action=reschedule"
 
 
-def _ics_escape(value: str) -> str:
-    """Escape a string for safe embedding in ICS fields (RFC 5545).
-    Prevents injection of new ICS properties via newline or special chars."""
-    if not value:
-        return ""
-    # Remove any CR/LF that could inject new ICS properties
-    value = value.replace("\r\n", " ").replace("\r", " ").replace("\n", "\\n")
-    # Escape backslashes, semicolons, and commas per RFC 5545
-    value = value.replace("\\", "\\\\")
-    value = value.replace(";", "\\;")
-    value = value.replace(",", "\\,")
-    return value
-
-
-def generate_ics_content(
-    appointment_title: str,
-    start_datetime: datetime,
-    duration_minutes: int,
-    attendee_email: str,
-    attendee_name: str,
-    organizer_email: str,
-    organizer_name: str,
-    description: str = "",
-    location: str = "",
-    video_link: str = None,
-    appointment_id: int = None
-):
-    """Generate ICS calendar file content with proper field escaping."""
-    end_datetime = start_datetime + timedelta(minutes=duration_minutes)
-    # Deterministic UID: use appointment_id if available to prevent duplicate calendar events
-    if appointment_id:
-        uid = f"appt-{appointment_id}@perenniaai.com"
-    else:
-        uid = f"{uuid_lib.uuid4()}@perenniaai.com"
-    from datetime import timezone as tz
-    dtstamp = datetime.now(tz.utc).strftime("%Y%m%dT%H%M%SZ")
-    dtstart = start_datetime.strftime("%Y%m%dT%H%M%SZ")
-    dtend = end_datetime.strftime("%Y%m%dT%H%M%SZ")
-
-    # Build and escape description
-    full_description = description or ""
-    if video_link:
-        full_description += "\\nJoin Video Call: " + video_link
-        if not location:
-            location = video_link
-
-    # Escape all user-supplied fields to prevent ICS injection
-    safe_title = _ics_escape(appointment_title)
-    safe_description = _ics_escape(full_description)
-    safe_location = _ics_escape(location)
-    safe_organizer_name = _ics_escape(organizer_name)
-    safe_attendee_name = _ics_escape(attendee_name)
-    # Email addresses: strip any newlines/special chars
-    safe_organizer_email = organizer_email.replace("\n", "").replace("\r", "").strip() if organizer_email else ""
-    safe_attendee_email = attendee_email.replace("\n", "").replace("\r", "").strip() if attendee_email else ""
-
-    ics_content = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Perennia AI//Perennia AI//EN
-CALSCALE:GREGORIAN
-METHOD:REQUEST
-BEGIN:VEVENT
-UID:{uid}
-DTSTAMP:{dtstamp}
-DTSTART:{dtstart}
-DTEND:{dtend}
-SUMMARY:{safe_title}
-DESCRIPTION:{safe_description}
-LOCATION:{safe_location}
-ORGANIZER;CN={safe_organizer_name}:mailto:{safe_organizer_email}
-ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;CN={safe_attendee_name}:mailto:{safe_attendee_email}
-STATUS:CONFIRMED
-SEQUENCE:0
-END:VEVENT
-END:VCALENDAR"""
-
-    return ics_content
+# NOTE: generate_ics_content is imported from services.ics_generator (see imports above).
+# The inline _ics_escape() and generate_ics_content() that previously lived here have been
+# removed in favour of the canonical implementation in services/ics_generator.py which
+# delegates to the RFC 5545-compliant primitives in utils/ics_generator.py.
 
 
 # ============================================================================
@@ -302,6 +362,10 @@ def send_appointment_confirmation_email(
     reschedule_url: str = None
 ):
     """Send appointment confirmation email with calendar invite using SendGrid"""
+    if not _check_email_rate_limit(attendee_email):
+        logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping confirmation email")
+        return {"success": False, "error": "Rate limit exceeded"}
+
     try:
         logger.info(f"Attempting to send appointment email to {attendee_email}")
 
@@ -384,7 +448,7 @@ Looking forward to speaking with you!
         attachments = []
         if scheduled_start:
             try:
-                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL)
                 organizer_name = team_member_name or "Perennia AI"
 
                 ics_content = generate_ics_content(
@@ -451,6 +515,10 @@ def send_appointment_update_email(
     reschedule_url: str = None
 ):
     """Send appointment update/reschedule email with updated calendar invite using SendGrid"""
+    if not _check_email_rate_limit(attendee_email):
+        logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping update email")
+        return {"success": False, "error": "Rate limit exceeded"}
+
     try:
         logger.info(f"Attempting to send appointment update email to {attendee_email}")
 
@@ -528,7 +596,7 @@ An updated calendar invite is attached to this email.
         attachments = []
         if scheduled_start:
             try:
-                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL)
                 organizer_name = team_member_name or "Perennia AI"
 
                 ics_content = generate_ics_content(
@@ -673,7 +741,7 @@ A calendar invite is attached to this email.
                     duration_minutes=duration_minutes,
                     attendee_email=team_member_email,
                     attendee_name=team_member_name,
-                    organizer_email=os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"),
+                    organizer_email=os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL),
                     organizer_name="Perennia AI",
                     description=f"Meeting with {attendee_name}\\nEmail: {attendee_email}\\nPhone: {attendee_phone or 'N/A'}",
                     video_link=video_link
@@ -721,6 +789,10 @@ def send_appointment_cancellation_email(
     cancellation_reason: str = None
 ):
     """Send appointment cancellation email to attendee"""
+    if not _check_email_rate_limit(attendee_email):
+        logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping cancellation email")
+        return False
+
     try:
         logger.info(f"Sending cancellation email to {attendee_email}")
 
@@ -911,6 +983,10 @@ def send_appointment_reminder_email(
     scheduled_start: datetime = None,
 ):
     """Send appointment reminder email with ICS calendar attachment."""
+    if not _check_email_rate_limit(attendee_email):
+        logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping reminder email")
+        return {"success": False, "error": "Rate limit exceeded"}
+
     try:
         if hours_before >= 24:
             subject_prefix = "Reminder: Tomorrow"
@@ -978,7 +1054,7 @@ If you need to reschedule or cancel, please contact us as soon as possible.
         attachments = []
         if scheduled_start:
             try:
-                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL)
                 organizer_name = team_member_name or "Perennia AI"
 
                 ics_content = generate_ics_content(
@@ -1154,7 +1230,7 @@ Looking forward to speaking with you!
         if scheduled_start:
             try:
                 organizer_email = team_member_email or os.getenv(
-                    "SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"
+                    "SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL
                 )
                 organizer_name = team_member_name or "Perennia AI"
 
@@ -1320,7 +1396,7 @@ Having these items ready will help us make the most of our time together.
         if scheduled_start:
             try:
                 organizer_email = team_member_email or os.getenv(
-                    "SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com"
+                    "SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL
                 )
                 organizer_name = team_member_name or "Perennia AI"
 

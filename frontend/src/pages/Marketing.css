@@ -570,7 +570,8 @@
 
 /* Fix for embedded components */
 .main-content .ai-outreach,
-.main-content .avatar-studio,
+/* DEPRECATED: Experimental feature deregistered */
+/* .main-content .avatar-studio, */
 .main-content .communication-intelligence,
 .main-content .acquisition-dashboard,
 .main-content .conversation-intelligence,

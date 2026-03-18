@@ -385,7 +385,11 @@ async def handle_send_email(input_data: Dict[str, Any], context: ToolContext) ->
 
     # Send the actual email with correct FROM address (routes through Salesforce when connected)
     import os
-    ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+    try:
+        from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _fallback_email
+    except ImportError:
+        _fallback_email = "sarah@reply.perenniaai.com"
+    ai_from_email = os.getenv("AI_FROM_EMAIL", _fallback_email)
     db = SessionLocal()
     try:
         if is_html:

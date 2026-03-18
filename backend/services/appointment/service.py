@@ -35,6 +35,11 @@ Usage:
         source="public_booking",
         requester_user_id=None,  # unauthenticated public booking
     )
+
+The heavy lifting for creation and lifecycle mutations is delegated to:
+- services.appointment.create_service     (create_appointment)
+- services.appointment.lifecycle_service   (update, cancel, reschedule, confirm,
+                                            mark_no_show, mark_completed)
 """
 
 from __future__ import annotations
@@ -43,15 +48,15 @@ import logging
 from datetime import datetime, timedelta, date, time, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from routes.scheduler.constants import DEFAULT_TIMEZONE
 from services.appointment._models import (
     AppointmentEvent,
     AppointmentResult,
     AppointmentSource,
     ConflictCheckResult,
-    ConflictError,
     DEFAULT_BUFFER_AFTER,
     DEFAULT_BUFFER_BEFORE,
     DEFAULT_DURATION_MINUTES,
@@ -59,34 +64,19 @@ from services.appointment._models import (
     DEFAULT_MIN_NOTICE_HOURS,
     DEFAULT_WORKING_HOURS,
     MAX_DATE_RANGE_DAYS,
-    TERMINAL_STATUSES,
     get_model,
     mask_email,
     safe_enum_parse,
 )
 from services.appointment.conflict_checker import (
     check_conflict as _check_conflict,
-    check_conflict_for_update as _check_conflict_for_update,
-    check_duplicate_booking as _check_duplicate_booking,
     get_all_busy_times as _get_all_busy_times,
     slot_conflicts_with_busy as _slot_conflicts_with_busy,
 )
 from services.appointment.hold_manager import (
     hold_slot as _hold_slot,
     release_hold as _release_hold,
-    release_holds_for_slot as _release_holds_for_slot,
     slot_conflicts_with_holds as _slot_conflicts_with_holds,
-)
-from services.appointment.crm_bridge import (
-    create_followup_task as _create_followup_task,
-    ensure_lead as _ensure_lead,
-    log_activity as _log_activity,
-)
-from services.appointment.notifications import (
-    create_outlook_event as _create_outlook_event,
-    send_cancellation_notification as _send_cancellation_notification,
-    send_confirmation_email as _send_confirmation_email,
-    send_update_notification as _send_update_notification,
 )
 
 logger = logging.getLogger(__name__)
@@ -121,7 +111,7 @@ class AppointmentService:
         lo_id: int,
         start_date: date,
         end_date: date,
-        timezone_str: str = "America/Chicago",
+        timezone_str: str = DEFAULT_TIMEZONE,
         duration_minutes: int = DEFAULT_DURATION_MINUTES,
         source: AppointmentSource = AppointmentSource.MANUAL_UI,
         meeting_type: Optional[str] = None,
@@ -295,7 +285,7 @@ class AppointmentService:
         return unique
 
     # =========================================================================
-    # CREATE
+    # CREATE (delegated)
     # =========================================================================
 
     async def create_appointment(
@@ -325,209 +315,15 @@ class AppointmentService:
         Returns:
             AppointmentResult with success status and appointment_id.
         """
-        Appointment = get_model("Appointment")
-        if not Appointment:
-            return AppointmentResult(success=False, error="Appointment model not available")
-
-        # Extract and validate required fields
-        title = data.get("title")
-        scheduled_start = data.get("scheduled_start")
-        duration_minutes = data.get("duration_minutes", DEFAULT_DURATION_MINUTES)
-
-        if not title or not scheduled_start:
-            return AppointmentResult(
-                success=False,
-                error="title and scheduled_start are required",
-            )
-
-        if isinstance(scheduled_start, str):
-            scheduled_start = datetime.fromisoformat(scheduled_start.replace("Z", "+00:00"))
-            if scheduled_start.tzinfo:
-                scheduled_start = scheduled_start.replace(tzinfo=None)
-
-        scheduled_end = data.get("scheduled_end")
-        if scheduled_end and isinstance(scheduled_end, str):
-            scheduled_end = datetime.fromisoformat(scheduled_end.replace("Z", "+00:00"))
-            if scheduled_end.tzinfo:
-                scheduled_end = scheduled_end.replace(tzinfo=None)
-        if not scheduled_end:
-            scheduled_end = scheduled_start + timedelta(minutes=duration_minutes)
-
-        assigned_user_id = data.get("assigned_user_id") or requester_user_id
-        attendee_email = data.get("attendee_email")
-        attendee_name = data.get("attendee_name")
-        attendee_phone = data.get("attendee_phone")
-
-        warnings: List[str] = []
-
-        # --- Double-booking prevention via SELECT FOR UPDATE ---
-        try:
-            _check_conflict_for_update(
-                self.db, self.organization_id,
-                assigned_user_id, scheduled_start, scheduled_end,
-                exclude_appointment_id=None,
-            )
-        except ConflictError as e:
-            return AppointmentResult(success=False, error=str(e))
-
-        # --- Duplicate booking detection ---
-        if attendee_email and assigned_user_id:
-            dup = _check_duplicate_booking(
-                self.db, self.organization_id,
-                attendee_email, assigned_user_id, scheduled_start,
-            )
-            if dup:
-                return AppointmentResult(
-                    success=False,
-                    error=f"Duplicate booking detected: existing appointment ID {dup}",
-                )
-
-        # --- Parse enum values safely ---
-        meeting_type = safe_enum_parse(
-            "MeetingType", data.get("meeting_type"), "custom"
-        )
-        meeting_mode = safe_enum_parse(
-            "MeetingMode", data.get("meeting_mode"), "video"
-        )
-
-        # --- Create the appointment record ---
-        appointment = Appointment(
-            organization_id=self.organization_id,
-            appointment_type_id=data.get("appointment_type_id"),
-            assigned_user_id=assigned_user_id,
-            created_by_user_id=requester_user_id,
-            lead_id=data.get("lead_id"),
-            loan_id=data.get("loan_id"),
-            contact_id=data.get("contact_id"),
-            external_id=data.get("external_id"),
-            external_source=source.value,
-            title=title,
-            description=data.get("description"),
-            meeting_type=meeting_type,
-            meeting_mode=meeting_mode,
-            scheduled_start=scheduled_start,
-            scheduled_end=scheduled_end,
-            duration_minutes=duration_minutes,
-            timezone=data.get("timezone", "America/Chicago"),
-            location=data.get("location"),
-            video_link=data.get("video_link"),
-            phone_number=data.get("phone_number"),
-            attendee_name=attendee_name,
-            attendee_email=attendee_email,
-            attendee_phone=attendee_phone,
-            attendee_notes=data.get("attendee_notes"),
-            intake_responses=data.get("intake_responses"),
-            status=safe_enum_parse(
-                "AppointmentStatus", "booked", "booked"
-            ),
-            status_changed_at=datetime.now(timezone.utc),
-            booked_by_ai=source in (
-                AppointmentSource.AI_RECEPTIONIST,
-                AppointmentSource.AI_SCHEDULER,
-            ),
-            ai_booking_context=data.get("ai_booking_context"),
-            internal_notes=data.get("internal_notes"),
-        )
-
-        self.db.add(appointment)
-        self._write_audit_log(
-            user_id=requester_user_id,
-            action="created",
-            entity_type="appointment",
-            changes={
-                "title": title,
-                "scheduled_start": scheduled_start.isoformat(),
-                "source": source.value,
-                "attendee_email": mask_email(attendee_email),
-            },
-        )
-        self.db.flush()  # Get the ID without committing
-
-        # --- CRM integrations (best-effort, never block the booking) ---
-
-        # Link or create Lead
-        if not appointment.lead_id and attendee_email:
-            lead_id = _ensure_lead(
-                self.db, self.organization_id,
-                attendee_email, attendee_name, attendee_phone,
-                assigned_user_id,
-            )
-            if lead_id:
-                appointment.lead_id = lead_id
-
-        # Log CRM Activity
-        _log_activity(
-            self.db, self.organization_id,
-            user_id=requester_user_id or assigned_user_id,
-            lead_id=appointment.lead_id,
-            loan_id=appointment.loan_id,
-            content=(
-                f"Appointment scheduled: {title} on "
-                f"{scheduled_start.strftime('%m/%d/%Y %I:%M %p')}"
-            ),
-        )
-
-        # Create follow-up Task
-        if appointment.scheduled_end:
-            _create_followup_task(
-                self.db, self.organization_id,
-                owner_id=assigned_user_id,
-                lead_id=appointment.lead_id,
-                loan_id=appointment.loan_id,
-                title=f"Follow up after: {title}"[:255],
-                description=(
-                    f"Follow up with {attendee_name or 'attendee'} after "
-                    f"meeting on {scheduled_start.strftime('%m/%d/%Y')}"
-                ),
-                due_date=appointment.scheduled_end + timedelta(days=1),
-            )
-
-        self.db.commit()
-        self.db.refresh(appointment)
-
-        # --- Release any holds for this slot ---
-        _release_holds_for_slot(
-            self.db, self.organization_id,
-            lo_id=assigned_user_id,
-            start_time=scheduled_start,
-            end_time=scheduled_end,
-        )
-
-        # --- Post-commit notifications (best-effort) ---
-        email_sent = False
-        outlook_event_id = None
-
-        if attendee_email:
-            email_sent = await _send_confirmation_email(
-                self.db, appointment, assigned_user_id,
-            )
-            if not email_sent:
-                warnings.append("Confirmation email could not be sent")
-
-        if assigned_user_id:
-            outlook_event_id = await _create_outlook_event(
-                self.db, appointment, attendee_email, attendee_name, attendee_phone,
-            )
-
-        # Emit event
-        self._emit_event(AppointmentEvent.CREATED, {
-            "appointment_id": appointment.id,
-            "source": source.value,
-            "lo_id": assigned_user_id,
-            "attendee_email": mask_email(attendee_email),
-        })
-
-        return AppointmentResult(
-            success=True,
-            appointment_id=appointment.id,
-            data={
-                "scheduled_start": appointment.scheduled_start.isoformat(),
-                "scheduled_end": appointment.scheduled_end.isoformat(),
-                "email_sent": email_sent,
-                "outlook_event_id": outlook_event_id,
-            },
-            warnings=warnings,
-            events_emitted=[AppointmentEvent.CREATED.value],
+        from services.appointment.create_service import create_appointment as _do_create
+        return await _do_create(
+            self.db,
+            self.organization_id,
+            data,
+            source=source,
+            requester_user_id=requester_user_id,
+            write_audit_log=self._write_audit_log,
+            emit_event=self._emit_event,
         )
 
     # =========================================================================
@@ -635,7 +431,7 @@ class AppointmentService:
         }
 
     # =========================================================================
-    # UPDATE
+    # UPDATE (delegated)
     # =========================================================================
 
     async def update_appointment(
@@ -656,137 +452,20 @@ class AppointmentService:
         Returns:
             AppointmentResult.
         """
-        Appointment = get_model("Appointment")
-        if not Appointment:
-            return AppointmentResult(success=False, error="Appointment model not available")
-
-        appointment = self.db.query(Appointment).filter(
-            Appointment.id == appointment_id,
-            Appointment.organization_id == self.organization_id,
-        ).first()
-
-        if not appointment:
-            return AppointmentResult(success=False, error="Appointment not found")
-
-        warnings: List[str] = []
-        changes: Dict[str, Dict[str, Any]] = {}
-        is_reschedule = False
-
-        # Detect time change (rescheduling)
-        new_start = data.get("scheduled_start")
-        if new_start:
-            if isinstance(new_start, str):
-                new_start = datetime.fromisoformat(new_start.replace("Z", "+00:00"))
-                if new_start.tzinfo:
-                    new_start = new_start.replace(tzinfo=None)
-
-            new_duration = data.get("duration_minutes", appointment.duration_minutes)
-            new_end = data.get("scheduled_end")
-            if new_end and isinstance(new_end, str):
-                new_end = datetime.fromisoformat(new_end.replace("Z", "+00:00"))
-                if new_end.tzinfo:
-                    new_end = new_end.replace(tzinfo=None)
-            if not new_end:
-                new_end = new_start + timedelta(minutes=new_duration)
-
-            assigned = data.get("assigned_user_id", appointment.assigned_user_id)
-
-            # Conflict check for new time (excluding self)
-            try:
-                _check_conflict_for_update(
-                    self.db, self.organization_id,
-                    assigned, new_start, new_end,
-                    exclude_appointment_id=appointment_id,
-                )
-            except ConflictError as e:
-                return AppointmentResult(success=False, error=str(e))
-
-            old_start = appointment.scheduled_start
-            if old_start != new_start:
-                is_reschedule = True
-                changes["scheduled_start"] = {
-                    "old": old_start.isoformat() if old_start else None,
-                    "new": new_start.isoformat(),
-                }
-                appointment.scheduled_start = new_start
-                appointment.scheduled_end = new_end
-                if "duration_minutes" in data:
-                    appointment.duration_minutes = new_duration
-                appointment.reschedule_count = (appointment.reschedule_count or 0) + 1
-
-        # Handle status changes
-        new_status_str = data.get("status")
-        if new_status_str:
-            new_status = safe_enum_parse("AppointmentStatus", new_status_str, None)
-            if new_status:
-                old_status = appointment.status
-                appointment.status = new_status
-                appointment.status_changed_at = datetime.now(timezone.utc)
-                appointment.status_changed_by = requester_user_id
-                changes["status"] = {
-                    "old": old_status.value if hasattr(old_status, "value") else str(old_status),
-                    "new": new_status_str,
-                }
-
-                if new_status_str == "completed":
-                    appointment.completed_at = datetime.now(timezone.utc)
-                elif new_status_str == "no_show":
-                    appointment.no_show_at = datetime.now(timezone.utc)
-                elif new_status_str == "cancelled":
-                    appointment.cancelled_at = datetime.now(timezone.utc)
-                    appointment.cancellation_reason = data.get("cancellation_reason")
-
-        # Apply simple field updates
-        simple_fields = [
-            "title", "description", "location", "video_link", "phone_number",
-            "attendee_name", "attendee_email", "attendee_phone", "attendee_notes",
-            "internal_notes", "meeting_notes", "intake_responses",
-        ]
-        for field_name in simple_fields:
-            if field_name in data:
-                old_val = getattr(appointment, field_name, None)
-                new_val = data[field_name]
-                if old_val != new_val:
-                    setattr(appointment, field_name, new_val)
-                    changes[field_name] = {"old": str(old_val)[:100], "new": str(new_val)[:100]}
-
-        # Handle meeting_mode
-        if "meeting_mode" in data:
-            mode = safe_enum_parse("MeetingMode", data["meeting_mode"], None)
-            if mode:
-                appointment.meeting_mode = mode
-
-        self._write_audit_log(
-            user_id=requester_user_id,
-            action="rescheduled" if is_reschedule else "updated",
-            entity_type="appointment",
-            entity_id=appointment_id,
-            changes=changes,
-        )
-        self.db.commit()
-
-        # Send update notifications
-        send_notification = data.get("send_notification", True)
-        if send_notification and is_reschedule and appointment.attendee_email:
-            await _send_update_notification(appointment)
-
-        # Emit appropriate event
-        event = AppointmentEvent.RESCHEDULED if is_reschedule else AppointmentEvent.UPDATED
-        self._emit_event(event, {
-            "appointment_id": appointment_id,
-            "changes": changes,
-        })
-
-        return AppointmentResult(
-            success=True,
-            appointment_id=appointment_id,
-            data=self._serialize_appointment(appointment),
-            warnings=warnings,
-            events_emitted=[event.value],
+        from services.appointment.lifecycle_service import update_appointment as _do_update
+        return await _do_update(
+            self.db,
+            self.organization_id,
+            appointment_id,
+            data,
+            requester_user_id=requester_user_id,
+            write_audit_log=self._write_audit_log,
+            emit_event=self._emit_event,
+            serialize_appointment=self._serialize_appointment,
         )
 
     # =========================================================================
-    # CANCEL
+    # CANCEL (delegated)
     # =========================================================================
 
     async def cancel_appointment(
@@ -799,69 +478,20 @@ class AppointmentService:
         """
         Cancel an appointment, notify attendees, and log the cancellation.
         """
-        Appointment = get_model("Appointment")
-        if not Appointment:
-            return AppointmentResult(success=False, error="Appointment model not available")
-
-        appointment = self.db.query(Appointment).filter(
-            Appointment.id == appointment_id,
-            Appointment.organization_id == self.organization_id,
-        ).first()
-
-        if not appointment:
-            return AppointmentResult(success=False, error="Appointment not found")
-
-        old_status = appointment.status
-        cancelled_status = safe_enum_parse("AppointmentStatus", "cancelled", "cancelled")
-
-        appointment.status = cancelled_status
-        appointment.status_changed_at = datetime.now(timezone.utc)
-        appointment.status_changed_by = requester_user_id
-        appointment.cancelled_at = datetime.now(timezone.utc)
-        appointment.cancellation_reason = reason
-
-        self._write_audit_log(
-            user_id=requester_user_id,
-            action="cancelled",
-            entity_type="appointment",
-            entity_id=appointment_id,
-            changes={
-                "status": {
-                    "old": old_status.value if hasattr(old_status, "value") else str(old_status),
-                    "new": "cancelled",
-                },
-                "reason": reason,
-            },
-        )
-
-        # Log CRM Activity
-        _log_activity(
-            self.db, self.organization_id,
-            user_id=requester_user_id or appointment.assigned_user_id,
-            lead_id=appointment.lead_id,
-            loan_id=appointment.loan_id,
-            content=f"Appointment cancelled: {appointment.title}. Reason: {reason or 'Not specified'}",
-        )
-
-        self.db.commit()
-
-        # Send cancellation notifications
-        if send_notification and appointment.attendee_email:
-            await _send_cancellation_notification(appointment)
-
-        self._emit_event(AppointmentEvent.CANCELLED, {
-            "appointment_id": appointment_id,
-            "reason": reason,
-        })
-
-        return AppointmentResult(
-            success=True,
-            appointment_id=appointment_id,
-            events_emitted=[AppointmentEvent.CANCELLED.value],
+        from services.appointment.lifecycle_service import cancel_appointment as _do_cancel
+        return await _do_cancel(
+            self.db,
+            self.organization_id,
+            appointment_id,
+            reason=reason,
+            requester_user_id=requester_user_id,
+            send_notification=send_notification,
+            write_audit_log=self._write_audit_log,
+            emit_event=self._emit_event,
         )
 
     # =========================================================================
-    # RESCHEDULE (atomic cancel + create)
+    # RESCHEDULE (delegated)
     # =========================================================================
 
     async def reschedule_appointment(
@@ -875,107 +505,21 @@ class AppointmentService:
         Reschedule an appointment atomically: mark old as rescheduled, create new
         record linked to the original.
         """
-        Appointment = get_model("Appointment")
-        if not Appointment:
-            return AppointmentResult(success=False, error="Appointment model not available")
-
-        original = self.db.query(Appointment).filter(
-            Appointment.id == appointment_id,
-            Appointment.organization_id == self.organization_id,
-        ).first()
-
-        if not original:
-            return AppointmentResult(success=False, error="Appointment not found")
-
-        if isinstance(new_start, str):
-            new_start = datetime.fromisoformat(new_start.replace("Z", "+00:00"))
-            if new_start.tzinfo:
-                new_start = new_start.replace(tzinfo=None)
-
-        duration = new_duration_minutes or original.duration_minutes
-        new_end = new_start + timedelta(minutes=duration)
-
-        # Conflict check for the new time
-        try:
-            _check_conflict_for_update(
-                self.db, self.organization_id,
-                original.assigned_user_id, new_start, new_end,
-                exclude_appointment_id=appointment_id,
-            )
-        except ConflictError as e:
-            return AppointmentResult(success=False, error=str(e))
-
-        # Mark original as rescheduled
-        rescheduled_status = safe_enum_parse("AppointmentStatus", "rescheduled", "rescheduled")
-        original.status = rescheduled_status
-        original.status_changed_at = datetime.now(timezone.utc)
-        original.status_changed_by = requester_user_id
-
-        # Create new appointment linked to original
-        new_data = {
-            "title": original.title,
-            "description": original.description,
-            "scheduled_start": new_start,
-            "scheduled_end": new_end,
-            "duration_minutes": duration,
-            "timezone": original.timezone,
-            "assigned_user_id": original.assigned_user_id,
-            "appointment_type_id": original.appointment_type_id,
-            "lead_id": original.lead_id,
-            "loan_id": original.loan_id,
-            "contact_id": original.contact_id,
-            "meeting_type": original.meeting_type.value if hasattr(original.meeting_type, "value") else str(original.meeting_type) if original.meeting_type else None,
-            "meeting_mode": original.meeting_mode.value if hasattr(original.meeting_mode, "value") else str(original.meeting_mode) if original.meeting_mode else None,
-            "location": original.location,
-            "video_link": original.video_link,
-            "phone_number": original.phone_number,
-            "attendee_name": original.attendee_name,
-            "attendee_email": original.attendee_email,
-            "attendee_phone": original.attendee_phone,
-            "attendee_notes": original.attendee_notes,
-            "intake_responses": original.intake_responses,
-            "ai_booking_context": original.ai_booking_context,
-        }
-
-        result = await self.create_appointment(
-            data=new_data,
-            source=AppointmentSource.MANUAL_UI,
+        from services.appointment.lifecycle_service import reschedule_appointment as _do_reschedule
+        return await _do_reschedule(
+            self.db,
+            self.organization_id,
+            appointment_id,
+            new_start,
+            new_duration_minutes=new_duration_minutes,
             requester_user_id=requester_user_id,
+            write_audit_log=self._write_audit_log,
+            emit_event=self._emit_event,
+            do_create_appointment=self.create_appointment,
         )
 
-        if result.success and result.appointment_id:
-            # Link the new appointment to the original
-            new_appt = self.db.query(Appointment).filter(
-                Appointment.id == result.appointment_id,
-            ).first()
-            if new_appt:
-                new_appt.rescheduled_from_id = appointment_id
-                new_appt.reschedule_count = (original.reschedule_count or 0) + 1
-                self.db.commit()
-
-            self._write_audit_log(
-                user_id=requester_user_id,
-                action="rescheduled",
-                entity_type="appointment",
-                entity_id=appointment_id,
-                changes={
-                    "new_appointment_id": result.appointment_id,
-                    "old_start": original.scheduled_start.isoformat() if original.scheduled_start else None,
-                    "new_start": new_start.isoformat(),
-                },
-            )
-            self.db.commit()
-
-        self._emit_event(AppointmentEvent.RESCHEDULED, {
-            "original_appointment_id": appointment_id,
-            "new_appointment_id": result.appointment_id,
-        })
-
-        result.events_emitted.append(AppointmentEvent.RESCHEDULED.value)
-        return result
-
     # =========================================================================
-    # CONFIRM
+    # CONFIRM (delegated)
     # =========================================================================
 
     async def confirm_appointment(self, appointment_id: int) -> AppointmentResult:
@@ -983,49 +527,12 @@ class AppointmentService:
         Confirm a booked appointment and send confirmation email.
         Transitions status from booked/tentative to confirmed (auto_confirmed=True).
         """
-        Appointment = get_model("Appointment")
-        if not Appointment:
-            return AppointmentResult(success=False, error="Appointment model not available")
-
-        appointment = self.db.query(Appointment).filter(
-            Appointment.id == appointment_id,
-            Appointment.organization_id == self.organization_id,
-        ).first()
-
-        if not appointment:
-            return AppointmentResult(success=False, error="Appointment not found")
-
-        # Only confirm if currently booked or tentative
-        current = appointment.status.value if hasattr(appointment.status, "value") else str(appointment.status)
-        if current not in ("booked", "tentative"):
-            return AppointmentResult(
-                success=False,
-                error=f"Cannot confirm appointment in '{current}' status",
-            )
-
-        booked_status = safe_enum_parse("AppointmentStatus", "booked", "booked")
-        appointment.status = booked_status
-        appointment.auto_confirmed = True
-        appointment.status_changed_at = datetime.now(timezone.utc)
-
-        self.db.commit()
-
-        # Send confirmation
-        email_sent = False
-        if appointment.attendee_email:
-            email_sent = await _send_confirmation_email(
-                self.db, appointment, appointment.assigned_user_id,
-            )
-
-        self._emit_event(AppointmentEvent.CONFIRMED, {
-            "appointment_id": appointment_id,
-        })
-
-        return AppointmentResult(
-            success=True,
-            appointment_id=appointment_id,
-            data={"email_sent": email_sent},
-            events_emitted=[AppointmentEvent.CONFIRMED.value],
+        from services.appointment.lifecycle_service import confirm_appointment as _do_confirm
+        return await _do_confirm(
+            self.db,
+            self.organization_id,
+            appointment_id,
+            emit_event=self._emit_event,
         )
 
     # =========================================================================
@@ -1106,7 +613,7 @@ class AppointmentService:
         )
 
     # =========================================================================
-    # STATUS TRANSITIONS
+    # STATUS TRANSITIONS (delegated)
     # =========================================================================
 
     async def mark_no_show(self, appointment_id: int) -> AppointmentResult:
@@ -1114,66 +621,13 @@ class AppointmentService:
         Mark an appointment as no-show and trigger recovery workflow.
         Creates a high-priority follow-up task.
         """
-        Appointment = get_model("Appointment")
-        if not Appointment:
-            return AppointmentResult(success=False, error="Appointment model not available")
-
-        appointment = self.db.query(Appointment).filter(
-            Appointment.id == appointment_id,
-            Appointment.organization_id == self.organization_id,
-        ).first()
-
-        if not appointment:
-            return AppointmentResult(success=False, error="Appointment not found")
-
-        no_show_status = safe_enum_parse("AppointmentStatus", "no_show", "no_show")
-        appointment.status = no_show_status
-        appointment.no_show_at = datetime.now(timezone.utc)
-        appointment.status_changed_at = datetime.now(timezone.utc)
-
-        # Create high-priority re-engagement task
-        _create_followup_task(
-            self.db, self.organization_id,
-            owner_id=appointment.assigned_user_id,
-            lead_id=appointment.lead_id,
-            loan_id=appointment.loan_id,
-            title=f"No-show recovery: {appointment.attendee_name or 'Client'}"[:255],
-            description=(
-                f"{appointment.attendee_name or 'Client'} missed their appointment "
-                f"'{appointment.title}' scheduled for "
-                f"{appointment.scheduled_start.strftime('%m/%d/%Y %I:%M %p') if appointment.scheduled_start else 'unknown'}. "
-                f"Please reach out to reschedule."
-            ),
-            due_date=datetime.now(timezone.utc) + timedelta(hours=4),
-            priority="high",
-        )
-
-        _log_activity(
-            self.db, self.organization_id,
-            user_id=appointment.assigned_user_id,
-            lead_id=appointment.lead_id,
-            loan_id=appointment.loan_id,
-            content=f"No-show: {appointment.attendee_name or 'Client'} missed appointment '{appointment.title}'",
-        )
-
-        self._write_audit_log(
-            user_id=None,
-            action="no_show",
-            entity_type="appointment",
-            entity_id=appointment_id,
-        )
-
-        self.db.commit()
-
-        self._emit_event(AppointmentEvent.NO_SHOW, {
-            "appointment_id": appointment_id,
-            "attendee_name": appointment.attendee_name,
-        })
-
-        return AppointmentResult(
-            success=True,
-            appointment_id=appointment_id,
-            events_emitted=[AppointmentEvent.NO_SHOW.value],
+        from services.appointment.lifecycle_service import mark_no_show as _do_mark_no_show
+        return await _do_mark_no_show(
+            self.db,
+            self.organization_id,
+            appointment_id,
+            write_audit_log=self._write_audit_log,
+            emit_event=self._emit_event,
         )
 
     async def mark_completed(
@@ -1185,55 +639,14 @@ class AppointmentService:
         Mark an appointment as completed and trigger post-appointment flow.
         Stores meeting notes and logs a CRM activity.
         """
-        Appointment = get_model("Appointment")
-        if not Appointment:
-            return AppointmentResult(success=False, error="Appointment model not available")
-
-        appointment = self.db.query(Appointment).filter(
-            Appointment.id == appointment_id,
-            Appointment.organization_id == self.organization_id,
-        ).first()
-
-        if not appointment:
-            return AppointmentResult(success=False, error="Appointment not found")
-
-        completed_status = safe_enum_parse("AppointmentStatus", "completed", "completed")
-        appointment.status = completed_status
-        appointment.completed_at = datetime.now(timezone.utc)
-        appointment.status_changed_at = datetime.now(timezone.utc)
-
-        if notes:
-            appointment.meeting_notes = notes
-
-        _log_activity(
-            self.db, self.organization_id,
-            user_id=appointment.assigned_user_id,
-            lead_id=appointment.lead_id,
-            loan_id=appointment.loan_id,
-            content=(
-                f"Appointment completed: {appointment.title}. "
-                + (f"Notes: {notes[:500]}" if notes else "No notes recorded.")
-            ),
-        )
-
-        self._write_audit_log(
-            user_id=None,
-            action="completed",
-            entity_type="appointment",
-            entity_id=appointment_id,
-            changes={"notes": notes[:200] if notes else None},
-        )
-
-        self.db.commit()
-
-        self._emit_event(AppointmentEvent.COMPLETED, {
-            "appointment_id": appointment_id,
-        })
-
-        return AppointmentResult(
-            success=True,
-            appointment_id=appointment_id,
-            events_emitted=[AppointmentEvent.COMPLETED.value],
+        from services.appointment.lifecycle_service import mark_completed as _do_mark_completed
+        return await _do_mark_completed(
+            self.db,
+            self.organization_id,
+            appointment_id,
+            notes=notes,
+            write_audit_log=self._write_audit_log,
+            emit_event=self._emit_event,
         )
 
     # =========================================================================

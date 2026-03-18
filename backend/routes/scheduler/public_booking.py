@@ -9,6 +9,14 @@ Unauthenticated endpoints for public-facing booking pages:
   - POST /public/book-demo/confirm     - Confirm a website demo booking
 
 All endpoints are rate-limited via shared infrastructure in _helpers.py.
+
+Appointment creation is delegated to the shared appointment_creation_service,
+which handles conflict checking, duplicate detection, cross-source calendar
+checks, meeting link generation, lead creation/linking, activity logging,
+follow-up task creation, and audit logging.  This module retains ownership of
+public-specific concerns: rate limiting, CAPTCHA, booking link validation,
+routing strategy, booking counter increments, confirmation emails/SMS, Outlook
+calendar event creation, confirmation token generation, and response shaping.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
@@ -39,6 +47,10 @@ from scheduler_email_service import (
 from services.notification_service import notification_service
 from services.microsoft_graph import create_event_via_graph, CalendarResult
 from services.scheduler_audit_logger import scheduler_audit
+from services.appointment_creation_service import (
+    create_appointment as _create_appointment_via_service,
+    AppointmentCreationResult,
+)
 from routes.scheduler.constants import (
     DEFAULT_APPOINTMENT_DURATION_MINUTES,
     ALLOWED_APPOINTMENT_DURATIONS,
@@ -501,8 +513,18 @@ async def confirm_public_booking(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Confirm a public booking"""
+    """Confirm a public booking.
+
+    Public-specific validation (rate limiting, CAPTCHA, booking link checks) is
+    handled here.  The actual appointment creation (conflict checking, persistence,
+    lead linking, activity logging, follow-up tasks, audit logging, meeting link
+    generation) is delegated to the shared appointment_creation_service.
+    """
     try:
+        # ==================================================================
+        # PUBLIC-SPECIFIC VALIDATION (rate limiting, CAPTCHA, link checks)
+        # ==================================================================
+
         # Rate limit public booking endpoint
         await _check_rate_limit(request, max_requests=BOOKING_RATE_LIMIT_PER_EMAIL)
 
@@ -605,54 +627,17 @@ async def confirm_public_booking(
                 assigned_user_id = link.user_id
 
         # Determine meeting mode from request or default to VIDEO
-        meeting_mode = MeetingMode.VIDEO
+        meeting_mode_str_raw = "video"
         if booking_data.meeting_mode:
-            mode_map = {"video": MeetingMode.VIDEO, "phone": MeetingMode.PHONE, "in_person": MeetingMode.IN_PERSON}
-            meeting_mode = mode_map.get(booking_data.meeting_mode.lower(), MeetingMode.VIDEO)
+            meeting_mode_str_raw = booking_data.meeting_mode.lower()
 
-        # Create appointment
         slot_end = slot_start + timedelta(minutes=duration_minutes)
 
-        # C1: Prevent double-booking with SELECT FOR UPDATE conflict check
-        _check_appointment_conflict(db, assigned_user_id, slot_start, slot_end, org_id=link_org_id)
-        # C2: Prevent duplicate booking by same attendee
-        _check_duplicate_booking(db, attendee_email, assigned_user_id, slot_start, org_id=link_org_id)
-        # C3: Check cross-source calendar conflicts (Google/Outlook/Salesforce)
-        try:
-            cross_conflicts = _get_cross_source_conflicts(db, assigned_user_id, slot_start, slot_end, org_id=link_org_id)
-            if _has_cross_source_conflict(cross_conflicts, slot_start, slot_end):
-                raise HTTPException(
-                    status_code=409,
-                    detail="This time slot is no longer available. Please select another time."
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"Cross-source conflict check failed (non-blocking): {e}")
-
-        appointment = Appointment(
-            organization_id=link_org_id,
-            appointment_type_id=appointment_type_id,
-            assigned_user_id=assigned_user_id,
-            title=f"{appt_type.type_name} with {attendee_name}",
-            description=appt_type.description,
-            meeting_type=appt_type.meeting_type,
-            meeting_mode=meeting_mode,
-            scheduled_start=slot_start,
-            scheduled_end=slot_end,
-            duration_minutes=duration_minutes,
-            attendee_name=attendee_name,
-            attendee_email=attendee_email,
-            attendee_phone=attendee_phone,
-            intake_responses=intake_responses,
-            status=AppointmentStatus.BOOKED,
-            status_changed_at=datetime.now(timezone.utc),
-            external_source="booking_link"
-        )
-
-        db.add(appointment)
-
-        # H8: Atomic booking count increments
+        # ==================================================================
+        # H8: Atomic booking count increments (staged before service commit)
+        # This runs on the same db session, so it will be committed atomically
+        # with the appointment creation inside the shared service.
+        # ==================================================================
         from sqlalchemy import func as sqlfunc
         db.query(BookingLink).filter(BookingLink.id == link.id).update(
             {
@@ -663,43 +648,59 @@ async def confirm_public_booking(
             synchronize_session=False
         )
 
-        # Create virtual meeting link if meeting mode is VIDEO
-        video_link = None
+        # ==================================================================
+        # DELEGATE TO SHARED APPOINTMENT CREATION SERVICE
+        # Handles: conflict check, duplicate check, cross-source check,
+        #          appointment persistence, meeting link generation,
+        #          lead creation/linking, activity logging, follow-up task,
+        #          audit logging, and db.commit().
+        # ==================================================================
+        result: AppointmentCreationResult = await _create_appointment_via_service(
+            db=db,
+            organization_id=link_org_id,
+            assigned_user_id=assigned_user_id,
+            created_by_user_id=None,  # Public booking -- no authenticated user
+            source="public_booking",
+            title=f"{appt_type.type_name} with {attendee_name}",
+            scheduled_start=slot_start,
+            scheduled_end=slot_end,
+            duration_minutes=duration_minutes,
+            attendee_name=attendee_name,
+            attendee_email=attendee_email,
+            attendee_phone=attendee_phone,
+            appointment_type_id=appointment_type_id,
+            description=appt_type.description,
+            meeting_type=getattr(appt_type, 'meeting_type', None) if appt_type else None,
+            meeting_mode=meeting_mode_str_raw,
+            intake_responses=intake_responses,
+            external_source="booking_link",
+            check_conflicts=True,
+            check_cross_source=True,
+            generate_meeting_link=True,
+            create_lead_if_missing=True,
+        )
+
+        # Translate service failure to HTTP error
+        if not result.success:
+            raise HTTPException(status_code=409, detail=result.error)
+
+        appointment = result.appointment
+        video_link = result.video_link
+
+        # Fallback room code for video meetings
         room_code = None
-        if meeting_mode == MeetingMode.VIDEO:
-            # Generate a fallback room code in case the meeting service is unavailable
-            room_code = secrets.token_urlsafe(8)
-            try:
-                from services.virtual_meeting_service import create_meeting_for_appointment
-                meeting_result = await create_meeting_for_appointment(
-                    db=db,
-                    appointment=appointment,
-                    provider="auto",
-                    user_id=assigned_user_id,
-                    org_id=link_org_id,
-                )
-                if meeting_result.success:
-                    video_link = meeting_result.join_url
-                    room_code = meeting_result.meeting_id
-                    logger.info(
-                        f"Auto-generated meeting link for public booking {appointment.id}: "
-                        f"provider={meeting_result.provider}, url={video_link}"
-                    )
-            except Exception as e:
-                logger.warning(f"Could not auto-generate meeting link for public booking: {e}")
-                # Continue without meeting link - appointment still gets created
+        meeting_mode_enum = MeetingMode.VIDEO
+        if booking_data.meeting_mode:
+            mode_map = {"video": MeetingMode.VIDEO, "phone": MeetingMode.PHONE, "in_person": MeetingMode.IN_PERSON}
+            meeting_mode_enum = mode_map.get(meeting_mode_str_raw, MeetingMode.VIDEO)
 
-        # Audit: DB + structured log for public booking path
-        _audit_log(db, link_org_id, None, 'created', 'appointment',
-                   entity_id=None, changes={
-                       'title': appointment.title,
-                       'attendee_email': attendee_email,
-                       'scheduled_start': slot_start.isoformat() if slot_start else None,
-                       'booking_link_slug': slug,
-                   }, request=request, booking_source="public_booking")
+        if meeting_mode_enum == MeetingMode.VIDEO:
+            room_code = secrets.token_urlsafe(8) if not video_link else None
 
-        db.commit()
-        db.refresh(appointment)
+        # ==================================================================
+        # PUBLIC-SPECIFIC POST-CREATION SIDE EFFECTS
+        # (enterprise audit, Outlook calendar, emails/SMS, confirmation token)
+        # ==================================================================
 
         # Enterprise audit: structured log for compliance (public booking path)
         scheduler_audit.log_appointment_created(
@@ -715,39 +716,13 @@ async def confirm_public_booking(
 
         logger.info(f"Public booking confirmed: {appointment.id} via link {slug}")
 
-        # CRM Integration: Create/link lead
-        lead_id = _ensure_lead_for_booking(
-            db, attendee_email, attendee_name, attendee_phone,
-            assigned_user_id, link_org_id
-        )
-        if lead_id and not appointment.lead_id:
-            appointment.lead_id = lead_id
-
-        # CRM: Log activity
-        _log_appointment_activity(
-            db, link_org_id, assigned_user_id, lead_id, None,
-            f"Public booking confirmed: {appointment.title} on "
-            f"{appointment.scheduled_start.strftime('%m/%d/%Y %I:%M %p') if appointment.scheduled_start else 'TBD'}"
-        )
-
-        # CRM: Create follow-up task
-        _create_followup_task(
-            db, link_org_id, assigned_user_id, lead_id, None,
-            title=f"Follow up after: {appointment.title}"[:255],
-            description=f"Follow up with {attendee_name or 'attendee'} after "
-                        f"meeting on {appointment.scheduled_start.strftime('%m/%d/%Y') if appointment.scheduled_start else 'TBD'}",
-            due_date=appointment.scheduled_end + timedelta(days=1) if appointment.scheduled_end else datetime.now(timezone.utc) + timedelta(days=2),
-        )
-
-        # C3: Soft licensing check
+        # C3: Soft licensing check (advisory only)
         attendee_state = None
         if intake_responses:
             attendee_state = intake_responses.get("state") or intake_responses.get("property_state")
         licensing_warning = _check_lo_licensing(db, assigned_user_id, attendee_state, org_id=link_org_id)
         if licensing_warning:
             logger.warning(f"Appointment {appointment.id}: {licensing_warning}")
-
-        db.commit()
 
         # Prepare confirmation details
         appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
@@ -756,9 +731,9 @@ async def confirm_public_booking(
 
         # Get meeting mode display string
         meeting_mode_str = "Video Call"
-        if meeting_mode == MeetingMode.PHONE:
+        if meeting_mode_enum == MeetingMode.PHONE:
             meeting_mode_str = "Phone Call"
-        elif meeting_mode == MeetingMode.IN_PERSON:
+        elif meeting_mode_enum == MeetingMode.IN_PERSON:
             meeting_mode_str = "In Person"
 
         # Get team member name and email - prefer explicit parameter, then try to fetch from user
@@ -1077,13 +1052,17 @@ async def confirm_website_demo_booking(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """
-    Confirm a website demo booking.
+    """Confirm a website demo booking.
 
-    This endpoint creates an appointment using the calendar assignment
-    for 'website_demo' purpose.
+    Public-specific validation (rate limiting, calendar assignment lookup) is
+    handled here.  The actual appointment creation is delegated to the shared
+    appointment_creation_service.
     """
     try:
+        # ==================================================================
+        # PUBLIC-SPECIFIC VALIDATION (rate limiting, assignment lookup)
+        # ==================================================================
+
         # Rate limit public demo booking endpoint
         await _check_rate_limit(http_request, max_requests=BOOKING_RATE_LIMIT_PER_EMAIL)
 
@@ -1132,64 +1111,54 @@ async def confirm_website_demo_booking(
 
         end_time = start_time + timedelta(minutes=request.duration_minutes)
 
-        # Create the appointment
-        Appointment = get_models().get('Appointment')
-        if not Appointment:
-            logger.error("Scheduler models not initialized for demo booking")
-            raise HTTPException(status_code=500, detail="Something went wrong. Please try again later.")
-
-        # Prevent double-booking
-        _check_appointment_conflict(db, assigned_user_id, start_time, end_time, org_id=demo_org_id)
-        # Check cross-source calendar conflicts (Google/Outlook/Salesforce)
-        try:
-            cross_conflicts = _get_cross_source_conflicts(db, assigned_user_id, start_time, end_time, org_id=demo_org_id)
-            if _has_cross_source_conflict(cross_conflicts, start_time, end_time):
-                raise HTTPException(
-                    status_code=409,
-                    detail="This time slot is no longer available. Please select another time."
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"Cross-source conflict check failed (non-blocking): {e}")
-
         # Validate and sanitize user-supplied text
         safe_name = _sanitize_text(request.attendee_name)
         safe_phone = _validate_phone(request.attendee_phone)
         safe_phone = _sanitize_text(safe_phone)
         safe_notes = _sanitize_text(request.notes)
 
-        new_appointment = Appointment(
+        # Determine meeting mode string for the shared service
+        demo_meeting_mode = "video" if request.meeting_mode == "video" else "phone"
+
+        # ==================================================================
+        # DELEGATE TO SHARED APPOINTMENT CREATION SERVICE
+        # Handles: conflict check, duplicate check, cross-source check,
+        #          appointment persistence, lead creation/linking, activity
+        #          logging, follow-up task, audit logging, and db.commit().
+        # ==================================================================
+        result: AppointmentCreationResult = await _create_appointment_via_service(
+            db=db,
             organization_id=demo_org_id,
             assigned_user_id=assigned_user_id,
+            created_by_user_id=None,  # Public booking -- no authenticated user
+            source="public_booking",
+            title=f"Platform Demo with {safe_name}",
             scheduled_start=start_time,
             scheduled_end=end_time,
             duration_minutes=request.duration_minutes,
             attendee_name=safe_name,
             attendee_email=request.attendee_email,
             attendee_phone=safe_phone,
-            title=f"Platform Demo with {safe_name}",
-            meeting_type=MeetingType.CUSTOM,
-            meeting_mode=MeetingMode.VIDEO if request.meeting_mode == "video" else MeetingMode.PHONE,
-            status=AppointmentStatus.BOOKED,
-            status_changed_at=datetime.now(timezone.utc),
+            meeting_type="custom",
+            meeting_mode=demo_meeting_mode,
             internal_notes=safe_notes,
-            external_source="website_demo"
+            external_source="website_demo",
+            check_conflicts=True,
+            check_cross_source=True,
+            generate_meeting_link=(demo_meeting_mode == "video"),
+            create_lead_if_missing=True,
         )
 
-        db.add(new_appointment)
+        # Translate service failure to HTTP error
+        if not result.success:
+            raise HTTPException(status_code=409, detail=result.error)
 
-        # Audit: DB + structured log for website demo booking path
-        _audit_log(db, demo_org_id, None, 'created', 'appointment',
-                   entity_id=None, changes={
-                       'title': new_appointment.title,
-                       'attendee_email': request.attendee_email,
-                       'scheduled_start': start_time.isoformat() if start_time else None,
-                       'demo_source': 'website',
-                   }, request=None, booking_source="public_booking")
+        new_appointment = result.appointment
 
-        db.commit()
-        db.refresh(new_appointment)
+        # ==================================================================
+        # PUBLIC-SPECIFIC POST-CREATION SIDE EFFECTS
+        # (enterprise audit, confirmation email, response shaping)
+        # ==================================================================
 
         # Enterprise audit: structured log for compliance (demo booking path)
         scheduler_audit.log_appointment_created(

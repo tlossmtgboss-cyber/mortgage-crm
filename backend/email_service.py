@@ -45,7 +45,8 @@ class EmailService:
         self.smtp_password = os.getenv('SMTP_PASSWORD', '')
 
         # Common configuration
-        self.from_email = os.getenv('FROM_EMAIL', 'sarah@reply.perenniaai.com')
+        from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
+        self.from_email = os.getenv('FROM_EMAIL', DEFAULT_ORGANIZER_EMAIL)
         self.from_name = os.getenv('FROM_NAME', 'Sarah from Perennia AI')
 
         if self.use_sendgrid:

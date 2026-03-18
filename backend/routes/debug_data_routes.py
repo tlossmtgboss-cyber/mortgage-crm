@@ -21,6 +21,11 @@ from auth.dependencies import require_auth
 logger = logging.getLogger(__name__)
 _ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
 
+try:
+    from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_ORGANIZER_EMAIL
+except ImportError:
+    _DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
+
 
 def register_debug_data_routes(
     app, get_db, get_current_user, get_current_user_flexible,
@@ -1916,7 +1921,7 @@ def register_debug_data_routes(
     """
 
             # Send the email with correct FROM address
-            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+            ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
             email_sent = email_service.send_html_email(
                 to_email=to_email,
                 subject=f"RE: Your Mortgage Inquiry - Perennia AI Assistant",
@@ -2290,7 +2295,7 @@ def register_debug_data_routes(
                                 }]
 
                                 # Send email to loan officer
-                                ai_from_email_lo = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                                ai_from_email_lo = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
                                 lo_email_sent = email_service.send_html_email(
                                     to_email=lo_email,
                                     subject=lo_subject,
@@ -2309,7 +2314,7 @@ def register_debug_data_routes(
                         logger.warning(f"Could not generate ICS: {ics_err}")
 
                 # Send the response (with ICS attachment if booking)
-                ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
                 email_sent = email_service.send_html_email(
                     to_email=sender_email,
                     subject=reply_subject,
@@ -2329,7 +2334,7 @@ def register_debug_data_routes(
                     training_log = EmailTrainingLog(
                         conversation_id=conv_id,
                         from_email=sender_email,
-                        to_email="sarah@reply.perenniaai.com",
+                        to_email=_DEFAULT_ORGANIZER_EMAIL,
                         subject=subject,
                         user_message=clean_message,
                         ai_response=result["response"],
@@ -2438,7 +2443,7 @@ def register_debug_data_routes(
     </html>
     """
 
-                ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+                ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
                 email_sent = email_service.send_html_email(
                     to_email=sender_email,
                     subject=f"Re: Your Mortgage Inquiry - Perennia AI",
@@ -2542,7 +2547,7 @@ def register_debug_data_routes(
 
             # Use the reply subdomain for FROM address so replies come back to us
             import os
-            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+            ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
 
             email_sent = email_service.send_html_email(
                 to_email=to_email,
@@ -2607,7 +2612,7 @@ def register_debug_data_routes(
 
     - Perennia AI Team"""
 
-            ai_from_email = os.getenv("AI_FROM_EMAIL", "sarah@reply.perenniaai.com")
+            ai_from_email = os.getenv("AI_FROM_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
             email_sent = email_service.send_html_email(
                 to_email=to_email,
                 subject=f"{test_subject} - ID:{test_id}",

@@ -125,6 +125,8 @@ def _build_extra(
     loan_id: Optional[int] = None,
     lead_id: Optional[int] = None,
     booking_link_id: Optional[int] = None,
+    booking_source: Optional[str] = None,
+    booking_path_details: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None,
     **kwargs: Any,
@@ -134,6 +136,8 @@ def _build_extra(
     Every audit entry includes the following when available:
     - event_type, appointment_id, user_id, org_id
     - loan_id, lead_id (entity linkage for enterprise compliance)
+    - booking_source: "authenticated", "public_booking", or "ai_pipeline"
+    - booking_path_details: dict with path-specific metadata
     - ip_address, user_agent (client provenance)
     - request_id (correlation)
     """
@@ -156,6 +160,10 @@ def _build_extra(
         extra["lead_id"] = lead_id
     if booking_link_id is not None:
         extra["booking_link_id"] = booking_link_id
+    if booking_source is not None:
+        extra["booking_source"] = booking_source
+    if booking_path_details is not None:
+        extra["booking_path_details"] = booking_path_details
     if ip_address is not None:
         extra["ip_address"] = ip_address
     if user_agent is not None:
@@ -250,6 +258,8 @@ class SchedulerAuditLogger:
         user: Any,
         *,
         request: Any = None,
+        booking_source: Optional[str] = None,
+        booking_path_details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log that a new appointment was created.
@@ -260,6 +270,9 @@ class SchedulerAuditLogger:
                          organization_id, assigned_user_id, lead_id, loan_id
             user: User ORM instance or dict with id, first_name, last_name
             request: FastAPI Request (for ip_address, user_agent)
+            booking_source: "authenticated", "public_booking", or "ai_pipeline"
+            booking_path_details: Dict with path-specific metadata (e.g.,
+                booking_link_slug, pipeline_stage, trigger_rule, etc.)
         """
         req_info = _extract_request_info(request)
 
@@ -270,6 +283,8 @@ class SchedulerAuditLogger:
             org_id=_safe_attr(appointment, "organization_id"),
             loan_id=_safe_attr(appointment, "loan_id"),
             lead_id=_safe_attr(appointment, "lead_id"),
+            booking_source=booking_source,
+            booking_path_details=booking_path_details,
             ip_address=req_info["ip_address"],
             user_agent=req_info["user_agent"],
             scheduled_start=_format_dt(_safe_attr(appointment, "scheduled_start")),
@@ -294,8 +309,9 @@ class SchedulerAuditLogger:
             booked_by_ai=_safe_attr(appointment, "booked_by_ai"),
         )
 
+        source_label = f" via {booking_source}" if booking_source else ""
         logger.info(
-            "Appointment created",
+            f"Appointment created{source_label}",
             extra=extra,
         )
 
@@ -310,6 +326,8 @@ class SchedulerAuditLogger:
         *,
         changes: Optional[Dict[str, Dict[str, Any]]] = None,
         request: Any = None,
+        booking_source: Optional[str] = None,
+        booking_path_details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log that an appointment was updated (field-level changes).
@@ -320,6 +338,8 @@ class SchedulerAuditLogger:
             changes: Dict of {field_name: {"old": ..., "new": ...}} showing
                      what changed. Only changed fields should be included.
             request: FastAPI Request (for ip_address, user_agent)
+            booking_source: "authenticated", "public_booking", or "ai_pipeline"
+            booking_path_details: Dict with path-specific metadata
         """
         req_info = _extract_request_info(request)
 
@@ -333,6 +353,8 @@ class SchedulerAuditLogger:
             org_id=_safe_attr(appointment, "organization_id"),
             loan_id=_safe_attr(appointment, "loan_id"),
             lead_id=_safe_attr(appointment, "lead_id"),
+            booking_source=booking_source,
+            booking_path_details=booking_path_details,
             ip_address=req_info["ip_address"],
             user_agent=req_info["user_agent"],
             updated_by=_get_user_name(user),
@@ -361,6 +383,8 @@ class SchedulerAuditLogger:
         within_policy: Optional[bool] = None,
         is_late_cancellation: Optional[bool] = None,
         cancellation_fee_applied: Optional[bool] = None,
+        booking_source: Optional[str] = None,
+        booking_path_details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log that an appointment was cancelled.
@@ -374,6 +398,8 @@ class SchedulerAuditLogger:
                            cancellation policy window
             is_late_cancellation: Whether this is a late cancellation
             cancellation_fee_applied: Whether a cancellation fee was charged
+            booking_source: "authenticated", "public_booking", or "ai_pipeline"
+            booking_path_details: Dict with path-specific metadata
         """
         req_info = _extract_request_info(request)
 
@@ -384,6 +410,8 @@ class SchedulerAuditLogger:
             org_id=_safe_attr(appointment, "organization_id"),
             loan_id=_safe_attr(appointment, "loan_id"),
             lead_id=_safe_attr(appointment, "lead_id"),
+            booking_source=booking_source,
+            booking_path_details=booking_path_details,
             ip_address=req_info["ip_address"],
             user_agent=req_info["user_agent"],
             scheduled_start=_format_dt(_safe_attr(appointment, "scheduled_start")),
@@ -417,6 +445,8 @@ class SchedulerAuditLogger:
         new_end: Any = None,
         reschedule_count: Optional[int] = None,
         initiated_by: Optional[str] = None,
+        booking_source: Optional[str] = None,
+        booking_path_details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log that an appointment was rescheduled.
@@ -431,6 +461,8 @@ class SchedulerAuditLogger:
             new_end: New scheduled_end
             reschedule_count: Total reschedule count after this operation
             initiated_by: "lo", "borrower", "admin", or "system"
+            booking_source: "authenticated", "public_booking", or "ai_pipeline"
+            booking_path_details: Dict with path-specific metadata
         """
         req_info = _extract_request_info(request)
 
@@ -441,6 +473,8 @@ class SchedulerAuditLogger:
             org_id=_safe_attr(appointment, "organization_id"),
             loan_id=_safe_attr(appointment, "loan_id"),
             lead_id=_safe_attr(appointment, "lead_id"),
+            booking_source=booking_source,
+            booking_path_details=booking_path_details,
             ip_address=req_info["ip_address"],
             user_agent=req_info["user_agent"],
             old_scheduled_start=_format_dt(old_time),
@@ -692,6 +726,8 @@ class SchedulerAuditLogger:
         old_end: Any = None,
         new_end: Any = None,
         request: Any = None,
+        booking_source: Optional[str] = None,
+        booking_path_details: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
         Log that a borrower confirmed a reschedule via self-service link.
@@ -703,6 +739,8 @@ class SchedulerAuditLogger:
             old_end: Previous scheduled_end
             new_end: New scheduled_end
             request: FastAPI Request (for ip_address, user_agent)
+            booking_source: "authenticated", "public_booking", or "ai_pipeline"
+            booking_path_details: Dict with path-specific metadata
         """
         req_info = _extract_request_info(request)
 
@@ -712,6 +750,8 @@ class SchedulerAuditLogger:
             org_id=_safe_attr(appointment, "organization_id"),
             loan_id=_safe_attr(appointment, "loan_id"),
             lead_id=_safe_attr(appointment, "lead_id"),
+            booking_source=booking_source,
+            booking_path_details=booking_path_details,
             ip_address=req_info["ip_address"],
             user_agent=req_info["user_agent"],
             old_scheduled_start=_format_dt(old_start),
@@ -728,6 +768,132 @@ class SchedulerAuditLogger:
             "Borrower confirmed reschedule via self-service link",
             extra=extra,
         )
+
+    # ------------------------------------------------------------------
+    # log_appointment_event (general-purpose DB + structured log entry)
+    # ------------------------------------------------------------------
+
+    def log_appointment_event(
+        self,
+        db: Any,
+        appointment_id: int,
+        event_type: str,
+        *,
+        user_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
+        booking_source: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+        ip_address: Optional[str] = None,
+        request: Any = None,
+    ) -> None:
+        """Log an appointment lifecycle event to both the DB audit table and
+        the structured log file.
+
+        This is a convenience method that writes a single row to the
+        ``scheduler_audit_log`` table **and** emits a structured log entry so
+        every booking path (authenticated, public, AI pipeline) can produce
+        a unified audit trail with a single call.
+
+        Args:
+            db: SQLAlchemy Session (for DB write).
+            appointment_id: ID of the appointment.
+            event_type: "created", "updated", "cancelled", "rescheduled",
+                        "no_show", "recovery_sent", etc.
+            user_id: ID of the acting user (None for unauthenticated paths).
+            organization_id: Tenant organization ID.
+            booking_source: "authenticated", "public_booking", or "ai_pipeline".
+            details: Arbitrary dict with event-specific metadata.
+            ip_address: Client IP address (overrides request extraction).
+            request: FastAPI Request (for ip_address/user_agent extraction).
+        """
+        req_info = _extract_request_info(request)
+        resolved_ip = ip_address or req_info.get("ip_address")
+        resolved_ua = req_info.get("user_agent")
+
+        # --- DB write ---
+        try:
+            from database.models.scheduler import SchedulerAuditLog
+            entry = SchedulerAuditLog(
+                organization_id=organization_id,
+                user_id=user_id,
+                action=event_type,
+                entity_type="appointment",
+                entity_id=appointment_id,
+                changes=details,
+                booking_source=booking_source,
+                ip_address=resolved_ip,
+                user_agent=resolved_ua[:255] if resolved_ua else None,
+            )
+            db.add(entry)
+            # Don't commit — let the caller's transaction include this
+        except Exception as e:
+            logger.warning(f"Failed to write appointment audit log to DB: {e}")
+
+        # --- Structured log entry ---
+        extra = _build_extra(
+            f"appointment_{event_type}",
+            appointment_id=appointment_id,
+            user_id=user_id,
+            org_id=organization_id,
+            booking_source=booking_source,
+            booking_path_details=details,
+            ip_address=resolved_ip,
+            user_agent=resolved_ua,
+        )
+        logger.info(
+            f"Appointment {event_type} (source={booking_source or 'unknown'})",
+            extra=extra,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Standalone helpers (no class instance needed)
+# ---------------------------------------------------------------------------
+
+def get_appointment_audit_trail(
+    db: Any,
+    appointment_id: int,
+) -> List[Dict[str, Any]]:
+    """Get complete audit trail for an appointment from the DB.
+
+    Returns a chronologically ordered list of audit log entries for the
+    specified appointment, combining all booking sources and event types.
+
+    Args:
+        db: SQLAlchemy Session.
+        appointment_id: ID of the appointment to retrieve history for.
+
+    Returns:
+        List of dicts, each containing event_type, booking_source, user_id,
+        details, ip_address, and created_at (ISO 8601).
+    """
+    try:
+        from database.models.scheduler import SchedulerAuditLog
+    except ImportError:
+        logger.warning("SchedulerAuditLog model not available for audit trail query")
+        return []
+
+    logs = (
+        db.query(SchedulerAuditLog)
+        .filter(
+            SchedulerAuditLog.entity_type == "appointment",
+            SchedulerAuditLog.entity_id == appointment_id,
+        )
+        .order_by(SchedulerAuditLog.created_at.asc())
+        .all()
+    )
+
+    return [
+        {
+            "event_type": log.action,
+            "booking_source": log.booking_source,
+            "user_id": log.user_id,
+            "details": log.changes,
+            "ip_address": log.ip_address,
+            "created_at": _format_dt(log.created_at),
+        }
+        for log in logs
+    ]
 
 
 # ---------------------------------------------------------------------------

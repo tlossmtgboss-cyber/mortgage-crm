@@ -27,6 +27,8 @@ from sqlalchemy import and_, or_
 import logging
 import uuid
 
+from routes.scheduler.constants import DEFAULT_TIMEZONE
+
 logger = logging.getLogger(__name__)
 
 
@@ -345,7 +347,7 @@ class ComplianceSchedulingService:
             scheduled_start=scheduled_start,
             scheduled_end=scheduled_end,
             duration_minutes=duration,
-            timezone="America/Chicago",
+            timezone=DEFAULT_TIMEZONE,
             attendee_name=loan.borrower_name,
             attendee_email=loan.borrower_email,
             attendee_phone=loan.borrower_phone,

@@ -36,7 +36,7 @@ DEFAULT_NAVIGATION_ITEMS = [
     {"path": "/master-manager/recruiting", "label": "Recruiting", "module": "recruiting_suite", "icon": "person_add"},
     {"path": "/conversation-intelligence", "label": "Call Intelligence", "module": "conversation_intelligence", "icon": "record_voice_over"},
     {"path": "/profitability", "label": "Profitability", "module": "advanced_analytics", "icon": "trending_up"},
-    {"path": "/decision-lab", "label": "Decision Lab", "module": "advanced_analytics", "icon": "science"},
+    # {"path": "/decision-lab", "label": "Decision Lab", "module": "advanced_analytics", "icon": "science"},  # DEPRECATED: Experimental feature deregistered
     {"path": "/integrations", "label": "Integrations", "module": "integrations", "icon": "extension"},
 ]
 
@@ -260,7 +260,7 @@ class ModuleService:
             "disc_assessment": "recruiting_suite",
             "call_recording": "conversation_intelligence",
             "qa_scoring": "conversation_intelligence",
-            "decision_lab": "advanced_analytics",
+            # "decision_lab": "advanced_analytics",  # DEPRECATED: Experimental feature deregistered
             "profitability": "advanced_analytics",
             "salesforce": "integrations",
             "hubspot": "integrations",

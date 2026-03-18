@@ -19,6 +19,10 @@ from routes.scheduler._helpers import (
     _check_appointment_conflict, _audit_log,
 )
 from routes.scheduler.constants import DEFAULT_APPOINTMENT_DURATION_MINUTES
+from routes.scheduler.error_responses import (
+    validation_error, not_found_error, conflict_error,
+    internal_error, service_unavailable_error,
+)
 from db import get_db
 from middleware.feature_gate import require_feature_tier
 from services.conflict_resolution_service import (
@@ -150,10 +154,10 @@ async def check_conflicts(
         start_dt = datetime.fromisoformat(start.replace('Z', '+00:00').replace('+00:00', ''))
         end_dt = datetime.fromisoformat(end.replace('Z', '+00:00').replace('+00:00', ''))
     except (ValueError, TypeError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid datetime format: {e}")
+        validation_error("Invalid datetime format", detail=str(e))
 
     if end_dt <= start_dt:
-        raise HTTPException(status_code=400, detail="End time must be after start time")
+        validation_error("End time must be after start time")
 
     # Detect conflicts
     conflicts = detect_conflicts(
@@ -225,12 +229,12 @@ async def list_conflicts(
         try:
             parsed_start = date.fromisoformat(start_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid start_date format (expected YYYY-MM-DD)")
+            validation_error("Invalid start_date format (expected YYYY-MM-DD)")
     if end_date:
         try:
             parsed_end = date.fromisoformat(end_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid end_date format (expected YYYY-MM-DD)")
+            validation_error("Invalid end_date format (expected YYYY-MM-DD)")
 
     conflict_pairs = list_user_conflicts(
         db=db,
@@ -270,7 +274,7 @@ async def resolve_conflict(
     _models = get_models()
     Appointment = _models.get('Appointment')
     if not Appointment:
-        raise HTTPException(status_code=500, detail="Scheduler models not available")
+        service_unavailable_error("Scheduler models not available")
 
     from sqlalchemy import or_
 
@@ -285,21 +289,21 @@ async def resolve_conflict(
     ).first()
 
     if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        not_found_error("Appointment not found")
 
     from smart_scheduler_models import AppointmentStatus
     if appointment.status in (AppointmentStatus.CANCELLED, AppointmentStatus.COMPLETED):
-        raise HTTPException(status_code=400, detail="Cannot reschedule a cancelled or completed appointment")
+        validation_error("Cannot reschedule a cancelled or completed appointment")
 
     # Parse new times
     try:
         new_start = datetime.fromisoformat(body.new_start.replace('Z', '+00:00').replace('+00:00', ''))
         new_end = datetime.fromisoformat(body.new_end.replace('Z', '+00:00').replace('+00:00', ''))
     except (ValueError, TypeError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid datetime format: {e}")
+        validation_error("Invalid datetime format", detail=str(e))
 
     if new_end <= new_start:
-        raise HTTPException(status_code=400, detail="End time must be after start time")
+        validation_error("End time must be after start time")
 
     # Verify new slot is conflict-free
     new_conflicts = detect_conflicts(
@@ -313,10 +317,7 @@ async def resolve_conflict(
 
     hard_conflicts = [c for c in new_conflicts if c['severity'] == 'hard']
     if hard_conflicts:
-        raise HTTPException(
-            status_code=409,
-            detail="The selected time slot still has conflicts. Please choose a different time.",
-        )
+        conflict_error("The selected time slot still has conflicts. Please choose a different time.")
 
     # Store old times for audit
     old_start = appointment.scheduled_start

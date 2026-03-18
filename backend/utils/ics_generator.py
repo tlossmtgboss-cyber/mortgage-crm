@@ -25,7 +25,11 @@ PRODID_MORTGAGE = "-//Perennia AI//Mortgage CRM//EN"
 PRODID_VIDEO = "-//Perennia AI//Video Meeting Platform//EN"
 PRODID_MILESTONES = "-//Perennia AI//Mortgage CRM Milestone Calendar//EN"
 
-DEFAULT_ORGANIZER_EMAIL = "sarah@reply.perenniaai.com"
+try:
+    from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
+except ImportError:
+    import os
+    DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "sarah@reply.perenniaai.com")
 DEFAULT_ORGANIZER_NAME = "Sarah - Perennia AI"
 
 # Appointment type display titles (shared between borrower and LO invite generators)

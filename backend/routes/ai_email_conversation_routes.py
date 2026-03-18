@@ -21,6 +21,11 @@ from sqlalchemy.exc import SQLAlchemyError
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+try:
+    from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_ORGANIZER_EMAIL
+except ImportError:
+    _DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
+
 
 # =============================================================================
 # Pydantic Models
@@ -1121,7 +1126,7 @@ Loan Information:
         # Send response
         from email_service import email_service
 
-        reply_to_base = os.getenv("AI_REPLY_EMAIL", "sarah@reply.perenniaai.com")
+        reply_to_base = os.getenv("AI_REPLY_EMAIL", _DEFAULT_ORGANIZER_EMAIL)
         # Create tagged reply-to for conversation threading
         if '@' in reply_to_base:
             domain = reply_to_base.split('@')[1]
