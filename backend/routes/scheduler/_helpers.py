@@ -22,7 +22,7 @@ from sqlalchemy import and_, or_
 from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Optional
 import pytz
-from collections import OrderedDict, deque
+from collections import OrderedDict, defaultdict, deque
 import asyncio
 import html
 import ipaddress
@@ -336,10 +336,18 @@ async def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: 
         return True
 
 
-async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC):
+async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC, custom_key: str = None):
     """
     Redis-backed rate limiter keyed by client IP + path.
     Falls back to async in-memory rate limiting if Redis is unavailable.
+
+    Args:
+        request: The incoming HTTP request (used for IP and path extraction).
+        max_requests: Maximum requests allowed in the rate-limit window.
+        custom_key: Optional override for the rate-limit key. When provided,
+                    this replaces the default ``sched_rl:{path}:{ip}`` key,
+                    allowing callers to rate-limit by a different dimension
+                    (e.g., per-email or per-action).
 
     SECURITY RATIONALE: Public booking endpoints (no auth required) are the primary
     consumers of this function. If rate limiting is completely bypassed, these
@@ -354,7 +362,7 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
     """
     client_ip = _get_client_ip(request)
 
-    key = f"sched_rl:{request.url.path}:{client_ip}"
+    key = custom_key or f"sched_rl:{request.url.path}:{client_ip}"
 
     r = _get_rate_limit_redis()
     if r is None:
@@ -568,8 +576,13 @@ async def _verify_turnstile_token(token: str) -> bool:
 # ============================================================================
 
 def _audit_log(db, org_id: int, user_id: int, action: str, entity_type: str,
-               entity_id: int = None, changes: dict = None, request: Request = None):
-    """Record an audit log entry for scheduler operations."""
+               entity_id: int = None, changes: dict = None, request: Request = None,
+               booking_source: str = None):
+    """Record an audit log entry for scheduler operations.
+
+    Args:
+        booking_source: "authenticated", "public_booking", or "ai_pipeline".
+    """
     AuditLog = _models.get('SchedulerAuditLog') if _models else None
     if not AuditLog:
         return
@@ -581,6 +594,7 @@ def _audit_log(db, org_id: int, user_id: int, action: str, entity_type: str,
             entity_type=entity_type,
             entity_id=entity_id,
             changes=changes,
+            booking_source=booking_source,
             ip_address=request.client.host if request and request.client else None,
             user_agent=str(request.headers.get('user-agent', ''))[:255] if request else None,
         )
@@ -686,6 +700,96 @@ def _has_cross_source_conflict(conflicts, slot_start, slot_end, buffer_before=0,
         if slot_start < buffered_end and slot_end > buffered_start:
             return True
     return False
+
+
+def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_id: int = None):
+    """
+    Batch-load cross-source conflicts for ALL users at once.
+
+    Returns a dict mapping user_id -> list of (start, end) tuples.
+    This replaces N calls to _get_cross_source_conflicts() with a fixed
+    number of queries regardless of user count.
+    """
+    conflicts_by_user = defaultdict(list)
+
+    # Source 1: v2 Appointment (scheduler_appointments) -- canonical table
+    if _models and _models.get('Appointment'):
+        try:
+            V2Appt = _models['Appointment']
+            v2_query = db.query(V2Appt).filter(
+                V2Appt.assigned_user_id.in_(user_ids),
+                V2Appt.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
+                V2Appt.scheduled_start >= start_dt,
+                V2Appt.scheduled_start <= end_dt
+            )
+            if org_id:
+                v2_query = v2_query.filter(V2Appt.organization_id == org_id)
+            for a in v2_query.all():
+                if a.scheduled_start and a.scheduled_end:
+                    conflicts_by_user[a.assigned_user_id].append(
+                        (a.scheduled_start, a.scheduled_end)
+                    )
+        except Exception as e:
+            logger.warning(f"v2 Appointment batch cross-source check unavailable: {e}")
+
+    # Source 1b: Legacy ScheduledAppointment (scheduled_appointments) -- deprecated
+    try:
+        from services.smart_scheduler_service import ScheduledAppointment as SAModel
+        sa_query = db.query(SAModel).filter(
+            SAModel.loan_officer_id.in_(user_ids),
+            SAModel.status.in_(["scheduled", "confirmed"]),
+            SAModel.start_time >= start_dt,
+            SAModel.start_time <= end_dt
+        )
+        if org_id:
+            sa_query = sa_query.filter(SAModel.organization_id == org_id)
+        for a in sa_query.all():
+            if a.start_time and a.end_time:
+                conflicts_by_user[a.loan_officer_id].append(
+                    (a.start_time, a.end_time)
+                )
+    except Exception as e:
+        logger.debug(f"Legacy ScheduledAppointment batch cross-source check skipped: {e}")
+
+    # Source 2: CalendarEvent (manual calendar entries)
+    try:
+        from database.models.communication import CalendarEvent
+        cal_query = db.query(CalendarEvent).filter(
+            CalendarEvent.user_id.in_(user_ids),
+            CalendarEvent.status != "cancelled",
+            CalendarEvent.start_time >= start_dt,
+            CalendarEvent.start_time <= end_dt
+        )
+        if org_id:
+            cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
+        for e in cal_query.all():
+            if e.start_time and e.end_time:
+                conflicts_by_user[e.user_id].append(
+                    (e.start_time, e.end_time)
+                )
+    except Exception as ex:
+        logger.warning(f"CalendarEvent batch cross-source check unavailable: {ex}")
+
+    # Source 3: CRMCalendarEvent (Salesforce-synced events)
+    try:
+        from models.calendar_sync_models import CRMCalendarEvent
+        crm_query = db.query(CRMCalendarEvent).filter(
+            CRMCalendarEvent.owner_user_id.in_(user_ids),
+            CRMCalendarEvent.status != "canceled",
+            CRMCalendarEvent.start_at >= start_dt,
+            CRMCalendarEvent.start_at <= end_dt
+        )
+        if org_id:
+            crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
+        for e in crm_query.all():
+            if e.start_at and e.end_at:
+                conflicts_by_user[e.owner_user_id].append(
+                    (e.start_at, e.end_at)
+                )
+    except Exception as ex:
+        logger.warning(f"CRMCalendarEvent batch cross-source check unavailable: {ex}")
+
+    return conflicts_by_user
 
 
 # ============================================================================
@@ -1021,16 +1125,91 @@ def _generate_available_slots(
         raise HTTPException(status_code=400, detail="Date range cannot exceed 90 days")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC -- consistent with datetime.combine() outputs
+    start_dt = datetime.combine(start_date, time.min)
+    end_dt = datetime.combine(end_date, time.max)
     all_slots = []
 
-    for user_id in user_ids:
-        # Load user config
-        config_query = db.query(SchedulerConfig).filter(
-            SchedulerConfig.user_id == user_id
-        )
+    # ---------------------------------------------------------------
+    # BATCH LOAD: Fetch data for ALL users upfront to avoid N+1 queries.
+    # With 5 users over 30 days, this reduces ~175 queries to ~5-10.
+    # ---------------------------------------------------------------
+
+    # Batch 1: SchedulerConfig for all users
+    config_query = db.query(SchedulerConfig).filter(
+        SchedulerConfig.user_id.in_(user_ids)
+    )
+    if org_id:
+        config_query = config_query.filter(SchedulerConfig.organization_id == org_id)
+    all_configs = config_query.all()
+    config_by_user = {c.user_id: c for c in all_configs}
+
+    # Batch 2: BlockedTime for all users in the date range
+    # Include both user-specific blocks AND applies_to_all_users blocks
+    blocked_query = db.query(BlockedTime).filter(
+        BlockedTime.is_active == True,
+        or_(
+            BlockedTime.user_id.in_(user_ids),
+            BlockedTime.applies_to_all_users == True
+        ),
+        BlockedTime.start_datetime <= end_dt,
+        BlockedTime.end_datetime >= start_dt
+    )
+    if org_id:
+        blocked_query = blocked_query.filter(BlockedTime.organization_id == org_id)
+    all_blocked = blocked_query.all()
+    # Build per-user blocked times: user-specific + applies_to_all
+    global_blocks = [bt for bt in all_blocked if getattr(bt, 'applies_to_all_users', False)]
+    user_specific_blocks = defaultdict(list)
+    for bt in all_blocked:
+        if not getattr(bt, 'applies_to_all_users', False) and bt.user_id is not None:
+            user_specific_blocks[bt.user_id].append(bt)
+    # Merge: each user gets their own blocks + global blocks
+    blocked_by_user = {}
+    for uid in user_ids:
+        blocked_by_user[uid] = user_specific_blocks.get(uid, []) + global_blocks
+
+    # Batch 3: Existing appointments for all users in the date range
+    appt_query = db.query(Appointment).filter(
+        Appointment.assigned_user_id.in_(user_ids),
+        Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
+        Appointment.scheduled_start >= start_dt,
+        Appointment.scheduled_start <= end_dt
+    )
+    if org_id:
+        appt_query = appt_query.filter(Appointment.organization_id == org_id)
+    all_appts = appt_query.all()
+    appts_by_user = defaultdict(list)
+    for appt in all_appts:
+        appts_by_user[appt.assigned_user_id].append(appt)
+
+    # Batch 4: Cross-source conflicts for all users
+    cross_source_by_user = (
+        _get_cross_source_conflicts_batch(db, user_ids, start_dt, end_dt, org_id=org_id)
+        if check_cross_source else {}
+    )
+
+    # Batch 5: Check recurring availability for all users (one query via service)
+    _ra_service = None
+    _users_with_recurring = set()
+    try:
+        from services.recurring_availability_service import RecurringAvailabilityService
+        _ra_service = RecurringAvailabilityService(db)
         if org_id:
-            config_query = config_query.filter(SchedulerConfig.organization_id == org_id)
-        config = config_query.first()
+            for uid in user_ids:
+                _ra_check = _ra_service.get_weekly_schedule(uid, org_id)
+                if _ra_check:
+                    _users_with_recurring.add(uid)
+    except Exception as e:
+        logger.debug(f"RecurringAvailability not available, using JSON working_hours: {e}")
+        _ra_service = None
+
+    # ---------------------------------------------------------------
+    # PER-USER LOOP: Use pre-loaded data instead of individual queries
+    # ---------------------------------------------------------------
+
+    for user_id in user_ids:
+        # Use pre-loaded config
+        config = config_by_user.get(user_id)
 
         working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
         buffer_before = config.buffer_before_minutes if config else DEFAULT_BUFFER_BEFORE_MINUTES
@@ -1042,50 +1221,14 @@ def _generate_available_slots(
         lunch_end_time = getattr(config, 'lunch_break_end', time(13, 0)) if config else time(13, 0)
 
         min_booking_time = now + timedelta(hours=min_notice)
-        start_dt = datetime.combine(start_date, time.min)
-        end_dt = datetime.combine(end_date, time.max)
 
-        # Query blocked times
-        blocked_query = db.query(BlockedTime).filter(
-            BlockedTime.is_active == True,
-            or_(
-                BlockedTime.user_id == user_id,
-                BlockedTime.applies_to_all_users == True
-            ),
-            BlockedTime.start_datetime <= end_dt,
-            BlockedTime.end_datetime >= start_dt
-        )
-        if org_id:
-            blocked_query = blocked_query.filter(BlockedTime.organization_id == org_id)
-        blocked_times = blocked_query.all()
+        # Use pre-loaded data
+        blocked_times = blocked_by_user.get(user_id, [])
+        existing_appts = appts_by_user.get(user_id, [])
+        cross_source_busy = cross_source_by_user.get(user_id, [])
 
-        # Query existing appointments
-        appt_query = db.query(Appointment).filter(
-            Appointment.assigned_user_id == user_id,
-            Appointment.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
-            Appointment.scheduled_start >= start_dt,
-            Appointment.scheduled_start <= end_dt
-        )
-        if org_id:
-            appt_query = appt_query.filter(Appointment.organization_id == org_id)
-        existing_appts = appt_query.all()
-
-        # Cross-source conflicts
-        cross_source_busy = (
-            _get_cross_source_conflicts(db, user_id, start_dt, end_dt, org_id=org_id)
-            if check_cross_source else []
-        )
-
-        # Check if user has recurring availability patterns (takes precedence over JSON working_hours)
-        _recurring_schedule = None
-        try:
-            from services.recurring_availability_service import RecurringAvailabilityService
-            _ra_service = RecurringAvailabilityService(db)
-            _ra_check = _ra_service.get_weekly_schedule(user_id, org_id) if org_id else []
-            if _ra_check:
-                _recurring_schedule = _ra_service
-        except Exception as e:
-            logger.debug(f"RecurringAvailability not available, using JSON working_hours: {e}")
+        # Determine if user has recurring availability (takes precedence over JSON working_hours)
+        _recurring_schedule = _ra_service if user_id in _users_with_recurring else None
 
         # Generate slots day by day
         current_date = start_date

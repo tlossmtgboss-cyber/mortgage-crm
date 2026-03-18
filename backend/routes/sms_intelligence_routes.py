@@ -1808,9 +1808,9 @@ async def send_sms(
     Supports template-based sending.
     """
     try:
-        from integrations.sms_service import get_sms_client
+        from integrations.sms_service import SMSClient
 
-        sms_client = get_sms_client()
+        sms_client = SMSClient(db)
         if not sms_client.enabled:
             raise HTTPException(
                 status_code=503,
@@ -1885,13 +1885,15 @@ async def send_sms(
                 message = message.replace("{borrower_name}", lead[0] or "")
 
         # Send the SMS
-        message_sid = await sms_client.send_sms(normalized_phone, message)
+        send_result = await sms_client.send_sms(normalized_phone, message)
 
-        if not message_sid:
+        if not send_result["success"]:
             raise HTTPException(
                 status_code=500,
-                detail="Failed to send SMS. Check telephony configuration."
+                detail=send_result.get("error", "Failed to send SMS. Check telephony configuration.")
             )
+
+        message_sid = send_result.get("message_id")
 
         # Log to queue as outbound
         result = db.execute(text("""
@@ -2059,9 +2061,9 @@ async def send_bulk_sms(
     Respects opt-out status for each recipient.
     """
     try:
-        from integrations.sms_service import get_sms_client
+        from integrations.sms_service import SMSClient
 
-        sms_client = get_sms_client()
+        sms_client = SMSClient(db)
         if not sms_client.enabled:
             raise HTTPException(
                 status_code=503,
@@ -2129,8 +2131,9 @@ async def send_bulk_sms(
 
             # Send
             try:
-                sid = await sms_client.send_sms(normalized, personalized)
-                if sid:
+                send_result = await sms_client.send_sms(normalized, personalized)
+                if send_result["success"]:
+                    sid = send_result.get("message_id")
                     results["sent"] += 1
                     results["details"].append({
                         "phone": normalized,
@@ -2158,7 +2161,7 @@ async def send_bulk_sms(
                     results["details"].append({
                         "phone": normalized,
                         "status": "failed",
-                        "reason": "send_failed"
+                        "reason": send_result.get("error", "send_failed")
                     })
             except Exception as send_error:
                 results["failed"] += 1

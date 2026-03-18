@@ -1297,6 +1297,9 @@ function ClientProfile() {
             <NeedsListView
               borrowerId={client?.id}
               loanId={client?.loan_id || client?.id}
+              borrowerEmail={client?.borrower_email || client?.email || ''}
+              borrowerName={client?.borrower_name || client?.name || `${client?.first_name || ''} ${client?.last_name || ''}`.trim()}
+              borrowerPhone={client?.borrower_phone || client?.phone || ''}
             />
           </div>
           )}
@@ -1768,6 +1771,9 @@ function ClientProfile() {
             <NeedsListView
               loanId={parseInt(id)}
               borrowerId={activeBorrower + 1}
+              borrowerEmail={client?.borrower_email || client?.email || ''}
+              borrowerName={client?.borrower_name || client?.name || `${client?.first_name || ''} ${client?.last_name || ''}`.trim()}
+              borrowerPhone={client?.borrower_phone || client?.phone || ''}
               onRequestUpdated={() => {
                 // Optionally refresh any related data when documents change
                 console.log('Document request updated');

@@ -4222,6 +4222,9 @@ function LeadDetail() {
             <NeedsListView
               borrowerId={lead?.id}
               loanId={lead?.loan_id || lead?.id}
+              borrowerEmail={lead?.email || ''}
+              borrowerName={lead?.name || `${lead?.first_name || ''} ${lead?.last_name || ''}`.trim()}
+              borrowerPhone={lead?.phone || ''}
             />
           </div>
           )}

@@ -2,23 +2,38 @@ import React, { useState, useEffect } from 'react';
 import { smartDocsAPI } from '../../services/smartDocsApi';
 import './NeedsListView.css';
 
-function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
+function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerName = '', borrowerPhone = '', onRequestUpdated }) {
   const [needsList, setNeedsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addingRequest, setAddingRequest] = useState(false);
-  const [newRequest, setNewRequest] = useState({
+
+  const getDefaultRequest = () => ({
     title: '',
     description: '',
     instructions: '',
     priority: 'NORMAL',
     due_date: '',
     send_notification: false,
-    borrower_email: '',
-    borrower_name: ''
+    send_sms: false,
+    borrower_email: borrowerEmail || '',
+    borrower_name: borrowerName || '',
+    borrower_phone: borrowerPhone || ''
   });
+
+  const [newRequest, setNewRequest] = useState(getDefaultRequest);
+
+  // Sync borrower fields when props change (lead data may load after mount)
+  useEffect(() => {
+    setNewRequest(prev => ({
+      ...prev,
+      borrower_email: prev.borrower_email || borrowerEmail || '',
+      borrower_name: prev.borrower_name || borrowerName || '',
+      borrower_phone: prev.borrower_phone || borrowerPhone || ''
+    }));
+  }, [borrowerEmail, borrowerName, borrowerPhone]);
 
   useEffect(() => {
     if (loanId) {
@@ -83,8 +98,10 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
         priority: newRequest.priority,
         due_date: newRequest.due_date || null,
         send_notification: newRequest.send_notification,
+        send_sms: newRequest.send_sms,
         borrower_email: newRequest.borrower_email.trim() || null,
-        borrower_name: newRequest.borrower_name.trim() || null
+        borrower_name: newRequest.borrower_name.trim() || null,
+        borrower_phone: newRequest.borrower_phone.trim() || null
       };
 
       const result = await smartDocsAPI.addCustomRequest(loanId, borrowerId, requestData);
@@ -93,18 +110,12 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
       if (result.notification_sent) {
         console.log('Email notification sent to borrower');
       }
+      if (result.sms_sent) {
+        console.log('SMS notification sent to borrower');
+      }
 
       // Reset form and close modal
-      setNewRequest({
-        title: '',
-        description: '',
-        instructions: '',
-        priority: 'NORMAL',
-        due_date: '',
-        send_notification: false,
-        borrower_email: '',
-        borrower_name: ''
-      });
+      setNewRequest(getDefaultRequest());
       setShowAddModal(false);
 
       // Refresh the list
@@ -120,13 +131,7 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
 
   const handleCloseModal = () => {
     setShowAddModal(false);
-    setNewRequest({
-      title: '',
-      description: '',
-      instructions: '',
-      priority: 'NORMAL',
-      due_date: ''
-    });
+    setNewRequest(getDefaultRequest());
     setError(null);
   };
 
@@ -243,7 +248,7 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
                 </div>
               </div>
 
-              {/* Email Notification Section */}
+              {/* Notification Section */}
               <div className="notification-section">
                 <label className="checkbox-label">
                   <input
@@ -254,19 +259,17 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
                   <span>Send email notification to borrower</span>
                 </label>
 
-                {newRequest.send_notification && (
+                <label className="checkbox-label" style={{ marginTop: '8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={newRequest.send_sms}
+                    onChange={(e) => setNewRequest({ ...newRequest, send_sms: e.target.checked })}
+                  />
+                  <span>Send SMS notification to borrower</span>
+                </label>
+
+                {(newRequest.send_notification || newRequest.send_sms) && (
                   <div className="notification-fields">
-                    <div className="form-group">
-                      <label htmlFor="borrower_email">Borrower Email *</label>
-                      <input
-                        type="email"
-                        id="borrower_email"
-                        value={newRequest.borrower_email}
-                        onChange={(e) => setNewRequest({ ...newRequest, borrower_email: e.target.value })}
-                        placeholder="borrower@email.com"
-                        required={newRequest.send_notification}
-                      />
-                    </div>
                     <div className="form-group">
                       <label htmlFor="borrower_name">Borrower Name</label>
                       <input
@@ -274,9 +277,35 @@ function NeedsListView({ loanId, borrowerId = 1, onRequestUpdated }) {
                         id="borrower_name"
                         value={newRequest.borrower_name}
                         onChange={(e) => setNewRequest({ ...newRequest, borrower_name: e.target.value })}
-                        placeholder="John Smith"
+                        placeholder="Borrower name"
                       />
                     </div>
+                    {newRequest.send_notification && (
+                      <div className="form-group">
+                        <label htmlFor="borrower_email">Borrower Email {newRequest.send_notification ? '*' : ''}</label>
+                        <input
+                          type="email"
+                          id="borrower_email"
+                          value={newRequest.borrower_email}
+                          onChange={(e) => setNewRequest({ ...newRequest, borrower_email: e.target.value })}
+                          placeholder="borrower@email.com"
+                          required={newRequest.send_notification}
+                        />
+                      </div>
+                    )}
+                    {newRequest.send_sms && (
+                      <div className="form-group">
+                        <label htmlFor="borrower_phone">Borrower Phone {newRequest.send_sms ? '*' : ''}</label>
+                        <input
+                          type="tel"
+                          id="borrower_phone"
+                          value={newRequest.borrower_phone}
+                          onChange={(e) => setNewRequest({ ...newRequest, borrower_phone: e.target.value })}
+                          placeholder="(555) 123-4567"
+                          required={newRequest.send_sms}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -38,6 +38,7 @@ from scheduler_email_service import (
 )
 from services.notification_service import notification_service
 from services.microsoft_graph import create_event_via_graph, CalendarResult
+from services.scheduler_audit_logger import scheduler_audit
 from routes.scheduler.constants import (
     DEFAULT_APPOINTMENT_DURATION_MINUTES,
     ALLOWED_APPOINTMENT_DURATIONS,
@@ -70,6 +71,8 @@ from routes.scheduler._helpers import (
     get_models,
     _check_appointment_conflict,
     _check_duplicate_booking,
+    _get_cross_source_conflicts,
+    _has_cross_source_conflict,
     _log_appointment_activity,
     _create_followup_task,
     _check_lo_licensing,
@@ -327,6 +330,13 @@ async def get_public_booking_page(
         if not link:
             raise HTTPException(status_code=404, detail="Booking page not found")
 
+        # Check if the booking link has expired
+        if link.expires_at and link.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=410,
+                detail="This booking link has expired. Please request a new one."
+            )
+
         # H8: Atomic view count increment to prevent lost updates under concurrency
         db.query(BookingLink).filter(BookingLink.id == link.id).update(
             {BookingLink.view_count: func.coalesce(BookingLink.view_count, 0) + 1},
@@ -449,6 +459,13 @@ async def get_public_available_slots(
         if not link:
             raise HTTPException(status_code=404, detail="Booking page not found")
 
+        # Check if the booking link has expired
+        if link.expires_at and link.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=410,
+                detail="This booking link has expired. Please request a new one."
+            )
+
         user_ids = link.assigned_users if link.assigned_users else [link.user_id]
         link_org_id = getattr(link, 'organization_id', None)
 
@@ -532,7 +549,7 @@ async def confirm_public_booking(
         # H5: Enforce booking link limits
         now_utc = datetime.now(timezone.utc)
         if link.expires_at and link.expires_at < now_utc:
-            raise HTTPException(status_code=410, detail="This booking link has expired")
+            raise HTTPException(status_code=410, detail="This booking link has expired. Please request a new one.")
         if link.available_from and link.available_from > now_utc:
             raise HTTPException(status_code=410, detail="This booking link is not yet active")
         if link.available_until and link.available_until < now_utc:
@@ -600,6 +617,18 @@ async def confirm_public_booking(
         _check_appointment_conflict(db, assigned_user_id, slot_start, slot_end, org_id=link_org_id)
         # C2: Prevent duplicate booking by same attendee
         _check_duplicate_booking(db, attendee_email, assigned_user_id, slot_start, org_id=link_org_id)
+        # C3: Check cross-source calendar conflicts (Google/Outlook/Salesforce)
+        try:
+            cross_conflicts = _get_cross_source_conflicts(db, assigned_user_id, slot_start, slot_end, org_id=link_org_id)
+            if _has_cross_source_conflict(cross_conflicts, slot_start, slot_end):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This time slot is no longer available. Please select another time."
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Cross-source conflict check failed (non-blocking): {e}")
 
         appointment = Appointment(
             organization_id=link_org_id,
@@ -660,8 +689,29 @@ async def confirm_public_booking(
                 logger.warning(f"Could not auto-generate meeting link for public booking: {e}")
                 # Continue without meeting link - appointment still gets created
 
+        # Audit: DB + structured log for public booking path
+        _audit_log(db, link_org_id, None, 'created', 'appointment',
+                   entity_id=None, changes={
+                       'title': appointment.title,
+                       'attendee_email': attendee_email,
+                       'scheduled_start': slot_start.isoformat() if slot_start else None,
+                       'booking_link_slug': slug,
+                   }, request=request, booking_source="public_booking")
+
         db.commit()
         db.refresh(appointment)
+
+        # Enterprise audit: structured log for compliance (public booking path)
+        scheduler_audit.log_appointment_created(
+            appointment, user={"id": None},
+            request=request,
+            booking_source="public_booking",
+            booking_path_details={
+                "booking_link_slug": slug,
+                "booking_link_id": link.id,
+                "appointment_type": appt_type.type_name if appt_type else None,
+            },
+        )
 
         logger.info(f"Public booking confirmed: {appointment.id} via link {slug}")
 
@@ -831,7 +881,8 @@ async def confirm_public_booking(
                     attendee_name=attendee_name,
                     appointment_date=appointment_date,
                     appointment_time=appointment_time,
-                    team_member_name=team_member_name
+                    team_member_name=team_member_name,
+                    organization_id=link_org_id
                 )
                 sms_sent = sms_result.get("success", False) if isinstance(sms_result, dict) else bool(sms_result)
             except Exception as e:
@@ -941,7 +992,7 @@ async def get_website_demo_available_slots(
         booking_link_id = assignment_result.booking_link_id
 
         # If there's a booking link configured, use it
-        if booking_link_id and _models:
+        if booking_link_id and get_models():
             BookingLink = get_models().get('BookingLink')
             if BookingLink:
                 link = db.query(BookingLink).filter(
@@ -1089,6 +1140,18 @@ async def confirm_website_demo_booking(
 
         # Prevent double-booking
         _check_appointment_conflict(db, assigned_user_id, start_time, end_time, org_id=demo_org_id)
+        # Check cross-source calendar conflicts (Google/Outlook/Salesforce)
+        try:
+            cross_conflicts = _get_cross_source_conflicts(db, assigned_user_id, start_time, end_time, org_id=demo_org_id)
+            if _has_cross_source_conflict(cross_conflicts, start_time, end_time):
+                raise HTTPException(
+                    status_code=409,
+                    detail="This time slot is no longer available. Please select another time."
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Cross-source conflict check failed (non-blocking): {e}")
 
         # Validate and sanitize user-supplied text
         safe_name = _sanitize_text(request.attendee_name)
@@ -1115,8 +1178,28 @@ async def confirm_website_demo_booking(
         )
 
         db.add(new_appointment)
+
+        # Audit: DB + structured log for website demo booking path
+        _audit_log(db, demo_org_id, None, 'created', 'appointment',
+                   entity_id=None, changes={
+                       'title': new_appointment.title,
+                       'attendee_email': request.attendee_email,
+                       'scheduled_start': start_time.isoformat() if start_time else None,
+                       'demo_source': 'website',
+                   }, request=None, booking_source="public_booking")
+
         db.commit()
         db.refresh(new_appointment)
+
+        # Enterprise audit: structured log for compliance (demo booking path)
+        scheduler_audit.log_appointment_created(
+            new_appointment, user={"id": None},
+            booking_source="public_booking",
+            booking_path_details={
+                "demo_booking": True,
+                "external_source": "website_demo",
+            },
+        )
 
         # Format confirmation details
         local_tz = pytz.timezone(_get_user_timezone(db, assigned_user_id, org_id=demo_org_id))

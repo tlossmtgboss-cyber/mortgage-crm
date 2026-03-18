@@ -1,8 +1,9 @@
 """
-Scheduler Appointments - CRUD and status transitions.
+Scheduler Appointments - CRUD, status transitions, and export.
 
 Endpoints:
   - GET    /appointments                          List appointments with filters
+  - GET    /appointments/export/ics               Export appointments as ICS calendar file
   - GET    /appointments/{appointment_id}         Get appointment details
   - GET    /appointments/{appointment_id}/timeline  Get status history timeline
   - POST   /appointments                          Create a new appointment
@@ -45,8 +46,12 @@ from routes.scheduler._helpers import (
     _ensure_lead_for_booking, _log_appointment_activity, _create_followup_task,
     _audit_log, _validate_url, _mask_email,
 )
+from routes.scheduler.error_responses import (
+    scheduler_error,
+    VALIDATION_ERROR, NOT_FOUND, FORBIDDEN,
+)
 from routes.scheduler.constants import DEFAULT_APPOINTMENT_DURATION_MINUTES
-from services.scheduler_audit_logger import scheduler_audit
+from services.scheduler_audit_logger import scheduler_audit, get_appointment_audit_trail
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -238,7 +243,12 @@ async def list_appointments(
             status_enum = AppointmentStatus(status)
             query = query.filter(Appointment.status == status_enum)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status filter: {status}")
+            valid_statuses = [s.value for s in AppointmentStatus]
+            scheduler_error(
+                400, VALIDATION_ERROR,
+                "Invalid appointment status filter",
+                detail=f"Got '{status}', expected one of: {valid_statuses}",
+            )
 
     if lead_id:
         query = query.filter(Appointment.lead_id == lead_id)
@@ -283,6 +293,117 @@ async def list_appointments(
 
 
 # ============================================================================
+# EXPORT APPOINTMENTS AS ICS
+# ============================================================================
+
+@router.get("/appointments/export/ics")
+async def export_appointments_ics(
+    request: Request,
+    start_date: Optional[str] = Query(None, description="ISO date or datetime for range start"),
+    end_date: Optional[str] = Query(None, description="ISO date or datetime for range end"),
+    db: Session = Depends(get_db),
+):
+    """Export appointments as an ICS calendar file for import into external calendars.
+
+    Defaults to the next 30 days if no date range is specified. Only includes
+    appointments with status booked, confirmed, or rescheduled.
+    """
+    from fastapi.responses import Response
+    from utils.ics_generator import generate_ics_multi_event, PRODID_MORTGAGE
+
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+    user_id = user.id
+
+    _models = get_models()
+    Appointment = _models['Appointment']
+
+    # Parse date range, default to next 30 days
+    now = datetime.now(timezone.utc)
+    if start_date:
+        try:
+            start = datetime.fromisoformat(start_date.replace("Z", "+00:00"))
+        except ValueError:
+            scheduler_error(
+                400, VALIDATION_ERROR,
+                "Invalid start_date format",
+                detail="Expected ISO 8601 date or datetime string",
+            )
+    else:
+        start = now
+
+    if end_date:
+        try:
+            end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+        except ValueError:
+            scheduler_error(
+                400, VALIDATION_ERROR,
+                "Invalid end_date format",
+                detail="Expected ISO 8601 date or datetime string",
+            )
+    else:
+        end = start + timedelta(days=30)
+
+    # Query appointments assigned to the current user in the date range
+    appointments = db.query(Appointment).filter(
+        Appointment.assigned_user_id == user_id,
+        Appointment.organization_id == org_id,
+        Appointment.scheduled_start >= start,
+        Appointment.scheduled_start <= end,
+        Appointment.status.in_([
+            AppointmentStatus.BOOKED,
+            AppointmentStatus.CONFIRMED,
+            AppointmentStatus.RESCHEDULED,
+        ]),
+    ).order_by(Appointment.scheduled_start.asc()).all()
+
+    # Build event dicts for the multi-event ICS generator
+    events = []
+    for appt in appointments:
+        appt_end = appt.scheduled_end or (
+            appt.scheduled_start + timedelta(minutes=appt.duration_minutes or DEFAULT_APPOINTMENT_DURATION_MINUTES)
+        )
+
+        description_parts = []
+        if appt.description:
+            description_parts.append(appt.description)
+        if appt.attendee_name:
+            description_parts.append(f"Attendee: {appt.attendee_name}")
+        if appt.attendee_email:
+            description_parts.append(f"Email: {appt.attendee_email}")
+        if appt.attendee_phone:
+            description_parts.append(f"Phone: {appt.attendee_phone}")
+        if appt.video_link:
+            description_parts.append(f"Join: {appt.video_link}")
+
+        events.append({
+            "uid": f"appt-{appt.id}@perenniaai.com",
+            "summary": appt.title or "Appointment",
+            "description": "\n".join(description_parts),
+            "start": appt.scheduled_start,
+            "end": appt_end,
+            "location": appt.video_link or appt.location or "",
+        })
+
+    ics_content = generate_ics_multi_event(
+        events=events,
+        prodid=PRODID_MORTGAGE,
+        method="PUBLISH",
+        calendar_name="Perennia AI - Appointments",
+    )
+
+    filename = f"appointments-{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}.ics"
+
+    return Response(
+        content=ics_content,
+        media_type="text/calendar",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+# ============================================================================
 # GET APPOINTMENT
 # ============================================================================
 
@@ -309,7 +430,7 @@ async def get_appointment(
     ).first()
 
     if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        scheduler_error(404, NOT_FOUND, "Appointment not found")
 
     return {
         "appointment": {
@@ -378,7 +499,7 @@ async def get_appointment_timeline(
     ).first()
 
     if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        scheduler_error(404, NOT_FOUND, "Appointment not found")
 
     # Query status history
     AppointmentStatusHistory = _models.get('AppointmentStatusHistory')
@@ -399,7 +520,7 @@ async def get_appointment_timeline(
                 "changed_by_user_id": entry.changed_by_user_id,
                 "change_source": entry.change_source,
                 "notes": entry.notes,
-                "metadata": entry.metadata or {},
+                "metadata": entry.extra_data or {},
                 "changed_at": entry.changed_at.isoformat() if entry.changed_at else None,
             }
             for entry in entries
@@ -452,6 +573,46 @@ async def get_appointment_timeline(
             "cancellation_reason": appointment.cancellation_reason,
             "reschedule_count": appointment.reschedule_count,
         }
+    }
+
+
+# ============================================================================
+# APPOINTMENT AUDIT TRAIL
+# ============================================================================
+
+@router.get("/appointments/{appointment_id}/audit-trail")
+async def get_appointment_audit_trail_endpoint(
+    appointment_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Get the complete audit trail for an appointment.
+
+    Returns a chronologically ordered list of all audit log entries for the
+    specified appointment, including booking source, event type, and metadata
+    from all booking paths (authenticated, public, AI pipeline).
+    """
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    _models = get_models()
+    Appointment = _models['Appointment']
+
+    # Verify appointment exists and belongs to this org
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id,
+        Appointment.organization_id == org_id,
+    ).first()
+
+    if not appointment:
+        scheduler_error(404, NOT_FOUND, "Appointment not found")
+
+    trail = get_appointment_audit_trail(db, appointment_id)
+
+    return {
+        "appointment_id": appointment_id,
+        "audit_trail": trail,
+        "count": len(trail),
     }
 
 
@@ -527,10 +688,11 @@ async def create_appointment(
         'title': appt_data.title,
         'attendee_email': appt_data.attendee_email,
         'scheduled_start': appt_data.scheduled_start.isoformat() if appt_data.scheduled_start else None,
-    }, request=request)
+    }, request=request, booking_source="authenticated")
     db.flush()  # Get appointment.id without committing
     # Backfill entity_id now that we have it
-    _audit_log(db, org_id, user.id, '_id_backfill', 'appointment', entity_id=appointment.id)
+    _audit_log(db, org_id, user.id, '_id_backfill', 'appointment', entity_id=appointment.id,
+               booking_source="authenticated")
 
     logger.info(f"Appointment created: {appointment.id} by user {user.id}")
 
@@ -584,7 +746,10 @@ async def create_appointment(
     db.refresh(appointment)
 
     # Enterprise audit: structured log for compliance
-    scheduler_audit.log_appointment_created(appointment, user, request=request)
+    scheduler_audit.log_appointment_created(
+        appointment, user, request=request,
+        booking_source="authenticated",
+    )
 
     # Send confirmation email if attendee email is provided
     email_sent = False
@@ -829,7 +994,7 @@ async def update_appointment(
     ).first()
 
     if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        scheduler_error(404, NOT_FOUND, "Appointment not found")
 
     # Check permission
     is_admin = _is_scheduler_admin(user)
@@ -840,7 +1005,7 @@ async def update_appointment(
 
     if not is_admin and not is_owner:
         logger.warning(f"User {user.id} attempted to update appointment {appointment_id} without permission")
-        raise HTTPException(status_code=403, detail="You don't have permission to update this appointment")
+        scheduler_error(403, FORBIDDEN, "You don't have permission to update this appointment")
 
     update_fields = appt_data.model_dump(exclude_unset=True)
     is_cancellation = False
@@ -873,14 +1038,24 @@ async def update_appointment(
                 update_fields["cancelled_at"] = datetime.now(timezone.utc)
                 is_cancellation = True
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {update_fields['status']}")
+            valid_statuses = [s.value for s in AppointmentStatus]
+            scheduler_error(
+                400, VALIDATION_ERROR,
+                "Invalid appointment status",
+                detail=f"Got '{update_fields['status']}', expected one of: {valid_statuses}",
+            )
 
     # Handle meeting mode
     if "meeting_mode" in update_fields:
         try:
             update_fields["meeting_mode"] = MeetingMode(update_fields["meeting_mode"])
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid meeting mode: {update_fields['meeting_mode']}")
+            valid_modes = [m.value for m in MeetingMode]
+            scheduler_error(
+                400, VALIDATION_ERROR,
+                "Invalid meeting mode",
+                detail=f"Got '{update_fields['meeting_mode']}', expected one of: {valid_modes}",
+            )
 
     # Handle rescheduling
     if "scheduled_start" in update_fields:
@@ -922,7 +1097,8 @@ async def update_appointment(
 
     action = 'cancelled' if is_cancellation else 'rescheduled' if is_reschedule else 'updated'
     _audit_log(db, org_id, user.id, action, 'appointment',
-               entity_id=appointment_id, changes=audit_changes, request=request)
+               entity_id=appointment_id, changes=audit_changes, request=request,
+               booking_source="authenticated")
     db.commit()
     db.refresh(appointment)
 
@@ -931,6 +1107,7 @@ async def update_appointment(
         scheduler_audit.log_appointment_cancelled(
             appointment, user, reason=audit_changes.get("cancellation_reason", {}).get("new"),
             request=request,
+            booking_source="authenticated",
         )
     elif is_reschedule:
         old_start_val = audit_changes.get("scheduled_start", {}).get("old")
@@ -947,6 +1124,7 @@ async def update_appointment(
             new_end=new_end_val,
             reschedule_count=appointment.reschedule_count,
             initiated_by="lo",
+            booking_source="authenticated",
         )
     else:
         # Check for no-show status transition
@@ -960,6 +1138,7 @@ async def update_appointment(
         # Log the general update for all non-cancel, non-reschedule changes
         scheduler_audit.log_appointment_updated(
             appointment, user, changes=audit_changes, request=request,
+            booking_source="authenticated",
         )
 
     # Get updated appointment details for notifications
@@ -1121,7 +1300,7 @@ async def cancel_appointment(
     ).first()
 
     if not appointment:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        scheduler_error(404, NOT_FOUND, "Appointment not found")
 
     # Store appointment details before cancellation for email notifications
     attendee_email = getattr(appointment, 'attendee_email', None)
@@ -1157,7 +1336,8 @@ async def cancel_appointment(
     appointment.status_changed_at = datetime.now(timezone.utc)
 
     _audit_log(db, org_id, user.id, 'cancelled', 'appointment',
-               entity_id=appointment_id, changes={'reason': reason}, request=request)
+               entity_id=appointment_id, changes={'reason': reason}, request=request,
+               booking_source="authenticated")
 
     # CRM: Log cancellation activity
     _log_appointment_activity(
@@ -1200,6 +1380,7 @@ async def cancel_appointment(
         appointment, user, reason=reason, request=request,
         within_policy=within_policy,
         is_late_cancellation=is_late_cancellation,
+        booking_source="authenticated",
     )
 
     logger.info(f"Appointment {appointment_id} cancelled by user {user.id}")
