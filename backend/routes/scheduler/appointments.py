@@ -37,7 +37,6 @@ from scheduler_email_service import (
     generate_reschedule_url,
 )
 from services.notification_service import notification_service
-from services.microsoft_graph import create_event_via_graph, CalendarResult
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
@@ -847,60 +846,14 @@ async def create_appointment_endpoint(
             email_error = str(e)
             logger.error(f"Error sending confirmation email: {e}")
 
-    # Auto-create calendar event in team member's Outlook calendar
+    # Sync to external calendars (Google Calendar, Outlook) via provider system
     calendar_event_created = False
-    outlook_event_id = None
-
-    calendar_video_link = appointment.video_link if appointment.video_link else None
-
-    calendar_meeting_mode = "Phone Call"
-    if appointment.meeting_mode:
-        mode_display_map = {
-            "video": "Video Call",
-            "phone": "Phone Call",
-            "in_person": "In Person",
-            "screen_share": "Screen Share",
-        }
-        mode_val = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode)
-        calendar_meeting_mode = mode_display_map.get(mode_val.lower(), "Phone Call")
-
-    if appointment.assigned_user_id:
-        try:
-            event_description = f"""
-            <h3>Client Meeting</h3>
-            <p><strong>Client:</strong> {html.escape(appt_data.attendee_name or 'Not specified')}</p>
-            <p><strong>Email:</strong> {html.escape(appt_data.attendee_email or 'Not specified')}</p>
-            <p><strong>Phone:</strong> {html.escape(appt_data.attendee_phone or 'Not specified')}</p>
-            <p><strong>Meeting Type:</strong> {html.escape(calendar_meeting_mode)}</p>
-            """
-            if appointment.description:
-                event_description += f"<p><strong>Notes:</strong> {html.escape(appointment.description)}</p>"
-            if calendar_video_link:
-                event_description += f"<p><strong>Video Link:</strong> <a href='{html.escape(calendar_video_link)}'>{html.escape(calendar_video_link)}</a></p>"
-
-            calendar_result: CalendarResult = await create_event_via_graph(
-                user_id=appointment.assigned_user_id,
-                subject=f"Meeting: {appt_data.attendee_name or 'Client'} - {appointment.title}",
-                start=appointment.scheduled_start,
-                end=appointment.scheduled_end,
-                db=db,
-                attendees=[appt_data.attendee_email] if appt_data.attendee_email else None,
-                location=calendar_video_link if calendar_video_link else None,
-                add_teams_link=False,
-                body=event_description
-            )
-
-            if calendar_result.success:
-                calendar_event_created = True
-                outlook_event_id = calendar_result.event_id
-                appointment.outlook_event_id = outlook_event_id
-                db.commit()  # Separate commit OK -- appointment already persisted, this is best-effort metadata
-                logger.info(f"Outlook calendar event created for appointment {appointment.id}: {outlook_event_id}")
-            else:
-                logger.warning(f"Could not create Outlook calendar event: {calendar_result.error}")
-
-        except Exception as cal_error:
-            logger.error(f"Error creating Outlook calendar event: {cal_error}")
+    try:
+        from services.calendar_outbound_sync import push_appointment_created
+        await push_appointment_created(db, appointment, user)
+        calendar_event_created = True
+    except Exception as cal_error:
+        logger.error(f"Outbound calendar sync failed for appointment {appointment.id}: {cal_error}")
 
     return {
         "message": "Appointment created",
@@ -910,7 +863,6 @@ async def create_appointment_endpoint(
         "email_sent": email_sent,
         "email_error": email_error,
         "calendar_event_created": calendar_event_created,
-        "outlook_event_id": outlook_event_id
     }
 
 
@@ -1203,6 +1155,20 @@ async def update_appointment(
             except Exception as e:
                 logger.error(f"Failed to send attendee update SMS: {e}")
 
+    # Sync changes to external calendars (Google, Outlook)
+    if is_cancellation:
+        try:
+            from services.calendar_outbound_sync import push_appointment_cancelled
+            await push_appointment_cancelled(db, appointment, user)
+        except Exception as cal_err:
+            logger.error(f"Outbound calendar sync (cancel) failed for appointment {appointment_id}: {cal_err}")
+    elif is_reschedule or bool(set(audit_changes.keys()) & {'scheduled_start', 'scheduled_end', 'title', 'location', 'video_link', 'attendee_email'}):
+        try:
+            from services.calendar_outbound_sync import push_appointment_updated
+            await push_appointment_updated(db, appointment, user)
+        except Exception as cal_err:
+            logger.error(f"Outbound calendar sync (update) failed for appointment {appointment_id}: {cal_err}")
+
     return {
         "message": "Appointment updated",
         "appointment_id": appointment_id,
@@ -1378,6 +1344,13 @@ async def cancel_appointment(
                 emails_sent.append(team_member_email)
         except Exception as e:
             logger.error(f"Failed to send team member cancellation email: {e}")
+
+    # Delete external calendar events (Google, Outlook)
+    try:
+        from services.calendar_outbound_sync import push_appointment_cancelled
+        await push_appointment_cancelled(db, appointment, user)
+    except Exception as cal_err:
+        logger.error(f"Outbound calendar sync (cancel) failed for appointment {appointment_id}: {cal_err}")
 
     return {
         "message": "Appointment cancelled",

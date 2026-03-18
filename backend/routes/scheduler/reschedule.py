@@ -356,6 +356,20 @@ async def public_reschedule_confirm(
     except Exception as e:
         logger.debug(f"Could not write scheduler audit for borrower reschedule confirm: {e}")
 
+    # Sync rescheduled time to external calendars (Google, Outlook)
+    try:
+        from services.calendar_outbound_sync import push_appointment_updated
+        models = get_models()
+        Appointment = models["Appointment"]
+        User = models.get("User")
+        appt_for_sync = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+        if appt_for_sync and appt_for_sync.assigned_user_id and User:
+            sync_user = db.query(User).filter(User.id == appt_for_sync.assigned_user_id).first()
+            if sync_user:
+                await push_appointment_updated(db, appt_for_sync, sync_user)
+    except Exception as cal_err:
+        logger.error(f"Outbound calendar sync (reschedule) failed for appointment {appointment_id}: {cal_err}")
+
     return {
         "status": "ok",
         "message": "Appointment rescheduled successfully",

@@ -255,6 +255,21 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # OUTBOUND CALENDAR SYNC CATCHUP
+        # =================================================================
+
+        # Retry failed/pending outbound calendar syncs - runs every 10 minutes at :03
+        # Finds CalendarEventMap rows stuck in 'failed' or 'pending' and retries
+        # the push to Google Calendar / Outlook via the provider system.
+        self.scheduler.add_job(
+            func=self.run_outbound_calendar_sync,
+            trigger=CronTrigger(minute="3,13,23,33,43,53"),
+            id="outbound_calendar_sync",
+            name="Outbound Calendar Sync Catchup",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
@@ -1325,6 +1340,35 @@ class SchedulerService:
         except Exception as e:
             session.rollback()
             logger.error(f"Webhook dead-letter retry job failed: {e}", exc_info=True)
+        finally:
+            session.close()
+
+    def run_outbound_calendar_sync(self):
+        """Retry failed/pending outbound calendar syncs.
+
+        Finds CalendarEventMap rows with sync_status='failed' or 'pending'
+        and re-runs the push to external calendar providers (Google, Outlook).
+        """
+        import asyncio
+        logger.info("Running outbound calendar sync catchup")
+
+        session = get_db_session()
+        try:
+            from services.calendar_outbound_sync import process_pending_syncs
+
+            loop = asyncio.new_event_loop()
+            try:
+                stats = loop.run_until_complete(process_pending_syncs(session))
+            finally:
+                loop.close()
+
+            if stats.get("retried", 0) > 0:
+                logger.info(
+                    "Outbound calendar sync catchup complete: %s", stats,
+                )
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Outbound calendar sync catchup failed: {e}", exc_info=True)
         finally:
             session.close()
 

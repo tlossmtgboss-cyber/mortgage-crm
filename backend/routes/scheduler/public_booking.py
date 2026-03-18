@@ -45,7 +45,6 @@ from scheduler_email_service import (
     generate_reschedule_url,
 )
 from services.notification_service import notification_service
-from services.microsoft_graph import create_event_via_graph, CalendarResult
 from services.scheduler_audit_logger import scheduler_audit
 from services.appointment_creation_service import (
     create_appointment as _create_appointment_via_service,
@@ -818,49 +817,18 @@ async def confirm_public_booking(
             except Exception as team_email_error:
                 logger.error(f"Error sending team member notification: {team_email_error}")
 
-        # Auto-create calendar event in team member's Outlook calendar
+        # Sync to external calendars (Google Calendar, Outlook) via provider system
         calendar_event_created = False
-        outlook_event_id = None
         if assigned_user_id:
             try:
-                # Build event description -- escape all user data for HTML context
-                event_description = f"""
-                <h3>Client Meeting</h3>
-                <p><strong>Client:</strong> {html.escape(attendee_name or 'Not specified')}</p>
-                <p><strong>Email:</strong> {html.escape(attendee_email or 'Not specified')}</p>
-                <p><strong>Phone:</strong> {html.escape(attendee_phone or 'Not specified')}</p>
-                <p><strong>Meeting Type:</strong> {html.escape(meeting_mode_str or '')}</p>
-                """
-                if appointment.description:
-                    event_description += f"<p><strong>Notes:</strong> {html.escape(appointment.description)}</p>"
-                if video_link:
-                    event_description += f"<p><strong>Video Link:</strong> <a href='{html.escape(video_link)}'>{html.escape(video_link)}</a></p>"
-
-                # Create calendar event via Microsoft Graph
-                calendar_result: CalendarResult = await create_event_via_graph(
-                    user_id=assigned_user_id,
-                    subject=f"Meeting: {attendee_name or 'Client'} - {appointment.title}",
-                    start=appointment.scheduled_start,
-                    end=appointment.scheduled_end,
-                    db=db,
-                    attendees=[attendee_email] if attendee_email else None,
-                    location=video_link if video_link else None,
-                    add_teams_link=False,
-                    body=event_description
-                )
-
-                if calendar_result.success:
+                from services.calendar_outbound_sync import push_appointment_created
+                User = get_models().get('User')
+                assigned_user_obj = db.query(User).filter(User.id == assigned_user_id).first() if User else None
+                if assigned_user_obj:
+                    await push_appointment_created(db, appointment, assigned_user_obj)
                     calendar_event_created = True
-                    outlook_event_id = calendar_result.event_id
-                    # Store the event ID in the appointment for future updates/deletions
-                    appointment.outlook_event_id = outlook_event_id
-                    db.commit()
-                    logger.info(f"Outlook calendar event created for public booking {appointment.id}: {outlook_event_id}")
-                else:
-                    logger.warning(f"Could not create Outlook calendar event for public booking: {calendar_result.error}")
-
             except Exception as cal_error:
-                logger.error(f"Error creating Outlook calendar event for public booking: {cal_error}")
+                logger.error(f"Outbound calendar sync failed for public booking {appointment.id}: {cal_error}")
 
         if attendee_phone:
             try:
@@ -913,8 +881,7 @@ async def confirm_public_booking(
                 "email_sent": email_sent,
                 "sms_sent": sms_sent,
                 "calendar_event_created": calendar_event_created
-            },
-            "outlook_event_id": outlook_event_id
+            }
         }
     except HTTPException as exc:
         raise HTTPException(
@@ -1216,6 +1183,16 @@ async def confirm_website_demo_booking(
             )
         except Exception as e:
             logger.warning(f"Failed to queue confirmation email: {e}")
+
+        # Sync to external calendars (Google Calendar, Outlook)
+        try:
+            from services.calendar_outbound_sync import push_appointment_created
+            User = get_models().get('User')
+            assigned_user_obj = db.query(User).filter(User.id == assigned_user_id).first() if User else None
+            if assigned_user_obj:
+                await push_appointment_created(db, new_appointment, assigned_user_obj)
+        except Exception as cal_error:
+            logger.error(f"Outbound calendar sync failed for demo booking {new_appointment.id}: {cal_error}")
 
         logger.info(f"Website demo booked: {new_appointment.id} for {_mask_email(request.attendee_email)}")
 
