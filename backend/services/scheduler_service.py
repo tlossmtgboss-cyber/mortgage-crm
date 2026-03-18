@@ -224,6 +224,21 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # SLOT HOLD CLEANUP JOBS
+        # =================================================================
+
+        # Expired SlotHold cleanup - runs every 6 hours at :47
+        # Deletes expired/released SlotHold records with 1-hour grace period
+        # to prevent table bloat and keep slot queries fast.
+        self.scheduler.add_job(
+            func=self.cleanup_slot_holds,
+            trigger=CronTrigger(minute=47, hour="0,6,12,18"),
+            id="slot_hold_cleanup",
+            name="Cleanup Expired Slot Holds",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
@@ -1136,6 +1151,33 @@ class SchedulerService:
         """Async helper: execute pending recovery steps for existing no-shows."""
         from services.no_show_recovery import no_show_recovery_service
         return await no_show_recovery_service.execute_no_show_recovery(session)
+
+    # =========================================================================
+    # SLOT HOLD CLEANUP METHODS
+    # =========================================================================
+
+    def cleanup_slot_holds(self):
+        """Delete expired/released SlotHold records to prevent table bloat.
+
+        Delegates to the standalone ``cleanup_expired_slot_holds()`` function
+        in ``routes/scheduler/maintenance.py`` which handles the actual query.
+        """
+        logger.info("Running slot hold cleanup job")
+
+        session = get_db_session()
+
+        try:
+            from routes.scheduler.maintenance import cleanup_expired_slot_holds
+
+            deleted = cleanup_expired_slot_holds(session, grace_period_hours=1)
+            session.commit()
+            logger.info(f"Slot hold cleanup complete: {deleted} records deleted")
+
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Slot hold cleanup job failed: {e}", exc_info=True)
+        finally:
+            session.close()
 
     def get_job_status(self) -> List[Dict[str, Any]]:
         """Get status of all scheduled jobs."""
