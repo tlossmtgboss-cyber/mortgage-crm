@@ -799,12 +799,28 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
 def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time,
                                  org_id: int = None, exclude_appointment_id=None):
     """
-    Check for overlapping appointments using SELECT FOR UPDATE to prevent double-booking.
+    Check for overlapping appointments using advisory lock + SELECT FOR UPDATE.
     Raises HTTPException 409 if a conflict is found or rows are locked by another transaction.
     exclude_appointment_id: skip this appointment (used when rescheduling to avoid self-conflict).
     org_id: ALWAYS applied when provided for tenant isolation.
+
+    The advisory lock serializes concurrent booking attempts for the same
+    LO + time slot, closing the race window where SELECT FOR UPDATE finds
+    no rows to lock (empty slot) and two transactions both INSERT.
     """
     from sqlalchemy.exc import OperationalError
+    from sqlalchemy import text as sa_text
+
+    # Acquire a transaction-scoped advisory lock keyed on (user_id, time_slot).
+    # This serializes concurrent booking attempts for the same LO + time window.
+    # The lock is released automatically when the transaction commits/rollbacks.
+    try:
+        start_epoch = int(start_time.timestamp()) if hasattr(start_time, 'timestamp') else 0
+        lock_key = (assigned_user_id * 1_000_000 + (start_epoch % 1_000_000)) & 0x7FFFFFFFFFFFFFFF
+        db.execute(sa_text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
+    except Exception as e:
+        logger.debug("Advisory lock failed (non-blocking): %s", e)
+
     Appointment = _models['Appointment']
     filters = [
         Appointment.assigned_user_id == assigned_user_id,

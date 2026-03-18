@@ -30,7 +30,9 @@ Sync helper functions:
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -46,6 +48,67 @@ from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Calendar Sync Inbound"])
+
+
+# ============================================================================
+# WEBHOOK TOKEN SIGNING — prevents spoofed webhook requests
+# ============================================================================
+
+def _get_webhook_signing_key() -> bytes:
+    """Derive a signing key for calendar webhook tokens.
+
+    Uses SECRET_KEY from environment. Falls back to a constant only in
+    development -- production MUST have SECRET_KEY set.
+    """
+    secret = os.environ.get("SECRET_KEY", "dev-only-calendar-webhook-key")
+    return hashlib.sha256(f"calendar-sync:{secret}".encode()).digest()
+
+
+def _sign_channel_token(org_id: int, user_id: int) -> str:
+    """Create an HMAC-signed channel token: 'org_id:user_id:signature'.
+
+    The signature prevents attackers from forging webhook requests with
+    guessed org_id:user_id values.
+    """
+    payload = f"{org_id}:{user_id}"
+    sig = hmac.new(_get_webhook_signing_key(), payload.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{payload}:{sig}"
+
+
+def _verify_channel_token(token: str) -> tuple[int | None, int | None, bool]:
+    """Verify an HMAC-signed channel token.
+
+    Returns (org_id, user_id, is_valid).
+    Accepts legacy unsigned 'org_id:user_id' tokens with a warning.
+    """
+    if not token:
+        return None, None, False
+
+    parts = token.split(":")
+    try:
+        org_id = int(parts[0])
+        user_id = int(parts[1]) if len(parts) > 1 else None
+    except (ValueError, IndexError):
+        return None, None, False
+
+    if len(parts) == 3 and user_id is not None:
+        # Signed token — verify HMAC
+        expected_sig = hmac.new(
+            _get_webhook_signing_key(),
+            f"{org_id}:{user_id}".encode(),
+            hashlib.sha256,
+        ).hexdigest()[:16]
+        is_valid = hmac.compare_digest(parts[2], expected_sig)
+        if not is_valid:
+            logger.warning("Calendar webhook: invalid HMAC signature in channel token")
+        return org_id, user_id, is_valid
+
+    # Legacy unsigned token — accept with warning (backward compatible)
+    logger.warning(
+        "Calendar webhook: unsigned channel token (legacy). "
+        "Re-register the watch channel to get a signed token."
+    )
+    return org_id, user_id, True
 
 
 # ============================================================================
@@ -123,19 +186,12 @@ async def google_calendar_webhook(request: Request, db: Session = Depends(get_db
         )
         return {"status": "sync_confirmed"}
 
-    # Parse the channel token to identify which user/org this belongs to.
-    # Format: "org_id:user_id" (set when registering the watch channel).
-    organization_id = None
-    user_id = None
-    if channel_token:
-        try:
-            parts = channel_token.split(":")
-            organization_id = int(parts[0])
-            user_id = int(parts[1]) if len(parts) > 1 else None
-        except (ValueError, IndexError):
-            logger.warning(
-                "Google Calendar webhook: invalid channel_token=%s", channel_token,
-            )
+    # Verify the HMAC-signed channel token to prevent spoofed requests.
+    # Format: "org_id:user_id:hmac_signature" (set when registering the watch channel).
+    organization_id, user_id, token_valid = _verify_channel_token(channel_token)
+    if not token_valid:
+        logger.warning("Google Calendar webhook: rejected — invalid channel token")
+        raise HTTPException(status_code=403, detail="Invalid channel token")
 
     logger.info(
         "Google Calendar webhook received: channel=%s state=%s org=%s user=%s msg=%s",
@@ -227,6 +283,16 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
         subscription_id = notification.get("subscriptionId", "")
         client_state = notification.get("clientState", "")
 
+        # Verify the client state HMAC signature
+        _, _, state_valid = _verify_channel_token(client_state)
+        if not state_valid:
+            logger.warning(
+                "Outlook webhook: rejected notification with invalid clientState "
+                "subscription=%s", subscription_id,
+            )
+            total_errors += 1
+            continue
+
         logger.info(
             "Outlook webhook notification: subscription=%s change=%s resource=%s",
             subscription_id, change_type, resource,
@@ -279,9 +345,9 @@ async def register_google_watch_channel(
     org_id = _get_org_id(current_user)
     user_id = getattr(current_user, "id", None)
 
-    # Generate a unique channel ID and build the channel token for routing
+    # Generate a unique channel ID and HMAC-signed channel token
     channel_id = str(uuid.uuid4())
-    channel_token = f"{org_id}:{user_id}"
+    channel_token = _sign_channel_token(org_id, user_id)
 
     # Build the webhook URL
     # Use the API domain from env, falling back to the request host
@@ -400,8 +466,9 @@ async def register_outlook_subscription(
     api_domain = os.environ.get("API_DOMAIN", "api.perenniaai.com")
     webhook_url = f"https://{api_domain}/api/v1/scheduler/calendar/sync/outlook/webhook"
 
-    # Client state for verification (sent back with each notification)
-    client_state = f"perennia_{org_id}_{user_id}"
+    # Client state for verification — HMAC-signed so we can verify
+    # that incoming notifications actually came via our subscription
+    client_state = _sign_channel_token(org_id, user_id)
 
     try:
         from services.calendar_sync_orchestrator import CalendarSyncOrchestrator

@@ -309,8 +309,8 @@ async def delete_label(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Delete a calendar label. Associated appointment_labels are CASCADE-deleted."""
-    from database.models.calendar_label import CalendarLabel
+    """Soft-delete a calendar label and remove its appointment associations."""
+    from database.models.calendar_label import CalendarLabel, AppointmentLabel
 
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
@@ -323,10 +323,17 @@ async def delete_label(
     label_name = label.name
     label.is_active = False
 
+    # Clean up appointment_labels referencing this label to prevent orphaned rows
+    orphan_count = (
+        db.query(AppointmentLabel)
+        .filter(AppointmentLabel.label_id == label_id)
+        .delete(synchronize_session="fetch")
+    )
+
     _audit_log(
         db, org_id, user_id, "deleted",
         "calendar_label", label_id,
-        changes={"name": label_name},
+        changes={"name": label_name, "orphans_cleaned": orphan_count},
         request=request,
     )
     db.commit()
@@ -387,6 +394,7 @@ async def assign_labels(
         .filter(
             CalendarLabel.organization_id == org_id,
             CalendarLabel.id.in_(label_ids),
+            CalendarLabel.is_active == True,
             or_(
                 CalendarLabel.user_id.is_(None),
                 CalendarLabel.user_id == user_id,
@@ -510,7 +518,10 @@ async def get_appointment_labels(
     labels = (
         db.query(CalendarLabel)
         .join(AppointmentLabel, AppointmentLabel.label_id == CalendarLabel.id)
-        .filter(AppointmentLabel.appointment_id == appointment_id)
+        .filter(
+            AppointmentLabel.appointment_id == appointment_id,
+            CalendarLabel.is_active == True,
+        )
         .order_by(CalendarLabel.sort_order)
         .all()
     )
