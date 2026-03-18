@@ -687,7 +687,7 @@ class AppointmentStatusHistory(Base):
 
     # Notes and context
     notes = Column(Text, nullable=True)
-    metadata = Column(JSON, default=dict)  # Extra context (e.g., cancellation_reason, reschedule_from)
+    extra_data = Column("metadata", JSON, default=dict)  # Extra context (e.g., cancellation_reason, reschedule_from)
 
     # Timestamps
     changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

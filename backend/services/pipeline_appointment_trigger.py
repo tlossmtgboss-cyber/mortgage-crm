@@ -254,7 +254,7 @@ class PipelineAppointmentTriggerLog(Base):
     # Status
     status = Column(String(30), default="pending")  # pending, completed, failed, cancelled
     error_message = Column(Text, nullable=True)
-    metadata = Column(JSON, default=dict)
+    extra_data = Column("metadata", JSON, default=dict)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -648,7 +648,7 @@ class PipelineAppointmentTrigger:
                 booking_link=result.get("booking_link"),
                 status=status,
                 error_message=result.get("error"),
-                metadata={
+                extra_data={
                     "required": rule.required,
                     "delay_hours": rule.delay_hours,
                     "auto_book": rule.auto_book,

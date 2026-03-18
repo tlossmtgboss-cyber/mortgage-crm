@@ -92,7 +92,7 @@ class DocNotification(Base):
     action_label = Column(String(100))  # e.g. "Review Document", "Clear Condition"
 
     # Arbitrary context data (document_id, classification result, etc.)
-    metadata = Column(JSON)
+    extra_data = Column("metadata", JSON)
 
     # Read/dismiss state
     is_read = Column(Boolean, default=False)
