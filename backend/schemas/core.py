@@ -1343,7 +1343,7 @@ class ActivityCreate(BaseModel):
 class ActivityResponse(BaseModel):
     id: int
     type: ActivityType
-    content: str
+    content: Optional[str] = None
     lead_id: Optional[int] = None
     loan_id: Optional[int] = None
     mum_client_id: Optional[int] = None

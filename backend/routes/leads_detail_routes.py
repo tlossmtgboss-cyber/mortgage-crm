@@ -393,7 +393,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             "proposed_monthly_payment": lead.proposed_monthly_payment,
             # Salesforce Integration
             "salesforce_id": getattr(lead, 'salesforce_id', None),
-            "salesforce_last_synced_at": (lead.salesforce_last_synced_at.isoformat() if getattr(lead, 'salesforce_last_synced_at', None) else
+            "salesforce_last_synced_at": (getattr(lead, 'salesforce_last_synced_at', None).isoformat() if getattr(lead, 'salesforce_last_synced_at', None) else
                                           (lead.meta_data or {}).get('salesforce_synced_at') if getattr(lead, 'meta_data', None) else None),
             # Timestamps
             "created_at": lead.created_at.isoformat() if lead.created_at else None,

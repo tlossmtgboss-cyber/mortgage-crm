@@ -647,24 +647,34 @@ function LeadDetail() {
       try {
         // Try to fetch from API first
         const leadIdInt = parseInt(id);
-        [leadData, activitiesData] = await Promise.all([
-          leadsAPI.getById(leadIdInt),
-          activitiesAPI.getAll({ lead_id: leadIdInt })
-        ]);
-        console.log('✅ Loaded lead from API:', leadData);
-        console.log('✅ Loaded activities from API:', activitiesData);
-      } catch (apiError) {
-        console.log('⚠️ API failed. Error:', apiError);
-
-        // Check if it's a 404 error (lead not found)
-        if (apiError?.response?.status === 404) {
-          console.error('❌ Lead not found in database');
-          setError('Lead not found. It may have been deleted.');
+        // Load lead data first — activities failure should not block the page
+        try {
+          leadData = await leadsAPI.getById(leadIdInt);
+          console.log('✅ Loaded lead from API:', leadData);
+        } catch (leadError) {
+          console.log('⚠️ Lead API failed. Error:', leadError);
+          if (leadError?.response?.status === 404) {
+            console.error('❌ Lead not found in database');
+            setError('Lead not found. It may have been deleted.');
+            setLoading(false);
+            return;
+          }
+          const errorMessage = leadError?.response?.data?.detail || leadError?.message || 'Failed to load lead';
+          console.error('❌ API Error:', errorMessage);
+          setError(errorMessage);
           setLoading(false);
           return;
         }
-
-        // For other errors, try to show a helpful message
+        // Load activities separately — don't block lead display on failure
+        try {
+          activitiesData = await activitiesAPI.getAll({ lead_id: parseInt(id) });
+          console.log('✅ Loaded activities from API:', activitiesData);
+        } catch (actError) {
+          console.warn('⚠️ Failed to load activities, continuing without them:', actError?.message);
+          activitiesData = [];
+        }
+      } catch (apiError) {
+        console.log('⚠️ API failed. Error:', apiError);
         const errorMessage = apiError?.response?.data?.detail || apiError?.message || 'Failed to load lead';
         console.error('❌ API Error:', errorMessage);
         setError(errorMessage);
