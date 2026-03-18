@@ -799,6 +799,37 @@ def register_health_routes(app, get_db, **kwargs):
         """Simple endpoint to verify deployment - added 2025-12-27T22:45"""
         return {"deployed_at": "2026-01-22T09:10:00Z", "version": "2026.01.22.1", "test": "db-pool-fixes"}
 
+    @app.get("/diag/db-test")
+    async def diag_db_test():
+        """Temporary diagnostic: return actual DB error for debugging."""
+        import traceback as tb
+        from db import SessionLocal
+        result = {"tests": []}
+        # Test 1: Can we create a session?
+        try:
+            session = SessionLocal()
+            result["tests"].append({"test": "session_create", "status": "ok"})
+        except Exception as e:
+            result["tests"].append({"test": "session_create", "status": "error", "error": str(e), "traceback": tb.format_exc()[-500:]})
+            return result
+        # Test 2: Can we execute SELECT 1?
+        try:
+            session.execute(text("SELECT 1"))
+            result["tests"].append({"test": "select_1", "status": "ok"})
+        except Exception as e:
+            result["tests"].append({"test": "select_1", "status": "error", "error": str(e), "traceback": tb.format_exc()[-500:]})
+        # Test 3: Can we query a table?
+        try:
+            row = session.execute(text("SELECT count(*) FROM users")).fetchone()
+            result["tests"].append({"test": "users_count", "status": "ok", "count": row[0] if row else None})
+        except Exception as e:
+            result["tests"].append({"test": "users_count", "status": "error", "error": str(e)})
+        try:
+            session.close()
+        except Exception:
+            pass
+        return result
+
     # ========================================================================
     # Debug routers (lines ~15709-15728 in inline_legacy_routes.py)
     # ========================================================================
