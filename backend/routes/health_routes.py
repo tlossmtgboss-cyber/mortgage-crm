@@ -830,6 +830,56 @@ def register_health_routes(app, get_db, **kwargs):
             pass
         return result
 
+    @app.get("/diag/kill-idle")
+    async def diag_kill_idle():
+        """Emergency: terminate idle DB connections using raw psycopg2 (bypasses pool)."""
+        import psycopg2
+        database_url = os.environ.get("DATABASE_URL", "")
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        try:
+            conn = psycopg2.connect(database_url, connect_timeout=10)
+            conn.autocommit = True
+            cur = conn.cursor()
+            # Get current status
+            cur.execute("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")
+            total_before = cur.fetchone()[0]
+            cur.execute("SHOW max_connections")
+            max_conn = cur.fetchone()[0]
+            # Kill ALL idle connections except ourselves
+            cur.execute("""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid != pg_backend_pid()
+                  AND state IN ('idle', 'idle in transaction', 'idle in transaction (aborted)')
+            """)
+            killed = cur.rowcount
+            # Also kill connections idle for > 1 second regardless of state
+            cur.execute("""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid != pg_backend_pid()
+                  AND state_change < NOW() - INTERVAL '1 second'
+                  AND state != 'active'
+            """)
+            killed2 = cur.rowcount
+            cur.execute("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")
+            total_after = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+            return {
+                "status": "ok",
+                "before": total_before,
+                "max_connections": max_conn,
+                "idle_killed": killed,
+                "stale_killed": killed2,
+                "after": total_after,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     # ========================================================================
     # Debug routers (lines ~15709-15728 in inline_legacy_routes.py)
     # ========================================================================
