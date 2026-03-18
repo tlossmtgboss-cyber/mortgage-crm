@@ -833,6 +833,7 @@ def register_health_routes(app, get_db, **kwargs):
     @app.get("/diag/kill-idle")
     async def diag_kill_idle():
         """Emergency: terminate idle DB connections using raw psycopg2 (bypasses pool)."""
+        import os
         import psycopg2
         database_url = os.environ.get("DATABASE_URL", "")
         if database_url.startswith("postgres://"):
