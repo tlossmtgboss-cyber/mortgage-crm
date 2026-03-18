@@ -706,16 +706,25 @@ async def confirm_public_booking(
         # (enterprise audit, Outlook calendar, emails/SMS, confirmation token)
         # ==================================================================
 
-        # Enterprise audit: structured log for compliance (public booking path)
+        # Enterprise audit: structured log + DB record for compliance (public booking path)
+        booking_details = {
+            "booking_link_slug": slug,
+            "booking_link_id": link.id,
+            "appointment_type": appt_type.type_name if appt_type else None,
+        }
         scheduler_audit.log_appointment_created(
             appointment, user={"id": None},
             request=request,
             booking_source="public_booking",
-            booking_path_details={
-                "booking_link_slug": slug,
-                "booking_link_id": link.id,
-                "appointment_type": appt_type.type_name if appt_type else None,
-            },
+            booking_path_details=booking_details,
+        )
+        # Also write to the DB audit table so booking link analytics can query it
+        scheduler_audit.write_audit_entry(
+            db, appointment.id, "created",
+            organization_id=appointment.organization_id,
+            booking_source="public_booking",
+            details=booking_details,
+            request=request,
         )
 
         logger.info(f"Public booking confirmed: {appointment.id} via link {slug}")
@@ -1168,14 +1177,21 @@ async def confirm_website_demo_booking(
         # (enterprise audit, confirmation email, response shaping)
         # ==================================================================
 
-        # Enterprise audit: structured log for compliance (demo booking path)
+        # Enterprise audit: structured log + DB record for compliance (demo booking path)
+        demo_details = {
+            "demo_booking": True,
+            "external_source": "website_demo",
+        }
         scheduler_audit.log_appointment_created(
             new_appointment, user={"id": None},
             booking_source="public_booking",
-            booking_path_details={
-                "demo_booking": True,
-                "external_source": "website_demo",
-            },
+            booking_path_details=demo_details,
+        )
+        scheduler_audit.write_audit_entry(
+            db, new_appointment.id, "created",
+            organization_id=new_appointment.organization_id,
+            booking_source="public_booking",
+            details=demo_details,
         )
 
         # Format confirmation details
