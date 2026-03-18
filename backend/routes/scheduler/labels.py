@@ -55,7 +55,10 @@ async def list_labels(
 
     from sqlalchemy import or_
 
-    filters = [CalendarLabel.organization_id == org_id]
+    filters = [
+        CalendarLabel.organization_id == org_id,
+        CalendarLabel.is_active == True,
+    ]
 
     if include_personal and user_id:
         filters.append(
@@ -318,7 +321,7 @@ async def delete_label(
         not_found_error("Label not found")
 
     label_name = label.name
-    db.delete(label)
+    label.is_active = False
 
     _audit_log(
         db, org_id, user_id, "deleted",

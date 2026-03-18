@@ -85,7 +85,9 @@ async def list_all_booking_links(
 @router.get("/booking-links")
 async def list_booking_links(
     request: Request,
-    db: Session = Depends(get_db)
+    limit: int = Query(50, ge=1, le=200, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db: Session = Depends(get_db),
 ):
     """List user's booking links"""
     user = await get_current_user(request, db)
@@ -94,11 +96,14 @@ async def list_booking_links(
     _models = get_models()
     BookingLink = _models['BookingLink']
 
-    links = db.query(BookingLink).filter(
+    query = db.query(BookingLink).filter(
         BookingLink.user_id == user.id,
         BookingLink.organization_id == org_id,
         BookingLink.is_active == True
-    ).all()
+    )
+
+    total = query.count()
+    links = query.order_by(BookingLink.created_at.desc()).offset(offset).limit(limit).all()
 
     return {
         "booking_links": [
@@ -115,7 +120,10 @@ async def list_booking_links(
                 "created_at": link.created_at.isoformat() if link.created_at else None
             }
             for link in links
-        ]
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 

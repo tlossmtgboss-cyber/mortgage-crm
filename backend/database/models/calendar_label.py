@@ -73,6 +73,7 @@ class CalendarLabel(Base):
 
     # Flags
     is_default = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)
 
     # Timestamps

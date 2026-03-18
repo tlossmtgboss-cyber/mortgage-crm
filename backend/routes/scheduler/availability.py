@@ -286,7 +286,7 @@ async def delete_availability_slot(
     if not slot:
         raise HTTPException(status_code=404, detail="Slot not found")
 
-    db.delete(slot)
+    slot.is_active = False
     db.commit()
 
     return {"message": "Slot deleted"}

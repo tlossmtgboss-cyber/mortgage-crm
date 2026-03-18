@@ -265,7 +265,7 @@ async def delete_reminder_template(
         raise HTTPException(status_code=404, detail="Template not found")
 
     template_name = template.name
-    db.delete(template)
+    template.is_active = False
 
     _audit_log(
         db, org_id, getattr(user, "id", None), "deleted",

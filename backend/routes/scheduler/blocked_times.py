@@ -156,7 +156,7 @@ async def delete_blocked_time(
 
     _audit_log(db, org_id, user.id, 'deleted', 'blocked_time',
                entity_id=block_id, changes={'title': blocked.title}, request=request)
-    db.delete(blocked)
+    blocked.is_active = False
     db.commit()
 
     return {"message": "Blocked time deleted"}

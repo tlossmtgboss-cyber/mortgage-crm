@@ -63,6 +63,8 @@ def _serialize_template(t) -> dict:
 async def list_appointment_templates(
     request: Request,
     include_inactive: bool = Query(False, description="Include deactivated templates"),
+    limit: int = Query(50, ge=1, le=200, description="Max results"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     db: Session = Depends(get_db),
 ):
     """List all appointment templates for the authenticated user's organization."""
@@ -79,14 +81,17 @@ async def list_appointment_templates(
     if not include_inactive:
         query = query.filter(AppointmentTemplate.is_active == True)
 
+    total = query.count()
     templates = query.order_by(
         AppointmentTemplate.sort_order.asc(),
         AppointmentTemplate.name.asc(),
-    ).all()
+    ).offset(offset).limit(limit).all()
 
     return {
         "templates": [_serialize_template(t) for t in templates],
-        "total": len(templates),
+        "total": total,
+        "limit": limit,
+        "offset": offset,
     }
 
 
