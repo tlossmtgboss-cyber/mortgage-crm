@@ -655,6 +655,9 @@ async def confirm_public_booking(
         #          lead creation/linking, activity logging, follow-up task,
         #          audit logging, and db.commit().
         # ==================================================================
+        # Resolve the assigned LO's timezone for the appointment record
+        lo_timezone = _get_user_timezone(db, assigned_user_id, org_id=link_org_id)
+
         result: AppointmentCreationResult = await _create_appointment_via_service(
             db=db,
             organization_id=link_org_id,
@@ -665,6 +668,7 @@ async def confirm_public_booking(
             scheduled_start=slot_start,
             scheduled_end=slot_end,
             duration_minutes=duration_minutes,
+            timezone=lo_timezone,
             attendee_name=attendee_name,
             attendee_email=attendee_email,
             attendee_phone=attendee_phone,
@@ -1126,6 +1130,9 @@ async def confirm_website_demo_booking(
         #          appointment persistence, lead creation/linking, activity
         #          logging, follow-up task, audit logging, and db.commit().
         # ==================================================================
+        # Resolve the assigned LO's timezone for the appointment record
+        demo_lo_timezone = _get_user_timezone(db, assigned_user_id, org_id=demo_org_id)
+
         result: AppointmentCreationResult = await _create_appointment_via_service(
             db=db,
             organization_id=demo_org_id,
@@ -1136,6 +1143,7 @@ async def confirm_website_demo_booking(
             scheduled_start=start_time,
             scheduled_end=end_time,
             duration_minutes=request.duration_minutes,
+            timezone=demo_lo_timezone,
             attendee_name=safe_name,
             attendee_email=request.attendee_email,
             attendee_phone=safe_phone,

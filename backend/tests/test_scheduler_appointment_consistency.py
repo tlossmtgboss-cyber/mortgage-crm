@@ -6,12 +6,19 @@ Verifies that all 3 booking paths produce consistent appointment records:
   2. Public booking (POST /public/book/{slug}/confirm) — public_booking.py
   3. Pipeline AI trigger (PipelineAppointmentTrigger.create_appointment_suggestion) — pipeline_appointment_trigger.py
 
-These tests use source-code analysis of the Appointment() constructor calls
-in each path to verify field-level consistency, conflict-checking behavior,
-and post-creation side effects (audit log, meeting link, lead linkage, etc.).
+Architecture note (March 2026):
+  All three paths now delegate to the unified appointment_creation_service.py,
+  which handles the Appointment() constructor, conflict checking, duplicate
+  detection, meeting link generation, audit logging, lead linking, and CRM
+  activity logging.  These tests verify:
+    1. The unified service sets all required fields on the Appointment.
+    2. Each booking path calls the unified service (not a direct Appointment() call).
+    3. Each path passes the correct control flags.
+    4. Pipeline-specific behavior (business hours snapping, default rules).
 """
 
 import ast
+import inspect
 import pytest
 import logging
 from datetime import datetime, timedelta, timezone
@@ -21,22 +28,23 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# HELPERS — Extract Appointment() constructor kwargs from each booking path
+# PATH CONSTANTS
 # =============================================================================
 
-# The three source files containing the booking paths
 _BACKEND_DIR = Path(__file__).parent.parent
 _AUTHENTICATED_PATH = _BACKEND_DIR / "routes" / "scheduler" / "appointments.py"
 _PUBLIC_BOOKING_PATH = _BACKEND_DIR / "routes" / "scheduler" / "public_booking.py"
 _PIPELINE_TRIGGER_PATH = _BACKEND_DIR / "services" / "pipeline_appointment_trigger.py"
+_UNIFIED_SERVICE_PATH = _BACKEND_DIR / "services" / "appointment_creation_service.py"
 
+
+# =============================================================================
+# HELPERS
+# =============================================================================
 
 def _extract_appointment_constructor_kwargs(source_path: Path) -> list[set[str]]:
     """Parse a Python source file and return sets of keyword argument names
     used in every ``Appointment(...)`` constructor call found in it.
-
-    Returns a list because a file may contain multiple Appointment() calls
-    (e.g. the pipeline trigger has one in ``create_appointment_suggestion``).
     """
     source = source_path.read_text()
     tree = ast.parse(source, filename=str(source_path))
@@ -45,7 +53,6 @@ def _extract_appointment_constructor_kwargs(source_path: Path) -> list[set[str]]
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
             func = node.func
-            # Match Appointment(...) — could be Name or Attribute node
             is_appointment_call = False
             if isinstance(func, ast.Name) and func.id == "Appointment":
                 is_appointment_call = True
@@ -60,32 +67,12 @@ def _extract_appointment_constructor_kwargs(source_path: Path) -> list[set[str]]
     return results
 
 
-def _get_kwargs_for_path(path: Path) -> set[str]:
-    """Return the kwargs from the *first* Appointment() constructor call
-    in the given file.  Asserts that at least one was found.
-    """
-    all_calls = _extract_appointment_constructor_kwargs(path)
-    assert len(all_calls) > 0, f"No Appointment() constructor found in {path.name}"
-    return all_calls[0]
+def _source_contains(path: Path, pattern: str) -> bool:
+    """Check if the source file contains a pattern (case-sensitive)."""
+    return pattern in path.read_text()
 
 
-# Cache the extracted kwargs at module level so every test doesn't re-parse
-_authenticated_kwargs: set[str] = set()
-_public_kwargs: set[str] = set()
-_pipeline_kwargs: set[str] = set()
-
-
-def _ensure_kwargs_loaded():
-    global _authenticated_kwargs, _public_kwargs, _pipeline_kwargs
-    if not _authenticated_kwargs:
-        _authenticated_kwargs.update(_get_kwargs_for_path(_AUTHENTICATED_PATH))
-    if not _public_kwargs:
-        _public_kwargs.update(_get_kwargs_for_path(_PUBLIC_BOOKING_PATH))
-    if not _pipeline_kwargs:
-        _pipeline_kwargs.update(_get_kwargs_for_path(_PIPELINE_TRIGGER_PATH))
-
-
-# Required fields that EVERY booking path must set on Appointment()
+# Required fields that the unified service MUST set on Appointment()
 REQUIRED_CORE_FIELDS = {
     "organization_id",
     "title",
@@ -93,7 +80,9 @@ REQUIRED_CORE_FIELDS = {
     "scheduled_end",
     "duration_minutes",
     "status",
+    "status_changed_at",
     "meeting_mode",
+    "timezone",
 }
 
 
@@ -103,329 +92,299 @@ REQUIRED_CORE_FIELDS = {
 
 @pytest.fixture(autouse=True, scope="module")
 def _verify_source_files_exist():
-    """Fail fast if any of the three source files are missing."""
-    for path in (_AUTHENTICATED_PATH, _PUBLIC_BOOKING_PATH, _PIPELINE_TRIGGER_PATH):
+    """Fail fast if any of the source files are missing."""
+    for path in (_AUTHENTICATED_PATH, _PUBLIC_BOOKING_PATH,
+                 _PIPELINE_TRIGGER_PATH, _UNIFIED_SERVICE_PATH):
         assert path.exists(), f"Source file not found: {path}"
-    _ensure_kwargs_loaded()
 
 
 # =============================================================================
-# TEST CLASS: Appointment Field Consistency
+# TEST CLASS: Unified Service — Single Appointment Constructor
 # =============================================================================
 
-class TestAppointmentFieldConsistency:
-    """Verify all booking paths set the same required fields."""
+class TestUnifiedServiceFields:
+    """Verify the unified appointment_creation_service.py sets all required
+    fields on the Appointment() constructor.
 
-    def test_all_paths_set_organization_id(self):
-        """All paths must set organization_id for tenant isolation."""
-        _ensure_kwargs_loaded()
-        assert "organization_id" in _authenticated_kwargs, \
-            "Authenticated path missing organization_id"
-        assert "organization_id" in _public_kwargs, \
-            "Public booking path missing organization_id"
-        assert "organization_id" in _pipeline_kwargs, \
-            "Pipeline trigger path missing organization_id"
+    All three booking paths now delegate to this service, so verifying the
+    service's Appointment() constructor is sufficient to cover all paths.
+    """
 
-    def test_all_paths_set_status_to_booked(self):
-        """All paths must set initial status (expected: BOOKED).
-
-        We verify the field is present in the constructor. The actual value
-        (AppointmentStatus.BOOKED) is checked via source text search since
-        AST constant extraction varies by Python version.
-        """
-        _ensure_kwargs_loaded()
-        assert "status" in _authenticated_kwargs
-        assert "status" in _public_kwargs
-        assert "status" in _pipeline_kwargs
-
-        # Verify the value is BOOKED in each source
-        for path in (_AUTHENTICATED_PATH, _PUBLIC_BOOKING_PATH, _PIPELINE_TRIGGER_PATH):
-            source = path.read_text()
-            # Look for status=AppointmentStatus.BOOKED in the Appointment constructor vicinity
-            assert "AppointmentStatus.BOOKED" in source, \
-                f"{path.name} does not set status to AppointmentStatus.BOOKED"
-
-    def test_all_paths_set_status_changed_at(self):
-        """All paths must set status_changed_at timestamp.
-
-        BUG DETECTED: pipeline_appointment_trigger.py does NOT set
-        status_changed_at. This is an inconsistency — authenticated and
-        public paths both set it, but the pipeline AI trigger omits it,
-        leaving it as NULL and breaking timeline queries that sort by
-        status_changed_at.
-        """
-        _ensure_kwargs_loaded()
-        assert "status_changed_at" in _authenticated_kwargs, \
-            "Authenticated path missing status_changed_at"
-        assert "status_changed_at" in _public_kwargs, \
-            "Public booking path missing status_changed_at"
-
-        # Document the known inconsistency
-        if "status_changed_at" not in _pipeline_kwargs:
-            pytest.xfail(
-                "KNOWN BUG: pipeline_appointment_trigger.py does not set "
-                "status_changed_at on the Appointment, causing NULL values "
-                "in the status timeline. Fix: add "
-                "status_changed_at=datetime.now(timezone.utc) to the "
-                "Appointment() constructor in create_appointment_suggestion()."
-            )
-
-    def test_all_paths_set_timezone(self):
-        """All paths must set a valid timezone, not rely on model default.
-
-        The Appointment model defaults timezone to 'America/Chicago', but
-        each path should explicitly set it based on the LO's configuration.
-        """
-        _ensure_kwargs_loaded()
-        assert "timezone" in _authenticated_kwargs, \
-            "Authenticated path should explicitly set timezone"
-        assert "timezone" in _pipeline_kwargs, \
-            "Pipeline trigger should explicitly set timezone"
-
-        # Public booking path may rely on model default — document the gap
-        if "timezone" not in _public_kwargs:
-            pytest.xfail(
-                "KNOWN GAP: public_booking.py does not explicitly set timezone "
-                "on the Appointment, relying on model default 'America/Chicago'. "
-                "Fix: resolve the LO's timezone from SchedulerConfig and pass it."
-            )
-
-    def test_all_paths_set_duration(self):
-        """All paths must set duration_minutes."""
-        _ensure_kwargs_loaded()
-        assert "duration_minutes" in _authenticated_kwargs
-        assert "duration_minutes" in _public_kwargs
-        assert "duration_minutes" in _pipeline_kwargs
-
-    def test_all_paths_set_meeting_mode(self):
-        """All paths must set meeting_mode (VIDEO, PHONE, IN_PERSON)."""
-        _ensure_kwargs_loaded()
-        assert "meeting_mode" in _authenticated_kwargs
-        assert "meeting_mode" in _public_kwargs
-        assert "meeting_mode" in _pipeline_kwargs
-
-    def test_all_paths_set_attendee_info(self):
-        """All paths should set at minimum attendee_name and attendee_email."""
-        _ensure_kwargs_loaded()
-        for label, kwargs in [
-            ("authenticated", _authenticated_kwargs),
-            ("public", _public_kwargs),
-            ("pipeline", _pipeline_kwargs),
-        ]:
-            assert "attendee_name" in kwargs, \
-                f"{label} path missing attendee_name"
-            assert "attendee_email" in kwargs, \
-                f"{label} path missing attendee_email"
-
-    def test_required_core_fields_present_in_all_paths(self):
-        """Every path must include all REQUIRED_CORE_FIELDS."""
-        _ensure_kwargs_loaded()
-        for label, kwargs in [
-            ("authenticated", _authenticated_kwargs),
-            ("public", _public_kwargs),
-            ("pipeline", _pipeline_kwargs),
-        ]:
-            missing = REQUIRED_CORE_FIELDS - kwargs
-            assert not missing, \
-                f"{label} path is missing required core fields: {missing}"
-
-
-# =============================================================================
-# TEST CLASS: Post-Creation Step Consistency
-# =============================================================================
-
-class TestPostCreationConsistency:
-    """Verify post-creation steps are consistent across paths."""
-
-    def _source_contains(self, path: Path, pattern: str) -> bool:
-        """Check if the source file contains a pattern (case-sensitive)."""
-        return pattern in path.read_text()
-
-    def test_all_paths_check_conflicts(self):
-        """All paths must check for appointment conflicts before creation.
-
-        BUG DETECTED: pipeline_appointment_trigger.py does NOT check for
-        scheduling conflicts before creating an appointment. This means
-        auto-booked appointments can double-book the LO's calendar.
-        """
-        auth_ok = self._source_contains(_AUTHENTICATED_PATH, "_check_appointment_conflict")
-        public_ok = self._source_contains(_PUBLIC_BOOKING_PATH, "_check_appointment_conflict")
-        pipeline_ok = self._source_contains(_PIPELINE_TRIGGER_PATH, "_check_appointment_conflict")
-
-        assert auth_ok, "Authenticated path must check conflicts"
-        assert public_ok, "Public booking path must check conflicts"
-
-        if not pipeline_ok:
-            pytest.xfail(
-                "KNOWN BUG: pipeline_appointment_trigger.py does not call "
-                "_check_appointment_conflict() before auto-booking. This can "
-                "cause double-booked calendar slots when a loan stage change "
-                "triggers an auto-book rule."
-            )
-
-    def test_all_paths_check_duplicate_bookings(self):
-        """All paths should check for duplicate bookings by the same attendee.
-
-        BUG DETECTED: pipeline_appointment_trigger.py does NOT check for
-        duplicate bookings. If a loan oscillates between stages, the same
-        appointment type may be created multiple times for the same borrower.
-        """
-        auth_ok = self._source_contains(_AUTHENTICATED_PATH, "_check_duplicate_booking")
-        public_ok = self._source_contains(_PUBLIC_BOOKING_PATH, "_check_duplicate_booking")
-        pipeline_ok = self._source_contains(_PIPELINE_TRIGGER_PATH, "_check_duplicate_booking")
-
-        assert auth_ok, "Authenticated path must check duplicates"
-        assert public_ok, "Public booking path must check duplicates"
-
-        if not pipeline_ok:
-            pytest.xfail(
-                "KNOWN BUG: pipeline_appointment_trigger.py does not check "
-                "for duplicate bookings. Repeated stage changes can create "
-                "multiple appointments of the same type for the same borrower."
-            )
-
-    def test_all_paths_generate_meeting_link(self):
-        """All paths should generate meeting links when meeting_mode is VIDEO.
-
-        BUG DETECTED: pipeline_appointment_trigger.py does NOT generate a
-        virtual meeting link for auto-booked video appointments. The borrower
-        receives an appointment without a join URL.
-        """
-        auth_ok = self._source_contains(_AUTHENTICATED_PATH, "create_meeting_for_appointment")
-        public_ok = self._source_contains(_PUBLIC_BOOKING_PATH, "create_meeting_for_appointment")
-        pipeline_ok = self._source_contains(_PIPELINE_TRIGGER_PATH, "create_meeting_for_appointment")
-
-        assert auth_ok, "Authenticated path must generate meeting links"
-        assert public_ok, "Public booking path must generate meeting links"
-
-        if not pipeline_ok:
-            pytest.xfail(
-                "KNOWN GAP: pipeline_appointment_trigger.py does not call "
-                "create_meeting_for_appointment() for video appointments. "
-                "Auto-booked appointments have no video link."
-            )
-
-    def test_all_paths_log_audit_trail(self):
-        """All paths should create audit log entries for compliance.
-
-        The authenticated and public paths use _audit_log() from _helpers.py.
-        The pipeline trigger uses its own _log_trigger() method, which writes
-        to pipeline_appointment_trigger_log — a different table.
-        """
-        auth_ok = self._source_contains(_AUTHENTICATED_PATH, "_audit_log")
-        public_ok = (
-            self._source_contains(_PUBLIC_BOOKING_PATH, "_audit_log")
-            or self._source_contains(_PUBLIC_BOOKING_PATH, "scheduler_audit")
+    def test_unified_service_has_appointment_constructor(self):
+        """The unified service must contain an Appointment() constructor call."""
+        calls = _extract_appointment_constructor_kwargs(_UNIFIED_SERVICE_PATH)
+        assert len(calls) > 0, (
+            "appointment_creation_service.py must contain at least one "
+            "Appointment() constructor call"
         )
-        pipeline_ok = self._source_contains(_PIPELINE_TRIGGER_PATH, "_log_trigger")
 
-        assert auth_ok, "Authenticated path must log audit trail"
-        # Public booking path does not call _audit_log; document this
-        if not public_ok:
-            pytest.xfail(
-                "KNOWN GAP: public_booking.py does not call _audit_log() or "
-                "scheduler_audit after creating the appointment. Only the "
-                "authenticated path creates a scheduler_audit_log entry."
-            )
-        assert pipeline_ok, \
-            "Pipeline trigger must log to pipeline_appointment_trigger_log"
+    def test_unified_service_sets_required_core_fields(self):
+        """The unified service Appointment() call must include all required fields."""
+        calls = _extract_appointment_constructor_kwargs(_UNIFIED_SERVICE_PATH)
+        assert len(calls) > 0, "No Appointment() call found in unified service"
 
-    def test_ai_path_matches_authenticated_output(self):
-        """AI-created appointments should have same core fields as authenticated ones.
+        kwargs = calls[0]
+        missing = REQUIRED_CORE_FIELDS - kwargs
+        assert not missing, (
+            f"Unified service Appointment() is missing required fields: {missing}"
+        )
 
-        Compares the Appointment() kwargs between the pipeline trigger
-        and the authenticated path to identify fields present in the
-        authenticated path but missing from the pipeline trigger.
-        """
-        _ensure_kwargs_loaded()
+    def test_unified_service_sets_status_changed_at(self):
+        """The unified service must set status_changed_at for timeline queries."""
+        calls = _extract_appointment_constructor_kwargs(_UNIFIED_SERVICE_PATH)
+        assert len(calls) > 0
+        assert "status_changed_at" in calls[0], (
+            "Unified service must set status_changed_at to prevent NULL values "
+            "in status timeline queries"
+        )
 
-        # Fields that the authenticated path sets but the pipeline path does not
-        auth_only = _authenticated_kwargs - _pipeline_kwargs
-        # Some fields are legitimately different (e.g. created_by_user_id is
-        # the logged-in user in auth path, not applicable for AI path)
-        expected_auth_only = {
-            "created_by_user_id",
-            "appointment_type_id",
-            "lead_id",
-            "contact_id",
-            "attendee_notes",
-            "intake_responses",
-        }
+    def test_unified_service_sets_timezone(self):
+        """The unified service must explicitly set timezone on the Appointment."""
+        calls = _extract_appointment_constructor_kwargs(_UNIFIED_SERVICE_PATH)
+        assert len(calls) > 0
+        assert "timezone" in calls[0], (
+            "Unified service must set timezone on the Appointment "
+            "(resolved from SchedulerConfig or caller-provided)"
+        )
 
-        unexpected_missing = auth_only - expected_auth_only
-        if unexpected_missing:
-            # These are fields that the auth path sets but the pipeline does
-            # not, AND they are not in the expected-to-differ set.
-            msg = (
-                f"Pipeline trigger is missing fields that the authenticated path sets: "
-                f"{unexpected_missing}. These may cause inconsistent appointment records."
-            )
-            # status_changed_at is a known bug, others may be intentional.
-            # We flag any unexpected missing fields as a warning via xfail.
-            if unexpected_missing - {"status_changed_at"}:
-                pytest.xfail(f"INCONSISTENCY: {msg}")
-            else:
-                pytest.xfail(f"KNOWN BUG: {msg}")
+    def test_unified_service_sets_attendee_fields(self):
+        """The unified service must set attendee_name and attendee_email."""
+        calls = _extract_appointment_constructor_kwargs(_UNIFIED_SERVICE_PATH)
+        assert len(calls) > 0
+        assert "attendee_name" in calls[0]
+        assert "attendee_email" in calls[0]
 
-    def test_public_path_matches_authenticated_output(self):
-        """Public booking appointments should have same core fields as authenticated ones.
+    def test_unified_service_sets_ai_context_fields(self):
+        """The unified service must set booked_by_ai and ai_booking_context."""
+        calls = _extract_appointment_constructor_kwargs(_UNIFIED_SERVICE_PATH)
+        assert len(calls) > 0
+        assert "booked_by_ai" in calls[0]
+        assert "ai_booking_context" in calls[0]
 
-        Compares the Appointment() kwargs between the public booking
-        and the authenticated path to identify unexpected divergences.
-        """
-        _ensure_kwargs_loaded()
+    def test_unified_service_does_conflict_checking(self):
+        """The unified service must check for scheduling conflicts."""
+        assert _source_contains(_UNIFIED_SERVICE_PATH, "_check_internal_conflict"), (
+            "Unified service must call _check_internal_conflict (SELECT FOR UPDATE)"
+        )
 
-        # Fields the authenticated path sets but the public path does not
-        auth_only = _authenticated_kwargs - _public_kwargs
-        expected_auth_only = {
-            "created_by_user_id",
-            "lead_id",
-            "loan_id",
-            "contact_id",
-            "attendee_notes",
-            "booked_by_ai",
-            "ai_booking_context",
-        }
+    def test_unified_service_does_duplicate_checking(self):
+        """The unified service must check for duplicate bookings."""
+        assert _source_contains(_UNIFIED_SERVICE_PATH, "_check_duplicate"), (
+            "Unified service must call _check_duplicate"
+        )
 
-        unexpected_missing = auth_only - expected_auth_only
-        if unexpected_missing:
-            msg = (
-                f"Public booking path is missing fields that the authenticated path sets: "
-                f"{unexpected_missing}."
-            )
-            if "timezone" in unexpected_missing:
-                pytest.xfail(
-                    f"KNOWN GAP: {msg} The public path does not set timezone, "
-                    f"relying on model default."
-                )
-            else:
-                assert False, msg
+    def test_unified_service_generates_meeting_links(self):
+        """The unified service must support meeting link generation."""
+        assert _source_contains(_UNIFIED_SERVICE_PATH, "_generate_meeting_link"), (
+            "Unified service must call _generate_meeting_link for video appointments"
+        )
 
-    def test_public_path_sets_external_source(self):
-        """Public booking should set external_source='booking_link'.
+    def test_unified_service_writes_audit_log(self):
+        """The unified service must write audit log entries."""
+        assert _source_contains(_UNIFIED_SERVICE_PATH, "_write_audit_log"), (
+            "Unified service must call _write_audit_log for compliance trail"
+        )
 
-        This field distinguishes publicly-booked appointments from
-        authenticated or AI-booked ones in analytics and reporting.
-        """
-        _ensure_kwargs_loaded()
-        assert "external_source" in _public_kwargs, \
-            "Public booking path must set external_source"
-        assert "external_source" not in _authenticated_kwargs, \
-            "Authenticated path should NOT set external_source (default is NULL)"
+    def test_unified_service_creates_leads(self):
+        """The unified service must support lead creation/linking."""
+        assert _source_contains(_UNIFIED_SERVICE_PATH, "_ensure_lead"), (
+            "Unified service must call _ensure_lead for CRM integration"
+        )
 
-    def test_pipeline_path_sets_ai_context_fields(self):
-        """Pipeline trigger should set booked_by_ai and ai_booking_context."""
-        _ensure_kwargs_loaded()
-        assert "booked_by_ai" in _pipeline_kwargs, \
-            "Pipeline trigger must set booked_by_ai=True"
-        assert "ai_booking_context" in _pipeline_kwargs, \
-            "Pipeline trigger must set ai_booking_context with trigger metadata"
-        assert "internal_notes" in _pipeline_kwargs, \
-            "Pipeline trigger must set internal_notes with trigger context"
+    def test_unified_service_creates_followup_tasks(self):
+        """The unified service must create follow-up tasks."""
+        assert _source_contains(_UNIFIED_SERVICE_PATH, "_create_followup_task"), (
+            "Unified service must call _create_followup_task"
+        )
+
+    def test_unified_service_checks_cross_source_conflicts(self):
+        """The unified service must support cross-source conflict checking."""
+        assert _source_contains(_UNIFIED_SERVICE_PATH, "_check_cross_source_conflicts"), (
+            "Unified service must call _check_cross_source_conflicts"
+        )
 
 
 # =============================================================================
-# TEST CLASS: Pipeline Trigger Specific Tests
+# TEST CLASS: All Paths Delegate to Unified Service
+# =============================================================================
+
+class TestDelegationToUnifiedService:
+    """Verify each booking path delegates to appointment_creation_service
+    rather than constructing Appointment() directly.
+    """
+
+    def test_authenticated_path_does_not_construct_appointment_directly(self):
+        """Authenticated path should delegate to unified service, not Appointment()."""
+        calls = _extract_appointment_constructor_kwargs(_AUTHENTICATED_PATH)
+        if calls:
+            pytest.fail(
+                "appointments.py should delegate to appointment_creation_service, "
+                "not construct Appointment() directly. Found direct constructor calls."
+            )
+
+    def test_public_booking_does_not_construct_appointment_directly(self):
+        """Public booking should delegate to unified service, not Appointment()."""
+        calls = _extract_appointment_constructor_kwargs(_PUBLIC_BOOKING_PATH)
+        assert len(calls) == 0, (
+            "public_booking.py should delegate to appointment_creation_service, "
+            "not construct Appointment() directly"
+        )
+
+    def test_pipeline_trigger_does_not_construct_appointment_directly(self):
+        """Pipeline trigger should delegate to unified service, not Appointment()."""
+        calls = _extract_appointment_constructor_kwargs(_PIPELINE_TRIGGER_PATH)
+        assert len(calls) == 0, (
+            "pipeline_appointment_trigger.py should delegate to "
+            "appointment_creation_service, not construct Appointment() directly"
+        )
+
+    def test_public_booking_imports_unified_service(self):
+        """Public booking must import create_appointment from the unified service."""
+        assert _source_contains(
+            _PUBLIC_BOOKING_PATH,
+            "from services.appointment_creation_service import"
+        ), "Public booking must import from appointment_creation_service"
+
+    def test_pipeline_trigger_imports_unified_service(self):
+        """Pipeline trigger must import create_appointment from the unified service."""
+        assert _source_contains(
+            _PIPELINE_TRIGGER_PATH,
+            "from services.appointment_creation_service import create_appointment"
+        ), "Pipeline trigger must import create_appointment from unified service"
+
+    def test_public_booking_passes_timezone(self):
+        """Public booking must pass timezone= to the unified service."""
+        source = _PUBLIC_BOOKING_PATH.read_text()
+        # Find _create_appointment_via_service calls and verify timezone= is passed
+        assert "timezone=" in source, (
+            "Public booking must pass timezone= to the unified service "
+            "to avoid relying on model defaults"
+        )
+
+    def test_pipeline_trigger_passes_timezone(self):
+        """Pipeline trigger must pass timezone= to the unified service."""
+        source = _PIPELINE_TRIGGER_PATH.read_text()
+        assert "timezone=" in source, (
+            "Pipeline trigger must pass timezone= to the unified service"
+        )
+
+    def test_public_booking_passes_conflict_flags(self):
+        """Public booking must enable conflict and cross-source checks."""
+        source = _PUBLIC_BOOKING_PATH.read_text()
+        assert "check_conflicts=True" in source
+        assert "check_cross_source=True" in source
+
+    def test_pipeline_trigger_passes_conflict_flags(self):
+        """Pipeline trigger must enable conflict and cross-source checks."""
+        source = _PIPELINE_TRIGGER_PATH.read_text()
+        assert "check_conflicts=True" in source
+        assert "check_cross_source=True" in source
+
+    def test_pipeline_trigger_passes_meeting_link_flag(self):
+        """Pipeline trigger must enable meeting link generation."""
+        source = _PIPELINE_TRIGGER_PATH.read_text()
+        assert "generate_meeting_link=True" in source
+
+    def test_public_booking_passes_meeting_link_flag(self):
+        """Public booking must enable meeting link generation."""
+        source = _PUBLIC_BOOKING_PATH.read_text()
+        assert "generate_meeting_link=True" in source
+
+
+# =============================================================================
+# TEST CLASS: Public Booking Post-Creation
+# =============================================================================
+
+class TestPublicBookingPostCreation:
+    """Verify public booking path's post-creation side effects."""
+
+    def test_public_booking_calls_scheduler_audit(self):
+        """Public booking must call scheduler_audit for enterprise compliance."""
+        assert _source_contains(
+            _PUBLIC_BOOKING_PATH,
+            "scheduler_audit.log_appointment_created"
+        ), "Public booking must call scheduler_audit.log_appointment_created"
+
+    def test_public_booking_sends_confirmation_email(self):
+        """Public booking must send confirmation email."""
+        assert _source_contains(
+            _PUBLIC_BOOKING_PATH,
+            "send_appointment_confirmation_email"
+        ), "Public booking must send confirmation email"
+
+    def test_public_booking_sends_confirmation_sms(self):
+        """Public booking must send confirmation SMS when phone is provided."""
+        assert _source_contains(
+            _PUBLIC_BOOKING_PATH,
+            "send_appointment_confirmation_sms"
+        ), "Public booking must send confirmation SMS"
+
+    def test_public_booking_creates_outlook_event(self):
+        """Public booking must create Outlook calendar event."""
+        assert _source_contains(
+            _PUBLIC_BOOKING_PATH,
+            "create_event_via_graph"
+        ), "Public booking must create Outlook calendar event"
+
+    def test_public_booking_increments_booking_count(self):
+        """Public booking must atomically increment the booking link counter."""
+        assert _source_contains(
+            _PUBLIC_BOOKING_PATH,
+            "booking_count"
+        ), "Public booking must increment booking_count on the BookingLink"
+
+
+# =============================================================================
+# TEST CLASS: Pipeline Trigger Post-Creation
+# =============================================================================
+
+class TestPipelineTriggerPostCreation:
+    """Verify pipeline trigger's post-creation side effects."""
+
+    def test_pipeline_trigger_logs_trigger(self):
+        """Pipeline trigger must log to pipeline_appointment_trigger_log."""
+        assert _source_contains(
+            _PIPELINE_TRIGGER_PATH,
+            "_log_trigger"
+        ), "Pipeline trigger must log to trigger_log table"
+
+    def test_pipeline_trigger_calls_scheduler_audit(self):
+        """Pipeline trigger must call scheduler_audit for AI bookings."""
+        assert _source_contains(
+            _PIPELINE_TRIGGER_PATH,
+            "scheduler_audit"
+        ), "Pipeline trigger must call scheduler_audit for AI bookings"
+
+    def test_pipeline_trigger_notifies_lo_on_failure(self):
+        """Pipeline trigger must notify the LO when auto-booking fails."""
+        assert _source_contains(
+            _PIPELINE_TRIGGER_PATH,
+            "_notify_lo_of_failure"
+        ), "Pipeline trigger must notify LO on auto-book failure"
+
+    def test_pipeline_trigger_falls_back_to_booking_link(self):
+        """Pipeline trigger must fall back to booking link when auto-book fails."""
+        assert _source_contains(
+            _PIPELINE_TRIGGER_PATH,
+            "send_booking_link"
+        ), "Pipeline trigger must fall back to send_booking_link"
+
+    def test_pipeline_trigger_records_speed_to_lead(self):
+        """Pipeline trigger must record speed-to-lead metrics."""
+        assert _source_contains(
+            _PIPELINE_TRIGGER_PATH,
+            "_record_speed_to_lead"
+        ), "Pipeline trigger must record speed-to-lead timing"
+
+    def test_pipeline_trigger_passes_ai_context(self):
+        """Pipeline trigger must pass booked_by_ai and ai_booking_context."""
+        source = _PIPELINE_TRIGGER_PATH.read_text()
+        assert "booked_by_ai=True" in source
+        assert "ai_booking_context=" in source
+
+
+# =============================================================================
+# TEST CLASS: Pipeline Trigger Specific Behavior
 # =============================================================================
 
 class TestPipelineTriggerBehavior:
@@ -511,71 +470,52 @@ class TestPipelineTriggerBehavior:
 
 
 # =============================================================================
-# TEST CLASS: Cross-Path Field Parity Report
+# TEST CLASS: Cross-Path Field Parity via Unified Service
 # =============================================================================
 
 class TestCrossPathFieldParity:
-    """Generate a detailed parity report across all three booking paths.
-
-    These tests are informational — they document every field difference
-    between paths so the team can decide which gaps to close.
+    """Verify the unified service's Appointment() constructor includes all
+    fields that matter across the three booking paths.
     """
 
-    def test_fields_unique_to_each_path(self):
-        """Report fields that appear in exactly one booking path."""
-        _ensure_kwargs_loaded()
+    def test_unified_service_appointment_constructor_completeness(self):
+        """The unified service Appointment() must set a comprehensive set of fields."""
+        calls = _extract_appointment_constructor_kwargs(_UNIFIED_SERVICE_PATH)
+        assert len(calls) > 0
 
-        all_paths = {
-            "authenticated": _authenticated_kwargs,
-            "public": _public_kwargs,
-            "pipeline": _pipeline_kwargs,
+        kwargs = calls[0]
+
+        # Every field the unified service should set
+        expected_fields = {
+            "organization_id",
+            "appointment_type_id",
+            "assigned_user_id",
+            "created_by_user_id",
+            "lead_id",
+            "loan_id",
+            "contact_id",
+            "title",
+            "description",
+            "meeting_type",
+            "meeting_mode",
+            "scheduled_start",
+            "scheduled_end",
+            "duration_minutes",
+            "timezone",
+            "attendee_name",
+            "attendee_email",
+            "attendee_phone",
+            "attendee_notes",
+            "intake_responses",
+            "status",
+            "status_changed_at",
+            "booked_by_ai",
+            "ai_booking_context",
+            "internal_notes",
+            "external_source",
         }
-        all_fields = _authenticated_kwargs | _public_kwargs | _pipeline_kwargs
 
-        for field in sorted(all_fields):
-            present_in = [name for name, kw in all_paths.items() if field in kw]
-            if len(present_in) == 1:
-                logger.info(
-                    f"Field '{field}' is unique to the {present_in[0]} path"
-                )
-
-        # This test always passes — it's for reporting purposes
-        assert True
-
-    def test_fields_present_in_exactly_two_paths(self):
-        """Report fields that appear in two paths but not the third.
-
-        These are the most likely candidates for consistency bugs.
-        """
-        _ensure_kwargs_loaded()
-
-        all_paths = {
-            "authenticated": _authenticated_kwargs,
-            "public": _public_kwargs,
-            "pipeline": _pipeline_kwargs,
-        }
-        all_fields = _authenticated_kwargs | _public_kwargs | _pipeline_kwargs
-
-        two_path_fields = []
-        for field in sorted(all_fields):
-            present_in = [name for name, kw in all_paths.items() if field in kw]
-            absent_from = [name for name, kw in all_paths.items() if field not in kw]
-            if len(present_in) == 2:
-                two_path_fields.append((field, present_in, absent_from[0]))
-                logger.info(
-                    f"Field '{field}' is in {present_in} but missing from {absent_from[0]}"
-                )
-
-        # This is informational — always passes
-        assert True
-
-    def test_all_three_paths_share_minimum_fields(self):
-        """All three paths must share at least the REQUIRED_CORE_FIELDS."""
-        _ensure_kwargs_loaded()
-
-        common = _authenticated_kwargs & _public_kwargs & _pipeline_kwargs
-        missing_from_common = REQUIRED_CORE_FIELDS - common
-
-        assert not missing_from_common, (
-            f"These required fields are not common to all 3 paths: {missing_from_common}"
+        missing = expected_fields - kwargs
+        assert not missing, (
+            f"Unified service Appointment() is missing fields: {missing}"
         )
