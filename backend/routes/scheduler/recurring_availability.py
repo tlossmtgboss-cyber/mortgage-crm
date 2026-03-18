@@ -60,7 +60,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 import logging
 
-from routes.scheduler._helpers import get_current_user, _get_org_id
+from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
 from routes.scheduler.constants import DEFAULT_TIMEZONE
 from db import get_db
 from services.recurring_availability_service import RecurringAvailabilityService
@@ -170,6 +170,12 @@ async def update_weekly_schedule(
     # this sync block can be removed.
     _sync_recurring_to_working_hours_json(db, user.id, org_id, schedule_dict)
 
+    _audit_log(
+        db, org_id, user.id, "updated",
+        "recurring_availability", None,
+        changes={"days_updated": list(schedule_dict.keys()), "timezone": body.timezone},
+        request=request,
+    )
     db.commit()
 
     return {
@@ -193,6 +199,13 @@ async def list_exceptions(
     """List availability exceptions, optionally filtered by date range."""
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
+
+    # Validate date range bounds to prevent unbounded queries
+    if start_date and end_date:
+        if end_date < start_date:
+            raise HTTPException(status_code=400, detail="end_date must be >= start_date")
+        if (end_date - start_date).days > 365:
+            raise HTTPException(status_code=400, detail="Date range cannot exceed 365 days")
 
     service = RecurringAvailabilityService(db)
     exceptions = service.get_exceptions(

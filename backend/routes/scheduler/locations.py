@@ -19,7 +19,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 import logging
 
-from routes.scheduler._helpers import get_current_user, _get_org_id, _is_scheduler_admin
+from routes.scheduler._helpers import get_current_user, _get_org_id, _is_scheduler_admin, _audit_log
 from db import get_db
 
 logger = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ async def create_location(
     db: Session = Depends(get_db),
 ):
     """
-    Create a new appointment location for the organization.
+    Create a new appointment location for the organization (admin only).
 
     The location is visible to all users in the org. If is_default=true,
     any previous default location is unset.
@@ -171,6 +171,9 @@ async def create_location(
 
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
+
+    if not _is_scheduler_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required to manage locations")
 
     _validate_location_type(body.location_type)
 
@@ -195,8 +198,15 @@ async def create_location(
         is_active=True,
     )
     db.add(location)
+    db.flush()
+
+    _audit_log(
+        db, org_id, getattr(user, "id", None), "created",
+        "appointment_location", location.id,
+        changes={"name": location.name, "location_type": location.location_type},
+        request=request,
+    )
     db.commit()
-    db.refresh(location)
 
     logger.info(f"Location created: {location.id} ({location.name}) for org {org_id}")
 
@@ -217,11 +227,14 @@ async def update_location(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Update an existing appointment location."""
+    """Update an existing appointment location (admin only)."""
     from database.models.appointment_location import AppointmentLocation
 
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
+
+    if not _is_scheduler_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required to manage locations")
 
     location = db.query(AppointmentLocation).filter(
         AppointmentLocation.id == location_id,
@@ -247,6 +260,13 @@ async def update_location(
         setattr(location, field_name, value)
 
     location.updated_at = datetime.now(timezone.utc)
+
+    _audit_log(
+        db, org_id, getattr(user, "id", None), "updated",
+        "appointment_location", location.id,
+        changes={k: str(v) for k, v in update_data.items()},
+        request=request,
+    )
     db.commit()
     db.refresh(location)
 
@@ -273,12 +293,15 @@ async def delete_location(
 
     The location is retained in the database for historical references
     (existing appointments may reference it) but will not appear in the
-    active location list.
+    active location list. Admin only.
     """
     from database.models.appointment_location import AppointmentLocation
 
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
+
+    if not _is_scheduler_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required to manage locations")
 
     location = db.query(AppointmentLocation).filter(
         AppointmentLocation.id == location_id,
@@ -288,12 +311,20 @@ async def delete_location(
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
 
+    location_name = location.name
     location.is_active = False
     location.is_default = False
     location.updated_at = datetime.now(timezone.utc)
+
+    _audit_log(
+        db, org_id, getattr(user, "id", None), "deleted",
+        "appointment_location", location_id,
+        changes={"name": location_name},
+        request=request,
+    )
     db.commit()
 
-    logger.info(f"Location deactivated: {location.id} ({location.name}) for org {org_id}")
+    logger.info(f"Location deactivated: {location.id} ({location_name}) for org {org_id}")
 
     return {
         "message": "Location deactivated",
@@ -312,7 +343,7 @@ async def set_default_location(
     db: Session = Depends(get_db),
 ):
     """
-    Set a location as the organization's default.
+    Set a location as the organization's default (admin only).
 
     Clears the default flag on all other locations in the org.
     """
@@ -320,6 +351,9 @@ async def set_default_location(
 
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
+
+    if not _is_scheduler_admin(user):
+        raise HTTPException(status_code=403, detail="Admin access required to manage locations")
 
     location = db.query(AppointmentLocation).filter(
         AppointmentLocation.id == location_id,

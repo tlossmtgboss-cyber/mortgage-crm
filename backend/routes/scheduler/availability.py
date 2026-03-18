@@ -50,7 +50,7 @@ from scheduler_models import (
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id,
-    _is_scheduler_admin,
+    _is_scheduler_admin, _audit_log,
     _generate_available_slots,
 )
 from db import get_db
@@ -64,6 +64,9 @@ router = APIRouter()
 # AVAILABILITY ENDPOINTS
 # ============================================================================
 
+MAX_AVAILABILITY_RANGE_DAYS = 90
+
+
 @router.get("/availability")
 async def get_availability(
     request: Request,
@@ -75,6 +78,15 @@ async def get_availability(
     """Get availability slots for a date range"""
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
+
+    # Validate date range to prevent unbounded queries
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="end_date must be >= start_date")
+    if (end_date - start_date).days > MAX_AVAILABILITY_RANGE_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Date range cannot exceed {MAX_AVAILABILITY_RANGE_DAYS} days",
+        )
 
     _models = get_models()
     SchedulerConfig = _models['SchedulerConfig']
@@ -258,8 +270,20 @@ async def create_availability_slot(
     )
 
     db.add(slot)
+    db.flush()
+
+    _audit_log(
+        db, org_id, user.id, "created",
+        "availability_slot", slot.id,
+        changes={
+            "day_of_week": slot_data.day_of_week,
+            "specific_date": str(slot_data.specific_date) if slot_data.specific_date else None,
+            "start_time": slot_data.start_time,
+            "end_time": slot_data.end_time,
+        },
+        request=request,
+    )
     db.commit()
-    db.refresh(slot)
 
     return {"message": "Availability slot created", "slot_id": slot.id}
 
@@ -287,6 +311,17 @@ async def delete_availability_slot(
         raise HTTPException(status_code=404, detail="Slot not found")
 
     slot.is_active = False
+
+    _audit_log(
+        db, org_id, user.id, "deleted",
+        "availability_slot", slot_id,
+        changes={
+            "day_of_week": slot.day_of_week.value if slot.day_of_week else None,
+            "start_time": slot.start_time.strftime("%H:%M") if slot.start_time else None,
+            "end_time": slot.end_time.strftime("%H:%M") if slot.end_time else None,
+        },
+        request=request,
+    )
     db.commit()
 
     return {"message": "Slot deleted"}

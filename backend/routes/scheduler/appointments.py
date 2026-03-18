@@ -645,6 +645,17 @@ async def create_appointment_endpoint(
     scheduled_end = appt_data.scheduled_start + timedelta(minutes=appt_data.duration_minutes)
     assigned_user = appt_data.assigned_user_id or user.id
 
+    # Validate assigned_user_id belongs to the same org (prevent cross-tenant assignment)
+    if appt_data.assigned_user_id and appt_data.assigned_user_id != user.id:
+        User = _models.get('User')
+        if User:
+            target = db.query(User).filter(
+                User.id == appt_data.assigned_user_id,
+                User.organization_id == org_id,
+            ).first()
+            if not target:
+                scheduler_error(403, FORBIDDEN, "Assigned user not found in your organization")
+
     # --- Delegate to shared service ---
     result = await create_appointment_service(
         db=db,
@@ -980,6 +991,17 @@ async def update_appointment(
     if "video_link" in update_fields:
         update_fields["video_link"] = _validate_url(update_fields["video_link"])
 
+    # Validate assigned_user_id belongs to same org (prevent cross-tenant assignment)
+    if "assigned_user_id" in update_fields and update_fields["assigned_user_id"]:
+        new_assigned = update_fields["assigned_user_id"]
+        if new_assigned != user.id:
+            target_user = db.query(User).filter(
+                User.id == new_assigned,
+                User.organization_id == org_id,
+            ).first()
+            if not target_user:
+                scheduler_error(403, FORBIDDEN, "Assigned user not found in your organization")
+
     # Apply all updates
     _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
     audit_changes = {}
@@ -1201,14 +1223,20 @@ async def cancel_appointment(
     Appointment = _models['Appointment']
     User = _models['User']
 
-    appointment = db.query(Appointment).filter(
+    # Admins can cancel any appointment in the org; non-admins only their own
+    is_admin = _is_scheduler_admin(user)
+    cancel_query = db.query(Appointment).filter(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
-        or_(
-            Appointment.assigned_user_id == user.id,
-            Appointment.created_by_user_id == user.id
+    )
+    if not is_admin:
+        cancel_query = cancel_query.filter(
+            or_(
+                Appointment.assigned_user_id == user.id,
+                Appointment.created_by_user_id == user.id,
+            )
         )
-    ).first()
+    appointment = cancel_query.first()
 
     if not appointment:
         scheduler_error(404, NOT_FOUND, "Appointment not found")
