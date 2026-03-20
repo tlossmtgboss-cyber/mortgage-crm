@@ -61,7 +61,7 @@ def create_smart_scheduler_models(Base=None):
     'RoutingRule') so that existing code like ``models['Appointment']`` keeps
     working.
     """
-    return {
+    models = {
         'SchedulerConfig': SchedulerConfig,
         'AvailabilitySlot': AvailabilitySlot,
         'AppointmentType': AppointmentType,
@@ -74,6 +74,31 @@ def create_smart_scheduler_models(Base=None):
         'SchedulerAuditLog': SchedulerAuditLog,
         'SlotHold': SlotHold,
     }
+
+    # Add newer models that live in their own files (lazy import to avoid
+    # circular dependencies — these modules import from db.Base)
+    try:
+        from database.models.appointment_location import AppointmentLocation
+        models['AppointmentLocation'] = AppointmentLocation
+    except ImportError:
+        pass
+    try:
+        from database.models.appointment_template import AppointmentTemplate
+        models['AppointmentTemplate'] = AppointmentTemplate
+    except ImportError:
+        pass
+    try:
+        from database.models.calendar_event_map import CalendarEventMap
+        models['CalendarEventMap'] = CalendarEventMap
+    except ImportError:
+        pass
+    try:
+        from database.models.calendar_label import CalendarLabel
+        models['CalendarLabel'] = CalendarLabel
+    except ImportError:
+        pass
+
+    return models
 
 
 # Aliases for callers that use non-canonical names (latent typos in codebase)
