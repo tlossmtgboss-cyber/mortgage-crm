@@ -37,13 +37,20 @@ from io import BytesIO
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from main import app
-from database import get_db
-
-# Eagerly import model submodules so pytest assertion rewriting can resolve them
-# during test collection (avoids "(unknown location)" errors)
+# Pre-import model submodules BEFORE `from main import app` so they are fully
+# loaded before pytest's assertion rewriter intercepts them.
 import models.smart_docs_models  # noqa: F401
 import models.sms_models  # noqa: F401
+
+# Verify the smart_docs_models module loaded correctly (debug diagnostics)
+import models.smart_docs_models as _sdm_check
+assert hasattr(_sdm_check, 'SmartDocument'), (
+    f"smart_docs_models loaded but missing SmartDocument! "
+    f"Attrs: {[a for a in dir(_sdm_check) if not a.startswith('_')]}"
+)
+
+from main import app
+from database import get_db
 
 # =============================================================================
 # DATABASE FIXTURES

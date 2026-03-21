@@ -24,6 +24,11 @@ from .base import (
     execute_query,
     execute_single,
 
+    # Tenant Isolation
+    set_tenant_context,
+    get_tenant_context,
+    clear_tenant_context,
+
     # Types
     ToolStatus,
     ToolResult,
@@ -614,6 +619,10 @@ __all__ = [
     "get_db",
     "execute_query",
     "execute_single",
+    # Tenant Isolation
+    "set_tenant_context",
+    "get_tenant_context",
+    "clear_tenant_context",
     "ToolStatus",
     "ToolResult",
     "ToolError",

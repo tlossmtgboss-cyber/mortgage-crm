@@ -128,11 +128,19 @@ def create_tool_functions_from_registry(
     else:
         registry_tools = tool_registry.get_all()
 
+    # Import tenant context for registry tool isolation
+    try:
+        from .tools.base import get_tenant_context
+    except ImportError:
+        get_tenant_context = lambda: None
+
     wrapped = {}
 
     for name, tool_def in registry_tools.items():
         fn = tool_def.func
         # Create async wrapper that converts ToolResult → dict
+        # Tenant context is set by gather.py before this wrapper is called,
+        # so execute_query() inside the tool will see the correct org_id.
         async def _async_wrapper(args, _fn=fn, _name=name):
             try:
                 result = _fn(**args) if isinstance(args, dict) else _fn(args)

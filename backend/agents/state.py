@@ -113,6 +113,11 @@ class AgentState(TypedDict, total=False):
     cached_data: dict                    # Data cached for reuse
     document_context: Optional[str]      # Text from user-uploaded document
 
+    # === Token Tracking & Observability ===
+    tokens_input: int                    # Input tokens from LLM API response
+    tokens_output: int                   # Output tokens from LLM API response
+    model_used: str                      # Which model was used (e.g. claude-sonnet-4-20250514)
+
 
 def create_initial_state(
     user_message: str,

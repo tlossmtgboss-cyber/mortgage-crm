@@ -7,7 +7,7 @@ updating records, etc. It manages action confirmation and execution.
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Set
 from datetime import datetime
 
 from ..state import (
@@ -17,6 +17,16 @@ from ..state import (
     add_error,
     update_state
 )
+
+# Import approval lists from tool_integration so execute node
+# respects the same approval gates as AgentToolExecutor.
+try:
+    from ..tool_integration import AGENT_CONFIGS
+    _APPROVAL_REQUIRED_TOOLS: Set[str] = set()
+    for cfg in AGENT_CONFIGS.values():
+        _APPROVAL_REQUIRED_TOOLS.update(cfg.requires_approval_for)
+except ImportError:
+    _APPROVAL_REQUIRED_TOOLS = set()
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +79,9 @@ def should_auto_execute(action_type: str, autonomous_mode: bool = True) -> bool:
     """
     Determine if an action should be auto-executed.
 
+    Checks both the local ACTION_RISK_LEVELS dict and the centralized
+    requires_approval_for lists in AGENT_CONFIGS (tool_integration.py).
+
     Args:
         action_type: Type of action
         autonomous_mode: Whether autonomous mode is enabled
@@ -79,9 +92,14 @@ def should_auto_execute(action_type: str, autonomous_mode: bool = True) -> bool:
     if not autonomous_mode:
         return False
 
+    # Check centralized approval list from tool_integration.AGENT_CONFIGS
+    if action_type in _APPROVAL_REQUIRED_TOOLS:
+        logger.info(f"[EXECUTE] Action '{action_type}' requires approval (AGENT_CONFIGS)")
+        return False
+
     risk = classify_action_risk(action_type)
-    if risk == "high":
-        return False  # High-risk actions always require human approval
+    if risk in ("high", "critical"):
+        return False  # High/critical risk actions always require human approval
     return risk in ["low", "medium"] and autonomous_mode
 
 

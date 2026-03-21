@@ -209,11 +209,14 @@ def _assign_round_robin(
     Uses SELECT...FOR UPDATE on the config row to serialize concurrent assignments.
     """
     try:
-        # Lock the config row for serialization
-        db.execute(text(
-            "SELECT id FROM lead_assignment_configs "
-            "WHERE organization_id = :org_id FOR UPDATE"
-        ), {"org_id": org_id})
+        # Lock the config row for serialization (PostgreSQL only; SQLite skips)
+        try:
+            db.execute(text(
+                "SELECT id FROM lead_assignment_configs "
+                "WHERE organization_id = :org_id FOR UPDATE"
+            ), {"org_id": org_id})
+        except Exception:
+            pass  # SQLite doesn't support FOR UPDATE; proceed without lock
 
         idx = config.round_robin_index or 0
         next_idx = idx % len(candidates)
@@ -290,13 +293,17 @@ def _assign_load_balanced(
     try:
         user_ids = [c["user_id"] for c in candidates]
 
+        id_placeholders = ", ".join(f":uid_{i}" for i in range(len(user_ids)))
+        id_params = {f"uid_{i}": uid for i, uid in enumerate(user_ids)}
+        id_params["org_id"] = org_id
+
         rows = db.execute(text(
-            "SELECT owner_id, COUNT(*) as cnt "
-            "FROM leads "
-            "WHERE owner_id = ANY(:ids) AND organization_id = :org_id "
-            "AND stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call') "
-            "GROUP BY owner_id"
-        ), {"ids": user_ids, "org_id": org_id}).fetchall()
+            f"SELECT owner_id, COUNT(*) as cnt "
+            f"FROM leads "
+            f"WHERE owner_id IN ({id_placeholders}) AND organization_id = :org_id "
+            f"AND stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call') "
+            f"GROUP BY owner_id"
+        ), id_params).fetchall()
 
         count_map = {row[0]: row[1] for row in rows}
         counts = [(uid, count_map.get(uid, 0)) for uid in user_ids]
@@ -517,13 +524,18 @@ def _filter_by_capacity(
     user_ids = [c["user_id"] for c in candidates]
 
     try:
+        id_placeholders = ", ".join(f":uid_{i}" for i in range(len(user_ids)))
+        id_params = {f"uid_{i}": uid for i, uid in enumerate(user_ids)}
+        id_params["org_id"] = org_id
+        id_params["today"] = today_start
+
         rows = db.execute(text(
-            "SELECT owner_id, COUNT(*) as cnt "
-            "FROM leads "
-            "WHERE owner_id = ANY(:ids) AND organization_id = :org_id "
-            "AND created_at >= :today "
-            "GROUP BY owner_id"
-        ), {"ids": user_ids, "org_id": org_id, "today": today_start}).fetchall()
+            f"SELECT owner_id, COUNT(*) as cnt "
+            f"FROM leads "
+            f"WHERE owner_id IN ({id_placeholders}) AND organization_id = :org_id "
+            f"AND created_at >= :today "
+            f"GROUP BY owner_id"
+        ), id_params).fetchall()
 
         daily_counts = {row[0]: row[1] for row in rows}
     except Exception as e:
@@ -609,6 +621,8 @@ def _log_assignment(
 def get_assignment_stats(db: Session, org_id: int, days: int = 30) -> Dict:
     """Get assignment statistics for the organization."""
     try:
+        cutoff = utcnow() - timedelta(days=days)
+
         stats = db.execute(text("""
             SELECT
                 COUNT(*) as total_assignments,
@@ -619,18 +633,18 @@ def get_assignment_stats(db: Session, org_id: int, days: int = 30) -> Dict:
                 COUNT(CASE WHEN action = 'FALLBACK' THEN 1 END) as fallback_used
             FROM lead_assignment_audit_log
             WHERE organization_id = :org_id
-            AND created_at >= CURRENT_DATE - :days
-        """), {"org_id": org_id, "days": days}).first()
+            AND created_at >= :cutoff
+        """), {"org_id": org_id, "cutoff": cutoff}).first()
 
         distribution = db.execute(text("""
             SELECT to_user_id, COUNT(*) as cnt
             FROM lead_assignment_audit_log
             WHERE organization_id = :org_id
-            AND created_at >= CURRENT_DATE - :days
+            AND created_at >= :cutoff
             AND to_user_id IS NOT NULL
             GROUP BY to_user_id
             ORDER BY cnt DESC
-        """), {"org_id": org_id, "days": days}).fetchall()
+        """), {"org_id": org_id, "cutoff": cutoff}).fetchall()
 
         return {
             "period_days": days,

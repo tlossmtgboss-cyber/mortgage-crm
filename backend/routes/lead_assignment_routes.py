@@ -11,10 +11,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-
 from db import get_db as _db_dep
 from schemas.lead_assignment import (
     AssignmentConfigUpdate,
@@ -56,10 +55,16 @@ def set_dependencies(user_model, current_user_func, db_func=None):
     _get_current_user = current_user_func
 
 
-def _current_user_dep():
+async def _resolve_current_user(
+    request: Request,
+    db: Session = Depends(_db_dep),
+):
+    """Resolve the current user via the injected auth function."""
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Dependencies not configured")
-    return Depends(_get_current_user)
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else ""
+    return await _get_current_user(token, request, db)
 
 
 def _require_admin(current_user):
@@ -94,7 +99,7 @@ def success_response(data, message: str = "Success"):
 @router.get("/config")
 async def get_config(
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Get lead assignment configuration for the organization."""
     from services.lead_assignment_service import get_or_create_config
@@ -134,7 +139,7 @@ async def get_config(
 async def update_config(
     update: AssignmentConfigUpdate,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Update lead assignment configuration."""
     from services.lead_assignment_service import get_or_create_config
@@ -163,7 +168,7 @@ async def update_config(
 @router.get("/rules")
 async def list_rules(
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """List all assignment rules for the organization."""
     from database.models.lead_assignment import LeadAssignmentRule
@@ -200,7 +205,7 @@ async def list_rules(
 async def create_rule(
     rule: RuleCreate,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Create a new assignment rule."""
     from database.models.lead_assignment import LeadAssignmentRule
@@ -234,7 +239,7 @@ async def update_rule(
     rule_id: int,
     update: RuleUpdate,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Update an assignment rule."""
     from database.models.lead_assignment import LeadAssignmentRule
@@ -269,7 +274,7 @@ async def update_rule(
 async def delete_rule(
     rule_id: int,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Delete (deactivate) an assignment rule."""
     from database.models.lead_assignment import LeadAssignmentRule
@@ -301,7 +306,7 @@ async def delete_rule(
 @router.get("/pool")
 async def list_pool_members(
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """List all assignment pool members with current daily lead counts."""
     from database.models.lead_assignment import LeadAssignmentPool
@@ -320,19 +325,23 @@ async def list_pool_members(
 
     if user_ids:
         try:
+            id_placeholders = ", ".join(f":uid_{i}" for i in range(len(user_ids)))
+            id_params = {f"uid_{i}": uid for i, uid in enumerate(user_ids)}
+
             rows = db.execute(text(
-                "SELECT id, CONCAT(first_name, ' ', last_name) as name "
-                "FROM users WHERE id = ANY(:ids)"
-            ), {"ids": user_ids}).fetchall()
+                f"SELECT id, first_name || ' ' || last_name as name "
+                f"FROM users WHERE id IN ({id_placeholders})"
+            ), id_params).fetchall()
             user_names = {row[0]: row[1] for row in rows}
 
+            id_params["org_id"] = org_id
             count_rows = db.execute(text(
-                "SELECT owner_id, COUNT(*) as cnt "
-                "FROM leads "
-                "WHERE owner_id = ANY(:ids) AND organization_id = :org_id "
-                "AND created_at >= CURRENT_DATE "
-                "GROUP BY owner_id"
-            ), {"ids": user_ids, "org_id": org_id}).fetchall()
+                f"SELECT owner_id, COUNT(*) as cnt "
+                f"FROM leads "
+                f"WHERE owner_id IN ({id_placeholders}) AND organization_id = :org_id "
+                f"AND created_at >= CURRENT_DATE "
+                f"GROUP BY owner_id"
+            ), id_params).fetchall()
             daily_counts = {row[0]: row[1] for row in count_rows}
         except Exception as e:
             logger.warning(f"Pool enrichment failed: {e}")
@@ -360,7 +369,7 @@ async def list_pool_members(
 async def add_pool_member(
     member: PoolMemberCreate,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Add a user to the assignment pool."""
     from database.models.lead_assignment import LeadAssignmentPool
@@ -410,7 +419,7 @@ async def update_pool_member(
     member_id: int,
     update: PoolMemberUpdate,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Update a pool member's settings."""
     from database.models.lead_assignment import LeadAssignmentPool
@@ -441,7 +450,7 @@ async def update_pool_member(
 async def remove_pool_member(
     member_id: int,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Remove (deactivate) a pool member."""
     from database.models.lead_assignment import LeadAssignmentPool
@@ -474,7 +483,7 @@ async def remove_pool_member(
 async def list_exceptions(
     active_only: bool = Query(True),
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """List assignment exceptions (PTO, blocked, etc.)."""
     from database.models.lead_assignment import LeadAssignmentException
@@ -512,7 +521,7 @@ async def list_exceptions(
 async def create_exception(
     exc: ExceptionCreate,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Create an assignment exception (PTO, block, etc.)."""
     from database.models.lead_assignment import LeadAssignmentException
@@ -543,7 +552,7 @@ async def create_exception(
 async def cancel_exception(
     exception_id: int,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Cancel an assignment exception."""
     from database.models.lead_assignment import LeadAssignmentException
@@ -576,7 +585,7 @@ async def cancel_exception(
 async def test_assignment(
     test_lead: TestAssignmentRequest,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Test assignment: simulate which LO would receive a lead with given attributes."""
     from services.lead_assignment_service import assign_lead, get_or_create_config, _get_eligible_candidates
@@ -599,7 +608,7 @@ async def test_assignment(
     if result_user_id:
         try:
             row = db.execute(text(
-                "SELECT CONCAT(first_name, ' ', last_name) FROM users WHERE id = :uid"
+                "SELECT first_name || ' ' || last_name FROM users WHERE id = :uid"
             ), {"uid": result_user_id}).scalar()
             user_name = row
         except Exception:
@@ -621,7 +630,7 @@ async def test_assignment(
 async def reassign_lead_endpoint(
     req: ReassignRequest,
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Reassign a lead to a different loan officer."""
     from services.lead_assignment_service import reassign_lead
@@ -666,7 +675,7 @@ async def get_audit_log(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Get assignment audit log."""
     from database.models.lead_assignment import LeadAssignmentAuditLog
@@ -712,7 +721,7 @@ async def get_audit_log(
 async def get_stats(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(_db_dep),
-    current_user=Depends(_current_user_dep),
+    current_user=Depends(_resolve_current_user),
 ):
     """Get assignment statistics and distribution metrics."""
     from services.lead_assignment_service import get_assignment_stats

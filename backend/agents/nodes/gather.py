@@ -21,6 +21,15 @@ from ..state import (
     update_state
 )
 
+# Tenant isolation context for registry tools
+try:
+    from ..tools.base import set_tenant_context, clear_tenant_context
+    TENANT_CONTEXT_AVAILABLE = True
+except ImportError:
+    set_tenant_context = lambda org_id: None
+    clear_tenant_context = lambda: None
+    TENANT_CONTEXT_AVAILABLE = False
+
 # Import cache - gracefully degrade if not available
 try:
     from core.cache import cache
@@ -36,6 +45,14 @@ try:
 except ImportError:
     cache_metrics = None
     METRICS_AVAILABLE = False
+
+# Import tool argument validator
+try:
+    from agents.tool_validator import validate_tool_arguments
+    VALIDATOR_AVAILABLE = True
+except ImportError:
+    validate_tool_arguments = None
+    VALIDATOR_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +151,17 @@ async def execute_tool(
             logger.warning(f"Tool not found: {tool_name}")
             return tool_call
 
+        # Validate tool arguments before execution
+        if VALIDATOR_AVAILABLE and validate_tool_arguments is not None:
+            is_valid, arguments, val_errors = validate_tool_arguments(tool_name, arguments)
+            if not is_valid:
+                tool_call.error = f"Argument validation failed: {'; '.join(val_errors)}"
+                tool_call.execution_time_ms = (time.time() - start_time) * 1000
+                logger.warning(f"[GATHER] Tool {tool_name} args invalid: {val_errors}")
+                return tool_call
+            # Use sanitized arguments going forward
+            tool_call.arguments = arguments
+
         # Check cache for cacheable tools
         cached_result = None
         cache_key = None
@@ -160,15 +188,47 @@ async def execute_tool(
 
                 return tool_call
 
-        # Execute the tool (handle both sync and async) with timeout
+            # Stampede protection: set a short-lived lock to prevent
+            # concurrent identical requests from all executing the same tool.
+            # If another request is already computing this, wait for its result.
+            stampede_lock_key = f"lock:{cache_key}"
+            try:
+                lock_acquired = await cache.set(stampede_lock_key, "1", ttl=30, nx=True)
+                if not lock_acquired:
+                    # Another request is computing — brief wait then retry cache
+                    import asyncio as _asyncio
+                    for _ in range(3):
+                        await _asyncio.sleep(0.5)
+                        cached_result = await cache.get(cache_key)
+                        if cached_result is not None:
+                            tool_call.result = cached_result
+                            tool_call.execution_time_ms = (time.time() - start_time) * 1000
+                            logger.info(f"Tool {tool_name} CACHE HIT (after stampede wait)")
+                            return tool_call
+                    # Timed out waiting — proceed with execution
+            except Exception:
+                pass  # Redis lock failed — proceed without stampede protection
+
+        # Set tenant context before executing any registry tool.
+        # This ensures execute_query() can validate results against the org boundary.
+        if organization_id is not None:
+            set_tenant_context(organization_id)
+
+        # Execute the tool (handle both sync and async) with timeout.
+        # IMPORTANT: ContextVars do NOT propagate to ThreadPoolExecutor threads.
+        # For sync tools, we use copy_context().run() to propagate the tenant
+        # context into the executor thread. Without this, get_tenant_context()
+        # returns None in the thread and tenant isolation is bypassed.
         TOOL_TIMEOUT = 15  # seconds
         try:
             if asyncio.iscoroutinefunction(func):
                 result = await asyncio.wait_for(func(arguments), timeout=TOOL_TIMEOUT)
             else:
+                from contextvars import copy_context
+                ctx = copy_context()
                 loop = asyncio.get_event_loop()
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(None, func, arguments), timeout=TOOL_TIMEOUT
+                    loop.run_in_executor(None, ctx.run, func, arguments), timeout=TOOL_TIMEOUT
                 )
         except asyncio.TimeoutError:
             tool_call.error = f"Tool '{tool_name}' timed out after {TOOL_TIMEOUT}s"
@@ -179,11 +239,16 @@ async def execute_tool(
         tool_call.result = result
         tool_call.execution_time_ms = (time.time() - start_time) * 1000
 
-        # Cache the result for cacheable tools
+        # Cache the result for cacheable tools and release stampede lock
         if (cache_key and result is not None and
             "error" not in result):
             ttl = CACHEABLE_TOOLS.get(tool_name, 300)
             await cache.set(cache_key, result, ttl)
+            # Release stampede lock
+            try:
+                await cache.delete(f"lock:{cache_key}")
+            except Exception:
+                pass
             logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms (cached for {ttl}s)")
         else:
             logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms")
@@ -510,6 +575,9 @@ def format_gathered_data_for_llm(state: AgentState) -> str:
     """
     Format gathered data into a string suitable for LLM processing.
 
+    PII is masked before formatting to prevent sensitive data (SSNs,
+    account numbers, full phone numbers) from being sent to the LLM API.
+
     Args:
         state: Agent state with gathered_data populated
 
@@ -520,9 +588,16 @@ def format_gathered_data_for_llm(state: AgentState) -> str:
     if not gathered_data:
         return "No data was gathered."
 
+    # Mask PII before formatting (import from reason_and_respond to avoid duplication)
+    try:
+        from .reason_and_respond import _mask_gathered_data
+        masked_data = _mask_gathered_data(gathered_data)
+    except ImportError:
+        masked_data = gathered_data
+
     sections = []
 
-    for tool_name, data in gathered_data.items():
+    for tool_name, data in masked_data.items():
         section = f"=== {tool_name.upper().replace('_', ' ')} ===\n"
 
         if isinstance(data, dict):

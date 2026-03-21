@@ -1557,6 +1557,16 @@ except Exception as e:
 # except Exception as e:
 #     logger.error(f"❌ Avatar Studio routes failed to load: {e}")
 
+# Lead Assignment Configuration routes
+try:
+    from routes.lead_assignment_routes import router as lead_assignment_router, set_dependencies as set_lead_assign_deps
+    from database.models import User as _UserModel
+    set_lead_assign_deps(_UserModel, get_current_user, get_db)
+    app.include_router(lead_assignment_router, tags=["Lead Assignment"])
+    logger.info("✅ Lead Assignment routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Lead Assignment routes not loaded: {e}")
+
 # ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================

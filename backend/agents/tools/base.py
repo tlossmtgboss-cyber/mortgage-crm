@@ -9,8 +9,10 @@ Database Connection:
 """
 
 import os
+import re
 import functools
 import logging
+from contextvars import ContextVar
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Callable, TypeVar, Union
 from dataclasses import dataclass, field
@@ -28,6 +30,35 @@ from langchain_core.tools import Tool
 from database import engine as shared_engine, SessionLocal as SharedSessionLocal
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Tenant Isolation Context
+# =============================================================================
+
+# ContextVar ensures tenant org_id is propagated through async call chains
+# without polluting function signatures on 160+ tool functions.
+_tenant_org_id: ContextVar[Optional[int]] = ContextVar("_tenant_org_id", default=None)
+
+
+def set_tenant_context(org_id: Optional[int]) -> None:
+    """
+    Set the tenant organization ID for the current execution context.
+
+    Must be called before executing any registry tool so that
+    execute_query() can validate results against the tenant boundary.
+    """
+    _tenant_org_id.set(org_id)
+
+
+def get_tenant_context() -> Optional[int]:
+    """Get the current tenant organization ID, or None if not set."""
+    return _tenant_org_id.get()
+
+
+def clear_tenant_context() -> None:
+    """Clear the tenant context (e.g., after tool execution completes)."""
+    _tenant_org_id.set(None)
 
 
 # =============================================================================
@@ -91,18 +122,113 @@ def get_db():
 db_session = get_db
 
 
+def _inject_tenant_filter(query: str, org_id: int) -> str:
+    """
+    Auto-inject organization_id filter into SQL queries on tenant-scoped tables.
+
+    Defense-in-depth: This provides query-level isolation BEFORE execution.
+    The post-execution filter remains as a safety net for edge cases.
+
+    Only modifies SELECT queries that reference known multi-tenant tables
+    and don't already filter on organization_id.
+    """
+    # Skip if query already filters on organization_id
+    if 'organization_id' in query.lower():
+        return query
+
+    # Skip non-SELECT queries (INSERT, UPDATE, DELETE handled by application logic)
+    query_stripped = query.strip().upper()
+    if not query_stripped.startswith('SELECT'):
+        return query
+
+    # Tables that have an organization_id column
+    _TENANT_TABLES = {
+        'loans', 'leads', 'users', 'tasks', 'referral_partners',
+        'compliance_alerts', 'activities', 'documents',
+    }
+
+    query_lower = query.lower()
+
+    # Find tenant-scoped tables referenced in FROM/JOIN clauses
+    # Pattern: FROM table_name alias  or  JOIN table_name alias
+    table_pattern = re.compile(
+        r'\b(?:from|join)\s+(\w+)\s+(?:as\s+)?(\w+)',
+        re.IGNORECASE
+    )
+
+    for match in table_pattern.finditer(query):
+        table = match.group(1).lower()
+        alias = match.group(2).lower()
+
+        if table in _TENANT_TABLES:
+            # Use the alias (or table name) to add the filter
+            filter_ref = alias if alias != table else table
+            filter_clause = f"{filter_ref}.organization_id = :_org_id"
+
+            # Find WHERE clause
+            where_match = re.search(r'\bWHERE\b', query, re.IGNORECASE)
+            if where_match:
+                # Insert after WHERE keyword
+                pos = where_match.end()
+                query = query[:pos] + f" {filter_clause} AND" + query[pos:]
+            else:
+                # Insert WHERE before GROUP BY, ORDER BY, LIMIT, HAVING, or at end
+                insert_match = re.search(
+                    r'\b(GROUP\s+BY|ORDER\s+BY|LIMIT|HAVING)\b',
+                    query, re.IGNORECASE
+                )
+                if insert_match:
+                    pos = insert_match.start()
+                    query = query[:pos] + f"WHERE {filter_clause}\n        " + query[pos:]
+                else:
+                    query = query.rstrip() + f"\n        WHERE {filter_clause}"
+
+            logger.debug(f"[TENANT] Auto-injected org_id filter on {table}.{alias}")
+            break  # Only inject on the primary table (first FROM match)
+
+    return query
+
+
 def execute_query(query: str, params: Optional[Dict] = None) -> List[Dict]:
     """
     Execute a query and return results as list of dicts.
 
     Uses the shared database connection from backend.database,
     which supports both SQLite and PostgreSQL.
+
+    Tenant isolation (defense-in-depth):
+    1. Query-level: Auto-injects WHERE organization_id = :_org_id
+    2. Post-execution: Filters any remaining cross-tenant rows
     """
+    if params is None:
+        params = {}
+
+    # Auto-inject tenant org_id into params so tools can reference :_org_id
+    org_id = get_tenant_context()
+    if org_id is not None:
+        params["_org_id"] = org_id
+        # Auto-inject WHERE clause for tenant-scoped tables
+        query = _inject_tenant_filter(query, org_id)
+
     try:
         with get_db() as db:
-            result = db.execute(text(query), params or {})
-            columns = result.keys()
-            return [dict(zip(columns, row)) for row in result.fetchall()]
+            result = db.execute(text(query), params)
+            columns = list(result.keys())
+            rows = [dict(zip(columns, row)) for row in result.fetchall()]
+
+        # Post-execution tenant validation: filter out any rows from other orgs
+        if org_id is not None and rows and "organization_id" in columns:
+            pre_count = len(rows)
+            rows = [r for r in rows if r.get("organization_id") in (org_id, None)]
+            filtered = pre_count - len(rows)
+            if filtered > 0:
+                logger.critical(
+                    f"[TENANT] Filtered {filtered} cross-tenant rows "
+                    f"(org_id={org_id}). Query may be missing WHERE clause."
+                )
+
+        return rows
+
     except Exception as e:
         logger.error(f"Query execution failed: {e}")
         logger.debug(f"Query: {query[:200]}...")

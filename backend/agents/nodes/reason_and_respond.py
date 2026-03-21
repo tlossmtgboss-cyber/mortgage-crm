@@ -11,6 +11,7 @@ With a single: reason_and_respond.py
 import json
 import logging
 import os
+import re
 import time
 from typing import Any, List
 from anthropic import Anthropic
@@ -167,14 +168,80 @@ def _get_role_context(role: str) -> str:
     return _ROLE_CONTEXT.get(role, "")
 
 
+# PII patterns for masking before LLM context injection (GLBA compliance)
+_SSN_PATTERN = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
+_FULL_PHONE_PATTERN = re.compile(r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b')
+
+# Keys whose values should be fully redacted (case-insensitive match)
+_REDACT_KEYS = frozenset({
+    'ssn', 'social_security', 'social_security_number',
+    'tax_id', 'ein', 'itin',
+    'account_number', 'routing_number',
+    'password', 'secret', 'token',
+})
+
+# Keys whose values should be partially masked (show last 4)
+_MASK_KEYS = frozenset({
+    'phone', 'phone_number', 'mobile', 'cell', 'fax',
+    'borrower_phone', 'co_borrower_phone',
+})
+
+
+def _mask_pii_value(key: str, value: Any) -> Any:
+    """
+    Mask PII in a single key-value pair before sending to LLM.
+
+    - SSNs → [REDACTED-SSN]
+    - Full phone numbers → ***-***-1234 (last 4 visible)
+    - Sensitive keys (ssn, tax_id, account_number) → [REDACTED]
+    - Names are kept (LLM needs them for useful borrower-specific responses)
+    """
+    if not isinstance(value, str):
+        return value
+
+    key_lower = key.lower()
+
+    # Fully redact sensitive keys
+    if key_lower in _REDACT_KEYS:
+        return "[REDACTED]"
+
+    # Partially mask phone keys
+    if key_lower in _MASK_KEYS:
+        digits = re.sub(r'\D', '', value)
+        if len(digits) >= 7:
+            return f"***-***-{digits[-4:]}"
+        return value
+
+    # Pattern-based masking for values (SSNs embedded in text)
+    value = _SSN_PATTERN.sub("[REDACTED-SSN]", value)
+
+    return value
+
+
+def _mask_gathered_data(data: Any) -> Any:
+    """Recursively mask PII in gathered data before LLM context injection."""
+    if isinstance(data, dict):
+        return {k: _mask_pii_value(k, _mask_gathered_data(v)) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [_mask_gathered_data(item) for item in data]
+    return data
+
+
 def format_gathered_data_for_llm(gathered_data: dict) -> str:
-    """Format gathered data into a concise string for LLM consumption."""
+    """Format gathered data into a concise string for LLM consumption.
+
+    PII is masked before formatting to prevent sensitive data (SSNs,
+    account numbers, full phone numbers) from being sent to the LLM API.
+    """
     if not gathered_data:
         return "No data was gathered."
 
+    # Mask PII before formatting
+    masked_data = _mask_gathered_data(gathered_data)
+
     sections = []
 
-    for tool_name, data in gathered_data.items():
+    for tool_name, data in masked_data.items():
         section = f"=== {tool_name.upper().replace('_', ' ')} ===\n"
 
         if isinstance(data, dict):
@@ -430,29 +497,70 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         # Single LLM call for both reasoning AND response generation
         # Use prompt caching on the system prompt to reduce cost on repeated calls
+        # Graceful degradation: retry once with Haiku on failure, then fall back to raw data
         llm_start = time.time()
-        response = anthropic_client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            system=[
-                {
-                    "type": "text",
-                    "text": system_prompt,
-                    "cache_control": {"type": "ephemeral"}
-                }
-            ],
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"Analyze this data and provide a helpful response:\n\n{context}"
-                }
-            ],
-            timeout=30.0,
-        )
+        response = None
+        _llm_error = None
+        for _attempt in range(2):
+            try:
+                response = anthropic_client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system_prompt,
+                            "cache_control": {"type": "ephemeral"}
+                        }
+                    ],
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": f"Analyze this data and provide a helpful response:\n\n{context}"
+                        }
+                    ],
+                    timeout=30.0,
+                )
+                break
+            except Exception as llm_err:
+                _llm_error = llm_err
+                if _attempt == 0 and model != _model_haiku():
+                    # Retry with faster model
+                    model = _model_haiku()
+                    max_tokens = min(max_tokens, 400)
+                    logger.warning(f"[REASON_AND_RESPOND] LLM failed, retrying with {model}: {llm_err}")
+                    continue
+                break
+
         llm_time = (time.time() - llm_start) * 1000
-        logger.info(f"[REASON_AND_RESPOND] ⏱️ Unified LLM call took {llm_time:.0f}ms (model={model}, context: {len(context)} chars)")
+
+        # Graceful degradation: if LLM is completely unavailable, return raw data summary
+        if response is None:
+            logger.error(f"[REASON_AND_RESPOND] LLM unavailable after retries: {_llm_error}")
+            fallback_text = "I'm having trouble generating a detailed response right now. Here's the raw data:\n\n"
+            fallback_text += formatted_data[:2000]
+            return update_state(state, {
+                "analysis": f"LLM unavailable: {_llm_error}",
+                "insights": ["AI service temporarily unavailable"],
+                "recommendations": ["Try again in a moment"],
+                "confidence_score": 0.1,
+                "response": fallback_text,
+                "response_type": "text",
+                "model_used": model,
+                "follow_up_suggestions": ["Try again", "Show me my pipeline"],
+            })
+
+        logger.info(f"[REASON_AND_RESPOND] LLM call took {llm_time:.0f}ms (model={model}, context: {len(context)} chars)")
 
         response_text = response.content[0].text.strip()
+
+        # Extract token usage from response for budget tracking
+        if hasattr(response, 'usage'):
+            state = update_state(state, {
+                "tokens_input": getattr(response.usage, 'input_tokens', 0),
+                "tokens_output": getattr(response.usage, 'output_tokens', 0),
+                "model_used": model,
+            })
 
         # Extract insights from the response (first few sentences for logging)
         first_paragraph = response_text.split("\n\n")[0] if "\n\n" in response_text else response_text[:300]

@@ -113,6 +113,23 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
 # - backend/tests/test_scheduler_routes.py
 # - backend/tests/test_scheduler_timezone.py
 
+# ============================================================================
+# MODULE __getattr__ — backward-compatible access to DI variables
+# ============================================================================
+# Tests do ``import routes.scheduler_appointment_routes as sar; sar._models = {...}``
+# DI variables live in _core.py. This proxies reads; writes go into __dict__
+# and are detected by get_models() in _core.py.
+
+_DI_PROXY_ATTRS = ('_models', '_enhanced_models', '_get_db', '_get_current_user_func')
+
+
+def __getattr__(name):
+    if name in _DI_PROXY_ATTRS:
+        import routes.scheduler._core as _core
+        return getattr(_core, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "router",
     "set_dependencies",

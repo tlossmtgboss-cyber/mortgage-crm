@@ -941,33 +941,19 @@ def check_configuration():
 # =============================================================================
 
 def check_specialized_agents():
-    """Verify all 8 specialized agents are properly configured."""
+    """Verify the active specialized agent (OpsManagerAgent) is properly configured."""
     print("\n🤖 SPECIALIZED AGENTS CHECK")
     print("-" * 50)
 
     try:
         from backend.agents.specialized import (
-            LeadManagementAgent,
-            LoanPipelineAgent,
-            TaskCalendarAgent,
-            CommunicationAgent,
-            DocumentAgent,
-            AnalyticsAgent,
-            PortfolioAgent,
-            ComplianceAgent,
+            OpsManagerAgent,
             AgentRegistry
         )
         from backend.agents.specialized.base import AgentContext
 
         agents = [
-            ("LeadManagementAgent", LeadManagementAgent),
-            ("LoanPipelineAgent", LoanPipelineAgent),
-            ("TaskCalendarAgent", TaskCalendarAgent),
-            ("CommunicationAgent", CommunicationAgent),
-            ("DocumentAgent", DocumentAgent),
-            ("AnalyticsAgent", AnalyticsAgent),
-            ("PortfolioAgent", PortfolioAgent),
-            ("ComplianceAgent", ComplianceAgent),
+            ("OpsManagerAgent", OpsManagerAgent),
         ]
 
         # Create test context
@@ -987,18 +973,11 @@ def check_specialized_agents():
                 tool_count = len(tools)
                 total_tools += tool_count
 
-                if tool_count == 8:
-                    report.add(HealthCheckResult(
-                        name=f"Specialized: {name}",
-                        status=CheckStatus.PASS,
-                        message=f"{tool_count} tools registered",
-                    ))
-                else:
-                    report.add(HealthCheckResult(
-                        name=f"Specialized: {name}",
-                        status=CheckStatus.WARN,
-                        message=f"{tool_count}/8 tools registered",
-                    ))
+                report.add(HealthCheckResult(
+                    name=f"Specialized: {name}",
+                    status=CheckStatus.PASS,
+                    message=f"{tool_count} tools registered",
+                ))
             except Exception as e:
                 report.add(HealthCheckResult(
                     name=f"Specialized: {name}",
@@ -1006,19 +985,11 @@ def check_specialized_agents():
                     message=f"Initialization failed: {e}",
                 ))
 
-        # Check total
-        if total_tools == 64:
-            report.add(HealthCheckResult(
-                name="Specialized Agent Total",
-                status=CheckStatus.PASS,
-                message=f"All {total_tools}/64 tools across 8 agents",
-            ))
-        else:
-            report.add(HealthCheckResult(
-                name="Specialized Agent Total",
-                status=CheckStatus.WARN,
-                message=f"{total_tools}/64 tools registered",
-            ))
+        report.add(HealthCheckResult(
+            name="Specialized Agent Total",
+            status=CheckStatus.PASS,
+            message=f"{total_tools} tools across {len(agents)} active agent(s)",
+        ))
 
     except ImportError as e:
         report.add(HealthCheckResult(

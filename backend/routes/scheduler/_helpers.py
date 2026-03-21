@@ -90,6 +90,25 @@ from routes.scheduler._availability import (  # noqa: F401
 # HELPERS DICT (for backward-compatible injection into sub-modules)
 # ============================================================================
 
+# ============================================================================
+# MODULE __getattr__ — backward-compatible access to DI variables
+# ============================================================================
+# Tests do ``import routes.scheduler._helpers as sar; sar._models = {...}``
+# After decomposition, DI variables live in _core.py. This __getattr__
+# proxies reads so that ``sar._models`` returns ``_core._models``.
+# Writes (``sar._models = {}``) go into this module's __dict__ and are
+# detected by get_models() in _core.py.
+
+_DI_PROXY_ATTRS = ('_models', '_enhanced_models', '_get_db', '_get_current_user_func')
+
+
+def __getattr__(name):
+    if name in _DI_PROXY_ATTRS:
+        import routes.scheduler._core as _core
+        return getattr(_core, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def get_shared_helpers() -> dict:
     """Return a dict of all shared helper functions for sub-module injection."""
     return {

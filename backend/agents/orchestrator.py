@@ -34,6 +34,10 @@ from .nodes.respond import generate_response, format_structured_response
 from .nodes.reason_and_respond import reason_and_respond
 from .hallucination_verifier import get_hallucination_verifier
 
+# Enterprise modules: budget, rate limiting, audit, correlation IDs
+from .token_budget import get_token_budget, get_rate_limiter
+from .audit import AuditEntry, get_audit_logger, set_request_id, get_request_id, clear_request_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -285,9 +289,45 @@ async def run_orchestrator(
     start_perf = time.perf_counter()
     timing = {}  # Detailed timing breakdown
 
+    # Assign correlation ID for cross-service tracing
+    request_id = set_request_id(conversation_id)
+
     logger.info(f"[ORCHESTRATOR] ========================================")
-    logger.info(f"[ORCHESTRATOR] START | Query: '{message[:80]}{'...' if len(message) > 80 else ''}'")
+    logger.info(f"[ORCHESTRATOR] START | rid={request_id} | Query: '{message[:80]}{'...' if len(message) > 80 else ''}'")
     logger.info(f"[ORCHESTRATOR] ========================================")
+
+    # Resolve org_id early for budget/rate checks
+    _early_org_id = organization_id
+    if _early_org_id is None and current_user is not None:
+        _early_org_id = getattr(current_user, 'organization_id', None)
+
+    # ================================================================
+    # ENTERPRISE GATE: Rate limiting + token budget check
+    # ================================================================
+    if _early_org_id is not None:
+        # Rate limit check
+        rate_limiter = get_rate_limiter()
+        allowed, retry_after = rate_limiter.check_rate_limit(_early_org_id)
+        if not allowed:
+            clear_request_id()
+            return {
+                "response": "You're sending requests too quickly. Please wait a moment and try again.",
+                "error": "rate_limited",
+                "error_type": "rate_limit",
+                "retry_after_seconds": retry_after,
+                "processing_time_seconds": 0,
+            }
+
+        # Token budget check
+        budget = get_token_budget()
+        if not budget.check_budget(_early_org_id):
+            clear_request_id()
+            return {
+                "response": "AI usage limit reached for this period. Please try again later or contact your administrator.",
+                "error": "budget_exceeded",
+                "error_type": "budget",
+                "processing_time_seconds": 0,
+            }
 
     try:
         # ================================================================
@@ -463,29 +503,55 @@ async def run_orchestrator(
             response["warnings"] = errors
 
         # ================================================================
-        # AUDIT LOGGING — record agent decision for compliance trail
+        # AUDIT LOGGING — structured compliance trail with token tracking
         # ================================================================
+        total_tokens_used = 0
         try:
-            from sqlalchemy import text as sa_text
-            if db_session and resolved_org_id:
-                response_text = response.get("response", "")
-                db_session.execute(sa_text("""
-                    INSERT INTO ai_audit_log
-                        (action_type, input_summary, output_summary, user_id, organization_id,
-                         model_used, tokens_used, created_at)
-                    VALUES (:action, :input, :output, :user_id, :org_id, :model, :tokens, NOW())
-                """), {
-                    "action": intent or "chat",
-                    "input": str(message)[:2000],
-                    "output": str(response_text)[:2000],
-                    "user_id": user_id,
-                    "org_id": resolved_org_id,
-                    "model": "anthropic",
-                    "tokens": 0,
-                })
-                db_session.flush()
+            # Extract actual token usage from the LLM response stored in state
+            tokens_input = final_state.get("tokens_input", 0)
+            tokens_output = final_state.get("tokens_output", 0)
+            total_tokens_used = tokens_input + tokens_output
+
+            # Record token usage for budget tracking
+            if resolved_org_id is not None and total_tokens_used > 0:
+                get_token_budget().record_usage(resolved_org_id, total_tokens_used)
+
+            tool_calls = final_state.get("tool_calls", [])
+            audit_entry = AuditEntry(
+                request_id=request_id,
+                user_id=user_id,
+                organization_id=resolved_org_id,
+                intent=intent or "chat",
+                user_message=str(message)[:2000],
+                response_text=str(response.get("response", ""))[:2000],
+                model_used=final_state.get("model_used", "anthropic"),
+                tokens_input=tokens_input,
+                tokens_output=tokens_output,
+                tools_called=[tc.tool_name for tc in tool_calls],
+                tool_results_summary={
+                    tc.tool_name: "ok" if tc.result else (tc.error or "no_result")
+                    for tc in tool_calls
+                },
+                actions_executed=[
+                    {"type": a.action_type, "success": a.success}
+                    for a in final_state.get("actions_executed", [])
+                ],
+                actions_pending=[
+                    a.get("type", "unknown")
+                    for a in final_state.get("actions_pending", [])
+                ],
+                processing_time_ms=processing_time * 1000,
+                data_quality=final_state.get("data_quality", "unknown"),
+                errors=errors,
+            )
+            get_audit_logger().log(audit_entry, db_session)
         except Exception as audit_err:
             logger.warning(f"Failed to log AI audit: {audit_err}")
+
+        # Add token usage to performance metrics
+        response["performance"]["tokens_input"] = tokens_input if 'tokens_input' in dir() else 0
+        response["performance"]["tokens_output"] = tokens_output if 'tokens_output' in dir() else 0
+        response["performance"]["tokens_total"] = total_tokens_used
 
         # ================================================================
         # HALLUCINATION VERIFICATION
@@ -570,21 +636,33 @@ async def run_orchestrator(
         logger.info(f"[ORCHESTRATOR] Scoped tools: {list(scoped_tools.keys())}")
         logger.info(f"[ORCHESTRATOR] Tools used: {len(final_state.get('tool_calls', []))} of {tool_count} available")
         logger.info(f"[ORCHESTRATOR] ========================================")
-        logger.info(f"[ORCHESTRATOR] END | {processing_time:.2f}s total")
+        logger.info(f"[ORCHESTRATOR] END | rid={request_id} | {processing_time:.2f}s total")
         logger.info(f"[ORCHESTRATOR] ========================================")
+
+        response["request_id"] = request_id
+        clear_request_id()
 
         return response
 
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds()
-        logger.error(f"[ORCHESTRATOR] FAILED after {processing_time:.2f}s: {e}", exc_info=True)
+        rid = get_request_id() or "unknown"
+        logger.error(f"[ORCHESTRATOR] FAILED rid={rid} after {processing_time:.2f}s: {e}", exc_info=True)
 
-        # Classify error type for client-side handling
+        # Classify error type for client-side handling and graceful degradation
         error_type = "internal"
         error_msg = "I apologize, but I encountered an error processing your request. Please try again."
 
         err_name = type(e).__name__
-        if "Anthropic" in err_name or "APIError" in err_name or "RateLimitError" in err_name:
+        err_str = str(e).lower()
+
+        if "RateLimitError" in err_name or "429" in err_str:
+            error_type = "external_api_rate_limit"
+            error_msg = "The AI service is experiencing high demand. Please try again in a moment."
+        elif "AuthenticationError" in err_name or "401" in err_str:
+            error_type = "external_api_auth"
+            error_msg = "AI service authentication error. Please contact your administrator."
+        elif "Anthropic" in err_name or "APIError" in err_name:
             error_type = "external_api"
             error_msg = "The AI service is temporarily unavailable. Please try again in a moment."
         elif "Timeout" in err_name or "TimeoutError" in err_name:
@@ -593,11 +671,35 @@ async def run_orchestrator(
         elif "SQLAlchemy" in err_name or "OperationalError" in err_name:
             error_type = "database"
             error_msg = "A database error occurred. Please try again."
+        elif "ConnectionError" in err_name or "connection" in err_str:
+            error_type = "connection"
+            error_msg = "Unable to reach the AI service. Please check your connection and try again."
+
+        # Audit the failure
+        try:
+            if db_session and _early_org_id:
+                failure_entry = AuditEntry(
+                    request_id=rid,
+                    user_id=user_id,
+                    organization_id=_early_org_id,
+                    intent="error",
+                    user_message=str(message)[:2000],
+                    response_text=error_msg,
+                    model_used="n/a",
+                    errors=[f"{error_type}: {str(e)[:500]}"],
+                    processing_time_ms=processing_time * 1000,
+                )
+                get_audit_logger().log(failure_entry, db_session)
+        except Exception:
+            pass
+
+        clear_request_id()
 
         return {
             "response": error_msg,
             "error": "Internal server error",
             "error_type": error_type,
+            "request_id": rid,
             "processing_time_seconds": processing_time
         }
 
