@@ -478,7 +478,7 @@ class TestDeadLetterHandling:
 
             db.query = patched_query
 
-            result = await retry_failed_webhook(db, delivery_id=delivery.id)
+            result = await retry_failed_webhook(db, delivery_id=delivery.id, organization_id=1)
 
             # The delivery should reflect the successful retry result
             assert result.status == "success"
@@ -565,7 +565,7 @@ class TestWebhookHealthCheck:
 
         db.query = patched_query
 
-        result = await check_webhook_health(db, subscription_id=1, window_hours=24)
+        result = await check_webhook_health(db, subscription_id=1, organization_id=1, window_hours=24)
 
         assert result["health_status"] == "healthy"
         assert result["success_rate"] == 90.0
@@ -604,7 +604,7 @@ class TestWebhookHealthCheck:
 
         db.query = patched_query
 
-        result = await check_webhook_health(db, subscription_id=2, window_hours=24)
+        result = await check_webhook_health(db, subscription_id=2, organization_id=1, window_hours=24)
 
         assert result["health_status"] == "degraded"
         assert result["success_rate"] == 60.0
@@ -642,7 +642,7 @@ class TestWebhookHealthCheck:
 
         db.query = patched_query
 
-        result = await check_webhook_health(db, subscription_id=3, window_hours=24)
+        result = await check_webhook_health(db, subscription_id=3, organization_id=1, window_hours=24)
 
         assert result["health_status"] == "unhealthy"
         assert result["success_rate"] == 30.0
@@ -665,7 +665,7 @@ class TestWebhookHealthCheck:
 
         db.query = patched_query
 
-        result = await check_webhook_health(db, subscription_id=4, window_hours=24)
+        result = await check_webhook_health(db, subscription_id=4, organization_id=1, window_hours=24)
 
         assert result["health_status"] == "inactive"
         assert result["total_deliveries"] == 0
@@ -698,7 +698,7 @@ class TestWebhookHealthCheck:
 
         db.query = patched_query
 
-        result = await check_webhook_health(db, subscription_id=5, window_hours=24)
+        result = await check_webhook_health(db, subscription_id=5, organization_id=1, window_hours=24)
 
         assert result["consecutive_recent_failures"] == 3
         assert result["health_status"] == "unhealthy"

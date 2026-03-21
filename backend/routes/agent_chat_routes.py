@@ -355,11 +355,15 @@ async def send_message(
 async def send_message_stream(
     session_id: int,
     message: ChatMessageCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Send a message and stream the agent response."""
     try:
-        session = db.query(AgentChatSession).filter(AgentChatSession.id == session_id).first()
+        session = db.query(AgentChatSession).filter(
+            AgentChatSession.id == session_id,
+            AgentChatSession.user_id == current_user.id,
+        ).first()
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
@@ -439,10 +443,14 @@ async def send_message_stream(
 @router.delete("/sessions/{session_id}")
 async def close_chat_session(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Close a chat session."""
-    session = db.query(AgentChatSession).filter(AgentChatSession.id == session_id).first()
+    session = db.query(AgentChatSession).filter(
+        AgentChatSession.id == session_id,
+        AgentChatSession.user_id == current_user.id,
+    ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -462,10 +470,14 @@ async def get_session_messages(
     session_id: int,
     limit: int = Query(100, le=500),
     offset: int = Query(0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """Get messages for a chat session."""
-    session = db.query(AgentChatSession).filter(AgentChatSession.id == session_id).first()
+    session = db.query(AgentChatSession).filter(
+        AgentChatSession.id == session_id,
+        AgentChatSession.user_id == current_user.id,
+    ).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -501,7 +513,8 @@ async def get_session_messages(
 async def quick_agent_action(
     agent_id: int,
     message: ChatMessageCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
 ):
     """
     Send a one-off message to an agent without creating a persistent session.

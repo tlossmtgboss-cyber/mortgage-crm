@@ -109,7 +109,13 @@ async def process_document_background(document_id: int):
             from services.document_analysis_service import DocumentAnalysisService
 
             # Get storage path (in production, download from S3)
-            storage_path = f"/tmp/perennia-docs/{doc.storage_key}" if doc.storage_key else None
+            # TENANT-007: Namespace temp path by organization to prevent cross-tenant file access
+            _org_id = None
+            if doc.loan_id:
+                _org_row = db.execute(text("SELECT organization_id FROM loans WHERE id = :lid"), {"lid": doc.loan_id}).fetchone()
+                _org_id = _org_row.organization_id if _org_row and _org_row.organization_id else None
+            org_subdir = f"org_{_org_id}" if _org_id else "unscoped"
+            storage_path = f"/tmp/perennia-docs/{org_subdir}/{doc.storage_key}" if doc.storage_key else None
 
             if storage_path:
                 analysis_service = DocumentAnalysisService()

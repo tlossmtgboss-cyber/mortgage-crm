@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 import logging
 
 from db import get_db
+from utils.pagination import clamp_pagination
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +197,9 @@ async def get_leads(
     Lead, User, LeadStage = get_models()
     _, filter_leads_by_permissions = get_permission_functions()
 
+    # Enforce pagination limits (PERF-001)
+    limit, skip = clamp_pagination(limit, skip)
+
     try:
         # Apply org + role-based permission filtering (multi-tenant isolation)
         query = db.query(Lead).options(joinedload(Lead.referral_partner))
@@ -306,6 +310,9 @@ async def search_leads(
     Lead, User, LeadStage = get_models()
     _, LeadResponse = get_schemas()
     _, filter_leads_by_permissions = get_permission_functions()
+
+    # Enforce pagination limits (PERF-001)
+    limit, _ = clamp_pagination(limit)
 
     if not q or len(q.strip()) < 2:
         return []

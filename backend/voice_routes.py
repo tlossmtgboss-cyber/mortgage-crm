@@ -1382,16 +1382,24 @@ async def save_call_summary(call_context: dict, db: Session):
         if call_context['lead_data'].get('phone'):
             phone = call_context['lead_data']['phone']
 
+            # TENANT-001: Scope phone lookup by organization.
+            # Derive org_id from the call context or the Telnyx phone number config.
+            org_id = call_context.get('organization_id')
+
             # Check if lead exists
-            lead = db.query(Lead).filter(Lead.phone == phone).first()
+            phone_query = db.query(Lead).filter(Lead.phone == phone)
+            if org_id:
+                phone_query = phone_query.filter(Lead.organization_id == org_id)
+            lead = phone_query.first()
 
             if not lead:
-                # Create new lead
+                # Create new lead — include organization_id for tenant isolation
                 lead = Lead(
                     name=call_context['lead_data'].get('name', 'Phone Inquiry'),
                     phone=phone,
                     source="Phone Call",
                     stage="NEW",
+                    organization_id=org_id,
                     notes=f"Inbound call. Conversation summary:\n{json.dumps(call_context['conversation_history'], indent=2)}"
                 )
                 db.add(lead)

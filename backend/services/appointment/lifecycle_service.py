@@ -45,6 +45,33 @@ logger = logging.getLogger(__name__)
 
 
 # =========================================================================
+# STATUS TRANSITION VALIDATION (DATA-001)
+# =========================================================================
+
+VALID_TRANSITIONS = {
+    "booked": {"confirmed", "cancelled", "rescheduled", "no_show"},
+    "tentative": {"booked", "confirmed", "cancelled"},
+    "confirmed": {"reminded", "cancelled", "rescheduled", "no_show", "checked_in"},
+    "reminded": {"checked_in", "cancelled", "rescheduled", "no_show"},
+    "checked_in": {"completed", "no_show"},
+    "completed": set(),
+    "no_show": {"rescheduled"},
+    "cancelled": set(),
+    "rescheduled": set(),
+}
+
+
+def _validate_status_transition(current_status, new_status):
+    """Validate that status transition is allowed. Returns True or raises ValueError."""
+    current = current_status.value if hasattr(current_status, 'value') else str(current_status).lower()
+    new = new_status.value if hasattr(new_status, 'value') else str(new_status).lower()
+    allowed = VALID_TRANSITIONS.get(current, set())
+    if new not in allowed:
+        raise ValueError(f"Invalid status transition: {current} -> {new}. Allowed: {sorted(allowed)}")
+    return True
+
+
+# =========================================================================
 # UPDATE
 # =========================================================================
 
@@ -139,6 +166,12 @@ async def update_appointment(
     if new_status_str:
         new_status = safe_enum_parse("AppointmentStatus", new_status_str, None)
         if new_status:
+            # DATA-001: Validate status transition
+            try:
+                _validate_status_transition(appointment.status, new_status)
+            except ValueError as e:
+                return AppointmentResult(success=False, error=str(e))
+
             old_status = appointment.status
             appointment.status = new_status
             appointment.status_changed_at = datetime.now(timezone.utc)
@@ -238,6 +271,12 @@ async def cancel_appointment(
 
     old_status = appointment.status
     cancelled_status = safe_enum_parse("AppointmentStatus", "cancelled", "cancelled")
+
+    # DATA-001: Validate status transition
+    try:
+        _validate_status_transition(old_status, cancelled_status)
+    except ValueError as e:
+        return AppointmentResult(success=False, error=str(e))
 
     appointment.status = cancelled_status
     appointment.status_changed_at = datetime.now(timezone.utc)
@@ -340,13 +379,16 @@ async def reschedule_appointment(
     except ConflictError as e:
         return AppointmentResult(success=False, error=str(e))
 
-    # Mark original as rescheduled
+    # DATA-001: Validate status transition before proceeding
     rescheduled_status = safe_enum_parse("AppointmentStatus", "rescheduled", "rescheduled")
-    original.status = rescheduled_status
-    original.status_changed_at = datetime.now(timezone.utc)
-    original.status_changed_by = requester_user_id
+    try:
+        _validate_status_transition(original.status, rescheduled_status)
+    except ValueError as e:
+        return AppointmentResult(success=False, error=str(e))
 
-    # Create new appointment linked to original
+    # NC2 fix: Create new appointment FIRST, then mark original as rescheduled
+    # only on success. This prevents the original being stuck in RESCHEDULED
+    # status if the new appointment creation fails.
     new_data = {
         "title": original.title,
         "description": original.description,
@@ -379,14 +421,19 @@ async def reschedule_appointment(
     )
 
     if result.success and result.appointment_id:
-        # Link the new appointment to the original
+        # New appointment created successfully — now safe to mark original
+        original.status = rescheduled_status
+        original.status_changed_at = datetime.now(timezone.utc)
+        original.status_changed_by = requester_user_id
+
+        # TENANT-N06: Link the new appointment to the original, with tenant isolation
         new_appt = db.query(Appointment).filter(
             Appointment.id == result.appointment_id,
+            Appointment.organization_id == organization_id,
         ).first()
         if new_appt:
             new_appt.rescheduled_from_id = appointment_id
             new_appt.reschedule_count = (original.reschedule_count or 0) + 1
-            db.commit()
 
         write_audit_log(
             user_id=requester_user_id,
@@ -401,12 +448,13 @@ async def reschedule_appointment(
         )
         db.commit()
 
-    emit_event(AppointmentEvent.RESCHEDULED, {
-        "original_appointment_id": appointment_id,
-        "new_appointment_id": result.appointment_id,
-    })
+        emit_event(AppointmentEvent.RESCHEDULED, {
+            "original_appointment_id": appointment_id,
+            "new_appointment_id": result.appointment_id,
+        })
 
-    result.events_emitted.append(AppointmentEvent.RESCHEDULED.value)
+        result.events_emitted.append(AppointmentEvent.RESCHEDULED.value)
+
     return result
 
 
@@ -445,8 +493,15 @@ async def confirm_appointment(
             error=f"Cannot confirm appointment in '{current}' status",
         )
 
-    booked_status = safe_enum_parse("AppointmentStatus", "booked", "booked")
-    appointment.status = booked_status
+    confirmed_status = safe_enum_parse("AppointmentStatus", "confirmed", "confirmed")
+
+    # DATA-001: Validate status transition
+    try:
+        _validate_status_transition(appointment.status, confirmed_status)
+    except ValueError as e:
+        return AppointmentResult(success=False, error=str(e))
+
+    appointment.status = confirmed_status
     appointment.auto_confirmed = True
     appointment.status_changed_at = datetime.now(timezone.utc)
 
@@ -500,6 +555,13 @@ async def mark_no_show(
         return AppointmentResult(success=False, error="Appointment not found")
 
     no_show_status = safe_enum_parse("AppointmentStatus", "no_show", "no_show")
+
+    # DATA-001: Validate status transition
+    try:
+        _validate_status_transition(appointment.status, no_show_status)
+    except ValueError as e:
+        return AppointmentResult(success=False, error=str(e))
+
     appointment.status = no_show_status
     appointment.no_show_at = datetime.now(timezone.utc)
     appointment.status_changed_at = datetime.now(timezone.utc)
@@ -580,6 +642,13 @@ async def mark_completed(
         return AppointmentResult(success=False, error="Appointment not found")
 
     completed_status = safe_enum_parse("AppointmentStatus", "completed", "completed")
+
+    # DATA-001: Validate status transition
+    try:
+        _validate_status_transition(appointment.status, completed_status)
+    except ValueError as e:
+        return AppointmentResult(success=False, error=str(e))
+
     appointment.status = completed_status
     appointment.completed_at = datetime.now(timezone.utc)
     appointment.status_changed_at = datetime.now(timezone.utc)

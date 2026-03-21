@@ -186,7 +186,8 @@ async def generate_response(
                     "role": "user",
                     "content": context
                 }
-            ]
+            ],
+            timeout=30.0,
         )
         llm_time = (time.time() - llm_start) * 1000
         logger.info(f"[RESPOND] ⏱️ LLM call took {llm_time:.0f}ms (context: {len(context)} chars)")

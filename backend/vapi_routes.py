@@ -177,7 +177,18 @@ async def assistant_request_webhook(
         # Customize assistant behavior based on caller
         try:
             from database.models import Lead
-            lead = db.query(Lead).filter(Lead.phone == phone_number).first()
+            # TENANT-001: Scope phone lookup to the organization associated with
+            # the Vapi assistant (derived from the call's assistant metadata).
+            org_id = None
+            assistant_id = call_data.get("assistantId")
+            if assistant_id:
+                assistant = db.query(VapiAssistant).filter(VapiAssistant.assistant_id == assistant_id).first()
+                if assistant:
+                    org_id = getattr(assistant, 'organization_id', None)
+            query = db.query(Lead).filter(Lead.phone == phone_number)
+            if org_id:
+                query = query.filter(Lead.organization_id == org_id)
+            lead = query.first()
 
             if lead:
                 # Existing customer

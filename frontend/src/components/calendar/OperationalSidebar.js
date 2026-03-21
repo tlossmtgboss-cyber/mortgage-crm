@@ -722,11 +722,11 @@ function AppointmentsTab({ events, onEventClick, onDeleteEvent, formatEventTime,
 // =============================================================================
 
 const SIDEBAR_TABS = [
-  { key: 'today', label: 'Today', icon: '&#9776;' },
-  { key: 'events', label: 'Events', icon: '&#128197;' },
-  { key: 'tasks', label: 'Tasks', icon: '&#9745;' },
-  { key: 'leads', label: 'Leads', icon: '&#9733;' },
-  { key: 'sla', label: 'SLA', icon: '&#9888;' },
+  { key: 'today', label: 'Today', icon: '\u2630' },
+  { key: 'events', label: 'Events', icon: '\uD83D\uDCC5' },
+  { key: 'tasks', label: 'Tasks', icon: '\u2611' },
+  { key: 'leads', label: 'Leads', icon: '\u2605' },
+  { key: 'sla', label: 'SLA', icon: '\u26A0' },
 ];
 
 /**
@@ -812,7 +812,7 @@ const OperationalSidebar = React.memo(function OperationalSidebar({
             className={`ops-tab${activeTab === tab.key ? ' ops-tab--active' : ''}`}
             onClick={() => setActiveTab(tab.key)}
           >
-            <span className="ops-tab-icon" dangerouslySetInnerHTML={{ __html: tab.icon }} />
+            <span className="ops-tab-icon">{tab.icon}</span>
             <span className="ops-tab-label">{tab.label}</span>
           </button>
         ))}

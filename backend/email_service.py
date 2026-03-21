@@ -225,8 +225,10 @@ class EmailService:
                     msg.attach(part)
 
             # Send email
+            import ssl
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
+                tls_context = ssl.create_default_context()
+                server.starttls(context=tls_context)
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
 

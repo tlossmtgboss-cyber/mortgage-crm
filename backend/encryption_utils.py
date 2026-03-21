@@ -17,25 +17,35 @@ class EncryptionManager:
 
     def __init__(self):
         # Use dedicated encryption key (separate from JWT SECRET_KEY)
-        encryption_key = os.getenv("DATA_ENCRYPTION_KEY")
+        encryption_key = os.getenv("DATA_ENCRYPTION_KEY", "")
+        is_production = os.getenv("ENVIRONMENT") == "production" or bool(os.getenv("RAILWAY_ENVIRONMENT"))
 
-        if not encryption_key:
-            # Fallback to SECRET_KEY for backward compatibility
-            is_production = os.getenv("ENVIRONMENT") == "production" or bool(os.getenv("RAILWAY_ENVIRONMENT"))
+        # Try DATA_ENCRYPTION_KEY first, fall back to SECRET_KEY-derived key
+        initialized = False
+        if encryption_key and not encryption_key.startswith("CHANGE_ME"):
+            try:
+                self.fernet = Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
+                initialized = True
+            except Exception as e:
+                logger.warning(f"DATA_ENCRYPTION_KEY is invalid ({e}), falling back to SECRET_KEY")
+
+        if not initialized:
             if is_production:
-                logger.error("❌ DATA_ENCRYPTION_KEY not set in PRODUCTION — falling back to SECRET_KEY. Set a dedicated Fernet key!")
+                logger.error("❌ DATA_ENCRYPTION_KEY not set/invalid in PRODUCTION — falling back to SECRET_KEY. Set a dedicated Fernet key!")
             else:
-                logger.warning("⚠️ DATA_ENCRYPTION_KEY not set, using SECRET_KEY (not recommended for production)")
+                logger.warning("⚠️ DATA_ENCRYPTION_KEY not set/invalid, using SECRET_KEY (not recommended for production)")
             secret_key = os.getenv("SECRET_KEY", "")
             key_material = secret_key.encode()[:32].ljust(32, b'0')
-            encryption_key = base64.urlsafe_b64encode(key_material).decode()
+            derived_key = base64.urlsafe_b64encode(key_material).decode()
+            try:
+                self.fernet = Fernet(derived_key.encode())
+                initialized = True
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize encryption: {e}")
+                raise ValueError(f"Invalid encryption key: {e}")
 
-        try:
-            self.fernet = Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
+        if initialized:
             logger.info("✅ Encryption manager initialized successfully")
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize encryption: {e}")
-            raise ValueError(f"Invalid encryption key: {e}")
 
     def encrypt(self, value: str) -> str:
         """Encrypt a string value"""

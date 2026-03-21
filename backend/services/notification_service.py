@@ -42,6 +42,10 @@ class NotificationService:
 
         if SENDGRID_API_KEY:
             self.sendgrid_client = SendGridAPIClient(SENDGRID_API_KEY)
+            # Set a 30-second timeout on the underlying HTTP client to prevent
+            # indefinite hangs when SendGrid is slow or unreachable.
+            if hasattr(self.sendgrid_client, 'client'):
+                self.sendgrid_client.client.timeout = 30
             logger.info("SendGrid client initialized")
         else:
             logger.warning("SendGrid API key not configured - emails will be logged only")
@@ -111,12 +115,12 @@ class NotificationService:
                     message.add_attachment(attachment)
 
             if not self.sendgrid_client:
-                logger.info(f"[DRY RUN] Would send email to {to_email}: {subject}")
+                logger.info(f"[DRY RUN] Would send email to {self._mask_email(to_email)}: {subject}")
                 return {"success": True, "dry_run": True}
 
             response = self.sendgrid_client.send(message)
 
-            logger.info(f"Email sent to {to_email}: {subject} (status: {response.status_code})")
+            logger.info(f"Email sent to {self._mask_email(to_email)}: {subject} (status: {response.status_code})")
 
             return {
                 "success": response.status_code in [200, 201, 202],
@@ -125,7 +129,7 @@ class NotificationService:
             }
 
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}")
+            logger.error(f"Failed to send email to {self._mask_email(to_email)}: {str(e)}")
             return {"success": False, "error": "Internal server error"}
 
     def send_application_confirmation(
@@ -717,10 +721,26 @@ class NotificationService:
     # SMS METHODS
     # =========================================================================
 
+    @staticmethod
+    def _mask_phone(phone):
+        """OBS-004: Mask phone number for safe logging."""
+        if not phone or len(phone) < 7:
+            return "***"
+        return phone[:2] + "***" + phone[-4:]
+
+    @staticmethod
+    def _mask_email(email):
+        """OBS-008: Mask email address for safe logging."""
+        if not email or '@' not in email:
+            return '***'
+        local, domain = email.rsplit('@', 1)
+        return f"{local[:2]}***@{domain}" if len(local) > 2 else f"***@{domain}"
+
     def send_sms(
         self,
         to_phone: str,
         message: str,
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Send an SMS via Telnyx.
@@ -728,10 +748,26 @@ class NotificationService:
         Args:
             to_phone: Recipient phone number (E.164 format preferred)
             message: SMS message content (max 1600 chars)
+            skip_consent_check: If True, bypass TCPA consent gate (default False)
 
         Returns:
             Dict with 'success' boolean and 'message_sid' or 'error'
         """
+        # COMP-003: TCPA consent gate
+        skip_consent = kwargs.pop('skip_consent_check', False)
+        if not skip_consent:
+            try:
+                from services.scheduler_sms_sender import check_sms_consent
+                can_send, reason = check_sms_consent(to_phone)
+                if not can_send:
+                    logger.info("SMS to %s blocked by TCPA consent: %s", self._mask_phone(to_phone), reason)
+                    return {"success": False, "error": f"TCPA consent blocked: {reason}"}
+            except ImportError:
+                pass  # Module may not exist yet - allow sending
+            except Exception as e:
+                logger.error("TCPA consent check error, blocking SMS: %s", e)
+                return {"success": False, "error": "consent check failed"}
+
         try:
             # Format phone number if needed
             if not to_phone.startswith('+'):
@@ -739,7 +775,7 @@ class NotificationService:
                 to_phone = '+1' + to_phone.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
 
             if not self.telephony_provider:
-                logger.info(f"[DRY RUN] Would send SMS to {to_phone}: {message[:50]}...")
+                logger.info("[DRY RUN] Would send SMS to %s: %s...", self._mask_phone(to_phone), message[:50])
                 return {"success": True, "dry_run": True}
 
             import telnyx
@@ -751,7 +787,7 @@ class NotificationService:
             )
 
             msg_id = getattr(sms, 'id', None) or getattr(getattr(sms, 'data', None), 'id', None) or 'unknown'
-            logger.info(f"SMS sent to {to_phone}: {msg_id}")
+            logger.info("SMS sent to %s: %s", self._mask_phone(to_phone), msg_id)
 
             return {
                 "success": True,
@@ -760,7 +796,7 @@ class NotificationService:
             }
 
         except Exception as e:
-            logger.error(f"Failed to send SMS to {to_phone}: {str(e)}")
+            logger.error("Failed to send SMS to %s: %s", self._mask_phone(to_phone), str(e))
             return {"success": False, "error": "Internal server error"}
 
     def send_application_confirmation_sms(

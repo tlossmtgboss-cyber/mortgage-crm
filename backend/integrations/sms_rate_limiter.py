@@ -77,7 +77,10 @@ def record_send_attempt(
     user_id: Optional[int] = None,
     lead_id: Optional[int] = None,
 ):
-    """Record a send attempt for rate limiting purposes."""
+    """Record a send attempt for rate limiting purposes.
+
+    Flushes but does NOT commit — caller controls the transaction.
+    """
     try:
         db.execute(
             text("""
@@ -87,9 +90,8 @@ def record_send_attempt(
             """),
             {"phone": to_phone, "user_id": user_id, "lead_id": lead_id},
         )
-        db.commit()
+        db.flush()
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to record rate limit entry: {e}")
 
 
@@ -114,10 +116,10 @@ def cleanup_old_rate_records(db: Session, hours: int = 48):
     """Remove rate limit records older than specified hours (run periodically)."""
     try:
         db.execute(
-            text("""
-                DELETE FROM sms_rate_limit_log
-                WHERE sent_at < NOW() - INTERVAL ':hours hours'
-            """.replace(":hours", str(hours))),
+            text(
+                "DELETE FROM sms_rate_limit_log WHERE sent_at < NOW() - INTERVAL '1 hour' * :hours"
+            ),
+            {"hours": hours},
         )
         db.commit()
     except Exception as e:
@@ -140,9 +142,9 @@ def _count_recent(
                 SELECT COUNT(*)
                 FROM sms_rate_limit_log
                 WHERE {column} = :value
-                  AND sent_at >= NOW() - INTERVAL '{window_seconds} seconds'
+                  AND sent_at >= NOW() - make_interval(secs => :window)
             """),
-            {"value": value},
+            {"value": value, "window": window_seconds},
         ).fetchone()
         return row[0] if row else 0
     except Exception:
@@ -153,11 +155,12 @@ def _count_global_recent(db: Session, window_seconds: int) -> int:
     """Count all messages within a time window."""
     try:
         row = db.execute(
-            text(f"""
+            text("""
                 SELECT COUNT(*)
                 FROM sms_rate_limit_log
-                WHERE sent_at >= NOW() - INTERVAL '{window_seconds} seconds'
+                WHERE sent_at >= NOW() - make_interval(secs => :window)
             """),
+            {"window": window_seconds},
         ).fetchone()
         return row[0] if row else 0
     except Exception:

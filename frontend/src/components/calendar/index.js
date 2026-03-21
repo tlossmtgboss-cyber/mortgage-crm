@@ -28,7 +28,10 @@ export { default as SetupBanner } from './SetupBanner';
 export { default as CalendarToolbar } from './CalendarToolbar';
 export { default as CommandCenterHeader } from './CommandCenterHeader';
 export { default as OperationalSidebar } from './OperationalSidebar';
+export { default as CalendarAnalyticsDashboard } from './CalendarAnalyticsDashboard';
+export { default as AppointmentOutcomeDashboard } from './AppointmentOutcomeDashboard';
 export { default as NoShowRecoveryDashboard } from './NoShowRecoveryDashboard';
+export { default as WebhookHealthDashboard } from './WebhookHealthDashboard';
 export {
   normalizeUTCDate,
   formatDateForAPI,

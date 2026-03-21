@@ -200,6 +200,15 @@ async def get_rules_for_lo(
     """
     config_row = None
 
+    # DATA-013: Warn when org_id is missing — rules will fall back to defaults
+    # without tenant scoping, which may return overly permissive scheduling rules.
+    if org_id is None:
+        logger.warning(
+            "get_rules_for_lo called without org_id for lo_id=%s — "
+            "rules will fall back to defaults without org-level scoping",
+            lo_id,
+        )
+
     # Try LO-specific config first
     if lo_id:
         try:
@@ -328,7 +337,7 @@ def _build_rules_from_config(
         lunch_break_end=lunch_end_str,
         enforce_lunch_break=_get("enforce_lunch_break", True),
         max_appointments_per_day=_get("max_meetings_per_day", 8),
-        max_appointments_per_week=_get("max_meetings_per_day", 8) * 5,  # derived
+        max_appointments_per_week=_get("max_appointments_per_week", None) or _get("max_meetings_per_day", 8) * 5,
         min_notice_hours=_get("min_notice_hours", 2),
         max_advance_days=_get("max_advance_days", 60),
         min_duration_minutes=_get("min_duration_minutes", 15),

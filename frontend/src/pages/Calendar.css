@@ -613,6 +613,19 @@
   min-width: 0;
 }
 
+/* Full-width when showing dashboard views (no sidebar) */
+.calendar-main--full-width {
+  grid-column: 1 / -1;
+}
+
+/* View switcher divider between calendar views and dashboard views */
+.view-divider {
+  color: var(--color-border, #cbd5e1);
+  margin: 0 2px;
+  font-size: 14px;
+  user-select: none;
+}
+
 @media (max-width: 1200px) {
   .calendar-content {
     grid-template-columns: minmax(350px, 600px) 1fr;

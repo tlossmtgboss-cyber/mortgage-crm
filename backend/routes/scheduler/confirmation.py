@@ -40,6 +40,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    import warnings
+    warnings.warn("SECRET_KEY not set in confirmation module")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
 
 # Maximum length for ICS description field to prevent abuse
@@ -315,6 +318,12 @@ async def get_confirmation_details(
     # Verify token AND implicitly revoke if appointment is cancelled/no-show
     payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
 
+    # SEC-001: Verify token email matches appointment attendee
+    token_email = (payload.get("email") or "").strip().lower()
+    appt_email = (appointment.attendee_email or "").strip().lower()
+    if token_email and appt_email and token_email != appt_email:
+        raise HTTPException(status_code=403, detail="Token does not match this appointment")
+
     # Get LO details -- mask PII for public response (no raw email/phone/NMLS)
     lo_name = None
     lo_photo = None
@@ -331,15 +340,16 @@ async def get_confirmation_details(
                 # Mask NMLS -- only show last 4 digits in public response
                 lo_nmls_masked = _mask_nmls_public(getattr(lo, 'nmls_number', None))
         except Exception as e:
-            logger.warning(f"Could not load LO details: {e}")
+            logger.error("Could not load LO details for appointment %s", appointment_id, exc_info=True)
 
-    # Get appointment type details
+    # Get appointment type details (scoped by org_id to prevent cross-tenant exposure)
     appointment_type_name = None
     if appointment.appointment_type_id:
         AppointmentType = models.get("AppointmentType")
         if AppointmentType:
             apt_type = db.query(AppointmentType).filter(
-                AppointmentType.id == appointment.appointment_type_id
+                AppointmentType.id == appointment.appointment_type_id,
+                AppointmentType.organization_id == appointment.organization_id,
             ).first()
             if apt_type:
                 appointment_type_name = getattr(apt_type, 'name', None)
@@ -421,7 +431,7 @@ async def get_confirmation_details(
         )
         cancel_url = f"{FRONTEND_URL}/booking/cancel?token={cancel_token}"
     except Exception as e:
-        logger.warning(f"Could not generate reschedule/cancel URLs: {e}")
+        logger.error("Could not generate reschedule/cancel URLs for appointment %s", appointment_id, exc_info=True)
 
     # QR code data for in-office check-in
     qr_data = _generate_qr_data(
@@ -504,7 +514,13 @@ async def download_ics_file(
     appt_status = appointment.status.value if hasattr(appointment.status, 'value') else str(appointment.status)
 
     # Verify token AND reject if appointment is cancelled/no-show
-    _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
+    payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
+
+    # SEC-001: Verify token email matches appointment attendee
+    token_email = (payload.get("email") or "").strip().lower()
+    appt_email = (appointment.attendee_email or "").strip().lower()
+    if token_email and appt_email and token_email != appt_email:
+        raise HTTPException(status_code=403, detail="Token does not match this appointment")
 
     # Get LO info for organizer fields
     organizer_name = "Perennia AI"
@@ -517,7 +533,7 @@ async def download_ics_file(
                 organizer_name = f"{getattr(lo, 'first_name', '') or ''} {getattr(lo, 'last_name', '') or ''}".strip()
                 organizer_email = getattr(lo, 'email', None) or organizer_email
         except Exception as e:
-            logger.warning(f"Could not load LO for ICS: {e}")
+            logger.error("Could not load LO for ICS for appointment %s", appointment_id, exc_info=True)
 
     # Sanitize description: strip HTML tags, limit length (Task #16)
     safe_description = _sanitize_ics_description(appointment.description or "")

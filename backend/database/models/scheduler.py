@@ -125,12 +125,13 @@ class SchedulerConfig(Base):
     __tablename__ = "scheduler_configs"
     __table_args__ = (
         Index('ix_scheduler_configs_org_id', 'organization_id'),
+        UniqueConstraint('organization_id', 'user_id', name='uq_scheduler_config_org_user'),
         {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null = team-level config
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Null = team-level config
     team_id = Column(Integer, nullable=True)  # For team-level settings
 
     # Name/description
@@ -220,12 +221,13 @@ class AvailabilitySlot(Base):
     __table_args__ = (
         Index('ix_availability_date_user', 'specific_date', 'user_id'),
         Index('ix_availability_slots_org_id', 'organization_id'),
+        UniqueConstraint('user_id', 'day_of_week', 'start_time', 'end_time', 'organization_id', name='uq_availability_recurring_slot'),
         {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    config_id = Column(Integer, ForeignKey("scheduler_configs.id"), nullable=False)
+    config_id = Column(Integer, ForeignKey("scheduler_configs.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Slot timing
@@ -278,7 +280,7 @@ class SchedulerAppointmentType(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    config_id = Column(Integer, ForeignKey("scheduler_configs.id"), nullable=False)
+    config_id = Column(Integer, ForeignKey("scheduler_configs.id", ondelete="CASCADE"), nullable=False)
 
     # Type identification
     type_key = Column(String(50), nullable=False)  # Internal key
@@ -346,20 +348,30 @@ class Appointment(Base):
         Index('ix_appointment_user', 'assigned_user_id', 'scheduled_start'),
         Index('ix_appointment_status', 'status'),
         Index('ix_appointment_org_user_start', 'organization_id', 'assigned_user_id', 'scheduled_start'),
+        Index('ix_appt_conflict_check', 'assigned_user_id', 'status', 'scheduled_start', 'scheduled_end'),
+        Index('ix_appt_attendee_status', 'attendee_email', 'status', 'scheduled_start'),
+        Index('ix_appt_no_show_detection', 'status', 'scheduled_end', 'organization_id'),
+        Index('ix_appt_org_status_start', 'organization_id', 'status', 'scheduled_start'),
+        Index('ix_appt_org_created', 'organization_id', 'created_at'),
         {'extend_existing': True}
     )
 
     id = Column(Integer, primary_key=True, index=True)
+    # Organization CASCADE: deleting an org removes all its appointments (business requirement —
+    # org deletion is a full teardown; orphaned appointments would have no owner or context)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Reference IDs
-    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
-    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # AppointmentType SET NULL: deleting a type orphans appointments (they keep their data, just lose the type link)
+    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id", ondelete="SET NULL"), nullable=True)
+    # User SET NULL: deleting a user orphans appointments (reassignment needed, not deletion —
+    # appointments contain borrower data and compliance records that must be preserved)
+    assigned_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
-    # Related entities
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
-    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    # Related entities — SET NULL: lead/loan deletion should not cascade to appointment records
+    lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"), nullable=True)
     contact_id = Column(Integer, nullable=True)  # Reference to contact (no FK)
 
     # External reference (for linking to other systems)
@@ -396,7 +408,7 @@ class Appointment(Base):
     # Status tracking
     status = Column(SQLEnum(AppointmentStatus), default=AppointmentStatus.BOOKED)
     status_changed_at = Column(DateTime)
-    status_changed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    status_changed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Completion tracking
     completed_at = Column(DateTime)
@@ -405,7 +417,7 @@ class Appointment(Base):
     cancellation_reason = Column(Text)
 
     # Rescheduling
-    rescheduled_from_id = Column(Integer, ForeignKey("scheduler_appointments.id"), nullable=True)
+    rescheduled_from_id = Column(Integer, ForeignKey("scheduler_appointments.id", ondelete="SET NULL"), nullable=True)
     reschedule_count = Column(Integer, default=0)
 
     # AI/automation flags
@@ -422,9 +434,25 @@ class Appointment(Base):
     internal_notes = Column(Text)  # LO notes
     meeting_notes = Column(Text)  # Post-meeting notes
 
+    # Optimistic locking
+    version = Column(Integer, nullable=False, default=1, server_default="1")
+
+    # Recovery tracking (no-show recovery workflow)
+    recovery_step = Column(Integer, default=0, server_default="0")
+    recovery_started_at = Column(DateTime, nullable=True)
+    recovery_completed_at = Column(DateTime, nullable=True)
+    recovery_opted_out = Column(Boolean, default=False, server_default="false")
+
+    # Consent tracking
+    communication_consent_at = Column(DateTime, nullable=True)
+    communication_consent_source = Column(String(50), nullable=True)
+
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Mapper args for optimistic locking
+    __mapper_args__ = {"version_id_col": version}
 
     # Relationships
     appointment_type = relationship("SchedulerAppointmentType", back_populates="appointments")
@@ -465,7 +493,7 @@ class SchedulerRoutingRule(Base):
     conditions = Column(JSON, default=list)
 
     # Matching criteria
-    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
+    appointment_type_id = Column(Integer, ForeignKey("appointment_types.id", ondelete="SET NULL"), nullable=True)
     meeting_types = Column(JSON, default=list)  # List of MeetingType values
     lead_sources = Column(JSON, default=list)  # Route by lead source
     loan_amounts_min = Column(Numeric(18, 2), nullable=True)
@@ -512,7 +540,7 @@ class BlockedTime(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Null = company-wide
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Null = company-wide
 
     # Block details
     title = Column(String(255), nullable=False)
@@ -537,7 +565,7 @@ class BlockedTime(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     user = relationship("User", foreign_keys=[user_id], backref="blocked_times")
@@ -558,7 +586,7 @@ class BookingLink(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Owner
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Owner
 
     # Link identification
     slug = Column(String(100), nullable=False)  # URL slug -- per-org unique via __table_args__
@@ -567,7 +595,7 @@ class BookingLink(Base):
 
     # What can be booked
     appointment_type_ids = Column(JSON, default=list)  # Allowed types
-    single_appointment_type_id = Column(Integer, ForeignKey("appointment_types.id"), nullable=True)
+    single_appointment_type_id = Column(Integer, ForeignKey("appointment_types.id", ondelete="SET NULL"), nullable=True)
 
     # Link settings
     is_public = Column(Boolean, default=True)
@@ -627,7 +655,7 @@ class AppointmentReminder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id"), nullable=False)
+    appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id", ondelete="CASCADE"), nullable=False)
 
     # Reminder settings
     channel = Column(SQLEnum(ReminderChannel), nullable=False)
@@ -681,7 +709,7 @@ class AppointmentStatusHistory(Base):
     new_status = Column(String(30), nullable=False)
 
     # Who made the change
-    changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    changed_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     changed_by_name = Column(String(255), nullable=True)  # Denormalized for display
     change_source = Column(String(50), default="manual")  # manual, ai, system, reminder, public
 
@@ -706,7 +734,7 @@ class SchedulerAuditLog(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, nullable=True)
     action = Column(String(50), nullable=False)  # created, updated, cancelled, deleted, settings_changed
     entity_type = Column(String(50), nullable=False)  # appointment, booking_link, blocked_time, settings, appointment_type
@@ -732,7 +760,7 @@ class SlotHold(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     organization_id = Column(Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    lo_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    lo_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     start_time = Column(DateTime, nullable=False)
     end_time = Column(DateTime, nullable=False)
     held_by = Column(String(50), nullable=False)  # 'ai_conversation', 'public_booking', 'manual'
@@ -742,7 +770,7 @@ class SlotHold(Base):
     conversation_id = Column(String(100), nullable=True)  # Vapi call/conversation ID
     expires_at = Column(DateTime, nullable=False)
     status = Column(String(20), nullable=False, default=SlotHoldStatus.ACTIVE.value)
-    converted_to_appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id"), nullable=True)
+    converted_to_appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id", ondelete="SET NULL"), nullable=True)
     converted_at = Column(DateTime, nullable=True)
     released_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

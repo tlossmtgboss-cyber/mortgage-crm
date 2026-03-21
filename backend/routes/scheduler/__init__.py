@@ -21,7 +21,6 @@ URL Prefix Map (all under /api/v1/scheduler):
   /public/waitlist/*            Public waitlist join/accept/position         (waitlist.py)
   /public/surveys/respond/*     Public survey response flow                 (surveys.py)
   /public/reschedule/{token}/*  Borrower self-service reschedule            (reschedule.py)
-  /public/ab-tests/*            A/B test variant assignment + recording     (ab_testing.py)
   /ai-recommend-slots           AI-powered slot recommendations (POST)      (ai_scheduling.py)
   /analytics/overview           Calendar analytics overview                 (analytics.py)
   /analytics/trends             Booking trend data                          (analytics.py)
@@ -30,8 +29,6 @@ URL Prefix Map (all under /api/v1/scheduler):
   /analytics/no-show-risks      Batch no-show risk for a date              (ai_scheduling.py)
   /analytics/appointment-outcomes       AI vs manual appointment funding conversion  (outcome_tracking.py)
   /analytics/appointment-type-effectiveness  Conversion by appointment type        (outcome_tracking.py)
-  /analytics/lo-outcome-comparison      Per-LO appointment outcome breakdown     (outcome_tracking.py)
-  /analytics/outcome-timeline           Time-series of appointment outcomes      (outcome_tracking.py)
   /today-summary                Aggregated LO "Today" dashboard summary    (today_summary.py)
   /search                       Full-text appointment search                (search.py)
   /search/suggestions           Search autocomplete suggestions             (search.py)
@@ -46,7 +43,6 @@ URL Prefix Map (all under /api/v1/scheduler):
   /notifications/*              Calendar notification feed + mark-read      (notifications.py)
   /locations/*                  Appointment location CRUD + default         (locations.py)
   /conflicts/*                  Conflict detection, listing, resolution     (conflicts.py)
-  /ab-tests/*                   A/B test CRUD + results                     (ab_testing.py)
   /cancellation-policy*         Cancellation policy CRUD + enforcement      (cancellation_policy.py)
   /cancel/{appointment_id}      Cancel with policy enforcement (POST)       (cancellation_policy.py)
   /cancellation-stats           Cancellation analytics                      (cancellation_policy.py)
@@ -61,10 +57,6 @@ URL Prefix Map (all under /api/v1/scheduler):
   /calendar/sync/outlook/webhook Outlook/Graph change notification receiver  (calendar_sync_inbound.py)
   /calendar/sync/google/register Register Google Calendar watch channel      (calendar_sync_inbound.py)
   /calendar/sync/outlook/register Register Outlook Graph subscription        (calendar_sync_inbound.py)
-  /pipeline-triggers/failures   List pipeline trigger failures for LO       (trigger_failures.py)
-  /pipeline-triggers/failures/{id}/acknowledge  Acknowledge a failure       (trigger_failures.py)
-  /email-service-status         Email service health check                  (email_testing.py)
-  /test-email                   Send test email (POST)                      (email_testing.py)
   /booking-links/{id}/analytics  Per-link performance analytics             (booking_links.py)
   /booking-links/analytics/summary  Org-wide booking link analytics (admin) (booking_links.py)
   /settings/all                 Get all scheduler settings                  (settings.py)
@@ -81,7 +73,6 @@ Active modules (32):
   booking_links.py            Booking link CRUD endpoints
   public_booking.py           Public booking flow (no auth, rate-limited)
   ai_scheduling.py            AI slot recommendations, no-show risk scoring
-  email_testing.py            Email service status and test endpoints
   search.py                   Advanced appointment search with full-text, filters, pagination
   meetings.py                 Virtual meeting integration (Zoom, Google Meet, Teams, Perennia)
   reminders.py                Reminder template CRUD, send history, test endpoint
@@ -96,20 +87,26 @@ Active modules (32):
   notifications.py            Calendar notification feed (bookings, cancellations, etc.)
   locations.py                Appointment location CRUD (offices, virtual links, phones)
   conflicts.py                Conflict detection, listing, and resolution
-  ab_testing.py               A/B testing for public booking page optimization
   cancellation_policy.py      Cancellation policy CRUD, enforcement, and analytics
   analytics.py                Calendar analytics dashboard (overview, trends, by-type, by-LO)
-  outcome_tracking.py         Appointment-to-funding conversion analytics (AI vs manual, by-type, by-LO, timeline)
+  outcome_tracking.py         Appointment-to-funding conversion analytics (AI vs manual, by-type)
   today_summary.py            Aggregated LO "Today" dashboard (appointments, tasks, leads, SLA)
   data_compliance.py          GDPR/CCPA data export, deletion, retention + TCPA/DNC/contact-hours compliance (admin)
   maintenance.py              Periodic cleanup tasks (expired slot holds)
   calendar_sync_inbound.py   Bidirectional calendar sync (Google/Outlook inbound webhooks)
-  trigger_failures.py         Pipeline trigger failure viewing and acknowledgment
   settings.py                 Scheduler config CRUD (availability, notifications, etc.)
   error_responses.py          Standardized error response helpers (not a router, re-exported)
 
-Internal helpers (not a router):
-  _helpers.py                 Shared auth, rate limiting, sanitization, conflict detection, CRM, slot engine
+Internal helpers (not routers):
+  _helpers.py                 Re-export layer for backward compatibility
+  _core.py                    Dependency injection storage
+  _auth.py                    Auth helpers (get_current_user, _get_org_id, _is_scheduler_admin)
+  _rate_limiting.py           Rate limiting (Redis + in-memory fallback), IP extraction
+  _input_validation.py        Input sanitization, URL/phone validation, Turnstile CAPTCHA
+  _audit.py                   Audit logging
+  _conflicts.py               Appointment conflict & duplicate booking detection
+  _crm_integration.py         CRM helpers (lead creation, activity logging, tasks)
+  _availability.py            Cross-source conflicts, timezone, unified slot engine
 
 Removed modules (deleted after decomposition):
   appointments_crud.py        Superseded by appointments + booking_links + ai_scheduling (deleted)
@@ -129,7 +126,6 @@ from .blocked_times import router as blocked_times_router
 from .booking_links import router as booking_links_router
 from .public_booking import router as public_booking_router
 from .ai_scheduling import router as ai_scheduling_router
-from .email_testing import router as email_testing_router
 from .search import router as search_router
 from .meetings import router as meetings_router
 from .booking_meta import router as booking_meta_router
@@ -145,7 +141,6 @@ from .reschedule import router as reschedule_router
 from .notifications import router as notifications_router
 from .locations import router as locations_router
 from .conflicts import router as conflicts_router
-from .ab_testing import router as ab_testing_router
 from .cancellation_policy import router as cancellation_policy_router
 from .analytics import router as analytics_router
 from .outcome_tracking import router as outcome_tracking_router
@@ -160,7 +155,6 @@ from .webhooks import router as webhooks_router
 from .widget_config import router as widget_config_router
 from .maintenance import router as maintenance_router
 from .calendar_sync_inbound import router as calendar_sync_inbound_router
-from .trigger_failures import router as trigger_failures_router
 from .settings import router as settings_router
 from .error_responses import (  # noqa: F401 — re-export for other modules
     scheduler_error, validation_error, not_found_error,
@@ -200,7 +194,6 @@ scheduler_router.include_router(blocked_times_router)
 scheduler_router.include_router(booking_links_router)
 scheduler_router.include_router(public_booking_router)
 scheduler_router.include_router(ai_scheduling_router)
-scheduler_router.include_router(email_testing_router)
 scheduler_router.include_router(search_router)
 scheduler_router.include_router(meetings_router)
 scheduler_router.include_router(booking_meta_router)
@@ -216,7 +209,6 @@ scheduler_router.include_router(reschedule_router)
 scheduler_router.include_router(notifications_router)
 scheduler_router.include_router(locations_router)
 scheduler_router.include_router(conflicts_router)
-scheduler_router.include_router(ab_testing_router)
 scheduler_router.include_router(cancellation_policy_router)
 scheduler_router.include_router(analytics_router)
 scheduler_router.include_router(outcome_tracking_router)
@@ -231,6 +223,5 @@ scheduler_router.include_router(webhooks_router)
 scheduler_router.include_router(widget_config_router)
 scheduler_router.include_router(maintenance_router)
 scheduler_router.include_router(calendar_sync_inbound_router)
-scheduler_router.include_router(trigger_failures_router)
 scheduler_router.include_router(settings_router)
 scheduler_router.include_router(_api_versions_router)

@@ -431,7 +431,8 @@ class AgentToolExecutor:
         tool_name: str,
         params: Dict[str, Any],
         user_id: Optional[str] = None,
-        skip_approval: bool = False,
+        user_role: Optional[str] = None,
+        pre_approved: bool = False,
     ) -> ToolExecutionResult:
         """
         Execute a tool with given parameters.
@@ -440,7 +441,8 @@ class AgentToolExecutor:
             tool_name: Name of the tool to execute
             params: Parameters to pass to the tool
             user_id: User executing the tool (for audit)
-            skip_approval: Skip approval check (for pre-approved actions)
+            user_role: Role of the user (only 'platform_admin' can set pre_approved)
+            pre_approved: Skip approval check — ONLY honored for platform_admin users
 
         Returns:
             ToolExecutionResult with data or error
@@ -455,8 +457,11 @@ class AgentToolExecutor:
                 error=f"Tool {tool_name} not available to {self.agent_role}",
             )
 
+        # Only platform admins can bypass approval
+        can_skip_approval = pre_approved and user_role == "platform_admin"
+
         # Check if approval required
-        if not skip_approval and tool_name in self.config.requires_approval_for:
+        if not can_skip_approval and tool_name in self.config.requires_approval_for:
             approval_id = f"approval_{tool_name}_{datetime.utcnow().timestamp()}"
             self._pending_approvals[approval_id] = {
                 "tool_name": tool_name,
@@ -527,6 +532,7 @@ class AgentToolExecutor:
         self,
         tool_calls: List[Dict[str, Any]],
         user_id: Optional[str] = None,
+        user_role: Optional[str] = None,
     ) -> List[ToolExecutionResult]:
         """
         Execute multiple tools, respecting concurrency limits.
@@ -534,6 +540,7 @@ class AgentToolExecutor:
         Args:
             tool_calls: List of {tool_name, params} dicts
             user_id: User executing the tools
+            user_role: Role of the user for approval checks
 
         Returns:
             List of ToolExecutionResults in same order
@@ -549,6 +556,7 @@ class AgentToolExecutor:
                     call["tool_name"],
                     call.get("params", {}),
                     user_id=user_id,
+                    user_role=user_role,
                 )
                 for call in batch
             ]

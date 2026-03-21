@@ -388,6 +388,7 @@ class PublicAvailableSlotsRequest(BaseModel):
     end_date: date
     duration_minutes: int = Field(30, ge=5, le=480)
     appointment_type: str = Field("platform-demo", max_length=100)
+    organization_id: Optional[int] = Field(None, description="Organization ID for multi-tenant isolation")
 
     @validator('end_date')
     def end_date_after_start(cls, v, values):
@@ -426,6 +427,7 @@ class WebsiteDemoBookingRequest(BaseModel):
     attendee_phone: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = Field(None, max_length=500)
     meeting_mode: str = Field("video", max_length=20)
+    organization_id: Optional[int] = Field(None, description="Organization ID for multi-tenant isolation")
 
 
 # =============================================================================
@@ -439,6 +441,19 @@ class SlotRecommendation(BaseModel):
     user_name: str
     score: float  # AI-calculated score
     reasons: List[str]  # Why this slot is recommended
+
+
+class AIBookingContext(BaseModel):
+    """Validated schema for AI booking decision context."""
+    decision_source: Optional[str] = None
+    confidence_score: Optional[float] = None
+    decision_reason: Optional[str] = None
+    matched_rules: Optional[List[str]] = None
+    alternative_slots_considered: Optional[int] = None
+    pipeline_trigger: Optional[str] = None
+
+    class Config:
+        extra = "allow"  # Allow forward-compatible extra fields
 
 
 # #############################################################################

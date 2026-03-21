@@ -43,6 +43,11 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Cache version — increment on any change to intent mappings, patterns, or LLM prompt.
+# This prefix is added to all cache keys so stale entries from previous deployments
+# are automatically bypassed without waiting for TTL expiration.
+INTENT_CACHE_VERSION = "v3"
+
 
 # =============================================================================
 # INTENT DEFINITIONS
@@ -410,9 +415,11 @@ async def classify_intent_llm(
     start = time.time()
 
     # Check cache first (if available)
+    # Cache key includes INTENT_CACHE_VERSION so deployments with changed
+    # intent mappings automatically bypass stale entries
     cache_key = None
     if LLM_CACHE_AVAILABLE and llm_cache and llm_cache._enabled:
-        cache_key = llm_cache._generate_key("intent", query.lower().strip())
+        cache_key = llm_cache._generate_key(f"intent_{INTENT_CACHE_VERSION}", query.lower().strip())
         cached = llm_cache.get(cache_key)
         if cached:
             elapsed = (time.time() - start) * 1000
@@ -440,7 +447,8 @@ async def classify_intent_llm(
             messages=[{
                 "role": "user",
                 "content": f"Query: {query}\n\nCategory:"
-            }]
+            }],
+            timeout=30.0,
         )
 
         intent = response.content[0].text.strip().lower()
@@ -463,7 +471,14 @@ async def classify_intent_llm(
         return result
 
     except Exception as e:
-        logger.error(f"[INTENT] LLM classification failed: {e}")
+        # Distinguish API errors from other failures for observability
+        err_name = type(e).__name__
+        if "AuthenticationError" in err_name:
+            logger.critical(f"[INTENT] Anthropic API authentication failed: {e}")
+        elif "RateLimitError" in err_name:
+            logger.warning(f"[INTENT] Anthropic API rate limit hit: {e}")
+        else:
+            logger.error(f"[INTENT] LLM classification failed ({err_name}): {e}", exc_info=True)
         return ("general", 0.3)
 
 
@@ -602,6 +617,25 @@ def print_intent_summary():
     print("\n" + "=" * 70)
 
 
+def flush_intent_cache() -> bool:
+    """
+    Flush all cached intent classifications.
+    Call this after deployments that change intent mappings or patterns.
+    Returns True if cache was flushed, False if cache unavailable.
+    """
+    if LLM_CACHE_AVAILABLE and llm_cache and llm_cache._enabled:
+        try:
+            # Incrementing INTENT_CACHE_VERSION in code is the primary mechanism.
+            # This function provides a runtime fallback for hot-fixing.
+            llm_cache.clear_prefix(f"intent_{INTENT_CACHE_VERSION}")
+            logger.info(f"[INTENT] Cache flushed for version {INTENT_CACHE_VERSION}")
+            return True
+        except Exception as e:
+            logger.error(f"[INTENT] Failed to flush cache: {e}")
+            return False
+    return False
+
+
 # =============================================================================
 # EXPORTS
 # =============================================================================
@@ -609,6 +643,7 @@ def print_intent_summary():
 __all__ = [
     "Intent",
     "INTENT_TO_AGENTS",
+    "INTENT_CACHE_VERSION",
     "HAIKU_INTENTS",
     "classify_intent",
     "classify_intent_fast",
@@ -616,5 +651,6 @@ __all__ = [
     "get_tools_for_intent",
     "get_agent_tools",
     "get_tool_count_for_intent",
+    "flush_intent_cache",
     "print_intent_summary",
 ]

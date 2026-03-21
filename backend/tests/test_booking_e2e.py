@@ -319,8 +319,8 @@ def _build_app():
 
     # Availability module (also exports _check_appointment_conflict, etc.)
     from routes.scheduler.availability import router as av_router
-    from routes.scheduler.availability import set_dependencies as av_set_deps
-    from routes.scheduler.availability import (
+    from routes.scheduler._helpers import set_dependencies as av_set_deps
+    from routes.scheduler._helpers import (
         _check_appointment_conflict,
         _check_duplicate_booking,
         _generate_available_slots,
@@ -350,13 +350,11 @@ def _build_app():
 
     # Booking links
     from routes.scheduler.booking_links import router as bl_router
-    from routes.scheduler.booking_links import set_dependencies as bl_set_deps
-    bl_set_deps(override_get_db, mock_get_current_user, _models_dict)
+    # booking_links uses _helpers.set_dependencies (already called above)
 
     # Blocked times
     from routes.scheduler.blocked_times import router as bt_router
-    from routes.scheduler.blocked_times import set_dependencies as bt_set_deps
-    bt_set_deps(override_get_db, mock_get_current_user, _models_dict)
+    # blocked_times uses _helpers.set_dependencies (already called above)
 
     # Public booking
     from routes.scheduler.public_booking import router as pb_router

@@ -45,6 +45,7 @@ from routes.scheduler._helpers import (
     _log_appointment_activity, _create_followup_task,
     _audit_log, _validate_url, _mask_email,
 )
+from routes.scheduler.public_booking import _sanitize_ai_context
 from routes.scheduler.error_responses import (
     scheduler_error,
     VALIDATION_ERROR, NOT_FOUND, FORBIDDEN,
@@ -354,7 +355,7 @@ async def export_appointments_ics(
             AppointmentStatus.CONFIRMED,
             AppointmentStatus.RESCHEDULED,
         ]),
-    ).order_by(Appointment.scheduled_start.asc()).all()
+    ).order_by(Appointment.scheduled_start.asc()).limit(500).all()
 
     # Build event dicts for the multi-event ICS generator
     events = []
@@ -606,6 +607,16 @@ async def get_appointment_audit_trail_endpoint(
     if not appointment:
         scheduler_error(404, NOT_FOUND, "Appointment not found")
 
+    # SEC-011: Non-admin users can only view audit trails for their own appointments
+    is_admin = _is_scheduler_admin(user)
+    if not is_admin:
+        is_owner = (
+            appointment.assigned_user_id == user.id or
+            appointment.created_by_user_id == user.id
+        )
+        if not is_owner:
+            scheduler_error(403, FORBIDDEN, "You don't have permission to view this audit trail")
+
     trail = get_appointment_audit_trail(db, appointment_id)
 
     return {
@@ -683,7 +694,7 @@ async def create_appointment_endpoint(
         intake_responses=appt_data.intake_responses,
         attendee_notes=appt_data.attendee_notes,
         booked_by_ai=appt_data.booked_by_ai,
-        ai_booking_context=appt_data.ai_booking_context,
+        ai_booking_context=_sanitize_ai_context(appt_data.ai_booking_context),
         # Control flags
         check_conflicts=True,
         check_cross_source=True,
@@ -934,6 +945,18 @@ async def update_appointment(
     if "status" in update_fields:
         try:
             new_status = AppointmentStatus(update_fields["status"])
+
+            # FUNC-007: Validate status transition before applying
+            from services.appointment.lifecycle_service import _validate_status_transition
+            try:
+                _validate_status_transition(appointment.status, new_status)
+            except ValueError as ve:
+                scheduler_error(
+                    400, VALIDATION_ERROR,
+                    "Invalid status transition",
+                    detail=str(ve),
+                )
+
             update_fields["status"] = new_status
             update_fields["status_changed_at"] = datetime.now(timezone.utc)
             update_fields["status_changed_by"] = user.id
@@ -1003,7 +1026,7 @@ async def update_appointment(
                 scheduler_error(403, FORBIDDEN, "Assigned user not found in your organization")
 
     # Apply all updates
-    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id'}
+    _protected = {'id', 'organization_id', 'created_at', 'updated_at', 'user_id', 'created_by_user_id'}
     audit_changes = {}
     for field, value in update_fields.items():
         if hasattr(appointment, field) and field not in _protected:

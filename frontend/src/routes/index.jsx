@@ -88,10 +88,16 @@ function PrivateRoute({ children }) {
 
 // Role-based redirect component for authenticated users
 function RoleBasedRedirect() {
+  let user = null;
   try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const user = JSON.parse(userStr);
+    const stored = localStorage.getItem('user');
+    if (stored) user = JSON.parse(stored);
+  } catch (e) {
+    console.warn('Failed to parse stored user data, clearing corrupted entry');
+    localStorage.removeItem('user');
+  }
+  try {
+    if (user) {
       const permissionRole = user.permission_role || 'sales';
       const legacyRole = user.role || null;
       const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
@@ -258,6 +264,7 @@ const LODashboard = lazyRetry(() => import('../pages/LODashboard'));
 const RealtorDashboard = lazyRetry(() => import('../pages/RealtorDashboard'));
 const RealtorPortal = lazyRetry(() => import('../pages/RealtorPortal'));
 const AdminPanel = lazyRetry(() => import('../pages/AdminPanel'));
+const LeadAssignmentConfig = lazyRetry(() => import('../pages/LeadAssignmentConfig'));
 const AgentDashboard = lazyRetry(() => import('../pages/AgentDashboard'));
 const AgentProfile = lazyRetry(() => import('../pages/AgentProfile'));
 const AcquisitionDashboard = lazyRetry(() => import('../pages/AcquisitionDashboard'));
@@ -691,6 +698,7 @@ export function getRoutes(layoutProps) {
     <Route key="/admin/domains" path="/admin/domains" element={withMainLayout(AdminCustomDomains)} />,
     <Route key="/admin/employee-onboarding" path="/admin/employee-onboarding" element={withMainLayout(EmployeeOnboardingAdmin)} />,
     <Route key="/admin/documents" path="/admin/documents" element={withMainLayout(AdminDocumentReviewQueue)} />,
+    <Route key="/admin/lead-assignment" path="/admin/lead-assignment" element={withMainLayout(LeadAssignmentConfig)} />,
     <Route key="/admin" path="/admin" element={withMainLayout(AdminPanel)} />,
 
     // Knowledge & Support

@@ -93,7 +93,38 @@ from routes.scheduler._helpers import (
 )
 from db import get_db
 
+import re as _re
+
 logger = logging.getLogger(__name__)
+
+# AGENT-001: Prompt injection sanitizer for AI booking context
+_INJECTION_PATTERNS = _re.compile(
+    r'(ignore\s+(all\s+)?previous\s+instructions|you\s+are\s+now|system\s*:\s*|<\s*/?script'
+    r'|disregard\s+prior|forget\s+everything|new\s+persona|act\s+as\b|pretend\s+you'
+    r'|override\s+instructions|\[INST\]|<<SYS>>|</s>)',
+    _re.IGNORECASE
+)
+
+
+def _sanitize_ai_context(context):
+    """Sanitize AI booking context to prevent prompt injection."""
+    if not context or not isinstance(context, dict):
+        return context
+    sanitized = {}
+    for key, value in context.items():
+        if isinstance(value, str):
+            value = value[:2000]  # Truncate
+            if _INJECTION_PATTERNS.search(value):
+                logger.warning("Potential prompt injection in ai_booking_context field '%s'", key)
+                sanitized[key] = "[REDACTED: suspicious content]"
+            else:
+                sanitized[key] = value
+        elif isinstance(value, dict):
+            sanitized[key] = _sanitize_ai_context(value)
+        else:
+            sanitized[key] = value
+    return sanitized
+
 
 router = APIRouter()
 
@@ -161,19 +192,27 @@ async def _check_booking_ip_rate_limit(request: Request):
             )
 
 
-def _check_booking_email_rate_limit(db: Session, attendee_email: str):
+def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: int = None):
     """
     Per-email booking rate limit: reject if this email has 3+ bookings in the last hour.
-    Queries the scheduler_appointments table directly.
+    Queries the scheduler_appointments table directly, scoped by org_id for tenant isolation.
     """
     if not attendee_email:
         return
 
+    if org_id is None:
+        logger.warning("_check_booking_email_rate_limit called without org_id; skipping rate limit to avoid unscoped query")
+        return
+
     from sqlalchemy import text as sql_text
-    result = db.execute(sql_text(
+    normalized_email = attendee_email.strip().lower()
+    query = (
         "SELECT COUNT(*) as cnt FROM scheduler_appointments "
-        "WHERE attendee_email = :email AND created_at > NOW() - INTERVAL '1 hour'"
-    ), {"email": attendee_email}).fetchone()
+        "WHERE LOWER(attendee_email) = :email AND created_at > NOW() - INTERVAL '1 hour'"
+        " AND organization_id = :org_id"
+    )
+    params = {"email": normalized_email, "org_id": org_id}
+    result = db.execute(sql_text(query), params).fetchone()
 
     count = result.cnt if result else 0
     if count >= _BOOKING_MAX_PER_EMAIL:
@@ -302,8 +341,9 @@ async def get_public_booking_page(
 
                         # Guard: check if a demo link already exists for this org
                         # (may have been created by a concurrent request or previously deactivated)
+                        demo_slug = f"demo-{secrets.token_hex(3)}"
                         existing_demo_link_query = db.query(BookingLink).filter(
-                            BookingLink.slug == "demo"
+                            BookingLink.slug.like("demo%")
                         )
                         if demo_org_id:
                             existing_demo_link_query = existing_demo_link_query.filter(
@@ -321,7 +361,7 @@ async def get_public_booking_page(
                             link = BookingLink(
                                 organization_id=demo_org_id,
                                 user_id=target_user.id,
-                                slug=slug,
+                                slug=demo_slug,
                                 link_name="Schedule a Demo",
                                 description="Book a personalized demo of Perennia AI",
                                 is_active=True,
@@ -584,7 +624,7 @@ async def confirm_public_booking(
         if link.max_per_person is not None:
             max_per_query = db.query(Appointment).filter(
                 Appointment.attendee_email == booking_data.attendee_email,
-                Appointment.status.notin_(['cancelled', 'no_show']),
+                Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]),
                 Appointment.external_source == 'booking_link'
             )
             if link_org_id:
@@ -606,6 +646,17 @@ async def confirm_public_booking(
 
         # RT1: Determine assigned user via routing strategy
         if booking_data.team_member_id:
+            # NC5 fix: Validate team_member_id belongs to the booking link's org
+            from database.models import User as _UserModel
+            _team_member = db.query(_UserModel).filter(
+                _UserModel.id == booking_data.team_member_id,
+                _UserModel.organization_id == link_org_id,
+            ).first()
+            if not _team_member:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid team member selection",
+                )
             assigned_user_id = booking_data.team_member_id
         else:
             try:
@@ -631,21 +682,6 @@ async def confirm_public_booking(
             meeting_mode_str_raw = booking_data.meeting_mode.lower()
 
         slot_end = slot_start + timedelta(minutes=duration_minutes)
-
-        # ==================================================================
-        # H8: Atomic booking count increments (staged before service commit)
-        # This runs on the same db session, so it will be committed atomically
-        # with the appointment creation inside the shared service.
-        # ==================================================================
-        from sqlalchemy import func as sqlfunc
-        db.query(BookingLink).filter(BookingLink.id == link.id).update(
-            {
-                BookingLink.booking_count: sqlfunc.coalesce(BookingLink.booking_count, 0) + 1,
-                BookingLink.current_bookings: sqlfunc.coalesce(BookingLink.current_bookings, 0) + 1,
-                BookingLink.last_booked_at: datetime.now(timezone.utc),
-            },
-            synchronize_session=False
-        )
 
         # ==================================================================
         # DELEGATE TO SHARED APPOINTMENT CREATION SERVICE
@@ -686,6 +722,20 @@ async def confirm_public_booking(
         # Translate service failure to HTTP error
         if not result.success:
             raise HTTPException(status_code=409, detail=result.error)
+
+        # ==================================================================
+        # H8: Increment booking count AFTER successful appointment creation
+        # ==================================================================
+        from sqlalchemy import func as sqlfunc
+        db.query(BookingLink).filter(BookingLink.id == link.id).update(
+            {
+                BookingLink.booking_count: sqlfunc.coalesce(BookingLink.booking_count, 0) + 1,
+                BookingLink.current_bookings: sqlfunc.coalesce(BookingLink.current_bookings, 0) + 1,
+                BookingLink.last_booked_at: datetime.now(timezone.utc),
+            },
+            synchronize_session=False
+        )
+        db.flush()
 
         appointment = result.appointment
         video_link = result.video_link
@@ -923,15 +973,23 @@ async def get_website_demo_available_slots(
         start_date = request.start_date
         end_date = request.end_date
 
-        # Look up calendar assignment for website_demo purpose
-        assignment_result = db.execute(text("""
-            SELECT ca.id, ca.assigned_user_id, ca.calendly_url, ca.booking_link_id,
-                   u.full_name as user_name, u.email as user_email
-            FROM calendar_assignments ca
-            LEFT JOIN users u ON u.id = ca.assigned_user_id
-            WHERE ca.purpose = 'website_demo' AND ca.is_active = true
-            LIMIT 1
-        """)).fetchone()
+        # Look up calendar assignment for website_demo purpose (tenant-scoped)
+        _demo_params = {"purpose": "website_demo"}
+        _org_filter = ""
+        if getattr(request, 'organization_id', None):
+            _org_filter = " AND u.organization_id = :org_id"
+            _demo_params["org_id"] = request.organization_id
+
+        assignment_result = db.execute(text(
+            "SELECT ca.id, ca.assigned_user_id, ca.calendly_url, ca.booking_link_id,"
+            "       u.full_name as user_name, u.email as user_email,"
+            "       u.organization_id as user_org_id"
+            " FROM calendar_assignments ca"
+            " LEFT JOIN users u ON u.id = ca.assigned_user_id"
+            " WHERE ca.purpose = :purpose AND ca.is_active = true"
+            + _org_filter +
+            " LIMIT 1"
+        ), _demo_params).fetchone()
 
         if not assignment_result:
             # No assignment configured - return empty slots (no internal details)
@@ -1054,15 +1112,23 @@ async def confirm_website_demo_booking(
 
         from sqlalchemy import text
 
-        # Look up calendar assignment for website_demo purpose
-        assignment_result = db.execute(text("""
-            SELECT ca.id, ca.assigned_user_id, ca.calendly_url, ca.booking_link_id,
-                   u.full_name as user_name, u.email as user_email, u.organization_id as user_org_id
-            FROM calendar_assignments ca
-            LEFT JOIN users u ON u.id = ca.assigned_user_id
-            WHERE ca.purpose = 'website_demo' AND ca.is_active = true
-            LIMIT 1
-        """)).fetchone()
+        # Look up calendar assignment for website_demo purpose (tenant-scoped)
+        _demo_params = {"purpose": "website_demo"}
+        _org_filter = ""
+        if getattr(request, 'organization_id', None):
+            _org_filter = " AND u.organization_id = :org_id"
+            _demo_params["org_id"] = request.organization_id
+
+        assignment_result = db.execute(text(
+            "SELECT ca.id, ca.assigned_user_id, ca.calendly_url, ca.booking_link_id,"
+            "       u.full_name as user_name, u.email as user_email,"
+            "       u.organization_id as user_org_id"
+            " FROM calendar_assignments ca"
+            " LEFT JOIN users u ON u.id = ca.assigned_user_id"
+            " WHERE ca.purpose = :purpose AND ca.is_active = true"
+            + _org_filter +
+            " LIMIT 1"
+        ), _demo_params).fetchone()
 
         if not assignment_result or not assignment_result.assigned_user_id:
             logger.warning("Website demo calendar not configured - no assignment found")

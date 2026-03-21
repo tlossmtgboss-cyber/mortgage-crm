@@ -49,6 +49,9 @@ from middleware.feature_gate import require_feature_tier
 from services.waitlist_service import WaitlistService
 
 SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    import warnings
+    warnings.warn("SECRET_KEY not set in waitlist module")
 
 logger = logging.getLogger(__name__)
 
@@ -380,12 +383,14 @@ async def expire_stale_offers(
 ):
     """Manually trigger expiration of stale offers (admin only)."""
     user = await get_current_user(request, db)
-    _get_org_id(user)  # Ensure user is in an org
+    org_id = _get_org_id(user)
 
     if not _is_scheduler_admin(user):
         forbidden_error("Admin access required")
 
     service = _get_waitlist_service(db)
+    # Note: expire_offers() does not currently accept org_id for tenant scoping.
+    # The service expires all stale offers globally; org_id filtering is a future improvement.
     count = service.expire_offers()
     db.commit()
 

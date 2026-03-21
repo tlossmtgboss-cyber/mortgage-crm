@@ -167,7 +167,8 @@ Data Quality: {data_quality}
                     "role": "user",
                     "content": context
                 }
-            ]
+            ],
+            timeout=30.0,
         )
         llm_time = (time.time() - llm_start) * 1000
         logger.info(f"[REASON] ⏱️ LLM call took {llm_time:.0f}ms (context: {len(context)} chars)")

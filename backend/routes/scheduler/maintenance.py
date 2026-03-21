@@ -117,12 +117,11 @@ async def cleanup_holds_endpoint(
         raise HTTPException(status_code=500, detail="Cleanup failed")
 
     _audit_log(
-        db,
-        user_id=getattr(current_user, "id", None),
-        org_id=org_id,
-        action="slot_hold_cleanup",
-        details={"deleted_count": deleted_count},
+        db, org_id, getattr(current_user, "id", None),
+        "slot_hold_cleanup", "slot_hold",
+        changes={"deleted_count": deleted_count},
     )
+    db.commit()
 
     return {
         "status": "success",

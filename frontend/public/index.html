@@ -86,7 +86,13 @@
         console.error('Global error caught:', event.error);
         const root = document.getElementById('root');
         if (root && (!root.innerHTML || root.innerHTML.trim() === '')) {
-          root.innerHTML = '<div style="padding: 20px; font-family: Arial, sans-serif;"><h1>Application Error</h1><p>An error occurred while loading the application.</p><p style="margin-top: 20px;">Error: ' + (event.error ? event.error.toString() : event.message) + '</p><button onclick="localStorage.clear(); window.location.reload();" style="margin-top: 20px; padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px;">Clear Cache & Reload</button></div>';
+          // Use innerHTML for structure only, then textContent for the error
+          // message to prevent XSS from error strings
+          root.innerHTML = '<div style="padding: 20px; font-family: Arial, sans-serif;"><h1>Application Error</h1><p>An error occurred while loading the application.</p><p id="error-detail" style="margin-top: 20px;"></p><button onclick="localStorage.clear(); window.location.reload();" style="margin-top: 20px; padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px;">Clear Cache & Reload</button></div>';
+          var errorDetail = document.getElementById('error-detail');
+          if (errorDetail) {
+            errorDetail.textContent = 'Error: ' + (event.error ? event.error.toString() : event.message);
+          }
         }
       });
 

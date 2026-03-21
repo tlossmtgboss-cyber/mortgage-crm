@@ -30,6 +30,7 @@ from typing import Dict, List, Optional, Tuple
 import jwt
 from sqlalchemy import and_, text
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +53,18 @@ RECOVERY_BATCH_SIZE = 200
 
 _SECRET_KEY: Optional[str] = None
 
+# SEC-002: Warn if SECRET_KEY is not set
+_SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not _SECRET_KEY:
+    import warnings
+    warnings.warn("SECRET_KEY not set — using empty key (unsafe for production)")
+
 
 def _get_secret_key() -> str:
     """Lazily load SECRET_KEY from environment."""
     global _SECRET_KEY
-    if _SECRET_KEY is None:
-        _SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-not-for-production")
+    if not _SECRET_KEY:
+        _SECRET_KEY = os.getenv("SECRET_KEY", "")
     return _SECRET_KEY
 
 
@@ -151,7 +158,11 @@ def generate_opt_out_token(
     """Generate a signed JWT token for the opt-out link.
 
     Token is valid for 30 days (longer than the recovery sequence).
+    Raises ValueError if SECRET_KEY is not configured.
     """
+    key = _get_secret_key()
+    if not key:
+        raise ValueError("SECRET_KEY is not configured; cannot generate opt-out token")
     payload = {
         "email": email,
         "org_id": organization_id,
@@ -159,18 +170,23 @@ def generate_opt_out_token(
         "purpose": "recovery_opt_out",
         "exp": datetime.now(timezone.utc) + timedelta(days=30),
     }
-    return jwt.encode(payload, _get_secret_key(), algorithm="HS256")
+    return jwt.encode(payload, key, algorithm="HS256")
 
 
 def verify_opt_out_token(token: str) -> Optional[Dict]:
     """Verify and decode an opt-out JWT token.
 
     Returns the decoded payload dict or None if invalid/expired.
+    Returns None if SECRET_KEY is not configured.
     """
+    key = _get_secret_key()
+    if not key:
+        logger.error("SECRET_KEY is not configured; cannot verify opt-out token")
+        return None
     try:
         payload = jwt.decode(
             token,
-            _get_secret_key(),
+            key,
             algorithms=["HS256"],
         )
         if payload.get("purpose") != "recovery_opt_out":
@@ -276,6 +292,7 @@ class NoShowRecoveryService:
             appointment_id=appointment.id,
             step=1,
             reschedule_url=reschedule_url,
+            organization_id=org_id,
         )
         return {"action": "started", "first_step_result": result}
 
@@ -285,6 +302,7 @@ class NoShowRecoveryService:
         appointment_id: int,
         step: int,
         reschedule_url: Optional[str] = None,
+        organization_id: Optional[int] = None,
     ) -> Dict:
         """Execute a single recovery step.
 
@@ -299,21 +317,19 @@ class NoShowRecoveryService:
         _models = self._get_models()
         Appointment = _models["Appointment"]
 
+        filters = [Appointment.id == appointment_id]
+        if organization_id is not None:
+            filters.append(Appointment.organization_id == organization_id)
+
         appointment = db.query(Appointment).filter(
-            Appointment.id == appointment_id
+            and_(*filters)
         ).first()
 
         if not appointment:
             return {"sent": False, "reason": "appointment_not_found"}
 
-        # Re-check: has the appointment been rescheduled or completed?
-        active_statuses = {
-            AppointmentStatus.BOOKED,
-            AppointmentStatus.CONFIRMED,
-            AppointmentStatus.COMPLETED,
-            AppointmentStatus.RESCHEDULED,
-        }
-        if appointment.status in active_statuses:
+        # FUNC-004: If appointment is no longer NO_SHOW, recovery should stop
+        if appointment.status != AppointmentStatus.NO_SHOW:
             logger.info(
                 f"Appointment {appointment_id} is now {appointment.status.value} "
                 "-- stopping recovery sequence"
@@ -382,7 +398,7 @@ class NoShowRecoveryService:
     async def check_and_mark_no_shows(
         self,
         db: Session,
-        organization_id: Optional[int] = None,
+        organization_id: int,
     ) -> Dict:
         """Mark BOOKED appointments as NO_SHOW if past their end time + grace period.
 
@@ -415,9 +431,8 @@ class NoShowRecoveryService:
             ]),
             Appointment.scheduled_end < grace_cutoff,
             Appointment.scheduled_end > lookback,
+            Appointment.organization_id == organization_id,
         ]
-        if organization_id is not None:
-            filters.append(Appointment.organization_id == organization_id)
 
         appointments = (
             db.query(Appointment)
@@ -431,6 +446,7 @@ class NoShowRecoveryService:
 
         detected_ids = []
         recovery_results = []
+        flushed_appointments = []
 
         for appt in appointments:
             previous_status = appt.status.value if appt.status else None
@@ -456,9 +472,39 @@ class NoShowRecoveryService:
             except Exception as e:
                 logger.warning(f"Failed to record status history for appointment {appt.id}: {e}")
 
-            detected_ids.append(appt.id)
+            # NC8 fix: Flush status changes to DB BEFORE sending recovery messages,
+            # so if a recovery message fails, the no-show status is already persisted.
+            # DATA-010: Flush per-appointment to catch StaleDataError from optimistic
+            # locking (version_id_col on Appointment model).
+            try:
+                db.flush()
+                detected_ids.append(appt.id)
+                flushed_appointments.append(appt)
+            except StaleDataError:
+                logger.warning(
+                    f"Appointment {appt.id} was concurrently modified (StaleDataError), skipping"
+                )
+                db.rollback()
+            except Exception as e:
+                logger.error(f"Failed to flush no-show update for appointment {appt.id}: {e}", exc_info=True)
+                db.rollback()
 
-            # Start recovery sequence for this appointment
+        # Commit all flushed no-show status changes so they persist even if
+        # recovery messaging fails or the caller never commits.
+        try:
+            db.commit()
+        except Exception as e:
+            logger.error(f"Failed to commit no-show status updates: {e}", exc_info=True)
+            db.rollback()
+            return {
+                "detected": 0,
+                "appointment_ids": [],
+                "recovery_results": [],
+                "error": f"Commit failed: {e}",
+            }
+
+        # Now send recovery messages with status already committed
+        for appt in flushed_appointments:
             try:
                 result = await self.start_recovery(db, appt)
                 recovery_results.append({
@@ -475,13 +521,6 @@ class NoShowRecoveryService:
                     "recovery": {"action": "error", "error": str(e)},
                 })
 
-        try:
-            db.flush()
-        except Exception as e:
-            logger.error(f"Failed to flush no-show updates: {e}", exc_info=True)
-            db.rollback()
-            return {"detected": 0, "appointment_ids": [], "error": str(e)}
-
         logger.info(f"Detected and marked {len(detected_ids)} no-show appointments")
         return {
             "detected": len(detected_ids),
@@ -492,7 +531,7 @@ class NoShowRecoveryService:
     async def execute_no_show_recovery(
         self,
         db: Session,
-        organization_id: Optional[int] = None,
+        organization_id: int,
     ) -> Dict:
         """Find no-show appointments and execute the next due recovery step.
 
@@ -517,9 +556,8 @@ class NoShowRecoveryService:
             Appointment.status == AppointmentStatus.NO_SHOW,
             Appointment.no_show_at.isnot(None),
             Appointment.no_show_at >= window_start,
+            Appointment.organization_id == organization_id,
         ]
-        if organization_id is not None:
-            filters.append(Appointment.organization_id == organization_id)
 
         appointments = (
             db.query(Appointment)
@@ -654,6 +692,7 @@ class NoShowRecoveryService:
             db,
             appointment_id=appt_id,
             step=next_step_num,
+            organization_id=org_id,
         )
 
         return {
@@ -826,7 +865,8 @@ class NoShowRecoveryService:
         try:
             from database.models.core import User
             user = db.query(User).filter(
-                User.id == appointment.assigned_user_id
+                User.id == appointment.assigned_user_id,
+                User.organization_id == appointment.organization_id,
             ).first()
             if user:
                 return f"{user.first_name or ''} {user.last_name or ''}".strip()
@@ -849,6 +889,20 @@ class NoShowRecoveryService:
         phone = appointment.attendee_phone
         if not phone:
             return {"success": False, "error": "no_phone_number"}
+
+        # COMP-002: TCPA consent check before sending recovery SMS
+        try:
+            from services.scheduler_sms_sender import check_sms_consent
+            can_send, reason = check_sms_consent(phone)
+            if not can_send:
+                logger.info("No-show recovery SMS blocked by TCPA consent: %s", reason)
+                return {"success": False, "error": f"TCPA consent blocked: {reason}"}
+        except ImportError:
+            logger.error("TCPA consent module not available, blocking SMS (fail-closed)")
+            return {"success": False, "error": "TCPA consent module unavailable"}
+        except Exception as e:
+            logger.error("TCPA consent check failed, blocking SMS as fail-safe: %s", e)
+            return {"success": False, "error": "TCPA consent check failed"}
 
         template = SMS_TEMPLATES.get(template_key)
         if not template:
@@ -1081,7 +1135,7 @@ no_show_recovery_service = NoShowRecoveryService()
 
 async def check_and_mark_no_shows(
     db: Session,
-    organization_id: Optional[int] = None,
+    organization_id: int,
 ) -> Dict:
     """Mark past-due BOOKED appointments as NO_SHOW and start recovery.
 
@@ -1090,7 +1144,7 @@ async def check_and_mark_no_shows(
 
     Args:
         db: Active database session.
-        organization_id: Optional filter to process a single org.
+        organization_id: Required org ID for tenant isolation.
 
     Returns:
         Dict with detection results (count, IDs, recovery outcomes).
@@ -1100,7 +1154,7 @@ async def check_and_mark_no_shows(
 
 async def execute_no_show_recovery(
     db: Session,
-    organization_id: Optional[int] = None,
+    organization_id: int,
 ) -> Dict:
     """Execute pending recovery steps for existing no-show appointments.
 
@@ -1109,7 +1163,7 @@ async def execute_no_show_recovery(
 
     Args:
         db: Active database session.
-        organization_id: Optional filter to process a single org.
+        organization_id: Required org ID for tenant isolation.
 
     Returns:
         Dict with execution stats (processed, steps executed, skipped, errors).
@@ -1119,7 +1173,7 @@ async def execute_no_show_recovery(
 
 async def run_no_show_recovery_cycle(
     db: Session,
-    organization_id: Optional[int] = None,
+    organization_id: int,
 ) -> Dict:
     """Main entry point for periodic execution.
 
@@ -1135,7 +1189,7 @@ async def run_no_show_recovery_cycle(
 
     Args:
         db: Active database session.
-        organization_id: Optional filter to process a single org.
+        organization_id: Required org ID for tenant isolation.
 
     Returns:
         Dict with combined results from both phases.

@@ -322,7 +322,7 @@ def extract_borrower_from_subject(subject: str) -> Optional[str]:
     return None
 
 
-def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str, Any]:
+def match_entity(fields: Dict[str, Any], db: Session, user_id: int, organization_id: int = None) -> Dict[str, Any]:
     """Match extracted fields to existing CRM entities
 
     Enhanced matching includes:
@@ -331,6 +331,10 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     - Last name matching for spouse/family identification
     - Email and phone matching for leads
     - Combined first_name + last_name support
+
+    Args:
+        organization_id: Tenant filter. When provided, lead queries are scoped
+                         to this organization to prevent cross-tenant data leakage.
     """
     _ensure_models()
 
@@ -620,7 +624,11 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     # Try phone matching (high confidence)
     if extracted_phone and len(extracted_phone) >= 10:
         logger.info(f"Trying phone match: '{extracted_phone}'")
-        all_leads = db.query(Lead).all()
+        # TENANT-002: Scope lead query to organization to prevent cross-tenant leakage
+        lead_query = db.query(Lead)
+        if organization_id:
+            lead_query = lead_query.filter(Lead.organization_id == organization_id)
+        all_leads = lead_query.all()
         for lead in all_leads:
             if lead.phone:
                 lead_phone = normalize_phone(lead.phone)
@@ -643,7 +651,11 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     if borrower_name:
         logger.info(f"Attempting to match borrower name: '{borrower_name}' (last name: '{borrower_last_name}')")
 
-        all_leads = db.query(Lead).all()
+        # TENANT-002: Scope lead query to organization to prevent cross-tenant leakage
+        lead_name_query = db.query(Lead)
+        if organization_id:
+            lead_name_query = lead_name_query.filter(Lead.organization_id == organization_id)
+        all_leads = lead_name_query.all()
         for lead in all_leads:
             if lead.name:
                 is_match, conf = names_match(borrower_name, lead.name)

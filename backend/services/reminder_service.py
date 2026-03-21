@@ -335,9 +335,9 @@ class ReminderService:
             )
             return consent is not None
         except Exception as e:
-            # Table may not exist in all deployments
-            logger.debug(f"TCPA consent check skipped: {e}")
-            return True
+            # COMP-001: Fail-closed — block SMS when consent check fails
+            logger.error("TCPA_CONSENT_CHECK_FAILURE: blocking SMS as fail-safe: %s", e, exc_info=True)
+            return False
 
     def send_reminder(
         self,

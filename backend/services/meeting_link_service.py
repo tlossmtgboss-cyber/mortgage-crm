@@ -19,7 +19,7 @@ import logging
 import os
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from sqlalchemy import text
@@ -155,7 +155,7 @@ class MeetingLinkService:
                 # Skip expired tokens (they may still be refreshable, but
                 # prefer a non-expired option when available)
                 if expires_at and isinstance(expires_at, datetime):
-                    if expires_at < datetime.utcnow():
+                    if expires_at < datetime.now(timezone.utc):
                         continue
 
                 if provider_name == "zoom":
@@ -226,7 +226,7 @@ class MeetingLinkService:
 
             # Refresh token if expired
             if expires_at and isinstance(expires_at, datetime):
-                if expires_at < datetime.utcnow() and refresh_token:
+                if expires_at < datetime.now(timezone.utc) and refresh_token:
                     token_data = await zoom_client.async_refresh_access_token(
                         refresh_token
                     )
@@ -260,7 +260,7 @@ class MeetingLinkService:
 
             # Create the Zoom meeting
             topic = getattr(appointment, "title", "Perennia AI Meeting") or "Meeting"
-            start_time = getattr(appointment, "scheduled_start", datetime.utcnow())
+            start_time = getattr(appointment, "scheduled_start", datetime.now(timezone.utc))
             duration = getattr(appointment, "duration_minutes", 30) or 30
             tz = getattr(appointment, "timezone", DEFAULT_TIMEZONE) or DEFAULT_TIMEZONE
 
@@ -346,7 +346,7 @@ class MeetingLinkService:
             from services.microsoft_graph import create_event_via_graph, CalendarResult
 
             topic = getattr(appointment, "title", "Perennia AI Meeting") or "Meeting"
-            start_time = getattr(appointment, "scheduled_start", datetime.utcnow())
+            start_time = getattr(appointment, "scheduled_start", datetime.now(timezone.utc))
             end_time = getattr(
                 appointment,
                 "scheduled_end",

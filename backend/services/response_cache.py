@@ -82,6 +82,8 @@ class ResponseCache:
             'has_property': 'property' in str(session_context.get('intent_signals', [])),
             'has_timeline': 'timeline' in str(session_context.get('intent_signals', [])),
             'lo_id': session_context.get('loan_officer_id'),
+            # TENANT-004: Namespace cache by organization to prevent cross-tenant leakage
+            'org_id': session_context.get('organization_id'),
         }
 
         cache_input = f"{json.dumps(context_keys, sort_keys=True)}:{normalized_msg}"

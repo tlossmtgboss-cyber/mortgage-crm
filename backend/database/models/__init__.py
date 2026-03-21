@@ -496,6 +496,15 @@ from .white_label_config import (
 # Smart Docs SLA Configuration & Tracking
 from .doc_sla_config import DocSLAConfig, DocSLATracking
 
+# Lead Assignment Configuration
+from .lead_assignment import (
+    LeadAssignmentConfig,
+    LeadAssignmentRule,
+    LeadAssignmentPool,
+    LeadAssignmentException,
+    LeadAssignmentAuditLog,
+)
+
 # Smart Docs Document Routing (Enterprise)
 from .routing_rule import (
     RoutingRule,
@@ -555,14 +564,6 @@ from .appointment_survey import AppointmentSurvey
 
 # Appointment locations (saved meeting locations for scheduling)
 from .appointment_location import AppointmentLocation
-
-# A/B testing for public booking pages
-from .ab_test import (
-    ABTest,
-    ABTestResult,
-    ABTestStatus,
-    ABTestElementType,
-)
 
 # Cancellation Policy (per-org appointment cancellation rules)
 from .cancellation_policy import CancellationPolicy
@@ -1093,6 +1094,15 @@ __all__ = [
     # =====================
     "DocSLAConfig",
     "DocSLATracking",
+
+    # =====================
+    # Lead Assignment
+    # =====================
+    "LeadAssignmentConfig",
+    "LeadAssignmentRule",
+    "LeadAssignmentPool",
+    "LeadAssignmentException",
+    "LeadAssignmentAuditLog",
 
     # =====================
     # Smart Docs Document Routing

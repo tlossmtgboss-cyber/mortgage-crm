@@ -1,9 +1,7 @@
 # backend/integrations/sms_webhook_handler.py
-# Telnyx webhook endpoint handler - verifies signatures and routes events
+# Telnyx webhook endpoint handler - verifies Ed25519 signatures and routes events
 
-import hashlib
-import hmac
-import json
+import base64
 import logging
 import os
 from typing import Optional
@@ -12,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from .sms_delivery_tracker import process_telnyx_webhook, update_delivery_status
 from .sms_compliance_gate import handle_inbound_keyword
-from .sms_retry_queue import mark_failed
 
 logger = logging.getLogger(__name__)
 
@@ -22,29 +19,79 @@ def verify_telnyx_signature(
     signature_header: str,
     timestamp_header: str,
     public_key: Optional[str] = None,
+    tolerance: int = 300,
 ) -> bool:
     """
-    Verify Telnyx webhook signature using HMAC-SHA256.
-    Telnyx signs webhooks with: HMAC-SHA256(timestamp + '.' + payload_body, public_key)
+    Verify Telnyx webhook signature using Ed25519 (API V2).
+
+    Telnyx signs every webhook with Ed25519 public-key cryptography.
+    Headers: telnyx-signature-ed25519, telnyx-timestamp.
+    Signed payload: {timestamp}|{json_payload}
+
+    Args:
+        payload_bytes: Raw request body bytes.
+        signature_header: Value of telnyx-signature-ed25519 header (base64).
+        timestamp_header: Value of telnyx-timestamp header (unix seconds).
+        public_key: Ed25519 public key (base64). Falls back to TELNYX_PUBLIC_KEY env.
+        tolerance: Max age in seconds before rejecting stale webhooks (default 5 min).
+
     Returns True if signature is valid.
     """
     pub_key = public_key or os.environ.get("TELNYX_PUBLIC_KEY", "")
     if not pub_key:
-        logger.warning("TELNYX_PUBLIC_KEY not set - skipping signature verification")
-        return True  # Allow through if key not configured (dev mode)
+        env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+        if env in ("production", "staging"):
+            logger.error("TELNYX_PUBLIC_KEY not set in production - rejecting webhook")
+            return False
+        logger.warning("TELNYX_PUBLIC_KEY not set - skipping verification (dev mode)")
+        return True
 
+    # Try using the telnyx SDK's built-in verification first
     try:
-        # Build the signed payload: timestamp + '.' + body
-        signed_payload = (timestamp_header + "." + payload_bytes.decode("utf-8")).encode()
-        expected_sig = hmac.new(
-            pub_key.encode(),
-            signed_payload,
-            hashlib.sha256,
-        ).hexdigest()
-
-        return hmac.compare_digest(expected_sig, signature_header)
+        import telnyx
+        telnyx.Webhook.construct_event(
+            payload_bytes.decode("utf-8"),
+            signature_header,
+            timestamp_header,
+            tolerance=tolerance,
+        )
+        return True
+    except telnyx.error.SignatureVerificationError:
+        logger.warning("Telnyx webhook signature verification FAILED (SDK)")
+        return False
+    except ImportError:
+        pass  # telnyx SDK not available, fall through to manual verification
     except Exception as e:
-        logger.error(f"Signature verification error: {e}")
+        logger.debug(f"SDK verification failed, trying manual: {e}")
+
+    # Manual Ed25519 verification fallback
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+        import time
+
+        # Reject stale webhooks
+        try:
+            ts = int(timestamp_header)
+            if abs(time.time() - ts) > tolerance:
+                logger.warning("Telnyx webhook timestamp outside tolerance window")
+                return False
+        except (ValueError, TypeError):
+            logger.warning("Invalid telnyx-timestamp header")
+            return False
+
+        # Build signed payload: timestamp|body
+        signed_payload = f"{timestamp_header}|{payload_bytes.decode('utf-8')}".encode()
+
+        # Decode the base64 public key and signature
+        pub_key_bytes = base64.b64decode(pub_key)
+        signature_bytes = base64.b64decode(signature_header)
+
+        # Load the Ed25519 public key
+        public_key_obj = Ed25519PublicKey.from_public_bytes(pub_key_bytes)
+        public_key_obj.verify(signature_bytes, signed_payload)
+        return True
+    except Exception as e:
+        logger.error(f"Ed25519 signature verification error: {e}")
         return False
 
 
@@ -60,11 +107,18 @@ def handle_webhook(
     Main webhook handler - routes Telnyx webhook events to appropriate handlers.
     Returns dict with processing result.
     """
-    # Signature verification
-    if not skip_verification and raw_body and signature and timestamp:
-        if not verify_telnyx_signature(raw_body, signature, timestamp):
-            logger.warning("Telnyx webhook signature verification FAILED")
-            return {"status": "rejected", "reason": "invalid_signature"}
+    # Signature verification — fail-closed when headers are present
+    if not skip_verification:
+        if raw_body and signature and timestamp:
+            if not verify_telnyx_signature(raw_body, signature, timestamp):
+                logger.warning("Telnyx webhook signature verification FAILED")
+                return {"status": "rejected", "reason": "invalid_signature"}
+        elif raw_body:
+            # Headers missing but body present — reject in production
+            env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+            if env in ("production", "staging"):
+                logger.warning("Webhook missing signature headers — rejecting")
+                return {"status": "rejected", "reason": "missing_signature_headers"}
 
     event_type = payload.get("data", {}).get("event_type", "")
     logger.info(f"Telnyx webhook received: {event_type}")
@@ -102,17 +156,33 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
         is_keyword, response_msg = handle_inbound_keyword(db, from_phone, body)
 
         if is_keyword:
-            # Auto-respond to keyword
-            _send_auto_response(from_phone, response_msg)
+            # Commit the opt-out/opt-in DB changes (compliance gate only flushes)
+            committed = False
+            try:
+                db.commit()
+                committed = True
+            except Exception as commit_err:
+                db.rollback()
+                logger.error(f"Failed to commit keyword action: {commit_err}")
+            # Only auto-respond if opt-out/opt-in was persisted successfully
+            if committed:
+                _send_auto_response(from_phone, response_msg)
+            else:
+                logger.error(f"Skipping auto-response — keyword action not persisted for {from_phone}")
             return {
-                "status": "processed",
-                "action": "keyword_handled",
+                "status": "processed" if committed else "error",
+                "action": "keyword_handled" if committed else "commit_failed",
                 "keyword": body.upper(),
                 "from": from_phone,
             }
 
         # Store inbound message for conversation threading
         _store_inbound_message(db, from_phone, body, record)
+        try:
+            db.commit()
+        except Exception as commit_err:
+            db.rollback()
+            logger.error(f"Failed to commit inbound message: {commit_err}")
 
         return {
             "status": "processed",
@@ -121,7 +191,7 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
         }
     except Exception as e:
         logger.error(f"Inbound message handler error: {e}")
-        return {"status": "error", "reason": str(e)}
+        return {"status": "error", "reason": "inbound_processing_failed"}
 
 
 def _handle_message_failed(db: Session, payload: dict) -> dict:
@@ -144,7 +214,7 @@ def _handle_message_failed(db: Session, payload: dict) -> dict:
         }
     except Exception as e:
         logger.error(f"Failed message handler error: {e}")
-        return {"status": "error", "reason": str(e)}
+        return {"status": "error", "reason": "failed_event_processing_error"}
 
 
 def _store_inbound_message(db: Session, from_phone: str, body: str, record: dict):
@@ -163,25 +233,37 @@ def _store_inbound_message(db: Session, from_phone: str, body: str, record: dict
                 "msg_id": record.get("id"),
             },
         )
-        db.commit()
+        db.flush()
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to store inbound message: {e}")
 
 
 def _send_auto_response(to_phone: str, message: str):
-    """Send auto-response to keyword via Telnyx (fire-and-forget)."""
+    """Send auto-response to keyword via Telnyx REST API (fire-and-forget).
+
+    Uses direct HTTP POST instead of setting telnyx.api_key globally
+    to avoid race conditions in multi-worker deployments.
+    """
     try:
-        import telnyx
+        import requests
         api_key = os.environ.get("TELNYX_API_KEY")
         from_phone = os.environ.get("TELNYX_PHONE_NUMBER")
+        profile_id = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "")
         if not api_key or not from_phone:
             return
-        telnyx.api_key = api_key
-        telnyx.Message.create(
-            from_=from_phone,
-            to=to_phone,
-            text=message,
+        requests.post(
+            "https://api.telnyx.com/v2/messages",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": from_phone,
+                "to": to_phone,
+                "text": message,
+                "messaging_profile_id": profile_id,
+            },
+            timeout=10,
         )
     except Exception as e:
         logger.error(f"Auto-response send failed: {e}")

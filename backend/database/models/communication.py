@@ -40,6 +40,7 @@ class Activity(Base):
         Index('ix_activities_lead_created', 'lead_id', 'created_at'),
         Index('ix_activities_organization_id', 'organization_id'),
         Index('ix_activities_org_created', 'organization_id', 'created_at'),
+        {'extend_existing': True},
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -172,6 +173,7 @@ class SMSConversation(Base):
         Index('ix_sms_conv_user', 'user_id'),
         Index('ix_sms_conv_active', 'is_active'),
         Index('ix_sms_conversations_organization_id', 'organization_id'),
+        {'extend_existing': True},
     )
 
     id = Column(Integer, primary_key=True, index=True)

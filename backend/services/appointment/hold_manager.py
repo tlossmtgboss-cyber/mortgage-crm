@@ -66,17 +66,17 @@ def hold_slot(
     DbSlotHold = get_model("SlotHold")
     if DbSlotHold:
         db_hold = DbSlotHold(
-            hold_id=hold_id,
             organization_id=organization_id,
-            user_id=lo_id,
+            lo_id=lo_id,
             start_time=start_time,
             end_time=end_time,
             expires_at=expires_at,
-            source=source,
+            held_by=source,
             status="active",
         )
         db.add(db_hold)
         db.flush()
+        hold_id = db_hold.id  # Use the DB-generated integer PK
     else:
         logger.error("SlotHold model not available -- hold not persisted")
 
@@ -108,7 +108,7 @@ def release_hold(
         return False
 
     hold = db.query(DbSlotHold).filter(
-        DbSlotHold.hold_id == hold_id,
+        DbSlotHold.id == hold_id,
         DbSlotHold.organization_id == organization_id,
         DbSlotHold.status == "active",
     ).first()
@@ -135,7 +135,7 @@ def slot_conflicts_with_holds(
 
     now = datetime.now(timezone.utc)
     conflict = db.query(DbSlotHold).filter(
-        DbSlotHold.user_id == lo_id,
+        DbSlotHold.lo_id == lo_id,
         DbSlotHold.organization_id == organization_id,
         DbSlotHold.status == "active",
         DbSlotHold.expires_at > now,
@@ -158,7 +158,7 @@ def release_holds_for_slot(
         return 0
 
     overlapping = db.query(DbSlotHold).filter(
-        DbSlotHold.user_id == lo_id,
+        DbSlotHold.lo_id == lo_id,
         DbSlotHold.organization_id == organization_id,
         DbSlotHold.status == "active",
         DbSlotHold.start_time < end_time,

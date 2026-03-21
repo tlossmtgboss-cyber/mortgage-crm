@@ -599,7 +599,7 @@ class RecurringAvailabilityService:
                             "end": a.scheduled_end,
                         })
         except Exception as e:
-            logger.debug(f"Could not load appointments for availability: {e}")
+            logger.warning(f"Could not load appointments for availability: {e}")
 
         return appointments
 

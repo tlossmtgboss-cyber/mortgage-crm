@@ -273,14 +273,20 @@ class SchedulerService:
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
-        """Send reminders for incomplete applications."""
+        """Send reminders for incomplete applications.
+
+        TENANT-N10: This background job intentionally queries all organizations in a single
+        batch for efficiency. Per-application processing is wrapped in try/except so one
+        org's failure doesn't affect others. Full per-org isolation would require significant
+        refactoring of the background job system.
+        """
         logger.info("Running application reminder job")
 
         session = get_db_session()
         notifier = get_notification_service()
 
         try:
-            # Find incomplete applications that need reminders
+            # Find incomplete applications that need reminders (cross-org batch query)
             query = text("""
                 SELECT
                     ba.id,
@@ -348,11 +354,26 @@ class SchedulerService:
 
                     # Send SMS on second and subsequent reminders
                     if reminder_count >= 1 and borrower_phone:
-                        notifier.send_reminder_sms(
-                            borrower_phone=borrower_phone,
-                            borrower_name=borrower_name,
-                            resume_link=resume_link,
-                        )
+                        # COMP-009: TCPA consent check before SMS
+                        sms_allowed = True
+                        try:
+                            from services.scheduler_sms_sender import check_sms_consent
+                            can_send, reason = check_sms_consent(borrower_phone)
+                            if not can_send:
+                                logger.info(f"SMS reminder blocked by TCPA consent for app {app_id}: {reason}")
+                                sms_allowed = False
+                        except ImportError:
+                            pass  # Module may not exist yet
+                        except Exception as e:
+                            logger.error(f"TCPA consent check failed for app {app_id}, blocking SMS: {e}")
+                            sms_allowed = False
+
+                        if sms_allowed:
+                            notifier.send_reminder_sms(
+                                borrower_phone=borrower_phone,
+                                borrower_name=borrower_name,
+                                resume_link=resume_link,
+                            )
 
                     # Update reminder count
                     update_query = text("""
@@ -367,7 +388,9 @@ class SchedulerService:
                     sent_count += 1
                     logger.info(f"Sent reminder #{reminder_count + 1} for application {app_id}")
 
-                except SQLAlchemyError as e:
+                except Exception as e:
+                    # TENANT-N10: Catch all exceptions per-application so one org's
+                    # failure doesn't prevent reminders for other orgs
                     logger.error(f"Failed to send reminder for application {app_dict.get('id')}: {e}")
                     session.rollback()
 
@@ -459,6 +482,10 @@ class SchedulerService:
             # =====================================================================
             # PART 1: Legacy appointments table (single reminder)
             # =====================================================================
+            # TENANT-N11: The legacy `appointments` table predates multi-tenancy and
+            # has no organization_id column. It cannot be filtered by tenant. This is
+            # acceptable because the table is from the AI receptionist era and will be
+            # deprecated once all data is migrated to scheduler_appointments.
             # Check if legacy appointments table exists
             legacy_table_check = session.execute(text("""
                 SELECT EXISTS (
@@ -669,21 +696,36 @@ class SchedulerService:
 
             # Send SMS reminder
             if appt_dict.get("attendee_phone"):
+                # COMP-009: TCPA consent check before SMS
+                sms_allowed = True
                 try:
-                    sms_result = notifier.send_appointment_reminder_sms(
-                        borrower_phone=appt_dict["attendee_phone"],
-                        borrower_name=appt_dict.get("attendee_name", "there"),
-                        appointment_time=appt_dict["scheduled_start"],
-                        lo_name=lo_name,
-                        meeting_link=appt_dict.get("video_link"),
-                    )
-                    sms_sent = sms_result.get("success", False)
-                    if sms_sent:
-                        logger.info(f"SMS reminder sent for appointment {appointment_id}: {sms_result}")
-                    else:
-                        logger.error(f"SMS reminder failed for appointment {appointment_id}: {sms_result}")
+                    from services.scheduler_sms_sender import check_sms_consent
+                    can_send, reason = check_sms_consent(appt_dict["attendee_phone"])
+                    if not can_send:
+                        logger.info(f"SMS reminder blocked by TCPA consent for appointment {appointment_id}: {reason}")
+                        sms_allowed = False
+                except ImportError:
+                    pass  # Module may not exist yet
                 except Exception as e:
-                    logger.error(f"Failed to send SMS reminder for appointment {appointment_id}: {e}")
+                    logger.error(f"TCPA consent check failed for appointment {appointment_id}, blocking SMS: {e}")
+                    sms_allowed = False
+
+                if sms_allowed:
+                    try:
+                        sms_result = notifier.send_appointment_reminder_sms(
+                            borrower_phone=appt_dict["attendee_phone"],
+                            borrower_name=appt_dict.get("attendee_name", "there"),
+                            appointment_time=appt_dict["scheduled_start"],
+                            lo_name=lo_name,
+                            meeting_link=appt_dict.get("video_link"),
+                        )
+                        sms_sent = sms_result.get("success", False)
+                        if sms_sent:
+                            logger.info(f"SMS reminder sent for appointment {appointment_id}: {sms_result}")
+                        else:
+                            logger.error(f"SMS reminder failed for appointment {appointment_id}: {sms_result}")
+                    except Exception as e:
+                        logger.error(f"Failed to send SMS reminder for appointment {appointment_id}: {e}")
 
             # Record the reminder in scheduler_reminders table
             if email_sent or sms_sent:
@@ -874,30 +916,45 @@ class SchedulerService:
 
             # Send SMS reminder using the ICS-capable scheduler_email_service
             if appt_dict.get("attendee_phone"):
+                # COMP-009: TCPA consent check before SMS
+                sms_allowed = True
                 try:
-                    from scheduler_email_service import send_appointment_reminder_sms as sched_reminder_sms
-                    sms_result = sched_reminder_sms(
-                        attendee_phone=appt_dict["attendee_phone"],
-                        attendee_name=appt_dict.get("attendee_name", "there"),
-                        appointment_date=appointment_date,
-                        appointment_time=appointment_time,
-                        hours_before=hours_before,
-                        team_member_name=lo_name,
-                    )
-                    sms_sent = sms_result.get("success", False)
-                    if sms_sent:
-                        logger.info(f"SMS reminder sent for chat appointment {appointment_id}")
+                    from services.scheduler_sms_sender import check_sms_consent
+                    can_send, reason = check_sms_consent(appt_dict["attendee_phone"])
+                    if not can_send:
+                        logger.info(f"SMS reminder blocked by TCPA consent for chat appointment {appointment_id}: {reason}")
+                        sms_allowed = False
                 except ImportError:
-                    sms_result = notifier.send_appointment_reminder_sms(
-                        borrower_phone=appt_dict["attendee_phone"],
-                        borrower_name=appt_dict.get("attendee_name", "there"),
-                        appointment_time=scheduled_start,
-                        lo_name=lo_name,
-                        meeting_link=None,
-                    )
-                    sms_sent = sms_result.get("success", False)
+                    pass  # Module may not exist yet
                 except Exception as e:
-                    logger.error(f"Failed to send SMS reminder for chat appointment {appointment_id}: {e}")
+                    logger.error(f"TCPA consent check failed for chat appointment {appointment_id}, blocking SMS: {e}")
+                    sms_allowed = False
+
+                if sms_allowed:
+                    try:
+                        from scheduler_email_service import send_appointment_reminder_sms as sched_reminder_sms
+                        sms_result = sched_reminder_sms(
+                            attendee_phone=appt_dict["attendee_phone"],
+                            attendee_name=appt_dict.get("attendee_name", "there"),
+                            appointment_date=appointment_date,
+                            appointment_time=appointment_time,
+                            hours_before=hours_before,
+                            team_member_name=lo_name,
+                        )
+                        sms_sent = sms_result.get("success", False)
+                        if sms_sent:
+                            logger.info(f"SMS reminder sent for chat appointment {appointment_id}")
+                    except ImportError:
+                        sms_result = notifier.send_appointment_reminder_sms(
+                            borrower_phone=appt_dict["attendee_phone"],
+                            borrower_name=appt_dict.get("attendee_name", "there"),
+                            appointment_time=scheduled_start,
+                            lo_name=lo_name,
+                            meeting_link=None,
+                        )
+                        sms_sent = sms_result.get("success", False)
+                    except Exception as e:
+                        logger.error(f"Failed to send SMS reminder for chat appointment {appointment_id}: {e}")
 
             # Record the reminder
             if email_sent or sms_sent:
@@ -1174,14 +1231,34 @@ class SchedulerService:
             session.close()
 
     async def _run_no_show_detection(self, session) -> Dict:
-        """Async helper: detect new no-shows and start recovery sequences."""
+        """Async helper: detect new no-shows per-org for tenant isolation."""
         from services.no_show_recovery import no_show_recovery_service
-        return await no_show_recovery_service.check_and_mark_no_shows(session)
+        from sqlalchemy import text as sa_text
+        org_ids = [
+            row[0] for row in
+            session.execute(sa_text("SELECT DISTINCT organization_id FROM scheduler_appointments WHERE status IN ('booked','confirmed','reminded')")).fetchall()
+        ]
+        combined = {"detected": 0, "appointment_ids": []}
+        for org_id in org_ids:
+            result = await no_show_recovery_service.check_and_mark_no_shows(session, org_id)
+            combined["detected"] += result.get("detected", 0)
+            combined["appointment_ids"].extend(result.get("appointment_ids", []))
+        return combined
 
     async def _run_no_show_follow_up(self, session) -> Dict:
-        """Async helper: execute pending recovery steps for existing no-shows."""
+        """Async helper: execute pending recovery steps per-org for tenant isolation."""
         from services.no_show_recovery import no_show_recovery_service
-        return await no_show_recovery_service.execute_no_show_recovery(session)
+        from sqlalchemy import text as sa_text
+        org_ids = [
+            row[0] for row in
+            session.execute(sa_text("SELECT DISTINCT organization_id FROM scheduler_appointments WHERE status = 'no_show'")).fetchall()
+        ]
+        combined = {"processed": 0, "steps_executed": 0, "skipped": 0, "errors": 0}
+        for org_id in org_ids:
+            result = await no_show_recovery_service.execute_no_show_recovery(session, org_id)
+            for key in combined:
+                combined[key] += result.get(key, 0)
+        return combined
 
     # =========================================================================
     # SLOT HOLD CLEANUP METHODS
@@ -1235,15 +1312,25 @@ class SchedulerService:
             cutoff = datetime.now() - timedelta(hours=1)
             max_auto_retries = 1  # Only auto-retry once; manual retry for further attempts
 
-            # Phase 1: Find dead-lettered deliveries eligible for auto-retry
+            # DATA-N02: Phase 1 — Find dead-lettered deliveries eligible for auto-retry.
+            # Join to WebhookSubscription to ensure we only process deliveries belonging
+            # to active subscriptions (with valid organization_id). This is a cross-org
+            # batch job; deliveries are processed per-subscription which inherently
+            # scopes to the subscription's organization.
             eligible = (
                 session.query(WebhookDeliveryLog)
+                .join(
+                    WebhookSubscription,
+                    WebhookDeliveryLog.subscription_id == WebhookSubscription.id,
+                )
                 .filter(
                     WebhookDeliveryLog.status == "failed",
                     WebhookDeliveryLog.dead_letter_at.isnot(None),
                     WebhookDeliveryLog.dead_letter_at < cutoff,
                     WebhookDeliveryLog.attempt_number <= 3,  # Original 3 attempts exhausted
+                    WebhookSubscription.organization_id.isnot(None),
                 )
+                .order_by(WebhookSubscription.organization_id)
                 .limit(50)
                 .all()
             )
@@ -1300,8 +1387,11 @@ class SchedulerService:
                     delivery.error_message = f"Auto-retry error: {str(e)[:200]}"
                     retried += 1
 
-            # Phase 2: Circuit breaker — disable subscriptions with >10 consecutive failures
-            # Find subscriptions where the last 10 deliveries all failed
+            # Phase 2: Circuit breaker — disable subscriptions with >10 consecutive failures.
+            # DATA-N03: This intentionally scans ALL organizations for circuit breaker
+            # purposes. It is a system-level health check — an unhealthy subscription in
+            # any org should be disabled to preserve delivery resources and prevent
+            # cascading timeouts across the webhook delivery pipeline.
             unhealthy_subs = (
                 session.query(WebhookSubscription.id)
                 .filter(

@@ -21,6 +21,12 @@ const CalendarSearch = lazy(() => import('../components/calendar/CalendarSearch'
 const KeyboardShortcutsHelp = lazy(() => import('../components/calendar/KeyboardShortcutsHelp'));
 const CalendarTour = lazy(() => import('../components/calendar/setup/CalendarTour'));
 
+// Lazy load dashboard views (only rendered when selected)
+const CalendarAnalyticsDashboard = lazy(() => import('../components/calendar/CalendarAnalyticsDashboard'));
+const NoShowRecoveryDashboard = lazy(() => import('../components/calendar/NoShowRecoveryDashboard'));
+const AppointmentOutcomeDashboard = lazy(() => import('../components/calendar/AppointmentOutcomeDashboard'));
+const WebhookHealthDashboard = lazy(() => import('../components/calendar/WebhookHealthDashboard'));
+
 // Feature flags
 const hasCalendarTour = true;
 const hasKeyboardShortcuts = true;
@@ -142,9 +148,9 @@ function Calendar() {
 
     try {
       setLoading(true);
-      // Fetch a wide window around currentDate so sidebar + all views have data
-      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 6, 1);
-      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 7, 0);
+      // PERF-004: Fetch 3-month window around currentDate (prev month through next month)
+      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 2, 0);
       const response = await unifiedCalendarAPI.getAll({
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
@@ -587,7 +593,23 @@ function Calendar() {
   // MAIN VIEW DISPATCH
   // ══════════════════════════════════════════════════════════
 
+  const isDashboardView = ['analytics', 'no-shows', 'outcomes', 'webhooks'].includes(view);
+
   const renderMainView = () => {
+    // Dashboard views don't need event loading
+    if (view === 'analytics') {
+      return <Suspense fallback={<div className="loading">Loading analytics...</div>}><CalendarAnalyticsDashboard /></Suspense>;
+    }
+    if (view === 'no-shows') {
+      return <Suspense fallback={<div className="loading">Loading no-show data...</div>}><NoShowRecoveryDashboard /></Suspense>;
+    }
+    if (view === 'outcomes') {
+      return <Suspense fallback={<div className="loading">Loading outcomes...</div>}><AppointmentOutcomeDashboard /></Suspense>;
+    }
+    if (view === 'webhooks') {
+      return <Suspense fallback={<div className="loading">Loading webhook health...</div>}><WebhookHealthDashboard /></Suspense>;
+    }
+
     if (loading) {
       return <div className="loading">Loading events...</div>;
     }
@@ -668,17 +690,19 @@ function Calendar() {
       )}
 
       <div className="calendar-content">
-        <OperationalSidebar
-          sortedEvents={sortedEvents}
-          onAddClick={openAddModal}
-          onEventClick={handleEditAppointment}
-          onDeleteEvent={handleDeleteEvent}
-          formatEventTime={formatEventTime}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+        {!isDashboardView && (
+          <OperationalSidebar
+            sortedEvents={sortedEvents}
+            onAddClick={openAddModal}
+            onEventClick={handleEditAppointment}
+            onDeleteEvent={handleDeleteEvent}
+            formatEventTime={formatEventTime}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+        )}
 
-        <div className="calendar-main">
+        <div className={isDashboardView ? 'calendar-main calendar-main--full-width' : 'calendar-main'}>
           {renderMainView()}
         </div>
       </div>

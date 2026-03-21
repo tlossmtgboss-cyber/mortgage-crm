@@ -105,6 +105,15 @@ def register_settings_routes(app, get_db, get_current_user, get_current_user_fle
     except Exception as e:
         logger.warning(f"Application Slides Settings routes not loaded: {e}")
 
+    # Lead Assignment Configuration routes
+    try:
+        from routes.lead_assignment_routes import router as lead_assignment_router, set_dependencies as set_lead_assign_deps
+        set_lead_assign_deps(User, get_current_user, get_db)
+        app.include_router(lead_assignment_router, tags=["Lead Assignment"])
+        logger.info("Lead Assignment routes loaded")
+    except Exception as e:
+        logger.warning(f"Lead Assignment routes not loaded: {e}")
+
     # Pre-Approval Letter Settings routes
     pre_approval_letter_settings_error = None
     try:

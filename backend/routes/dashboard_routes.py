@@ -615,7 +615,10 @@ async def get_dashboard(
         return cached_data
 
     # Organization-scoped filtering (Enterprise Readiness Check 9.5-9.7)
+    # TENANT-008: Require organization context — dashboard must never return unscoped data
     org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
 
     # Branch-level access control (Enterprise Readiness Check 9.6)
     # Since Lead/Loan models don't have branch_id, we filter via User.branch_id

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy - Perennia AI</title>
+<meta name="description" content="Perennia AI Privacy Policy. Learn how we collect, use, and protect your personal information.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.perenniaai.com/privacy-policy">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy: #1a365d;
+  --navy-light: #2a4a7f;
+  --navy-dark: #0f2440;
+  --teal: #319795;
+  --teal-light: #4fd1c5;
+  --gray-50: #f7fafc;
+  --gray-100: #edf2f7;
+  --gray-200: #e2e8f0;
+  --gray-300: #cbd5e0;
+  --gray-400: #a0aec0;
+  --gray-500: #718096;
+  --gray-600: #4a5568;
+  --gray-700: #2d3748;
+  --gray-800: #1a202c;
+  --white: #ffffff;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --transition: all .25s ease;
+}
+
+html { scroll-behavior: smooth; font-size: 16px; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--gray-700);
+  background: var(--gray-50);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* NAV */
+.nav-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--navy-dark);
+  border-bottom: 2px solid var(--teal);
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  max-width: 1200px; margin: 0 auto; padding: 12px 24px;
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 1.25rem; font-weight: 700; color: var(--white);
+  text-decoration: none;
+}
+.nav-logo-icon {
+  width: 36px; height: 36px; background: var(--teal); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: white; font-weight: 800;
+}
+.nav-actions { display: flex; align-items: center; gap: 10px; }
+.btn-login {
+  color: var(--gray-300); text-decoration: none; padding: 7px 16px;
+  border-radius: 6px; font-size: .82rem; font-weight: 600;
+  transition: var(--transition); border: 1px solid rgba(255,255,255,.2);
+  background: transparent;
+}
+.btn-login:hover { color: var(--white); background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.4); }
+
+/* CONTENT */
+.page-content {
+  max-width: 860px;
+  margin: 48px auto;
+  padding: 0 24px;
+}
+.content-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
+  padding: 48px;
+}
+.content-card h1 {
+  font-size: 2.2rem;
+  color: var(--navy);
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+.last-updated {
+  color: var(--gray-500);
+  font-size: .9rem;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.policy-section {
+  margin-bottom: 32px;
+}
+.policy-section h2 {
+  font-size: 1.3rem;
+  color: var(--gray-800);
+  font-weight: 700;
+  margin-bottom: 12px;
+  padding-top: 4px;
+}
+.policy-section h3 {
+  font-size: 1.05rem;
+  color: var(--gray-600);
+  font-weight: 600;
+  margin: 16px 0 8px;
+}
+.policy-section p {
+  color: var(--gray-600);
+  line-height: 1.75;
+  margin-bottom: 12px;
+}
+.policy-section ul {
+  margin: 8px 0 16px 24px;
+  color: var(--gray-600);
+  line-height: 1.75;
+}
+.policy-section ul li {
+  margin-bottom: 6px;
+}
+.policy-section ul li strong {
+  color: var(--gray-700);
+}
+.contact-box {
+  background: var(--gray-50);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-top: 12px;
+  border-left: 4px solid var(--teal);
+}
+.contact-box p {
+  margin-bottom: 4px;
+  color: var(--gray-600);
+}
+.contact-box p:last-child { margin-bottom: 0; }
+.back-link {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--gray-200);
+  text-align: center;
+}
+.back-link a {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--teal); text-decoration: none; font-weight: 600;
+  padding: 10px 20px; border-radius: 6px;
+  transition: var(--transition);
+}
+.back-link a:hover { background: var(--gray-50); color: var(--navy); }
+
+/* FOOTER */
+.footer {
+  background: var(--navy-dark); color: var(--gray-400);
+  padding: 40px 24px 32px; font-size: .85rem;
+  margin-top: 48px;
+}
+.footer-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 16px;
+}
+.footer-copyright { color: var(--gray-500); font-size: .8rem; }
+.footer-legal { display: flex; gap: 24px; }
+.footer-legal a {
+  color: var(--gray-500); text-decoration: none; font-size: .8rem;
+  transition: var(--transition);
+}
+.footer-legal a:hover { color: var(--gray-300); }
+
+@media (max-width: 768px) {
+  .content-card { padding: 32px 24px; }
+  .content-card h1 { font-size: 1.75rem; }
+  .policy-section h2 { font-size: 1.15rem; }
+  .page-content { margin: 24px auto; }
+  .footer-inner { flex-direction: column; text-align: center; }
+}
+
+@media print {
+  .nav-bar, .footer { display: none; }
+  .content-card { box-shadow: none; padding: 0; }
+  .page-content { margin: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav-bar">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <div class="nav-logo-icon">P</div>
+      Perennia AI
+    </a>
+    <div class="nav-actions">
+      <a href="https://app.perenniaai.com/login" class="btn-login">Log In</a>
+    </div>
+  </div>
+</nav>
+
+<!-- CONTENT -->
+<main class="page-content">
+  <div class="content-card">
+    <h1>Privacy Policy</h1>
+    <p class="last-updated">Last Updated: March 20, 2026</p>
+
+    <section class="policy-section">
+      <h2>1. Introduction</h2>
+      <p>Perennia AI ("Company," "we," "us," or "our") is committed to protecting your privacy and the security of your personal information. This Privacy Policy describes how we collect, use, disclose, and safeguard your information when you use our mortgage customer relationship management platform and related services (collectively, the "Services").</p>
+      <p>By accessing or using our Services, you agree to this Privacy Policy. If you do not agree with the terms of this Privacy Policy, please do not access or use our Services.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>2. Information We Collect</h2>
+      <h3>2.1 Personal Information</h3>
+      <p>We may collect the following types of personal information:</p>
+      <ul>
+        <li><strong>Identity Information:</strong> Name, date of birth, Social Security Number (SSN), driver's license number, and government-issued identification</li>
+        <li><strong>Contact Information:</strong> Email address, phone number, mailing address, and residential address</li>
+        <li><strong>Financial Information:</strong> Income details, employment information, bank account information, credit history, tax returns, and other financial documents</li>
+        <li><strong>Property Information:</strong> Property addresses, property values, and mortgage details</li>
+        <li><strong>Account Information:</strong> Username, password, and account preferences</li>
+      </ul>
+
+      <h3>2.2 Automatically Collected Information</h3>
+      <p>When you use our Services, we automatically collect:</p>
+      <ul>
+        <li>Device information (browser type, operating system, device identifiers)</li>
+        <li>IP address and geolocation data</li>
+        <li>Usage data (pages viewed, features used, time spent on the platform)</li>
+        <li>Cookies and similar tracking technologies</li>
+      </ul>
+    </section>
+
+    <section class="policy-section">
+      <h2>3. How We Use Your Information</h2>
+      <p>We use the information we collect to:</p>
+      <ul>
+        <li>Provide, maintain, and improve our Services</li>
+        <li>Process mortgage applications and facilitate loan transactions</li>
+        <li>Verify your identity and prevent fraud</li>
+        <li>Communicate with you about your account, transactions, and our Services</li>
+        <li>Comply with legal and regulatory requirements</li>
+        <li>Analyze usage patterns to enhance user experience</li>
+        <li>Provide customer support and respond to inquiries</li>
+        <li>Send marketing communications (with your consent)</li>
+      </ul>
+    </section>
+
+    <section class="policy-section">
+      <h2>4. How We Share Your Information</h2>
+      <p>We may share your information with:</p>
+      <ul>
+        <li><strong>Lending Partners:</strong> To process mortgage applications and facilitate loan approvals</li>
+        <li><strong>Service Providers:</strong> Third-party vendors who assist in providing our Services (e.g., cloud hosting, analytics, customer support)</li>
+        <li><strong>Credit Bureaus:</strong> To verify creditworthiness and report loan information</li>
+        <li><strong>Regulatory Authorities:</strong> As required by law or to comply with legal obligations</li>
+        <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets</li>
+        <li><strong>With Your Consent:</strong> For any other purpose with your explicit consent</li>
+      </ul>
+      <p>We do not sell your personal information to third parties for marketing purposes.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>5. Data Security</h2>
+      <p>We implement industry-standard security measures to protect your personal information, including:</p>
+      <ul>
+        <li>Encryption of data in transit and at rest using AES-256 encryption</li>
+        <li>Secure Socket Layer (SSL/TLS) technology for data transmission</li>
+        <li>Regular security assessments and penetration testing</li>
+        <li>Access controls and authentication mechanisms</li>
+        <li>Employee training on data protection and privacy</li>
+        <li>Physical security measures at our data centers</li>
+      </ul>
+      <p>While we strive to protect your personal information, no method of transmission over the internet or electronic storage is 100% secure. We cannot guarantee absolute security.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>6. Your Rights and Choices</h2>
+      <p>Depending on your location, you may have the following rights:</p>
+      <ul>
+        <li><strong>Access:</strong> Request access to the personal information we hold about you</li>
+        <li><strong>Correction:</strong> Request correction of inaccurate or incomplete information</li>
+        <li><strong>Deletion:</strong> Request deletion of your personal information (subject to legal retention requirements)</li>
+        <li><strong>Portability:</strong> Request a copy of your data in a portable format</li>
+        <li><strong>Opt-Out:</strong> Opt out of marketing communications at any time</li>
+        <li><strong>Do Not Sell:</strong> Opt out of the sale of your personal information (we do not sell personal information)</li>
+      </ul>
+      <p>To exercise these rights, please contact us at privacy@perenniaai.com.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>7. California Privacy Rights (CCPA/CPRA)</h2>
+      <p>If you are a California resident, you have additional rights under the California Consumer Privacy Act and California Privacy Rights Act:</p>
+      <ul>
+        <li>Right to know what personal information is collected, used, shared, or sold</li>
+        <li>Right to delete personal information held by businesses</li>
+        <li>Right to opt out of sale or sharing of personal information</li>
+        <li>Right to correct inaccurate personal information</li>
+        <li>Right to limit use of sensitive personal information</li>
+        <li>Right to non-discrimination for exercising your privacy rights</li>
+      </ul>
+      <p>We do not discriminate against you for exercising any of your privacy rights.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>8. Gramm-Leach-Bliley Act (GLBA) Compliance</h2>
+      <p>As a provider of financial services technology, we comply with the Gramm-Leach-Bliley Act (GLBA) and related regulations. This includes:</p>
+      <ul>
+        <li>Providing clear privacy notices about our information practices</li>
+        <li>Implementing safeguards to protect nonpublic personal information</li>
+        <li>Limiting the sharing of nonpublic personal information with third parties</li>
+        <li>Giving you the right to opt out of certain information sharing</li>
+      </ul>
+    </section>
+
+    <section class="policy-section">
+      <h2>9. Cookies and Tracking Technologies</h2>
+      <p>We use cookies and similar tracking technologies to enhance your experience on our platform. These include:</p>
+      <ul>
+        <li><strong>Essential Cookies:</strong> Required for the platform to function properly</li>
+        <li><strong>Analytics Cookies:</strong> Help us understand how users interact with our Services</li>
+        <li><strong>Preference Cookies:</strong> Remember your settings and preferences</li>
+      </ul>
+      <p>You can control cookies through your browser settings. Note that disabling certain cookies may affect the functionality of our Services.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>10. Data Retention</h2>
+      <p>We retain your personal information for as long as necessary to:</p>
+      <ul>
+        <li>Provide our Services to you</li>
+        <li>Comply with legal and regulatory requirements (typically 7 years for financial records)</li>
+        <li>Resolve disputes and enforce our agreements</li>
+        <li>Maintain business records for legitimate purposes</li>
+      </ul>
+      <p>When personal information is no longer needed, we securely delete or anonymize it.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>11. Children's Privacy</h2>
+      <p>Our Services are not intended for individuals under the age of 18. We do not knowingly collect personal information from children. If we become aware that we have collected personal information from a child, we will take steps to delete such information.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>12. International Data Transfers</h2>
+      <p>Your information may be transferred to and processed in countries other than your country of residence. These countries may have different data protection laws. We ensure appropriate safeguards are in place to protect your information when transferred internationally.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>13. Third-Party Links</h2>
+      <p>Our Services may contain links to third-party websites or services. We are not responsible for the privacy practices of these third parties. We encourage you to review the privacy policies of any third-party sites you visit.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>14. Changes to This Privacy Policy</h2>
+      <p>We may update this Privacy Policy from time to time. We will notify you of any material changes by posting the new Privacy Policy on this page and updating the "Last Updated" date. We encourage you to review this Privacy Policy periodically.</p>
+    </section>
+
+    <section class="policy-section">
+      <h2>15. Contact Us</h2>
+      <p>If you have any questions about this Privacy Policy or our privacy practices, please contact us at:</p>
+      <div class="contact-box">
+        <p><strong>Perennia AI</strong></p>
+        <p>Email: privacy@perenniaai.com</p>
+        <p>Website: www.perenniaai.com</p>
+      </div>
+    </section>
+
+    <div class="back-link">
+      <a href="/">&larr; Back to Home</a>
+    </div>
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-copyright">&copy; 2026 Perennia AI. All rights reserved.</div>
+    <div class="footer-legal">
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms-of-service">Terms of Service</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

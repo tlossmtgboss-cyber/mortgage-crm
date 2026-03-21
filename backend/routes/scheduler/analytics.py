@@ -203,7 +203,7 @@ def _effective_date_range(
 @require_feature_tier("scheduler_analytics")
 async def analytics_overview(
     request: Request,
-    period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
     start_date: Optional[date_type] = Query(None, description="Explicit start date (YYYY-MM-DD) — reserved for future use"),
     end_date: Optional[date_type] = Query(None, description="Explicit end date (YYYY-MM-DD) — reserved for future use"),
     user_id: Optional[int] = Query(None, description="Filter by specific user (admin only)"),
@@ -252,8 +252,8 @@ async def analytics_overview(
 @require_feature_tier("scheduler_analytics")
 async def analytics_trends(
     request: Request,
-    period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
-    granularity: str = Query("daily", regex="^(daily|weekly)$", description="Aggregation granularity"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
+    granularity: str = Query("daily", pattern="^(daily|weekly)$", description="Aggregation granularity"),
     start_date: Optional[date_type] = Query(None, description="Explicit start date (YYYY-MM-DD) — reserved for future use"),
     end_date: Optional[date_type] = Query(None, description="Explicit end date (YYYY-MM-DD) — reserved for future use"),
     user_id: Optional[int] = Query(None, description="Filter by specific user (admin only)"),
@@ -310,7 +310,7 @@ async def analytics_trends(
 @require_feature_tier("scheduler_analytics")
 async def analytics_by_type(
     request: Request,
-    period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
     user_id: Optional[int] = Query(None, description="Filter by specific user (admin only)"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
@@ -366,7 +366,7 @@ async def analytics_by_type(
 @require_feature_tier("scheduler_analytics")
 async def analytics_by_lo(
     request: Request,
-    period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
     db: Session = Depends(get_db),

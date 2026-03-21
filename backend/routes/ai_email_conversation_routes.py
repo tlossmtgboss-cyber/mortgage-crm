@@ -21,6 +21,19 @@ from sqlalchemy.exc import SQLAlchemyError
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+# OBS-002: Wrapper to surface background task failures in logs
+async def _safe_background_task(func, *args, task_name="unknown", **kwargs):
+    """Wrapper that logs background task failures instead of silently dropping them."""
+    import asyncio
+    try:
+        if asyncio.iscoroutinefunction(func):
+            await func(*args, **kwargs)
+        else:
+            func(*args, **kwargs)
+    except Exception as e:
+        logger.error(f"Background task '{task_name}' failed: {e}", exc_info=True)
+
 try:
     from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL as _DEFAULT_ORGANIZER_EMAIL
 except ImportError:
@@ -426,7 +439,9 @@ async def inbound_email_webhook(
         db.commit()
 
         # Process AI response in background (uses its own DB session)
+        # OBS-002: Wrapped with _safe_background_task for error surfacing
         background_tasks.add_task(
+            _safe_background_task,
             generate_ai_response,
             conversation_id,
             clean_reply,
@@ -434,7 +449,8 @@ async def inbound_email_webhook(
             subject,
             context,
             loan_id,
-            lead_id
+            lead_id,
+            task_name="generate_ai_response",
         )
 
         status_msg = "new_conversation" if is_new_conversation else "received"

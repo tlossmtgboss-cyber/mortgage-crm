@@ -106,11 +106,10 @@ api.interceptors.response.use(
       console.error('[API] Network error (no response):', {
         message: error.message,
         code: error.code,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          baseURL: error.config?.baseURL
-        }
+        method: error.config?.method,
+        // OBS-001: Don't log full URL — may contain PII in query params
+        path: error.config?.url?.split('?')[0],
+        status: 'no_response'
       });
     }
 
@@ -127,6 +126,35 @@ api.interceptors.response.use(
         error.config._csrfRetry = true;
         error.config.headers['X-CSRF-Token'] = newToken;
         return api.request(error.config);
+      }
+    }
+
+    // Sanitize error messages to prevent leaking backend internals to the UI.
+    // For 500-level errors, replace the detail with a generic message.
+    // For client errors (4xx), keep user-friendly messages from the backend.
+    const SAFE_ERROR_MESSAGES = {
+      400: "Invalid request. Please check your input.",
+      401: "Session expired. Please log in again.",
+      403: "You don't have permission for this action.",
+      404: "The requested resource was not found.",
+      409: "A conflict occurred. Please refresh and try again.",
+      422: "Invalid data submitted.",
+      429: "Too many requests. Please wait a moment.",
+    };
+    if (error.response) {
+      const status = error.response.status;
+      if (status >= 500) {
+        // Never expose internal server errors to the UI
+        error.response.data = {
+          ...error.response.data,
+          detail: "An unexpected error occurred. Please try again later.",
+        };
+      } else if (!error.response.data?.detail && SAFE_ERROR_MESSAGES[status]) {
+        // Provide a safe fallback if no user-friendly detail was sent
+        error.response.data = {
+          ...error.response.data,
+          detail: SAFE_ERROR_MESSAGES[status],
+        };
       }
     }
 
@@ -898,6 +926,14 @@ export const calendarAnalyticsAPI = {
   },
   getByLO: async (params = {}) => {
     const response = await api.get('/api/v1/scheduler/analytics/by-lo', { params });
+    return response.data;
+  },
+  getAppointmentOutcomes: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/analytics/appointment-outcomes', { params });
+    return response.data;
+  },
+  getAppointmentTypeEffectiveness: async (params = {}) => {
+    const response = await api.get('/api/v1/scheduler/analytics/appointment-type-effectiveness', { params });
     return response.data;
   },
 };

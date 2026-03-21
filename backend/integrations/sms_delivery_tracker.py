@@ -61,11 +61,10 @@ def record_message_sent(
                 "segments": segments,
             },
         )
-        db.commit()
+        db.flush()
         row = result.fetchone()
         return row[0] if row else 0
     except Exception as e:
-        db.rollback()
         logger.error(f"Failed to record message sent: {e}")
         return 0
 
@@ -195,8 +194,9 @@ def get_delivery_stats(db: Session, days: int = 7) -> dict:
                         NULLIF(COUNT(*), 0) * 100, 2
                     ) AS delivery_rate
                 FROM sms_delivery_log
-                WHERE sent_at >= NOW() - INTERVAL ':days days'
-            """.replace(":days", str(days))),
+                WHERE sent_at >= NOW() - make_interval(days => :days)
+            """),
+            {"days": days},
         ).fetchone()
 
         return {
@@ -256,4 +256,4 @@ def process_telnyx_webhook(db: Session, payload: dict) -> dict:
 
     except Exception as e:
         logger.error(f"Webhook processing error: {e}")
-        return {"status": "error", "reason": str(e)}
+        return {"status": "error", "reason": "webhook_processing_failed"}

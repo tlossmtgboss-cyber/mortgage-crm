@@ -146,15 +146,20 @@ async def _deliver_to_subscription(
 
     headers = {
         "Content-Type": "application/json",
-        "X-Webhook-Signature": f"sha256={signature}",
         "X-Webhook-Event": event_type,
         "X-Webhook-Delivery-Id": str(delivery.id),
         "User-Agent": "PerenniaAI-Webhooks/1.0",
     }
 
-    # Merge any custom headers from the subscription
+    # SEC-006: Merge custom headers but protect system headers from override
+    _PROTECTED_HEADERS = frozenset({"Content-Type", "X-Webhook-Event", "X-Webhook-Delivery-Id", "X-Webhook-Signature", "User-Agent"})
     if subscription.headers and isinstance(subscription.headers, dict):
-        headers.update(subscription.headers)
+        for key, value in subscription.headers.items():
+            if key not in _PROTECTED_HEADERS:
+                headers[key] = value
+
+    # NC6 fix: Set HMAC signature AFTER custom headers to prevent override
+    headers["X-Webhook-Signature"] = f"sha256={signature}"
 
     last_error = None
     timeout = subscription.timeout_seconds or _DELIVERY_TIMEOUT_SECONDS
@@ -299,13 +304,18 @@ async def dispatch_webhook(
 
     payload = _build_event_payload(event_type, appointment_data, organization_id)
 
-    deliveries = []
-    for sub in matching:
+    # PERF-010: Deliver to all matching subscriptions concurrently
+    import asyncio
+
+    async def _safe_deliver(sub):
         try:
-            delivery = await _deliver_to_subscription(db, sub, payload)
-            deliveries.append(delivery)
+            return await _deliver_to_subscription(db, sub, payload)
         except Exception as exc:
             logger.exception("Unexpected error dispatching to subscription=%s: %s", sub.id, exc)
+            return None
+
+    results = await asyncio.gather(*[_safe_deliver(sub) for sub in matching])
+    deliveries = [r for r in results if r is not None]
 
     return deliveries
 
@@ -517,6 +527,7 @@ def _create_dead_letter_notification(
 async def retry_failed_webhook(
     db: Session,
     delivery_id: int,
+    organization_id: int,
 ) -> WebhookDeliveryLog:
     """Manually retry a failed/dead-lettered webhook delivery.
 
@@ -527,6 +538,8 @@ async def retry_failed_webhook(
     Args:
         db: SQLAlchemy session.
         delivery_id: The WebhookDeliveryLog.id to retry.
+        organization_id: Tenant org scope — only deliveries belonging to
+            subscriptions in this org can be retried.
 
     Returns:
         The updated WebhookDeliveryLog after re-delivery attempt.
@@ -536,7 +549,11 @@ async def retry_failed_webhook(
     """
     delivery = (
         db.query(WebhookDeliveryLog)
-        .filter(WebhookDeliveryLog.id == delivery_id)
+        .join(WebhookSubscription, WebhookDeliveryLog.subscription_id == WebhookSubscription.id)
+        .filter(
+            WebhookDeliveryLog.id == delivery_id,
+            WebhookSubscription.organization_id == organization_id,
+        )
         .first()
     )
 
@@ -551,7 +568,10 @@ async def retry_failed_webhook(
 
     subscription = (
         db.query(WebhookSubscription)
-        .filter(WebhookSubscription.id == delivery.subscription_id)
+        .filter(
+            WebhookSubscription.id == delivery.subscription_id,
+            WebhookSubscription.organization_id == organization_id,
+        )
         .first()
     )
 
@@ -611,7 +631,7 @@ async def retry_failed_webhook(
 
 async def get_failed_webhooks(
     db: Session,
-    organization_id: Optional[int] = None,
+    organization_id: int,
     subscription_id: Optional[int] = None,
     limit: int = 50,
     offset: int = 0,
@@ -620,7 +640,7 @@ async def get_failed_webhooks(
 
     Args:
         db: SQLAlchemy session.
-        organization_id: Filter by organization (optional).
+        organization_id: Tenant org scope — required for tenant isolation.
         subscription_id: Filter by specific subscription (optional).
         limit: Max results to return (default 50).
         offset: Pagination offset (default 0).
@@ -631,11 +651,11 @@ async def get_failed_webhooks(
     query = (
         db.query(WebhookDeliveryLog)
         .join(WebhookSubscription, WebhookDeliveryLog.subscription_id == WebhookSubscription.id)
-        .filter(WebhookDeliveryLog.status == "failed")
+        .filter(
+            WebhookDeliveryLog.status == "failed",
+            WebhookSubscription.organization_id == organization_id,
+        )
     )
-
-    if organization_id is not None:
-        query = query.filter(WebhookSubscription.organization_id == organization_id)
 
     if subscription_id is not None:
         query = query.filter(WebhookDeliveryLog.subscription_id == subscription_id)
@@ -686,6 +706,7 @@ async def get_failed_webhooks(
 async def check_webhook_health(
     db: Session,
     subscription_id: int,
+    organization_id: int,
     window_hours: int = 24,
 ) -> Dict[str, Any]:
     """Check if a webhook subscription is healthy based on recent delivery success rate.
@@ -700,6 +721,8 @@ async def check_webhook_health(
     Args:
         db: SQLAlchemy session.
         subscription_id: The WebhookSubscription.id to check.
+        organization_id: Tenant org scope — only subscriptions in this org
+            can be queried.
         window_hours: How far back to look (default 24 hours).
 
     Returns:
@@ -710,7 +733,10 @@ async def check_webhook_health(
     """
     subscription = (
         db.query(WebhookSubscription)
-        .filter(WebhookSubscription.id == subscription_id)
+        .filter(
+            WebhookSubscription.id == subscription_id,
+            WebhookSubscription.organization_id == organization_id,
+        )
         .first()
     )
 

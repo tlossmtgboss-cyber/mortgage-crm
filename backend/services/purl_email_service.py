@@ -20,6 +20,13 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 logger = logging.getLogger(__name__)
 
 
+def _mask_email(email: str) -> str:
+    if not email or '@' not in email:
+        return '***'
+    local, domain = email.rsplit('@', 1)
+    return f"{local[:2]}***@{domain}" if len(local) > 2 else f"***@{domain}"
+
+
 # =============================================================================
 # TEMPLATE CONFIGURATION
 # =============================================================================
@@ -122,7 +129,7 @@ class PURLEmailService:
                     to_email, subject, html_content, text_content, reply_to
                 )
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {e}")
+            logger.error(f"Failed to send email to {_mask_email(to_email)}: {e}")
             return False
 
     async def _send_via_sendgrid(
@@ -160,7 +167,7 @@ class PURLEmailService:
             sg = SendGridAPIClient(api_key)
             response = sg.send(message)
 
-            logger.info(f"Email sent to {to_email}, status: {response.status_code}")
+            logger.info(f"Email sent to {_mask_email(to_email)}, status: {response.status_code}")
             return response.status_code in [200, 201, 202]
 
         except Exception as e:
@@ -200,7 +207,7 @@ class PURLEmailService:
                 ReplyToAddresses=[reply_to] if reply_to else []
             )
 
-            logger.info(f"Email sent to {to_email}, message ID: {response['MessageId']}")
+            logger.info(f"Email sent to {_mask_email(to_email)}, message ID: {response['MessageId']}")
             return True
 
         except Exception as e:
@@ -245,7 +252,7 @@ class PURLEmailService:
                     server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
 
-            logger.info(f"Email sent to {to_email} via SMTP")
+            logger.info(f"Email sent to {_mask_email(to_email)} via SMTP")
             return True
 
         except Exception as e:

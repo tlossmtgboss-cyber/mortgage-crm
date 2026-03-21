@@ -171,7 +171,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                 httponly=False,  # Must be readable by JavaScript
                 secure=self.cookie_secure,
                 samesite=self.cookie_samesite,
-                max_age=86400 * 7,  # 7 days
+                max_age=86400,  # 1 day
                 path="/",
             )
 
@@ -228,7 +228,7 @@ def create_csrf_routes():
             httponly=False,
             secure=True,
             samesite="Lax",
-            max_age=86400 * 7,
+            max_age=86400,
             path="/",
         )
         return response

@@ -22,6 +22,7 @@ import logging
 import traceback
 
 from db import get_db
+from utils.pagination import clamp_pagination
 
 logger = logging.getLogger(__name__)
 
@@ -443,6 +444,9 @@ async def get_loans(
     from sqlalchemy import text
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
+
+    # Enforce pagination limits (PERF-001)
+    limit, skip = clamp_pagination(limit, skip)
 
     try:
         query = db.query(Loan)

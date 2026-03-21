@@ -31,6 +31,7 @@ from scheduler_email_service import (
     generate_reschedule_url,
 )
 from services.notification_service import notification_service
+from services.appointment.lifecycle_service import _validate_status_transition
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _is_scheduler_admin,
@@ -39,6 +40,7 @@ from routes.scheduler._helpers import (
     _ensure_lead_for_booking, _log_appointment_activity, _create_followup_task,
     _audit_log,
 )
+from routes.scheduler.public_booking import _sanitize_ai_context
 from routes.scheduler.constants import (
     DEFAULT_APPOINTMENT_DURATION_MINUTES,
     DEFAULT_TIMEZONE,
@@ -80,7 +82,7 @@ class BulkAppointmentItem(BaseModel):
     contact_id: Optional[int] = None
     assigned_user_id: Optional[int] = None
 
-    intake_responses: Dict = {}
+    intake_responses: Dict = Field(default_factory=dict)
     booked_by_ai: bool = False
     ai_booking_context: Optional[Dict] = None
 
@@ -245,7 +247,7 @@ async def bulk_create_appointments(
                 status=AppointmentStatus.BOOKED,
                 status_changed_at=datetime.now(timezone.utc),
                 booked_by_ai=item.booked_by_ai,
-                ai_booking_context=item.ai_booking_context,
+                ai_booking_context=_sanitize_ai_context(item.ai_booking_context),
             )
 
             db.add(appointment)
@@ -396,6 +398,9 @@ async def bulk_cancel_appointments(
 
             if appointment.status == AppointmentStatus.CANCELLED:
                 raise ValueError(f"Appointment {appointment_id} is already cancelled")
+
+            # DATA-N01: Validate status transition before cancelling
+            _validate_status_transition(appointment.status, AppointmentStatus.CANCELLED)
 
             # Store details before cancellation for notifications
             cancel_info = {

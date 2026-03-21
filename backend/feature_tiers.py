@@ -84,7 +84,7 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "it_helpdesk": FeatureTier.EXPERIMENTAL,
     # "decision_lab": FeatureTier.EXPERIMENTAL,  # DEPRECATED: Experimental feature deregistered
     # "circle_of_cashflow": FeatureTier.EXPERIMENTAL,  # DEPRECATED: Experimental feature deregistered
-    "scheduler_ab_testing": FeatureTier.EXPERIMENTAL,
+    # "scheduler_ab_testing": removed — feature deleted, not needed for mortgage CRM
 }
 
 

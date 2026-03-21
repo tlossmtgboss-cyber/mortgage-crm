@@ -80,7 +80,9 @@ def should_auto_execute(action_type: str, autonomous_mode: bool = True) -> bool:
         return False
 
     risk = classify_action_risk(action_type)
-    return risk in ["low", "medium"]
+    if risk == "high":
+        return False  # High-risk actions always require human approval
+    return risk in ["low", "medium"] and autonomous_mode
 
 
 async def execute_single_action(

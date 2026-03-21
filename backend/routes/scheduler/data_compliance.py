@@ -116,6 +116,7 @@ async def export_borrower_data(
             func.lower(Appointment.attendee_email) == email,
         )
         .order_by(Appointment.scheduled_start.desc())
+        .limit(1000)
         .all()
     )
 
@@ -216,6 +217,18 @@ async def export_borrower_data(
     except Exception as e:
         logger.warning(f"Could not export surveys for {_mask_email(email)}: {e}")
 
+    # ---- Slot holds ----
+    exported_slot_holds = []
+    try:
+        slot_holds = db.execute(text("""
+            SELECT id, start_time, end_time, status, created_at
+            FROM slot_holds WHERE held_for_email = :email AND organization_id = :org_id
+        """), {"email": email, "org_id": org_id}).fetchall()
+        exported_slot_holds = [dict(row._mapping) for row in slot_holds]
+    except Exception:
+        logger.warning("Failed to export slot_holds for %s", _mask_email(email), exc_info=True)
+        exported_slot_holds = []
+
     export_payload = {
         "export_type": "scheduler_data_export",
         "borrower_email": email,
@@ -227,12 +240,14 @@ async def export_borrower_data(
             "cancellations": cancellations,
             "reminder_logs": exported_reminders,
             "survey_responses": exported_surveys,
+            "slot_holds": exported_slot_holds,
         },
         "counts": {
             "appointments": len(exported_appointments),
             "cancellations": len(cancellations),
             "reminder_logs": len(exported_reminders),
             "survey_responses": len(exported_surveys),
+            "slot_holds": len(exported_slot_holds),
         },
     }
 
@@ -317,6 +332,28 @@ async def delete_borrower_data(
         # Keep: title, status, scheduled_start/end, duration, meeting_type/mode
         # These are operational/statistical, not PII
         counts["appointments_anonymized"] += 1
+
+    # ---- 1b. Cascade anonymize related tables ----
+    # Slot holds
+    try:
+        db.execute(text("""
+            UPDATE slot_holds SET held_for_name = '[REDACTED]', held_for_phone = NULL,
+            held_for_email = 'redacted@redacted.invalid'
+            WHERE held_for_email = :email AND organization_id = :org_id
+        """), {"email": email, "org_id": org_id})
+    except Exception as e:
+        logger.warning("Could not anonymize slot_holds for %s: %s", _mask_email(email), e)
+
+    # Appointment status history
+    try:
+        db.execute(text("""
+            UPDATE appointment_status_history SET changed_by_name = '[REDACTED]'
+            WHERE appointment_id IN (
+                SELECT id FROM scheduler_appointments WHERE attendee_email = :anon_email AND organization_id = :org_id
+            )
+        """), {"anon_email": _ANON_EMAIL, "org_id": org_id})
+    except Exception as e:
+        logger.warning("Could not anonymize appointment_status_history for %s: %s", _mask_email(email), e)
 
     # ---- 2. Delete survey responses ----
     try:
@@ -743,7 +780,7 @@ async def get_compliance_status(
                     if tcpa:
                         consented_phones.add(phone)
                 except Exception:
-                    pass
+                    logger.warning("Failed to check TCPAConsent for phone in consent audit", exc_info=True)
 
             consent_verified = len(consented_phones)
             consent_missing = len(unique_phones) - consent_verified
@@ -1127,7 +1164,7 @@ async def get_consent_audit(
                         has_consent = True
                         consent_source = "channel_preference"
         except Exception:
-            pass
+            logger.warning("Failed to check ChannelPreference for consent verification", exc_info=True)
 
         # Fallback: TCPAConsent table
         if not has_consent and consent_source != "opted_out":
@@ -1148,7 +1185,7 @@ async def get_consent_audit(
                     has_consent = True
                     consent_source = f"tcpa_consent ({tcpa.consent_type})"
             except Exception:
-                pass
+                logger.warning("Failed to check TCPAConsent for consent verification", exc_info=True)
 
         if has_consent:
             with_consent += 1

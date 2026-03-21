@@ -25,6 +25,10 @@ from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path)
 
+# Signal to main.py startup event to skip DB-dependent operations
+# (TestClient triggers startup before dependency overrides are in effect)
+os.environ["TESTING"] = "1"
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
@@ -36,6 +40,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from main import app
 from database import get_db
 
+# Eagerly import model submodules so pytest assertion rewriting can resolve them
+# during test collection (avoids "(unknown location)" errors)
+import models.smart_docs_models  # noqa: F401
+import models.sms_models  # noqa: F401
 
 # =============================================================================
 # DATABASE FIXTURES

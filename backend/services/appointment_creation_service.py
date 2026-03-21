@@ -506,7 +506,7 @@ async def _generate_meeting_link(
 
 
 # =============================================================================
-# AUDIT LOGGING
+# AUDIT LOGGING (delegates to shared _audit_log from scheduler helpers)
 # =============================================================================
 
 def _write_audit_log(
@@ -518,23 +518,32 @@ def _write_audit_log(
     entity_id: Optional[int] = None,
     changes: Optional[dict] = None,
 ) -> None:
-    """Write an audit log entry to the SchedulerAuditLog table."""
+    """Write an audit log entry — delegates to the shared _audit_log."""
     try:
-        from services.appointment._models import get_model
-        AuditLog = get_model("SchedulerAuditLog")
-        if not AuditLog:
-            return
-        entry = AuditLog(
-            organization_id=organization_id,
-            user_id=user_id,
-            action=action,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            changes=changes,
+        from routes.scheduler._audit import _audit_log
+        _audit_log(
+            db, org_id=organization_id, user_id=user_id,
+            action=action, entity_type=entity_type,
+            entity_id=entity_id, changes=changes,
         )
-        db.add(entry)
-    except Exception as e:
-        logger.warning(f"Failed to write audit log: {e}")
+    except ImportError:
+        # Fallback if scheduler helpers aren't available
+        try:
+            from services.appointment._models import get_model
+            AuditLog = get_model("SchedulerAuditLog")
+            if not AuditLog:
+                return
+            entry = AuditLog(
+                organization_id=organization_id,
+                user_id=user_id,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                changes=changes,
+            )
+            db.add(entry)
+        except Exception as e:
+            logger.warning(f"Failed to write audit log: {e}")
 
 
 # =============================================================================

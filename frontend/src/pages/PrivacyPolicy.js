@@ -13,7 +13,7 @@ function PrivacyPolicy() {
       <main className="privacy-content">
         <div className="privacy-container">
           <h1>Privacy Policy</h1>
-          <p className="last-updated">Last Updated: January 1, 2025</p>
+          <p className="last-updated">Last Updated: March 20, 2026</p>
 
           <section className="privacy-section">
             <h2>1. Introduction</h2>
@@ -220,7 +220,7 @@ function PrivacyPolicy() {
       </main>
 
       <footer className="privacy-footer">
-        <p>&copy; 2025 Perennia AI. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} Perennia AI. All rights reserved.</p>
       </footer>
     </div>
   );

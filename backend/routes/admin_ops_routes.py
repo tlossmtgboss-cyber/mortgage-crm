@@ -2789,19 +2789,28 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             """)).fetchall()
 
             # Null out or delete child references
+            # Values come from information_schema but validate with _safe_identifier
+            # as defense-in-depth
             for child_tbl, child_col, parent_tbl in fk_refs:
                 try:
+                    safe_tbl = _safe_identifier(child_tbl)
+                    safe_col = _safe_identifier(child_col)
                     r = db.execute(text(
-                        f'UPDATE "{child_tbl}" SET "{child_col}" = NULL'
+                        f'UPDATE {safe_tbl} SET {safe_col} = NULL'
                     ))
                     if r.rowcount > 0:
                         cleaned[f"{child_tbl}.{child_col} nulled"] = r.rowcount
+                except ValueError:
+                    logger.warning(f"Blocked invalid identifier from information_schema: {child_tbl}.{child_col}")
                 except Exception:
                     db.rollback()
                     try:
-                        r = db.execute(text(f'DELETE FROM "{child_tbl}"'))
+                        safe_tbl = _safe_identifier(child_tbl)
+                        r = db.execute(text(f'DELETE FROM {safe_tbl}'))
                         if r.rowcount > 0:
                             cleaned[f"{child_tbl} deleted"] = r.rowcount
+                    except ValueError:
+                        logger.warning(f"Blocked invalid identifier: {child_tbl}")
                     except Exception:
                         db.rollback()
 
@@ -2836,7 +2845,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
             for tbl in tables_to_clear:
                 try:
-                    r = db.execute(text(f'DELETE FROM "{tbl}"'))
+                    r = db.execute(text(f'DELETE FROM {_safe_identifier(tbl)}'))
                     if r.rowcount > 0:
                         cleaned[tbl] = r.rowcount
                 except Exception:

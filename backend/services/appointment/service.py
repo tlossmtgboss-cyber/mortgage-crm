@@ -57,12 +57,8 @@ from services.appointment._models import (
     AppointmentResult,
     AppointmentSource,
     ConflictCheckResult,
-    DEFAULT_BUFFER_AFTER,
-    DEFAULT_BUFFER_BEFORE,
     DEFAULT_DURATION_MINUTES,
     DEFAULT_HOLD_TTL_SECONDS,
-    DEFAULT_MIN_NOTICE_HOURS,
-    DEFAULT_WORKING_HOURS,
     MAX_DATE_RANGE_DAYS,
     get_model,
     mask_email,
@@ -70,8 +66,6 @@ from services.appointment._models import (
 )
 from services.appointment.conflict_checker import (
     check_conflict as _check_conflict,
-    get_all_busy_times as _get_all_busy_times,
-    slot_conflicts_with_busy as _slot_conflicts_with_busy,
 )
 from services.appointment.hold_manager import (
     hold_slot as _hold_slot,
@@ -120,13 +114,11 @@ class AppointmentService:
         """
         Compute available time slots for an LO, checking ALL calendar sources.
 
-        Cross-source conflict check includes:
-        1. scheduler_appointments table (main appointment records)
-        2. ScheduledAppointment table (AI-booked legacy)
-        3. CalendarEvent table (manual calendar entries)
-        4. CRMCalendarEvent table (Salesforce-synced events)
-        5. Active soft holds (in-memory)
-        6. Blocked times (PTO, holidays, focus time)
+        Delegates to the canonical ``_generate_available_slots`` engine (which
+        handles working hours, blocked times, appointments, cross-source
+        conflicts, RecurringAvailability, lunch breaks, min-notice, and
+        capacity limits).  After slot generation, filters out any slots that
+        conflict with active soft holds.
 
         Args:
             lo_id: The loan officer's user_id.
@@ -147,142 +139,34 @@ class AppointmentService:
         if start_date > end_date:
             raise ValueError("start_date must be before or equal to end_date")
 
-        Appointment = get_model("Appointment")
-        SchedulerConfig = get_model("SchedulerConfig")
-        BlockedTime = get_model("BlockedTime")
+        # Use the canonical unified slot generator
+        from routes.scheduler._availability import _generate_available_slots
 
-        if not Appointment or not SchedulerConfig or not BlockedTime:
-            logger.error("Required scheduler models not available")
-            return []
-
-        # Load LO config
-        config = self.db.query(SchedulerConfig).filter(
-            SchedulerConfig.user_id == lo_id,
-            SchedulerConfig.organization_id == self.organization_id,
-        ).first()
-
-        working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
-        buffer_before = config.buffer_before_minutes if config else DEFAULT_BUFFER_BEFORE
-        buffer_after = config.buffer_after_minutes if config else DEFAULT_BUFFER_AFTER
-        min_notice = config.min_notice_hours if config else DEFAULT_MIN_NOTICE_HOURS
-        max_per_day = config.max_meetings_per_day if config else None
-        enforce_lunch = getattr(config, "enforce_lunch_break", True) if config else True
-        lunch_start_t = getattr(config, "lunch_break_start", time(12, 0)) if config else time(12, 0)
-        lunch_end_t = getattr(config, "lunch_break_end", time(13, 0)) if config else time(13, 0)
-
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        min_booking_time = now + timedelta(hours=min_notice)
-        range_start_dt = datetime.combine(start_date, time.min)
-        range_end_dt = datetime.combine(end_date, time.max)
-
-        # Gather ALL busy times from every source
-        busy_times = _get_all_busy_times(
-            self.db, self.organization_id,
-            lo_id, range_start_dt, range_end_dt,
+        slots = _generate_available_slots(
+            db=self.db,
+            user_ids=[lo_id],
+            start_date=start_date,
+            end_date=end_date,
+            duration_minutes=duration_minutes,
+            org_id=self.organization_id,
+            check_cross_source=True,
+            include_day_name=True,
             exclude_appointment_id=exclude_appointment_id,
         )
 
-        # Query blocked times
-        blocked = self.db.query(BlockedTime).filter(
-            BlockedTime.is_active == True,  # noqa: E712
-            BlockedTime.organization_id == self.organization_id,
-            or_(
-                BlockedTime.user_id == lo_id,
-                BlockedTime.applies_to_all_users == True,  # noqa: E712
-            ),
-            BlockedTime.start_datetime <= range_end_dt,
-            BlockedTime.end_datetime >= range_start_dt,
-        ).all()
+        # Post-filter: exclude slots that conflict with active soft holds
+        filtered = []
+        for slot in slots:
+            slot_start = datetime.fromisoformat(slot["start"])
+            slot_end = datetime.fromisoformat(slot["end"])
+            if not _slot_conflicts_with_holds(
+                self.db, self.organization_id, lo_id, slot_start, slot_end,
+            ):
+                # Add duration_minutes for interface compatibility
+                slot["duration_minutes"] = duration_minutes
+                filtered.append(slot)
 
-        # Count existing appointments per day for capacity checks
-        day_counts: Dict[date, int] = {}
-        for busy_start, busy_end in busy_times:
-            d = busy_start.date() if isinstance(busy_start, datetime) else busy_start
-            day_counts[d] = day_counts.get(d, 0) + 1
-
-        # Generate slots day by day
-        slots: List[Dict[str, Any]] = []
-        current_d = start_date
-
-        while current_d <= end_date:
-            day_name = current_d.strftime("%A").lower()
-            day_hours = working_hours.get(day_name, {})
-
-            if not day_hours.get("enabled", False):
-                current_d += timedelta(days=1)
-                continue
-
-            # Check daily capacity
-            if max_per_day and day_counts.get(current_d, 0) >= max_per_day:
-                current_d += timedelta(days=1)
-                continue
-
-            # Parse working hours
-            try:
-                work_start = datetime.strptime(day_hours.get("start", "09:00"), "%H:%M").time()
-                work_end = datetime.strptime(day_hours.get("end", "17:00"), "%H:%M").time()
-            except ValueError:
-                current_d += timedelta(days=1)
-                continue
-
-            slot_start = datetime.combine(current_d, work_start)
-            day_end = datetime.combine(current_d, work_end)
-            lunch_start_dt = datetime.combine(current_d, lunch_start_t) if enforce_lunch else None
-            lunch_end_dt = datetime.combine(current_d, lunch_end_t) if enforce_lunch else None
-
-            while slot_start + timedelta(minutes=duration_minutes) <= day_end:
-                slot_end = slot_start + timedelta(minutes=duration_minutes)
-
-                # Skip past or too-soon slots
-                if slot_start < min_booking_time:
-                    slot_start += timedelta(minutes=30)
-                    continue
-
-                # Skip lunch break
-                if lunch_start_dt and lunch_end_dt:
-                    if slot_start < lunch_end_dt and slot_end > lunch_start_dt:
-                        slot_start += timedelta(minutes=30)
-                        continue
-
-                # Check blocked times
-                is_blocked = any(
-                    slot_start < bt.end_datetime and slot_end > bt.start_datetime
-                    for bt in blocked
-                )
-                if is_blocked:
-                    slot_start += timedelta(minutes=30)
-                    continue
-
-                # Check cross-source busy times (with buffers)
-                has_conflict = _slot_conflicts_with_busy(
-                    slot_start, slot_end, busy_times,
-                    buffer_before, buffer_after,
-                )
-
-                # Check soft holds
-                if not has_conflict:
-                    has_conflict = _slot_conflicts_with_holds(
-                        self.db, self.organization_id,
-                        lo_id, slot_start, slot_end,
-                    )
-
-                if not has_conflict:
-                    slots.append({
-                        "start": slot_start.isoformat(),
-                        "end": slot_end.isoformat(),
-                        "date": current_d.isoformat(),
-                        "day": day_name,
-                        "duration_minutes": duration_minutes,
-                    })
-
-                slot_start += timedelta(minutes=30)
-
-            current_d += timedelta(days=1)
-
-        # Deduplicate by start time and sort
-        unique = list({s["start"]: s for s in slots}.values())
-        unique.sort(key=lambda x: x["start"])
-        return unique
+        return filtered
 
     # =========================================================================
     # CREATE (delegated)
@@ -736,13 +620,14 @@ class AppointmentService:
             )
             self.db.add(entry)
         except Exception as e:
-            logger.debug(f"Failed to write audit log: {e}")
+            logger.error("AUDIT_LOG_WRITE_FAILURE for %s %s (action=%s): %s", entity_type, entity_id, action, e, exc_info=True)
 
     def _emit_event(self, event: AppointmentEvent, data: Dict[str, Any]) -> None:
         """
         Emit an event for downstream consumers.
 
-        Currently stores events in-memory on the service instance.
+        Stores events in-memory on the service instance AND persists to DB
+        for durability.
         Future: publish to Redis pub/sub, webhook queue, or event bus.
         """
         event_record = {
@@ -753,6 +638,26 @@ class AppointmentService:
         }
         self._emitted_events.append(event_record)
         logger.info(f"Event emitted: {event.value} | {data}")
+
+        # OBS-003: Persist event to DB for durability
+        try:
+            from sqlalchemy import text as _text
+            import json as _json
+            self.db.execute(
+                _text(
+                    "INSERT INTO scheduler_events (organization_id, event_type, event_data, created_at) "
+                    "VALUES (:org_id, :event_type, :event_data, :created_at)"
+                ),
+                {
+                    "org_id": self.organization_id,
+                    "event_type": event.value,
+                    "event_data": _json.dumps(data, default=str),
+                    "created_at": datetime.now(timezone.utc),
+                },
+            )
+        except Exception as e:
+            # Don't crash if the events table doesn't exist or the write fails
+            logger.warning("Failed to persist event to DB (non-fatal): %s", e)
 
     @property
     def events(self) -> List[Dict[str, Any]]:

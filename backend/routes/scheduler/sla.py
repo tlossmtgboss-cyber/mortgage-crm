@@ -167,7 +167,7 @@ class SLATargetsResponse(BaseModel):
 @router.get("/sla/dashboard", response_model=SLADashboardResponse)
 async def sla_dashboard(
     request: Request,
-    period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
     db: Session = Depends(get_db),
 ):
     """
@@ -203,7 +203,7 @@ async def sla_dashboard(
 async def sla_breaches(
     request: Request,
     days: int = Query(7, ge=1, le=90, description="Lookback period in days"),
-    severity: Optional[str] = Query(None, regex="^(critical|warning)$", description="Filter by severity"),
+    severity: Optional[str] = Query(None, pattern="^(critical|warning)$", description="Filter by severity"),
     breach_type: Optional[str] = Query(None, description="Filter by breach type"),
     db: Session = Depends(get_db),
 ):
@@ -252,7 +252,7 @@ async def sla_breaches(
 async def sla_lo_metrics(
     request: Request,
     lo_id: int,
-    period: str = Query("30d", regex="^(7d|30d|90d)$", description="Time period"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$", description="Time period"),
     db: Session = Depends(get_db),
 ):
     """

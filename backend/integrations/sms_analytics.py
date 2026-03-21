@@ -34,7 +34,7 @@ def get_dashboard_summary(db: Session, user_id: Optional[int] = None, days: int 
                     SUM(dl.segments) AS total_segments,
                     ROUND(SUM(dl.segments) * 0.004, 4) AS estimated_cost_usd
                 FROM sms_delivery_log dl
-                WHERE dl.sent_at >= NOW() - INTERVAL '{days} days'
+                WHERE dl.sent_at >= NOW() - make_interval(days => :days)
                 {user_filter}
             """),
             params,
@@ -79,7 +79,7 @@ def get_daily_volume(
                     COUNT(*) FILTER (WHERE status = 'delivered') AS delivered,
                     COUNT(*) FILTER (WHERE status = 'failed') AS failed
                 FROM sms_delivery_log
-                WHERE sent_at >= NOW() - INTERVAL '{days} days'
+                WHERE sent_at >= NOW() - make_interval(days => :days)
                 {user_filter}
                 GROUP BY DATE(sent_at)
                 ORDER BY send_date ASC
@@ -124,8 +124,9 @@ def get_top_performing_templates(
                         NULLIF(COUNT(dl.id), 0) * 100, 1
                     ) AS delivery_rate
                 FROM sms_delivery_log dl
-                JOIN sms_templates t ON dl.template_id = t.id
-                WHERE dl.sent_at >= NOW() - INTERVAL '{days} days'
+                JOIN sms_queue sq ON sq.telnyx_message_id = dl.telnyx_message_id
+                JOIN sms_templates t ON sq.template_id = t.id
+                WHERE dl.sent_at >= NOW() - make_interval(days => :days)
                 {user_filter}
                 GROUP BY t.name
                 ORDER BY delivery_rate DESC
@@ -154,7 +155,7 @@ def get_agent_leaderboard(
             text(f"""
                 SELECT
                     u.email AS agent_email,
-                    u.full_name AS agent_name,
+                    CONCAT(u.first_name, ' ', u.last_name) AS agent_name,
                     COUNT(dl.id) AS total_sent,
                     ROUND(
                         COUNT(dl.id) FILTER (WHERE dl.status = 'delivered')::numeric /
@@ -162,12 +163,12 @@ def get_agent_leaderboard(
                     ) AS delivery_rate
                 FROM sms_delivery_log dl
                 JOIN users u ON dl.user_id = u.id
-                WHERE dl.sent_at >= NOW() - INTERVAL '{days} days'
-                GROUP BY u.email, u.full_name
+                WHERE dl.sent_at >= NOW() - make_interval(days => :days)
+                GROUP BY u.email, u.first_name, u.last_name
                 ORDER BY total_sent DESC
                 LIMIT :limit
             """),
-            {"limit": limit},
+            {"limit": limit, "days": days},
         ).fetchall()
 
         return [
@@ -191,13 +192,14 @@ def get_opt_out_trends(
     """Return daily opt-out counts."""
     try:
         rows = db.execute(
-            text(f"""
+            text("""
                 SELECT DATE(opted_out_at) AS opt_date, COUNT(*) AS opt_outs
                 FROM sms_opt_outs
-                WHERE opted_out_at >= NOW() - INTERVAL '{days} days'
+                WHERE opted_out_at >= NOW() - make_interval(days => :days)
                 GROUP BY DATE(opted_out_at)
                 ORDER BY opt_date ASC
-            """)
+            """),
+            {"days": days},
         ).fetchall()
 
         return [{"date": str(r[0]), "opt_outs": r[1]} for r in rows]
@@ -212,7 +214,8 @@ def get_opt_out_trends(
 def _get_opt_out_count(db: Session, days: int, user_id: Optional[int]) -> int:
     try:
         row = db.execute(
-            text(f"SELECT COUNT(*) FROM sms_opt_outs WHERE opted_out_at >= NOW() - INTERVAL '{days} days'")
+            text("SELECT COUNT(*) FROM sms_opt_outs WHERE opted_out_at >= NOW() - make_interval(days => :days)"),
+            {"days": days},
         ).fetchone()
         return row[0] if row else 0
     except Exception:
@@ -226,7 +229,7 @@ def _get_compliance_blocks(db: Session, days: int, user_id: Optional[int]) -> in
         if user_id:
             params["user_id"] = user_id
         row = db.execute(
-            text(f"SELECT COUNT(*) FROM sms_compliance_log WHERE check_result != 'passed' AND checked_at >= NOW() - INTERVAL '{days} days' {user_filter}"),
+            text(f"SELECT COUNT(*) FROM sms_compliance_log WHERE check_result != 'passed' AND checked_at >= NOW() - make_interval(days => :days) {user_filter}"),
             params,
         ).fetchone()
         return row[0] if row else 0

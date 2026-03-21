@@ -103,12 +103,12 @@ def _verify_channel_token(token: str) -> tuple[int | None, int | None, bool]:
             logger.warning("Calendar webhook: invalid HMAC signature in channel token")
         return org_id, user_id, is_valid
 
-    # Legacy unsigned token — accept with warning (backward compatible)
-    logger.warning(
-        "Calendar webhook: unsigned channel token (legacy). "
+    # Legacy unsigned token — reject (NC4: unsigned tokens are a spoofing risk)
+    logger.error(
+        "Calendar webhook: unsigned channel token rejected. "
         "Re-register the watch channel to get a signed token."
     )
-    return org_id, user_id, True
+    return org_id, user_id, False
 
 
 # ============================================================================

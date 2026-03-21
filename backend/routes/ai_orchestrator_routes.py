@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
+from collections import defaultdict
 import logging
 import json
 import uuid
@@ -17,6 +18,125 @@ from routes.auth_deps import current_user_flexible_dep
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/ai")
+
+
+# =============================================================================
+# RATE LIMITER — per-user, in-memory sliding window
+# =============================================================================
+
+# In-memory sliding window rate limiter.
+# Intentionally in-memory for single-instance Railway deployment.
+# For multi-instance, replace with Redis-backed limiter.
+_rate_limit_store: Dict[str, list] = defaultdict(list)
+RATE_LIMIT_MAX_REQUESTS = int(os.getenv("AI_RATE_LIMIT_MAX", "15"))  # per-user requests
+RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("AI_RATE_LIMIT_WINDOW", "60"))  # per window
+RATE_LIMIT_ORG_MAX = int(os.getenv("AI_RATE_LIMIT_ORG_MAX", "100"))  # per-org requests
+
+
+def _check_rate_limit(user_id: str, org_id: str = None) -> None:
+    """
+    Check per-user and per-organization rate limit using a sliding window.
+    Raises HTTPException 429 if limit exceeded.
+    """
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW_SECONDS
+
+    # Per-user check
+    timestamps = _rate_limit_store[user_id]
+    _rate_limit_store[user_id] = [t for t in timestamps if t > window_start]
+
+    if len(_rate_limit_store[user_id]) >= RATE_LIMIT_MAX_REQUESTS:
+        retry_after = int(RATE_LIMIT_WINDOW_SECONDS - (now - _rate_limit_store[user_id][0]))
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Max {RATE_LIMIT_MAX_REQUESTS} requests per {RATE_LIMIT_WINDOW_SECONDS}s. Retry after {max(retry_after, 1)}s.",
+            headers={"Retry-After": str(max(retry_after, 1))}
+        )
+
+    # Per-organization check
+    if org_id:
+        org_key = f"org:{org_id}"
+        org_timestamps = _rate_limit_store[org_key]
+        _rate_limit_store[org_key] = [t for t in org_timestamps if t > window_start]
+        if len(_rate_limit_store[org_key]) >= RATE_LIMIT_ORG_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Organization rate limit exceeded. Please wait before sending more requests.",
+                headers={"Retry-After": str(RATE_LIMIT_WINDOW_SECONDS)}
+            )
+        _rate_limit_store[org_key].append(now)
+
+    _rate_limit_store[user_id].append(now)
+
+
+# =============================================================================
+# INPUT SANITIZATION
+# =============================================================================
+
+# Max message length to prevent abuse
+MAX_MESSAGE_LENGTH = int(os.getenv("AI_MAX_MESSAGE_LENGTH", "10000"))
+
+
+def _sanitize_message(message: str) -> str:
+    """
+    Sanitize user message before sending to LLM.
+    Strips HTML, limits length, and adds basic prompt injection guardrails.
+    """
+    if not message:
+        return message
+
+    # Strip HTML tags using nh3 if available, otherwise basic strip
+    try:
+        import nh3
+        message = nh3.clean(message, tags=set())  # Remove all HTML tags
+    except ImportError:
+        import re
+        message = re.sub(r'<[^>]+>', '', message)
+
+    # Enforce max length
+    if len(message) > MAX_MESSAGE_LENGTH:
+        message = message[:MAX_MESSAGE_LENGTH]
+        logger.warning(f"Message truncated to {MAX_MESSAGE_LENGTH} chars")
+
+    return message.strip()
+
+
+def _sanitize_document_context(context: Optional[str]) -> Optional[str]:
+    """
+    Sanitize extracted document context before injecting into LLM prompt.
+    Strips HTML, filters prompt injection patterns, and wraps in clear delimiters
+    so LLM can distinguish document content from instructions.
+    """
+    if not context:
+        return None
+
+    # Strip HTML
+    try:
+        import nh3
+        context = nh3.clean(context, tags=set())
+    except ImportError:
+        import re
+        context = re.sub(r'<[^>]+>', '', context)
+
+    # Filter common prompt injection patterns from document content
+    import re
+    injection_patterns = [
+        r"(?i)ignore\s+(previous|all|above|prior)\s+instructions",
+        r"(?i)you\s+are\s+now\s+a",
+        r"(?i)system\s*prompt\s*:",
+        r"(?i)new\s+instructions?\s*:",
+        r"<\|.*?\|>",
+    ]
+    for pattern in injection_patterns:
+        context = re.sub(pattern, "[FILTERED]", context)
+
+    # Truncate if too long
+    max_doc_length = 50000
+    if len(context) > max_doc_length:
+        context = context[:max_doc_length]
+
+    # Wrap in clear delimiters to prevent prompt injection via document content
+    return f"[DOCUMENT CONTENT START]\n{context}\n[DOCUMENT CONTENT END]"
 
 
 def get_db_dep(request: Request = None):
@@ -142,10 +262,15 @@ async def orchestrator_chat(
 
         request_start_time = time.time()
 
+        # Rate limit check (per-user and per-org)
+        user_id_str = str(getattr(current_user, 'id', 'unknown'))
+        org_id_str = str(getattr(current_user, 'organization_id', '')) or None
+        _check_rate_limit(user_id_str, org_id_str)
+
         data = await request.json()
-        message = data.get("message", "")
+        message = _sanitize_message(data.get("message", ""))
         session_id = data.get("session_id")
-        document_context = data.get("document_context")
+        document_context = _sanitize_document_context(data.get("document_context"))
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
@@ -206,8 +331,13 @@ async def orchestrator_chat_stream(
     Streaming AI Chat - sends response tokens as they're generated.
     Uses Server-Sent Events (SSE) for real-time streaming via the LangGraph agent.
     """
+    # Rate limit check (per-user and per-org)
+    user_id_str = str(getattr(current_user, 'id', 'unknown'))
+    org_id_str = str(getattr(current_user, 'organization_id', '')) or None
+    _check_rate_limit(user_id_str, org_id_str)
+
     data = await request.json()
-    message = data.get("message", "")
+    message = _sanitize_message(data.get("message", ""))
     session_id = data.get("session_id") or str(uuid.uuid4())
 
     if not message:

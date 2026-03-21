@@ -27,6 +27,8 @@ class WebhookSubscription(Base):
     # Webhook configuration
     name = Column(String, nullable=False)
     url = Column(Text, nullable=False)
+    # TODO: COMP-004 — Encrypt webhook secrets at rest using field-level encryption
+    # when WEBHOOK_SECRET_ENCRYPTION_KEY is available. Currently stored in plaintext.
     secret = Column(String, nullable=False)  # HMAC signing secret
 
     # Event subscriptions (e.g., ["lead.created", "loan.funded"])

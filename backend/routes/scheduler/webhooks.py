@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 import logging
 
 from routes.scheduler._helpers import (
@@ -62,6 +62,17 @@ class WebhookRegisterRequest(BaseModel):
         None,
         description="Custom headers to include on every delivery",
     )
+
+    @validator("url")
+    def validate_url(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) > 2048:
+            raise ValueError("URL must not exceed 2048 characters")
+        if not v.startswith("https://"):
+            # Allow http only for localhost/dev environments
+            if not (v.startswith("http://localhost") or v.startswith("http://127.0.0.1")):
+                raise ValueError("Webhook URL must use HTTPS")
+        return v
 
 
 class WebhookResponse(BaseModel):

@@ -83,6 +83,39 @@ const CalendarToolbar = React.memo(function CalendarToolbar({
           >
             Month
           </button>
+          <span className="view-divider" aria-hidden="true">|</span>
+          <button
+            role="tab"
+            aria-selected={view === 'analytics'}
+            className={view === 'analytics' ? 'active' : ''}
+            onClick={() => onViewChange('analytics')}
+          >
+            Analytics
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === 'no-shows'}
+            className={view === 'no-shows' ? 'active' : ''}
+            onClick={() => onViewChange('no-shows')}
+          >
+            No-Shows
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === 'outcomes'}
+            className={view === 'outcomes' ? 'active' : ''}
+            onClick={() => onViewChange('outcomes')}
+          >
+            Outcomes
+          </button>
+          <button
+            role="tab"
+            aria-selected={view === 'webhooks'}
+            className={view === 'webhooks' ? 'active' : ''}
+            onClick={() => onViewChange('webhooks')}
+          >
+            Webhooks
+          </button>
         </div>
         <div className="month-navigation">
           <button onClick={onPrev} aria-label={`Previous ${view}`}>&larr;</button>

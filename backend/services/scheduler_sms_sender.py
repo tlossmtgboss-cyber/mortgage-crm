@@ -18,6 +18,14 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
+
+def _mask_phone(phone):
+    """OBS-004: Mask phone number for safe logging."""
+    if not phone or len(phone) < 7:
+        return "***"
+    return phone[:2] + "***" + phone[-4:]
+
+
 # --- Re-exports from shared compliance module (backward compatibility) ---
 from services.sms_compliance import check_sms_consent, _check_contact_hours  # noqa: F401
 
@@ -39,7 +47,7 @@ def send_appointment_confirmation_sms(
         # TCPA/DNC consent check (scoped by org)
         can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
         if not can_send:
-            logger.info(f"SMS consent check blocked confirmation to {attendee_phone}: {reason}")
+            logger.info(f"SMS consent check blocked confirmation to {_mask_phone(attendee_phone)}: {reason}")
             return False
 
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
@@ -63,7 +71,7 @@ def send_appointment_confirmation_sms(
         )
 
         msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
-        logger.info(f"Appointment confirmation SMS sent to {attendee_phone}, ID: {msg_id}")
+        logger.info(f"Appointment confirmation SMS sent to {_mask_phone(attendee_phone)}, ID: {msg_id}")
         return True
 
     except Exception as e:
@@ -84,7 +92,7 @@ def send_appointment_update_sms(
         # TCPA/DNC consent check (scoped by org)
         can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
         if not can_send:
-            logger.info(f"SMS consent check blocked update to {attendee_phone}: {reason}")
+            logger.info(f"SMS consent check blocked update to {_mask_phone(attendee_phone)}: {reason}")
             return False
 
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
@@ -105,7 +113,7 @@ def send_appointment_update_sms(
         )
 
         msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
-        logger.info(f"Appointment update SMS sent to {attendee_phone}, ID: {msg_id}")
+        logger.info(f"Appointment update SMS sent to {_mask_phone(attendee_phone)}, ID: {msg_id}")
         return True
 
     except Exception as e:
@@ -128,7 +136,7 @@ def send_appointment_reminder_sms(
         # TCPA/DNC consent check (scoped by org)
         can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
         if not can_send:
-            logger.info(f"SMS consent check blocked reminder to {attendee_phone}: {reason}")
+            logger.info(f"SMS consent check blocked reminder to {_mask_phone(attendee_phone)}: {reason}")
             return {"success": False, "error": f"Consent blocked: {reason}"}
 
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
@@ -159,7 +167,7 @@ def send_appointment_reminder_sms(
         )
 
         msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
-        logger.info(f"Appointment reminder SMS sent to {attendee_phone}, ID: {msg_id}")
+        logger.info(f"Appointment reminder SMS sent to {_mask_phone(attendee_phone)}, ID: {msg_id}")
         return {"success": True, "message_id": msg_id}
 
     except Exception as e:

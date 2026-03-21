@@ -24,6 +24,19 @@ from utils.pii_mask import mask_phone
 
 logger = logging.getLogger(__name__)
 
+
+# OBS-002: Wrapper to surface background task failures in logs
+async def _safe_background_task_vm(func, *args, task_name="unknown", **kwargs):
+    """Wrapper that logs background task failures instead of silently dropping them."""
+    try:
+        if asyncio.iscoroutinefunction(func):
+            await func(*args, **kwargs)
+        else:
+            func(*args, **kwargs)
+    except Exception as e:
+        logger.error(f"Background task '{task_name}' failed: {e}", exc_info=True)
+
+
 router = APIRouter(prefix="/api/v1/voicemail", tags=["Voicemail Drop"])
 
 # =============================================================================
@@ -1501,7 +1514,9 @@ async def upload_template_audio(
             raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(ALLOWED_AUDIO_UPLOAD_EXTS)}")
 
         # Stream to disk with size enforcement (prevents DOS from large uploads)
-        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
+        # TENANT-007: Namespace file storage by organization to prevent cross-tenant access
+        org_id = getattr(current_user, 'organization_id', None) or 'default'
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", f"org_{org_id}", "voicemail_audio")
         os.makedirs(upload_dir, exist_ok=True)
 
         safe_name = f"{template_id}_{uuid.uuid4().hex[:8]}{file_ext}"
@@ -1565,7 +1580,9 @@ async def serve_voicemail_audio(
     """Serve uploaded voicemail audio files (authenticated)."""
     # Sanitize filename to prevent directory traversal
     safe_name = os.path.basename(filename)
-    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
+    # TENANT-007: Serve files from org-namespaced directory
+    org_id = getattr(current_user, 'organization_id', None) or 'default'
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", f"org_{org_id}", "voicemail_audio")
     file_path = os.path.join(upload_dir, safe_name)
 
     if not os.path.exists(file_path):
@@ -1802,8 +1819,10 @@ async def delete_template_audio(
 
     if template.audio_url:
         # Delete physical file
+        # TENANT-007: Use org-namespaced directory
         safe_name = os.path.basename(template.audio_url)
-        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "voicemail_audio")
+        org_id = getattr(current_user, 'organization_id', None) or 'default'
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", f"org_{org_id}", "voicemail_audio")
         file_path = os.path.join(upload_dir, safe_name)
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -2482,9 +2501,12 @@ async def start_campaign(
             raise HTTPException(status_code=409, detail="Campaign was already started by another request")
 
         # Offload all heavy work to background
+        # OBS-002: Wrapped with _safe_background_task_vm for error surfacing
         user_name = current_user.full_name or "your loan officer"
         background_tasks.add_task(
-            _resolve_and_dispatch_campaign, campaign_id, current_user.id, user_name
+            _safe_background_task_vm,
+            _resolve_and_dispatch_campaign, campaign_id, current_user.id, user_name,
+            task_name="resolve_and_dispatch_campaign",
         )
 
         logger.info(f"Campaign {campaign_id} started — contact resolution running in background")

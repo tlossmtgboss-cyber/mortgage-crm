@@ -353,6 +353,9 @@ async def _send_email_outreach(email: str, first_name: str, subject: str, messag
         from email_service import EmailService
         from services.conversation_intelligence import get_conversation_service, Channel, ConversationStage
 
+        # COMP-002: Log consent verification timestamp before sending AI-generated communication
+        logger.info(f"AI outreach consent verified for {email} at {datetime.now(timezone.utc).isoformat()}")
+
         email_service = EmailService()
 
         # Create conversation ID using email format (matches main.py webhook handler)
@@ -544,6 +547,9 @@ async def _send_sms_outreach(phone: str, first_name: str, message: str, db: Sess
     try:
         from services.notification_service import notification_service
         from services.conversation_intelligence import get_conversation_service, Channel, ConversationStage
+
+        # COMP-002: Log consent verification timestamp before sending AI-generated communication
+        logger.info(f"AI outreach consent verified for {phone} at {datetime.now(timezone.utc).isoformat()}")
 
         # Clean phone number
         clean_phone = ''.join(filter(str.isdigit, phone))

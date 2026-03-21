@@ -45,14 +45,27 @@ class SMSOptOutManager:
         # Check DB if available
         if self.db:
             try:
-                from backend.models.sms_opt_out import SMSOptOut
+                from models.sms_models import SMSOptOut
                 record = self.db.query(SMSOptOut).filter(
-                    SMSOptOut.phone == normalized,
-                    SMSOptOut.is_active == True,
+                    SMSOptOut.phone_number == normalized,
+                    SMSOptOut.active == True,
                 ).first()
                 if record:
-                    self._opted_out[key] = {"phone": normalized, "opted_out_at": record.created_at}
+                    self._opted_out[key] = {"phone": normalized, "opted_out_at": record.opted_out_at}
                     return True
+            except ImportError:
+                # Fallback: raw SQL if ORM model not importable
+                try:
+                    from sqlalchemy import text
+                    row = self.db.execute(
+                        text("SELECT id FROM sms_opt_outs WHERE phone_number = :phone AND active = TRUE LIMIT 1"),
+                        {"phone": normalized},
+                    ).fetchone()
+                    if row:
+                        self._opted_out[key] = {"phone": normalized, "opted_out_at": datetime.utcnow().isoformat()}
+                        return True
+                except Exception as e2:
+                    logger.debug(f"DB opt-out check skipped: {e2}")
             except Exception as e:
                 logger.debug(f"DB opt-out check skipped: {e}")
 
@@ -74,20 +87,20 @@ class SMSOptOutManager:
         # Persist to DB
         if self.db:
             try:
-                from backend.models.sms_opt_out import SMSOptOut
-                existing = self.db.query(SMSOptOut).filter(
-                    SMSOptOut.phone == normalized,
-                ).first()
-                if not existing:
-                    entry = SMSOptOut(
-                        phone=normalized,
-                        reason=reason,
-                        tenant_id=tenant_id,
-                        is_active=True,
-                    )
-                    self.db.add(entry)
-                    self.db.commit()
+                from sqlalchemy import text
+                self.db.execute(
+                    text("""
+                        INSERT INTO sms_opt_outs (phone_number, opt_out_keyword, organization_id, opted_out_at, active)
+                        VALUES (:phone, :keyword, :org_id, NOW(), TRUE)
+                        ON CONFLICT (phone_number) DO UPDATE
+                          SET active = TRUE, opted_out_at = NOW(), opt_out_keyword = :keyword,
+                              organization_id = COALESCE(:org_id, sms_opt_outs.organization_id)
+                    """),
+                    {"phone": normalized, "keyword": reason[:20], "org_id": int(tenant_id) if tenant_id and tenant_id.isdigit() else None},
+                )
+                self.db.commit()
             except Exception as e:
+                self.db.rollback()
                 logger.error(f"Failed to persist opt-out to DB: {e}")
 
         return record
@@ -101,14 +114,17 @@ class SMSOptOutManager:
         # Update DB
         if self.db:
             try:
-                from backend.models.sms_opt_out import SMSOptOut
-                record = self.db.query(SMSOptOut).filter(
-                    SMSOptOut.phone == normalized,
-                ).first()
-                if record:
-                    record.is_active = False
-                    self.db.commit()
+                from sqlalchemy import text
+                self.db.execute(
+                    text("""
+                        UPDATE sms_opt_outs SET active = FALSE, opted_in_at = NOW()
+                        WHERE phone_number = :phone
+                    """),
+                    {"phone": normalized},
+                )
+                self.db.commit()
             except Exception as e:
+                self.db.rollback()
                 logger.error(f"Failed to update opt-in in DB: {e}")
 
         if removed:
@@ -195,18 +211,21 @@ class SMSOptOutManager:
             return f"+1{digits}"
         if len(digits) == 11 and digits.startswith("1"):
             return f"+{digits}"
-        return f"+{digits}" if not digits.startswith("+") else phone
+        if len(digits) >= 10:
+            return f"+{digits}"
+        return phone
 
 
-# ── Singleton ───────────────────────────────────────────────────────────────────
-_manager: Optional[SMSOptOutManager] = None
+# ── Factory (no singleton — avoids stale DB session) ──────────────────────────
 
 
 def get_opt_out_manager(db=None) -> SMSOptOutManager:
-    global _manager
-    if _manager is None:
-        _manager = SMSOptOutManager(db=db)
-    return _manager
+    """Create a new manager with the provided DB session.
+
+    Previously used a singleton, but that caused stale session issues
+    in multi-worker deployments. Each call now gets a fresh instance.
+    """
+    return SMSOptOutManager(db=db)
 
 
 def is_opted_out(phone: str, tenant_id: Optional[str] = None, db=None) -> bool:

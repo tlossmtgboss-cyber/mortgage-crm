@@ -160,11 +160,21 @@ async def execute_tool(
 
                 return tool_call
 
-        # Execute the tool (handle both sync and async)
-        if asyncio.iscoroutinefunction(func):
-            result = await func(arguments)
-        else:
-            result = func(arguments)
+        # Execute the tool (handle both sync and async) with timeout
+        TOOL_TIMEOUT = 15  # seconds
+        try:
+            if asyncio.iscoroutinefunction(func):
+                result = await asyncio.wait_for(func(arguments), timeout=TOOL_TIMEOUT)
+            else:
+                loop = asyncio.get_event_loop()
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(None, func, arguments), timeout=TOOL_TIMEOUT
+                )
+        except asyncio.TimeoutError:
+            tool_call.error = f"Tool '{tool_name}' timed out after {TOOL_TIMEOUT}s"
+            tool_call.execution_time_ms = (time.time() - start_time) * 1000
+            logger.error(f"Tool {tool_name} timed out after {TOOL_TIMEOUT}s")
+            return tool_call
 
         tool_call.result = result
         tool_call.execution_time_ms = (time.time() - start_time) * 1000

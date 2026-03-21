@@ -50,6 +50,7 @@ class Lead(Base):
         Index('ix_leads_owner_stage', 'owner_id', 'stage'),
         Index('ix_leads_organization_id', 'organization_id'),
         Index('ix_leads_org_stage', 'organization_id', 'stage'),
+        Index('ix_leads_org_created', 'organization_id', 'created_at'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -58,7 +59,7 @@ class Lead(Base):
     first_name = Column(String)
     last_name = Column(String)
     email = Column(String, index=True)
-    phone = Column(String)
+    phone = Column(String, index=True)
 
     # Co-applicant
     co_applicant_name = Column(String)
@@ -219,6 +220,12 @@ class Lead(Base):
     fub_person_id = Column(Integer)
     fub_last_synced_at = Column(DateTime)
 
+    # AI tracking (COMP-001: mark AI-generated modifications)
+    last_modified_by_ai = Column(Boolean, default=False, server_default="false")
+
+    # GDPR retention (COMP-004: PII retention with automated expiry)
+    data_retention_expires_at = Column(DateTime, nullable=True)
+
     # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -240,6 +247,14 @@ class Lead(Base):
             logging.getLogger(__name__).warning(
                 f"Lead stage '{value}' not in LeadStage enum — allowing for backward compat"
             )
+        return value
+
+    @validates('first_name', 'last_name')
+    def validate_required_fields(self, key, value):
+        """Warn on empty required fields (not enforced as NOT NULL to avoid migration breakage)."""
+        if not value or not str(value).strip():
+            import logging
+            logging.getLogger(__name__).warning(f"Lead.{key} should not be empty")
         return value
 
     # Relationships
@@ -265,6 +280,7 @@ class Loan(Base):
         Index('ix_loans_officer_stage', 'loan_officer_id', 'stage'),
         Index('ix_loans_organization_id', 'organization_id'),
         Index('ix_loans_org_stage', 'organization_id', 'stage'),
+        Index('ix_loans_org_created', 'organization_id', 'created_at'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -454,6 +470,9 @@ class Loan(Base):
     encompass_loan_id = Column(String, index=True, nullable=True)
     encompass_last_synced_at = Column(DateTime, nullable=True)
     encompass_sync_status = Column(String, nullable=True)  # "synced", "pending", "error"
+
+    # AI tracking (COMP-001: mark AI-generated modifications)
+    last_modified_by_ai = Column(Boolean, default=False, server_default="false")
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

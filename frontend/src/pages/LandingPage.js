@@ -253,7 +253,7 @@ function LandingPage() {
       <footer className="landing-footer">
         <div className="footer-content">
           <div className="footer-section">
-            <h4>Mortgage CRM</h4>
+            <h4>Perennia AI</h4>
             <p>AI-powered CRM for mortgage professionals</p>
           </div>
           <div className="footer-section">
@@ -284,7 +284,7 @@ function LandingPage() {
           </div>
         </div>
         <div className="footer-bottom">
-          <p>© 2025 Mortgage CRM. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Perennia AI. All rights reserved.</p>
         </div>
       </footer>
     </div>

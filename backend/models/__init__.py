@@ -127,7 +127,15 @@ from .sms_models import (
     SMSComplianceLog,
     SMSDeliveryStatus,
     SMSAnalytics,
-    SMSRateLimit,
+    SMSRateLimitLog,
     SMSScheduledMessage,
-    SMSQueue
+    SMSQueue,
+    SMSConversation,
+    SMSDeliveryLog,
 )
+# Backward compat alias
+SMSRateLimit = SMSRateLimitLog
+
+# Eagerly import submodules so `from models.X import Y` works even after
+# models/__init__.py is partially loaded by conftest/main import chains.
+from . import smart_docs_models as smart_docs_models  # noqa: F401

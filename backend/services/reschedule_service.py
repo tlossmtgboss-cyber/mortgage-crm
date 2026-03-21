@@ -128,6 +128,7 @@ class RescheduleService:
             check_cross_source=True,
             include_user_id=False,
             time_key_format="start",
+            exclude_appointment_id=appointment_id,
         )
         return slots
 

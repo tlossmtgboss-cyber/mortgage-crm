@@ -298,7 +298,6 @@ async def get_booking_link_analytics(
                 recent_bookings.append({
                     "appointment_id": row.entity_id,
                     "booked_at": row.created_at.isoformat() if row.created_at else None,
-                    "ip_address": row.ip_address,
                 })
 
     # Appointment outcome breakdown (if we can correlate)

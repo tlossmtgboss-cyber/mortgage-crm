@@ -37,6 +37,15 @@ from .hallucination_verifier import get_hallucination_verifier
 logger = logging.getLogger(__name__)
 
 
+def _is_retryable(error: Exception) -> bool:
+    """Check if error is transient and worth retrying."""
+    error_str = str(error).lower()
+    return any(keyword in error_str for keyword in [
+        'rate_limit', 'timeout', '429', '503', 'overloaded',
+        'internal_error', 'connection', 'temporarily'
+    ])
+
+
 # Intent to scoped tools mapping (matches analyze.py)
 INTENT_TO_SCOPED_TOOLS = {
     # Fast response intents (use Haiku, minimal tools)
@@ -188,25 +197,26 @@ def create_orchestrator(
                 return "execute"
             return "respond"
 
-        def should_skip_reasoning(state: AgentState) -> Literal["reason", "respond"]:
-            """Determine if reasoning can be skipped for simple queries."""
+        def should_skip_reasoning(state: AgentState) -> Literal["reason", "execute_check"]:
+            """Determine if reasoning can be skipped for simple queries.
+            Always routes to execute_check (not respond) to ensure actions are never skipped."""
             query_complexity = state.get("query_complexity", "moderate")
             data_quality = state.get("data_quality", "complete")
 
             if query_complexity == "simple" and data_quality == "complete":
                 gathered_data = state.get("gathered_data", {})
                 if len(gathered_data) <= 1:
-                    return "respond"
+                    return "execute_check"
             return "reason"
 
-        # Define edges
+        # Define edges — execute node is ALWAYS reachable
         workflow.set_entry_point("analyze")
         workflow.add_edge("analyze", "gather")
 
         workflow.add_conditional_edges(
             "gather",
             should_skip_reasoning,
-            {"reason": "reason", "respond": "respond"}
+            {"reason": "reason", "execute_check": "execute"}
         )
 
         workflow.add_conditional_edges(
@@ -326,6 +336,11 @@ async def run_orchestrator(
             # Fallback to provided tools or empty
             scoped_tools = tool_functions or {}
 
+        # Warn and fall back if no tools available for this intent
+        if not scoped_tools and tool_functions:
+            logger.warning(f"[ORCHESTRATOR] No tools available for intent '{intent}' — falling back to all provided tools")
+            scoped_tools = tool_functions
+
         timing["load_tools"] = (time.perf_counter() - step_start) * 1000
         tool_count = len(scoped_tools)
 
@@ -344,7 +359,13 @@ async def run_orchestrator(
             resolved_org_id = getattr(current_user, 'organization_id', None)
 
         if resolved_org_id is None:
-            logger.warning(f"[ORCHESTRATOR] No organization_id for user {user_id} — tenant isolation degraded")
+            logger.error(f"[ORCHESTRATOR] No organization_id for user {user_id} — tenant isolation BLOCKED")
+            return {
+                "response": "Unable to process your request. Your account is missing organization context. Please contact support.",
+                "error": "tenant_isolation_failed",
+                "error_type": "authorization",
+                "processing_time_seconds": (datetime.utcnow() - start_time).total_seconds()
+            }
 
         state = create_initial_state(
             user_message=message,
@@ -383,10 +404,21 @@ async def run_orchestrator(
         logger.info(f"[ORCHESTRATOR] Graph created with {tool_count} scoped tools")
 
         # ================================================================
-        # STEP 3: Execute workflow
+        # STEP 3: Execute workflow (with retry on transient LLM failures)
         # ================================================================
         step_start = time.perf_counter()
-        final_state = await orchestrator.ainvoke(state)
+        MAX_RETRIES = 2
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                final_state = await orchestrator.ainvoke(state)
+                break
+            except Exception as workflow_err:
+                if attempt < MAX_RETRIES and _is_retryable(workflow_err):
+                    wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s
+                    logger.warning(f"[ORCHESTRATOR] LLM retry {attempt + 1}/{MAX_RETRIES} after {wait_time}s: {workflow_err}")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise
         timing["workflow_execute"] = (time.perf_counter() - step_start) * 1000
 
         # ================================================================
@@ -431,15 +463,42 @@ async def run_orchestrator(
             response["warnings"] = errors
 
         # ================================================================
-        # HALLUCINATION VERIFICATION (Background - non-blocking)
+        # AUDIT LOGGING — record agent decision for compliance trail
         # ================================================================
-        # Run hallucination check in background to not delay response
+        try:
+            from sqlalchemy import text as sa_text
+            if db_session and resolved_org_id:
+                response_text = response.get("response", "")
+                db_session.execute(sa_text("""
+                    INSERT INTO ai_audit_log
+                        (action_type, input_summary, output_summary, user_id, organization_id,
+                         model_used, tokens_used, created_at)
+                    VALUES (:action, :input, :output, :user_id, :org_id, :model, :tokens, NOW())
+                """), {
+                    "action": intent or "chat",
+                    "input": str(message)[:2000],
+                    "output": str(response_text)[:2000],
+                    "user_id": user_id,
+                    "org_id": resolved_org_id,
+                    "model": "anthropic",
+                    "tokens": 0,
+                })
+                db_session.flush()
+        except Exception as audit_err:
+            logger.warning(f"Failed to log AI audit: {audit_err}")
+
+        # ================================================================
+        # HALLUCINATION VERIFICATION
+        # Blocking for compliance-sensitive intents, background for others
+        # ================================================================
+        BLOCKING_VERIFICATION_INTENTS = {"compliance", "rates", "sla"}
         verification_enabled = os.getenv("ENABLE_HALLUCINATION_VERIFICATION", "true").lower() == "true"
+        verification_timeout = int(os.getenv("HALLUCINATION_VERIFICATION_TIMEOUT", "30"))
         if verification_enabled and final_state.get("response") and final_state.get("gathered_data"):
             try:
-                # Fire and forget - verification runs asynchronously
-                asyncio.create_task(
-                    _verify_response_hallucinations(
+                async def _run_verification_task():
+                    """Run hallucination verification."""
+                    return await _verify_response_hallucinations(
                         session_id=conversation_id or state.get("session_id"),
                         message_id=f"msg_{datetime.utcnow().timestamp()}",
                         response_text=final_state.get("response", ""),
@@ -448,8 +507,37 @@ async def run_orchestrator(
                         user_id=user_id,
                         db_session=db_session
                     )
-                )
-                logger.debug("[ORCHESTRATOR] Hallucination verification started in background")
+
+                if intent in BLOCKING_VERIFICATION_INTENTS:
+                    # Blocking mode for compliance-sensitive intents
+                    try:
+                        verification = await asyncio.wait_for(
+                            _run_verification_task(), timeout=10.0
+                        )
+                        if verification and hasattr(verification, 'faithfulness_score') and verification.faithfulness_score < 0.7:
+                            response["response"] += "\n\nThis response may need human verification for accuracy."
+                            logger.warning(f"[HALLUCINATION] Low faithfulness ({verification.faithfulness_score:.2%}) for compliance intent '{intent}'")
+                    except asyncio.TimeoutError:
+                        logger.warning("[HALLUCINATION] Blocking hallucination check timed out after 10s")
+                    except Exception as verify_err:
+                        logger.warning(f"[HALLUCINATION] Blocking verification failed: {verify_err}")
+                else:
+                    # Non-blocking for general queries
+                    async def _run_verification_with_timeout():
+                        """Wrapper with timeout and error handling for background verification."""
+                        try:
+                            await asyncio.wait_for(_run_verification_task(), timeout=verification_timeout)
+                        except asyncio.TimeoutError:
+                            logger.warning(f"[HALLUCINATION] Verification timed out after {verification_timeout}s")
+                        except Exception as verify_err:
+                            logger.error(f"[HALLUCINATION] Background verification failed: {verify_err}", exc_info=True)
+
+                    task = asyncio.create_task(_run_verification_with_timeout())
+                    task.add_done_callback(
+                        lambda t: logger.error(f"[HALLUCINATION] Task error: {t.exception()}", exc_info=t.exception())
+                        if t.exception() else None
+                    )
+                    logger.debug("[ORCHESTRATOR] Hallucination verification started in background")
             except Exception as e:
                 logger.warning(f"[ORCHESTRATOR] Failed to start hallucination verification: {e}")
 
@@ -490,9 +578,26 @@ async def run_orchestrator(
     except Exception as e:
         processing_time = (datetime.utcnow() - start_time).total_seconds()
         logger.error(f"[ORCHESTRATOR] FAILED after {processing_time:.2f}s: {e}", exc_info=True)
+
+        # Classify error type for client-side handling
+        error_type = "internal"
+        error_msg = "I apologize, but I encountered an error processing your request. Please try again."
+
+        err_name = type(e).__name__
+        if "Anthropic" in err_name or "APIError" in err_name or "RateLimitError" in err_name:
+            error_type = "external_api"
+            error_msg = "The AI service is temporarily unavailable. Please try again in a moment."
+        elif "Timeout" in err_name or "TimeoutError" in err_name:
+            error_type = "timeout"
+            error_msg = "The request took too long to process. Please try a simpler query."
+        elif "SQLAlchemy" in err_name or "OperationalError" in err_name:
+            error_type = "database"
+            error_msg = "A database error occurred. Please try again."
+
         return {
-            "response": f"I apologize, but I encountered an error processing your request. Please try again.",
+            "response": error_msg,
             "error": "Internal server error",
+            "error_type": error_type,
             "processing_time_seconds": processing_time
         }
 

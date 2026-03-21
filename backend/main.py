@@ -149,9 +149,13 @@ try:
     _redis_url = os.getenv("REDIS_URL")
     if _redis_url:
         token_blacklist.initialize(_redis_url)
-        logger.info("✅ Token blacklist initialized with Redis")
+        logger.info("Token blacklist initialized with Redis")
     else:
-        logger.warning("⚠️ Token blacklist disabled (no REDIS_URL)")
+        _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+        if _env in ("production", "staging"):
+            logger.error("REDIS_URL not set — token revocation disabled in production")
+        else:
+            logger.warning("REDIS_URL not set — using in-memory token blacklist (dev only)")
 except ImportError as e:
     logger.warning(f"⚠️ Secure auth module not available, using legacy JWT: {e}")
     _USE_SECURE_TOKENS = False
@@ -662,6 +666,9 @@ async def get_current_user(
     actual_user = None
 
     # Check if token is an API key (starts with 'sk_')
+    # SEC-003: API keys are currently stored and compared in plaintext.
+    # TODO: Migrate to hashed API key storage (bcrypt or sha256) — store
+    # only the hash, compare hash(input) == stored_hash on lookup.
     if token.startswith('sk_'):
         api_key = db.query(ApiKey).filter(
             ApiKey.key == token,
@@ -848,6 +855,8 @@ async def get_current_user_flexible(
         raise credentials_exception
 
     # Check if token is an API key (starts with 'sk_')
+    # SEC-003: API keys are currently stored and compared in plaintext.
+    # TODO: Migrate to hashed API key storage (bcrypt or sha256).
     if token.startswith('sk_'):
         api_key = db.query(ApiKey).filter(
             ApiKey.key == token,
@@ -1614,6 +1623,20 @@ except ImportError:
 @app.on_event("startup")
 async def startup_event():
     """Initialize the scheduler on app startup and run critical schema migrations."""
+    # Skip DB-dependent startup when running under pytest (TestClient triggers this
+    # before dependency overrides are in effect, causing connections to unavailable DB)
+    # Note: use _os (module-level alias) since `import os` appears later in this function
+    # body, which makes Python treat `os` as a local variable throughout.
+    if _os.environ.get("TESTING") == "1":
+        logger.info("⏭️ Skipping startup DB operations (TESTING=1)")
+        return
+
+    # SEC-003: Warn about plaintext API key storage
+    logger.warning(
+        "SEC-003: ApiKey.key column stores keys in plaintext. "
+        "Migrate to hashed storage (bcrypt or sha256) before production hardening."
+    )
+
     # Run critical schema migrations (missing columns that break page loads)
     try:
         _run_critical_schema_migrations()
@@ -1759,6 +1782,8 @@ def _run_critical_schema_migrations():
             ("user_metadata", "JSONB"),
             # Stage tracking
             ("stage_changed_at", "TIMESTAMP"),
+            # COMP-001: AI modification tracking
+            ("last_modified_by_ai", "BOOLEAN DEFAULT FALSE"),
         ]
         added = 0
         for col_name, col_type in loan_columns:
@@ -1888,6 +1913,10 @@ def _run_critical_schema_migrations():
             ("salesforce_id", "VARCHAR"),
             ("meta_data", "JSONB"),
             ("user_metadata", "JSONB"),
+            # COMP-001: AI modification tracking
+            ("last_modified_by_ai", "BOOLEAN DEFAULT FALSE"),
+            # COMP-004: GDPR PII retention with automated expiry
+            ("data_retention_expires_at", "TIMESTAMP"),
         ]
         leads_added = 0
         for col_name, col_type in lead_columns:

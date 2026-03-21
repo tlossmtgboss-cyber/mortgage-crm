@@ -571,7 +571,7 @@ async def get_all_settings(
         )
         labels_list = [_serialize_label(lbl) for lbl in label_rows]
     except Exception:
-        logger.debug("CalendarLabel model not available, skipping labels")
+        logger.info("CalendarLabel model not available, skipping labels")
 
     # Locations
     locations_list = []
@@ -589,7 +589,7 @@ async def get_all_settings(
         )
         locations_list = [_serialize_location(loc) for loc in loc_rows]
     except Exception:
-        logger.debug("AppointmentLocation model not available, skipping locations")
+        logger.info("AppointmentLocation model not available, skipping locations")
 
     # Cancellation policy
     cancellation_policy = {}
@@ -606,7 +606,7 @@ async def get_all_settings(
             "late_cancel_message": policy.late_cancel_message or "",
         }
     except Exception:
-        logger.debug("CancellationPolicy not available, using empty defaults")
+        logger.info("CancellationPolicy not available, using empty defaults")
 
     # Setup progress
     setup_completed = getattr(config, "setup_completed", False) or False

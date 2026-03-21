@@ -117,7 +117,34 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     continue
 
                 # Delete related records using raw SQL
+                # Whitelist validation: table/column pairs come from the
+                # hardcoded tables_to_clean list above, but validate anyway
+                # as defense-in-depth against future code changes.
+                ALLOWED_CLEANUP_TABLES = {
+                    "activities": "lead_id",
+                    "tasks": "lead_id",
+                    "ai_tasks": "lead_id",
+                    "notes": "lead_id",
+                    "communications": "lead_id",
+                    "email_reconciliation_queue": "lead_id",
+                    "workflow_executions": "lead_id",
+                    "workflow_sla_instances": "lead_id",
+                    "workflow_sla_tasks": "lead_id",
+                    "lead_profiles": "lead_id",
+                    "circle_contacts": "lead_id",
+                    "notifications": "lead_id",
+                    "stage_history": "lead_id",
+                    "conversation_messages": "lead_id",
+                    "ai_conversation_messages": "lead_id",
+                    "incoming_data_events": "lead_id",
+                    "lead_source_tracking": "lead_id",
+                    "purl_events": "lead_id",
+                    "purl_workspaces": "lead_id",
+                }
                 for table, column in tables_to_clean:
+                    if table not in ALLOWED_CLEANUP_TABLES or column != ALLOWED_CLEANUP_TABLES.get(table):
+                        logger.warning(f"Blocked invalid table/column cleanup: {table}.{column}")
+                        continue
                     if table in existing_tables:
                         try:
                             db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
@@ -718,7 +745,27 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
             # Delete from all related tables using parameterized queries
             # Table/column names are from the hardcoded whitelist above, not user input
+            # Validate against whitelist as defense-in-depth
+            ALLOWED_DELETE_TABLES = {
+                "activities": "lead_id",
+                "tasks": "lead_id",
+                "ai_tasks": "lead_id",
+                "notes": "lead_id",
+                "communications": "lead_id",
+                "email_reconciliation_queue": "lead_id",
+                "workflow_executions": "lead_id",
+                "lead_profiles": "lead_id",
+                "circle_contacts": "lead_id",
+                "notifications": "lead_id",
+                "stage_history": "lead_id",
+                "conversation_messages": "lead_id",
+                "ai_conversation_messages": "lead_id",
+                "incoming_data_events": "lead_id",
+            }
             for table, column in tables_to_clean:
+                if table not in ALLOWED_DELETE_TABLES or column != ALLOWED_DELETE_TABLES.get(table):
+                    logger.warning(f"Blocked invalid table/column cleanup: {table}.{column}")
+                    continue
                 if table in existing_tables:
                     try:
                         db.execute(

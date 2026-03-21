@@ -27,7 +27,18 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from models.smart_docs_models import (
+import importlib
+_sdm = importlib.import_module("models.smart_docs_models")
+SmartDocument = _sdm.SmartDocument
+DocumentRequest = _sdm.DocumentRequest
+DocType = _sdm.DocType
+DocumentDecision = _sdm.DocumentDecision
+RejectionCategory = _sdm.RejectionCategory
+RequestStatus = _sdm.RequestStatus
+RequestPriority = _sdm.RequestPriority
+_import_done = True
+# Original import kept for reference:
+# from models.smart_docs_models import (
     SmartDocument,
     DocumentRequest,
     DocType,

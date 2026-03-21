@@ -827,7 +827,7 @@ class SchedulerAuditLogger:
             db.add(entry)
             # Don't commit — let the caller's transaction include this
         except Exception as e:
-            logger.warning(f"Failed to write appointment audit log to DB: {e}")
+            logger.error("AUDIT_DB_WRITE_FAILURE (appointment_id=%s, event=%s): %s", appointment_id, event_type, e, exc_info=True)
 
         # --- Structured log entry ---
         extra = _build_extra(
@@ -853,6 +853,7 @@ class SchedulerAuditLogger:
 def get_appointment_audit_trail(
     db: Any,
     appointment_id: int,
+    include_pii: bool = False,
 ) -> List[Dict[str, Any]]:
     """Get complete audit trail for an appointment from the DB.
 
@@ -862,6 +863,8 @@ def get_appointment_audit_trail(
     Args:
         db: SQLAlchemy Session.
         appointment_id: ID of the appointment to retrieve history for.
+        include_pii: When False (default), PII fields like ip_address are
+            redacted. Set to True only for admin callers.
 
     Returns:
         List of dicts, each containing event_type, booking_source, user_id,
@@ -889,7 +892,7 @@ def get_appointment_audit_trail(
             "booking_source": log.booking_source,
             "user_id": log.user_id,
             "details": log.changes,
-            "ip_address": log.ip_address,
+            "ip_address": log.ip_address if include_pii else None,
             "created_at": _format_dt(log.created_at),
         }
         for log in logs

@@ -403,7 +403,12 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
 
         # Check by phone number
         else:
-            leads = db.query(Lead).filter(Lead.phone == identifier).all()
+            # TENANT-001: Scope phone lookup to current user's organization
+            org_id = getattr(current_user, "organization_id", None)
+            phone_query = db.query(Lead).filter(Lead.phone == identifier)
+            if org_id:
+                phone_query = phone_query.filter(Lead.organization_id == org_id)
+            leads = phone_query.all()
             for lead in leads:
                 result["consent_records"].append({
                     "source": "lead",
@@ -1072,6 +1077,94 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
             "audit_trail": entries,
             "total_changes": len(entries),
         }
+
+    # -----------------------------------------------------------------
+    # GDPR Data Export (COMP-003: Article 20 — Right to Data Portability)
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/compliance/data-export/{lead_id}",
+        tags=["Compliance"],
+    )
+    async def export_lead_data(
+        lead_id: int,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """GDPR Article 20 -- Export all data for a lead/borrower.
+
+        Returns all PII and related records for data portability.
+        Restricted to admin, leadership, or management roles.
+        """
+        _require_compliance_access(current_user)
+
+        from database.models.lead_loan import Lead
+        from sqlalchemy import text as sa_text
+
+        lead = db.query(Lead).filter(
+            Lead.id == lead_id,
+            Lead.organization_id == current_user.organization_id,
+        ).first()
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        # Gather related data
+        activities = []
+        try:
+            rows = db.execute(
+                sa_text("SELECT id, type, content, created_at FROM activities WHERE lead_id = :id"),
+                {"id": lead_id},
+            ).fetchall()
+            activities = [dict(row._mapping) for row in rows] if rows else []
+        except Exception:
+            pass
+
+        documents = []
+        try:
+            rows = db.execute(
+                sa_text(
+                    "SELECT id, doc_type, doc_category, status, uploaded_at "
+                    "FROM documents WHERE lead_id = :id"
+                ),
+                {"id": lead_id},
+            ).fetchall()
+            documents = [dict(row._mapping) for row in rows] if rows else []
+        except Exception:
+            pass
+
+        tasks = []
+        try:
+            rows = db.execute(
+                sa_text("SELECT id, title, status, created_at FROM tasks WHERE lead_id = :id"),
+                {"id": lead_id},
+            ).fetchall()
+            tasks = [dict(row._mapping) for row in rows] if rows else []
+        except Exception:
+            pass
+
+        export_data = {
+            "export_date": datetime.now(timezone.utc).isoformat(),
+            "lead": {
+                "id": lead.id,
+                "first_name": lead.first_name,
+                "last_name": lead.last_name,
+                "email": lead.email,
+                "phone": lead.phone,
+                "stage": lead.stage,
+                "source": lead.source,
+                "created_at": str(lead.created_at) if lead.created_at else None,
+            },
+            "activities": activities,
+            "documents": documents,
+            "tasks": tasks,
+        }
+
+        # Audit trail for the export itself
+        logger.info(
+            f"GDPR data export for lead {lead_id} by user {current_user.id}"
+        )
+
+        return export_data
 
     # -----------------------------------------------------------------
     # Helper Functions

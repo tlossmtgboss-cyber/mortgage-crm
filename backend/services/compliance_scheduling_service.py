@@ -382,7 +382,8 @@ class ComplianceSchedulingService:
         )
         self.db.add(alert)
 
-        self.db.commit()
+        # DATA-006: Use flush instead of commit to let caller control transaction
+        self.db.flush()
 
         logger.info(
             "Compliance appointment created",
@@ -548,6 +549,7 @@ class ComplianceSchedulingService:
             self.db.query(_ComplianceAlert)
             .filter(
                 _ComplianceAlert.loan_id == loan.id,
+                _ComplianceAlert.organization_id == loan.organization_id,  # TENANT-008
                 _ComplianceAlert.status == "open",
             )
             .all()
@@ -649,6 +651,7 @@ class ComplianceSchedulingService:
                 self.db.query(_Appointment)
                 .filter(
                     _Appointment.loan_id == loan.id,
+                    _Appointment.organization_id == loan.organization_id,  # TENANT-009
                     _Appointment.status.in_(["booked", "confirmed", "reminded"]),
                     _Appointment.meeting_type == "closing_prep",
                 )

@@ -198,7 +198,12 @@ def get_db(request: Request = None):
         org_id = getattr(request.state, 'organization_id', None)
 
     # Per-tenant connection limit check (PERF-008)
-    if org_id and MAX_CONNECTIONS_PER_TENANT > 0:
+    # Only enforce per-tenant limits when using QueuePool (not NullPool/PgBouncer).
+    # PgBouncer handles connection pooling externally — per-tenant counting would
+    # add overhead without benefit and could cause false 503s (PERF-003).
+    _enforce_tenant_limits = not USE_PGBOUNCER and org_id and MAX_CONNECTIONS_PER_TENANT > 0
+
+    if _enforce_tenant_limits:
         with _tenant_conn_lock:
             current = _tenant_connection_counts.get(org_id, 0)
             if current >= MAX_CONNECTIONS_PER_TENANT:
@@ -218,12 +223,18 @@ def get_db(request: Request = None):
                 from database.tenant_mixin import set_tenant_context
                 set_tenant_context(db, org_id)
             except Exception as e:
-                logger.warning(f"Failed to set RLS tenant context: {e}")
+                # TENANT-006: Fail loudly in production/staging — silent RLS failure
+                # means queries run WITHOUT tenant isolation, leaking data cross-tenant.
+                env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+                if env in ("production", "staging"):
+                    logger.error(f"CRITICAL: RLS tenant context failed: {e}")
+                    raise
+                logger.warning(f"RLS context failed (dev mode): {e}")
         yield db
     finally:
         db.close()
         # Release the per-tenant connection slot
-        if org_id and MAX_CONNECTIONS_PER_TENANT > 0:
+        if _enforce_tenant_limits:
             with _tenant_conn_lock:
                 current = _tenant_connection_counts.get(org_id, 1)
                 if current <= 1:

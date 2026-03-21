@@ -492,7 +492,7 @@ class TestAutoRejectPoorQuality:
 
     def test_oversized_file_warning(self, service):
         """A file exceeding MAX_FILE_SIZE should get a quality deduction."""
-                import services.smart_docs.ai_review_service as svc_module
+        import services.smart_docs.ai_review_service as svc_module
         with patch.object(svc_module, "MAX_FILE_SIZE", 1000):
             large_content = _make_pdf_bytes("test", size=1001)
             score, issues = service._check_quality(large_content, "application/pdf")

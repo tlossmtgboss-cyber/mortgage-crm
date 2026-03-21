@@ -579,7 +579,7 @@ class WorkflowAIEvaluator:
             "id": evaluation_id,
             "result": json.dumps(execution_result)
         })
-        self.db.commit()
+        self.db.flush()  # Let the caller (route handler) commit the transaction
 
     def _execute_task(self, task: Dict) -> Dict[str, Any]:
         """Execute a task via AI."""
@@ -633,7 +633,7 @@ Context: This is an automated workflow task for lead/loan follow-up."""
                     updated_at = NOW()
                 WHERE id = :id
             """), {"id": task["id"]})
-            self.db.commit()
+            self.db.flush()  # Let the caller (route handler) commit the transaction
 
             return {"success": True, "result": result}
 
@@ -676,7 +676,7 @@ Context: This is an automated workflow task. Keep the message brief and professi
                     updated_at = NOW()
                 WHERE id = :id
             """), {"id": task["id"]})
-            self.db.commit()
+            self.db.flush()  # Let the caller (route handler) commit the transaction
 
             return {"success": True, "result": result}
 
