@@ -42,13 +42,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import models.smart_docs_models  # noqa: F401
 import models.sms_models  # noqa: F401
 
-# Verify the smart_docs_models module loaded correctly (debug diagnostics)
-import models.smart_docs_models as _sdm_check
-assert hasattr(_sdm_check, 'SmartDocument'), (
-    f"smart_docs_models loaded but missing SmartDocument! "
-    f"Attrs: {[a for a in dir(_sdm_check) if not a.startswith('_')]}"
-)
-
 from main import app
 from database import get_db
 

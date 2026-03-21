@@ -16,6 +16,10 @@ Existing imports like ``from routes.scheduler._helpers import get_current_user``
 continue to work without modification.
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # --- Core: DI storage ---
 from routes.scheduler._core import (  # noqa: F401
     set_dependencies,
@@ -100,12 +104,16 @@ from routes.scheduler._availability import (  # noqa: F401
 # detected by get_models() in _core.py.
 
 _DI_PROXY_ATTRS = ('_models', '_enhanced_models', '_get_db', '_get_current_user_func')
+_RATE_LIMIT_PROXY_ATTRS = ('_rate_limit_redis', '_rate_limit_redis_checked')
 
 
 def __getattr__(name):
     if name in _DI_PROXY_ATTRS:
         import routes.scheduler._core as _core
         return getattr(_core, name)
+    if name in _RATE_LIMIT_PROXY_ATTRS:
+        import routes.scheduler._rate_limiting as _rl
+        return getattr(_rl, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

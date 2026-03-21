@@ -225,6 +225,7 @@ class TestConflictDetection:
             sar._check_appointment_conflict(
                 mock_db,
                 assigned_user_id=1,
+                org_id=1,
                 start_time=datetime(2026, 3, 20, 10, 0),
                 end_time=datetime(2026, 3, 20, 10, 30),
             )
@@ -241,6 +242,7 @@ class TestConflictDetection:
         sar._check_appointment_conflict(
             mock_db,
             assigned_user_id=1,
+            org_id=1,
             start_time=datetime(2026, 3, 20, 10, 30),
             end_time=datetime(2026, 3, 20, 11, 0),
         )
@@ -255,6 +257,7 @@ class TestConflictDetection:
             sar._check_appointment_conflict(
                 mock_db,
                 assigned_user_id=1,
+                org_id=1,
                 start_time=datetime(2026, 3, 20, 10, 15),
                 end_time=datetime(2026, 3, 20, 10, 45),
             )
@@ -269,6 +272,7 @@ class TestConflictDetection:
         sar._check_appointment_conflict(
             mock_db,
             assigned_user_id=1,
+            org_id=1,
             start_time=datetime(2026, 3, 20, 10, 0),
             end_time=datetime(2026, 3, 20, 10, 30),
             exclude_appointment_id=42,
@@ -286,6 +290,7 @@ class TestConflictDetection:
             sar._check_appointment_conflict(
                 mock_db,
                 assigned_user_id=1,
+                org_id=1,
                 start_time=datetime(2026, 3, 20, 10, 0),
                 end_time=datetime(2026, 3, 20, 10, 30),
             )

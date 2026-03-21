@@ -22,6 +22,7 @@ import logging
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log, _check_rate_limit, _sanitize_public_error
 from db import get_db
 from middleware.feature_gate import require_feature_tier
+from services.survey_service import AppointmentSurveyService  # noqa: F401 — also used by test patches
 
 logger = logging.getLogger(__name__)
 

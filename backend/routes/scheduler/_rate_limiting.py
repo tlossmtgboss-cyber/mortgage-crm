@@ -116,6 +116,15 @@ _rate_limit_redis_checked = False
 def _get_rate_limit_redis():
     """Get or create Redis connection for rate limiting. Returns None if unavailable."""
     global _rate_limit_redis, _rate_limit_redis_checked
+
+    # Check for test monkey-patches on re-export modules (tests set sar._rate_limit_redis)
+    import sys as _sys
+    for _mod_name in ('routes.scheduler._helpers', 'routes.scheduler_appointment_routes'):
+        _mod = _sys.modules.get(_mod_name)
+        if _mod is not None and '_rate_limit_redis_checked' in _mod.__dict__:
+            if _mod.__dict__['_rate_limit_redis_checked']:
+                return _mod.__dict__.get('_rate_limit_redis')
+
     if _rate_limit_redis_checked:
         return _rate_limit_redis
     _rate_limit_redis_checked = True

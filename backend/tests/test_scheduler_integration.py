@@ -83,7 +83,11 @@ class TestC2_DuplicateBookingFunctional:
     def test_raises_409_on_duplicate(self):
         """Verify function raises HTTPException(409) path via source inspection."""
         import ast
-        with open(os.path.join(BACKEND_DIR, "routes", "scheduler", "_helpers.py")) as f:
+        # After decomposition, _check_duplicate_booking lives in _conflicts.py
+        conflicts_path = os.path.join(BACKEND_DIR, "routes", "scheduler", "_conflicts.py")
+        if not os.path.exists(conflicts_path):
+            conflicts_path = os.path.join(BACKEND_DIR, "routes", "scheduler", "_helpers.py")
+        with open(conflicts_path) as f:
             source = f.read()
         # Find _check_duplicate_booking and verify it contains 409
         tree = ast.parse(source)

@@ -384,3 +384,19 @@ async def get_available_slots(
             "user_ids": user_ids
         }
     }
+
+
+# ============================================================================
+# BACKWARD-COMPATIBLE RE-EXPORTS
+# ============================================================================
+# Tests import these from routes.scheduler.availability; they live in sub-modules.
+from routes.scheduler._availability import (  # noqa: F401, E402
+    _generate_available_slots,
+    _get_cross_source_conflicts,
+    _has_cross_source_conflict,
+    _get_cross_source_conflicts_batch,
+)
+from routes.scheduler._conflicts import (  # noqa: F401, E402
+    _check_appointment_conflict,
+    _check_duplicate_booking,
+)

@@ -538,6 +538,7 @@ class TestCheckAppointmentConflict:
         """Should not raise when no conflict found."""
         sar = setup_scheduler_routes
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
+        mock_db.execute.return_value = None
 
         # Should not raise
         sar._check_appointment_conflict(
@@ -545,12 +546,14 @@ class TestCheckAppointmentConflict:
             assigned_user_id=1,
             start_time=datetime(2026, 3, 5, 10, 0),
             end_time=datetime(2026, 3, 5, 10, 30),
+            org_id=1,
         )
 
     def test_raises_409_on_conflict(self, setup_scheduler_routes, mock_db):
         """Should raise 409 when an overlapping appointment is found."""
         sar = setup_scheduler_routes
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = MagicMock()
+        mock_db.execute.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             sar._check_appointment_conflict(
@@ -558,6 +561,7 @@ class TestCheckAppointmentConflict:
                 assigned_user_id=1,
                 start_time=datetime(2026, 3, 5, 10, 0),
                 end_time=datetime(2026, 3, 5, 10, 30),
+                org_id=1,
             )
         assert exc.value.status_code == 409
 
@@ -567,6 +571,7 @@ class TestCheckAppointmentConflict:
         sar = setup_scheduler_routes
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.side_effect = \
             OperationalError("lock", {}, Exception())
+        mock_db.execute.return_value = None
 
         with pytest.raises(HTTPException) as exc:
             sar._check_appointment_conflict(
@@ -574,6 +579,7 @@ class TestCheckAppointmentConflict:
                 assigned_user_id=1,
                 start_time=datetime(2026, 3, 5, 10, 0),
                 end_time=datetime(2026, 3, 5, 10, 30),
+                org_id=1,
             )
         assert exc.value.status_code == 409
 
@@ -581,12 +587,14 @@ class TestCheckAppointmentConflict:
         """Should pass exclude_appointment_id to the query."""
         sar = setup_scheduler_routes
         mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
+        mock_db.execute.return_value = None
 
         sar._check_appointment_conflict(
             mock_db,
             assigned_user_id=1,
             start_time=datetime(2026, 3, 5, 10, 0),
             end_time=datetime(2026, 3, 5, 10, 30),
+            org_id=1,
             exclude_appointment_id=42,
         )
         # No exception means success
@@ -662,9 +670,10 @@ class TestCrossSourceConflicts:
 # =============================================================================
 
 class TestRateLimiting:
-    """Test Redis-backed rate limiting."""
+    """Test Redis-backed rate limiting (_check_rate_limit is async)."""
 
-    def test_allows_request_when_redis_unavailable(self, setup_scheduler_routes):
+    @pytest.mark.asyncio
+    async def test_allows_request_when_redis_unavailable(self, setup_scheduler_routes):
         """Should allow all requests when Redis is not available."""
         sar = setup_scheduler_routes
 
@@ -678,9 +687,10 @@ class TestRateLimiting:
         mock_request.headers.get.return_value = None
 
         # Should not raise
-        sar._check_rate_limit(mock_request)
+        await sar._check_rate_limit(mock_request)
 
-    def test_raises_429_when_limit_exceeded(self, setup_scheduler_routes):
+    @pytest.mark.asyncio
+    async def test_raises_429_when_limit_exceeded(self, setup_scheduler_routes):
         """Should raise 429 when request count exceeds limit."""
         sar = setup_scheduler_routes
 
@@ -696,10 +706,11 @@ class TestRateLimiting:
         mock_request.headers.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            sar._check_rate_limit(mock_request)
+            await sar._check_rate_limit(mock_request)
         assert exc.value.status_code == 429
 
-    def test_allows_request_under_limit(self, setup_scheduler_routes):
+    @pytest.mark.asyncio
+    async def test_allows_request_under_limit(self, setup_scheduler_routes):
         """Should allow requests under the limit."""
         sar = setup_scheduler_routes
 
@@ -715,9 +726,10 @@ class TestRateLimiting:
         mock_request.headers.get.return_value = None
 
         # Should not raise
-        sar._check_rate_limit(mock_request)
+        await sar._check_rate_limit(mock_request)
 
-    def test_sets_expire_on_first_request(self, setup_scheduler_routes):
+    @pytest.mark.asyncio
+    async def test_sets_expire_on_first_request(self, setup_scheduler_routes):
         """Should set TTL on first request (incr returns 1)."""
         sar = setup_scheduler_routes
 
@@ -731,10 +743,11 @@ class TestRateLimiting:
         mock_request.url.path = "/public/book/demo"
         mock_request.headers.get.return_value = None
 
-        sar._check_rate_limit(mock_request)
+        await sar._check_rate_limit(mock_request)
         mock_redis.expire.assert_called_once()
 
-    def test_uses_x_forwarded_for(self, setup_scheduler_routes):
+    @pytest.mark.asyncio
+    async def test_uses_x_forwarded_for(self, setup_scheduler_routes):
         """Should use X-Forwarded-For header for client IP."""
         sar = setup_scheduler_routes
 
@@ -747,11 +760,12 @@ class TestRateLimiting:
         mock_request.headers.get.return_value = "10.0.0.1, 10.0.0.2"
         mock_request.url.path = "/test"
 
-        sar._check_rate_limit(mock_request)
+        await sar._check_rate_limit(mock_request)
         call_args = mock_redis.incr.call_args[0][0]
         assert "10.0.0.1" in call_args
 
-    def test_allows_on_redis_error(self, setup_scheduler_routes):
+    @pytest.mark.asyncio
+    async def test_allows_on_redis_error(self, setup_scheduler_routes):
         """Should allow request if Redis raises an error."""
         sar = setup_scheduler_routes
 
@@ -766,7 +780,7 @@ class TestRateLimiting:
         mock_request.headers.get.return_value = None
 
         # Should not raise — graceful degradation
-        sar._check_rate_limit(mock_request)
+        await sar._check_rate_limit(mock_request)
 
 
 # =============================================================================
