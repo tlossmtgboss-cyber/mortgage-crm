@@ -11,6 +11,7 @@ Comprehensive tests for the e-signature database models:
 Uses an in-memory SQLite database for full isolation.
 """
 
+import os
 import pytest
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -19,6 +20,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
 from db import Base
+from tests.test_db_helper import create_all_tables
 from database.models.esignature import (
     ESignatureEnvelope,
     ESignatureRecipient,
@@ -40,9 +42,9 @@ from database.models.esignature import (
 
 @pytest.fixture(scope="module")
 def engine():
-    """Create an in-memory SQLite engine for the test module."""
-    eng = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(bind=eng)
+    """Create a PostgreSQL engine for the test module."""
+    eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
+    create_all_tables(Base, eng)
     yield eng
     eng.dispose()
 

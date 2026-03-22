@@ -16,6 +16,9 @@ Endpoints (all admin-only, tenant-isolated):
   - DELETE /data-delete/{borrower_email}        Anonymize/delete borrower PII
   - GET    /data-retention/report               Data retention status report
 
+  Audit:
+  - GET    /audit-export                        Export audit log entries as JSON (admin)
+
   TCPA / DNC / Contact Hours:
   - GET    /compliance/status                   Overall compliance health dashboard
   - GET    /compliance/opt-outs                 Recent opt-out requests
@@ -624,6 +627,84 @@ async def get_data_retention_report(
     db.commit()
 
     return report
+
+
+# ============================================================================
+# AUDIT LOG EXPORT
+# ============================================================================
+
+@router.get("/audit-export")
+async def export_audit_log(
+    request: Request,
+    days: int = Query(90, ge=1, le=3650, description="Lookback period in days"),
+    entity_type: str = Query(None, description="Filter by entity type (e.g., appointment, booking_link)"),
+    action: str = Query(None, description="Filter by action (e.g., created, updated, deleted)"),
+    limit: int = Query(1000, ge=1, le=10000, description="Maximum entries to return"),
+    db: Session = Depends(get_db),
+):
+    """
+    Export audit log entries for the organization.
+
+    Returns structured JSON suitable for compliance review, SOC 2 evidence,
+    and regulatory audit responses. PII is already masked at write time.
+
+    Requires admin-level authentication.
+    """
+    user = await get_current_user(request, db)
+    _require_admin(user)
+    org_id = _get_org_id(user)
+
+    models = get_models()
+    AuditLog = models.get("SchedulerAuditLog")
+
+    if not AuditLog:
+        raise HTTPException(status_code=501, detail="Audit log not available")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    query = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.organization_id == org_id,
+            AuditLog.created_at >= cutoff,
+        )
+    )
+
+    if entity_type:
+        query = query.filter(AuditLog.entity_type == entity_type)
+    if action:
+        query = query.filter(AuditLog.action == action)
+
+    entries = query.order_by(AuditLog.created_at.desc()).limit(limit).all()
+
+    _audit_log(
+        db, org_id, getattr(user, "id", None), "exported",
+        "audit_log", None,
+        changes={"days": days, "count": len(entries)},
+        request=request,
+    )
+    db.commit()
+
+    return {
+        "organization_id": org_id,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "period_days": days,
+        "total_entries": len(entries),
+        "entries": [
+            {
+                "id": e.id,
+                "action": e.action,
+                "entity_type": e.entity_type,
+                "entity_id": e.entity_id,
+                "user_id": e.user_id,
+                "changes": e.changes,
+                "booking_source": getattr(e, "booking_source", None),
+                "ip_address": getattr(e, "ip_address", None),
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in entries
+        ],
+    }
 
 
 # ============================================================================

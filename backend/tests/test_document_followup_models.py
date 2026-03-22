@@ -7,6 +7,7 @@ relationships, scheduling conflicts, template rendering, escalation tracking,
 multi-step sequences, and tenant isolation.
 """
 
+import os
 import re
 import pytest
 from datetime import datetime, date, timedelta, timezone
@@ -42,8 +43,8 @@ from database.models.document_followup import (
 
 @pytest.fixture(scope="module")
 def engine():
-    """Create an in-memory SQLite engine scoped to the test module."""
-    eng = create_engine("sqlite:///:memory:")
+    """Create a PostgreSQL test engine scoped to the test module."""
+    eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
     # Create only the four tables under test
     for model in (FollowupCampaign, FollowupEvent, DocumentAppointment, FollowupTemplate):
         model.__table__.create(bind=eng, checkfirst=True)

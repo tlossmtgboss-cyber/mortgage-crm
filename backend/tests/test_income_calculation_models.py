@@ -15,6 +15,7 @@ IncomeVerificationTask models covering:
 Uses pytest with in-memory SQLite via SQLAlchemy.
 """
 
+import os
 import pytest
 from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
@@ -44,16 +45,8 @@ from database.models.income_calculation import (
 
 @pytest.fixture(scope="module")
 def engine():
-    """Create an in-memory SQLite engine for the test module."""
-    eng = create_engine("sqlite:///:memory:")
-
-    # SQLite does not enforce CHECK constraints from SQLAlchemy enums by default.
-    # Enable foreign key support for completeness.
-    @event.listens_for(eng, "connect")
-    def _set_sqlite_pragma(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    """Create a PostgreSQL engine for the test module."""
+    eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
 
     # Create only the three tables under test (plus any Base metadata needed).
     IncomeCalculation.__table__.create(eng, checkfirst=True)

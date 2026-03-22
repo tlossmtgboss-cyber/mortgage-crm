@@ -168,8 +168,9 @@ class CallMonitoringOrchestrator:
     - Receptionist: Calendar scheduling and appointment coordination
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, organization_id: Optional[int] = None):
         self.db = db
+        self.organization_id = organization_id
         self._agents = {}
         self._initialize_agents()
 
@@ -213,10 +214,12 @@ class CallMonitoringOrchestrator:
         self.db.execute(text("""
             INSERT INTO call_sessions (
                 id, capture_mode, user_id, loan_id, lead_id, contact_id,
-                recording_id, participants, metadata, status, started_at
+                recording_id, participants, metadata, status, started_at,
+                organization_id
             ) VALUES (
                 :id, :capture_mode, :user_id, :loan_id, :lead_id, :contact_id,
-                :recording_id, :participants, :metadata, 'active', :started_at
+                :recording_id, :participants, :metadata, 'active', :started_at,
+                :org_id
             )
         """), {
             "id": session_id,
@@ -229,6 +232,7 @@ class CallMonitoringOrchestrator:
             "participants": json.dumps(participants or []),
             "metadata": json.dumps(metadata or {}),
             "started_at": now,
+            "org_id": self.organization_id,
         })
         self.db.commit()
 
@@ -246,14 +250,18 @@ class CallMonitoringOrchestrator:
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get session details."""
-        result = self.db.execute(text("""
+        org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+        params = {"id": session_id}
+        if self.organization_id:
+            params["org_id"] = self.organization_id
+        result = self.db.execute(text(f"""
             SELECT id, capture_mode, recording_id, loan_id, lead_id, contact_id,
                    user_id, status, transcript_state, full_transcript, participants,
                    metadata, tags, overall_confidence, started_at, ended_at,
                    duration_seconds, created_at
             FROM call_sessions
-            WHERE id = :id
-        """), {"id": session_id}).fetchone()
+            WHERE id = :id {org_filter}
+        """), params).fetchone()
 
         if not result:
             return None

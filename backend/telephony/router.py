@@ -123,6 +123,8 @@ async def get_call_tasks(
     from database.models import Task, AITask, Lead, Loan
     from sqlalchemy import or_, and_
 
+    org_id = getattr(current_user, 'organization_id', None)
+
     # Call-related keywords to identify phone tasks
     call_keywords = ['call', 'phone', 'contact', 'dial', 'reach out', 'follow up', 'follow-up', 'callback', 'ring']
 
@@ -157,10 +159,13 @@ async def get_call_tasks(
         entity_type = None
         entity_id = None
 
-        # Get phone from Lead
+        # Get phone from Lead (scoped to org)
         if task.lead_id:
             try:
-                lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+                lead_q = db.query(Lead).filter(Lead.id == task.lead_id)
+                if org_id:
+                    lead_q = lead_q.filter(Lead.organization_id == org_id)
+                lead = lead_q.first()
                 if lead and lead.phone:
                     phone = lead.phone
                     contact_name = lead.name
@@ -170,10 +175,13 @@ async def get_call_tasks(
                 # Handle enum mismatch errors gracefully
                 pass
 
-        # Get phone from Loan if not found in Lead
+        # Get phone from Loan if not found in Lead (scoped to org)
         if not phone and task.loan_id:
             try:
-                loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+                loan_q = db.query(Loan).filter(Loan.id == task.loan_id)
+                if org_id:
+                    loan_q = loan_q.filter(Loan.organization_id == org_id)
+                loan = loan_q.first()
                 if loan and loan.borrower_phone:
                     phone = loan.borrower_phone
                     contact_name = loan.borrower_name
@@ -219,10 +227,13 @@ async def get_call_tasks(
             entity_type = None
             entity_id = None
 
-            # Get phone from Lead
+            # Get phone from Lead (scoped to org)
             if ai_task.lead_id:
                 try:
-                    lead = db.query(Lead).filter(Lead.id == ai_task.lead_id).first()
+                    lead_q = db.query(Lead).filter(Lead.id == ai_task.lead_id)
+                    if org_id:
+                        lead_q = lead_q.filter(Lead.organization_id == org_id)
+                    lead = lead_q.first()
                     if lead and lead.phone:
                         phone = lead.phone
                         contact_name = lead.name
@@ -232,10 +243,13 @@ async def get_call_tasks(
                     # Handle enum mismatch errors gracefully
                     pass
 
-            # Get phone from Loan
+            # Get phone from Loan (scoped to org)
             if not phone and ai_task.loan_id:
                 try:
-                    loan = db.query(Loan).filter(Loan.id == ai_task.loan_id).first()
+                    loan_q = db.query(Loan).filter(Loan.id == ai_task.loan_id)
+                    if org_id:
+                        loan_q = loan_q.filter(Loan.organization_id == org_id)
+                    loan = loan_q.first()
                     if loan and loan.borrower_phone:
                         phone = loan.borrower_phone
                         contact_name = loan.borrower_name
@@ -286,17 +300,23 @@ async def get_call_tasks(
             entity_type = wf_task.get('client_type')
             entity_id = wf_task.get('client_id')
 
-            # Get phone from Lead or Loan
+            # Get phone from Lead or Loan (scoped to org)
             if entity_type == 'lead' and entity_id:
                 try:
-                    lead = db.query(Lead).filter(Lead.id == entity_id).first()
+                    lead_q = db.query(Lead).filter(Lead.id == entity_id)
+                    if org_id:
+                        lead_q = lead_q.filter(Lead.organization_id == org_id)
+                    lead = lead_q.first()
                     if lead and lead.phone:
                         phone = lead.phone
                 except Exception as e:
                     logger.exception(f"Failed to fetch lead phone for entity_id={entity_id}: {e}")
             elif entity_type == 'loan' and entity_id:
                 try:
-                    loan = db.query(Loan).filter(Loan.id == entity_id).first()
+                    loan_q = db.query(Loan).filter(Loan.id == entity_id)
+                    if org_id:
+                        loan_q = loan_q.filter(Loan.organization_id == org_id)
+                    loan = loan_q.first()
                     if loan and loan.borrower_phone:
                         phone = loan.borrower_phone
                 except Exception as e:
@@ -356,14 +376,18 @@ async def get_callable_contacts(
     from database.models import Lead, Loan
     from sqlalchemy import and_
 
+    org_id = getattr(current_user, 'organization_id', None)
     contacts = []
 
     try:
-        # Get leads with phone numbers assigned to current user
+        # Get leads with phone numbers assigned to current user (scoped to org)
         leads_query = db.query(Lead).filter(
             Lead.owner_id == current_user.id,
             Lead.phone.isnot(None)
-        ).order_by(Lead.created_at.desc())
+        )
+        if org_id:
+            leads_query = leads_query.filter(Lead.organization_id == org_id)
+        leads_query = leads_query.order_by(Lead.created_at.desc())
 
         for lead in leads_query.offset(skip).limit(limit).all():
             # Skip empty phone numbers
@@ -392,7 +416,10 @@ async def get_callable_contacts(
             loans_query = db.query(Loan).filter(
                 Loan.loan_officer_id == current_user.id,
                 Loan.borrower_phone.isnot(None)
-            ).order_by(Loan.created_at.desc())
+            )
+            if org_id:
+                loans_query = loans_query.filter(Loan.organization_id == org_id)
+            loans_query = loans_query.order_by(Loan.created_at.desc())
 
             for loan in loans_query.limit(remaining).all():
                 # Skip empty phone numbers
@@ -700,6 +727,18 @@ async def api_click_to_dial(
 ):
     """Initiate a single click-to-dial call"""
     import os
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    from database.models import CallLog
+
+    # Rate limit: max 10 click-to-dial calls per minute per user
+    recent_calls = db.query(func.count(CallLog.id)).filter(
+        CallLog.agent_id == current_user.id,
+        CallLog.created_at >= datetime.utcnow() - timedelta(minutes=1)
+    ).scalar() or 0
+    if recent_calls >= 10:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded: max 10 calls per minute")
+
     base_url = os.getenv("BASE_URL", "https://app.perenniaai.com")
 
     result = click_to_dial(
@@ -710,7 +749,8 @@ async def api_click_to_dial(
         base_url=base_url,
         lead_id=request.lead_id,
         loan_id=request.loan_id,
-        task_id=request.task_id
+        task_id=request.task_id,
+        organization_id=getattr(current_user, 'organization_id', None),
     )
 
     return ClickToDialResponse(
@@ -736,7 +776,7 @@ async def create_dialer_session(
     import os
     base_url = os.getenv("BASE_URL", "https://app.perenniaai.com")
 
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     result = engine.create_session(request.task_ids, base_url)
 
     return StartSessionResponse(
@@ -757,15 +797,19 @@ async def get_active_session(
     from database.enums import DialerSessionStatus
     from database.models import DialerSession
 
-    session = db.query(DialerSession).filter(
+    org_id = getattr(current_user, 'organization_id', None)
+    session_q = db.query(DialerSession).filter(
         DialerSession.agent_id == current_user.id,
         DialerSession.status == DialerSessionStatus.ACTIVE
-    ).first()
+    )
+    if org_id:
+        session_q = session_q.filter(DialerSession.organization_id == org_id)
+    session = session_q.first()
 
     if not session:
         return {"active_session": None}
 
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     return {"active_session": engine.get_session_status(session.id)}
 
 
@@ -776,7 +820,7 @@ async def get_session_status(
     current_user = Depends(get_current_user)
 ):
     """Get status of a specific dialer session"""
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     status = engine.get_session_status(session_id)
 
     if not status:
@@ -792,7 +836,7 @@ async def get_next_task(
     current_user = Depends(get_current_user)
 ):
     """Get the next pending task in a session"""
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     task = engine.get_next_task(session_id)
 
     if not task:
@@ -812,7 +856,7 @@ async def initiate_session_call(
     import os
     base_url = os.getenv("BASE_URL", "https://app.perenniaai.com")
 
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     result = engine.initiate_call(session_id, task_id, base_url)
 
     if not result.get("success"):
@@ -833,7 +877,7 @@ async def set_task_disposition(
     current_user = Depends(get_current_user)
 ):
     """Set disposition for a completed call"""
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     result = engine.set_disposition(
         session_id=session_id,
         task_id=task_id,
@@ -861,7 +905,7 @@ async def skip_session_task(
     current_user = Depends(get_current_user)
 ):
     """Skip a task in the session"""
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     result = engine.skip_task(session_id, task_id, reason)
 
     if not result.get("success"):
@@ -877,7 +921,7 @@ async def pause_session(
     current_user = Depends(get_current_user)
 ):
     """Pause an active dialer session"""
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     result = engine.pause_session(session_id)
 
     if not result.get("success"):
@@ -893,7 +937,7 @@ async def resume_session(
     current_user = Depends(get_current_user)
 ):
     """Resume a paused dialer session"""
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     result = engine.resume_session(session_id)
 
     if not result.get("success"):
@@ -909,7 +953,7 @@ async def stop_session(
     current_user = Depends(get_current_user)
 ):
     """Stop a dialer session completely"""
-    engine = DialerEngine(db, current_user.id)
+    engine = DialerEngine(db, current_user.id, organization_id=getattr(current_user, 'organization_id', None))
     result = engine.stop_session(session_id)
 
     if not result.get("success"):
@@ -981,7 +1025,10 @@ async def get_call_logs(
     """Get call history for the agent"""
     from database.models import CallLog
 
+    org_id = getattr(current_user, 'organization_id', None)
     query = db.query(CallLog).filter(CallLog.agent_id == current_user.id)
+    if org_id:
+        query = query.filter(CallLog.organization_id == org_id)
 
     if lead_id:
         query = query.filter(CallLog.lead_id == lead_id)
@@ -1175,7 +1222,7 @@ async def webhook_call_status(
 
     if session_id and task_id:
         try:
-            engine = DialerEngine(db, current_user.id if current_user else 0)
+            engine = DialerEngine(db, current_user.id if current_user else 0, organization_id=getattr(current_user, 'organization_id', None) if current_user else None)
             engine.handle_call_status(
                 session_id=session_id,
                 task_id=task_id,

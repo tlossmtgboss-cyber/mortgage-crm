@@ -24,6 +24,7 @@ top-level SQLAlchemy model classes.
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text,
     Enum as SQLEnum, Float, Numeric, Time, Date, UniqueConstraint, Index,
+    CheckConstraint, text,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, time, timezone
@@ -353,6 +354,13 @@ class Appointment(Base):
         Index('ix_appt_no_show_detection', 'status', 'scheduled_end', 'organization_id'),
         Index('ix_appt_org_status_start', 'organization_id', 'status', 'scheduled_start'),
         Index('ix_appt_org_created', 'organization_id', 'created_at'),
+        # Enterprise: Prevent double-booking at DB level (defense-in-depth behind app-level conflict check)
+        Index(
+            'uq_appointment_no_double_book',
+            'assigned_user_id', 'scheduled_start', 'scheduled_end',
+            unique=True,
+            postgresql_where=text("status NOT IN ('cancelled', 'rescheduled', 'no_show', 'completed')"),
+        ),
         {'extend_existing': True}
     )
 
@@ -477,6 +485,7 @@ class SchedulerRoutingRule(Base):
     __tablename__ = "scheduler_routing_rules"
     __table_args__ = (
         Index('ix_routing_rules_org_id', 'organization_id'),
+        Index('ix_routing_rules_active_priority', 'organization_id', 'is_active', 'priority'),
         {'extend_existing': True}
     )
 
@@ -535,6 +544,7 @@ class BlockedTime(Base):
     __table_args__ = (
         Index('ix_blocked_time_range', 'start_datetime', 'end_datetime'),
         Index('ix_blocked_times_org_id', 'organization_id'),
+        CheckConstraint("block_type IN ('pto', 'holiday', 'focus', 'custom', 'meeting', 'personal')", name='ck_blocked_time_block_type'),
         {'extend_existing': True}
     )
 
@@ -581,6 +591,7 @@ class BookingLink(Base):
     __table_args__ = (
         UniqueConstraint('organization_id', 'slug', name='uq_booking_link_org_slug'),
         Index('ix_booking_links_org_id', 'organization_id'),
+        Index('ix_booking_link_analytics', 'organization_id', 'is_active', 'last_booked_at'),
         {'extend_existing': True}
     )
 
@@ -650,6 +661,7 @@ class AppointmentReminder(Base):
     __tablename__ = "scheduler_reminders"
     __table_args__ = (
         Index('ix_reminders_org_id', 'organization_id'),
+        Index('ix_reminders_pending_delivery', 'status', 'scheduled_for', 'organization_id'),
         {'extend_existing': True}
     )
 
@@ -755,6 +767,8 @@ class SlotHold(Base):
     __table_args__ = (
         Index('idx_slot_holds_lo_active', 'lo_id', 'status', 'expires_at'),
         Index('idx_slot_holds_org_status', 'organization_id', 'status'),
+        Index('idx_slot_holds_cleanup', 'status', 'expires_at'),
+        CheckConstraint("status IN ('active', 'expired', 'released', 'converted')", name='ck_slot_hold_status'),
         {'extend_existing': True}
     )
 

@@ -51,3 +51,20 @@ DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "sarah@rep
 
 # Timezone
 DEFAULT_TIMEZONE = "America/Chicago"
+
+# CAN-SPAM compliance: physical address required in all commercial emails.
+# Override via CAN_SPAM_ADDRESS environment variable for white-label deployments.
+CAN_SPAM_PHYSICAL_ADDRESS = os.environ.get(
+    "CAN_SPAM_ADDRESS",
+    "Perennia AI, 123 Main Street, Suite 100, Austin, TX 78701"
+)
+
+# NMLS-regulated states: LO must have NMLS number on file to book in these states.
+# All US states require NMLS; this set tracks states with active enforcement.
+NMLS_REGULATED_STATES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+}

@@ -14,7 +14,7 @@ Endpoints:
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -89,25 +89,35 @@ class ReviewListResponse(BaseModel):
 
 
 # =============================================================================
-# Dependencies
+# Dependencies (injected from main app via set_dependencies)
 # =============================================================================
 
-def get_db_session():
-    """Get database session dependency."""
-    # This would be replaced with actual dependency injection
-    # from your FastAPI app's database setup
-    from database import get_db
-    return next(get_db())
+from database import get_db
+
+_get_current_user = None
 
 
-def get_current_user_id():
-    """Get current user ID from auth."""
-    # This would be replaced with actual auth dependency
-    # Returns the authenticated user's ID
-    return 1  # Placeholder
+def set_dependencies(user_dependency):
+    """Store reference to main app's get_current_user dependency."""
+    global _get_current_user
+    _get_current_user = user_dependency
 
 
-def get_review_service(db=Depends(get_db_session)):
+async def get_current_user(request: Request, db=Depends(get_db)):
+    """Current user dependency - delegates to main app's auth."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    if _get_current_user is None:
+        raise HTTPException(status_code=503, detail="Authentication service not initialized")
+
+    return await _get_current_user(token=token, request=request, db=db)
+
+
+def get_review_service(db=Depends(get_db)):
     """Get review service instance."""
     from services.call_intelligence import HumanReviewService
     return HumanReviewService(db)
@@ -125,6 +135,7 @@ async def list_pending_reviews(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     service: Any = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     List reviews with optional filters.
@@ -133,6 +144,7 @@ async def list_pending_reviews(
     (lowest confidence first).
     """
     offset = (page - 1) * page_size
+    org_id = current_user.get("organization_id") or current_user.get("org_id")
 
     try:
         items = await service.get_pending_reviews(
@@ -140,6 +152,7 @@ async def list_pending_reviews(
             extraction_type=extraction_type,
             limit=page_size + 1,  # Get one extra to check has_more
             offset=offset,
+            organization_id=org_id,
         )
 
         has_more = len(items) > page_size
@@ -164,6 +177,7 @@ async def get_review_stats(
     loan_id: Optional[int] = Query(None, description="Filter by loan ID"),
     days: int = Query(30, ge=1, le=365, description="Days to include"),
     service: Any = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get review queue statistics.
@@ -171,8 +185,9 @@ async def get_review_stats(
     Returns counts of pending, approved, rejected, and modified reviews,
     plus breakdown by extraction type.
     """
+    org_id = current_user.get("organization_id") or current_user.get("org_id")
     try:
-        stats = await service.get_stats(loan_id=loan_id, days=days)
+        stats = await service.get_stats(loan_id=loan_id, days=days, organization_id=org_id)
         return ReviewStatsResponse(**stats.to_dict())
 
     except Exception as e:
@@ -187,6 +202,7 @@ async def get_reviews_for_loan(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     service: Any = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get all reviews for a specific loan.
@@ -194,12 +210,14 @@ async def get_reviews_for_loan(
     Returns all reviews (pending and completed) for the given loan.
     """
     offset = (page - 1) * page_size
+    org_id = current_user.get("organization_id") or current_user.get("org_id")
 
     try:
         items = await service.get_pending_reviews(
             loan_id=loan_id,
             limit=page_size + 1,
             offset=offset,
+            organization_id=org_id,
         )
 
         has_more = len(items) > page_size
@@ -223,6 +241,7 @@ async def get_reviews_for_loan(
 async def get_review(
     review_id: str,
     service: Any = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get a single review item by ID.
@@ -230,8 +249,9 @@ async def get_review(
     Returns full details including source text and any previous
     review attempts.
     """
+    org_id = current_user.get("organization_id") or current_user.get("org_id")
     try:
-        item = await service.get_review(review_id)
+        item = await service.get_review(review_id, organization_id=org_id)
 
         if not item:
             raise HTTPException(status_code=404, detail=f"Review {review_id} not found")
@@ -250,7 +270,7 @@ async def submit_review_decision(
     review_id: str,
     request: ReviewDecisionRequest,
     service: Any = Depends(get_review_service),
-    user_id: int = Depends(get_current_user_id),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Submit a review decision.
@@ -276,13 +296,15 @@ async def submit_review_decision(
             detail="final_value is required for 'modified' decision"
         )
 
+    org_id = current_user.get("organization_id") or current_user.get("org_id")
     try:
         result = await service.submit_review(
             review_id=review_id,
             decision=request.decision,
-            reviewer_id=user_id,
+            reviewer_id=current_user["id"],
             final_value=request.final_value,
             notes=request.notes,
+            organization_id=org_id,
         )
 
         if not result.success:
@@ -304,7 +326,7 @@ async def submit_review_decision(
 async def submit_bulk_decisions(
     decisions: List[Dict[str, Any]],
     service: Any = Depends(get_review_service),
-    user_id: int = Depends(get_current_user_id),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Submit multiple review decisions at once.
@@ -324,14 +346,16 @@ async def submit_bulk_decisions(
         "errors": [],
     }
 
+    org_id = current_user.get("organization_id") or current_user.get("org_id")
     for item in decisions:
         try:
             result = await service.submit_review(
                 review_id=item["review_id"],
                 decision=item["decision"],
-                reviewer_id=user_id,
+                reviewer_id=current_user["id"],
                 final_value=item.get("final_value"),
                 notes=item.get("notes"),
+                organization_id=org_id,
             )
 
             if result.success:
@@ -357,14 +381,16 @@ async def submit_bulk_decisions(
 async def get_reviews_for_call(
     call_id: str,
     service: Any = Depends(get_review_service),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get all reviews for a specific call.
 
     Returns all reviews associated with the given call ID.
     """
+    org_id = current_user.get("organization_id") or current_user.get("org_id")
     try:
-        items = await service.get_reviews_for_call(call_id)
+        items = await service.get_reviews_for_call(call_id, organization_id=org_id)
         return [ReviewItemResponse(**item.to_dict()) for item in items]
 
     except Exception as e:

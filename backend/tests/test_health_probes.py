@@ -12,6 +12,7 @@ Covers:
 
 Also tests the `scheduler_startup_check()` helper directly.
 """
+import os
 import pytest
 import time
 from datetime import datetime, timezone
@@ -31,24 +32,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 def client():
     """Create a TestClient that works even without a live DB.
 
-    We override `get_db` with a file-based SQLite session for fast
-    isolated tests.  File-based (instead of :memory:) avoids the
-    pitfall where in-memory SQLite gives each connection its own
-    empty database.
+    We override `get_db` with a PostgreSQL test session for
+    isolated tests.
     """
-    import tempfile
     from sqlalchemy import create_engine, text
     from sqlalchemy.orm import sessionmaker
     from fastapi.testclient import TestClient
 
-    # Use a temp file so all connections see the same schema
-    _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    _tmp_path = _tmp.name
-    _tmp.close()
-
     engine = create_engine(
-        f"sqlite:///{_tmp_path}",
-        connect_args={"check_same_thread": False},
+        os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"),
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -56,7 +48,7 @@ def client():
     with engine.connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS scheduler_appointments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 start_time TIMESTAMP,
                 status TEXT DEFAULT 'pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -64,14 +56,14 @@ def client():
         """))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS scheduler_configs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 organization_id INTEGER,
                 name TEXT
             )
         """))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS scheduler_reminders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 status TEXT DEFAULT 'pending',
                 send_at TIMESTAMP
             )
@@ -98,13 +90,6 @@ def client():
 
     app.dependency_overrides.pop(get_db, None)
     app.dependency_overrides.pop(db_get_db, None)
-
-    # Cleanup temp file
-    import os
-    try:
-        os.unlink(_tmp_path)
-    except OSError:
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -308,14 +293,14 @@ class TestSchedulerStartupCheckUnit:
         from sqlalchemy import create_engine, text
         from sqlalchemy.orm import sessionmaker
 
-        engine = create_engine("sqlite:///:memory:")
+        engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         Session = sessionmaker(bind=engine)
 
         with engine.connect() as conn:
-            conn.execute(text("CREATE TABLE scheduler_appointments (id INTEGER PRIMARY KEY)"))
-            conn.execute(text("CREATE TABLE scheduler_configs (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_appointments (id SERIAL PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_configs (id SERIAL PRIMARY KEY)"))
             conn.execute(text("INSERT INTO scheduler_configs (id) VALUES (1)"))
-            conn.execute(text("CREATE TABLE scheduler_reminders (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_reminders (id SERIAL PRIMARY KEY)"))
             conn.commit()
 
         db = Session()
@@ -334,14 +319,14 @@ class TestSchedulerStartupCheckUnit:
         from sqlalchemy import create_engine, text
         from sqlalchemy.orm import sessionmaker
 
-        engine = create_engine("sqlite:///:memory:")
+        engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         Session = sessionmaker(bind=engine)
 
         # Only create two of three tables
         with engine.connect() as conn:
-            conn.execute(text("CREATE TABLE scheduler_configs (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_configs (id SERIAL PRIMARY KEY)"))
             conn.execute(text("INSERT INTO scheduler_configs (id) VALUES (1)"))
-            conn.execute(text("CREATE TABLE scheduler_reminders (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_reminders (id SERIAL PRIMARY KEY)"))
             conn.commit()
 
         db = Session()
@@ -356,13 +341,13 @@ class TestSchedulerStartupCheckUnit:
         from sqlalchemy import create_engine, text
         from sqlalchemy.orm import sessionmaker
 
-        engine = create_engine("sqlite:///:memory:")
+        engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         Session = sessionmaker(bind=engine)
 
         with engine.connect() as conn:
-            conn.execute(text("CREATE TABLE scheduler_appointments (id INTEGER PRIMARY KEY)"))
-            conn.execute(text("CREATE TABLE scheduler_configs (id INTEGER PRIMARY KEY)"))
-            conn.execute(text("CREATE TABLE scheduler_reminders (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_appointments (id SERIAL PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_configs (id SERIAL PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_reminders (id SERIAL PRIMARY KEY)"))
             conn.commit()
 
         db = Session()
@@ -377,14 +362,14 @@ class TestSchedulerStartupCheckUnit:
         from sqlalchemy import create_engine, text
         from sqlalchemy.orm import sessionmaker
 
-        engine = create_engine("sqlite:///:memory:")
+        engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         Session = sessionmaker(bind=engine)
 
         with engine.connect() as conn:
-            conn.execute(text("CREATE TABLE scheduler_appointments (id INTEGER PRIMARY KEY)"))
-            conn.execute(text("CREATE TABLE scheduler_configs (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_appointments (id SERIAL PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_configs (id SERIAL PRIMARY KEY)"))
             conn.execute(text("INSERT INTO scheduler_configs (id) VALUES (1)"))
-            conn.execute(text("CREATE TABLE scheduler_reminders (id INTEGER PRIMARY KEY)"))
+            conn.execute(text("CREATE TABLE IF NOT EXISTS scheduler_reminders (id SERIAL PRIMARY KEY)"))
             conn.commit()
 
         db = Session()

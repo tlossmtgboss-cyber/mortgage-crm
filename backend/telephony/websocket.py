@@ -23,17 +23,22 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
+HEARTBEAT_INTERVAL = 30  # seconds between pings
+
+
 class WebSocketManager:
     """
     Manages WebSocket connections for real-time dialer updates
 
     Each agent can have multiple connections (multiple browser tabs)
-    Messages are broadcast to all connections for a given agent
+    Messages are broadcast to all connections for a given agent.
+    Includes heartbeat mechanism to detect stale connections.
     """
 
     def __init__(self):
         # Map of agent_id -> set of websocket connections
         self.active_connections: Dict[str, Set[WebSocket]] = {}
+        self._heartbeat_task: Optional[asyncio.Task] = None
 
     async def connect(self, websocket: WebSocket, agent_id: str, skip_accept: bool = False):
         """Accept a new WebSocket connection for an agent"""
@@ -45,6 +50,10 @@ class WebSocketManager:
 
         self.active_connections[agent_id].add(websocket)
         logger.info(f"WebSocket connected for agent {agent_id} (total: {len(self.active_connections[agent_id])})")
+
+        # Start heartbeat if not already running
+        if self._heartbeat_task is None or self._heartbeat_task.done():
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
     def disconnect(self, websocket: WebSocket, agent_id: str):
         """Remove a WebSocket connection"""
@@ -82,16 +91,43 @@ class WebSocketManager:
         Useful when called from non-async contexts (like webhook handlers)
         """
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.send_to_agent(agent_id, message))
-            else:
-                loop.run_until_complete(self.send_to_agent(agent_id, message))
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.send_to_agent(agent_id, message))
         except RuntimeError:
-            # No event loop - create a new one
-            asyncio.run(self.send_to_agent(agent_id, message))
+            # No running event loop
+            try:
+                asyncio.run(self.send_to_agent(agent_id, message))
+            except RuntimeError:
+                logger.warning(f"Cannot send WebSocket message to agent {agent_id}: no event loop")
         except Exception as e:
             logger.error(f"Error in send_to_agent_sync: {e}")
+
+    async def _heartbeat_loop(self):
+        """Periodically ping all connections to detect stale ones."""
+        while True:
+            try:
+                await asyncio.sleep(HEARTBEAT_INTERVAL)
+                if not self.active_connections:
+                    break  # Stop heartbeat when no connections
+
+                for agent_id in list(self.active_connections.keys()):
+                    disconnected = set()
+                    for ws in list(self.active_connections.get(agent_id, set())):
+                        try:
+                            await ws.send_json({"type": "ping"})
+                        except Exception:
+                            disconnected.add(ws)
+
+                    for ws in disconnected:
+                        self.disconnect(ws, agent_id)
+
+                    if disconnected:
+                        logger.info(f"Heartbeat: cleaned {len(disconnected)} stale connections for agent {agent_id}")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Heartbeat loop error: {e}")
 
     async def broadcast_to_all(self, message: dict):
         """Broadcast a message to all connected agents"""

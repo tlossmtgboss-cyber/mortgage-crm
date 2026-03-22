@@ -16,6 +16,20 @@ jobs:
   unit-tests:
     name: Unit Tests (Critical)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_perennia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,7 +50,8 @@ jobs:
         working-directory: ./backend
         env:
           TESTING: 'true'
-          DATABASE_URL: sqlite:///./test.db
+          TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test_perennia
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_perennia
           SECRET_KEY: ci-test-secret-key
           DATA_ENCRYPTION_KEY: ${{ secrets.DATA_ENCRYPTION_KEY }}
         run: |
@@ -189,6 +204,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: golden-flow-tests
     continue-on-error: true
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_perennia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -211,7 +240,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TESTING: 'true'
-          DATABASE_URL: sqlite:///./test.db
+          TEST_DATABASE_URL: postgresql://test:test@localhost:5432/test_perennia
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_perennia
         run: |
           pytest tests/ -v -m "ai or agents" --timeout=120 --tb=short
   frontend-tests:

@@ -79,18 +79,20 @@ class DialerEngine:
     - Multi-agent collision prevention
     """
 
-    def __init__(self, db_session, agent_id: int):
+    def __init__(self, db_session, agent_id: int, organization_id: Optional[int] = None):
         """
         Initialize dialer engine for an agent
 
         Args:
             db_session: SQLAlchemy database session
             agent_id: ID of the agent using the dialer
+            organization_id: Tenant org ID for data isolation
         """
         self.db = db_session
         self.agent_id = agent_id
+        self.organization_id = organization_id
         self.provider = get_telephony_provider()
-        self.compliance = ComplianceChecker(db_session)
+        self.compliance = ComplianceChecker(db_session, organization_id=organization_id)
         self._current_session_id: Optional[int] = None
 
     def get_agent_settings(self) -> Optional[Dict[str, Any]]:
@@ -158,14 +160,17 @@ class DialerEngine:
                 "error": "No verified caller ID configured. Please set up your business phone number."
             }
 
-        # Create session
-        session = DialerSession(
+        # Create session (with tenant isolation)
+        session_kwargs = dict(
             agent_id=self.agent_id,
             status=DialerSessionStatus.ACTIVE,
             total_tasks=len(task_ids),
             completed_tasks=0,
-            caller_id_used=caller_id
+            caller_id_used=caller_id,
         )
+        if self.organization_id and hasattr(DialerSession, 'organization_id'):
+            session_kwargs['organization_id'] = self.organization_id
+        session = DialerSession(**session_kwargs)
         self.db.add(session)
         self.db.flush()  # Get session ID
 
@@ -555,7 +560,7 @@ class DialerEngine:
         }
         call_outcome = outcome_map.get(status.lower() if isinstance(status, str) else status, CallOutcome.COMPLETED)
 
-        call_log = CallLog(
+        call_log_kwargs = dict(
             agent_id=self.agent_id,
             session_id=session_id,
             session_task_id=task_id,
@@ -567,8 +572,11 @@ class DialerEngine:
             duration_seconds=duration,
             outcome=call_outcome,
             start_time=task.created_at,  # Use created_at as start time
-            end_time=datetime.utcnow()
+            end_time=datetime.utcnow(),
         )
+        if self.organization_id and hasattr(CallLog, 'organization_id'):
+            call_log_kwargs['organization_id'] = self.organization_id
+        call_log = CallLog(**call_log_kwargs)
         self.db.add(call_log)
 
         # Clear current task
@@ -812,7 +820,8 @@ def click_to_dial(
     base_url: str,
     lead_id: Optional[int] = None,
     loan_id: Optional[int] = None,
-    task_id: Optional[int] = None
+    task_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Single click-to-dial call (not part of a session)
@@ -826,6 +835,7 @@ def click_to_dial(
         lead_id: Optional lead ID
         loan_id: Optional loan ID
         task_id: Optional task ID
+        organization_id: Optional org ID for tenant isolation
 
     Returns:
         Dict with call result
@@ -834,7 +844,7 @@ def click_to_dial(
     from database.models import AgentTelephonySettings, CallLog
 
     provider = get_telephony_provider()
-    compliance = ComplianceChecker(db_session)
+    compliance = ComplianceChecker(db_session, organization_id=organization_id)
 
     # Run compliance checks (pass lead_id for consent verification)
     compliance_result = compliance.full_compliance_check(phone_number, agent_id, contact_id=lead_id)
@@ -889,8 +899,8 @@ def click_to_dial(
         # Update lock with real call SID
         compliance.acquire_soft_lock(phone_number, agent_id, result.call_sid)
 
-        # Log the call
-        call_log = CallLog(
+        # Log the call (with tenant isolation)
+        call_log_kwargs = dict(
             agent_id=agent_id,
             contact_phone=phone_number,
             contact_name=contact_name,
@@ -899,8 +909,11 @@ def click_to_dial(
             session_task_id=task_id,
             call_sid=result.call_sid,
             outcome=CallOutcome.INITIATED,
-            start_time=datetime.utcnow()
+            start_time=datetime.utcnow(),
         )
+        if organization_id and hasattr(CallLog, 'organization_id'):
+            call_log_kwargs['organization_id'] = organization_id
+        call_log = CallLog(**call_log_kwargs)
         db_session.add(call_log)
         db_session.commit()
 

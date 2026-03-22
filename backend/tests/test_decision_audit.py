@@ -12,6 +12,7 @@ Covers:
 - Validation of decision_type, decision, and maker_type enums
 """
 
+import os
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
@@ -20,6 +21,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker, Session
 
 from db import Base
+from tests.test_db_helper import create_all_tables
 
 
 # =============================================================================
@@ -28,9 +30,9 @@ from db import Base
 
 @pytest.fixture
 def test_engine():
-    """Create an in-memory SQLite engine with the decision audit tables."""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    """Create a PostgreSQL test engine with the decision audit tables."""
+    engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
+    create_all_tables(Base, engine)
     return engine
 
 

@@ -44,12 +44,14 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def in_memory_db():
-    """Create an in-memory SQLite database with the cache table."""
+    """Create a PostgreSQL test database with the cache table."""
+    import os
     from db import Base
     from database.models.document_cache import DocumentProcessingCache  # noqa: F401
+    from tests.test_db_helper import create_all_tables
 
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
+    create_all_tables(Base, engine)
     Session = sessionmaker(bind=engine)
     session = Session()
     yield session

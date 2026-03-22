@@ -17,6 +17,7 @@ Tests cover:
 Uses pytest with in-memory SQLite via SQLAlchemy.
 """
 
+import os
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
@@ -41,14 +42,8 @@ from database.models.income_calculation import (
 
 @pytest.fixture(scope="module")
 def engine():
-    """Create an in-memory SQLite engine for tests."""
-    eng = create_engine("sqlite:///:memory:")
-
-    @event.listens_for(eng, "connect")
-    def _set_sqlite_pragma(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+    """Create a PostgreSQL test engine for tests."""
+    eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
 
     IncomeCalculation.__table__.create(eng, checkfirst=True)
     IncomeSource.__table__.create(eng, checkfirst=True)

@@ -6,6 +6,8 @@ Uses SendGrid for email and Telnyx for SMS.
 
 import os
 import logging
+import threading
+import time as _time
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from sendgrid import SendGridAPIClient
@@ -15,6 +17,77 @@ import base64
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# CIRCUIT BREAKER — protects SendGrid calls from cascading failures
+# ============================================================================
+
+class SendGridCircuitBreaker:
+    """Thread-safe circuit breaker for SendGrid API calls.
+
+    States:
+        CLOSED   — normal operation, requests pass through
+        OPEN     — too many failures, requests short-circuited
+        HALF_OPEN — recovery probe: one request allowed through
+
+    Transitions:
+        CLOSED  -> OPEN      when failure_count >= failure_threshold
+        OPEN    -> HALF_OPEN when recovery_timeout seconds have elapsed
+        HALF_OPEN -> CLOSED  when a probe request succeeds
+        HALF_OPEN -> OPEN    when a probe request fails
+    """
+
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
+        self._state = self.CLOSED
+        self._failure_count = 0
+        self._failure_threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout
+        self._last_failure_time: float = 0
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> str:
+        with self._lock:
+            if self._state == self.OPEN:
+                if _time.time() - self._last_failure_time >= self._recovery_timeout:
+                    self._state = self.HALF_OPEN
+                    logger.info("SendGrid circuit breaker: OPEN -> HALF_OPEN (recovery probe)")
+            return self._state
+
+    def allow_request(self) -> bool:
+        """Return True if the request should be attempted."""
+        return self.state != self.OPEN
+
+    def record_success(self):
+        with self._lock:
+            self._failure_count = 0
+            if self._state == self.HALF_OPEN:
+                logger.info("SendGrid circuit breaker: HALF_OPEN -> CLOSED (probe succeeded)")
+            self._state = self.CLOSED
+
+    def record_failure(self):
+        with self._lock:
+            self._failure_count += 1
+            self._last_failure_time = _time.time()
+            if self._failure_count >= self._failure_threshold:
+                if self._state != self.OPEN:
+                    logger.warning(
+                        f"SendGrid circuit breaker: {self._state} -> OPEN "
+                        f"({self._failure_count} consecutive failures)"
+                    )
+                self._state = self.OPEN
+
+
+# Module-level singleton
+_sendgrid_circuit_breaker = SendGridCircuitBreaker(
+    failure_threshold=int(os.getenv("SENDGRID_CB_THRESHOLD", "5")),
+    recovery_timeout=int(os.getenv("SENDGRID_CB_TIMEOUT", "60")),
+)
 
 # SendGrid configuration
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
@@ -118,7 +191,17 @@ class NotificationService:
                 logger.info(f"[DRY RUN] Would send email to {self._mask_email(to_email)}: {subject}")
                 return {"success": True, "dry_run": True}
 
+            # Circuit breaker: short-circuit if SendGrid is known-down
+            if not _sendgrid_circuit_breaker.allow_request():
+                logger.warning(f"SendGrid circuit breaker OPEN — email to {self._mask_email(to_email)} deferred")
+                return {"success": False, "error": "Email service temporarily unavailable", "circuit_open": True}
+
             response = self.sendgrid_client.send(message)
+
+            if response.status_code in [200, 201, 202]:
+                _sendgrid_circuit_breaker.record_success()
+            else:
+                _sendgrid_circuit_breaker.record_failure()
 
             logger.info(f"Email sent to {self._mask_email(to_email)}: {subject} (status: {response.status_code})")
 
@@ -129,6 +212,7 @@ class NotificationService:
             }
 
         except Exception as e:
+            _sendgrid_circuit_breaker.record_failure()
             logger.error(f"Failed to send email to {self._mask_email(to_email)}: {str(e)}")
             return {"success": False, "error": "Internal server error"}
 

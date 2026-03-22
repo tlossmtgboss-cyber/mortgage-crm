@@ -1,6 +1,10 @@
 """SMS Campaign Manager - Mortgage CRM A+ Module #7
 Batch SMS campaigns with audience segmentation, scheduling,
 rate limiting, compliance checks, and delivery reporting.
+
+DB-backed persistence: campaigns are stored in sms_campaign_records.
+The in-memory dict _active_campaigns acts as a hot cache;
+the database is the source of truth.
 """
 import asyncio
 import logging
@@ -86,10 +90,164 @@ class SMSCampaignManager:
         self.template_engine = template_engine
         self.db = db
         self._active_campaigns: Dict[str, SMSCampaign] = {}
+        self._loaded_from_db = False
+
+    # ── DB persistence helpers ────────────────────────────────────────────────
+
+    def _get_db_session(self):
+        """Get a new DB session.  Returns None if DB is unavailable."""
+        try:
+            from db import SessionLocal
+            return SessionLocal()
+        except Exception as e:
+            logger.warning(f"Could not create DB session for SMS persistence: {e}")
+            return None
+
+    def _persist_campaign(self, campaign: SMSCampaign) -> None:
+        """Upsert campaign state to sms_campaign_records."""
+        session = self._get_db_session()
+        if session is None:
+            return
+        try:
+            from database.models.sms_persistence import SMSCampaignRecord
+
+            record = (
+                session.query(SMSCampaignRecord)
+                .filter(SMSCampaignRecord.campaign_id == campaign.campaign_id)
+                .first()
+            )
+
+            config = {
+                "campaign_type": campaign.campaign_type.value,
+                "template_key": campaign.template_key,
+                "batch_size": campaign.batch_size,
+                "batch_delay_seconds": campaign.batch_delay_seconds,
+                "variables": campaign.variables,
+                "audience_count": len(campaign.audience),
+                "stats": campaign.stats,
+                "errors": campaign.errors[-20:],  # keep last 20 errors
+            }
+
+            # Resolve organization_id from tenant_id when possible
+            org_id = None
+            if campaign.tenant_id:
+                try:
+                    org_id = int(campaign.tenant_id)
+                except (ValueError, TypeError):
+                    pass
+
+            if record is None:
+                record = SMSCampaignRecord(
+                    campaign_id=campaign.campaign_id,
+                    organization_id=org_id,
+                    name=campaign.name,
+                    status=campaign.status.value,
+                    campaign_config=config,
+                    total_recipients=campaign.stats.get("total", 0),
+                    sent_count=campaign.stats.get("sent", 0),
+                    failed_count=campaign.stats.get("failed", 0),
+                    completed_at=campaign.completed_at,
+                )
+                session.add(record)
+            else:
+                record.name = campaign.name
+                record.status = campaign.status.value
+                record.campaign_config = config
+                record.total_recipients = campaign.stats.get("total", 0)
+                record.sent_count = campaign.stats.get("sent", 0)
+                record.failed_count = campaign.stats.get("failed", 0)
+                record.completed_at = campaign.completed_at
+                if org_id is not None:
+                    record.organization_id = org_id
+
+            session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to persist campaign {campaign.campaign_id}: {e}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
+        finally:
+            try:
+                session.close()
+            except Exception:
+                pass
+
+    def _load_campaigns(self) -> None:
+        """Load active campaigns from DB into the in-memory cache."""
+        if self._loaded_from_db:
+            return
+        session = self._get_db_session()
+        if session is None:
+            self._loaded_from_db = True
+            return
+        try:
+            from database.models.sms_persistence import SMSCampaignRecord
+
+            active_statuses = [
+                CampaignStatus.DRAFT.value,
+                CampaignStatus.SCHEDULED.value,
+                CampaignStatus.RUNNING.value,
+                CampaignStatus.PAUSED.value,
+            ]
+            records = (
+                session.query(SMSCampaignRecord)
+                .filter(SMSCampaignRecord.status.in_(active_statuses))
+                .all()
+            )
+
+            loaded = 0
+            for rec in records:
+                if rec.campaign_id in self._active_campaigns:
+                    continue  # already cached
+                config = rec.campaign_config or {}
+                campaign = SMSCampaign(
+                    campaign_id=rec.campaign_id,
+                    name=rec.name or "",
+                    campaign_type=CampaignType(config.get("campaign_type", "broadcast")),
+                    template_key=config.get("template_key", ""),
+                    audience=[],  # audience not stored in DB (can be large)
+                    batch_size=config.get("batch_size", 50),
+                    batch_delay_seconds=config.get("batch_delay_seconds", 60),
+                    variables=config.get("variables", {}),
+                    tenant_id=str(rec.organization_id) if rec.organization_id else None,
+                )
+                campaign.status = CampaignStatus(rec.status)
+                campaign.stats = config.get("stats", {
+                    "total": rec.total_recipients or 0,
+                    "sent": rec.sent_count or 0,
+                    "delivered": 0,
+                    "failed": rec.failed_count or 0,
+                    "opted_out": 0,
+                    "compliance_blocked": 0,
+                })
+                campaign.completed_at = rec.completed_at
+                campaign.created_at = rec.created_at or datetime.utcnow()
+                campaign.errors = config.get("errors", [])
+
+                self._active_campaigns[rec.campaign_id] = campaign
+                loaded += 1
+
+            if loaded:
+                logger.info(f"Loaded {loaded} active SMS campaigns from DB")
+        except Exception as e:
+            logger.warning(f"Failed to load campaigns from DB: {e}")
+        finally:
+            self._loaded_from_db = True
+            try:
+                session.close()
+            except Exception:
+                pass
+
+    def _ensure_loaded(self) -> None:
+        """Ensure campaigns have been loaded from DB (lazy init)."""
+        if not self._loaded_from_db:
+            self._load_campaigns()
 
     # ── Campaign lifecycle ───────────────────────────────────────────────────
     def create_campaign(self, config: Dict[str, Any]) -> SMSCampaign:
         """Create a new campaign from config dict."""
+        self._ensure_loaded()
         import uuid
         campaign = SMSCampaign(
             campaign_id=config.get("campaign_id", str(uuid.uuid4())),
@@ -104,11 +262,13 @@ class SMSCampaignManager:
             tenant_id=config.get("tenant_id"),
         )
         self._active_campaigns[campaign.campaign_id] = campaign
+        self._persist_campaign(campaign)
         logger.info(f"Campaign created: {campaign.campaign_id} ({campaign.name})")
         return campaign
 
     async def launch_campaign(self, campaign_id: str) -> Dict[str, Any]:
         """Launch a campaign - process all recipients in batches."""
+        self._ensure_loaded()
         campaign = self._active_campaigns.get(campaign_id)
         if not campaign:
             raise ValueError(f"Campaign {campaign_id} not found")
@@ -117,6 +277,7 @@ class SMSCampaignManager:
 
         campaign.status = CampaignStatus.RUNNING
         campaign.started_at = datetime.utcnow()
+        self._persist_campaign(campaign)
         logger.info(f"Launching campaign {campaign_id} to {len(campaign.audience)} recipients")
 
         try:
@@ -132,17 +293,22 @@ class SMSCampaignManager:
 
                 await self._process_batch(campaign, batch, batch_num)
 
+                # Persist stats after each batch
+                self._persist_campaign(campaign)
+
                 # Delay between batches to respect rate limits
                 if batch_num < len(batches) - 1:
                     await asyncio.sleep(campaign.batch_delay_seconds)
 
             campaign.status = CampaignStatus.COMPLETED
             campaign.completed_at = datetime.utcnow()
+            self._persist_campaign(campaign)
             logger.info(f"Campaign {campaign_id} completed. Stats: {campaign.stats}")
 
         except Exception as e:
             campaign.status = CampaignStatus.FAILED
             campaign.errors.append(str(e))
+            self._persist_campaign(campaign)
             logger.error(f"Campaign {campaign_id} failed: {e}")
 
         return self.get_campaign_stats(campaign_id)
@@ -222,20 +388,25 @@ class SMSCampaignManager:
 
     # ── Campaign management ──────────────────────────────────────────────────
     def pause_campaign(self, campaign_id: str) -> bool:
+        self._ensure_loaded()
         campaign = self._active_campaigns.get(campaign_id)
         if campaign and campaign.status == CampaignStatus.RUNNING:
             campaign.status = CampaignStatus.PAUSED
+            self._persist_campaign(campaign)
             return True
         return False
 
     def cancel_campaign(self, campaign_id: str) -> bool:
+        self._ensure_loaded()
         campaign = self._active_campaigns.get(campaign_id)
         if campaign and campaign.status in (CampaignStatus.RUNNING, CampaignStatus.PAUSED):
             campaign.status = CampaignStatus.CANCELLED
+            self._persist_campaign(campaign)
             return True
         return False
 
     def get_campaign_stats(self, campaign_id: str) -> Dict[str, Any]:
+        self._ensure_loaded()
         campaign = self._active_campaigns.get(campaign_id)
         if not campaign:
             return {"error": "Campaign not found"}
@@ -250,6 +421,7 @@ class SMSCampaignManager:
         }
 
     def list_campaigns(self) -> List[Dict[str, Any]]:
+        self._ensure_loaded()
         return [self.get_campaign_stats(cid) for cid in self._active_campaigns]
 
 

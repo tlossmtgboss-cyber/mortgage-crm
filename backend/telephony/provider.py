@@ -8,10 +8,112 @@ as the sole provider.
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
+from enum import Enum
 import logging
 import os
+import threading
+import time
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# CIRCUIT BREAKER — protects against cascading failures from Telnyx API outages
+# Pattern adapted from services/call_intelligence/llm_client.py (async → sync)
+# =============================================================================
+
+class TelephonyCircuitState(str, Enum):
+    CLOSED = "closed"       # Normal operation — requests pass through
+    OPEN = "open"           # Provider down — requests fail fast
+    HALF_OPEN = "half_open" # Testing recovery — limited requests allowed
+
+
+class TelephonyCircuitBreakerOpen(Exception):
+    """Raised when circuit breaker is open (telephony provider unavailable)."""
+    pass
+
+
+class TelephonyCircuitBreaker:
+    """
+    Circuit breaker for telephony API calls.
+
+    States:
+    - CLOSED: Normal operation, requests pass through
+    - OPEN: API is down, requests fail fast without calling API
+    - HALF_OPEN: Testing if API recovered, limited requests allowed
+
+    Uses threading.Lock for thread-safe synchronous operation.
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = 3,
+        recovery_timeout: float = 30.0,
+        half_open_max_calls: int = 1,
+    ):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.half_open_max_calls = half_open_max_calls
+        self._state = TelephonyCircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time = 0.0
+        self._half_open_calls = 0
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> TelephonyCircuitState:
+        with self._lock:
+            if self._state == TelephonyCircuitState.OPEN:
+                if time.monotonic() - self._last_failure_time >= self.recovery_timeout:
+                    self._state = TelephonyCircuitState.HALF_OPEN
+                    self._half_open_calls = 0
+            return self._state
+
+    def check(self):
+        """Check if request is allowed. Raises TelephonyCircuitBreakerOpen if not."""
+        current_state = self.state  # property acquires lock internally
+        if current_state == TelephonyCircuitState.CLOSED:
+            return
+        elif current_state == TelephonyCircuitState.HALF_OPEN:
+            with self._lock:
+                if self._half_open_calls < self.half_open_max_calls:
+                    self._half_open_calls += 1
+                    return
+            raise TelephonyCircuitBreakerOpen(
+                f"Telephony circuit breaker HALF_OPEN: max test calls ({self.half_open_max_calls}) reached"
+            )
+        else:
+            with self._lock:
+                remaining = self.recovery_timeout - (time.monotonic() - self._last_failure_time)
+            raise TelephonyCircuitBreakerOpen(
+                f"Telephony circuit breaker is OPEN. Recovery in {remaining:.0f}s"
+            )
+
+    def record_success(self):
+        """Record a successful API call."""
+        with self._lock:
+            if self._state == TelephonyCircuitState.HALF_OPEN:
+                logger.info("Telephony circuit breaker: HALF_OPEN -> CLOSED (provider recovered)")
+            self._state = TelephonyCircuitState.CLOSED
+            self._failure_count = 0
+            self._half_open_calls = 0
+
+    def record_failure(self):
+        """Record a failed API call."""
+        with self._lock:
+            self._failure_count += 1
+            self._last_failure_time = time.monotonic()
+            if self._failure_count >= self.failure_threshold:
+                if self._state != TelephonyCircuitState.OPEN:
+                    logger.warning(
+                        f"Telephony circuit breaker OPENED after {self._failure_count} consecutive failures"
+                    )
+                self._state = TelephonyCircuitState.OPEN
+                self._half_open_calls = 0
+
+
+# Module-level singleton
+_telephony_circuit_breaker = TelephonyCircuitBreaker()
 
 # ============================================================================
 # FEATURE TIER: PREMIUM
@@ -159,7 +261,11 @@ class TelnyxProvider(TelephonyProvider):
         async_amd: bool = False,
         async_amd_callback: str = None,
     ) -> CallResult:
-        """Place an outbound call via Telnyx with optional recording and AMD"""
+        """Place an outbound call via Telnyx with optional recording and AMD.
+
+        Includes circuit breaker protection and retry logic (max 2 retries with
+        exponential backoff) for transient API errors.
+        """
         # Support both naming conventions
         to = to or to_number
         from_ = from_ or from_number
@@ -167,55 +273,81 @@ class TelnyxProvider(TelephonyProvider):
         status_callback = status_callback or status_callback_url
         self._ensure_client()
 
-        try:
-            # Build call parameters
-            call_params = {
-                "connection_id": self.connection_id,
-                "to": to,
-                "from_": from_,
-                "webhook_url": url,
-                "webhook_url_method": "POST",
-                "timeout_secs": timeout,
+        # Build call parameters (done once, reused across retries)
+        call_params = {
+            "connection_id": self.connection_id,
+            "to": to,
+            "from_": from_,
+            "webhook_url": url,
+            "webhook_url_method": "POST",
+            "timeout_secs": timeout,
+        }
+
+        # Add recording if enabled
+        if record:
+            call_params["record"] = "record-from-answer"
+            if recording_status_callback:
+                call_params["recording_status_callback"] = recording_status_callback
+
+        # Add AMD if configured
+        if machine_detection:
+            call_params["answering_machine_detection"] = "detect"
+            call_params["answering_machine_detection_config"] = {
+                "total_analysis_time_millis": machine_detection_timeout * 1000,
+                "after_greeting_silence_millis": 800,
+                "between_words_silence_millis": 50,
+                "greeting_duration_millis": 3500,
+                "initial_silence_millis": 3500,
+                "maximum_number_of_words": 5,
+                "maximum_word_length_millis": 3500,
+                "silence_threshold": 256,
             }
 
-            # Add recording if enabled
-            if record:
-                call_params["record"] = "record-from-answer"
-                if recording_status_callback:
-                    call_params["recording_status_callback"] = recording_status_callback
+        # Retry loop with circuit breaker
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                # Check circuit breaker before making API call
+                _telephony_circuit_breaker.check()
 
-            # Add AMD if configured
-            if machine_detection:
-                call_params["answering_machine_detection"] = "detect"
-                call_params["answering_machine_detection_config"] = {
-                    "total_analysis_time_millis": machine_detection_timeout * 1000,
-                    "after_greeting_silence_millis": 800,
-                    "between_words_silence_millis": 50,
-                    "greeting_duration_millis": 3500,
-                    "initial_silence_millis": 3500,
-                    "maximum_number_of_words": 5,
-                    "maximum_word_length_millis": 3500,
-                    "silence_threshold": 256,
-                }
+                # Create the call
+                call = self.client.calls.create(**call_params)
 
-            # Create the call
-            call = self.client.calls.create(**call_params)
+                logger.info(f"Telnyx call placed: {call.data.call_control_id} from {from_} to {to}")
 
-            logger.info(f"Telnyx call placed: {call.data.call_control_id} from {from_} to {to}")
+                _telephony_circuit_breaker.record_success()
 
-            return CallResult(
-                success=True,
-                call_sid=call.data.call_control_id,
-                status="initiated"
-            )
+                return CallResult(
+                    success=True,
+                    call_sid=call.data.call_control_id,
+                    status="initiated"
+                )
 
-        except Exception as e:
-            logger.error(f"Telnyx error placing call to {to}: {e}")
-            return CallResult(
-                success=False,
-                error_message=str(e),
-                error_code="TELNYX_ERROR"
-            )
+            except TelephonyCircuitBreakerOpen as e:
+                logger.warning(f"Telephony circuit breaker blocked call to {to}: {e}")
+                return CallResult(
+                    success=False,
+                    error_message=str(e),
+                    error_code="CIRCUIT_BREAKER_OPEN"
+                )
+
+            except Exception as e:
+                _telephony_circuit_breaker.record_failure()
+                if attempt < max_retries:
+                    backoff = min(2 ** attempt, 4)  # 1s, 2s
+                    logger.warning(
+                        f"Telnyx call attempt {attempt + 1}/{max_retries + 1} failed for {to}: {e}. "
+                        f"Retrying in {backoff}s..."
+                    )
+                    time.sleep(backoff)
+                    continue
+
+                logger.error(f"Telnyx error placing call to {to} after {max_retries + 1} attempts: {e}")
+                return CallResult(
+                    success=False,
+                    error_message=str(e),
+                    error_code="TELNYX_ERROR"
+                )
 
     def get_call_status(self, call_sid: str) -> Optional[CallStatus]:
         """Get the current status of a call"""

@@ -156,6 +156,7 @@ from .widget_config import router as widget_config_router
 from .maintenance import router as maintenance_router
 from .calendar_sync_inbound import router as calendar_sync_inbound_router
 from .settings import router as settings_router
+from .email_events import router as email_events_router
 from .error_responses import (  # noqa: F401 — re-export for other modules
     scheduler_error, validation_error, not_found_error,
     conflict_error, rate_limit_error, internal_error,
@@ -224,4 +225,5 @@ scheduler_router.include_router(widget_config_router)
 scheduler_router.include_router(maintenance_router)
 scheduler_router.include_router(calendar_sync_inbound_router)
 scheduler_router.include_router(settings_router)
+scheduler_router.include_router(email_events_router)
 scheduler_router.include_router(_api_versions_router)

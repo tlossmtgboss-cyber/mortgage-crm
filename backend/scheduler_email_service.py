@@ -35,6 +35,15 @@ from typing import Optional
 from services.notification_service import notification_service
 from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
 
+
+def _is_email_suppressed(email: str) -> bool:
+    """Lazy wrapper to avoid circular import with routes.scheduler.email_events."""
+    try:
+        from routes.scheduler.email_events import is_email_suppressed
+        return is_email_suppressed(email)
+    except ImportError:
+        return False
+
 # --- Re-exports from extracted sub-modules (backward compatibility) ---
 # SMS compliance: consent checking, contact hours (canonical source)
 from services.sms_compliance import check_sms_consent, _check_contact_hours  # noqa: F401
@@ -362,6 +371,10 @@ def send_appointment_confirmation_email(
     reschedule_url: str = None
 ):
     """Send appointment confirmation email with calendar invite using SendGrid"""
+    if _is_email_suppressed(attendee_email):
+        logger.info(f"Email suppressed (bounce/complaint): {_mask_email(attendee_email)}, skipping confirmation")
+        return {"success": False, "error": "Email address suppressed"}
+
     if not _check_email_rate_limit(attendee_email):
         logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping confirmation email")
         return {"success": False, "error": "Rate limit exceeded"}

@@ -13,6 +13,7 @@ class VapiCall(Base):
     __tablename__ = "vapi_calls"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     vapi_call_id = Column(String(255), unique=True, index=True, nullable=False)
 
     # Call Details
@@ -77,6 +78,7 @@ class VapiAssistant(Base):
     __tablename__ = "vapi_assistants"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     vapi_assistant_id = Column(String(255), unique=True, index=True)
 
     name = Column(String(255), nullable=False)
@@ -105,6 +107,7 @@ class VapiPhoneNumber(Base):
     __tablename__ = "vapi_phone_numbers"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     vapi_number_id = Column(String(255), unique=True, index=True)
 
     phone_number = Column(String(20), unique=True, nullable=False)

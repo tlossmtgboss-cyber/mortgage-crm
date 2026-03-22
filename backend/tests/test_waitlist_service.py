@@ -12,6 +12,7 @@ Comprehensive tests for the waiting room / queue management system:
 - Edge cases and error handling
 """
 
+import os
 import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, MagicMock, patch, PropertyMock
@@ -176,8 +177,8 @@ def mock_models():
 @pytest.fixture
 def service(mock_models):
     """Create a WaitlistService with a real SQLAlchemy in-memory DB."""
-    # Use a real SQLite in-memory database so we can test actual SQL behavior
-    engine = create_engine("sqlite:///:memory:")
+    # Use a real database so we can test actual SQL behavior
+    engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
 
     from db import Base
     # Create the waitlist_entries table

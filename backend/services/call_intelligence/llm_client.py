@@ -230,6 +230,107 @@ OPENAI_BURST_SIZE = 10
 # Retry/backoff constants
 MAX_BACKOFF_SECONDS = 30.0  # Cap exponential backoff to prevent excessive waits
 
+# Circuit breaker constants
+CB_FAILURE_THRESHOLD = 5  # Consecutive failures before opening circuit
+CB_RECOVERY_TIMEOUT = 60  # Seconds before trying half-open
+CB_HALF_OPEN_MAX_CALLS = 2  # Test calls allowed in half-open state
+
+
+class CircuitBreakerState(str, Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+
+class CircuitBreakerOpen(LLMError):
+    """Raised when circuit breaker is open (LLM API unavailable)."""
+    pass
+
+
+class CircuitBreaker:
+    """
+    Circuit breaker for LLM API calls.
+
+    States:
+    - CLOSED: Normal operation, requests pass through
+    - OPEN: API is down, requests fail fast without calling API
+    - HALF_OPEN: Testing if API recovered, limited requests allowed
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = CB_FAILURE_THRESHOLD,
+        recovery_timeout: float = CB_RECOVERY_TIMEOUT,
+        half_open_max_calls: int = CB_HALF_OPEN_MAX_CALLS,
+    ):
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.half_open_max_calls = half_open_max_calls
+        self._state = CircuitBreakerState.CLOSED
+        self._failure_count = 0
+        self._last_failure_time = 0.0
+        self._half_open_calls = 0
+        self._lock = asyncio.Lock()
+
+    @property
+    def state(self) -> CircuitBreakerState:
+        if self._state == CircuitBreakerState.OPEN:
+            if time.monotonic() - self._last_failure_time >= self.recovery_timeout:
+                return CircuitBreakerState.HALF_OPEN
+        return self._state
+
+    async def check(self):
+        """Check if request is allowed. Raises CircuitBreakerOpen if not."""
+        async with self._lock:
+            current_state = self.state
+            if current_state == CircuitBreakerState.CLOSED:
+                return
+            elif current_state == CircuitBreakerState.HALF_OPEN:
+                if self._half_open_calls < self.half_open_max_calls:
+                    self._half_open_calls += 1
+                    return
+                raise CircuitBreakerOpen(
+                    f"Circuit breaker half-open: max test calls ({self.half_open_max_calls}) reached"
+                )
+            else:
+                remaining = self.recovery_timeout - (time.monotonic() - self._last_failure_time)
+                raise CircuitBreakerOpen(
+                    f"Circuit breaker open: LLM API unavailable, retry in {remaining:.0f}s"
+                )
+
+    async def record_success(self):
+        """Record a successful API call."""
+        async with self._lock:
+            if self._state == CircuitBreakerState.HALF_OPEN or self.state == CircuitBreakerState.HALF_OPEN:
+                logger.info("Circuit breaker: HALF_OPEN -> CLOSED (API recovered)")
+            self._state = CircuitBreakerState.CLOSED
+            self._failure_count = 0
+            self._half_open_calls = 0
+
+    async def record_failure(self):
+        """Record a failed API call."""
+        async with self._lock:
+            self._failure_count += 1
+            self._last_failure_time = time.monotonic()
+            if self._failure_count >= self.failure_threshold:
+                if self._state != CircuitBreakerState.OPEN:
+                    logger.warning(
+                        f"Circuit breaker: OPEN after {self._failure_count} consecutive failures"
+                    )
+                self._state = CircuitBreakerState.OPEN
+                self._half_open_calls = 0
+
+
+# Global circuit breakers (one per provider)
+_circuit_breakers: Dict[str, CircuitBreaker] = {}
+
+
+def get_circuit_breaker(provider: str) -> CircuitBreaker:
+    """Get or create a circuit breaker for a provider."""
+    if provider not in _circuit_breakers:
+        _circuit_breakers[provider] = CircuitBreaker()
+    return _circuit_breakers[provider]
+
 # Validation bounds
 MIN_TEMPERATURE = 0.0
 MAX_TEMPERATURE = 2.0  # OpenAI allows up to 2.0
@@ -554,8 +655,13 @@ Respond ONLY with the JSON object, no additional text."""
         if redaction_stats.get("total", 0) > 0:
             logger.info(f"PII redacted before LLM call: {redaction_stats}")
 
+        circuit_breaker = get_circuit_breaker("anthropic")
+
         for attempt in range(self.config.max_retries):
             try:
+                # Check circuit breaker before attempting API call
+                await circuit_breaker.check()
+
                 # Acquire rate limit token before making request
                 await rate_limiter.acquire(timeout=self.config.timeout)
 
@@ -604,6 +710,7 @@ Respond ONLY with the JSON object, no additional text."""
                 result = self._parse_json_response(content)
 
                 if result:
+                    await circuit_breaker.record_success()
                     return result
                 else:
                     # JSON parse failed - log and retry
@@ -612,10 +719,12 @@ Respond ONLY with the JSON object, no additional text."""
                         await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                     continue
 
+            except CircuitBreakerOpen:
+                raise  # Don't retry when circuit is open
             except asyncio.TimeoutError:
+                await circuit_breaker.record_failure()
                 logger.warning(f"LLM extraction attempt {attempt + 1} timed out after {self.config.timeout}s")
                 if attempt < self.config.max_retries - 1:
-                    # Capped exponential backoff to prevent excessive waits
                     await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     logger.error(f"LLM extraction failed after {self.config.max_retries} attempts (timeout)")
@@ -633,17 +742,16 @@ Respond ONLY with the JSON object, no additional text."""
                 else:
                     raise LLMParseError(f"Failed to parse Anthropic response as JSON: {e}")
             except (ConnectionError, OSError) as e:
-                # Network-related errors
+                await circuit_breaker.record_failure()
                 logger.warning(f"Network error on attempt {attempt + 1}: {e}")
                 if attempt < self.config.max_retries - 1:
                     await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     raise LLMAPIError(f"Network error calling Anthropic API: {e}")
             except Exception as e:
-                # Log the exception type for debugging
+                await circuit_breaker.record_failure()
                 logger.warning(f"LLM extraction attempt {attempt + 1} failed ({type(e).__name__}): {e}")
                 if attempt < self.config.max_retries - 1:
-                    # Capped exponential backoff to prevent excessive waits
                     await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
                 else:
                     logger.error(f"LLM extraction failed after {self.config.max_retries} attempts")

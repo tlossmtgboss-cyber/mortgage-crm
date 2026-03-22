@@ -13,6 +13,7 @@ Covers:
 Uses in-memory SQLite database with mock data to avoid external dependencies.
 """
 
+import os
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
@@ -32,8 +33,8 @@ from services.smart_docs.ai_benchmarking_service import AIBenchmarkingService, B
 
 @pytest.fixture(scope="module")
 def bench_engine():
-    """Create an in-memory SQLite engine with benchmark tables."""
-    engine = create_engine("sqlite:///:memory:")
+    """Create a PostgreSQL test engine with benchmark tables."""
+    engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
     # Create only the tables we need
     for table_name in ("ai_benchmark_datasets", "ai_benchmark_samples", "ai_document_classifications"):
         table = Base.metadata.tables.get(table_name)

@@ -11,6 +11,7 @@ Tests the database-backed business rules service including:
 - Seed defaults
 """
 
+import os
 import time
 import pytest
 from datetime import date, datetime, timezone, timedelta
@@ -20,6 +21,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db import Base
+from tests.test_db_helper import create_all_tables
 
 
 # =============================================================================
@@ -28,9 +30,9 @@ from db import Base
 
 @pytest.fixture
 def db_engine():
-    """Create an in-memory SQLite engine for testing."""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    """Create a PostgreSQL test engine for testing."""
+    engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
+    create_all_tables(Base, engine)
     return engine
 
 

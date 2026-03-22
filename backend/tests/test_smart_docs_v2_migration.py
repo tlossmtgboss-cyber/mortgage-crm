@@ -20,6 +20,7 @@ PostgreSQL-specific syntax (SERIAL, JSONB, DO $$ blocks) is adapted
 via a portable DDL string that mirrors the migration's intent.
 """
 
+import os
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
@@ -83,12 +84,12 @@ LEGACY_TABLE_NAMES = {
 
 
 # ===========================================================================
-# Portable SQLite DDL (mirrors the PostgreSQL migration)
+# Portable DDL (mirrors the PostgreSQL migration)
 # ===========================================================================
 
 _SQLITE_DDL = """
 CREATE TABLE IF NOT EXISTS esignature_envelopes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     loan_id INTEGER,
     created_by_user_id INTEGER,
@@ -118,7 +119,7 @@ CREATE TABLE IF NOT EXISTS esignature_envelopes (
 );
 
 CREATE TABLE IF NOT EXISTS esignature_recipients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     envelope_id INTEGER NOT NULL REFERENCES esignature_envelopes(id) ON DELETE CASCADE,
     recipient_type VARCHAR(32) NOT NULL DEFAULT 'signer',
     signing_order INTEGER DEFAULT 1,
@@ -143,7 +144,7 @@ CREATE TABLE IF NOT EXISTS esignature_recipients (
 );
 
 CREATE TABLE IF NOT EXISTS esignature_fields (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     envelope_id INTEGER NOT NULL REFERENCES esignature_envelopes(id) ON DELETE CASCADE,
     recipient_id INTEGER REFERENCES esignature_recipients(id) ON DELETE SET NULL,
     field_type VARCHAR(32) NOT NULL,
@@ -165,7 +166,7 @@ CREATE TABLE IF NOT EXISTS esignature_fields (
 );
 
 CREATE TABLE IF NOT EXISTS esignature_audit_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     envelope_id INTEGER NOT NULL REFERENCES esignature_envelopes(id) ON DELETE CASCADE,
     recipient_id INTEGER REFERENCES esignature_recipients(id) ON DELETE SET NULL,
     event_type VARCHAR(64) NOT NULL,
@@ -179,7 +180,7 @@ CREATE TABLE IF NOT EXISTS esignature_audit_events (
 );
 
 CREATE TABLE IF NOT EXISTS esignature_templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     created_by_user_id INTEGER,
     name VARCHAR(255) NOT NULL,
@@ -195,7 +196,7 @@ CREATE TABLE IF NOT EXISTS esignature_templates (
 );
 
 CREATE TABLE IF NOT EXISTS income_calculations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     loan_id INTEGER,
     borrower_id INTEGER,
@@ -224,7 +225,7 @@ CREATE TABLE IF NOT EXISTS income_calculations (
 );
 
 CREATE TABLE IF NOT EXISTS income_sources (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     calculation_id INTEGER REFERENCES income_calculations(id) ON DELETE CASCADE,
     borrower_id INTEGER,
     source_type VARCHAR(64),
@@ -254,7 +255,7 @@ CREATE TABLE IF NOT EXISTS income_sources (
 );
 
 CREATE TABLE IF NOT EXISTS income_verification_tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     calculation_id INTEGER REFERENCES income_calculations(id) ON DELETE SET NULL,
     income_source_id INTEGER REFERENCES income_sources(id) ON DELETE SET NULL,
     loan_id INTEGER,
@@ -275,7 +276,7 @@ CREATE TABLE IF NOT EXISTS income_verification_tasks (
 );
 
 CREATE TABLE IF NOT EXISTS ai_document_classifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     document_id INTEGER,
     original_doc_type VARCHAR(128),
@@ -294,7 +295,7 @@ CREATE TABLE IF NOT EXISTS ai_document_classifications (
 );
 
 CREATE TABLE IF NOT EXISTS document_requirement_rules (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     rule_name VARCHAR(255) NOT NULL,
     rule_description TEXT,
@@ -313,7 +314,7 @@ CREATE TABLE IF NOT EXISTS document_requirement_rules (
 );
 
 CREATE TABLE IF NOT EXISTS pos_document_mappings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     pos_field_path VARCHAR(512) NOT NULL,
     pos_field_value VARCHAR(512),
@@ -326,7 +327,7 @@ CREATE TABLE IF NOT EXISTS pos_document_mappings (
 );
 
 CREATE TABLE IF NOT EXISTS call_intel_document_needs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     loan_id INTEGER,
     lead_id INTEGER,
@@ -348,7 +349,7 @@ CREATE TABLE IF NOT EXISTS call_intel_document_needs (
 );
 
 CREATE TABLE IF NOT EXISTS document_followup_campaigns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     loan_id INTEGER,
     borrower_id INTEGER,
@@ -374,7 +375,7 @@ CREATE TABLE IF NOT EXISTS document_followup_campaigns (
 );
 
 CREATE TABLE IF NOT EXISTS document_followup_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     campaign_id INTEGER REFERENCES document_followup_campaigns(id) ON DELETE CASCADE,
     event_type VARCHAR(64) NOT NULL,
     step_number INTEGER,
@@ -393,7 +394,7 @@ CREATE TABLE IF NOT EXISTS document_followup_events (
 );
 
 CREATE TABLE IF NOT EXISTS document_appointments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     loan_id INTEGER,
     borrower_id INTEGER,
@@ -428,7 +429,7 @@ CREATE TABLE IF NOT EXISTS document_appointments (
 );
 
 CREATE TABLE IF NOT EXISTS document_followup_templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(128),
@@ -445,7 +446,7 @@ CREATE TABLE IF NOT EXISTS document_followup_templates (
 );
 
 CREATE TABLE IF NOT EXISTS document_access_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     document_id INTEGER,
     document_type VARCHAR(128),
@@ -465,7 +466,7 @@ CREATE TABLE IF NOT EXISTS document_access_logs (
 );
 
 CREATE TABLE IF NOT EXISTS document_encryption_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     document_id INTEGER,
     document_type VARCHAR(128),
@@ -485,7 +486,7 @@ CREATE TABLE IF NOT EXISTS document_encryption_records (
 );
 
 CREATE TABLE IF NOT EXISTS document_integrity_checks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     document_id INTEGER,
     document_type VARCHAR(128),
     check_type VARCHAR(64) NOT NULL,
@@ -504,7 +505,7 @@ CREATE TABLE IF NOT EXISTS document_integrity_checks (
 );
 
 CREATE TABLE IF NOT EXISTS document_retention_policies (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     organization_id INTEGER,
     doc_type VARCHAR(128),
     policy_name VARCHAR(255) NOT NULL,
@@ -520,7 +521,7 @@ CREATE TABLE IF NOT EXISTS document_retention_policies (
 );
 
 CREATE TABLE IF NOT EXISTS document_watermark_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     document_id INTEGER,
     watermark_type VARCHAR(32) NOT NULL,
     watermark_text TEXT,
@@ -651,9 +652,8 @@ _SQLITE_INDEXES = [
 # ===========================================================================
 
 def _apply_sqlite_migration(engine):
-    """Apply the migration DDL and indexes on SQLite."""
+    """Apply the migration DDL and indexes."""
     with engine.connect() as conn:
-        conn.execute(text("PRAGMA foreign_keys = ON"))
         for stmt in _SQLITE_DDL.strip().split(";"):
             stmt = stmt.strip()
             if stmt:
@@ -664,16 +664,17 @@ def _apply_sqlite_migration(engine):
 
 
 def _get_unique_columns(conn, table):
-    """Get set of column names that have UNIQUE constraints via SQLite PRAGMA."""
+    """Get set of column names that have UNIQUE constraints."""
     unique_cols = set()
-    rows = conn.execute(text(f"PRAGMA index_list('{table}')")).fetchall()
-    for row in rows:
-        index_name = row[1]
-        is_unique = row[2]
-        if is_unique:
-            info = conn.execute(text(f"PRAGMA index_info('{index_name}')")).fetchall()
-            for col_info in info:
-                unique_cols.add(col_info[2])
+    insp = inspect(conn.engine)
+    for idx in insp.get_indexes(table):
+        if idx.get("unique"):
+            for col in idx.get("column_names", []):
+                unique_cols.add(col)
+    # Also check unique constraints
+    for uc in insp.get_unique_constraints(table):
+        for col in uc.get("column_names", []):
+            unique_cols.add(col)
     return unique_cols
 
 
@@ -683,8 +684,8 @@ def _get_unique_columns(conn, table):
 
 @pytest.fixture(scope="module")
 def engine():
-    """In-memory SQLite engine with migration applied once for the module."""
-    eng = create_engine("sqlite:///:memory:")
+    """PostgreSQL engine with migration applied once for the module."""
+    eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
     _apply_sqlite_migration(eng)
     yield eng
     eng.dispose()
@@ -926,7 +927,7 @@ class TestIdempotency:
 
     def test_migration_runs_twice_without_error(self):
         """Running the migration DDL twice must not raise any exception."""
-        eng = create_engine("sqlite:///:memory:")
+        eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         _apply_sqlite_migration(eng)
         _apply_sqlite_migration(eng)
         tables = set(inspect(eng).get_table_names())
@@ -936,7 +937,7 @@ class TestIdempotency:
 
     def test_migration_runs_three_times_stable(self):
         """Three consecutive runs produce the same 21-table result."""
-        eng = create_engine("sqlite:///:memory:")
+        eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         _apply_sqlite_migration(eng)
         _apply_sqlite_migration(eng)
         _apply_sqlite_migration(eng)
@@ -945,7 +946,7 @@ class TestIdempotency:
 
     def test_data_preserved_on_rerun(self):
         """Existing row data survives a second migration run."""
-        eng = create_engine("sqlite:///:memory:")
+        eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         _apply_sqlite_migration(eng)
         with eng.connect() as conn:
             conn.execute(text(
@@ -1343,7 +1344,6 @@ class TestForeignKeys:
 
     def test_cascade_delete_removes_children(self, conn):
         """Deleting an envelope must cascade-delete recipients, fields, and audit events."""
-        conn.execute(text("PRAGMA foreign_keys = ON"))
         conn.execute(text(
             "INSERT INTO esignature_envelopes (id, envelope_uuid, title) "
             "VALUES (9999, 'cascade-uuid', 'Cascade Test')"
@@ -1393,12 +1393,11 @@ class TestRollback:
 
     def test_tables_can_be_dropped_in_reverse(self):
         """All 21 tables can be dropped in reverse order (simulated rollback)."""
-        eng = create_engine("sqlite:///:memory:")
+        eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         _apply_sqlite_migration(eng)
         with eng.connect() as conn:
-            conn.execute(text("PRAGMA foreign_keys = OFF"))
             for table in reversed(EXPECTED_TABLES):
-                conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
+                conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
             conn.commit()
         remaining = inspect(eng).get_table_names()
         assert len(remaining) == 0, f"Tables remaining after rollback: {remaining}"
@@ -1406,14 +1405,13 @@ class TestRollback:
 
     def test_recreate_after_rollback(self):
         """Migration can create tables again after a full drop-all rollback."""
-        eng = create_engine("sqlite:///:memory:")
+        eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         _apply_sqlite_migration(eng)
         assert len(inspect(eng).get_table_names()) == 21
 
         with eng.connect() as conn:
-            conn.execute(text("PRAGMA foreign_keys = OFF"))
             for table in reversed(EXPECTED_TABLES):
-                conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
+                conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
             conn.commit()
         assert len(inspect(eng).get_table_names()) == 0
 

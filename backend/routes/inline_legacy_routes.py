@@ -1135,6 +1135,15 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Call Monitoring routes: {e}")
 
+    # Include Call Intelligence Review routes (human review queue for low-confidence extractions)
+    try:
+        from routes.call_intelligence_review_routes import router as ci_review_router, set_dependencies as set_ci_review_deps
+        set_ci_review_deps(get_current_user)
+        app.include_router(ci_review_router, tags=["Call Intelligence Reviews"])
+        logger.info("✅ Call Intelligence Review routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load Call Intelligence Review routes: {e}")
+
     # Include Underwriting Guidelines routes (upload and manage AI underwriter guidelines)
     try:
         from routes.underwriting_guidelines_routes import router as underwriting_guidelines_router

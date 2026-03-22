@@ -34,16 +34,7 @@ class ComplianceError(Exception):
     pass
 
 
-# Test mode bypass - set to True to skip calling hours check for testing
 import os
-BYPASS_CALLING_HOURS = os.getenv("BYPASS_CALLING_HOURS", "false").lower() == "true"
-if BYPASS_CALLING_HOURS:
-    _env = os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "")).lower()
-    if _env in ("production", "prod"):
-        logger.critical("BYPASS_CALLING_HOURS=true in PRODUCTION — TCPA violation risk! Ignoring flag.")
-        BYPASS_CALLING_HOURS = False
-    else:
-        logger.warning("BYPASS_CALLING_HOURS is enabled — calling hours checks will be skipped")
 
 
 class ComplianceChecker:
@@ -60,12 +51,51 @@ class ComplianceChecker:
     CALLING_HOURS_START = time(8, 0)   # 8 AM
     CALLING_HOURS_END = time(21, 0)    # 9 PM
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, organization_id: Optional[int] = None):
         self.db = db
+        self.organization_id = organization_id
         if HAS_PYTZ:
             self.default_timezone = pytz.timezone('America/New_York')
         else:
             self.default_timezone = ZoneInfo('America/New_York')
+
+    # =========================================================================
+    # Compliance Decision Logging
+    # =========================================================================
+
+    def _log_decision(
+        self,
+        decision_type: str,
+        phone_number: str,
+        decision: str,
+        reason: str = None,
+        details: dict = None,
+        contact_id: int = None,
+        lead_id: int = None,
+        user_id: int = None,
+    ):
+        """Log a compliance decision to the immutable audit log."""
+        try:
+            from database.models.compliance_log import ComplianceDecisionLog
+
+            # Mask phone number for PII protection
+            masked_phone = f"***{phone_number[-4:]}" if phone_number and len(phone_number) >= 4 else "unknown"
+
+            log_entry = ComplianceDecisionLog(
+                organization_id=self.organization_id,
+                user_id=user_id,
+                decision_type=decision_type,
+                phone_number=masked_phone,
+                contact_id=contact_id,
+                lead_id=lead_id,
+                decision=decision,
+                reason=reason,
+                details=details,
+            )
+            self.db.add(log_entry)
+            # Don't commit here -- let the caller's transaction handle it
+        except Exception as e:
+            logger.error(f"Failed to log compliance decision: {e}")
 
     # =========================================================================
     # DNC Checks
@@ -92,14 +122,32 @@ class ComplianceChecker:
         # Normalize phone number
         digits = self._normalize_phone(phone_number)
 
-        # Check internal DNC list
-        dnc_entry = self.db.query(ContactDNCStatus).filter(
+        # Check internal DNC list (always scoped to organization)
+        dnc_query = self.db.query(ContactDNCStatus).filter(
             ContactDNCStatus.phone_number == digits
-        ).first()
+        )
+        if self.organization_id:
+            dnc_query = dnc_query.filter(
+                ContactDNCStatus.organization_id == self.organization_id
+            )
+        dnc_entry = dnc_query.first()
 
         if dnc_entry:
+            self._log_decision(
+                decision_type="dnc_check",
+                phone_number=digits,
+                decision="blocked",
+                reason=f"On DNC list: {dnc_entry.reason}",
+                details={"dnc_reason": dnc_entry.reason},
+            )
             return True, dnc_entry.reason
 
+        self._log_decision(
+            decision_type="dnc_check",
+            phone_number=digits,
+            decision="allowed",
+            reason="Not on DNC list",
+        )
         return False, None
 
     def check_dnc_by_contact(self, contact_id: int) -> bool:
@@ -114,7 +162,10 @@ class ComplianceChecker:
         """
         try:
             from database.models import Lead
-            contact = self.db.query(Lead).filter(Lead.id == contact_id).first()
+            lead_query = self.db.query(Lead).filter(Lead.id == contact_id)
+            if self.organization_id:
+                lead_query = lead_query.filter(Lead.organization_id == self.organization_id)
+            contact = lead_query.first()
 
             if not contact:
                 return False
@@ -146,9 +197,15 @@ class ComplianceChecker:
         digits = self._normalize_phone(phone_number)
 
         try:
-            existing = self.db.query(ContactDNCStatus).filter(
+            # Scope DNC query to organization
+            existing_query = self.db.query(ContactDNCStatus).filter(
                 ContactDNCStatus.phone_number == digits
-            ).first()
+            )
+            if self.organization_id:
+                existing_query = existing_query.filter(
+                    ContactDNCStatus.organization_id == self.organization_id
+                )
+            existing = existing_query.first()
 
             if existing:
                 existing.reason = reason
@@ -157,7 +214,8 @@ class ComplianceChecker:
                 dnc_entry = ContactDNCStatus(
                     phone_number=digits,
                     reason=reason,
-                    added_by_id=added_by_id
+                    added_by_id=added_by_id,
+                    organization_id=self.organization_id,
                 )
                 self.db.add(dnc_entry)
 
@@ -180,9 +238,14 @@ class ComplianceChecker:
         digits = self._normalize_phone(phone_number)
 
         try:
-            deleted = self.db.query(ContactDNCStatus).filter(
+            remove_query = self.db.query(ContactDNCStatus).filter(
                 ContactDNCStatus.phone_number == digits
-            ).delete()
+            )
+            if self.organization_id:
+                remove_query = remove_query.filter(
+                    ContactDNCStatus.organization_id == self.organization_id
+                )
+            deleted = remove_query.delete()
             self.db.commit()
             if deleted:
                 logger.info(f"Removed {digits} from DNC list")
@@ -208,11 +271,6 @@ class ComplianceChecker:
         Returns:
             Tuple of (is_allowed, reason_message)
         """
-        # Check for test bypass
-        if BYPASS_CALLING_HOURS:
-            logger.warning("BYPASS_CALLING_HOURS is enabled - skipping calling hours check")
-            return True, "Calling hours check bypassed for testing"
-
         contact_tz = self._get_timezone_for_phone(phone_number)
         now_utc = datetime.utcnow()
 
@@ -223,15 +281,38 @@ class ComplianceChecker:
             now_local = now_utc.replace(tzinfo=timezone.utc).astimezone(contact_tz)
 
         current_time = now_local.time()
+        digits = self._normalize_phone(phone_number)
+        tz_name = str(contact_tz)
 
         if current_time < self.CALLING_HOURS_START or current_time >= self.CALLING_HOURS_END:
             reason = (
                 f"Outside calling hours - local time is {now_local.strftime('%I:%M %p')}. "
                 f"Legal hours: 8 AM - 9 PM"
             )
+            self._log_decision(
+                decision_type="calling_hours",
+                phone_number=digits,
+                decision="blocked",
+                reason=reason,
+                details={
+                    "local_time": now_local.strftime('%H:%M'),
+                    "timezone": tz_name,
+                },
+            )
             return False, reason
 
-        return True, f"Within calling hours ({now_local.strftime('%I:%M %p')} local)"
+        allowed_msg = f"Within calling hours ({now_local.strftime('%I:%M %p')} local)"
+        self._log_decision(
+            decision_type="calling_hours",
+            phone_number=digits,
+            decision="allowed",
+            reason=allowed_msg,
+            details={
+                "local_time": now_local.strftime('%H:%M'),
+                "timezone": tz_name,
+            },
+        )
+        return True, allowed_msg
 
     def _get_timezone_for_phone(self, phone_number: str):
         """Determine timezone from phone number area code"""
@@ -254,36 +335,24 @@ class ComplianceChecker:
         return self.default_timezone
 
     def _area_code_to_timezone(self, area_code: str) -> Optional[str]:
-        """Map area code to timezone string"""
-        # Simplified mapping of major area codes
-        area_code_map = {
-            # Eastern
-            '212': 'America/New_York', '646': 'America/New_York', '917': 'America/New_York',
-            '718': 'America/New_York', '347': 'America/New_York', '516': 'America/New_York',
-            '202': 'America/New_York', '301': 'America/New_York', '410': 'America/New_York',
-            '215': 'America/New_York', '267': 'America/New_York', '610': 'America/New_York',
-            '404': 'America/New_York', '678': 'America/New_York', '770': 'America/New_York',
-            '305': 'America/New_York', '786': 'America/New_York', '954': 'America/New_York',
-            '617': 'America/New_York', '857': 'America/New_York',
-            # Central
-            '312': 'America/Chicago', '773': 'America/Chicago', '872': 'America/Chicago',
-            '214': 'America/Chicago', '469': 'America/Chicago', '972': 'America/Chicago',
-            '713': 'America/Chicago', '832': 'America/Chicago', '281': 'America/Chicago',
-            '512': 'America/Chicago', '737': 'America/Chicago',
-            '314': 'America/Chicago', '636': 'America/Chicago',
-            # Mountain
-            '303': 'America/Denver', '720': 'America/Denver',
-            '602': 'America/Phoenix', '480': 'America/Phoenix', '623': 'America/Phoenix',
-            '801': 'America/Denver', '385': 'America/Denver',
-            # Pacific
-            '310': 'America/Los_Angeles', '323': 'America/Los_Angeles', '213': 'America/Los_Angeles',
-            '818': 'America/Los_Angeles', '626': 'America/Los_Angeles', '424': 'America/Los_Angeles',
-            '415': 'America/Los_Angeles', '628': 'America/Los_Angeles',
-            '510': 'America/Los_Angeles', '650': 'America/Los_Angeles',
-            '206': 'America/Los_Angeles', '425': 'America/Los_Angeles',
-            '503': 'America/Los_Angeles', '971': 'America/Los_Angeles',
-        }
-        return area_code_map.get(area_code)
+        """Map area code to timezone string using phonenumbers library.
+
+        Covers all NANP area codes instead of a hardcoded subset.
+        Falls back to None (caller defaults to Eastern).
+        """
+        try:
+            import phonenumbers
+            from phonenumbers import timezone as pn_timezone
+
+            # Parse as national number with US region hint
+            pn = phonenumbers.parse(f"{area_code}5551234", "US")
+            timezones = pn_timezone.time_zones_for_number(pn)
+            if timezones and timezones[0] != 'Etc/Unknown':
+                return timezones[0]
+        except Exception as e:
+            logger.debug(f"phonenumbers timezone lookup failed for area code {area_code}: {e}")
+
+        return None
 
     # =========================================================================
     # Rate Limiting
@@ -314,18 +383,43 @@ class ComplianceChecker:
         max_calls = settings.max_calls_per_day or 100
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
-        calls_today = self.db.query(func.count(CallLog.id)).filter(
+        rate_query = self.db.query(func.count(CallLog.id)).filter(
             and_(
                 CallLog.agent_id == agent_id,
                 CallLog.created_at >= today_start
             )
-        ).scalar() or 0
+        )
+        if self.organization_id:
+            rate_query = rate_query.filter(CallLog.organization_id == self.organization_id)
+        calls_today = rate_query.scalar() or 0
 
         if calls_today >= max_calls:
             reason = f"Daily call limit reached ({calls_today}/{max_calls})"
             logger.warning(f"Rate limit exceeded for agent {agent_id}: {reason}")
+            self._log_decision(
+                decision_type="rate_limit",
+                phone_number="",
+                decision="blocked",
+                reason=reason,
+                user_id=agent_id,
+                details={
+                    "calls_today": calls_today,
+                    "max_calls": max_calls,
+                },
+            )
             return False, reason
 
+        self._log_decision(
+            decision_type="rate_limit",
+            phone_number="",
+            decision="allowed",
+            reason=f"Within daily limit ({calls_today}/{max_calls})",
+            user_id=agent_id,
+            details={
+                "calls_today": calls_today,
+                "max_calls": max_calls,
+            },
+        )
         return True, None
 
     # =========================================================================
@@ -350,23 +444,39 @@ class ComplianceChecker:
 
         digits = self._normalize_phone(phone_number)
 
-        active_lock = self.db.query(ActiveCall).filter(
+        lock_query = self.db.query(ActiveCall).filter(
             and_(
                 ActiveCall.contact_phone == digits,
                 ActiveCall.expires_at > datetime.utcnow(),
                 ActiveCall.agent_id != agent_id
             )
-        ).first()
+        )
+        if self.organization_id:
+            lock_query = lock_query.filter(ActiveCall.organization_id == self.organization_id)
+        active_lock = lock_query.first()
 
         if active_lock:
             locking_agent = self.db.query(User).filter(User.id == active_lock.agent_id).first()
 
-            return True, {
+            lock_info = {
                 'agent_id': active_lock.agent_id,
                 'agent_name': locking_agent.name if locking_agent else "Unknown",
                 'locked_at': active_lock.locked_at,
                 'call_sid': active_lock.call_sid
             }
+            self._log_decision(
+                decision_type="soft_lock",
+                phone_number=digits,
+                decision="blocked",
+                reason=f"Number locked by agent {lock_info['agent_name']}",
+                user_id=agent_id,
+                details={
+                    "locking_agent_id": active_lock.agent_id,
+                    "locking_agent_name": lock_info['agent_name'],
+                    "call_sid": active_lock.call_sid,
+                },
+            )
+            return True, lock_info
 
         return False, None
 
@@ -402,10 +512,13 @@ class ComplianceChecker:
             if is_locked:
                 return False
 
-            # Remove any existing lock for this number
-            self.db.query(ActiveCall).filter(
+            # Remove any existing lock for this number (scoped to org)
+            delete_query = self.db.query(ActiveCall).filter(
                 ActiveCall.contact_phone == digits
-            ).delete()
+            )
+            if self.organization_id:
+                delete_query = delete_query.filter(ActiveCall.organization_id == self.organization_id)
+            delete_query.delete()
 
             # Create new lock
             now = datetime.utcnow()
@@ -414,11 +527,23 @@ class ComplianceChecker:
                 agent_id=agent_id,
                 call_sid=call_sid,
                 locked_at=now,
-                expires_at=now + timedelta(seconds=lock_duration_seconds)
+                expires_at=now + timedelta(seconds=lock_duration_seconds),
+                organization_id=self.organization_id,
             )
             self.db.add(lock)
             self.db.commit()
 
+            self._log_decision(
+                decision_type="soft_lock",
+                phone_number=digits,
+                decision="acquired",
+                reason=f"Lock acquired for {lock_duration_seconds}s",
+                user_id=agent_id,
+                details={
+                    "call_sid": call_sid,
+                    "lock_duration_seconds": lock_duration_seconds,
+                },
+            )
             logger.info(f"Acquired soft lock for {digits} by agent {agent_id}")
             return True
 
@@ -437,10 +562,13 @@ class ComplianceChecker:
         digits = self._normalize_phone(phone_number)
 
         try:
-            deleted = self.db.query(ActiveCall).filter(
+            release_query = self.db.query(ActiveCall).filter(
                 ActiveCall.contact_phone == digits,
                 ActiveCall.agent_id == agent_id
-            ).delete()
+            )
+            if self.organization_id:
+                release_query = release_query.filter(ActiveCall.organization_id == self.organization_id)
+            deleted = release_query.delete()
             self.db.commit()
             if deleted:
                 logger.info(f"Released soft lock for {digits}")
@@ -539,18 +667,31 @@ class ComplianceChecker:
 
             digits = self._normalize_phone(phone_number)
             if digits:
-                lead = self.db.query(Lead).filter(
+                lead_query = self.db.query(Lead).filter(
                     Lead.phone.ilike(f"%{digits[-10:]}")
-                ).first()
+                )
+                if self.organization_id:
+                    lead_query = lead_query.filter(Lead.organization_id == self.organization_id)
+                lead = lead_query.first()
                 if lead:
                     lead_id = lead.id
 
+        digits = self._normalize_phone(phone_number)
+
         if not lead_id:
             # No matching contact found — cannot verify consent, block the call.
-            return False, (
+            no_contact_reason = (
                 "No contact record found for this phone number. "
                 "Cannot verify call consent — outbound call blocked."
             )
+            self._log_decision(
+                decision_type="consent_check",
+                phone_number=digits,
+                decision="blocked",
+                reason=no_contact_reason,
+                details={"failure": "no_contact_record"},
+            )
+            return False, no_contact_reason
 
         # Look up ChannelPreference for this lead
         pref = self.db.query(ChannelPreference).filter(
@@ -558,17 +699,42 @@ class ComplianceChecker:
         ).first()
 
         if not pref:
-            return False, (
+            no_pref_reason = (
                 "No channel preference record found for contact. "
                 "Call consent has not been granted — outbound call blocked."
             )
+            self._log_decision(
+                decision_type="consent_check",
+                phone_number=digits,
+                decision="blocked",
+                reason=no_pref_reason,
+                lead_id=lead_id,
+                details={"failure": "no_channel_preference"},
+            )
+            return False, no_pref_reason
 
         if not pref.call_consent:
-            return False, (
+            no_consent_reason = (
                 "Contact has not granted call consent. "
                 "Outbound call blocked per TCPA/FCC one-to-one consent rules."
             )
+            self._log_decision(
+                decision_type="consent_check",
+                phone_number=digits,
+                decision="blocked",
+                reason=no_consent_reason,
+                lead_id=lead_id,
+                details={"failure": "consent_not_granted"},
+            )
+            return False, no_consent_reason
 
+        self._log_decision(
+            decision_type="consent_check",
+            phone_number=digits,
+            decision="allowed",
+            reason="Call consent verified",
+            lead_id=lead_id,
+        )
         return True, None
 
     # =========================================================================

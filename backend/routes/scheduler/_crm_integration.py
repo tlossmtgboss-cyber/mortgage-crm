@@ -145,10 +145,21 @@ def _create_comm_failure_task(db, org_id: int, assigned_user_id: int,
         logger.error(f"Failed to create escalation task: {e}")
 
 
-def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: int = None) -> Optional[str]:
+class NMLSBlockingError(Exception):
+    """Raised when a booking must be blocked due to missing NMLS in a regulated state."""
+    pass
+
+
+def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: int = None,
+                        enforce: bool = True) -> Optional[str]:
     """
-    C3: Soft check -- verify LO has NMLS number on file.
-    Returns a warning string if concern, None if OK. Advisory only.
+    C3: Verify LO has NMLS number on file.
+
+    In NMLS-regulated states (all 50 + DC), missing NMLS raises
+    ``NMLSBlockingError`` when ``enforce=True`` (the default).
+    Returns a warning string for non-regulated states or when
+    ``enforce=False``. Returns None if OK.
+
     Scoped by org_id to prevent cross-tenant user enumeration.
     """
     if not attendee_state:
@@ -156,6 +167,11 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
 
     try:
         from database.models.core import User
+        from routes.scheduler.constants import NMLS_REGULATED_STATES
+    except ImportError:
+        return None
+
+    try:
         lo_query = db.query(User).filter(User.id == assigned_user_id)
         lo_query = lo_query.filter(User.organization_id == org_id)
         assigned = lo_query.first()
@@ -163,15 +179,25 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
             return f"Warning: Could not verify LO licensing - user {assigned_user_id} not found"
 
         nmls = getattr(assigned, 'nmls_number', None)
+        state_upper = attendee_state.strip().upper()[:2]
+
         if not nmls:
             name = f"{getattr(assigned, 'first_name', '')} {getattr(assigned, 'last_name', '')}".strip()
-            return (f"Warning: LO {name} has no NMLS number on file. "
-                    f"Cannot verify licensing for state {attendee_state}.")
+            msg = (f"LO {name} has no NMLS number on file. "
+                   f"Cannot verify licensing for state {state_upper}.")
 
-        logger.info(f"LO licensing check: NMLS#{nmls} for state {attendee_state}")
+            if enforce and state_upper in NMLS_REGULATED_STATES:
+                logger.warning(f"NMLS_BLOCK: {msg}")
+                raise NMLSBlockingError(
+                    f"Booking blocked: {msg} "
+                    f"An NMLS number is required to book appointments in {state_upper}."
+                )
+            return f"Warning: {msg}"
+
+        logger.info(f"LO licensing check: NMLS#{nmls} for state {state_upper}")
         return None
-    except ImportError:
-        return None
+    except NMLSBlockingError:
+        raise
     except Exception as e:
         logger.warning(f"LO licensing check failed: {e}")
         return None

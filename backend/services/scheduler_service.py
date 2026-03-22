@@ -270,15 +270,27 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # =================================================================
+        # AUDIT LOG RETENTION CLEANUP
+        # =================================================================
+
+        # Purge audit log entries older than retention period — daily at 3:17 AM
+        self.scheduler.add_job(
+            func=self.cleanup_audit_logs,
+            trigger=CronTrigger(hour=3, minute=17),
+            id="audit_log_retention",
+            name="Audit Log Retention Cleanup",
+            replace_existing=True,
+        )
+
         logger.info("Scheduled jobs registered")
 
     def send_application_reminders(self):
         """Send reminders for incomplete applications.
 
-        TENANT-N10: This background job intentionally queries all organizations in a single
-        batch for efficiency. Per-application processing is wrapped in try/except so one
-        org's failure doesn't affect others. Full per-org isolation would require significant
-        refactoring of the background job system.
+        TENANT-SAFE: Queries all orgs in one batch for efficiency, but processes
+        per-application with try/except isolation so one org's failure doesn't
+        affect others. Each successful reminder is committed independently.
         """
         logger.info("Running application reminder job")
 
@@ -286,10 +298,12 @@ class SchedulerService:
         notifier = get_notification_service()
 
         try:
-            # Find incomplete applications that need reminders (cross-org batch query)
+            # Find incomplete applications that need reminders
+            # Ordered by organization_id first for cache-friendly processing
             query = text("""
                 SELECT
                     ba.id,
+                    ba.organization_id,
                     ba.borrower_email,
                     ba.borrower_first_name,
                     ba.borrower_phone,
@@ -313,7 +327,7 @@ class SchedulerService:
                 )
                 AND ba.reminder_count < 4
                 AND ba.organization_id IS NOT NULL
-                ORDER BY ba.updated_at ASC
+                ORDER BY ba.organization_id, ba.updated_at ASC
                 LIMIT 100
             """)
 
@@ -1284,6 +1298,41 @@ class SchedulerService:
         except Exception as e:
             session.rollback()
             logger.error(f"Slot hold cleanup job failed: {e}", exc_info=True)
+        finally:
+            session.close()
+
+    # =========================================================================
+    # AUDIT LOG RETENTION METHODS
+    # =========================================================================
+
+    def cleanup_audit_logs(self):
+        """Purge audit log entries older than the configured retention period.
+
+        Default retention: 2 years (730 days). Override via AUDIT_RETENTION_DAYS env var.
+        Compliance note: most mortgage regulations require 3-7 year retention.
+        Set AUDIT_RETENTION_DAYS accordingly for your jurisdiction.
+        """
+        retention_days = int(os.getenv("AUDIT_RETENTION_DAYS", "730"))
+        logger.info(f"Running audit log retention cleanup (>{retention_days} days)")
+
+        session = get_db_session()
+
+        try:
+            # Delete old audit log entries beyond the retention window
+            result = session.execute(text("""
+                DELETE FROM scheduler_audit_log
+                WHERE created_at < NOW() - :retention_days * INTERVAL '1 day'
+                RETURNING id
+            """), {"retention_days": retention_days})
+
+            deleted_rows = result.fetchall()
+            session.commit()
+            logger.info(f"Audit log retention cleanup: {len(deleted_rows)} old entries purged")
+
+        except Exception as e:
+            session.rollback()
+            # Table may not exist yet — this is not a critical failure
+            logger.warning(f"Audit log retention cleanup skipped: {e}")
         finally:
             session.close()
 

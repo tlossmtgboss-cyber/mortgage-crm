@@ -11,8 +11,18 @@ Provides:
 """
 
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+# CAN-SPAM: physical address required in all commercial email footers
+try:
+    from routes.scheduler.constants import CAN_SPAM_PHYSICAL_ADDRESS
+except ImportError:
+    CAN_SPAM_PHYSICAL_ADDRESS = os.environ.get(
+        "CAN_SPAM_ADDRESS",
+        "Perennia AI, 123 Main Street, Suite 100, Austin, TX 78701"
+    )
 
 
 # ============================================================================
@@ -69,6 +79,9 @@ def build_scheduler_email_html(
 
                 <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 20px;">
                     {footer}
+                </p>
+                <p style="text-align: center; color: #9ca3af; font-size: 11px; margin-top: 4px;">
+                    {CAN_SPAM_PHYSICAL_ADDRESS}
                 </p>
             </div>
         </body>

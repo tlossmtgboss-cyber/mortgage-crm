@@ -357,7 +357,7 @@ async def create_client_from_call(
         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
         # Get current user ID for assignment
-        user_id = current_user.get("id", 1)
+        user_id = current_user["id"]
 
         # Insert new lead
         insert_query = text("""
@@ -560,7 +560,7 @@ async def create_session(
     Starts tracking a call for AI processing. Can be linked to a loan, lead, or contact.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
 
         # Validate capture mode
         try:
@@ -604,7 +604,7 @@ async def get_session(
 ):
     """Get call session details."""
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
@@ -628,7 +628,7 @@ async def update_session(
 ):
     """Update call session details."""
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
@@ -670,7 +670,7 @@ async def end_session(
     the agents to process the transcript.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
@@ -724,10 +724,16 @@ async def list_sessions(
 ):
     """List call sessions with optional filters."""
     try:
-        # Build query
+        # Build query with org_id scoping
+        org_id = current_user.get("organization_id")
         query = "SELECT * FROM call_sessions WHERE 1=1"
         count_query = "SELECT COUNT(*) FROM call_sessions WHERE 1=1"
         params = {}
+
+        if org_id:
+            query += " AND organization_id = :org_id"
+            count_query += " AND organization_id = :org_id"
+            params["org_id"] = org_id
 
         if loan_id:
             query += " AND loan_id = :loan_id"
@@ -803,7 +809,7 @@ async def add_transcript_chunk(
     Used for streaming transcripts from real-time transcription services.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
 
         # Format chunk with speaker if provided
         chunk_text = request.text
@@ -836,7 +842,7 @@ async def get_transcript(
 ):
     """Get the full transcript for a session."""
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         transcript_data = orchestrator.get_transcript(session_id)
 
         if not transcript_data:
@@ -877,7 +883,7 @@ async def run_agents(
     By default runs all three agents (scribe, junior_lo, underwriter).
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
@@ -975,7 +981,7 @@ async def approve_artifacts(
 ):
     """Approve selected artifacts."""
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
 
         result = await orchestrator.approve_artifacts(
             session_id=session_id,
@@ -1004,7 +1010,7 @@ async def reject_artifacts(
 ):
     """Reject selected artifacts."""
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
 
         rejected = await orchestrator.reject_artifacts(
             session_id=session_id,
@@ -1038,7 +1044,7 @@ async def execute_artifacts(
     This creates tasks, document requests, conditions, etc. from approved artifacts.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
 
         results = await orchestrator.execute_approved_artifacts(
             session_id=session_id,
@@ -1075,7 +1081,7 @@ async def get_review_data(
     Returns session info, transcript, all artifacts, and agent run details.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         review_data = orchestrator.get_review_data(session_id)
 
         if not review_data:
@@ -1104,7 +1110,7 @@ async def submit_review(
     This approves selected artifacts and triggers execution.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         user_id = str(current_user.get("id"))
 
         # Approve artifacts
@@ -1153,7 +1159,7 @@ async def add_participant(
 ):
     """Add a participant to a call session."""
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
 
         participant = await orchestrator.add_participant(
             session_id=session_id,
@@ -1263,7 +1269,8 @@ async def get_client_calls(
     Used by the Call Intelligence tab in ClientProfile.
     """
     try:
-        # Query sessions for this client
+        # Query sessions for this client (scoped to org)
+        org_id = current_user.get("organization_id")
         query = """
             SELECT cs.*,
                    (SELECT COUNT(*) FROM call_artifacts ca WHERE ca.session_id = cs.id) as artifact_count,
@@ -1272,6 +1279,10 @@ async def get_client_calls(
             WHERE (cs.lead_id = :client_id OR cs.contact_id = :client_id)
         """
         params = {"client_id": client_id}
+
+        if org_id:
+            query += " AND cs.organization_id = :org_id"
+            params["org_id"] = org_id
 
         if loan_id:
             query += " AND cs.loan_id = :loan_id"
@@ -1392,6 +1403,7 @@ async def list_ci_recordings(
     Shows recordings that can be processed by Call Monitoring agents.
     """
     try:
+        org_id = current_user.get("organization_id")
         query = """
             SELECT
                 r.id,
@@ -1413,6 +1425,10 @@ async def list_ci_recordings(
             WHERE 1=1
         """
         params = {"limit": limit}
+
+        if org_id:
+            query += " AND r.organization_id = :org_id"
+            params["org_id"] = org_id
 
         if status:
             query += " AND r.status = :status"
@@ -1488,7 +1504,7 @@ async def get_live_transcript(
     Optimized for frequent polling during live calls.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
@@ -1549,14 +1565,14 @@ async def convert_to_application(
     a new lead or loan record pre-filled with the extracted data.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
         data = request.extracted_data
-        user_id = current_user.get("id", 1)
+        user_id = current_user["id"]
 
         if request.create_type == "lead":
             # Create a lead
@@ -1688,8 +1704,10 @@ async def get_call_metrics(
     - Average call duration
     """
     try:
-        # Get counts
-        result = db.execute(text("""
+        # Get counts (scoped to org)
+        org_id = current_user.get("organization_id")
+        org_filter = "AND organization_id = :org_id" if org_id else ""
+        result = db.execute(text(f"""
             SELECT
                 COUNT(*) FILTER (WHERE status IN ('active', 'capturing')) as active_calls,
                 COUNT(*) FILTER (WHERE status = 'completed' AND approval_status = 'pending') as pending_reviews,
@@ -1699,7 +1717,8 @@ async def get_call_metrics(
                 AVG(duration_seconds) FILTER (WHERE duration_seconds > 0) as avg_duration
             FROM call_sessions
             WHERE created_at >= NOW() - INTERVAL ':days days'
-        """.replace(':days', str(days))))
+            {org_filter}
+        """.replace(':days', str(days))), {"org_id": org_id} if org_id else {})
 
         row = result.fetchone()
         metrics = dict(row._mapping) if row else {}
@@ -1998,14 +2017,20 @@ async def get_stacked_notes(
     Each note includes date stamp, source (Scribe/JR LO/Underwriter), and call mode.
     """
     try:
-        # Get all sessions for this client (via loan_id or lead_id)
-        sessions_query = text("""
+        # Get all sessions for this client (via loan_id or lead_id, scoped to org)
+        org_id = current_user.get("organization_id")
+        org_filter = "AND cs.organization_id = :org_id" if org_id else ""
+        sessions_query = text(f"""
             SELECT DISTINCT cs.id as session_id, cs.call_mode, cs.started_at, cs.ended_at
             FROM call_sessions cs
             WHERE (cs.loan_id = :client_id OR cs.lead_id = :client_id)
+            {org_filter}
             ORDER BY cs.started_at DESC
         """)
-        sessions_result = db.execute(sessions_query, {"client_id": client_id})
+        session_params = {"client_id": client_id}
+        if org_id:
+            session_params["org_id"] = org_id
+        sessions_result = db.execute(sessions_query, session_params)
         sessions = [dict(row._mapping) for row in sessions_result]
 
         if not sessions:
@@ -2106,13 +2131,13 @@ async def complete_uw_review(
     It updates all UW review items as addressed and creates a PA task if requested.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        user_id = current_user.get("id", 1)
+        user_id = current_user["id"]
 
         # Mark all UW review items as completed for this session
         db.execute(text("""
@@ -2226,13 +2251,13 @@ async def create_review_task(
     such as 5 C's review items or underwriting conditions.
     """
     try:
-        orchestrator = CallMonitoringOrchestrator(db)
+        orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
         session = orchestrator.get_session(session_id)
 
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        user_id = current_user.get("id", 1)
+        user_id = current_user["id"]
         loan_id = session.get("loan_id")
 
         # Determine assigned user based on role

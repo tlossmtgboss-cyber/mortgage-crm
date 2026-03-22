@@ -13,6 +13,12 @@ from sqlalchemy.orm import relationship
 
 from db import Base
 
+try:
+    from services.encryption import EncryptedString
+    _HAS_ENCRYPTION = True
+except ImportError:
+    _HAS_ENCRYPTION = False
+
 
 class WebhookSubscription(Base):
     """Webhook endpoint subscriptions for event notifications"""
@@ -27,9 +33,9 @@ class WebhookSubscription(Base):
     # Webhook configuration
     name = Column(String, nullable=False)
     url = Column(Text, nullable=False)
-    # TODO: COMP-004 — Encrypt webhook secrets at rest using field-level encryption
-    # when WEBHOOK_SECRET_ENCRYPTION_KEY is available. Currently stored in plaintext.
-    secret = Column(String, nullable=False)  # HMAC signing secret
+    # COMP-004: Webhook secrets encrypted at rest using Fernet (EncryptedString TypeDecorator).
+    # Transparently encrypts on write, decrypts on read. Column sized to 500 for ciphertext.
+    secret = Column(EncryptedString(500) if _HAS_ENCRYPTION else String(500), nullable=False)
 
     # Event subscriptions (e.g., ["lead.created", "loan.funded"])
     events = Column(JSON, default=list)

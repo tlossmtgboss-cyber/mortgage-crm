@@ -47,6 +47,9 @@ router = APIRouter(prefix="/api/v1/voicemail", tags=["Voicemail Drop"])
 TCPA_CALL_START = dt_time(8, 0)
 TCPA_CALL_END = dt_time(21, 0)
 
+# Allowed delivery methods for voicemail drops
+ALLOWED_DELIVERY_METHODS = {"vapi_ai", "slybroadcast", "drop_cowboy", "direct", "ringless"}
+
 # US area code to timezone mapping (covers major area codes)
 # Falls back to America/New_York if unknown
 AREA_CODE_TIMEZONE = {
@@ -349,7 +352,7 @@ def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
     return False, ""
 
 
-def check_consent(lead_id: Optional[int], db: Session) -> Tuple[bool, str]:
+def check_consent(lead_id: Optional[int], db: Session, organization_id: Optional[int] = None) -> Tuple[bool, str]:
     """
     Check if the lead/borrower has given communication consent.
     If no lead_id is provided, consent is assumed (manual dial).
@@ -366,7 +369,10 @@ def check_consent(lead_id: Optional[int], db: Session) -> Tuple[bool, str]:
 
         # Check if the lead has an opt-out flag
         Lead = main.Lead
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        lead_query = db.query(Lead).filter(Lead.id == lead_id)
+        if organization_id is not None:
+            lead_query = lead_query.filter(Lead.organization_id == organization_id)
+        lead = lead_query.first()
         if not lead:
             return True, ""  # Lead not found — allow (may be external contact)
 
@@ -411,6 +417,7 @@ def run_compliance_checks(
     phone_number: str,
     lead_id: Optional[int],
     db: Session,
+    organization_id: Optional[int] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Run all TCPA compliance checks before sending a voicemail.
@@ -424,7 +431,7 @@ def run_compliance_checks(
         return False, dnc_msg
 
     # 2. Consent check
-    has_consent, consent_msg = check_consent(lead_id, db)
+    has_consent, consent_msg = check_consent(lead_id, db, organization_id=organization_id)
     if not has_consent:
         logger.warning(f"Voicemail blocked by consent: lead_id={lead_id}")
         return False, consent_msg
@@ -465,7 +472,7 @@ def _clean_stale_rate_entries():
         del _rate_tracker[key]
 
 
-async def check_rate_limit(user_id: int, db: Session) -> Tuple[bool, Optional[str]]:
+async def check_rate_limit(user_id: int, db: Session, organization_id: Optional[int] = None) -> Tuple[bool, Optional[str]]:
     """
     Check per-user voicemail drop rate limits.
     Uses async lock for thread-safety. Falls back to DB count for
@@ -499,10 +506,13 @@ async def check_rate_limit(user_id: int, db: Session) -> Tuple[bool, Optional[st
     try:
         VoicemailDrop = get_voicemail_drop_model()
         day_start = now - timedelta(hours=24)
-        daily_count = db.query(func.count(VoicemailDrop.id)).filter(
+        daily_query = db.query(func.count(VoicemailDrop.id)).filter(
             VoicemailDrop.user_id == user_id,
             VoicemailDrop.created_at >= day_start,
-        ).scalar() or 0
+        )
+        if organization_id is not None:
+            daily_query = daily_query.filter(VoicemailDrop.organization_id == organization_id)
+        daily_count = daily_query.scalar() or 0
         if daily_count >= VOICEMAIL_DAILY_LIMIT:
             return False, f"Daily voicemail limit reached ({VOICEMAIL_DAILY_LIMIT}/day). Try again tomorrow."
     except Exception as e:
@@ -693,10 +703,12 @@ async def create_voicemail_drop(
             raise HTTPException(status_code=400, detail="Message is required")
 
         # --- TCPA Compliance Checks ---
+        org_id = getattr(current_user, 'organization_id', None)
         is_allowed, rejection_reason = run_compliance_checks(
             phone_number=phone_number,
             lead_id=lead_id,
             db=db,
+            organization_id=org_id,
         )
         if not is_allowed:
             logger.warning(
@@ -706,7 +718,7 @@ async def create_voicemail_drop(
             raise HTTPException(status_code=403, detail=rejection_reason)
 
         # --- Rate Limiting ---
-        is_allowed, rate_msg = await check_rate_limit(current_user.id, db)
+        is_allowed, rate_msg = await check_rate_limit(current_user.id, db, organization_id=org_id)
         if not is_allowed:
             raise HTTPException(status_code=429, detail=rate_msg)
 
@@ -732,15 +744,25 @@ async def create_voicemail_drop(
         delivery_method = os.getenv("VOICEMAIL_DELIVERY_METHOD", "vapi_ai")
 
         if template_id:
-            template = db.query(VoicemailTemplate).filter(
+            template_query = db.query(VoicemailTemplate).filter(
                 VoicemailTemplate.id == template_id
-            ).first()
+            )
+            if org_id is not None:
+                template_query = template_query.filter(
+                    or_(
+                        VoicemailTemplate.organization_id == None,
+                        VoicemailTemplate.organization_id == org_id,
+                    )
+                )
+            template = template_query.first()
             if template:
                 voice_provider = template.voice_provider or voice_provider
                 voice_id = template.voice_id or voice_id
                 voice_speed = float(template.voice_speed) if template.voice_speed else voice_speed
                 audio_url = template.audio_url
                 delivery_method = template.delivery_method or delivery_method
+                if delivery_method not in ALLOWED_DELIVERY_METHODS:
+                    raise HTTPException(status_code=400, detail=f"Invalid delivery method: {delivery_method}")
                 # Increment usage atomically
                 db.execute(text("""
                     UPDATE voicemail_templates
@@ -1008,6 +1030,7 @@ async def get_voicemail_templates(
     VoicemailTemplate = get_voicemail_template_model()
 
     try:
+        org_id = getattr(current_user, 'organization_id', None)
         query = db.query(VoicemailTemplate).filter(
             VoicemailTemplate.is_active == True
         ).filter(
@@ -1016,6 +1039,13 @@ async def get_voicemail_templates(
                 VoicemailTemplate.user_id == current_user.id  # User's templates
             )
         )
+        if org_id is not None:
+            query = query.filter(
+                or_(
+                    VoicemailTemplate.organization_id == None,  # Default/global templates
+                    VoicemailTemplate.organization_id == org_id,
+                )
+            )
 
         if category:
             query = query.filter(VoicemailTemplate.category == category)
@@ -1077,6 +1107,7 @@ async def create_voicemail_template(
 
         template = VoicemailTemplate(
             user_id=current_user.id,
+            organization_id=getattr(current_user, 'organization_id', None),
             name=name,
             category=category,
             message_text=message_text,
@@ -1084,7 +1115,7 @@ async def create_voicemail_template(
             voice_provider=data.get("voice_provider", "deepgram"),
             voice_id=data.get("voice_id", "asteria"),
             voice_speed=data.get("voice_speed", 1.0),
-            delivery_method=data.get("delivery_method", "vapi_ai"),
+            delivery_method=data.get("delivery_method", "vapi_ai") if data.get("delivery_method", "vapi_ai") in ALLOWED_DELIVERY_METHODS else "vapi_ai",
             is_active=True,
             is_default=False
         )
@@ -1130,9 +1161,12 @@ async def get_voicemail_history(
     VoicemailDrop = get_voicemail_drop_model()
 
     try:
+        org_id = getattr(current_user, 'organization_id', None)
         query = db.query(VoicemailDrop).filter(
             VoicemailDrop.user_id == current_user.id
         )
+        if org_id is not None:
+            query = query.filter(VoicemailDrop.organization_id == org_id)
 
         if status:
             query = query.filter(VoicemailDrop.status == status)
@@ -1193,11 +1227,14 @@ async def get_voicemail_analytics(
         end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
 
         # Base filters — reused for each independent query to avoid mutation bug
+        org_id = getattr(current_user, 'organization_id', None)
         base_filters = [
             VoicemailDrop.user_id == current_user.id,
             VoicemailDrop.created_at >= start,
             VoicemailDrop.created_at <= end,
         ]
+        if org_id is not None:
+            base_filters.append(VoicemailDrop.organization_id == org_id)
 
         total_sent = db.query(func.count(VoicemailDrop.id)).filter(
             *base_filters
@@ -1493,10 +1530,14 @@ async def upload_template_audio(
     VoicemailTemplate = get_voicemail_template_model()
 
     try:
-        template = db.query(VoicemailTemplate).filter(
+        org_id = getattr(current_user, 'organization_id', None)
+        template_query = db.query(VoicemailTemplate).filter(
             VoicemailTemplate.id == template_id,
             VoicemailTemplate.user_id == current_user.id,
-        ).first()
+        )
+        if org_id is not None:
+            template_query = template_query.filter(VoicemailTemplate.organization_id == org_id)
+        template = template_query.first()
 
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
@@ -1809,10 +1850,14 @@ async def delete_template_audio(
     """Remove audio file from a voicemail template."""
     VoicemailTemplate = get_voicemail_template_model()
 
-    template = db.query(VoicemailTemplate).filter(
+    org_id = getattr(current_user, 'organization_id', None)
+    template_query = db.query(VoicemailTemplate).filter(
         VoicemailTemplate.id == template_id,
         VoicemailTemplate.user_id == current_user.id,
-    ).first()
+    )
+    if org_id is not None:
+        template_query = template_query.filter(VoicemailTemplate.organization_id == org_id)
+    template = template_query.first()
 
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -1925,10 +1970,14 @@ async def update_voicemail_template(
     VoicemailTemplate = get_voicemail_template_model()
 
     try:
-        template = db.query(VoicemailTemplate).filter(
+        org_id = getattr(current_user, 'organization_id', None)
+        template_query = db.query(VoicemailTemplate).filter(
             VoicemailTemplate.id == template_id,
             VoicemailTemplate.user_id == current_user.id,
-        ).first()
+        )
+        if org_id is not None:
+            template_query = template_query.filter(VoicemailTemplate.organization_id == org_id)
+        template = template_query.first()
 
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
@@ -1950,6 +1999,8 @@ async def update_voicemail_template(
         if "voice_speed" in data:
             template.voice_speed = data["voice_speed"]
         if "delivery_method" in data:
+            if data["delivery_method"] not in ALLOWED_DELIVERY_METHODS:
+                raise HTTPException(status_code=400, detail=f"Invalid delivery method: {data['delivery_method']}")
             template.delivery_method = data["delivery_method"]
 
         db.commit()
@@ -1987,10 +2038,14 @@ async def delete_voicemail_template(
     """Soft-delete a voicemail template (sets is_active=False)."""
     VoicemailTemplate = get_voicemail_template_model()
 
-    template = db.query(VoicemailTemplate).filter(
+    org_id = getattr(current_user, 'organization_id', None)
+    template_query = db.query(VoicemailTemplate).filter(
         VoicemailTemplate.id == template_id,
         VoicemailTemplate.user_id == current_user.id,
-    ).first()
+    )
+    if org_id is not None:
+        template_query = template_query.filter(VoicemailTemplate.organization_id == org_id)
+    template = template_query.first()
 
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -2029,6 +2084,7 @@ async def create_campaign(
 
     try:
         data = await request.json()
+        org_id = getattr(current_user, 'organization_id', None)
 
         name = data.get("name", "").strip()
         if not name:
@@ -2036,10 +2092,18 @@ async def create_campaign(
 
         template_id = data.get("template_id")
         if template_id:
-            template = db.query(VoicemailTemplate).filter(
+            template_query = db.query(VoicemailTemplate).filter(
                 VoicemailTemplate.id == template_id,
                 VoicemailTemplate.is_active == True,
-            ).first()
+            )
+            if org_id is not None:
+                template_query = template_query.filter(
+                    or_(
+                        VoicemailTemplate.organization_id == None,
+                        VoicemailTemplate.organization_id == org_id,
+                    )
+                )
+            template = template_query.first()
             if not template:
                 raise HTTPException(status_code=404, detail="Template not found")
 
@@ -2049,6 +2113,7 @@ async def create_campaign(
 
         campaign = VoicemailCampaign(
             user_id=current_user.id,
+            organization_id=org_id,
             name=name,
             description=data.get("description", ""),
             template_id=template_id,
@@ -2087,9 +2152,12 @@ async def list_campaigns(
     VoicemailCampaign = get_voicemail_campaign_model()
 
     try:
+        org_id = getattr(current_user, 'organization_id', None)
         query = db.query(VoicemailCampaign).filter(
             VoicemailCampaign.user_id == current_user.id,
         )
+        if org_id is not None:
+            query = query.filter(VoicemailCampaign.organization_id == org_id)
 
         if status:
             query = query.filter(VoicemailCampaign.status == status)
@@ -2117,10 +2185,14 @@ async def get_campaign(
     """Get campaign details."""
     VoicemailCampaign = get_voicemail_campaign_model()
 
-    campaign = db.query(VoicemailCampaign).filter(
+    org_id = getattr(current_user, 'organization_id', None)
+    campaign_query = db.query(VoicemailCampaign).filter(
         VoicemailCampaign.id == campaign_id,
         VoicemailCampaign.user_id == current_user.id,
-    ).first()
+    )
+    if org_id is not None:
+        campaign_query = campaign_query.filter(VoicemailCampaign.organization_id == org_id)
+    campaign = campaign_query.first()
 
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -2139,10 +2211,14 @@ async def update_campaign(
     VoicemailCampaign = get_voicemail_campaign_model()
 
     try:
-        campaign = db.query(VoicemailCampaign).filter(
+        org_id = getattr(current_user, 'organization_id', None)
+        campaign_query = db.query(VoicemailCampaign).filter(
             VoicemailCampaign.id == campaign_id,
             VoicemailCampaign.user_id == current_user.id,
-        ).first()
+        )
+        if org_id is not None:
+            campaign_query = campaign_query.filter(VoicemailCampaign.organization_id == org_id)
+        campaign = campaign_query.first()
 
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
@@ -2252,7 +2328,7 @@ async def _resolve_and_dispatch_campaign(campaign_id: int, user_id: int, user_na
                 if campaign.status in ("paused", "cancelled"):
                     break
 
-            is_allowed, reason = run_compliance_checks(contact.phone, contact.id, db)
+            is_allowed, reason = run_compliance_checks(contact.phone, contact.id, db, organization_id=campaign_org_id)
             if not is_allowed:
                 skipped_count += 1
                 continue
@@ -2462,11 +2538,15 @@ async def start_campaign(
     try:
         # Use SELECT FOR UPDATE NOWAIT to prevent two workers from starting the same campaign
         from sqlalchemy import text as sa_text
+        org_id = getattr(current_user, 'organization_id', None)
         try:
-            campaign = db.query(VoicemailCampaign).filter(
+            campaign_query = db.query(VoicemailCampaign).filter(
                 VoicemailCampaign.id == campaign_id,
                 VoicemailCampaign.user_id == current_user.id,
-            ).with_for_update(nowait=True).first()
+            )
+            if org_id is not None:
+                campaign_query = campaign_query.filter(VoicemailCampaign.organization_id == org_id)
+            campaign = campaign_query.with_for_update(nowait=True).first()
         except Exception as lock_err:
             if "could not obtain lock" in str(lock_err).lower() or "lock" in str(lock_err).lower():
                 raise HTTPException(status_code=409, detail="Campaign is already being started by another request")
@@ -2534,10 +2614,14 @@ async def pause_campaign(
     """Pause a running campaign."""
     VoicemailCampaign = get_voicemail_campaign_model()
 
-    campaign = db.query(VoicemailCampaign).filter(
+    org_id = getattr(current_user, 'organization_id', None)
+    campaign_query = db.query(VoicemailCampaign).filter(
         VoicemailCampaign.id == campaign_id,
         VoicemailCampaign.user_id == current_user.id,
-    ).first()
+    )
+    if org_id is not None:
+        campaign_query = campaign_query.filter(VoicemailCampaign.organization_id == org_id)
+    campaign = campaign_query.first()
 
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -2562,10 +2646,14 @@ async def cancel_campaign(
     VoicemailCampaign = get_voicemail_campaign_model()
     VoicemailDrop = get_voicemail_drop_model()
 
-    campaign = db.query(VoicemailCampaign).filter(
+    org_id = getattr(current_user, 'organization_id', None)
+    campaign_query = db.query(VoicemailCampaign).filter(
         VoicemailCampaign.id == campaign_id,
         VoicemailCampaign.user_id == current_user.id,
-    ).first()
+    )
+    if org_id is not None:
+        campaign_query = campaign_query.filter(VoicemailCampaign.organization_id == org_id)
+    campaign = campaign_query.first()
 
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")

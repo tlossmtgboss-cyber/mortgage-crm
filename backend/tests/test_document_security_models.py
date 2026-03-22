@@ -12,6 +12,7 @@ Covers:
 - Audit trail completeness and immutability guarantees
 """
 
+import os
 import pytest
 from datetime import datetime, timezone, timedelta
 
@@ -39,8 +40,8 @@ from database.models.document_security import (
 
 @pytest.fixture(scope="module")
 def engine():
-    """Create an in-memory SQLite engine for document security model tests."""
-    eng = create_engine("sqlite:///:memory:")
+    """Create a PostgreSQL engine for document security model tests."""
+    eng = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
     # Create only the tables we need for these tests
     for table_name in (
         "document_access_logs",

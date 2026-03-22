@@ -11,6 +11,7 @@ Tests for the eClosing platform integration covering:
   - Tenant isolation
 """
 
+import os
 import pytest
 from datetime import date, datetime, timezone, timedelta
 from unittest.mock import MagicMock, patch
@@ -19,6 +20,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from db import Base
+from tests.test_db_helper import create_all_tables
 
 
 # =============================================================================
@@ -27,11 +29,11 @@ from db import Base
 
 @pytest.fixture
 def eclosing_engine():
-    """Create an in-memory SQLite database for eClosing tests."""
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    """Create a PostgreSQL test database for eClosing tests."""
+    engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
+    create_all_tables(Base, engine)
 
-    # Create minimal loans table for testing (SQLite-compatible)
+    # Create minimal loans table for testing
     with engine.connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS loans (
@@ -51,7 +53,7 @@ def eclosing_engine():
 
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS eclosing_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 organization_id INTEGER NOT NULL,
                 loan_id INTEGER NOT NULL,
                 provider VARCHAR(20) NOT NULL DEFAULT 'internal',

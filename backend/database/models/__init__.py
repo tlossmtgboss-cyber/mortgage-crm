@@ -610,6 +610,12 @@ from .scheduler import (
 # Agent performance metrics (AI agent invocation tracking)
 from .agent_metrics import AgentInvocation
 
+# Compliance decision audit log (TCPA/DNC/calling-hours immutable log)
+from .compliance_log import ComplianceDecisionLog
+
+# SMS persistence models (campaign & scheduled job DB-backed state)
+from .sms_persistence import SMSCampaignRecord, ScheduledSMSJobRecord
+
 
 __all__ = [
     # =====================
@@ -1236,4 +1242,15 @@ __all__ = [
     # Agent Performance Metrics
     # =====================
     "AgentInvocation",
+
+    # =====================
+    # Compliance Decision Audit Log
+    # =====================
+    "ComplianceDecisionLog",
+
+    # =====================
+    # SMS Persistence
+    # =====================
+    "SMSCampaignRecord",
+    "ScheduledSMSJobRecord",
 ]

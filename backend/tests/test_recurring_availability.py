@@ -14,6 +14,7 @@ Tests cover:
 - Integration with existing slot generation engine
 """
 
+import os
 import pytest
 from datetime import datetime, date, time, timedelta, timezone
 from unittest.mock import MagicMock, patch, AsyncMock
@@ -39,8 +40,8 @@ from services.recurring_availability_service import RecurringAvailabilityService
 
 @pytest.fixture(scope="module")
 def test_engine():
-    """Create in-memory SQLite engine for tests."""
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    """Create PostgreSQL engine for tests."""
+    engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
     # Create only the tables we need for these tests
     RecurringAvailability.__table__.create(bind=engine, checkfirst=True)
     AvailabilityException.__table__.create(bind=engine, checkfirst=True)

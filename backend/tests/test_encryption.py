@@ -17,6 +17,8 @@ from unittest.mock import patch
 from sqlalchemy import Column, Integer, create_engine
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
 
+from tests.test_db_helper import create_all_tables
+
 # Ensure a deterministic key for tests
 TEST_KEY = "test-secret-key-for-unit-tests-only"
 
@@ -204,8 +206,8 @@ class TestEncryptedStringTypeDecorator:
             attendee_email = Column(EncryptedString(500))
             attendee_phone = Column(EncryptedString(200))
 
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(engine)
+        engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
+        create_all_tables(Base, engine)
         SessionLocal = sessionmaker(bind=engine)
         session = SessionLocal()
         yield session, FakeAppointment, engine

@@ -10,6 +10,7 @@ Verifies:
 """
 
 import logging
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -48,15 +49,9 @@ def app():
 @pytest.fixture
 def pg_style_engine(tmp_path):
     """
-    In-memory SQLite engine for migration tests.
-
-    SQLite lacks SERIAL/JSONB but CREATE TABLE IF NOT EXISTS still works
-    when the DDL is re-written to be SQLite-compatible.  For our purposes
-    we test via PostgreSQL-compatible DDL running through the real
-    migration function -- any SQLite incompatibilities are expected and
-    caught by the test to validate graceful handling.
+    PostgreSQL engine for migration tests.
     """
-    return create_engine("sqlite:///:memory:")
+    return create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
 
 
 # ===========================================================================
@@ -172,13 +167,9 @@ class TestEnterpriseMigration:
 
     def test_migration_returns_success(self):
         """run_migration on a PostgreSQL-compatible engine returns success."""
-        # Use a real PostgreSQL engine if DATABASE_URL is set, otherwise
-        # accept that SQLite will partially fail due to SERIAL/JSONB syntax.
         from migrations.smart_docs_enterprise_migration import run_migration
 
-        engine = create_engine("sqlite:///:memory:")
-        # SQLite will choke on SERIAL/JSONB, so we expect partial success
-        # but no unhandled exception.
+        engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         result = run_migration(engine)
 
         assert result is not None
@@ -190,7 +181,7 @@ class TestEnterpriseMigration:
         """Running migration twice does not raise."""
         from migrations.smart_docs_enterprise_migration import run_migration
 
-        engine = create_engine("sqlite:///:memory:")
+        engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
         run_migration(engine)
         # Second run should also succeed
         result = run_migration(engine)

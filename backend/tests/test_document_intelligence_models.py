@@ -16,6 +16,7 @@ Covers:
 - Document type mapping accuracy
 """
 
+import os
 import pytest
 from datetime import datetime, timezone, timedelta
 
@@ -31,9 +32,9 @@ from db import Base
 
 @pytest.fixture(scope="module")
 def engine():
-    """Create an in-memory SQLite engine and register only the document
+    """Create a PostgreSQL engine and register only the document
     intelligence tables so tests are fully self-contained."""
-    _engine = create_engine("sqlite:///:memory:")
+    _engine = create_engine(os.getenv("TEST_DATABASE_URL", "postgresql://localhost:5432/test_perennia"))
 
     # Import models so their table definitions are registered on Base.metadata
     from database.models.document_intelligence import (  # noqa: F401

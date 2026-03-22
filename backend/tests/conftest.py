@@ -49,18 +49,21 @@ from database import get_db
 # DATABASE FIXTURES
 # =============================================================================
 
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///./test_perennia.db")
+# Disable mutation audit logging during tests
+os.environ.setdefault("ENABLE_MUTATION_AUDIT", "false")
 
-# Remove stale test DB file so ORM tables are recreated with all current columns
-if "sqlite:///" in TEST_DATABASE_URL and "memory" not in TEST_DATABASE_URL:
-    _db_path = TEST_DATABASE_URL.replace("sqlite:///", "")
-    if os.path.exists(_db_path):
-        os.remove(_db_path)
-
-test_engine = create_engine(
-    TEST_DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in TEST_DATABASE_URL else {}
+# Default to local PostgreSQL. Override via TEST_DATABASE_URL env var.
+# PostgreSQL is REQUIRED — SQLite cannot handle JSONB, ARRAY, INET, TSVECTOR.
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql://localhost:5432/test_perennia",
 )
+
+# Fix postgres:// to postgresql:// for SQLAlchemy
+if TEST_DATABASE_URL.startswith("postgres://"):
+    TEST_DATABASE_URL = TEST_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+test_engine = create_engine(TEST_DATABASE_URL)
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
@@ -68,31 +71,27 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_eng
 def db_engine():
     """Create test database engine for the session.
 
-    Creates ORM tables individually to match the real schema.  Tables are
-    created one-by-one so a broken FK reference on an unrelated model
-    (e.g. workflow_task_instances) doesn't block the whole batch.
+    Uses Base.metadata.create_all() against PostgreSQL to create all ORM
+    tables in correct dependency order with full type support.
     """
     from db import Base
+    from tests.test_db_helper import create_all_tables
     # Import models so their tables are registered on Base.metadata
     try:
         from database.models import Lead, Loan, User  # noqa: F401
     except Exception as e:
         logger.debug(f"Model import skipped in db_engine: {e}")
 
-    # Create each ORM table individually — skip tables whose FK targets
-    # are missing (SQLite ignores FK enforcement by default anyway).
-    for table in Base.metadata.tables.values():
-        try:
-            table.create(bind=test_engine, checkfirst=True)
-        except Exception as e:
-            logger.debug(f"Skipping table {table.name} creation in db_engine: {e}")
+    # Drop and recreate all tables for a clean test run.
+    # Uses per-table creation to handle missing FK targets from factory models.
+    create_all_tables(Base, test_engine)
 
     # Create lightweight tables used only by estimate-parser tests
     # (these are NOT ORM models — they use raw SQL in the route handlers)
     with test_engine.connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS estimate_parse_cache (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 doc_hash TEXT UNIQUE NOT NULL,
                 parsed_json TEXT,
                 confidence_score REAL,
@@ -105,7 +104,7 @@ def db_engine():
 
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS estimate_parse_failures (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 request_id TEXT,
                 doc_hash TEXT,
                 error_stage TEXT,
@@ -132,6 +131,9 @@ def db_engine():
         conn.commit()
 
     yield test_engine
+
+    # Clean up after the full test session
+    Base.metadata.drop_all(bind=test_engine)
 
 
 @pytest.fixture(scope="function")

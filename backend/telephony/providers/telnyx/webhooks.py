@@ -255,9 +255,8 @@ def validate_telnyx_webhook(
         True if signature is valid, False otherwise
     """
     if not public_key:
-        # In development, skip validation
-        logger.warning("Telnyx webhook validation skipped - no public key configured")
-        return True
+        logger.warning("Telnyx webhook REJECTED - no public key configured")
+        return False
 
     try:
         # Telnyx uses Ed25519 for signature verification

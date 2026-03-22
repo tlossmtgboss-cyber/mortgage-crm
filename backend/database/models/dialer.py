@@ -11,7 +11,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime,
-    Text, ForeignKey, Enum as SQLEnum, Index
+    Text, ForeignKey, Enum as SQLEnum, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -143,6 +143,7 @@ class ActiveCall(Base):
         Index('ix_active_calls_contact', 'contact_phone', 'expires_at'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     contact_phone = Column(String, nullable=False)
     agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     call_sid = Column(String)
@@ -153,8 +154,12 @@ class ActiveCall(Base):
 class ContactDNCStatus(Base):
     """Do Not Call list for contacts"""
     __tablename__ = "contact_dnc_status"
+    __table_args__ = (
+        UniqueConstraint('phone_number', 'organization_id', name='uq_dnc_phone_org'),
+    )
     id = Column(Integer, primary_key=True, index=True)
-    phone_number = Column(String, unique=True, nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+    phone_number = Column(String, nullable=False, index=True)
     reason = Column(String)
     added_by_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
