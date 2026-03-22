@@ -110,10 +110,14 @@ def normalize_phone(phone: str) -> str:
     return ''.join(filter(str.isdigit, phone))[-10:]  # Get last 10 digits
 
 
-def lookup_caller_in_crm(db: Session, phone: str) -> Dict[str, Any]:
+def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Look up caller in CRM database across leads, loans, and MUM clients.
     Returns caller type and appropriate assistant.
+
+    org_id is optional: when provided (e.g. from authenticated endpoints), queries
+    are scoped to that organization. When omitted (e.g. from Vapi webhook), all
+    organizations are searched.
     """
     phone_clean = normalize_phone(phone)
 
@@ -125,15 +129,21 @@ def lookup_caller_in_crm(db: Session, phone: str) -> Dict[str, Any]:
             "assistant_name": ASSISTANT_CONFIG["receptionist"]["name"]
         }
 
+    org_filter = "AND organization_id = :org_id" if org_id else ""
+    params: Dict[str, Any] = {"phone_pattern": f"%{phone_clean}"}
+    if org_id:
+        params["org_id"] = org_id
+
     # 1. Check MUM clients first (highest priority - past clients)
     try:
-        mum_result = db.execute(text("""
+        mum_result = db.execute(text(f"""
             SELECT id, first_name, last_name, phone, status, loan_id
             FROM mum_clients
             WHERE phone LIKE :phone_pattern
             AND status IN ('active', 'paid_off', 'refinance_opportunity')
+            {org_filter}
             LIMIT 1
-        """), {"phone_pattern": f"%{phone_clean}"}).fetchone()
+        """), params).fetchone()
 
         if mum_result:
             return {
@@ -153,15 +163,16 @@ def lookup_caller_in_crm(db: Session, phone: str) -> Dict[str, Any]:
 
     # 2. Check active loans
     try:
-        loan_result = db.execute(text("""
+        loan_result = db.execute(text(f"""
             SELECT l.id, l.borrower_name, l.borrower_phone, l.stage, l.loan_number,
                    l.expected_close_date, l.property_address
             FROM loans l
             WHERE (l.borrower_phone LIKE :phone_pattern OR l.coborrower_phone LIKE :phone_pattern)
             AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'withdrawn')
+            {org_filter.replace('organization_id', 'l.organization_id')}
             ORDER BY l.created_at DESC
             LIMIT 1
-        """), {"phone_pattern": f"%{phone_clean}"}).fetchone()
+        """), params).fetchone()
 
         if loan_result:
             return {
@@ -183,14 +194,15 @@ def lookup_caller_in_crm(db: Session, phone: str) -> Dict[str, Any]:
 
     # 3. Check leads
     try:
-        lead_result = db.execute(text("""
+        lead_result = db.execute(text(f"""
             SELECT id, first_name, last_name, name, phone, stage, loan_type, preapproval_amount
             FROM leads
             WHERE phone LIKE :phone_pattern
             AND stage NOT IN ('withdrawn', 'does_not_qualify', 'converted')
+            {org_filter}
             ORDER BY created_at DESC
             LIMIT 1
-        """), {"phone_pattern": f"%{phone_clean}"}).fetchone()
+        """), params).fetchone()
 
         if lead_result:
             caller_name = lead_result.name or f"{lead_result.first_name or ''} {lead_result.last_name or ''}".strip()
@@ -268,8 +280,8 @@ async def route_inbound_call(
             try:
                 db.execute(text("""
                     INSERT INTO call_routing_logs
-                    (phone_number, caller_type, caller_name, stage, assistant_id, assistant_name, created_at)
-                    VALUES (:phone, :caller_type, :caller_name, :stage, :assistant_id, :assistant_name, :created_at)
+                    (phone_number, caller_type, caller_name, stage, assistant_id, assistant_name, organization_id, created_at)
+                    VALUES (:phone, :caller_type, :caller_name, :stage, :assistant_id, :assistant_name, :organization_id, :created_at)
                 """), {
                     "phone": phone_number,
                     "caller_type": result["caller_type"],
@@ -277,6 +289,7 @@ async def route_inbound_call(
                     "stage": result.get("stage"),
                     "assistant_id": result["assistant_id"],
                     "assistant_name": result["assistant_name"],
+                    "organization_id": result.get("context", {}).get("organization_id"),
                     "created_at": datetime.now(timezone.utc)
                 })
                 db.commit()
@@ -324,7 +337,8 @@ async def test_caller_lookup(
     current_user = Depends(get_current_user_flexible)
 ):
     """Test the caller lookup for a given phone number"""
-    result = lookup_caller_in_crm(db, phone)
+    org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
+    result = lookup_caller_in_crm(db, phone, org_id=org_id)
     return {
         "phone_searched": phone,
         "phone_normalized": normalize_phone(phone),
@@ -359,13 +373,15 @@ async def get_routing_logs(
 ):
     """Get recent call routing logs"""
     try:
+        org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
         logs = db.execute(text("""
             SELECT id, phone_number, caller_type, caller_name, stage,
                    assistant_id, assistant_name, created_at
             FROM call_routing_logs
+            WHERE organization_id = :org_id
             ORDER BY created_at DESC
             LIMIT :limit
-        """), {"limit": limit}).fetchall()
+        """), {"limit": limit, "org_id": org_id}).fetchall()
 
         return {
             "logs": [
@@ -448,8 +464,15 @@ async def run_routing_migration(
                 stage VARCHAR(100),
                 assistant_id VARCHAR(255),
                 assistant_name VARCHAR(255),
+                organization_id INTEGER,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
+        """))
+
+        # Add organization_id column if table already exists without it
+        db.execute(text("""
+            ALTER TABLE call_routing_logs
+            ADD COLUMN IF NOT EXISTS organization_id INTEGER
         """))
 
         db.execute(text("""
@@ -460,6 +483,11 @@ async def run_routing_migration(
         db.execute(text("""
             CREATE INDEX IF NOT EXISTS idx_call_routing_logs_phone
             ON call_routing_logs(phone_number)
+        """))
+
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_call_routing_logs_org
+            ON call_routing_logs(organization_id)
         """))
 
         db.commit()
@@ -478,6 +506,7 @@ async def get_routing_status(
 ):
     """Get routing system status and stats"""
     try:
+        org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
         # Get today's stats
         stats = db.execute(text("""
             SELECT
@@ -485,8 +514,9 @@ async def get_routing_status(
                 COUNT(*) as count
             FROM call_routing_logs
             WHERE created_at >= CURRENT_DATE
+            AND organization_id = :org_id
             GROUP BY caller_type
-        """)).fetchall()
+        """), {"org_id": org_id}).fetchall()
 
         stats_dict = {row.caller_type: row.count for row in stats}
 
