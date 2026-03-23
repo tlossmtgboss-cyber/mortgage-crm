@@ -244,9 +244,37 @@ export async function loadTabData(tab, dispatch, getState) {
         break;
       }
 
-      case 'advanced':
-        dispatch({ type: LOAD_SECTION_SUCCESS, section: tab, payload: {} });
+      case 'advanced': {
+        try {
+          const res = await calendarSettingsAPI.getAdvancedSettings?.();
+          if (res?.data) {
+            const prev = sections.advanced.data;
+            // Map backend field names back to frontend field names
+            const ai = res.data.ai || {};
+            const display = res.data.display || {};
+            const ft = res.data.feature_toggles || {};
+            dispatch({
+              type: LOAD_SECTION_SUCCESS,
+              section: 'advanced',
+              payload: {
+                data: {
+                  ...prev,
+                  auto_confirm_appointments: ai.ai_scheduling_enabled !== false,
+                  enable_waitlist: ai.smart_reminders_enabled || false,
+                  calendar_feed_enabled: ft.calendar_feed_enabled || prev.calendar_feed_enabled,
+                  show_timezone_selector: ft.show_timezone_selector !== false,
+                },
+              },
+            });
+          } else {
+            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'advanced', payload: {} });
+          }
+        } catch {
+          // Endpoint may not exist yet; fall back to defaults silently
+          dispatch({ type: LOAD_SECTION_SUCCESS, section: 'advanced', payload: {} });
+        }
         break;
+      }
 
       case 'ai-scheduling': {
         try {
@@ -272,7 +300,7 @@ export async function loadTabData(tab, dispatch, getState) {
       }
 
       case 'ai-automation': {
-        // Merged tab: load ai-scheduling data, then mark advanced as loaded too
+        // Merged tab: load ai-scheduling data + advanced data
         try {
           const res = await calendarSettingsAPI.getAIScheduling();
           if (res?.data) {
@@ -291,8 +319,32 @@ export async function loadTabData(tab, dispatch, getState) {
           console.warn('AI scheduling settings load fell back to defaults:', err.message);
           dispatch({ type: LOAD_SECTION_SUCCESS, section: 'ai-scheduling', payload: {} });
         }
-        // Advanced section uses local defaults only (no API endpoint)
-        dispatch({ type: LOAD_SECTION_SUCCESS, section: 'advanced', payload: {} });
+        // Load advanced settings from API
+        try {
+          const advRes = await calendarSettingsAPI.getAdvancedSettings?.();
+          if (advRes?.data) {
+            const prev = sections.advanced.data;
+            const ai = advRes.data.ai || {};
+            const ft = advRes.data.feature_toggles || {};
+            dispatch({
+              type: LOAD_SECTION_SUCCESS,
+              section: 'advanced',
+              payload: {
+                data: {
+                  ...prev,
+                  auto_confirm_appointments: ai.ai_scheduling_enabled !== false,
+                  enable_waitlist: ai.smart_reminders_enabled || false,
+                  calendar_feed_enabled: ft.calendar_feed_enabled || prev.calendar_feed_enabled,
+                  show_timezone_selector: ft.show_timezone_selector !== false,
+                },
+              },
+            });
+          } else {
+            dispatch({ type: LOAD_SECTION_SUCCESS, section: 'advanced', payload: {} });
+          }
+        } catch {
+          dispatch({ type: LOAD_SECTION_SUCCESS, section: 'advanced', payload: {} });
+        }
         // Mark the merged tab itself as loaded
         dispatch({ type: LOAD_SECTION_SUCCESS, section: 'ai-automation', payload: {} });
         break;

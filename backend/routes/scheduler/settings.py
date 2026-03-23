@@ -78,6 +78,9 @@ class AvailabilityUpdate(BaseModel):
     min_notice_hours: Optional[int] = Field(None, ge=0, le=168)
     max_advance_days: Optional[int] = Field(None, ge=1, le=365)
     default_duration_minutes: Optional[int] = Field(None, ge=5, le=480)
+    seasonal_hours: Optional[List[Dict[str, Any]]] = None
+    override_days: Optional[List[Dict[str, Any]]] = None
+    blocked_holidays: Optional[Dict[str, Any]] = None
 
     @validator("timezone")
     def validate_timezone(cls, v):
@@ -144,9 +147,21 @@ class IntegrationsUpdate(BaseModel):
     calendar_feed_enabled: Optional[bool] = None
 
 
+class TeamMemberUpdate(BaseModel):
+    user_id: int
+    max_daily_appointments: Optional[int] = Field(None, ge=0, le=24)
+    is_accepting_appointments: Optional[bool] = None
+    specialties: Optional[List[str]] = None
+
+
 class TeamUpdate(BaseModel):
     routing_strategy: Optional[str] = Field(None, max_length=50)
+    assignment_strategy: Optional[str] = Field(None, max_length=50)
     accept_overflow_bookings: Optional[bool] = None
+    apply_to_new_only: Optional[bool] = None
+    members: Optional[List[TeamMemberUpdate]] = None
+    overflow: Optional[Dict[str, Any]] = None
+    permissions: Optional[Dict[str, Any]] = None
 
 
 class AdvancedUpdate(BaseModel):
@@ -276,9 +291,12 @@ def _serialize_config_availability(config) -> dict:
     """Build the availability section from a SchedulerConfig."""
     lunch_start = config.lunch_break_start
     lunch_end = config.lunch_break_end
+    raw_wh = config.working_hours or {}
+    # Separate day schedules from underscore-prefixed metadata
+    clean_wh = {k: v for k, v in raw_wh.items() if not k.startswith("_")}
     return {
         "timezone": config.timezone or DEFAULT_TIMEZONE,
-        "working_hours": config.working_hours or {},
+        "working_hours": clean_wh,
         "lunch_break": {
             "start": lunch_start.strftime("%H:%M") if isinstance(lunch_start, time) else str(lunch_start or "12:00"),
             "end": lunch_end.strftime("%H:%M") if isinstance(lunch_end, time) else str(lunch_end or "13:00"),
@@ -297,6 +315,9 @@ def _serialize_config_availability(config) -> dict:
             "max_advance_days": config.max_advance_days or 60,
         },
         "default_duration_minutes": config.default_duration_minutes or 30,
+        "seasonal_hours": (config.working_hours or {}).get("_seasonal_hours", []),
+        "override_days": (config.working_hours or {}).get("_override_days", []),
+        "blocked_holidays": (config.working_hours or {}).get("_blocked_holidays", {}),
     }
 
 
@@ -420,11 +441,19 @@ def _serialize_team(config) -> dict:
     """Build the team section from a SchedulerConfig."""
     rs = config.routing_strategy
     strategy_value = rs.value if hasattr(rs, "value") else (rs or "relationship")
+    ft = config.feature_toggles or {} if hasattr(config, "feature_toggles") else {}
     return {
         "strategy": strategy_value,
-        "overflow": {
+        "assignment_strategy": strategy_value,
+        "apply_to_new_only": ft.get("_team_apply_to_new_only", True),
+        "overflow": ft.get("_team_overflow", {
             "accept_overflow_bookings": config.accept_overflow_bookings if config.accept_overflow_bookings is not None else False,
-        },
+        }),
+        "permissions": ft.get("_team_permissions", {
+            "members_see_calendars": True,
+            "members_reschedule_others": False,
+            "only_managers_modify": True,
+        }),
     }
 
 
@@ -714,10 +743,32 @@ async def update_settings_section(
         _apply_integrations(config, payload, changes)
     elif section == "team":
         _apply_team(config, payload, changes)
+        # Handle member-level updates (per-user config rows)
+        if payload.members:
+            models = get_models()
+            SchedulerConfig = models["SchedulerConfig"]
+            for member in payload.members:
+                member_config = (
+                    db.query(SchedulerConfig)
+                    .filter(
+                        SchedulerConfig.user_id == member.user_id,
+                        SchedulerConfig.organization_id == org_id,
+                    )
+                    .first()
+                )
+                if member_config:
+                    if member.max_daily_appointments is not None:
+                        member_config.max_meetings_per_day = member.max_daily_appointments
+                    if member.is_accepting_appointments is not None:
+                        member_config.is_active = member.is_accepting_appointments
+                    member_config.updated_at = datetime.now(timezone.utc)
+                    changes[f"member_{member.user_id}"] = True
     elif section == "advanced":
         _apply_advanced(config, payload, changes)
     elif section == "ai_scheduling":
         _apply_ai_scheduling(config, payload, changes)
+    elif section == "labels":
+        _apply_labels(config, payload, changes)
 
     # Phase 2 reverse sync: if working_hours JSON was updated, propagate to
     # RecurringAvailability structured tables so both sources stay consistent.
@@ -748,9 +799,10 @@ async def update_settings_section(
         "ai_scheduling": _serialize_ai_scheduling,
     }
 
+    serializer = section_serializers.get(section)
     return {
         "section": section,
-        "data": section_serializers[section](config),
+        "data": serializer(config) if serializer else {"updated": True},
         "updated_at": config.updated_at.isoformat() if config.updated_at else None,
     }
 
@@ -765,7 +817,10 @@ def _apply_availability(config, payload: AvailabilityUpdate, changes: dict):
         changes["timezone"] = {"old": config.timezone, "new": payload.timezone}
         config.timezone = payload.timezone
     if payload.working_hours is not None:
-        wh = {day: dv.dict() for day, dv in payload.working_hours.items()}
+        # Preserve underscore-prefixed metadata keys (_time_blocks, _seasonal_hours, etc.)
+        existing_wh = dict(config.working_hours or {})
+        wh = {k: v for k, v in existing_wh.items() if k.startswith("_")}
+        wh.update({day: dv.dict() for day, dv in payload.working_hours.items()})
         changes["working_hours"] = True
         config.working_hours = wh
     if payload.lunch_break_start is not None:
@@ -800,6 +855,24 @@ def _apply_availability(config, payload: AvailabilityUpdate, changes: dict):
     if payload.default_duration_minutes is not None:
         config.default_duration_minutes = payload.default_duration_minutes
         changes["default_duration_minutes"] = payload.default_duration_minutes
+
+    # Store seasonal_hours, override_days, blocked_holidays in working_hours JSON
+    wh = dict(config.working_hours or {})
+    wh_changed = False
+    if payload.seasonal_hours is not None:
+        wh["_seasonal_hours"] = payload.seasonal_hours
+        changes["seasonal_hours"] = True
+        wh_changed = True
+    if payload.override_days is not None:
+        wh["_override_days"] = payload.override_days
+        changes["override_days"] = True
+        wh_changed = True
+    if payload.blocked_holidays is not None:
+        wh["_blocked_holidays"] = payload.blocked_holidays
+        changes["blocked_holidays"] = True
+        wh_changed = True
+    if wh_changed:
+        config.working_hours = wh
 
 
 def _apply_notifications(config, payload: NotificationsUpdate, changes: dict):
@@ -848,12 +921,32 @@ def _apply_integrations(config, payload: IntegrationsUpdate, changes: dict):
 
 def _apply_team(config, payload: TeamUpdate, changes: dict):
     """Apply team section updates to config."""
-    if payload.routing_strategy is not None:
-        config.routing_strategy = payload.routing_strategy
-        changes["routing_strategy"] = payload.routing_strategy
+    # Accept either routing_strategy or assignment_strategy (frontend sends the latter)
+    strategy = payload.routing_strategy or payload.assignment_strategy
+    if strategy is not None:
+        config.routing_strategy = strategy
+        changes["routing_strategy"] = strategy
     if payload.accept_overflow_bookings is not None:
         config.accept_overflow_bookings = payload.accept_overflow_bookings
         changes["accept_overflow_bookings"] = payload.accept_overflow_bookings
+
+    # Store overflow, permissions, apply_to_new_only in feature_toggles JSON
+    ft = dict(config.feature_toggles or {}) if hasattr(config, "feature_toggles") else {}
+    ft_changed = False
+    if payload.overflow is not None:
+        ft["_team_overflow"] = payload.overflow
+        changes["overflow"] = True
+        ft_changed = True
+    if payload.permissions is not None:
+        ft["_team_permissions"] = payload.permissions
+        changes["permissions"] = True
+        ft_changed = True
+    if payload.apply_to_new_only is not None:
+        ft["_team_apply_to_new_only"] = payload.apply_to_new_only
+        changes["apply_to_new_only"] = payload.apply_to_new_only
+        ft_changed = True
+    if ft_changed:
+        config.feature_toggles = ft
 
 
 def _apply_advanced(config, payload: AdvancedUpdate, changes: dict):
@@ -906,6 +999,21 @@ def _apply_ai_scheduling(config, payload: AISchedulingUpdate, changes: dict):
             changes[field] = val
 
     config.ai_scheduling_config = current
+
+
+def _apply_labels(config, payload: LabelsUpdate, changes: dict):
+    """Apply labels section updates to feature_toggles JSON."""
+    ft = dict(config.feature_toggles or {}) if hasattr(config, "feature_toggles") else {}
+    if payload.auto_assign_enabled is not None:
+        ft["_label_auto_assign_enabled"] = payload.auto_assign_enabled
+        changes["auto_assign_enabled"] = payload.auto_assign_enabled
+    if payload.default_label_id is not None:
+        ft["_label_default_id"] = payload.default_label_id
+        changes["default_label_id"] = payload.default_label_id
+    if payload.label_mappings is not None:
+        ft["_label_mappings"] = payload.label_mappings
+        changes["label_mappings"] = True
+    config.feature_toggles = ft
 
 
 # ============================================================================

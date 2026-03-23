@@ -1082,6 +1082,11 @@ export const calendarSettingsAPI = {
     return response.data;
   },
   // Advanced Settings
+  getAdvancedSettings: async () => {
+    const response = await api.get('/api/v1/scheduler/settings/all');
+    // Extract the advanced section from the unified settings blob
+    return { data: response.data?.advanced || {} };
+  },
   updateAdvancedSettings: async (data) => {
     const response = await api.put('/api/v1/scheduler/settings/advanced', data);
     return response.data;

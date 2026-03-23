@@ -107,6 +107,9 @@ class AvailabilitySettings(BaseModel):
     buffer_minutes: Optional[int] = Field(None, ge=0, le=60)
     min_booking_notice_hours: Optional[int] = Field(None, ge=0, le=168)
     max_advance_booking_days: Optional[int] = Field(None, ge=1, le=365)
+    seasonal_hours: Optional[List[Dict[str, Any]]] = None
+    override_days: Optional[List[Dict[str, Any]]] = None
+    blocked_holidays: Optional[Dict[str, Any]] = None
 
 
 class AppointmentTypeCreate(BaseModel):
@@ -254,9 +257,12 @@ async def get_availability_settings(
                 "is_default": True,
             }, "Default availability (no custom configuration)")
 
-        working_hours = row.working_hours if row.working_hours else {}
-        # Extract time_blocks from working_hours JSON
+        working_hours = dict(row.working_hours) if row.working_hours else {}
+        # Extract underscore-prefixed metadata from working_hours JSON (use copy to avoid DB mutation)
         time_blocks = working_hours.pop("_time_blocks", None) or []
+        seasonal_hours = working_hours.pop("_seasonal_hours", None) or []
+        override_days = working_hours.pop("_override_days", None) or []
+        blocked_holidays = working_hours.pop("_blocked_holidays", None) or {}
         # Migrate legacy _lunch_break → time_blocks if present
         legacy_lunch = working_hours.pop("_lunch_break", None)
         if legacy_lunch and not time_blocks and legacy_lunch.get("enabled"):
@@ -274,6 +280,9 @@ async def get_availability_settings(
             "timezone": row.timezone or "America/Chicago",
             "business_hours": working_hours,
             "time_blocks": time_blocks,
+            "seasonal_hours": seasonal_hours,
+            "override_days": override_days,
+            "blocked_holidays": blocked_holidays,
             "buffer_minutes": row.buffer_before_minutes or 5,
             "min_booking_notice_hours": row.min_notice_hours or 2,
             "max_advance_booking_days": row.max_advance_days or 60,
@@ -335,7 +344,16 @@ async def update_availability_settings(
             update_fields.append("timezone = :timezone")
             params["timezone"] = settings.timezone
 
-        if settings.business_hours is not None or settings.time_blocks is not None:
+        # Determine if we need to touch working_hours JSON at all
+        wh_needs_update = (
+            settings.business_hours is not None
+            or settings.time_blocks is not None
+            or settings.seasonal_hours is not None
+            or settings.override_days is not None
+            or settings.blocked_holidays is not None
+        )
+
+        if wh_needs_update:
             # Load existing working_hours first to avoid wiping unmodified parts
             existing_wh = {}
             if config_id:
@@ -356,6 +374,12 @@ async def update_availability_settings(
                     wh[day] = day_settings.dict()
             if settings.time_blocks is not None:
                 wh["_time_blocks"] = [tb.dict() for tb in settings.time_blocks]
+            if settings.seasonal_hours is not None:
+                wh["_seasonal_hours"] = settings.seasonal_hours
+            if settings.override_days is not None:
+                wh["_override_days"] = settings.override_days
+            if settings.blocked_holidays is not None:
+                wh["_blocked_holidays"] = settings.blocked_holidays
             update_fields.append("working_hours = :working_hours")
             params["working_hours"] = json.dumps(wh)
 
