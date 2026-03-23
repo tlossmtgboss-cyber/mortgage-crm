@@ -185,11 +185,28 @@ class ScheduledAppointment(Base):
 
 
 def ensure_scheduler_tables():
-    """Create scheduler tables if they don't exist. Uses a SINGLE connection to avoid pool exhaustion."""
-    from database import engine
-    from sqlalchemy import text
+    """Create scheduler tables if they don't exist. Uses a raw psycopg2 connection to avoid pool exhaustion."""
+    import os
+    raw_conn = None
     try:
-        with engine.begin() as conn:
+        import psycopg2
+        db_url = os.getenv("DATABASE_URL", "")
+        if not db_url:
+            logger.warning("No DATABASE_URL set, skipping scheduler table creation")
+            return
+        raw_conn = psycopg2.connect(db_url, connect_timeout=10)
+        raw_conn.autocommit = True
+
+        # Quick check: if scheduler_configs already exists, skip everything
+        with raw_conn.cursor() as cur:
+            cur.execute("SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = 'scheduler_configs')")
+            if cur.fetchone()[0]:
+                raw_conn.close()
+                raw_conn = None
+                logger.info("Smart Scheduler tables already exist, skipping creation")
+                return
+
+        with raw_conn.cursor() as cur:
             # 1. Create PostgreSQL ENUM types first (safe if already exist)
             enum_definitions = [
                 ("appointmentstatus", "'available','tentative','booked','confirmed','reminded','checked_in','completed','no_show','cancelled','rescheduled'"),
@@ -203,16 +220,16 @@ def ensure_scheduler_tables():
                 ("slotholdstatus", "'active','expired','released','converted'"),
             ]
             for type_name, values in enum_definitions:
-                conn.execute(text(f"""
+                cur.execute(f"""
                     DO $$ BEGIN
                         CREATE TYPE {type_name} AS ENUM ({values});
                     EXCEPTION
                         WHEN duplicate_object THEN NULL;
                     END $$
-                """))
+                """)
 
             # 2. Create all scheduler tables via raw SQL (single connection, no pool pressure)
-            conn.execute(text("""
+            cur.execute("""
                 -- Legacy tables
                 CREATE TABLE IF NOT EXISTS scheduler_settings (
                     id SERIAL PRIMARY KEY,
@@ -535,22 +552,28 @@ def ensure_scheduler_tables():
                     released_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
                 );
-            """))
+            """)
 
             # 3. Add organization_id to legacy tables if missing
             for table_name in ["scheduler_settings", "loan_officer_schedules", "scheduled_appointments"]:
-                result = conn.execute(text("""
-                    SELECT column_name FROM information_schema.columns
-                    WHERE table_name = :tbl AND column_name = 'organization_id'
-                """), {"tbl": table_name})
-                if not result.fetchone():
-                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS organization_id INTEGER"))
-                    conn.execute(text(f"CREATE INDEX IF NOT EXISTS ix_{table_name}_organization_id ON {table_name} (organization_id)"))
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND column_name = 'organization_id'",
+                    (table_name,)
+                )
+                if not cur.fetchone():
+                    cur.execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS organization_id INTEGER")
+                    cur.execute(f"CREATE INDEX IF NOT EXISTS ix_{table_name}_organization_id ON {table_name} (organization_id)")
                     logger.info(f"Added organization_id column to {table_name}")
 
         logger.info("Smart Scheduler tables created/verified (legacy + new)")
     except Exception as e:
         logger.warning(f"Could not create Smart Scheduler tables: {e}")
+    finally:
+        if raw_conn is not None:
+            try:
+                raw_conn.close()
+            except Exception:
+                pass
 
 
 # =============================================================================
