@@ -94,11 +94,16 @@ def _google_get_db_dep():
 
 
 async def _google_get_current_user_dep(request: Request, db: Session = Depends(_google_get_db_dep)):
-    """Get current user for Google Calendar routes."""
+    """Get current user for Google Calendar routes.
+    Supports token from Authorization header OR query parameter (for browser redirect flows like OAuth initiation).
+    """
     if _google_get_current_user is None:
         raise HTTPException(status_code=500, detail="Auth dependency not configured")
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    # Fallback: token from query param (for window.location.href OAuth initiation)
+    if not token:
+        token = request.query_params.get("token", "")
     return await _google_get_current_user(token=token, request=request, db=db)
 
 

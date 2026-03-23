@@ -69,16 +69,31 @@ export default function IntegrationsSection({
     }
   };
 
-  const handleDisconnectIntegration = (service) => {
+  const handleDisconnectIntegration = async (service) => {
     setDisconnectConfirm(null);
     const urls = {
       google: `${API_BASE_URL}/api/v1/google-calendar/disconnect`,
-      outlook: `${API_BASE_URL}/api/v1/microsoft/calendar/disconnect`,
+      outlook: `${API_BASE_URL}/api/v1/microsoft/disconnect/calendar`,
       zoom: `${API_BASE_URL}/api/v1/zoom/disconnect`,
       google_meet: `${API_BASE_URL}/api/v1/google-meet/disconnect`,
     };
     if (urls[service]) {
-      window.location.href = urls[service];
+      try {
+        const token = localStorage.getItem('token');
+        const resp = await fetch(urls[service], {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        });
+        if (resp.ok) {
+          setIntegrations(prev => ({ ...prev, [service]: { ...prev[service], connected: false } }));
+          toast.success(`${service.charAt(0).toUpperCase() + service.slice(1)} disconnected`);
+        } else {
+          const data = await resp.json().catch(() => ({}));
+          toast.error(data.detail || `Failed to disconnect ${service}`);
+        }
+      } catch (err) {
+        toast.error(`Failed to disconnect ${service}`);
+      }
     } else {
       setIntegrations(prev => ({
         ...prev,
@@ -89,9 +104,10 @@ export default function IntegrationsSection({
   };
 
   const handleConnectIntegration = (service) => {
+    const token = localStorage.getItem('token');
     const urls = {
-      google: `${API_BASE_URL}/api/v1/google-calendar/connect`,
-      outlook: `${API_BASE_URL}/api/v1/microsoft/calendar/connect`,
+      google: `${API_BASE_URL}/api/v1/google-calendar/auth?token=${token}`,
+      outlook: `${API_BASE_URL}/api/v1/microsoft/auth?integration_type=calendar&token=${token}`,
       zoom: `${API_BASE_URL}/api/v1/zoom/connect`,
       google_meet: `${API_BASE_URL}/api/v1/google-meet/connect`,
     };

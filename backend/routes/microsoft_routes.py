@@ -33,11 +33,16 @@ def set_dependencies(get_db_func: Callable, get_current_user_func: Callable):
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user - wrapper that works at request time."""
+    """Get current user - wrapper that works at request time.
+    Supports token from Authorization header OR query parameter (for browser redirect flows like OAuth initiation).
+    """
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Auth dependency not configured")
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    # Fallback: token from query param (for window.location.href OAuth initiation)
+    if not token:
+        token = request.query_params.get("token", "")
     return await _get_current_user(token=token, request=request, db=db)
 
 
