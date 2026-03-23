@@ -184,6 +184,32 @@ class ScheduledAppointment(Base):
     cancelled_at = Column(DateTime, nullable=True)
 
 
+def _ensure_scheduler_enum_types(engine):
+    """Create PostgreSQL ENUM types used by scheduler models. Safe to call repeatedly."""
+    from sqlalchemy import text
+    enum_definitions = [
+        ("appointmentstatus", "'available','tentative','booked','confirmed','reminded','checked_in','completed','no_show','cancelled','rescheduled'"),
+        ("meetingtype", "'discovery_call','pre_approval_review','application_walkthrough','document_review','rate_lock_discussion','closing_prep','post_close_review','referral_partner_meeting','team_sync','custom'"),
+        ("meetingmode", "'video','phone','in_person','screen_share'"),
+        ("routingstrategy", "'round_robin','load_balanced','expertise','relationship','availability','ai_optimized'"),
+        ("dayofweek", "'monday','tuesday','wednesday','thursday','friday','saturday','sunday'"),
+        ("slotpriority", "'preferred','standard','overflow','blocked'"),
+        ("reminderchannel", "'email','sms','push','voice'"),
+        ("reminderstatus", "'pending','sent','delivered','failed','acknowledged'"),
+        ("slotholdstatus", "'active','expired','released','converted'"),
+    ]
+    with engine.begin() as conn:
+        for type_name, values in enum_definitions:
+            conn.execute(text(f"""
+                DO $$ BEGIN
+                    CREATE TYPE {type_name} AS ENUM ({values});
+                EXCEPTION
+                    WHEN duplicate_object THEN NULL;
+                END $$
+            """))
+    logger.info("Scheduler PostgreSQL ENUM types created/verified")
+
+
 def ensure_scheduler_tables():
     """Create scheduler tables if they don't exist. Call during app startup, not at import."""
     from database import engine
@@ -192,6 +218,9 @@ def ensure_scheduler_tables():
         SchedulerSettings.__table__.create(engine, checkfirst=True)
         LoanOfficerSchedule.__table__.create(engine, checkfirst=True)
         ScheduledAppointment.__table__.create(engine, checkfirst=True)
+
+        # Create PostgreSQL ENUM types BEFORE creating tables that use them
+        _ensure_scheduler_enum_types(engine)
 
         # New scheduler tables (used by calendar_settings_routes.py)
         from database.models.scheduler import (
@@ -209,7 +238,7 @@ def ensure_scheduler_tables():
             try:
                 model.__table__.create(engine, checkfirst=True)
             except Exception as table_err:
-                logger.debug(f"Table {model.__tablename__} creation note: {table_err}")
+                logger.warning(f"Table {model.__tablename__} creation failed: {table_err}")
 
         # Add organization_id columns if missing (tables may pre-date this column)
         from sqlalchemy import text, inspect

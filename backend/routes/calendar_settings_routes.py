@@ -374,14 +374,14 @@ async def get_appointment_types(
             SELECT
                 at.id, at.type_key, at.type_name, at.description,
                 at.default_duration_minutes, at.color, at.icon,
-                at.is_public, at.is_active, at.sort_order,
+                at.is_public, at.is_active, at.display_order,
                 at.created_at, at.updated_at
             FROM appointment_types at
             JOIN scheduler_configs sc ON sc.id = at.config_id
             WHERE at.organization_id = :org_id
               AND sc.user_id = :user_id
               AND at.is_active = true
-            ORDER BY COALESCE(at.sort_order, 999), at.created_at
+            ORDER BY COALESCE(at.display_order, 999), at.created_at
         """), {"org_id": org_id, "user_id": user.id}).fetchall()
 
         types = []
@@ -395,7 +395,7 @@ async def get_appointment_types(
                 "color": r.color,
                 "icon": r.icon,
                 "is_public": r.is_public,
-                "sort_order": r.sort_order or 0,
+                "sort_order": r.display_order or 0,
             })
 
         return _success_response({"appointment_types": types, "count": len(types)})
@@ -424,18 +424,31 @@ async def create_appointment_type(
         """), {"org_id": org_id, "user_id": user.id}).fetchone()
 
         if not config:
-            raise HTTPException(status_code=404, detail="Scheduler config not found. Save availability settings first.")
+            # Auto-create default config for this user
+            config = db.execute(text("""
+                INSERT INTO scheduler_configs (
+                    organization_id, user_id, config_name, timezone,
+                    default_duration_minutes, buffer_before_minutes, buffer_after_minutes,
+                    min_notice_hours, max_advance_days, max_meetings_per_day,
+                    is_active, created_at, updated_at
+                ) VALUES (
+                    :org_id, :user_id, 'Default', 'America/Chicago',
+                    30, 5, 5, 2, 60, 8,
+                    true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                ) RETURNING id
+            """), {"org_id": org_id, "user_id": user.id}).fetchone()
+            db.flush()
 
         type_key = data.type_key or data.type_name.lower().replace(" ", "_").replace("-", "_")
 
         result = db.execute(text("""
             INSERT INTO appointment_types (
                 config_id, organization_id, type_key, type_name, description,
-                default_duration_minutes, color, icon, is_public, sort_order,
+                default_duration_minutes, color, icon, is_public, display_order,
                 is_active, created_at, updated_at
             ) VALUES (
                 :config_id, :org_id, :type_key, :type_name, :description,
-                :duration, :color, :icon, :is_public, :sort_order,
+                :duration, :color, :icon, :is_public, :display_order,
                 true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             ) RETURNING id
         """), {
@@ -448,7 +461,7 @@ async def create_appointment_type(
             "color": data.color,
             "icon": data.icon,
             "is_public": data.is_public,
-            "sort_order": data.sort_order or 0,
+            "display_order": data.sort_order or 0,
         })
         new_id = result.fetchone().id
         db.commit()
@@ -495,8 +508,8 @@ async def update_appointment_type(
             fields.append("is_public = :is_public")
             params["is_public"] = data.is_public
         if data.sort_order is not None:
-            fields.append("sort_order = :sort_order")
-            params["sort_order"] = data.sort_order
+            fields.append("display_order = :display_order")
+            params["display_order"] = data.sort_order
 
         if not fields:
             return _success_response({"updated": False}, "No fields to update")
@@ -572,13 +585,13 @@ async def reorder_appointment_types(
         for idx, type_id in enumerate(data.type_ids):
             db.execute(text("""
                 UPDATE appointment_types
-                SET sort_order = :sort_order, updated_at = CURRENT_TIMESTAMP
+                SET display_order = :display_order, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :type_id
                   AND organization_id = :org_id
                   AND config_id IN (
                       SELECT id FROM scheduler_configs WHERE user_id = :user_id
                   )
-            """), {"sort_order": idx, "type_id": type_id, "org_id": org_id, "user_id": user.id})
+            """), {"display_order": idx, "type_id": type_id, "org_id": org_id, "user_id": user.id})
 
         db.commit()
         return _success_response({"reordered": True}, "Appointment types reordered")
