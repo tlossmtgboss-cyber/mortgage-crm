@@ -188,9 +188,29 @@ def ensure_scheduler_tables():
     """Create scheduler tables if they don't exist. Call during app startup, not at import."""
     from database import engine
     try:
+        # Legacy tables
         SchedulerSettings.__table__.create(engine, checkfirst=True)
         LoanOfficerSchedule.__table__.create(engine, checkfirst=True)
         ScheduledAppointment.__table__.create(engine, checkfirst=True)
+
+        # New scheduler tables (used by calendar_settings_routes.py)
+        from database.models.scheduler import (
+            SchedulerConfig, AvailabilitySlot, SchedulerAppointmentType,
+            Appointment, SchedulerRoutingRule, BlockedTime, BookingLink,
+            AppointmentReminder, AppointmentStatusHistory, SchedulerAuditLog,
+            SlotHold,
+        )
+        for model in [
+            SchedulerConfig, AvailabilitySlot, SchedulerAppointmentType,
+            Appointment, SchedulerRoutingRule, BlockedTime, BookingLink,
+            AppointmentReminder, AppointmentStatusHistory, SchedulerAuditLog,
+            SlotHold,
+        ]:
+            try:
+                model.__table__.create(engine, checkfirst=True)
+            except Exception as table_err:
+                logger.debug(f"Table {model.__tablename__} creation note: {table_err}")
+
         # Add organization_id columns if missing (tables may pre-date this column)
         from sqlalchemy import text, inspect
         insp = inspect(engine)
@@ -211,7 +231,7 @@ def ensure_scheduler_tables():
                             f"ON {table_name} (organization_id)"
                         ))
                     logger.info(f"Added organization_id column to {table_name}")
-        logger.info("Smart Scheduler tables created/verified")
+        logger.info("Smart Scheduler tables created/verified (legacy + new)")
     except Exception as e:
         logger.warning(f"Could not create Smart Scheduler tables: {e}")
 
