@@ -586,6 +586,12 @@ static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 logger.info(f"✅ Static files mounted at /static from {static_dir.absolute()}")
 
+# Mount reports directory for shareable HTML reports (no auth required)
+reports_dir = PathLib("static/reports")
+reports_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/reports", StaticFiles(directory=str(reports_dir), html=True), name="reports")
+logger.info(f"✅ Reports mounted at /reports from {reports_dir.absolute()}")
+
 # Register standardized exception handlers for consistent error responses
 try:
     from utils.error_handling import register_exception_handlers
