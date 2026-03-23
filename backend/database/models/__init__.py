@@ -1187,14 +1187,6 @@ __all__ = [
     "AppointmentLocation",
 
     # =====================
-    # A/B Testing
-    # =====================
-    "ABTest",
-    "ABTestResult",
-    "ABTestStatus",
-    "ABTestElementType",
-
-    # =====================
     # Cancellation Policy
     # =====================
     "CancellationPolicy",

@@ -321,7 +321,7 @@ async def public_reschedule_confirm(
     # Basic validation (compare naive UTC to naive UTC)
     if new_end <= new_start:
         raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "End time must be after start time"))
-    now_utc_naive = datetime.utcnow()
+    now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
     if new_start < now_utc_naive:
         raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Cannot reschedule to a past time"))
 

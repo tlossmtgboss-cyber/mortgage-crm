@@ -187,8 +187,8 @@ function Calendar() {
   useEffect(() => {
     calendarSettingsAPI.getAvailability()
       .then(res => {
-        if (res?.data?.schedule) {
-          setViewHours(deriveViewHours(res.data.schedule));
+        if (res?.data?.business_hours) {
+          setViewHours(deriveViewHours(res.data.business_hours));
         }
       })
       .catch(() => {});

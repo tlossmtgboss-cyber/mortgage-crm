@@ -51,7 +51,8 @@ def _validate_url(value: Optional[str]) -> Optional[str]:
             logger.warning(f"Rejected URL with unsafe scheme: {parsed.scheme}")
             return None
         return value
-    except Exception:
+    except Exception as e:
+        logger.debug(f"URL validation failed for input: {e}")
         return None
 
 

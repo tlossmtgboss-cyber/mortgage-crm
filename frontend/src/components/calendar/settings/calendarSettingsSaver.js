@@ -161,10 +161,10 @@ export async function handleSave(activeSection, sections, dispatch) {
       try {
         const advanced = sections.advanced.data;
         await calendarSettingsAPI.updateAdvancedSettings({
-          ai_settings: {
-            ai_scheduling_enabled: advanced.auto_confirm_appointments !== false,
-            smart_reminders_enabled: advanced.enable_waitlist || false,
-          },
+          calendar_feed_enabled: advanced.calendar_feed_enabled || false,
+          auto_confirm_appointments: advanced.auto_confirm_appointments !== false,
+          show_timezone_selector: advanced.show_timezone_selector !== false,
+          enable_waitlist: advanced.enable_waitlist || false,
         });
         toast.success('Advanced settings saved');
         dispatch({ type: SAVE_SUCCESS, section: 'advanced' });
@@ -199,10 +199,10 @@ export async function handleSave(activeSection, sections, dispatch) {
         // Save Advanced data
         const advanced = sections.advanced.data;
         await calendarSettingsAPI.updateAdvancedSettings({
-          ai_settings: {
-            ai_scheduling_enabled: advanced.auto_confirm_appointments !== false,
-            smart_reminders_enabled: advanced.enable_waitlist || false,
-          },
+          calendar_feed_enabled: advanced.calendar_feed_enabled || false,
+          auto_confirm_appointments: advanced.auto_confirm_appointments !== false,
+          show_timezone_selector: advanced.show_timezone_selector !== false,
+          enable_waitlist: advanced.enable_waitlist || false,
         });
         dispatch({ type: SAVE_SUCCESS, section: 'advanced' });
 

@@ -300,8 +300,22 @@ async def update_availability_settings(
             params["timezone"] = settings.timezone
 
         if settings.business_hours is not None or settings.time_blocks is not None:
-            wh = {}
+            # Load existing working_hours first to avoid wiping unmodified parts
+            existing_wh = {}
+            if config_id:
+                wh_result = db.execute(text(
+                    "SELECT working_hours FROM scheduler_configs WHERE id = :cid"
+                ), {"cid": config_id})
+                wh_row = wh_result.fetchone()
+                if wh_row and wh_row.working_hours:
+                    existing_wh = dict(wh_row.working_hours) if isinstance(wh_row.working_hours, dict) else json.loads(wh_row.working_hours)
+
+            wh = existing_wh
             if settings.business_hours is not None:
+                # Remove old day entries before merging new ones
+                for key in list(wh.keys()):
+                    if not key.startswith("_"):
+                        del wh[key]
                 for day, day_settings in settings.business_hours.items():
                     wh[day] = day_settings.dict()
             if settings.time_blocks is not None:
@@ -684,8 +698,13 @@ async def update_notification_settings(
         result = db.execute(text("""
             UPDATE scheduler_configs
             SET notification_settings = :notif, updated_at = CURRENT_TIMESTAMP
-            WHERE organization_id = :org_id
-              AND (user_id = :user_id OR team_id = :org_id)
+            WHERE id = (
+                SELECT id FROM scheduler_configs
+                WHERE organization_id = :org_id
+                  AND (user_id = :user_id OR team_id = :org_id)
+                ORDER BY user_id IS NOT NULL DESC
+                LIMIT 1
+            )
         """), {"notif": notif_json, "user_id": user.id, "org_id": org_id})
 
         if result.rowcount == 0:
@@ -794,8 +813,13 @@ async def update_booking_page_settings(
         result = db.execute(text("""
             UPDATE scheduler_configs
             SET landing_page_settings = :lps, updated_at = CURRENT_TIMESTAMP
-            WHERE organization_id = :org_id
-              AND (user_id = :user_id OR team_id = :org_id)
+            WHERE id = (
+                SELECT id FROM scheduler_configs
+                WHERE organization_id = :org_id
+                  AND (user_id = :user_id OR team_id = :org_id)
+                ORDER BY user_id IS NOT NULL DESC
+                LIMIT 1
+            )
         """), {"lps": lps_json, "user_id": user.id, "org_id": org_id})
 
         if result.rowcount == 0:

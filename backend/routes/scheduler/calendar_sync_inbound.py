@@ -283,8 +283,8 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
         subscription_id = notification.get("subscriptionId", "")
         client_state = notification.get("clientState", "")
 
-        # Verify the client state HMAC signature
-        _, _, state_valid = _verify_channel_token(client_state)
+        # Verify the client state HMAC signature and extract org/user IDs
+        verified_org_id, verified_user_id, state_valid = _verify_channel_token(client_state)
         if not state_valid:
             logger.warning(
                 "Outlook webhook: rejected notification with invalid clientState "
@@ -305,6 +305,8 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
                 change_type=change_type,
                 subscription_id=subscription_id,
                 client_state=client_state,
+                verified_org_id=verified_org_id,
+                verified_user_id=verified_user_id,
             )
             total_processed += sync_result.get("events_processed", 0)
             total_errors += sync_result.get("errors", 0)
@@ -677,6 +679,8 @@ async def _process_outlook_notification(
     change_type: str,
     subscription_id: str,
     client_state: str,
+    verified_org_id: int = None,
+    verified_user_id: int = None,
 ) -> Dict[str, Any]:
     """
     Process a single Microsoft Graph change notification.
@@ -692,16 +696,9 @@ async def _process_outlook_notification(
     events_processed = 0
     errors = 0
 
-    # Parse org_id and user_id from client_state ("perennia_{org}_{user}")
-    organization_id = None
-    user_id = None
-    if client_state and client_state.startswith("perennia_"):
-        try:
-            parts = client_state.split("_")
-            organization_id = int(parts[1])
-            user_id = int(parts[2]) if len(parts) > 2 else None
-        except (ValueError, IndexError):
-            pass
+    # Use org_id and user_id from verified HMAC token (passed by caller)
+    organization_id = verified_org_id
+    user_id = verified_user_id
 
     if not user_id or not organization_id:
         logger.warning(
@@ -1155,7 +1152,8 @@ def _parse_outlook_datetime(dt_dict: Dict[str, Any]) -> Optional[datetime]:
                     import pytz
                     tz = pytz.timezone(tz_name)
                     dt = tz.localize(dt).astimezone(pytz.utc)
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Failed pytz conversion for tz '{tz_name}', falling back to UTC: {e}")
                     dt = dt.replace(tzinfo=timezone.utc)
         return dt
     except (ValueError, TypeError):

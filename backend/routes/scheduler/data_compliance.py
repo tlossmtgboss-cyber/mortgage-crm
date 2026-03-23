@@ -228,8 +228,8 @@ async def export_borrower_data(
             FROM slot_holds WHERE held_for_email = :email AND organization_id = :org_id
         """), {"email": email, "org_id": org_id}).fetchall()
         exported_slot_holds = [dict(row._mapping) for row in slot_holds]
-    except Exception:
-        logger.warning("Failed to export slot_holds for %s", _mask_email(email), exc_info=True)
+    except Exception as e:
+        logger.warning("Failed to export slot_holds for %s: %s", _mask_email(email), e, exc_info=True)
         exported_slot_holds = []
 
     export_payload = {
@@ -860,8 +860,8 @@ async def get_compliance_status(
                     )
                     if tcpa:
                         consented_phones.add(phone)
-                except Exception:
-                    logger.warning("Failed to check TCPAConsent for phone in consent audit", exc_info=True)
+                except Exception as e:
+                    logger.warning("Failed to check TCPAConsent for phone in consent audit: %s", e, exc_info=True)
 
             consent_verified = len(consented_phones)
             consent_missing = len(unique_phones) - consent_verified
@@ -1244,8 +1244,8 @@ async def get_consent_audit(
                     elif getattr(pref, "sms_consent", False):
                         has_consent = True
                         consent_source = "channel_preference"
-        except Exception:
-            logger.warning("Failed to check ChannelPreference for consent verification", exc_info=True)
+        except Exception as e:
+            logger.warning("Failed to check ChannelPreference for consent verification: %s", e, exc_info=True)
 
         # Fallback: TCPAConsent table
         if not has_consent and consent_source != "opted_out":
@@ -1265,8 +1265,8 @@ async def get_consent_audit(
                 if tcpa:
                     has_consent = True
                     consent_source = f"tcpa_consent ({tcpa.consent_type})"
-            except Exception:
-                logger.warning("Failed to check TCPAConsent for consent verification", exc_info=True)
+            except Exception as e:
+                logger.warning("Failed to check TCPAConsent for consent verification: %s", e, exc_info=True)
 
         if has_consent:
             with_consent += 1

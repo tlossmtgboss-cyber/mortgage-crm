@@ -123,9 +123,9 @@ def add_email_suppression(email: str, reason: str, event_type: str, org_id: int 
         db.commit()
         masked = f"{email_lower[:2]}***@{email_lower.split('@')[-1] if '@' in email_lower else '***'}"
         logger.info(f"Email suppressed: {masked} ({event_type})")
-    except Exception:
+    except Exception as e:
         db.rollback()
-        logger.exception("Failed to add email suppression")
+        logger.exception("Failed to add email suppression: %s", e)
     finally:
         if close_session:
             db.close()
@@ -152,9 +152,9 @@ def remove_email_suppression(email: str, db: Optional[Session] = None) -> bool:
             db.commit()
             return True
         return False
-    except Exception:
+    except Exception as e:
         db.rollback()
-        logger.exception("Failed to remove email suppression")
+        logger.exception("Failed to remove email suppression: %s", e)
         return False
     finally:
         if close_session:
@@ -199,7 +199,8 @@ def _verify_unsubscribe_token(token: str) -> str:
 
     try:
         email = base64.urlsafe_b64decode(email_b64.encode()).decode("utf-8")
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to decode unsubscribe token: {e}")
         raise ValueError("Invalid unsubscribe token")
 
     if not email or "@" not in email:
@@ -251,14 +252,16 @@ async def sendgrid_event_webhook(request: Request, db: Session = Depends(get_db)
         import json
         try:
             events = json.loads(body)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to parse SendGrid webhook JSON: {e}")
             raise HTTPException(status_code=400, detail="Invalid JSON payload")
     else:
         # No verification key configured — accept but log warning
         logger.warning("SENDGRID_WEBHOOK_VERIFICATION_KEY not set — webhook not verified")
         try:
             events = await request.json()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to parse SendGrid webhook JSON (unverified): {e}")
             raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     if not isinstance(events, list):

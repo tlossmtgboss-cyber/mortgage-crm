@@ -12,7 +12,7 @@ References:
     - Section 3.3.11: TEXT value type (escaping)
 """
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Any, Dict, List, Optional
 import uuid
 
@@ -162,7 +162,7 @@ def generate_ics_event(
     if attendees is None:
         attendees = []
 
-    dtstamp = format_datetime_utc(datetime.utcnow())
+    dtstamp = format_datetime_utc(datetime.now(timezone.utc))
     dtstart = format_datetime_utc(start)
     dtend = format_datetime_utc(end)
 
@@ -276,7 +276,7 @@ def generate_ics_multi_event(
     Returns:
         Complete ICS string with CRLF endings.
     """
-    dtstamp = format_datetime_utc(datetime.utcnow())
+    dtstamp = format_datetime_utc(datetime.now(timezone.utc))
 
     lines: List[str] = [
         "BEGIN:VCALENDAR",

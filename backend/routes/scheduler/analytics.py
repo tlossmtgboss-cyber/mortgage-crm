@@ -11,7 +11,7 @@ All endpoints require authentication and are scoped to the user's organization.
 """
 
 import math
-from datetime import date as date_type, datetime
+from datetime import date as date_type, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -189,7 +189,7 @@ def _effective_date_range(
         return start_date.isoformat(), end_date.isoformat()
     # Compute from period string for informational purposes
     from datetime import timedelta
-    now = datetime.utcnow().date()
+    now = datetime.now(timezone.utc).date()
     days_map = {"7d": 7, "30d": 30, "90d": 90}
     delta = days_map.get(period, 30)
     return (now - timedelta(days=delta)).isoformat(), now.isoformat()

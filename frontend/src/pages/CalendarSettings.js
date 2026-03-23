@@ -190,7 +190,7 @@ function CalendarSettings() {
     setIsTesting(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/smart-scheduler-settings/test`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/scheduler/settings/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ test_duration: availability.buffer_minutes || 30 }),

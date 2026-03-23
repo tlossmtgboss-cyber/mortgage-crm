@@ -120,7 +120,8 @@ async def _get_widget_config_impl(
             _m = get_models()
             BookingLink = _m.get("BookingLink") if _m else None
             AppointmentType = _m.get("AppointmentType") if _m else None
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to load scheduler models via _helpers: {e}")
             BookingLink = None
             AppointmentType = None
 

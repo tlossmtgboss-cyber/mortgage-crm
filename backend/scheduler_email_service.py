@@ -437,7 +437,7 @@ def send_appointment_confirmation_email(
             header_color=_HEADER_COLOR_TEAL,
             heading="Appointment Confirmed!",
             body_content=body_content,
-            footer_text="Sent from Perennia AI - Perennia AI",
+            footer_text="Sent from Perennia AI",
         )
 
         video_link_text = f"\nJoin Video Call: {video_link}" if video_link else ""
@@ -727,7 +727,7 @@ def send_team_member_notification_email(
             header_color=_HEADER_COLOR_TEAL,
             heading="New Appointment Scheduled",
             body_content=body_content,
-            footer_text="Sent from Perennia AI - Perennia AI",
+            footer_text="Sent from Perennia AI",
         )
 
         video_link_text = f"\nVideo Call Link: {video_link}" if video_link else ""
@@ -763,7 +763,7 @@ A calendar invite is attached to this email.
                     attendee_name=team_member_name,
                     organizer_email=os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL),
                     organizer_name="Perennia AI",
-                    description=f"Meeting with {attendee_name}\\nEmail: {attendee_email}\\nPhone: {attendee_phone or 'N/A'}",
+                    description=f"Meeting with {attendee_name}\nEmail: {attendee_email}\nPhone: {attendee_phone or 'N/A'}",
                     video_link=video_link
                 )
 
@@ -855,7 +855,7 @@ def send_appointment_cancellation_email(
             header_color=_HEADER_COLOR_RED,
             heading="Appointment Cancelled",
             body_content=body_content,
-            footer_text="Sent from Perennia AI - Perennia AI",
+            footer_text="Sent from Perennia AI",
         )
 
         text_content = f"""
@@ -947,7 +947,7 @@ def send_team_member_cancellation_email(
             header_color=_HEADER_COLOR_RED,
             heading="Appointment Cancelled",
             body_content=body_content,
-            footer_text="Sent from Perennia AI - Perennia AI",
+            footer_text="Sent from Perennia AI",
         )
 
         text_content = f"""

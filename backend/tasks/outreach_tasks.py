@@ -152,7 +152,7 @@ async def process_no_activity_triggers(db_session):
         # Get no_activity triggers
         result = db_session.execute(text("""
             SELECT * FROM outreach_triggers
-            WHERE trigger_type = 'no_activity' AND is_active = 1
+            WHERE trigger_type = 'no_activity' AND is_active = TRUE
         """))
         triggers = [dict(row._mapping) for row in result.fetchall()]
 
@@ -171,18 +171,18 @@ async def process_no_activity_triggers(db_session):
                 inactive_result = db_session.execute(text("""
                     SELECT l.id, l.first_name, l.email, l.phone
                     FROM leads l
-                    WHERE l.status NOT IN ('converted', 'closed', 'dead')
-                    AND l.updated_at < datetime('now', :days_ago)
+                    WHERE l.stage NOT IN ('converted', 'closed', 'dead')
+                    AND l.updated_at < CURRENT_TIMESTAMP - CAST(:days_ago AS INTEGER) * INTERVAL '1 day'
                     AND l.id NOT IN (
                         SELECT DISTINCT lead_id FROM trigger_execution_log
                         WHERE trigger_id = :trigger_id
-                        AND executed_at > datetime('now', :cooldown)
+                        AND executed_at > CURRENT_TIMESTAMP - CAST(:cooldown AS INTEGER) * INTERVAL '1 day'
                     )
                     LIMIT 50
                 """), {
-                    "days_ago": f"-{days_threshold} days",
+                    "days_ago": days_threshold,
                     "trigger_id": trigger["id"],
-                    "cooldown": f"-{days_threshold} days"
+                    "cooldown": days_threshold
                 })
 
                 inactive_leads = inactive_result.fetchall()
@@ -213,13 +213,13 @@ def setup_outreach_scheduler(scheduler, SessionLocal):
         """Wrapper to run drip campaigns with DB session"""
         import asyncio
         with SessionLocal() as db:
-            asyncio.get_event_loop().run_until_complete(process_drip_campaigns(db))
+            asyncio.run(process_drip_campaigns(db))
 
     def run_no_activity_triggers():
         """Wrapper to run no-activity triggers with DB session"""
         import asyncio
         with SessionLocal() as db:
-            asyncio.get_event_loop().run_until_complete(process_no_activity_triggers(db))
+            asyncio.run(process_no_activity_triggers(db))
 
     # Process drip campaigns every 15 minutes
     scheduler.add_job(

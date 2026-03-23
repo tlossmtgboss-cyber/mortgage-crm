@@ -99,7 +99,7 @@ class WorkingHoursDay(BaseModel):
 
 
 class SchedulerConfigCreate(BaseModel):
-    config_name: str = Field(..., min_length=1, max_length=200)
+    config_name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=2000)
     timezone: str = "America/Chicago"
     default_duration_minutes: int = Field(30, ge=5, le=480)
@@ -164,8 +164,8 @@ class LandingPageSettings(BaseModel):
 # =============================================================================
 
 class AppointmentTypeCreate(BaseModel):
-    type_key: str = Field(..., min_length=1, max_length=100)
-    type_name: str = Field(..., min_length=1, max_length=200)
+    type_key: str = Field(..., min_length=1, max_length=50)
+    type_name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=2000)
     meeting_type: Optional[str] = "custom"
     default_duration_minutes: int = Field(30, ge=15, le=480)
@@ -372,7 +372,7 @@ class BlockedTimeCreate(BaseModel):
 
 class BookingLinkCreate(BaseModel):
     slug: str = Field(..., min_length=2, max_length=100, pattern=r'^[a-z0-9][a-z0-9\-_]*$')
-    link_name: str = Field(..., min_length=1, max_length=200)
+    link_name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=1000)
     appointment_type_ids: List[int] = []
     single_appointment_type_id: Optional[int] = None
