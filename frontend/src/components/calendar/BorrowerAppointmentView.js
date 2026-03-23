@@ -190,6 +190,7 @@ const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
       onClick={handleClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `View details for ${appt.title || appt.appointment_type_name || 'appointment'} on ${formatFullDate(appt.scheduled_start)} at ${formatTime(appt.scheduled_start)}` : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
     >
       {/* Time column */}
@@ -202,7 +203,9 @@ const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
       <div className="bav-card-details">
         <div className="bav-card-title-row">
           <span className="bav-card-title">{appt.title || appt.appointment_type_name || 'Appointment'}</span>
-          <StatusBadge status={appt.status} size="sm" />
+          <span role="status" aria-label={`Appointment status: ${appt.status}`}>
+            <StatusBadge status={appt.status} size="sm" />
+          </span>
         </div>
 
         {/* Meeting mode + LO */}
@@ -234,6 +237,7 @@ const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
               target="_blank"
               rel="noopener noreferrer"
               className="bav-btn bav-btn-primary"
+              aria-label={`Join meeting for ${appt.title || appt.appointment_type_name || 'appointment'}`}
               onClick={(e) => e.stopPropagation()}
             >
               Join Meeting
@@ -243,6 +247,7 @@ const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
             <a
               href={appt.reschedule_url}
               className="bav-btn bav-btn-secondary"
+              aria-label={`Reschedule appointment: ${appt.title || appt.appointment_type_name || 'appointment'}`}
               onClick={(e) => e.stopPropagation()}
             >
               Reschedule
@@ -284,15 +289,15 @@ const LoadingSkeleton = () => (
 );
 
 const ErrorState = ({ message, onRetry }) => (
-  <div className="bav-error">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="bav-error-icon">
+  <div className="bav-error" role="alert" aria-live="polite">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="bav-error-icon" aria-hidden="true">
       <circle cx="12" cy="12" r="10" />
       <path d="M12 8v4M12 16h.01" />
     </svg>
     <h3 className="bav-error-title">Unable to load appointments</h3>
     <p className="bav-error-text">{message}</p>
     {onRetry && (
-      <button className="bav-btn bav-btn-primary" onClick={onRetry}>
+      <button className="bav-btn bav-btn-primary" aria-label="Retry loading appointments" onClick={onRetry}>
         Try Again
       </button>
     )}
@@ -423,7 +428,7 @@ export default function BorrowerAppointmentView({
 
       {/* Upcoming appointments grouped by day */}
       {upcomingGroups.length > 0 ? (
-        <div className="bav-groups">
+        <div className="bav-groups" aria-live="polite">
           {upcomingGroups.map((group) => (
             <div key={group.label} className="bav-group">
               <h3 className="bav-group-label">{group.label}</h3>
@@ -445,7 +450,7 @@ export default function BorrowerAppointmentView({
       {showPast && pastGroups.length > 0 && (
         <>
           <h2 className="bav-heading bav-heading-past">Past Appointments</h2>
-          <div className="bav-groups bav-groups-past">
+          <div className="bav-groups bav-groups-past" aria-live="polite">
             {pastGroups.map((group) => (
               <div key={group.label} className="bav-group">
                 <h3 className="bav-group-label">{group.label}</h3>

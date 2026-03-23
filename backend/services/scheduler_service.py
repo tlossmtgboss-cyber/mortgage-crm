@@ -1207,16 +1207,21 @@ class SchedulerService:
            recovery step (understanding email, reschedule SMS, final email).
 
         The NoShowRecoveryService methods are async, so we bridge via
-        asyncio.run() since BackgroundScheduler runs in a thread.
+        a new event loop since BackgroundScheduler runs in a background thread
+        (which has no running event loop).
         """
         import asyncio
 
         logger.info("Running no-show recovery job")
         session = get_db_session()
 
+        # Create a dedicated event loop for this thread to avoid
+        # "cannot be called from a running event loop" errors
+        loop = asyncio.new_event_loop()
+
         try:
             # Phase 1: Detect new no-shows and start recovery
-            detect_result = asyncio.run(
+            detect_result = loop.run_until_complete(
                 self._run_no_show_detection(session)
             )
             if detect_result.get("detected", 0) > 0:
@@ -1226,7 +1231,7 @@ class SchedulerService:
                 )
 
             # Phase 2: Execute pending recovery steps for existing no-shows
-            recovery_result = asyncio.run(
+            recovery_result = loop.run_until_complete(
                 self._run_no_show_follow_up(session)
             )
             if recovery_result.get("steps_executed", 0) > 0:
@@ -1242,6 +1247,7 @@ class SchedulerService:
             session.rollback()
             logger.error(f"No-show recovery job failed: {e}", exc_info=True)
         finally:
+            loop.close()
             session.close()
 
     async def _run_no_show_detection(self, session) -> Dict:

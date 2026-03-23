@@ -39,53 +39,57 @@ def get_test_session(engine=None):
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def create_all_tables(Base, engine):
-    """Create all ORM tables with multi-pass dependency resolution.
-
-    Some models reference tables from factory functions that may not be
-    registered in Base.metadata. This function:
-    1. Drops the public schema cleanly
-    2. Creates tables in multiple passes — each pass creates tables whose
-       FK dependencies are now satisfied
-    3. Skips tables with truly unresolvable FK references (factory models)
-    """
-    # First try the fast path (works when all FK targets are registered)
+def _register_factory_models(Base):
+    """Register models defined in factory functions so create_all() can resolve FKs."""
     try:
-        Base.metadata.drop_all(bind=engine)
-        Base.metadata.create_all(bind=engine)
-        return
+        from workflow_config_models import create_workflow_config_models
+        create_workflow_config_models(Base)
     except Exception as e:
-        logger.debug(f"Bulk create_all failed ({e}), falling back to multi-pass creation")
+        logger.debug(f"Workflow config models registration skipped: {e}")
+    try:
+        from models.workflow_sla import create_workflow_sla_models
+        create_workflow_sla_models(Base)
+    except Exception as e:
+        logger.debug(f"Workflow SLA models registration skipped: {e}")
 
-    # Clean slate — drop entire schema
+
+def create_all_tables(Base, engine):
+    """Create all ORM tables for testing.
+
+    1. Registers factory-defined models (workflow tables)
+    2. Drops the public schema cleanly (avoids stale constraint issues)
+    3. Uses create_all() for correct dependency ordering
+    4. Falls back to multi-pass per-table creation if create_all() fails
+    """
+    _register_factory_models(Base)
+
+    # Clean slate — drop entire schema to avoid stale constraints/indexes
     with engine.connect() as conn:
         conn.execute(text("DROP SCHEMA public CASCADE"))
         conn.execute(text("CREATE SCHEMA public"))
         conn.commit()
 
-    # Multi-pass creation: keep iterating until no more tables can be created
+    # Try bulk create_all (handles dependency ordering)
+    try:
+        Base.metadata.create_all(bind=engine)
+        return
+    except Exception as e:
+        logger.debug(f"Bulk create_all failed ({e}), falling back to multi-pass")
+
+    # Multi-pass fallback for any remaining FK resolution issues
     remaining = set(Base.metadata.tables.keys())
-    max_passes = 10
-
-    for pass_num in range(max_passes):
-        created_this_pass = []
-
-        for table_name in list(remaining):
-            table = Base.metadata.tables[table_name]
+    for _ in range(15):
+        created = []
+        for tname in list(remaining):
+            table = Base.metadata.tables[tname]
             try:
                 table.create(bind=engine, checkfirst=True)
-                created_this_pass.append(table_name)
+                created.append(tname)
             except Exception:
-                pass  # Will retry next pass
-
-        for name in created_this_pass:
-            remaining.discard(name)
-
-        if not remaining or not created_this_pass:
+                pass
+        remaining -= set(created)
+        if not remaining or not created:
             break
 
     if remaining:
-        logger.info(
-            f"Skipped {len(remaining)} tables with unresolvable FK targets: "
-            f"{sorted(remaining)}"
-        )
+        logger.info(f"Skipped {len(remaining)} tables: {sorted(remaining)[:10]}...")

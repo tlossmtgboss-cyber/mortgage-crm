@@ -732,10 +732,14 @@ async def api_click_to_dial(
     from database.models import CallLog
 
     # Rate limit: max 10 click-to-dial calls per minute per user
-    recent_calls = db.query(func.count(CallLog.id)).filter(
+    organization_id = getattr(current_user, 'organization_id', None)
+    rate_q = db.query(func.count(CallLog.id)).filter(
         CallLog.agent_id == current_user.id,
         CallLog.created_at >= datetime.utcnow() - timedelta(minutes=1)
-    ).scalar() or 0
+    )
+    if organization_id:
+        rate_q = rate_q.filter(CallLog.organization_id == organization_id)
+    recent_calls = rate_q.scalar() or 0
     if recent_calls >= 10:
         raise HTTPException(status_code=429, detail="Rate limit exceeded: max 10 calls per minute")
 
@@ -750,7 +754,7 @@ async def api_click_to_dial(
         lead_id=request.lead_id,
         loan_id=request.loan_id,
         task_id=request.task_id,
-        organization_id=getattr(current_user, 'organization_id', None),
+        organization_id=organization_id,
     )
 
     return ClickToDialResponse(

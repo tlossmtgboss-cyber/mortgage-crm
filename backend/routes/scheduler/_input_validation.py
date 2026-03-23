@@ -5,14 +5,15 @@ public error masking, and Cloudflare Turnstile CAPTCHA verification.
 
 from fastapi import HTTPException
 from typing import Optional
-import html
 import logging
 import os
 
 try:
     import nh3
 except ImportError:
-    nh3 = None
+    raise ImportError(
+        "nh3 is required for HTML sanitization. Install with: pip install nh3"
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,7 @@ def _sanitize_text(value: Optional[str]) -> Optional[str]:
     """Sanitize user-supplied text input, stripping all HTML."""
     if value is None:
         return None
-    if nh3:
-        return nh3.clean(value, tags=set())
-    # Fallback: html.escape
-    return html.escape(value)
+    return nh3.clean(value, tags=set())
 
 
 def _mask_email(email: Optional[str]) -> str:
@@ -76,6 +74,28 @@ def _validate_phone(phone: Optional[str]) -> Optional[str]:
                 status_code=400,
                 detail="Invalid phone number format. Please use a valid phone number."
             )
+        # NANP area code validation for US numbers (+1NXXNXXXXXX)
+        cleaned = phone.strip()
+        if cleaned.startswith("+1") and len(cleaned) == 12:
+            area_code = cleaned[2:5]
+            # NANP: first digit must be 2-9
+            if area_code[0] in "01":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid phone number: invalid area code."
+                )
+            # Reject N11 service codes (211, 311, 411, 511, 611, 711, 811, 911)
+            if area_code[1:] == "11":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid phone number: invalid area code."
+                )
+            # Reject 555 (reserved for fictional use)
+            if area_code == "555":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid phone number: invalid area code."
+                )
     elif len(digits_only) == 10:
         pass  # Standard US 10-digit
     elif len(digits_only) == 11 and digits_only.startswith('1'):
@@ -125,6 +145,21 @@ if _IS_PRODUCTION and not _TURNSTILE_SECRET_KEY:
 
 _turnstile_client = None
 
+# Turnstile token replay prevention
+_used_turnstile_tokens: set = set()
+_TURNSTILE_TOKEN_MAX_CACHE = 10000
+
+
+def _check_turnstile_replay(token: str) -> bool:
+    """Check if a Turnstile token has already been used. Returns False if replay detected."""
+    if token in _used_turnstile_tokens:
+        return False  # Replay detected
+    _used_turnstile_tokens.add(token)
+    # Cleanup if cache grows too large
+    if len(_used_turnstile_tokens) > _TURNSTILE_TOKEN_MAX_CACHE:
+        _used_turnstile_tokens.clear()
+    return True
+
 
 def _get_turnstile_client():
     global _turnstile_client
@@ -161,6 +196,9 @@ async def _verify_turnstile_token(token: str) -> bool:
         )
         result = response.json()
         if result.get("success"):
+            if not _check_turnstile_replay(token):
+                logger.warning("Turnstile token replay detected — rejecting reused token")
+                return False
             return True
         logger.warning(f"Turnstile verification failed: {result.get('error-codes', [])}")
         return False

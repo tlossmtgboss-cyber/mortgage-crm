@@ -42,7 +42,7 @@ class PresentationScenario(Base):
 
     # Foreign Keys
     loan_id = Column(Integer, ForeignKey('loans.id'), nullable=False, index=True)
-    borrower_id = Column(Integer, ForeignKey('borrowers.id'), index=True)
+    borrower_id = Column(Integer, ForeignKey('borrower_profiles.id'), index=True)
     created_by_user_id = Column(Integer, ForeignKey('users.id'), index=True)
 
     # Scenario Type
@@ -108,7 +108,7 @@ class QuoteRequest(Base):
 
     # Foreign Keys
     loan_id = Column(Integer, ForeignKey('loans.id'), nullable=False, index=True)
-    borrower_id = Column(Integer, ForeignKey('borrowers.id'), index=True)
+    borrower_id = Column(Integer, ForeignKey('borrower_profiles.id'), index=True)
     scenario_id = Column(UUID(as_uuid=True), ForeignKey('presentation_scenarios.id'), index=True)
     assigned_to_user_id = Column(Integer, ForeignKey('users.id'), index=True)
 

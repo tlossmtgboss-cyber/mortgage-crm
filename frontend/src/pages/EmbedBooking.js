@@ -28,6 +28,7 @@ export default function EmbedBooking() {
       justifyContent: 'center',
       background: theme.background || '#f8fafc',
       padding: 16,
+      boxSizing: 'border-box',
     }}>
       <EmbeddableBookingWidget
         slug={slug}

@@ -57,6 +57,7 @@ class VapiCallNote(Base):
     __tablename__ = "vapi_call_notes"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     call_id = Column(Integer, ForeignKey('vapi_calls.id'), nullable=False)
 
     note_type = Column(String(50))  # action_item, follow_up, information, etc.
@@ -130,6 +131,7 @@ class CallRoutingLog(Base):
     __tablename__ = "call_routing_log"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     call_id = Column(Integer, ForeignKey('vapi_calls.id'), nullable=True)
     vapi_call_id = Column(String(255), index=True)
 
@@ -165,6 +167,7 @@ class StaffAvailability(Base):
     __tablename__ = "staff_availability"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False)
 
     # Availability Status
@@ -201,6 +204,7 @@ class CallTransferConfig(Base):
     __tablename__ = "call_transfer_config"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
 
     # Transfer Rules
     caller_type = Column(String(50))  # new_lead, active_loan, etc.

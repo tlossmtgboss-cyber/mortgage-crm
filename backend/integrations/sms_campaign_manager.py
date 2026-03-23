@@ -83,12 +83,14 @@ class SMSCampaignManager:
         rate_limiter=None,
         template_engine=None,
         db=None,
+        organization_id: Optional[int] = None,
     ):
         self.sms_service = sms_service
         self.compliance_gate = compliance_gate
         self.rate_limiter = rate_limiter
         self.template_engine = template_engine
         self.db = db
+        self._org_id = organization_id
         self._active_campaigns: Dict[str, SMSCampaign] = {}
         self._loaded_from_db = False
 
@@ -111,11 +113,12 @@ class SMSCampaignManager:
         try:
             from database.models.sms_persistence import SMSCampaignRecord
 
-            record = (
-                session.query(SMSCampaignRecord)
-                .filter(SMSCampaignRecord.campaign_id == campaign.campaign_id)
-                .first()
+            query = session.query(SMSCampaignRecord).filter(
+                SMSCampaignRecord.campaign_id == campaign.campaign_id
             )
+            if self._org_id:
+                query = query.filter(SMSCampaignRecord.organization_id == self._org_id)
+            record = query.first()
 
             config = {
                 "campaign_type": campaign.campaign_type.value,
@@ -190,11 +193,12 @@ class SMSCampaignManager:
                 CampaignStatus.RUNNING.value,
                 CampaignStatus.PAUSED.value,
             ]
-            records = (
-                session.query(SMSCampaignRecord)
-                .filter(SMSCampaignRecord.status.in_(active_statuses))
-                .all()
+            query = session.query(SMSCampaignRecord).filter(
+                SMSCampaignRecord.status.in_(active_statuses)
             )
+            if self._org_id:
+                query = query.filter(SMSCampaignRecord.organization_id == self._org_id)
+            records = query.all()
 
             loaded = 0
             for rec in records:
@@ -429,8 +433,13 @@ class SMSCampaignManager:
 _manager: Optional[SMSCampaignManager] = None
 
 
-def get_campaign_manager(**kwargs) -> SMSCampaignManager:
+def get_campaign_manager(organization_id: Optional[int] = None, **kwargs) -> SMSCampaignManager:
+    """Get or create a campaign manager.
+
+    When *organization_id* is provided the returned manager is scoped to
+    that tenant's data only (prevents cross-tenant cache leakage).
+    """
     global _manager
     if _manager is None:
-        _manager = SMSCampaignManager(**kwargs)
+        _manager = SMSCampaignManager(organization_id=organization_id, **kwargs)
     return _manager

@@ -99,13 +99,69 @@ def compute_signature(payload_bytes: bytes, secret: str) -> str:
     """Compute HMAC-SHA256 signature for webhook payload verification.
 
     The consumer should recompute this from the raw request body and compare
-    against the X-Webhook-Signature header value.
+    against the X-Webhook-Signature header value using verify_signature().
     """
     return hmac.new(
         secret.encode("utf-8"),
         payload_bytes,
         hashlib.sha256,
     ).hexdigest()
+
+
+def verify_signature(payload_bytes: bytes, secret: str, received_signature: str) -> bool:
+    """Verify a webhook signature using constant-time comparison.
+
+    Args:
+        payload_bytes: The raw request body bytes.
+        secret: The shared webhook secret.
+        received_signature: The signature from X-Webhook-Signature header
+                           (with or without 'sha256=' prefix).
+
+    Returns:
+        True if the signature is valid.
+    """
+    expected = compute_signature(payload_bytes, secret)
+    # Strip 'sha256=' prefix if present
+    received = received_signature
+    if received.startswith("sha256="):
+        received = received[7:]
+    return hmac.compare_digest(expected, received)
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Reject webhook URLs targeting private/internal networks (SSRF protection).
+
+    Raises ValueError if the URL resolves to a private IP range or uses
+    a non-HTTPS scheme (except for localhost in development).
+    """
+    from urllib.parse import urlparse
+    import ipaddress
+    import socket
+
+    parsed = urlparse(url)
+
+    # Require http(s) scheme
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Webhook URL must use http or https scheme, got: {parsed.scheme}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Webhook URL must have a hostname")
+
+    # Block obviously internal hostnames
+    _BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "metadata.google.internal"}
+    if hostname.lower() in _BLOCKED_HOSTS:
+        raise ValueError(f"Webhook URL cannot target internal host: {hostname}")
+
+    # Resolve hostname and check for private IP ranges
+    try:
+        addrs = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+        for family, type_, proto, canonname, sockaddr in addrs:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                raise ValueError(f"Webhook URL resolves to private/reserved IP: {ip}")
+    except socket.gaierror:
+        raise ValueError(f"Webhook URL hostname cannot be resolved: {hostname}")
 
 
 # ============================================================================
@@ -362,6 +418,9 @@ async def register_webhook(
     invalid = [e for e in events if e not in VALID_EVENTS and e != "*"]
     if invalid:
         raise ValueError(f"Invalid event types: {invalid}. Valid: {sorted(VALID_EVENTS)}")
+
+    # SSRF protection: reject URLs targeting private/internal networks
+    _validate_webhook_url(url)
 
     subscription = WebhookSubscription(
         organization_id=organization_id,

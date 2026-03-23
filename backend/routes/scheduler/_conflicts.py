@@ -7,6 +7,8 @@ from sqlalchemy import and_
 from datetime import timedelta
 from typing import Optional
 import logging
+import asyncio
+import hashlib
 
 from smart_scheduler_models import AppointmentStatus
 from routes.scheduler.constants import DEFAULT_APPOINTMENT_DURATION_MINUTES
@@ -16,8 +18,8 @@ from routes.scheduler._input_validation import _mask_email
 logger = logging.getLogger(__name__)
 
 
-def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time,
-                                 org_id: int = None, exclude_appointment_id=None):
+async def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time,
+                                       org_id: int = None, exclude_appointment_id=None):
     """
     Check for overlapping appointments using advisory lock + SELECT FOR UPDATE.
     Raises HTTPException 409 if a conflict is found or rows are locked by another transaction.
@@ -38,14 +40,16 @@ def _check_appointment_conflict(db, assigned_user_id: int, start_time, end_time,
     # Uses pg_try_advisory_xact_lock (non-blocking) with retry to avoid
     # indefinite blocking that could exhaust the connection pool under load.
     try:
-        start_epoch = int(start_time.timestamp()) if hasattr(start_time, 'timestamp') else 0
-        lock_key = (assigned_user_id * 1_000_000 + (start_epoch % 1_000_000)) & 0x7FFFFFFFFFFFFFFF
-        import time as _time
+        # Build a collision-resistant lock key from user_id + date + time slot
+        # using SHA-256, taking lower 63 bits to fit Postgres bigint range.
+        start_iso = start_time.isoformat() if hasattr(start_time, 'isoformat') else str(start_time)
+        key_str = f"{assigned_user_id}:{start_iso}"
+        lock_key = int.from_bytes(hashlib.sha256(key_str.encode()).digest()[:8], 'big') & 0x7FFFFFFFFFFFFFFF
         for _attempt in range(3):
             result = db.execute(sa_text("SELECT pg_try_advisory_xact_lock(:key) AS acquired"), {"key": lock_key})
             if result.scalar():
                 break
-            _time.sleep(0.05)
+            await asyncio.sleep(0.05)
         else:
             logger.error("Advisory lock not acquired after 3 attempts for key %s — rejecting booking", lock_key)
             raise HTTPException(

@@ -21,7 +21,8 @@ Usage:
 """
 
 from datetime import datetime, timedelta, timezone, date
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 import logging
@@ -217,6 +218,14 @@ class ComplianceSchedulingService:
         if not loan:
             return []
 
+        return self._evaluate_loan_object(loan)
+
+    def _evaluate_loan_object(self, loan) -> List[Dict[str, Any]]:
+        """Evaluate an already-loaded loan object against all compliance rules.
+
+        This avoids the N+1 query pattern when called from evaluate_pipeline,
+        which already has the loan objects loaded in a single batch query.
+        """
         if loan.stage in TERMINAL_STAGES:
             return []
 
@@ -264,9 +273,19 @@ class ComplianceSchedulingService:
 
         loans = query.all()
 
-        all_suggestions = []
+        # M13: Deduplicate loans by ID to avoid checking the same loan N times
+        seen_ids: Set[int] = set()
+        unique_loans = []
         for loan in loans:
-            loan_suggestions = await self.evaluate_loan(loan.id, organization_id)
+            if loan.id not in seen_ids:
+                seen_ids.add(loan.id)
+                unique_loans.append(loan)
+
+        all_suggestions = []
+        for loan in unique_loans:
+            # H12: Evaluate directly against the already-loaded loan object
+            # instead of re-querying each loan by ID (N+1 query elimination)
+            loan_suggestions = self._evaluate_loan_object(loan)
             all_suggestions.extend(loan_suggestions)
 
         # Sort: critical > high > medium, then by days_remaining ascending
@@ -701,7 +720,7 @@ class ComplianceSchedulingService:
             return 0
         if isinstance(dt, datetime):
             dt = dt.date() if dt.tzinfo is None else dt.astimezone(timezone.utc).date()
-        today = date.today()
+        today = datetime.now(timezone.utc).date()
         return (today - dt).days
 
     def _days_until(self, dt) -> int:
@@ -710,7 +729,7 @@ class ComplianceSchedulingService:
             return 999
         if isinstance(dt, datetime):
             dt = dt.date() if dt.tzinfo is None else dt.astimezone(timezone.utc).date()
-        today = date.today()
+        today = datetime.now(timezone.utc).date()
         return (dt - today).days
 
     @staticmethod
@@ -723,13 +742,23 @@ class ComplianceSchedulingService:
         return dt.strftime("%m/%d/%Y")
 
     @staticmethod
-    def _next_business_day_10am() -> datetime:
-        """Return next business day at 10:00 AM UTC (approximation)."""
-        now = datetime.now(timezone.utc)
-        candidate = now.replace(hour=15, minute=0, second=0, microsecond=0)  # 10 AM CT = 15 UTC
-        if candidate <= now:
+    def _next_business_day_10am(tz_name: Optional[str] = None) -> datetime:
+        """Return next business day at 10:00 AM in the given timezone.
+
+        Uses ZoneInfo for proper DST handling. Falls back to America/New_York
+        if no timezone is provided. Returns a UTC datetime.
+        """
+        try:
+            local_tz = ZoneInfo(tz_name) if tz_name else ZoneInfo("America/New_York")
+        except (KeyError, Exception):
+            local_tz = ZoneInfo("America/New_York")
+
+        now_local = datetime.now(local_tz)
+        candidate = now_local.replace(hour=10, minute=0, second=0, microsecond=0)
+        if candidate <= now_local:
             candidate += timedelta(days=1)
         # Skip weekends
         while candidate.weekday() >= 5:
             candidate += timedelta(days=1)
-        return candidate
+        # Convert to UTC for storage
+        return candidate.astimezone(timezone.utc)

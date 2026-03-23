@@ -46,6 +46,13 @@ def _mask_pii_in_changes(changes: dict) -> dict:
     for key, value in changes.items():
         if isinstance(value, dict):
             masked[key] = _mask_pii_in_changes(value)
+        elif isinstance(value, list):
+            masked[key] = [
+                _mask_pii_in_changes(item) if isinstance(item, dict)
+                else _mask_pii_value(key, item) if key in (_PII_EMAIL_KEYS | _PII_PHONE_KEYS | _PII_NAME_KEYS)
+                else item
+                for item in value
+            ]
         elif key in (_PII_EMAIL_KEYS | _PII_PHONE_KEYS | _PII_NAME_KEYS):
             masked[key] = _mask_pii_value(key, value)
         else:
@@ -90,3 +97,16 @@ def _audit_log(db, org_id: int, user_id: int, action: str, entity_type: str,
         # Don't commit here -- let the caller's commit include this
     except Exception as e:
         logger.error("AUDIT_LOG_WRITE_FAILURE", exc_info=True)
+        # Compliance-critical operations (GDPR deletion, data export, purge)
+        # must not proceed if the audit trail cannot be written.
+        _COMPLIANCE_CRITICAL_ACTIONS = {
+            'data_deletion', 'data_export', 'data_deleted', 'data_exported',
+            'pii_purged', 'gdpr_delete', 'gdpr_export',
+            'borrower_data_deleted', 'borrower_data_exported',
+            'consent_revoked',
+        }
+        if action in _COMPLIANCE_CRITICAL_ACTIONS:
+            raise RuntimeError(
+                f"COMPLIANCE_AUDIT_REQUIRED: Audit log write failed for "
+                f"compliance-critical action '{action}'. Aborting operation."
+            ) from e

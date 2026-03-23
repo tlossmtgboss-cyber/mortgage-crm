@@ -586,7 +586,10 @@ class ComplianceChecker:
             return
 
         try:
-            self.db.query(ActiveCall).filter(ActiveCall.call_sid == call_sid).delete()
+            release_q = self.db.query(ActiveCall).filter(ActiveCall.call_sid == call_sid)
+            if self.organization_id:
+                release_q = release_q.filter(ActiveCall.organization_id == self.organization_id)
+            release_q.delete()
             self.db.commit()
             logger.info(f"Released contact lock for call {call_sid}")
         except Exception as e:
@@ -594,16 +597,19 @@ class ComplianceChecker:
             self.db.rollback()
 
     def cleanup_expired_locks(self):
-        """Remove all expired locks"""
+        """Remove expired locks (scoped to organization if set)"""
         try:
             from database.models import ActiveCall
         except ImportError:
             return
 
         try:
-            deleted = self.db.query(ActiveCall).filter(
+            cleanup_q = self.db.query(ActiveCall).filter(
                 ActiveCall.expires_at <= datetime.utcnow()
-            ).delete()
+            )
+            if self.organization_id:
+                cleanup_q = cleanup_q.filter(ActiveCall.organization_id == self.organization_id)
+            deleted = cleanup_q.delete()
             if deleted > 0:
                 self.db.commit()
                 logger.info(f"Cleaned up {deleted} expired contact locks")
@@ -693,7 +699,10 @@ class ComplianceChecker:
             )
             return False, no_contact_reason
 
-        # Look up ChannelPreference for this lead
+        # Look up ChannelPreference for this lead.
+        # TENANT SAFETY: lead_id is already org-validated -- either passed as
+        # contact_id (caller responsibility) or resolved via Lead phone lookup
+        # above which filters by self.organization_id.
         pref = self.db.query(ChannelPreference).filter(
             ChannelPreference.lead_id == lead_id
         ).first()

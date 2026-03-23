@@ -23,6 +23,7 @@ class AgentTelephonySettings(Base):
     """Telephony settings for each agent/user"""
     __tablename__ = "agent_telephony_settings"
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     cell_phone = Column(String, nullable=True)
     business_caller_id = Column(String, nullable=True)
@@ -40,6 +41,7 @@ class VerifiedCallerId(Base):
     """Verified caller IDs for the organization"""
     __tablename__ = "verified_caller_ids"
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     phone_number = Column(String, unique=True, nullable=False)
     friendly_name = Column(String)
     verification_status = Column(String, default="pending")  # pending, verified, failed
@@ -81,6 +83,7 @@ class DialerSessionTask(Base):
         Index('ix_dialer_session_tasks_order', 'session_id', 'task_order'),
     )
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     session_id = Column(Integer, ForeignKey("dialer_sessions.id"), nullable=False)
     contact_phone = Column(String, nullable=False)
     contact_name = Column(String)

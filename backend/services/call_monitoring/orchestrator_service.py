@@ -577,9 +577,11 @@ class CallMonitoringOrchestrator:
         # Create agent run record
         self.db.execute(text("""
             INSERT INTO agent_runs (
-                id, session_id, agent_type, status, input_context, started_at
+                id, session_id, agent_type, status, input_context, started_at,
+                organization_id
             ) VALUES (
-                :id, :session_id, :agent_type, 'running', :context, :started_at
+                :id, :session_id, :agent_type, 'running', :context, :started_at,
+                :org_id
             )
         """), {
             "id": run_id,
@@ -587,6 +589,7 @@ class CallMonitoringOrchestrator:
             "agent_type": agent_type,
             "context": json.dumps({k: v for k, v in context.items() if k != 'transcript'}),
             "started_at": start_time,
+            "org_id": self.organization_id,
         })
         self.db.commit()
 
@@ -603,7 +606,21 @@ class CallMonitoringOrchestrator:
             processing_time_ms = int((end_time - start_time).total_seconds() * 1000)
 
             # Update run record
-            self.db.execute(text("""
+            run_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+            run_update_params = {
+                "id": run_id,
+                "artifacts": json.dumps(result.artifacts),
+                "raw_output": result.raw_output if hasattr(result, 'raw_output') else None,
+                "model_used": result.model_used if hasattr(result, 'model_used') else None,
+                "tokens_used": result.tokens_used,
+                "input_tokens": result.input_tokens if hasattr(result, 'input_tokens') else None,
+                "output_tokens": result.output_tokens if hasattr(result, 'output_tokens') else None,
+                "processing_time_ms": processing_time_ms,
+                "completed_at": end_time,
+            }
+            if self.organization_id:
+                run_update_params["org_id"] = self.organization_id
+            self.db.execute(text(f"""
                 UPDATE agent_runs
                 SET status = 'completed',
                     artifacts = :artifacts,
@@ -615,18 +632,8 @@ class CallMonitoringOrchestrator:
                     processing_time_ms = :processing_time_ms,
                     completed_at = :completed_at,
                     updated_at = NOW()
-                WHERE id = :id
-            """), {
-                "id": run_id,
-                "artifacts": json.dumps(result.artifacts),
-                "raw_output": result.raw_output if hasattr(result, 'raw_output') else None,
-                "model_used": result.model_used if hasattr(result, 'model_used') else None,
-                "tokens_used": result.tokens_used,
-                "input_tokens": result.input_tokens if hasattr(result, 'input_tokens') else None,
-                "output_tokens": result.output_tokens if hasattr(result, 'output_tokens') else None,
-                "processing_time_ms": processing_time_ms,
-                "completed_at": end_time,
-            })
+                WHERE id = :id {run_org_filter}
+            """), run_update_params)
             self.db.commit()
 
             self._log_event(session_id, 'agent_completed', {
@@ -648,14 +655,18 @@ class CallMonitoringOrchestrator:
             logger.error(f"Agent {agent_type} failed: {e}")
 
             # Update run record with error
-            self.db.execute(text("""
+            run_fail_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+            run_fail_params = {"id": run_id, "error": "Internal server error"}
+            if self.organization_id:
+                run_fail_params["org_id"] = self.organization_id
+            self.db.execute(text(f"""
                 UPDATE agent_runs
                 SET status = 'failed',
                     error_message = :error,
                     completed_at = NOW(),
                     updated_at = NOW()
-                WHERE id = :id
-            """), {"id": run_id, "error": "Internal server error"})
+                WHERE id = :id {run_fail_org_filter}
+            """), run_fail_params)
             self.db.commit()
 
             self._log_event(session_id, 'agent_failed', {
@@ -740,15 +751,19 @@ class CallMonitoringOrchestrator:
 
         # Get Loan Officer + Production Assistant in a single query (replaces 2 queries)
         if user_id:
-            lo_pa_data = self.db.execute(text("""
+            lo_org_filter = "AND lo.organization_id = :org_id" if self.organization_id else ""
+            lo_params = {"id": user_id}
+            if self.organization_id:
+                lo_params["org_id"] = self.organization_id
+            lo_pa_data = self.db.execute(text(f"""
                 SELECT
                     lo.id, lo.name, lo.email, lo.phone, lo.calendar_link,
                     pa.id as pa_id, pa.name as pa_name, pa.email as pa_email, pa.phone as pa_phone
                 FROM users lo
                 LEFT JOIN user_assignments ua ON ua.loan_officer_id = lo.id AND ua.role = 'production_assistant'
                 LEFT JOIN users pa ON pa.id = ua.assistant_id
-                WHERE lo.id = :id
-            """), {"id": user_id}).fetchone()
+                WHERE lo.id = :id {lo_org_filter}
+            """), lo_params).fetchone()
 
             if lo_pa_data:
                 team['loan_officer'] = {
@@ -771,13 +786,17 @@ class CallMonitoringOrchestrator:
         borrowers = []
         if loan_id:
             # Get primary borrower from loan
-            borrower_data = self.db.execute(text("""
+            borrower_org_filter = "AND l.organization_id = :org_id" if self.organization_id else ""
+            borrower_params = {"loan_id": loan_id}
+            if self.organization_id:
+                borrower_params["org_id"] = self.organization_id
+            borrower_data = self.db.execute(text(f"""
                 SELECT c.id, c.first_name, c.last_name, c.email, c.phone,
                        c.preferred_contact_time
                 FROM contacts c
                 JOIN loans l ON l.borrower_id = c.id OR l.co_borrower_id = c.id
-                WHERE l.id = :loan_id
-            """), {"loan_id": loan_id}).fetchall()
+                WHERE l.id = :loan_id {borrower_org_filter}
+            """), borrower_params).fetchall()
 
             for i, bd in enumerate(borrower_data):
                 borrowers.append({
@@ -816,7 +835,11 @@ class CallMonitoringOrchestrator:
 
         # Get loan team in a single JOIN query (replaces 5 separate queries)
         if loan_id:
-            loan_team = self.db.execute(text("""
+            loan_team_org_filter = "AND l.organization_id = :org_id" if self.organization_id else ""
+            loan_team_params = {"loan_id": loan_id}
+            if self.organization_id:
+                loan_team_params["org_id"] = self.organization_id
+            loan_team = self.db.execute(text(f"""
                 SELECT
                     proc.id as proc_id, proc.name as proc_name, proc.email as proc_email,
                     tc.id as tc_id, tc.name as tc_name, tc.contact_name as tc_contact,
@@ -833,8 +856,8 @@ class CallMonitoringOrchestrator:
                 LEFT JOIN insurance_agents ia ON ia.id = l.insurance_agent_id
                 LEFT JOIN realtor_assignments ba ON ba.loan_id = l.id AND ba.role = 'buyer_agent'
                 LEFT JOIN realtor_assignments la ON la.loan_id = l.id AND la.role = 'listing_agent'
-                WHERE l.id = :loan_id
-            """), {"loan_id": loan_id}).fetchone()
+                WHERE l.id = :loan_id {loan_team_org_filter}
+            """), loan_team_params).fetchone()
 
             if loan_team:
                 if loan_team[0]:  # proc_id
@@ -1015,9 +1038,13 @@ class CallMonitoringOrchestrator:
 
         # Get run IDs for linking
         run_ids = {}
-        runs = self.db.execute(text("""
-            SELECT id, agent_type FROM agent_runs WHERE session_id = :session_id
-        """), {"session_id": session_id}).fetchall()
+        runs_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+        runs_params = {"session_id": session_id}
+        if self.organization_id:
+            runs_params["org_id"] = self.organization_id
+        runs = self.db.execute(text(f"""
+            SELECT id, agent_type FROM agent_runs WHERE session_id = :session_id {runs_org_filter}
+        """), runs_params).fetchall()
         for run in runs:
             run_ids[run[1]] = str(run[0])
 
@@ -1193,11 +1220,13 @@ class CallMonitoringOrchestrator:
             INSERT INTO intake_field_updates (
                 id, session_id, artifact_id, entity_type, entity_id,
                 field_name, field_path, current_value, proposed_value,
-                confidence, evidence_text, has_conflict
+                confidence, evidence_text, has_conflict,
+                organization_id
             ) VALUES (
                 gen_random_uuid(), :session_id, :artifact_id, :entity_type, :entity_id,
                 :field_name, :field_path, :current_value, :proposed_value,
-                :confidence, :evidence_text, :has_conflict
+                :confidence, :evidence_text, :has_conflict,
+                :org_id
             )
         """), {
             "session_id": session_id,
@@ -1211,6 +1240,7 @@ class CallMonitoringOrchestrator:
             "confidence": item.get('confidence'),
             "evidence_text": item.get('evidence'),
             "has_conflict": has_conflict,
+            "org_id": self.organization_id,
         })
 
     # =========================================================================
@@ -1516,9 +1546,13 @@ class CallMonitoringOrchestrator:
 
             lead_id = session.get('lead_id')
             if lead_id and (not contact_name or not contact_email):
+                cal_lead_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+                cal_lead_params = {"lid": lead_id}
+                if self.organization_id:
+                    cal_lead_params["org_id"] = self.organization_id
                 lead_row = self.db.execute(text(
-                    "SELECT id, first_name, last_name, email, phone FROM leads WHERE id = :lid"
-                ), {"lid": lead_id}).fetchone()
+                    f"SELECT id, first_name, last_name, email, phone FROM leads WHERE id = :lid {cal_lead_org_filter}"
+                ), cal_lead_params).fetchone()
                 if lead_row:
                     contact_id = lead_row[0]
                     contact_name = contact_name or f"{lead_row[1] or ''} {lead_row[2] or ''}".strip()
@@ -1573,11 +1607,13 @@ class CallMonitoringOrchestrator:
             INSERT INTO calendar_events (
                 id, title, description, event_type, start_time, duration_minutes,
                 meeting_type, participants, loan_id, lead_id,
-                created_by, source, source_id, status
+                created_by, source, source_id, status,
+                organization_id
             ) VALUES (
                 :id, :title, :description, :event_type, :start_time, :duration_minutes,
                 :meeting_type, :participants, :loan_id, :lead_id,
-                :created_by, 'call_monitoring', :source_id, 'scheduled'
+                :created_by, 'call_monitoring', :source_id, 'scheduled',
+                :org_id
             )
         """), {
             "id": event_id,
@@ -1592,6 +1628,7 @@ class CallMonitoringOrchestrator:
             "lead_id": session.get('lead_id'),
             "created_by": user_id,
             "source_id": session.get('id'),
+            "org_id": self.organization_id,
         })
 
         return event_id
@@ -1639,10 +1676,12 @@ class CallMonitoringOrchestrator:
         self.db.execute(text("""
             INSERT INTO tasks (
                 id, title, description, loan_id, lead_id, assigned_to,
-                created_by, status, priority, task_type, source, source_id
+                created_by, status, priority, task_type, source, source_id,
+                organization_id
             ) VALUES (
                 :id, :title, :description, :loan_id, :lead_id, :assigned_to,
-                :created_by, 'open', 'medium', 'follow_up', 'call_monitoring', :source_id
+                :created_by, 'open', 'medium', 'follow_up', 'call_monitoring', :source_id,
+                :org_id
             )
         """), {
             "id": reminder_id,
@@ -1653,6 +1692,7 @@ class CallMonitoringOrchestrator:
             "assigned_to": session.get('user_id'),
             "created_by": user_id,
             "source_id": session.get('id'),
+            "org_id": self.organization_id,
         })
 
         return reminder_id
@@ -1674,9 +1714,13 @@ class CallMonitoringOrchestrator:
 
         lead_id = session.get('lead_id')
         if lead_id and (not recipient_email or not recipient_name):
+            email_lead_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+            email_lead_params = {"lid": lead_id}
+            if self.organization_id:
+                email_lead_params["org_id"] = self.organization_id
             lead_row = self.db.execute(text(
-                "SELECT first_name, last_name, email FROM leads WHERE id = :lid"
-            ), {"lid": lead_id}).fetchone()
+                f"SELECT first_name, last_name, email FROM leads WHERE id = :lid {email_lead_org_filter}"
+            ), email_lead_params).fetchone()
             if lead_row:
                 recipient_name = recipient_name or f"{lead_row[0] or ''} {lead_row[1] or ''}".strip()
                 recipient_email = recipient_email or (lead_row[2] or '')
@@ -1689,11 +1733,13 @@ class CallMonitoringOrchestrator:
             INSERT INTO email_drafts (
                 user_id, lead_id, loan_id, recipient_email, recipient_name,
                 subject, body_html, body_text, source_type, source_id,
-                status, created_at, updated_at
+                status, created_at, updated_at,
+                organization_id
             ) VALUES (
                 :user_id, :lead_id, :loan_id, :recipient_email, :recipient_name,
                 :subject, :body_html, :body_text, 'call_recording', :source_id,
-                'draft', NOW(), NOW()
+                'draft', NOW(), NOW(),
+                :org_id
             )
         """), {
             "user_id": session.get('user_id') or user_id,
@@ -1705,6 +1751,7 @@ class CallMonitoringOrchestrator:
             "body_html": body_html,
             "body_text": body_text,
             "source_id": session.get('id'),
+            "org_id": self.organization_id,
         })
 
         return draft_id
@@ -1722,13 +1769,18 @@ class CallMonitoringOrchestrator:
         if not lo_id:
             return None
 
-        pa_data = self.db.execute(text("""
+        pa_org_filter = "AND u.organization_id = :org_id" if self.organization_id else ""
+        pa_params = {"lo_id": lo_id}
+        if self.organization_id:
+            pa_params["org_id"] = self.organization_id
+        pa_data = self.db.execute(text(f"""
             SELECT u.id
             FROM users u
             JOIN user_assignments ua ON ua.assistant_id = u.id
             WHERE ua.loan_officer_id = :lo_id AND ua.role = 'production_assistant'
+            {pa_org_filter}
             LIMIT 1
-        """), {"lo_id": lo_id}).fetchone()
+        """), pa_params).fetchone()
 
         pa_id = str(pa_data[0]) if pa_data else lo_id  # Fallback to LO if no PA
 
@@ -1737,10 +1789,12 @@ class CallMonitoringOrchestrator:
         self.db.execute(text("""
             INSERT INTO tasks (
                 id, title, description, loan_id, lead_id, assigned_to,
-                created_by, status, priority, task_type, source, source_id
+                created_by, status, priority, task_type, source, source_id,
+                organization_id
             ) VALUES (
                 :id, :title, :description, :loan_id, :lead_id, :assigned_to,
-                :created_by, 'open', 'high', 'scheduling', 'call_monitoring', :source_id
+                :created_by, 'open', 'high', 'scheduling', 'call_monitoring', :source_id,
+                :org_id
             )
         """), {
             "id": task_id,
@@ -1751,6 +1805,7 @@ class CallMonitoringOrchestrator:
             "assigned_to": pa_id,
             "created_by": user_id,
             "source_id": session.get('id'),
+            "org_id": self.organization_id,
         })
 
         return task_id
@@ -1769,10 +1824,12 @@ class CallMonitoringOrchestrator:
         self.db.execute(text("""
             INSERT INTO tasks (
                 id, title, description, loan_id, lead_id, assigned_to,
-                created_by, status, priority, source, source_id
+                created_by, status, priority, source, source_id,
+                organization_id
             ) VALUES (
                 :id, :title, :description, :loan_id, :lead_id, :assigned_to,
-                :created_by, 'open', :priority, 'call_monitoring', :source_id
+                :created_by, 'open', :priority, 'call_monitoring', :source_id,
+                :org_id
             )
         """), {
             "id": task_id,
@@ -1784,6 +1841,7 @@ class CallMonitoringOrchestrator:
             "created_by": user_id,
             "priority": structured_data.get('priority', 'medium'),
             "source_id": session.get('id'),
+            "org_id": self.organization_id,
         })
 
         return task_id
@@ -1803,10 +1861,12 @@ class CallMonitoringOrchestrator:
         self.db.execute(text("""
             INSERT INTO smart_docs_requests (
                 id, loan_id, lead_id, document_type, description,
-                status, requested_by, source, source_id
+                status, requested_by, source, source_id,
+                organization_id
             ) VALUES (
                 :id, :loan_id, :lead_id, :doc_type, :description,
-                'requested', :requested_by, 'call_monitoring', :source_id
+                'requested', :requested_by, 'call_monitoring', :source_id,
+                :org_id
             )
         """), {
             "id": request_id,
@@ -1816,6 +1876,7 @@ class CallMonitoringOrchestrator:
             "description": content,
             "requested_by": user_id,
             "source_id": session.get('id'),
+            "org_id": self.organization_id,
         })
 
         return request_id
@@ -1829,11 +1890,15 @@ class CallMonitoringOrchestrator:
     ) -> Optional[str]:
         """Apply an intake field update."""
         # Get the intake field update record
-        field_update = self.db.execute(text("""
+        ifu_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+        ifu_params = {"artifact_id": artifact_id}
+        if self.organization_id:
+            ifu_params["org_id"] = self.organization_id
+        field_update = self.db.execute(text(f"""
             SELECT id, entity_type, entity_id, field_path, proposed_value
             FROM intake_field_updates
-            WHERE artifact_id = :artifact_id
-        """), {"artifact_id": artifact_id}).fetchone()
+            WHERE artifact_id = :artifact_id {ifu_org_filter}
+        """), ifu_params).fetchone()
 
         if not field_update:
             return None
@@ -1845,21 +1910,29 @@ class CallMonitoringOrchestrator:
 
         # Apply the update to the entity
         # This is simplified - real implementation would handle JSON paths properly
+        entity_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+        entity_params = {"id": entity_id, "value": proposed_value}
+        if self.organization_id:
+            entity_params["org_id"] = self.organization_id
         if entity_type == 'loan' and field_path:
             self.db.execute(text(f"""
-                UPDATE loans SET {field_path} = :value WHERE id = :id
-            """), {"id": entity_id, "value": proposed_value})
+                UPDATE loans SET {field_path} = :value WHERE id = :id {entity_org_filter}
+            """), entity_params)
         elif entity_type == 'lead' and field_path:
             self.db.execute(text(f"""
-                UPDATE leads SET {field_path} = :value WHERE id = :id
-            """), {"id": entity_id, "value": proposed_value})
+                UPDATE leads SET {field_path} = :value WHERE id = :id {entity_org_filter}
+            """), entity_params)
 
         # Update intake field status
-        self.db.execute(text("""
+        ifu_update_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+        ifu_update_params = {"id": str(field_update[0]), "user_id": user_id}
+        if self.organization_id:
+            ifu_update_params["org_id"] = self.organization_id
+        self.db.execute(text(f"""
             UPDATE intake_field_updates
             SET status = 'applied', applied_by = :user_id, applied_at = NOW()
-            WHERE id = :id
-        """), {"id": str(field_update[0]), "user_id": user_id})
+            WHERE id = :id {ifu_update_org_filter}
+        """), ifu_update_params)
 
         return str(field_update[0])
 
@@ -1894,10 +1967,12 @@ class CallMonitoringOrchestrator:
         self.db.execute(text("""
             INSERT INTO loan_conditions (
                 id, loan_id, condition_type, category, description,
-                status, priority, created_by, source, source_id
+                status, priority, created_by, source, source_id,
+                organization_id
             ) VALUES (
                 :id, :loan_id, :condition_type, :category, :description,
-                'open', :priority, :created_by, 'call_monitoring', :source_id
+                'open', :priority, :created_by, 'call_monitoring', :source_id,
+                :org_id
             )
         """), {
             "id": condition_id,
@@ -1908,6 +1983,7 @@ class CallMonitoringOrchestrator:
             "priority": 'high' if risk_flag[4] in ('high', 'critical') else 'medium',
             "created_by": user_id,
             "source_id": session.get('id'),
+            "org_id": self.organization_id,
         })
 
         # Update risk flag with condition link
@@ -1932,19 +2008,23 @@ class CallMonitoringOrchestrator:
             return None
 
         # Get participants
-        participants = self.db.execute(text("""
+        review_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
+        review_params = {"session_id": session_id}
+        if self.organization_id:
+            review_params["org_id"] = self.organization_id
+        participants = self.db.execute(text(f"""
             SELECT id, role, name, phone, email, speaker_label, talk_time_seconds
             FROM call_participants
-            WHERE session_id = :session_id
-        """), {"session_id": session_id}).fetchall()
+            WHERE session_id = :session_id {review_org_filter}
+        """), review_params).fetchall()
 
         # Get agent runs
-        runs = self.db.execute(text("""
+        runs = self.db.execute(text(f"""
             SELECT id, agent_type, status, artifacts, tokens_used,
                    processing_time_ms, started_at, completed_at
             FROM agent_runs
-            WHERE session_id = :session_id
-        """), {"session_id": session_id}).fetchall()
+            WHERE session_id = :session_id {review_org_filter}
+        """), review_params).fetchall()
 
         # Get artifacts
         artifacts = self.get_artifacts(session_id)
@@ -2007,9 +2087,11 @@ class CallMonitoringOrchestrator:
         redacted = _redact_payload(payload)
         self.db.execute(text("""
             INSERT INTO agent_events (
-                session_id, run_id, event_type, agent_type, payload, transcript_timestamp_ms
+                session_id, run_id, event_type, agent_type, payload, transcript_timestamp_ms,
+                organization_id
             ) VALUES (
-                :session_id, :run_id, :event_type, :agent_type, :payload, :timestamp_ms
+                :session_id, :run_id, :event_type, :agent_type, :payload, :timestamp_ms,
+                :org_id
             )
         """), {
             "session_id": session_id,
@@ -2018,6 +2100,7 @@ class CallMonitoringOrchestrator:
             "agent_type": agent_type,
             "payload": json.dumps(redacted),
             "timestamp_ms": transcript_timestamp_ms,
+            "org_id": self.organization_id,
         })
 
     # =========================================================================
@@ -2042,10 +2125,12 @@ class CallMonitoringOrchestrator:
         self.db.execute(text("""
             INSERT INTO call_participants (
                 id, session_id, role, name, phone, email,
-                speaker_label, contact_id, user_id, joined_at
+                speaker_label, contact_id, user_id, joined_at,
+                organization_id
             ) VALUES (
                 :id, :session_id, :role, :name, :phone, :email,
-                :speaker_label, :contact_id, :user_id, :joined_at
+                :speaker_label, :contact_id, :user_id, :joined_at,
+                :org_id
             )
         """), {
             "id": participant_id,
@@ -2058,6 +2143,7 @@ class CallMonitoringOrchestrator:
             "contact_id": contact_id,
             "user_id": user_id,
             "joined_at": now,
+            "org_id": self.organization_id,
         })
 
         # Also update session participants JSON

@@ -60,9 +60,10 @@ class SMSScheduler:
     QUIET_HOUR_START = 21  # 9 PM
     QUIET_HOUR_END = 8     # 8 AM
 
-    def __init__(self, sms_service=None, db=None):
+    def __init__(self, sms_service=None, db=None, organization_id: Optional[int] = None):
         self.sms_service = sms_service
         self.db = db
+        self._org_id = organization_id
         self._jobs: Dict[str, ScheduledSMSJob] = {}
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -87,11 +88,12 @@ class SMSScheduler:
         try:
             from database.models.sms_persistence import ScheduledSMSJobRecord
 
-            record = (
-                session.query(ScheduledSMSJobRecord)
-                .filter(ScheduledSMSJobRecord.job_id == job.job_id)
-                .first()
+            query = session.query(ScheduledSMSJobRecord).filter(
+                ScheduledSMSJobRecord.job_id == job.job_id
             )
+            if self._org_id:
+                query = query.filter(ScheduledSMSJobRecord.organization_id == self._org_id)
+            record = query.first()
 
             config = {
                 "template_key": job.template_key,
@@ -157,11 +159,12 @@ class SMSScheduler:
         try:
             from database.models.sms_persistence import ScheduledSMSJobRecord
 
-            records = (
-                session.query(ScheduledSMSJobRecord)
-                .filter(ScheduledSMSJobRecord.status == JobStatus.PENDING.value)
-                .all()
+            query = session.query(ScheduledSMSJobRecord).filter(
+                ScheduledSMSJobRecord.status == JobStatus.PENDING.value
             )
+            if self._org_id:
+                query = query.filter(ScheduledSMSJobRecord.organization_id == self._org_id)
+            records = query.all()
 
             loaded = 0
             for rec in records:
@@ -404,10 +407,15 @@ class SMSScheduler:
 _scheduler: Optional[SMSScheduler] = None
 
 
-def get_scheduler(sms_service=None, db=None) -> SMSScheduler:
+def get_scheduler(sms_service=None, db=None, organization_id: Optional[int] = None) -> SMSScheduler:
+    """Get or create an SMS scheduler.
+
+    When *organization_id* is provided the returned scheduler is scoped to
+    that tenant's data only (prevents cross-tenant cache leakage).
+    """
     global _scheduler
     if _scheduler is None:
-        _scheduler = SMSScheduler(sms_service=sms_service, db=db)
+        _scheduler = SMSScheduler(sms_service=sms_service, db=db, organization_id=organization_id)
     return _scheduler
 
 

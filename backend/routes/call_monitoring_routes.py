@@ -231,16 +231,22 @@ async def lookup_caller(
         ]
 
         # Search in leads table first (most common for new calls)
-        lead_query = text("""
+        org_id = current_user.get("organization_id")
+        org_filter = "AND organization_id = :org_id" if org_id else ""
+        lead_query = text(f"""
             SELECT id, first_name, last_name, email, phone, status,
                    loan_amount, property_address, created_at
             FROM leads
             WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :phone_pattern
+            {org_filter}
             ORDER BY created_at DESC
             LIMIT 1
         """)
 
-        lead = db.execute(lead_query, {"phone_pattern": f"%{normalized_phone[-10:]}"}).fetchone()
+        lead_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
+        if org_id:
+            lead_params["org_id"] = org_id
+        lead = db.execute(lead_query, lead_params).fetchone()
 
         if lead:
             return CallerLookupResponse(
@@ -262,16 +268,21 @@ async def lookup_caller(
             )
 
         # Search in contacts table
-        contact_query = text("""
+        contact_org_filter = "AND organization_id = :org_id" if org_id else ""
+        contact_query = text(f"""
             SELECT id, first_name, last_name, email, phone, contact_type,
                    company, created_at
             FROM contacts
             WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :phone_pattern
+            {contact_org_filter}
             ORDER BY created_at DESC
             LIMIT 1
         """)
 
-        contact = db.execute(contact_query, {"phone_pattern": f"%{normalized_phone[-10:]}"}).fetchone()
+        contact_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
+        if org_id:
+            contact_params["org_id"] = org_id
+        contact = db.execute(contact_query, contact_params).fetchone()
 
         if contact:
             return CallerLookupResponse(
@@ -292,16 +303,21 @@ async def lookup_caller(
             )
 
         # Search in loans table (borrower info)
-        loan_query = text("""
+        loan_org_filter = "AND organization_id = :org_id" if org_id else ""
+        loan_query = text(f"""
             SELECT id, borrower_first_name, borrower_last_name, borrower_email,
                    borrower_phone, status, loan_amount, property_address
             FROM loans
             WHERE REGEXP_REPLACE(borrower_phone, '[^0-9]', '', 'g') LIKE :phone_pattern
+            {loan_org_filter}
             ORDER BY created_at DESC
             LIMIT 1
         """)
 
-        loan = db.execute(loan_query, {"phone_pattern": f"%{normalized_phone[-10:]}"}).fetchone()
+        loan_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
+        if org_id:
+            loan_params["org_id"] = org_id
+        loan = db.execute(loan_query, loan_params).fetchone()
 
         if loan:
             return CallerLookupResponse(
@@ -425,6 +441,8 @@ async def search_clients(
         if not name and not email:
             return {"found": False, "clients": []}
 
+        org_id = current_user.get("organization_id")
+        org_filter = "AND organization_id = :org_id" if org_id else ""
         clients = []
 
         # Search leads by name
@@ -432,31 +450,39 @@ async def search_clients(
             name_parts = name.strip().split()
             if len(name_parts) >= 2:
                 # Full name search
-                lead_query = text("""
+                lead_query = text(f"""
                     SELECT id, first_name, last_name, email, phone, status, created_at
                     FROM leads
                     WHERE LOWER(first_name) LIKE LOWER(:first_pattern)
                       AND LOWER(last_name) LIKE LOWER(:last_pattern)
+                    {org_filter}
                     ORDER BY created_at DESC
                     LIMIT 5
                 """)
-                results = db.execute(lead_query, {
+                lead_params = {
                     "first_pattern": f"{name_parts[0]}%",
                     "last_pattern": f"{name_parts[1]}%",
-                }).fetchall()
+                }
+                if org_id:
+                    lead_params["org_id"] = org_id
+                results = db.execute(lead_query, lead_params).fetchall()
             else:
                 # Single name search (first or last)
-                lead_query = text("""
+                lead_query = text(f"""
                     SELECT id, first_name, last_name, email, phone, status, created_at
                     FROM leads
-                    WHERE LOWER(first_name) LIKE LOWER(:pattern)
-                       OR LOWER(last_name) LIKE LOWER(:pattern)
+                    WHERE (LOWER(first_name) LIKE LOWER(:pattern)
+                       OR LOWER(last_name) LIKE LOWER(:pattern))
+                    {org_filter}
                     ORDER BY created_at DESC
                     LIMIT 5
                 """)
-                results = db.execute(lead_query, {
+                lead_params = {
                     "pattern": f"{name}%",
-                }).fetchall()
+                }
+                if org_id:
+                    lead_params["org_id"] = org_id
+                results = db.execute(lead_query, lead_params).fetchall()
 
             for r in results:
                 clients.append({
@@ -475,30 +501,38 @@ async def search_clients(
         if name and len(clients) < 5:
             name_parts = name.strip().split()
             if len(name_parts) >= 2:
-                contact_query = text("""
+                contact_query = text(f"""
                     SELECT id, first_name, last_name, email, phone, created_at
                     FROM contacts
                     WHERE LOWER(first_name) LIKE LOWER(:first_pattern)
                       AND LOWER(last_name) LIKE LOWER(:last_pattern)
+                    {org_filter}
                     ORDER BY created_at DESC
                     LIMIT 5
                 """)
-                results = db.execute(contact_query, {
+                contact_params = {
                     "first_pattern": f"{name_parts[0]}%",
                     "last_pattern": f"{name_parts[1]}%",
-                }).fetchall()
+                }
+                if org_id:
+                    contact_params["org_id"] = org_id
+                results = db.execute(contact_query, contact_params).fetchall()
             else:
-                contact_query = text("""
+                contact_query = text(f"""
                     SELECT id, first_name, last_name, email, phone, created_at
                     FROM contacts
-                    WHERE LOWER(first_name) LIKE LOWER(:pattern)
-                       OR LOWER(last_name) LIKE LOWER(:pattern)
+                    WHERE (LOWER(first_name) LIKE LOWER(:pattern)
+                       OR LOWER(last_name) LIKE LOWER(:pattern))
+                    {org_filter}
                     ORDER BY created_at DESC
                     LIMIT 5
                 """)
-                results = db.execute(contact_query, {
+                contact_params = {
                     "pattern": f"{name}%",
-                }).fetchall()
+                }
+                if org_id:
+                    contact_params["org_id"] = org_id
+                results = db.execute(contact_query, contact_params).fetchall()
 
             for r in results:
                 clients.append({
@@ -514,13 +548,17 @@ async def search_clients(
 
         # Search by email if provided
         if email:
-            email_query = text("""
+            email_query = text(f"""
                 SELECT id, first_name, last_name, email, phone, status
                 FROM leads
                 WHERE LOWER(email) = LOWER(:email)
+                {org_filter}
                 LIMIT 1
             """)
-            result = db.execute(email_query, {"email": email}).fetchone()
+            email_params = {"email": email}
+            if org_id:
+                email_params["org_id"] = org_id
+            result = db.execute(email_query, email_params).fetchone()
             if result:
                 clients.insert(0, {
                     "id": str(result.id),
@@ -1339,16 +1377,23 @@ async def process_ci_recording(
     - Test the agent pipeline with a specific recording
     """
     try:
-        # Check if recording exists and has transcription
-        recording = db.execute(text("""
+        # Check if recording exists and has transcription (scoped to user's org)
+        org_id = current_user.get("organization_id")
+        rec_org_filter = "AND u.organization_id = :org_id" if org_id else ""
+        rec_params = {"recording_id": request.recording_id}
+        if org_id:
+            rec_params["org_id"] = org_id
+        recording = db.execute(text(f"""
             SELECT r.id, r.status, r.loan_id, r.lead_id,
                    t.id as transcription_id, t.status as transcription_status
             FROM ci_call_recordings r
+            LEFT JOIN users u ON u.id = r.agent_user_id
             LEFT JOIN ci_call_transcriptions t ON t.recording_id = r.id
             WHERE r.id = :recording_id
+            {rec_org_filter}
             ORDER BY t.created_at DESC
             LIMIT 1
-        """), {"recording_id": request.recording_id}).fetchone()
+        """), rec_params).fetchone()
 
         if not recording:
             raise HTTPException(status_code=404, detail="Recording not found")

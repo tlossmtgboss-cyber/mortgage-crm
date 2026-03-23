@@ -47,7 +47,7 @@ class EmailService:
         # Common configuration
         from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
         self.from_email = os.getenv('FROM_EMAIL', DEFAULT_ORGANIZER_EMAIL)
-        self.from_name = os.getenv('FROM_NAME', 'Sarah from Perennia AI')
+        self.from_name = os.getenv('EMAIL_SENDER_NAME', os.getenv('FROM_NAME', 'Perennia AI'))
 
         if self.use_sendgrid:
             logger.info("Email service initialized with SendGrid")

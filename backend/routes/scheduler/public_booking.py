@@ -149,6 +149,10 @@ _BOOKING_RATE_LIMIT_WINDOW = int(os.getenv("SCHEDULER_BOOKING_RATE_LIMIT_WINDOW"
 _BOOKING_MAX_PER_EMAIL = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_EMAIL", str(BOOKING_RATE_LIMIT_PER_EMAIL)))
 _BOOKING_MAX_PER_IP = int(os.getenv("SCHEDULER_BOOKING_MAX_PER_IP", str(BOOKING_RATE_LIMIT_PER_IP)))
 
+# L1: Maximum number of slots returned by public endpoints. If more slots exist,
+# the response includes truncated=true so the client knows to narrow its date range.
+_PUBLIC_SLOT_CAP = 500
+
 
 async def _check_booking_ip_rate_limit(request: Request):
     """
@@ -485,12 +489,14 @@ async def get_public_available_slots(
             await _check_rate_limit(request)
 
         # Resolve date range: prefer start_date/end_date, fall back to single date
+        date_range_truncated = False
         if start_date and end_date:
             query_start = start_date
             query_end = end_date
             # Cap range at SLOT_GENERATION_MAX_DAYS for public endpoint
             if (query_end - query_start).days > SLOT_GENERATION_MAX_DAYS:
                 query_end = query_start + timedelta(days=SLOT_GENERATION_MAX_DAYS)
+                date_range_truncated = True
         elif date:
             query_start = date
             query_end = date
@@ -530,7 +536,17 @@ async def get_public_available_slots(
             check_cross_source=True,
         )
 
-        return {"available_slots": available_slots}
+        # L1: Cap results and communicate truncation to the client
+        truncated = date_range_truncated or len(available_slots) > _PUBLIC_SLOT_CAP
+        if len(available_slots) > _PUBLIC_SLOT_CAP:
+            available_slots = available_slots[:_PUBLIC_SLOT_CAP]
+
+        response = {"available_slots": available_slots}
+        if truncated:
+            response["truncated"] = True
+            response["message"] = f"Results limited to {_PUBLIC_SLOT_CAP} slots. Narrow your date range for complete results."
+
+        return response
     except HTTPException as exc:
         raise HTTPException(
             status_code=exc.status_code,
@@ -1063,7 +1079,14 @@ async def _generate_slots_for_users(
     duration_minutes: int = DEFAULT_APPOINTMENT_DURATION_MINUTES,
     org_id: Optional[int] = None
 ) -> dict:
-    """Generate available slots for a list of users. Delegates to unified slot engine."""
+    """Generate available slots for a list of users. Delegates to unified slot engine.
+
+    H5: Does NOT include internal user IDs or tenant configuration in the
+    response -- this is a public/unauthenticated endpoint.
+
+    L1: Caps results at _PUBLIC_SLOT_CAP and communicates truncation to the
+    client so the frontend can prompt the user to narrow their date range.
+    """
     available_slots = _generate_available_slots(
         db=db,
         user_ids=user_ids,
@@ -1072,15 +1095,25 @@ async def _generate_slots_for_users(
         duration_minutes=duration_minutes,
         org_id=org_id,
         check_cross_source=False,
-        include_user_id=True,
+        include_user_id=False,
         time_key_format="start_time",
     )
 
-    return {
+    # L1: Cap results and communicate truncation
+    truncated = len(available_slots) > _PUBLIC_SLOT_CAP
+    if truncated:
+        available_slots = available_slots[:_PUBLIC_SLOT_CAP]
+
+    response = {
         "available_slots": available_slots,
-        "configured": True,
-        "slot_count": len(available_slots)
+        "slot_count": len(available_slots),
     }
+
+    if truncated:
+        response["truncated"] = True
+        response["message"] = f"Results limited to {_PUBLIC_SLOT_CAP} slots. Narrow your date range for complete results."
+
+    return response
 
 
 @router.post("/public/book-demo/confirm")

@@ -208,7 +208,7 @@ class SchedulerConfig(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user = relationship("User", backref="scheduler_config")
+    user = relationship("User", backref="scheduler_configs")
     availability_slots = relationship("AvailabilitySlot", back_populates="config", cascade="all, delete-orphan")
     appointment_types = relationship("SchedulerAppointmentType", back_populates="config", cascade="all, delete-orphan")
 
@@ -223,6 +223,7 @@ class AvailabilitySlot(Base):
         Index('ix_availability_date_user', 'specific_date', 'user_id'),
         Index('ix_availability_slots_org_id', 'organization_id'),
         UniqueConstraint('user_id', 'day_of_week', 'start_time', 'end_time', 'organization_id', name='uq_availability_recurring_slot'),
+        UniqueConstraint('organization_id', 'user_id', 'specific_date', name='uq_avail_slot_org_user_date'),
         {'extend_existing': True}
     )
 
@@ -259,7 +260,7 @@ class AvailabilitySlot(Base):
 
     # Relationships
     config = relationship("SchedulerConfig", back_populates="availability_slots")
-    user = relationship("User", backref="availability_slots")
+    user = relationship("User", backref="scheduler_availability_slots")
 
 
 class SchedulerAppointmentType(Base):
@@ -464,7 +465,7 @@ class Appointment(Base):
 
     # Relationships
     appointment_type = relationship("SchedulerAppointmentType", back_populates="appointments")
-    assigned_user = relationship("User", foreign_keys=[assigned_user_id], backref="assigned_appointments")
+    assigned_user = relationship("User", foreign_keys=[assigned_user_id], backref="scheduler_assigned_appointments")
     created_by = relationship("User", foreign_keys=[created_by_user_id])
     status_changed_by_user = relationship("User", foreign_keys=[status_changed_by])
     rescheduled_from = relationship("Appointment", remote_side=[id])
@@ -578,7 +579,7 @@ class BlockedTime(Base):
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
-    user = relationship("User", foreign_keys=[user_id], backref="blocked_times")
+    user = relationship("User", foreign_keys=[user_id], backref="scheduler_blocked_times")
     created_by = relationship("User", foreign_keys=[created_by_id])
 
 
@@ -650,7 +651,7 @@ class BookingLink(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user = relationship("User", backref="booking_links")
+    user = relationship("User", backref="scheduler_booking_links")
     single_appointment_type = relationship("SchedulerAppointmentType")
 
 

@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 import html
 import logging
+import threading
 
 from smart_scheduler_models import (
     AppointmentStatus, MeetingType, MeetingMode,
@@ -223,14 +224,18 @@ async def list_appointments(
     _models = get_models()
     Appointment = _models['Appointment']
 
-    # Query main Appointment table
+    # M24: Admins can see all org appointments; non-admins only see their own
+    is_admin = _is_scheduler_admin(user)
     query = db.query(Appointment).filter(
         Appointment.organization_id == org_id,
-        or_(
-            Appointment.assigned_user_id == user.id,
-            Appointment.created_by_user_id == user.id
-        )
     )
+    if not is_admin:
+        query = query.filter(
+            or_(
+                Appointment.assigned_user_id == user.id,
+                Appointment.created_by_user_id == user.id
+            )
+        )
 
     if start_date:
         query = query.filter(Appointment.scheduled_start >= datetime.combine(start_date, time.min))
@@ -420,14 +425,20 @@ async def get_appointment(
     _models = get_models()
     Appointment = _models['Appointment']
 
-    appointment = db.query(Appointment).filter(
+    # M22: Consistent admin auth — admins can view any appointment in their org
+    is_admin = _is_scheduler_admin(user)
+    get_query = db.query(Appointment).filter(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
-        or_(
-            Appointment.assigned_user_id == user.id,
-            Appointment.created_by_user_id == user.id
+    )
+    if not is_admin:
+        get_query = get_query.filter(
+            or_(
+                Appointment.assigned_user_id == user.id,
+                Appointment.created_by_user_id == user.id
+            )
         )
-    ).first()
+    appointment = get_query.first()
 
     if not appointment:
         scheduler_error(404, NOT_FOUND, "Appointment not found")
@@ -488,15 +499,20 @@ async def get_appointment_timeline(
     _models = get_models()
     Appointment = _models['Appointment']
 
-    # Verify appointment exists and belongs to this org/user
-    appointment = db.query(Appointment).filter(
+    # M22: Consistent admin auth — admins can view any appointment timeline in their org
+    is_admin = _is_scheduler_admin(user)
+    timeline_query = db.query(Appointment).filter(
         Appointment.id == appointment_id,
         Appointment.organization_id == org_id,
-        or_(
-            Appointment.assigned_user_id == user.id,
-            Appointment.created_by_user_id == user.id
+    )
+    if not is_admin:
+        timeline_query = timeline_query.filter(
+            or_(
+                Appointment.assigned_user_id == user.id,
+                Appointment.created_by_user_id == user.id
+            )
         )
-    ).first()
+    appointment = timeline_query.first()
 
     if not appointment:
         scheduler_error(404, NOT_FOUND, "Appointment not found")
@@ -1264,6 +1280,15 @@ async def cancel_appointment(
     if not appointment:
         scheduler_error(404, NOT_FOUND, "Appointment not found")
 
+    # H6: Prevent cancelling appointments already in terminal states
+    CANCELLABLE_STATUSES = {"booked", "confirmed", "reminded", "checked_in"}
+    current_status = appointment.status.value if appointment.status else "booked"
+    if current_status not in CANCELLABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel an appointment with status: {current_status}",
+        )
+
     # Store appointment details before cancellation for email notifications
     attendee_email = getattr(appointment, 'attendee_email', None)
     attendee_name = getattr(appointment, 'attendee_name', None) or 'Valued Client'
@@ -1360,41 +1385,61 @@ async def cancel_appointment(
     except Exception as e:
         logger.warning(f"Waitlist auto-offer failed (non-blocking): {e}")
 
-    # Send cancellation emails
+    # M23: Send cancellation emails in a background thread to prevent SMTP
+    # timeout from blocking the API response (SMTP can block up to 30s).
     emails_sent = []
+    _cancel_user_full_name = getattr(user, 'full_name', None) or getattr(user, 'email', '')
 
+    def _send_cancellation_emails():
+        """Fire-and-forget email dispatch for cancellation notifications."""
+        try:
+            if attendee_email:
+                try:
+                    result = send_appointment_cancellation_email(
+                        attendee_email=attendee_email,
+                        attendee_name=attendee_name,
+                        appointment_title=appointment_title,
+                        appointment_date=appointment_date,
+                        appointment_time=appointment_time,
+                        team_member_name=team_member_name,
+                        cancellation_reason=reason
+                    )
+                    if result.get("success") if isinstance(result, dict) else result:
+                        logger.info(f"Cancellation email sent to attendee {_mask_email(attendee_email)}")
+                    else:
+                        logger.warning(f"Cancellation email to attendee failed: {result}")
+                except Exception as e:
+                    logger.error(f"Failed to send attendee cancellation email: {e}")
+
+            if team_member_email and team_member_name and team_member_email != attendee_email:
+                try:
+                    result = send_team_member_cancellation_email(
+                        team_member_email=team_member_email,
+                        team_member_name=team_member_name,
+                        attendee_name=attendee_name,
+                        appointment_title=appointment_title,
+                        appointment_date=appointment_date,
+                        appointment_time=appointment_time,
+                        cancellation_reason=reason,
+                        cancelled_by=_cancel_user_full_name
+                    )
+                    if result.get("success") if isinstance(result, dict) else result:
+                        logger.info(f"Cancellation email sent to team member {team_member_email}")
+                    else:
+                        logger.warning(f"Cancellation email to team member failed: {result}")
+                except Exception as e:
+                    logger.error(f"Failed to send team member cancellation email: {e}")
+        except Exception as e:
+            logger.error(f"Background cancellation email thread error: {e}")
+
+    email_thread = threading.Thread(target=_send_cancellation_emails, daemon=True)
+    email_thread.start()
+
+    # Build optimistic emails_sent list for response (actual sending is async)
     if attendee_email:
-        try:
-            result = send_appointment_cancellation_email(
-                attendee_email=attendee_email,
-                attendee_name=attendee_name,
-                appointment_title=appointment_title,
-                appointment_date=appointment_date,
-                appointment_time=appointment_time,
-                team_member_name=team_member_name,
-                cancellation_reason=reason
-            )
-            if result.get("success") if isinstance(result, dict) else result:
-                emails_sent.append(attendee_email)
-        except Exception as e:
-            logger.error(f"Failed to send attendee cancellation email: {e}")
-
+        emails_sent.append(attendee_email)
     if team_member_email and team_member and team_member.id != user.id:
-        try:
-            result = send_team_member_cancellation_email(
-                team_member_email=team_member_email,
-                team_member_name=team_member_name,
-                attendee_name=attendee_name,
-                appointment_title=appointment_title,
-                appointment_date=appointment_date,
-                appointment_time=appointment_time,
-                cancellation_reason=reason,
-                cancelled_by=user.full_name or user.email
-            )
-            if result.get("success") if isinstance(result, dict) else result:
-                emails_sent.append(team_member_email)
-        except Exception as e:
-            logger.error(f"Failed to send team member cancellation email: {e}")
+        emails_sent.append(team_member_email)
 
     # Delete external calendar events (Google, Outlook)
     try:

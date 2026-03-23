@@ -69,13 +69,21 @@ def _convert_utc_to_user_tz(
 def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_id: int = None):
     """
     Gather all busy time blocks from all 3 calendar sources for a user.
-    Returns a list of (start, end) tuples representing occupied time.
+    Returns a tuple of (conflicts, degraded_sources) where:
+      - conflicts is a list of (start, end) tuples representing occupied time
+      - degraded_sources is a list of source names that failed to query
+
+    When a source query fails, we fail CLOSED: the entire requested time range
+    is added as a conflict for that source, so no slots can be booked during
+    a period where we cannot verify availability.
+
     org_id filtering is ALWAYS applied for tenant isolation.
     """
     if org_id is None:
         raise ValueError("org_id is required")
     _models = get_models()
     conflicts = []
+    degraded_sources = []
 
     # Source 1: v2 Appointment (scheduler_appointments) -- canonical table
     if _models and _models.get('Appointment'):
@@ -93,7 +101,9 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
                 if a.scheduled_start and a.scheduled_end:
                     conflicts.append((a.scheduled_start, a.scheduled_end))
         except Exception as e:
-            logger.warning(f"v2 Appointment cross-source check unavailable: {e}")
+            logger.error(f"v2 Appointment cross-source check FAILED for user {target_user_id} — failing closed: {e}")
+            degraded_sources.append("v2_appointment")
+            conflicts.append((start_dt, end_dt))
 
     # Source 1b: Legacy ScheduledAppointment (scheduled_appointments) -- deprecated, kept for backward compat
     try:
@@ -110,7 +120,14 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             if a.start_time and a.end_time:
                 conflicts.append((a.start_time, a.end_time))
     except Exception as e:
-        logger.debug(f"Legacy ScheduledAppointment cross-source check skipped: {e}")
+        # Legacy source — import failures are expected if table doesn't exist;
+        # only fail closed on actual query errors (not ImportError)
+        if isinstance(e, ImportError):
+            logger.debug(f"Legacy ScheduledAppointment cross-source check skipped (not installed): {e}")
+        else:
+            logger.error(f"Legacy ScheduledAppointment cross-source check FAILED for user {target_user_id} — failing closed: {e}")
+            degraded_sources.append("legacy_appointment")
+            conflicts.append((start_dt, end_dt))
 
     # Source 2: CalendarEvent (manual calendar entries)
     try:
@@ -127,7 +144,12 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             if e.start_time and e.end_time:
                 conflicts.append((e.start_time, e.end_time))
     except Exception as ex:
-        logger.warning(f"CalendarEvent cross-source check unavailable: {ex}")
+        if isinstance(ex, ImportError):
+            logger.debug(f"CalendarEvent cross-source check skipped (not installed): {ex}")
+        else:
+            logger.error(f"CalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
+            degraded_sources.append("calendar_event")
+            conflicts.append((start_dt, end_dt))
 
     # Source 3: CRMCalendarEvent (Salesforce-synced events)
     try:
@@ -144,9 +166,14 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             if e.start_at and e.end_at:
                 conflicts.append((e.start_at, e.end_at))
     except Exception as ex:
-        logger.warning(f"CRMCalendarEvent cross-source check unavailable: {ex}")
+        if isinstance(ex, ImportError):
+            logger.debug(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
+        else:
+            logger.error(f"CRMCalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
+            degraded_sources.append("crm_calendar_event")
+            conflicts.append((start_dt, end_dt))
 
-    return conflicts
+    return conflicts, degraded_sources
 
 
 def _has_cross_source_conflict(conflicts, slot_start, slot_end, buffer_before=0, buffer_after=0):
@@ -163,13 +190,27 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
     """
     Batch-load cross-source conflicts for ALL users at once.
 
-    Returns a dict mapping user_id -> list of (start, end) tuples.
+    Returns a tuple of (conflicts_by_user, degraded_sources) where:
+      - conflicts_by_user is a dict mapping user_id -> list of (start, end) tuples
+      - degraded_sources is a list of source names that failed to query
+
+    When a source query fails, we fail CLOSED: the entire requested time range
+    is added as a conflict for ALL users in the batch, so no slots can be
+    booked during a period where we cannot verify availability.
+
     This replaces N calls to _get_cross_source_conflicts() with a fixed
     number of queries regardless of user count.
     org_id filtering is ALWAYS applied for tenant isolation.
     """
     _models = get_models()
     conflicts_by_user = defaultdict(list)
+    degraded_sources = []
+
+    def _fail_closed_all_users(source_name):
+        """Mark the entire time range as conflicted for all users."""
+        degraded_sources.append(source_name)
+        for uid in user_ids:
+            conflicts_by_user[uid].append((start_dt, end_dt))
 
     # Source 1: v2 Appointment (scheduler_appointments) -- canonical table
     if _models and _models.get('Appointment'):
@@ -188,7 +229,8 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                         (a.scheduled_start, a.scheduled_end)
                     )
         except Exception as e:
-            logger.warning(f"v2 Appointment batch cross-source check unavailable: {e}")
+            logger.error(f"v2 Appointment batch cross-source check FAILED — failing closed for all users: {e}")
+            _fail_closed_all_users("v2_appointment")
 
     # Source 1b: Legacy ScheduledAppointment (scheduled_appointments) -- deprecated
     try:
@@ -206,7 +248,11 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                     (a.start_time, a.end_time)
                 )
     except Exception as e:
-        logger.debug(f"Legacy ScheduledAppointment batch cross-source check skipped: {e}")
+        if isinstance(e, ImportError):
+            logger.debug(f"Legacy ScheduledAppointment batch cross-source check skipped (not installed): {e}")
+        else:
+            logger.error(f"Legacy ScheduledAppointment batch cross-source check FAILED — failing closed for all users: {e}")
+            _fail_closed_all_users("legacy_appointment")
 
     # Source 2: CalendarEvent (manual calendar entries)
     try:
@@ -224,7 +270,11 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                     (e.start_time, e.end_time)
                 )
     except Exception as ex:
-        logger.warning(f"CalendarEvent batch cross-source check unavailable: {ex}")
+        if isinstance(ex, ImportError):
+            logger.debug(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
+        else:
+            logger.error(f"CalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
+            _fail_closed_all_users("calendar_event")
 
     # Source 3: CRMCalendarEvent (Salesforce-synced events)
     try:
@@ -242,9 +292,13 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                     (e.start_at, e.end_at)
                 )
     except Exception as ex:
-        logger.warning(f"CRMCalendarEvent batch cross-source check unavailable: {ex}")
+        if isinstance(ex, ImportError):
+            logger.debug(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
+        else:
+            logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
+            _fail_closed_all_users("crm_calendar_event")
 
-    return conflicts_by_user
+    return conflicts_by_user, degraded_sources
 
 
 # ============================================================================
@@ -388,10 +442,22 @@ def _generate_available_slots(
         appts_by_user[appt.assigned_user_id].append(appt)
 
     # Batch 4: Cross-source conflicts for all users
-    cross_source_by_user = (
-        _get_cross_source_conflicts_batch(db, user_ids, start_dt, end_dt, org_id=org_id)
-        if check_cross_source else {}
-    )
+    # _get_cross_source_conflicts_batch returns (conflicts_by_user, degraded_sources).
+    # If any source fails, it fails CLOSED: the entire time range is marked as
+    # conflicted for all affected users, preventing double-bookings.
+    if check_cross_source:
+        cross_source_by_user, degraded_sources = _get_cross_source_conflicts_batch(
+            db, user_ids, start_dt, end_dt, org_id=org_id
+        )
+        if degraded_sources:
+            logger.error(
+                f"Cross-source availability DEGRADED — failed sources: {degraded_sources}. "
+                f"Slots overlapping the failed sources' time range will be marked unavailable "
+                f"(fail-closed). Users affected: {user_ids}"
+            )
+    else:
+        cross_source_by_user = {}
+        degraded_sources = []
 
     # Batch 5: Check recurring availability for all users (one query via service)
     _ra_service = None

@@ -48,6 +48,7 @@ import FollowUpCadenceSection from './calendar-settings/FollowUpCadenceSection';
 function CalendarSettings() {
   const navigate = useNavigate();
   const contentRef = useRef(null);
+  const tabPanelRef = useRef(null);
   const [state, dispatch] = useReducer(settingsReducer, initialState);
   const [testResult, setTestResult] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -131,6 +132,13 @@ function CalendarSettings() {
   useEffect(() => {
     doLoadTab(activeSection);
   }, [activeSection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Move focus to the active tab panel when tab changes (keyboard accessibility)
+  useEffect(() => {
+    if (tabPanelRef.current) {
+      tabPanelRef.current.focus();
+    }
+  }, [activeSection]);
 
   // ============================================================================
   // Navigation
@@ -499,7 +507,14 @@ function CalendarSettings() {
         </nav>
 
         {/* Content Area */}
-        <main className="cal-settings-content" ref={contentRef}>
+        <main
+          className="cal-settings-content"
+          ref={(node) => { contentRef.current = node; tabPanelRef.current = node; }}
+          id={`panel-${activeSection}`}
+          role="tabpanel"
+          tabIndex={-1}
+          aria-labelledby={`calnav-${activeSection}`}
+        >
           {/* Breadcrumb */}
           <div className="cal-settings-breadcrumb">
             <span>Settings</span>

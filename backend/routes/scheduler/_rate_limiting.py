@@ -81,21 +81,34 @@ def _get_client_ip(request: Request) -> str:
     """
     Extract the real client IP from a request.
 
-    Only trusts X-Forwarded-For when the direct connecting IP (request.client.host)
-    belongs to a trusted proxy network (Railway, Cloudflare, or private/internal).
-    Uses the rightmost (last) IP in X-Forwarded-For, which is the one appended by
-    the closest trusted proxy and is hardest to spoof.
-    Falls back to the direct connection IP if the header can't be trusted.
+    Priority order:
+      1. CF-Connecting-IP — set by Cloudflare to the true client IP, cannot be
+         spoofed by the client when the request traverses Cloudflare.
+      2. X-Forwarded-For leftmost (first) entry — the original client IP as seen
+         by the first proxy in the chain.  Only trusted when the direct connecting
+         IP belongs to a known proxy network.
+      3. Direct connection IP (request.client.host) as last resort.
+
+    NOTE: The previous implementation used the *rightmost* X-Forwarded-For entry,
+    which is the IP of the nearest proxy (e.g. Cloudflare/Railway), not the client.
     """
     direct_ip = request.client.host if request.client else "unknown"
 
+    # Cloudflare sets CF-Connecting-IP to the real client IP.  Trust it when the
+    # direct connection comes from a known proxy (i.e. the request actually went
+    # through Cloudflare rather than being sent directly with a forged header).
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip and _is_trusted_proxy(direct_ip):
+        return cf_ip.strip()
+
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded and _is_trusted_proxy(direct_ip):
-        # Request came through a trusted proxy; use the rightmost (last) IP
-        # which was appended by the closest trusted reverse proxy
+        # Use the leftmost (first) IP — this is the original client address
+        # appended by the outermost proxy.  The rightmost entry is the nearest
+        # proxy's own IP and is NOT the client.
         ips = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
         if ips:
-            return ips[-1]
+            return ips[0]
 
     return direct_ip
 
@@ -150,6 +163,10 @@ _memory_rate_check_count = 0  # Counter for periodic cleanup
 _MAX_RATE_LIMIT_KEYS = int(os.getenv("SCHEDULER_RATE_LIMIT_MAX_KEYS", "10000"))
 _MEMORY_CLEANUP_INTERVAL = int(os.getenv("SCHEDULER_RATE_LIMIT_CLEANUP_INTERVAL",
                                           os.getenv("RATE_LIMIT_CLEANUP_INTERVAL", "500")))
+# Estimated number of Gunicorn/Uvicorn workers.  Used to compensate the
+# in-memory fallback rate limiter, which is per-process.  Without this
+# adjustment the effective limit is N * max_requests across the deployment.
+_ESTIMATED_WORKER_COUNT = int(os.getenv("SCHEDULER_RATE_LIMIT_WORKER_COUNT", "4"))
 
 
 class _RateLimitCapacityExhausted(Exception):
@@ -244,12 +261,17 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
     r = _get_rate_limit_redis()
     if r is None:
         # Fallback: in-memory rate limiting (per-worker only -- degraded protection).
-        # The effective limit is multiplied by worker count since each process has
-        # its own in-memory store.
-        logger.warning("Rate limiter: Redis unavailable, using per-worker memory fallback. "
-                        "Effective limit is multiplied by worker count. Restore Redis ASAP.")
+        # Each worker process has its own in-memory store, so the cluster-wide
+        # effective limit would be N * max_requests.  We divide by the estimated
+        # worker count to approximate a shared limit.
+        adjusted_max = max(1, max_requests // _ESTIMATED_WORKER_COUNT)
+        logger.warning(
+            "Rate limiter: Redis unavailable, using per-worker memory fallback "
+            f"(adjusted limit {adjusted_max} per worker, ~{max_requests} cluster-wide "
+            f"assuming {_ESTIMATED_WORKER_COUNT} workers). Restore Redis ASAP."
+        )
         try:
-            if not await _check_memory_rate_limit(key, max_requests):
+            if not await _check_memory_rate_limit(key, adjusted_max):
                 raise HTTPException(
                     status_code=429,
                     detail="Too many requests. Please try again later.",
@@ -274,9 +296,14 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
         return
 
     try:
-        current = r.incr(key)
-        if current == 1:
-            r.expire(key, _RATE_LIMIT_WINDOW)
+        # Use a Redis pipeline to make INCR + EXPIRE atomic.  Without this,
+        # a crash between INCR and EXPIRE would leak a key with no TTL,
+        # permanently consuming rate-limit state.
+        pipe = r.pipeline(transaction=True)
+        pipe.incr(key)
+        pipe.expire(key, _RATE_LIMIT_WINDOW)
+        results = pipe.execute()
+        current = results[0]  # result of INCR
         if current > max_requests:
             ttl = r.ttl(key)
             raise HTTPException(
@@ -288,9 +315,11 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
         raise
     except Exception as e:
         # Redis command error mid-request -- fall back to in-memory
-        logger.warning(f"Rate limit Redis error, using memory fallback: {e}")
+        adjusted_max = max(1, max_requests // _ESTIMATED_WORKER_COUNT)
+        logger.warning(f"Rate limit Redis error, using memory fallback "
+                       f"(adjusted limit {adjusted_max}): {e}")
         try:
-            if not await _check_memory_rate_limit(key, max_requests):
+            if not await _check_memory_rate_limit(key, adjusted_max):
                 raise HTTPException(
                     status_code=429,
                     detail="Too many requests. Please try again later.",

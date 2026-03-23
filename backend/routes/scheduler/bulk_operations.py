@@ -187,7 +187,25 @@ async def bulk_create_appointments(
     succeeded = 0
     created_appointments = []  # For post-commit notifications
 
+    # M9: Deduplicate within the batch — reject duplicate (attendee_email, start_time) pairs
+    seen_pairs = set()
+    duplicate_indices = set()
     for idx, item in enumerate(payload.appointments):
+        if item.attendee_email:
+            pair_key = (item.attendee_email.lower(), item.scheduled_start.isoformat())
+            if pair_key in seen_pairs:
+                duplicate_indices.add(idx)
+            else:
+                seen_pairs.add(pair_key)
+
+    for idx, item in enumerate(payload.appointments):
+        # M9: Skip duplicates detected within this batch
+        if idx in duplicate_indices:
+            results.append(BulkResultItem(
+                index=idx, success=False,
+                error="Duplicate appointment: same attendee email and start time appears earlier in this batch"
+            ))
+            continue
         savepoint = db.begin_nested()
         try:
             # Non-admins can only create appointments assigned to themselves
@@ -291,6 +309,9 @@ async def bulk_create_appointments(
                        }, request=request)
 
             savepoint.commit()
+            # H4: Flush after savepoint commit so subsequent conflict/duplicate checks
+            # within this batch see the newly created appointment
+            db.flush()
             succeeded += 1
             results.append(BulkResultItem(
                 index=idx, success=True, appointment_id=appointment.id
@@ -303,13 +324,14 @@ async def bulk_create_appointments(
         except HTTPException as exc:
             savepoint.rollback()
             results.append(BulkResultItem(
-                index=idx, success=False, error=exc.detail
+                index=idx, success=False, error="Conflict detected"
             ))
         except Exception as exc:
             savepoint.rollback()
-            logger.warning(f"Bulk create item {idx} failed: {exc}")
+            # M8: Log full error internally, return sanitized message to caller
+            logger.error(f"Bulk create item {idx} failed: {exc}", exc_info=True)
             results.append(BulkResultItem(
-                index=idx, success=False, error=str(exc)
+                index=idx, success=False, error="Failed to create appointment"
             ))
 
     # Commit all successful savepoints
@@ -457,13 +479,16 @@ async def bulk_cancel_appointments(
         except HTTPException as exc:
             savepoint.rollback()
             results.append(BulkResultItem(
-                index=idx, success=False, appointment_id=appointment_id, error=exc.detail
+                index=idx, success=False, appointment_id=appointment_id,
+                error="Failed to cancel appointment"
             ))
         except Exception as exc:
             savepoint.rollback()
-            logger.warning(f"Bulk cancel item {idx} (appt {appointment_id}) failed: {exc}")
+            # M8: Log full error internally, return sanitized message to caller
+            logger.error(f"Bulk cancel item {idx} (appt {appointment_id}) failed: {exc}", exc_info=True)
             results.append(BulkResultItem(
-                index=idx, success=False, appointment_id=appointment_id, error=str(exc)
+                index=idx, success=False, appointment_id=appointment_id,
+                error="Failed to cancel appointment"
             ))
 
     # Commit all successful savepoints
@@ -588,6 +613,9 @@ async def bulk_reschedule_appointments(
             )
 
             savepoint.commit()
+            # H4: Flush after savepoint commit so subsequent conflict checks
+            # within this batch see the updated appointment times
+            db.flush()
             succeeded += 1
             results.append(BulkResultItem(
                 index=idx, success=True, appointment_id=appointment.id
@@ -610,13 +638,16 @@ async def bulk_reschedule_appointments(
         except HTTPException as exc:
             savepoint.rollback()
             results.append(BulkResultItem(
-                index=idx, success=False, appointment_id=item.appointment_id, error=exc.detail
+                index=idx, success=False, appointment_id=item.appointment_id,
+                error="Conflict detected"
             ))
         except Exception as exc:
             savepoint.rollback()
-            logger.warning(f"Bulk reschedule item {idx} (appt {item.appointment_id}) failed: {exc}")
+            # M8: Log full error internally, return sanitized message to caller
+            logger.error(f"Bulk reschedule item {idx} (appt {item.appointment_id}) failed: {exc}", exc_info=True)
             results.append(BulkResultItem(
-                index=idx, success=False, appointment_id=item.appointment_id, error=str(exc)
+                index=idx, success=False, appointment_id=item.appointment_id,
+                error="Failed to reschedule appointment"
             ))
 
     # Commit all successful savepoints
@@ -773,13 +804,16 @@ async def bulk_assign_appointments(
         except HTTPException as exc:
             savepoint.rollback()
             results.append(BulkResultItem(
-                index=idx, success=False, appointment_id=item.appointment_id, error=exc.detail
+                index=idx, success=False, appointment_id=item.appointment_id,
+                error="Conflict detected"
             ))
         except Exception as exc:
             savepoint.rollback()
-            logger.warning(f"Bulk assign item {idx} (appt {item.appointment_id}) failed: {exc}")
+            # M8: Log full error internally, return sanitized message to caller
+            logger.error(f"Bulk assign item {idx} (appt {item.appointment_id}) failed: {exc}", exc_info=True)
             results.append(BulkResultItem(
-                index=idx, success=False, appointment_id=item.appointment_id, error=str(exc)
+                index=idx, success=False, appointment_id=item.appointment_id,
+                error="Failed to reassign appointment"
             ))
 
     # Commit all successful savepoints

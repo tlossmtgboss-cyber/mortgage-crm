@@ -320,7 +320,7 @@ def _check_national_dnc_scrub_freshness() -> Tuple[bool, str]:
     return False, ""
 
 
-def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
+def check_dnc_status(phone_number: str, db: Session, organization_id: Optional[int] = None) -> Tuple[bool, str]:
     """
     Check if phone number is on the Do Not Call list.
     Checks both internal DNC table and National DNC Registry scrub freshness.
@@ -333,11 +333,20 @@ def check_dnc_status(phone_number: str, db: Session) -> Tuple[bool, str]:
 
     # Normalize DNC entries to digits-only for reliable matching.
     # Uses SQL to strip non-digits so format variations (dashes, parens, +1) all match.
-    dnc = db.execute(text("""
-        SELECT id, reason FROM contact_dnc_status
-        WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
-        LIMIT 1
-    """), {"suffix": f"%{digits[-10:]}" if len(digits) >= 10 else f"%{digits}"}).fetchone()
+    suffix_param = f"%{digits[-10:]}" if len(digits) >= 10 else f"%{digits}"
+    if organization_id is not None:
+        dnc = db.execute(text("""
+            SELECT id, reason FROM contact_dnc_status
+            WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
+              AND organization_id = :org_id
+            LIMIT 1
+        """), {"suffix": suffix_param, "org_id": organization_id}).fetchone()
+    else:
+        dnc = db.execute(text("""
+            SELECT id, reason FROM contact_dnc_status
+            WHERE regexp_replace(phone_number, '[^0-9]', '', 'g') LIKE :suffix
+            LIMIT 1
+        """), {"suffix": suffix_param}).fetchone()
 
     if dnc:
         return True, f"Phone number is on Do Not Call list (reason: {dnc[1] or 'N/A'})"
@@ -424,8 +433,8 @@ def run_compliance_checks(
 
     Returns (is_allowed, rejection_reason).
     """
-    # 1. DNC check
-    is_blocked, dnc_msg = check_dnc_status(phone_number, db)
+    # 1. DNC check (scoped to organization)
+    is_blocked, dnc_msg = check_dnc_status(phone_number, db, organization_id=organization_id)
     if is_blocked:
         logger.warning(f"Voicemail blocked by DNC: {phone_number}")
         return False, dnc_msg
@@ -723,12 +732,21 @@ async def create_voicemail_drop(
             raise HTTPException(status_code=429, detail=rate_msg)
 
         # --- Idempotency: prevent duplicate drops within 60 seconds ---
-        recent_dup = db.execute(text("""
-            SELECT id FROM voicemail_drops
-            WHERE user_id = :uid AND phone_number = :phone
-              AND created_at > NOW() - INTERVAL '60 seconds'
-            LIMIT 1
-        """), {"uid": current_user.id, "phone": phone_number}).fetchone()
+        if org_id is not None:
+            recent_dup = db.execute(text("""
+                SELECT id FROM voicemail_drops
+                WHERE user_id = :uid AND phone_number = :phone
+                  AND organization_id = :org_id
+                  AND created_at > NOW() - INTERVAL '60 seconds'
+                LIMIT 1
+            """), {"uid": current_user.id, "phone": phone_number, "org_id": org_id}).fetchone()
+        else:
+            recent_dup = db.execute(text("""
+                SELECT id FROM voicemail_drops
+                WHERE user_id = :uid AND phone_number = :phone
+                  AND created_at > NOW() - INTERVAL '60 seconds'
+                LIMIT 1
+            """), {"uid": current_user.id, "phone": phone_number}).fetchone()
         if recent_dup:
             raise HTTPException(
                 status_code=409,

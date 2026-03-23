@@ -30,7 +30,7 @@ import os
 import secrets
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -184,7 +184,7 @@ class ZoomMeetingProvider(MeetingProvider):
         expires_at = token_data.get("expires_at")
 
         # Refresh token if expired
-        if expires_at and isinstance(expires_at, datetime) and expires_at < datetime.utcnow():
+        if expires_at and isinstance(expires_at, datetime) and expires_at < datetime.now(timezone.utc):
             access_token = await self._refresh_token(refresh_token)
             if not access_token:
                 return MeetingResult.failure("zoom", "Failed to refresh expired Zoom token")
@@ -410,7 +410,7 @@ class GoogleMeetProvider(MeetingProvider):
         expires_at = token_data.get("expires_at")
 
         # Refresh token if expired
-        if expires_at and isinstance(expires_at, datetime) and expires_at < datetime.utcnow():
+        if expires_at and isinstance(expires_at, datetime) and expires_at < datetime.now(timezone.utc):
             access_token = await self._refresh_google_token(refresh_token)
             if not access_token:
                 return MeetingResult.failure("google_meet", "Failed to refresh expired Google token")
@@ -646,14 +646,21 @@ class GoogleMeetProvider(MeetingProvider):
                 if response.status_code == 200:
                     token_data = response.json()
                     new_access_token = token_data.get("access_token")
+                    expires_in = token_data.get("expires_in", 3600)
+                    new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
                     self.db.execute(
                         text("""
                             UPDATE user_integrations
                             SET access_token = :access_token,
+                                expires_at = :expires_at,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE user_id = :user_id AND provider = 'google'
                         """),
-                        {"user_id": self.user_id, "access_token": new_access_token},
+                        {
+                            "user_id": self.user_id,
+                            "access_token": new_access_token,
+                            "expires_at": new_expires_at,
+                        },
                     )
                     self.db.flush()
                     return new_access_token
@@ -1094,11 +1101,11 @@ async def create_meeting_for_appointment(
 
     details = MeetingDetails(
         title=getattr(appointment, "title", "Meeting") or "Meeting",
-        scheduled_start=getattr(appointment, "scheduled_start", datetime.utcnow()),
+        scheduled_start=getattr(appointment, "scheduled_start", datetime.now(timezone.utc)),
         scheduled_end=getattr(
             appointment,
             "scheduled_end",
-            getattr(appointment, "scheduled_start", datetime.utcnow()) + timedelta(minutes=30),
+            getattr(appointment, "scheduled_start", datetime.now(timezone.utc)) + timedelta(minutes=30),
         ),
         duration_minutes=getattr(appointment, "duration_minutes", 30) or 30,
         description=getattr(appointment, "description", "") or "",

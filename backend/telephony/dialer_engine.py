@@ -190,13 +190,19 @@ class DialerEngine:
             loan_id = None
 
             if task.lead_id:
-                lead = self.db.query(Lead).filter(Lead.id == task.lead_id).first()
+                lead_q = self.db.query(Lead).filter(Lead.id == task.lead_id)
+                if self.organization_id:
+                    lead_q = lead_q.filter(Lead.organization_id == self.organization_id)
+                lead = lead_q.first()
                 if lead:
                     contact_phone = lead.phone
                     contact_name = contact_name or lead.name
                     lead_id = lead.id
             elif task.loan_id:
-                loan = self.db.query(Loan).filter(Loan.id == task.loan_id).first()
+                loan_q = self.db.query(Loan).filter(Loan.id == task.loan_id)
+                if self.organization_id:
+                    loan_q = loan_q.filter(Loan.organization_id == self.organization_id)
+                loan = loan_q.first()
                 if loan:
                     contact_phone = loan.borrower_phone
                     contact_name = contact_name or loan.borrower_name

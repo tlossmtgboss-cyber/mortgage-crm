@@ -18,6 +18,7 @@ and the public booking slot generation engine.
 import logging
 from datetime import datetime, date, time, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -117,6 +118,7 @@ class RecurringAvailabilityService:
             dow_int = int(dow)
             if dow_int < 0 or dow_int > 6:
                 raise ValueError(f"Invalid day_of_week: {dow}. Must be 0-6.")
+            parsed_blocks = []
             for block in blocks:
                 start = datetime.strptime(block["start"], "%H:%M").time()
                 end = datetime.strptime(block["end"], "%H:%M").time()
@@ -124,6 +126,19 @@ class RecurringAvailabilityService:
                     raise ValueError(
                         f"start_time ({block['start']}) must be before end_time ({block['end']}) "
                         f"on day {dow_int}"
+                    )
+                parsed_blocks.append((start, end))
+
+            # M17 fix: Check for overlapping blocks on the same day
+            parsed_blocks.sort(key=lambda b: b[0])
+            for i in range(len(parsed_blocks) - 1):
+                _, prev_end = parsed_blocks[i]
+                next_start, _ = parsed_blocks[i + 1]
+                if next_start < prev_end:
+                    raise ValueError(
+                        f"Overlapping availability blocks on day {dow_int}: "
+                        f"block ending at {prev_end.strftime('%H:%M')} overlaps with "
+                        f"block starting at {next_start.strftime('%H:%M')}"
                     )
 
         # Soft-delete existing schedule (deactivate, don't hard delete)
@@ -462,6 +477,7 @@ class RecurringAvailabilityService:
         buffer_before: int = 0,
         buffer_after: int = 0,
         max_per_day: Optional[int] = None,
+        timezone_str: Optional[str] = None,
     ) -> List[dict]:
         """
         Compute actual available time slots by merging:
@@ -469,6 +485,10 @@ class RecurringAvailabilityService:
         2. Date-specific exceptions
         3. Existing appointments (subtracted)
         4. Appointment type constraints (duration, buffer, max daily)
+
+        All time arithmetic is done in the user's local timezone to correctly
+        handle DST transitions (spring-forward / fall-back). Slot datetimes
+        are converted to UTC for storage and comparison.
 
         Args:
             user_id: User ID
@@ -479,10 +499,19 @@ class RecurringAvailabilityService:
             buffer_before: Minutes before each appointment to keep free
             buffer_after: Minutes after each appointment to keep free
             max_per_day: Maximum slots per day (None = unlimited)
+            timezone_str: IANA timezone for the user (e.g. "America/Chicago").
+                Falls back to the recurring availability row's timezone,
+                then DEFAULT_TIMEZONE.
 
         Returns:
             List of available slot dicts: [{"date": "2026-03-15", "start": "09:00", "end": "09:30"}, ...]
         """
+        # H13 fix: Resolve the user's local timezone for DST-safe arithmetic.
+        # Prefer explicit param, then look up from user's recurring availability
+        # config, then fall back to DEFAULT_TIMEZONE.
+        user_tz = self._resolve_user_timezone(user_id, org_id, timezone_str)
+        utc_tz = ZoneInfo("UTC")
+
         # Get existing appointments for the date range
         existing_appointments = self._get_existing_appointments(
             user_id, org_id, start_date, end_date
@@ -507,22 +536,34 @@ class RecurringAvailabilityService:
                 block_start = datetime.strptime(block["start"], "%H:%M").time()
                 block_end = datetime.strptime(block["end"], "%H:%M").time()
 
-                # Generate slots within this block
-                slot_start_dt = datetime.combine(current_date, block_start)
-                block_end_dt = datetime.combine(current_date, block_end)
+                # H13 fix: Build timezone-aware datetimes in the user's
+                # local timezone so DST transitions are handled correctly.
+                # datetime.combine with a ZoneInfo tzinfo correctly resolves
+                # ambiguous/missing wall-clock times on DST boundaries.
+                slot_start_dt = datetime.combine(current_date, block_start, tzinfo=user_tz)
+                block_end_dt = datetime.combine(current_date, block_end, tzinfo=user_tz)
 
                 while slot_start_dt + timedelta(minutes=duration_minutes) <= block_end_dt:
                     slot_end_dt = slot_start_dt + timedelta(minutes=duration_minutes)
+
+                    # Convert to UTC for comparison with appointment times
+                    slot_start_utc = slot_start_dt.astimezone(utc_tz)
+                    slot_end_utc = slot_end_dt.astimezone(utc_tz)
 
                     # Check if slot conflicts with any appointment (including buffers)
                     has_conflict = False
                     for appt in day_appointments:
                         appt_start = appt["start"]
                         appt_end = appt["end"]
+                        # Ensure appointment times are tz-aware for comparison
+                        if appt_start.tzinfo is None:
+                            appt_start = appt_start.replace(tzinfo=utc_tz)
+                        if appt_end.tzinfo is None:
+                            appt_end = appt_end.replace(tzinfo=utc_tz)
                         buffered_start = appt_start - timedelta(minutes=buffer_before)
                         buffered_end = appt_end + timedelta(minutes=buffer_after)
 
-                        if slot_start_dt < buffered_end and slot_end_dt > buffered_start:
+                        if slot_start_utc < buffered_end and slot_end_utc > buffered_start:
                             has_conflict = True
                             break
 
@@ -531,8 +572,8 @@ class RecurringAvailabilityService:
                             "date": current_date.isoformat(),
                             "start": slot_start_dt.strftime("%H:%M"),
                             "end": slot_end_dt.strftime("%H:%M"),
-                            "start_datetime": slot_start_dt.isoformat(),
-                            "end_datetime": slot_end_dt.isoformat(),
+                            "start_datetime": slot_start_utc.isoformat(),
+                            "end_datetime": slot_end_utc.isoformat(),
                         })
 
                     # Advance by slot step (30-minute increments)
@@ -551,6 +592,53 @@ class RecurringAvailabilityService:
     # INTERNAL HELPERS
     # ==================================================================
 
+    def _resolve_user_timezone(
+        self,
+        user_id: int,
+        org_id: int,
+        override: Optional[str] = None,
+    ) -> ZoneInfo:
+        """
+        Resolve the IANA timezone for a user's availability.
+
+        Priority:
+        1. Explicit override parameter
+        2. Timezone stored on the user's active recurring availability rows
+        3. DEFAULT_TIMEZONE constant
+
+        Returns a ZoneInfo instance.
+        """
+        if override:
+            try:
+                return ZoneInfo(override)
+            except (KeyError, ValueError):
+                logger.warning(
+                    "Invalid timezone override '%s', falling back to default", override
+                )
+
+        # Look up from existing recurring availability rows
+        RecurringAvailability, _, _ = self._get_models()
+        row = (
+            self.db.query(RecurringAvailability.timezone)
+            .filter(
+                RecurringAvailability.user_id == user_id,
+                RecurringAvailability.organization_id == org_id,
+                RecurringAvailability.is_active == True,
+            )
+            .first()
+        )
+        if row and row[0]:
+            try:
+                return ZoneInfo(row[0])
+            except (KeyError, ValueError):
+                logger.warning(
+                    "Invalid timezone '%s' on recurring availability for user %s, "
+                    "falling back to default",
+                    row[0], user_id,
+                )
+
+        return ZoneInfo(DEFAULT_TIMEZONE)
+
     def _get_existing_appointments(
         self,
         user_id: int,
@@ -564,11 +652,21 @@ class RecurringAvailabilityService:
         """
         appointments = []
 
-        # Try to load v2 Appointment model
+        # M16 fix: Separate ImportError (critical -- means the module is broken)
+        # from runtime errors (which can be warned about and recovered from).
         try:
             from smart_scheduler_models import AppointmentStatus
             from routes.scheduler._helpers import get_models
+        except ImportError:
+            logger.error(
+                "Failed to import scheduler models required for appointment "
+                "conflict detection. Recurring availability slots will NOT "
+                "account for existing appointments.",
+                exc_info=True,
+            )
+            raise
 
+        try:
             models = get_models()
             Appointment = models.get("Appointment") if models else None
 

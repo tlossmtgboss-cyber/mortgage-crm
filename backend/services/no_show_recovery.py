@@ -150,6 +150,40 @@ EMAIL_TEMPLATES = {
 # Opt-out token helpers
 # ---------------------------------------------------------------------------
 
+# M21: Common weak/default SECRET_KEY values that must be rejected
+_WEAK_SECRET_KEYS = frozenset({
+    "changeme", "secret", "password", "development",
+    "test", "testing", "default", "placeholder",
+    "your-secret-key", "your_secret_key", "supersecret",
+    "mysecret", "my-secret", "my_secret",
+})
+
+_MIN_SECRET_KEY_LENGTH = 32
+
+
+def _validate_secret_key(key: str) -> None:
+    """M21 fix: Reject empty, short, or well-known default SECRET_KEY values.
+
+    Raises RuntimeError if the key is too weak to sign tokens safely.
+    """
+    if not key:
+        raise RuntimeError(
+            "SECRET_KEY is not configured; cannot generate opt-out token. "
+            "Set a strong SECRET_KEY (>= 32 characters) in the environment."
+        )
+    if len(key) < _MIN_SECRET_KEY_LENGTH:
+        raise RuntimeError(
+            f"SECRET_KEY is too short ({len(key)} chars). "
+            f"A minimum of {_MIN_SECRET_KEY_LENGTH} characters is required "
+            "for safe token signing."
+        )
+    if key.strip().lower() in _WEAK_SECRET_KEYS:
+        raise RuntimeError(
+            "SECRET_KEY matches a known default/weak value. "
+            "Set a strong, unique SECRET_KEY in the environment."
+        )
+
+
 def generate_opt_out_token(
     email: str,
     organization_id: int,
@@ -158,11 +192,10 @@ def generate_opt_out_token(
     """Generate a signed JWT token for the opt-out link.
 
     Token is valid for 30 days (longer than the recovery sequence).
-    Raises ValueError if SECRET_KEY is not configured.
+    Raises RuntimeError if SECRET_KEY is not configured or too weak.
     """
     key = _get_secret_key()
-    if not key:
-        raise ValueError("SECRET_KEY is not configured; cannot generate opt-out token")
+    _validate_secret_key(key)
     payload = {
         "email": email,
         "org_id": organization_id,
@@ -451,43 +484,48 @@ class NoShowRecoveryService:
         for appt in appointments:
             previous_status = appt.status.value if appt.status else None
 
-            # Mark as NO_SHOW
-            appt.status = AppointmentStatus.NO_SHOW
-            appt.no_show_at = now
-            appt.status_changed_at = now
-            appt.updated_at = now
-
-            # Record status history for audit trail
+            # H8 fix: Use SAVEPOINT so a per-appointment failure only rolls back
+            # that appointment's changes, not all prior flushed work.
             try:
-                history = AppointmentStatusHistory(
-                    organization_id=appt.organization_id,
-                    appointment_id=appt.id,
-                    previous_status=previous_status,
-                    new_status=AppointmentStatus.NO_SHOW.value,
-                    change_source="system",
-                    notes="Auto-detected: appointment end time + grace period elapsed with no check-in",
-                    changed_at=now,
-                )
-                db.add(history)
-            except Exception as e:
-                logger.warning(f"Failed to record status history for appointment {appt.id}: {e}")
+                nested = db.begin_nested()
 
-            # NC8 fix: Flush status changes to DB BEFORE sending recovery messages,
-            # so if a recovery message fails, the no-show status is already persisted.
-            # DATA-010: Flush per-appointment to catch StaleDataError from optimistic
-            # locking (version_id_col on Appointment model).
-            try:
+                # Mark as NO_SHOW
+                appt.status = AppointmentStatus.NO_SHOW
+                appt.no_show_at = now
+                appt.status_changed_at = now
+                appt.updated_at = now
+
+                # Record status history for audit trail
+                try:
+                    history = AppointmentStatusHistory(
+                        organization_id=appt.organization_id,
+                        appointment_id=appt.id,
+                        previous_status=previous_status,
+                        new_status=AppointmentStatus.NO_SHOW.value,
+                        change_source="system",
+                        notes="Auto-detected: appointment end time + grace period elapsed with no check-in",
+                        changed_at=now,
+                    )
+                    db.add(history)
+                except Exception as e:
+                    logger.warning(f"Failed to record status history for appointment {appt.id}: {e}")
+
+                # NC8 fix: Flush status changes to DB BEFORE sending recovery messages,
+                # so if a recovery message fails, the no-show status is already persisted.
+                # DATA-010: Flush per-appointment to catch StaleDataError from optimistic
+                # locking (version_id_col on Appointment model).
                 db.flush()
+                nested.commit()
                 detected_ids.append(appt.id)
                 flushed_appointments.append(appt)
             except StaleDataError:
                 logger.warning(
                     f"Appointment {appt.id} was concurrently modified (StaleDataError), skipping"
                 )
-                db.rollback()
+                # nested transaction auto-rolls back to savepoint; prior work preserved
             except Exception as e:
                 logger.error(f"Failed to flush no-show update for appointment {appt.id}: {e}", exc_info=True)
-                db.rollback()
+                # nested transaction auto-rolls back to savepoint; prior work preserved
 
         # Commit all flushed no-show status changes so they persist even if
         # recovery messaging fails or the caller never commits.
@@ -704,12 +742,11 @@ class NoShowRecoveryService:
         }
 
     def _get_last_completed_step(self, appointment) -> int:
-        """Parse internal_notes to determine the last completed recovery step.
+        """Determine the last completed recovery step.
 
-        The _log_recovery_step method writes notes in the format:
-            [Recovery Step N/4] SMS template=gentle_sms sent=YES at 2026-03-18 14:30 UTC
-
-        We look for the highest step number with sent=YES.
+        Uses a structured prefix ``[STEP:N]`` written by ``_log_recovery_step``
+        for reliable parsing.  Falls back to the legacy regex pattern for
+        appointments whose notes were written before this change.
 
         Returns:
             The highest completed step number (0 if none completed).
@@ -718,14 +755,19 @@ class NoShowRecoveryService:
         if not notes:
             return 0
 
+        # H11 fix: Primary detection via structured [STEP:N] prefix
+        structured_matches = re.findall(r"\[STEP:(\d+)\]", notes)
+        if structured_matches:
+            return max(int(m) for m in structured_matches)
+
+        # Legacy fallback: parse old-format notes written before the fix
         # Pattern matches "[Recovery Step N/M] ... sent=YES ..."
-        pattern = r"\[Recovery Step (\d+)/\d+\].*?sent=YES"
-        matches = re.findall(pattern, notes)
+        legacy_pattern = r"\[Recovery Step (\d+)/\d+\].*?sent=YES"
+        legacy_matches = re.findall(legacy_pattern, notes)
+        if legacy_matches:
+            return max(int(m) for m in legacy_matches)
 
-        if not matches:
-            return 0
-
-        return max(int(m) for m in matches)
+        return 0
 
     # ------------------------------------------------------------------
     # Opt-out management
@@ -1100,14 +1142,28 @@ class NoShowRecoveryService:
         step_config: Dict,
         result: Dict,
     ) -> None:
-        """Log a recovery step in the appointment's internal notes."""
+        """Log a recovery step in the appointment's internal notes.
+
+        H11 fix: Each note line is prefixed with a structured ``[STEP:N]``
+        tag so that ``_get_last_completed_step`` can reliably parse the
+        last completed step without fragile regex on free-text content.
+        Only successful sends are tagged (failed sends are logged without
+        the structured prefix so they don't advance the step counter).
+        """
         try:
             timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            sent = result.get("success", False)
+
+            # H11: Structured prefix only for successful sends so the step
+            # counter reflects actually-delivered messages.
+            step_prefix = f"[STEP:{step}] " if sent else ""
+
             note = (
+                f"{step_prefix}"
                 f"[Recovery Step {step}/{len(RECOVERY_STEPS)}] "
                 f"{step_config['channel'].upper()} "
                 f"template={step_config['template']} "
-                f"sent={'YES' if result.get('success') else 'NO'} "
+                f"sent={'YES' if sent else 'NO'} "
                 f"at {timestamp}"
             )
             if result.get("error"):

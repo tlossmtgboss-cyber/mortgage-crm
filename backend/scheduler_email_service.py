@@ -120,7 +120,7 @@ def _mask_email(email: Optional[str]) -> str:
 _email_throttle_store: OrderedDict = OrderedDict()
 _email_throttle_lock = threading.Lock()
 _EMAIL_THROTTLE_WINDOW = 3600  # 1 hour in seconds
-_EMAIL_THROTTLE_MAX_KEYS = 5000
+_EMAIL_THROTTLE_MAX_KEYS = 10000
 _email_throttle_cleanup_counter = 0
 _EMAIL_THROTTLE_CLEANUP_INTERVAL = 100
 

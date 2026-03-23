@@ -310,16 +310,19 @@ async def public_reschedule_confirm(
     except (ValueError, AttributeError):
         raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid datetime format"))
 
-    # Make naive (consistent with DB storage)
+    # Normalize to UTC naive (consistent with DB storage)
     if new_start.tzinfo is not None:
-        new_start = new_start.replace(tzinfo=None)
+        from datetime import timezone as _tz
+        new_start = new_start.astimezone(_tz.utc).replace(tzinfo=None)
     if new_end.tzinfo is not None:
-        new_end = new_end.replace(tzinfo=None)
+        from datetime import timezone as _tz
+        new_end = new_end.astimezone(_tz.utc).replace(tzinfo=None)
 
-    # Basic validation
+    # Basic validation (compare naive UTC to naive UTC)
     if new_end <= new_start:
         raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "End time must be after start time"))
-    if new_start < datetime.now(timezone.utc).replace(tzinfo=None):
+    now_utc_naive = datetime.utcnow()
+    if new_start < now_utc_naive:
         raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Cannot reschedule to a past time"))
 
     # Capture old time before the reschedule for audit logging

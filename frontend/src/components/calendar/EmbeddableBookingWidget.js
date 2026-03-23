@@ -14,12 +14,14 @@ import { useState, useEffect } from 'react';
 const WIDGET_STYLES = {
   container: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    maxWidth: 480,
+    maxWidth: 'min(480px, 100%)',
+    width: '100%',
     margin: '0 auto',
-    padding: 24,
+    padding: 16,
     background: '#fff',
     borderRadius: 12,
     boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    boxSizing: 'border-box',
   },
   header: {
     textAlign: 'center',

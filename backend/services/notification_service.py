@@ -4,6 +4,7 @@ Notification Service - Email and SMS notifications for borrower applications.
 Uses SendGrid for email and Telnyx for SMS.
 """
 
+import html
 import os
 import logging
 import threading
@@ -229,6 +230,12 @@ class NotificationService:
 
         subject = "Your Mortgage Application Has Been Received"
 
+        safe_borrower_name = html.escape(borrower_name or '')
+        safe_lo_name = html.escape(lo_name or '')
+        safe_lo_email = html.escape(lo_email or '')
+        safe_lo_phone = html.escape(lo_phone or '') if lo_phone else ''
+        safe_application_id = html.escape(application_id[:8].upper() if application_id else '')
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -248,7 +255,7 @@ class NotificationService:
                     </div>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        Hi {borrower_name},
+                        Hi {safe_borrower_name},
                     </p>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -257,7 +264,7 @@ class NotificationService:
 
                     <div style="background: #f3f4f6; border-radius: 12px; padding: 24px; margin: 24px 0;">
                         <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">Application Reference</p>
-                        <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 600;">{application_id[:8].upper()}</p>
+                        <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 600;">{safe_application_id}</p>
                     </div>
 
                     <h2 style="color: #111827; font-size: 18px; margin: 32px 0 16px;">What happens next?</h2>
@@ -279,10 +286,10 @@ class NotificationService:
 
                     <div style="background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%); border-radius: 12px; padding: 24px; margin: 32px 0; color: white;">
                         <p style="margin: 0 0 8px; font-size: 14px; opacity: 0.9;">Your Loan Officer</p>
-                        <p style="margin: 0 0 4px; font-size: 18px; font-weight: 600;">{lo_name}</p>
+                        <p style="margin: 0 0 4px; font-size: 18px; font-weight: 600;">{safe_lo_name}</p>
                         <p style="margin: 0; font-size: 14px;">
-                            <a href="mailto:{lo_email}" style="color: white;">{lo_email}</a>
-                            {f'<br>{lo_phone}' if lo_phone else ''}
+                            <a href="mailto:{safe_lo_email}" style="color: white;">{safe_lo_email}</a>
+                            {f'<br>{safe_lo_phone}' if safe_lo_phone else ''}
                         </p>
                     </div>
 
@@ -318,8 +325,11 @@ class NotificationService:
 
         subject = "Documents Needed for Your Mortgage Application"
 
+        safe_borrower_name = html.escape(borrower_name or '')
+        safe_lo_name = html.escape(lo_name or '')
+        safe_upload_link = html.escape(upload_link or '')
         docs_list = "".join([
-            f'<li style="margin-bottom: 8px; color: #374151;">{doc}</li>'
+            f'<li style="margin-bottom: 8px; color: #374151;">{html.escape(doc)}</li>'
             for doc in documents_needed
         ])
 
@@ -337,7 +347,7 @@ class NotificationService:
                     <h1 style="margin: 0 0 24px; color: #111827; font-size: 24px;">Documents Needed</h1>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        Hi {borrower_name},
+                        Hi {safe_borrower_name},
                     </p>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
@@ -351,13 +361,13 @@ class NotificationService:
                     </div>
 
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="{upload_link}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                        <a href="{safe_upload_link}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                             Upload Documents
                         </a>
                     </div>
 
                     <p style="color: #6b7280; font-size: 14px; text-align: center;">
-                        Need help? Contact {lo_name} for assistance.
+                        Need help? Contact {safe_lo_name} for assistance.
                     </p>
 
                 </div>
@@ -384,6 +394,10 @@ class NotificationService:
 
         subject = "Continue Your Mortgage Application"
 
+        safe_borrower_name = html.escape(borrower_name or '')
+        safe_resume_link = html.escape(resume_link or '')
+        safe_progress = int(progress_percent) if isinstance(progress_percent, (int, float)) else 0
+
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -398,25 +412,25 @@ class NotificationService:
                     <h1 style="margin: 0 0 24px; color: #111827; font-size: 24px;">You're Almost There!</h1>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        Hi {borrower_name},
+                        Hi {safe_borrower_name},
                     </p>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        Your mortgage application is {progress_percent}% complete. Just a few more steps and you'll be done!
+                        Your mortgage application is {safe_progress}% complete. Just a few more steps and you'll be done!
                     </p>
 
                     <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; margin: 24px 0;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                             <span style="color: #374151; font-weight: 500;">Progress</span>
-                            <span style="color: #218D8D; font-weight: 600;">{progress_percent}%</span>
+                            <span style="color: #218D8D; font-weight: 600;">{safe_progress}%</span>
                         </div>
                         <div style="background: #e5e7eb; border-radius: 9999px; height: 8px; overflow: hidden;">
-                            <div style="background: linear-gradient(90deg, #218D8D, #10b981); height: 100%; width: {progress_percent}%; border-radius: 9999px;"></div>
+                            <div style="background: linear-gradient(90deg, #218D8D, #10b981); height: 100%; width: {safe_progress}%; border-radius: 9999px;"></div>
                         </div>
                     </div>
 
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="{resume_link}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                        <a href="{safe_resume_link}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                             Continue Application
                         </a>
                     </div>
@@ -471,6 +485,12 @@ class NotificationService:
         color = status_colors.get(new_status.lower(), "#6b7280")
         icon = status_icons.get(new_status.lower(), "•")
 
+        safe_borrower_name = html.escape(borrower_name or '')
+        safe_status_display = html.escape(new_status.replace('_', ' ').title())
+        safe_status_message = html.escape(status_message or '')
+        safe_lo_name = html.escape(lo_name or '')
+        safe_lo_email = html.escape(lo_email or '')
+
         subject = f"Application Update: {new_status.replace('_', ' ').title()}"
 
         html_content = f"""
@@ -492,24 +512,24 @@ class NotificationService:
                     </div>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        Hi {borrower_name},
+                        Hi {safe_borrower_name},
                     </p>
 
                     <div style="background: #f3f4f6; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
                         <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">Current Status</p>
                         <p style="margin: 0; color: {color}; font-size: 20px; font-weight: 700;">
-                            {new_status.replace('_', ' ').title()}
+                            {safe_status_display}
                         </p>
                     </div>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        {status_message}
+                        {safe_status_message}
                     </p>
 
                     <div style="border-top: 1px solid #e5e7eb; margin-top: 32px; padding-top: 24px;">
                         <p style="color: #6b7280; font-size: 14px; margin: 0 0 8px;">Your Loan Officer</p>
                         <p style="color: #111827; font-size: 16px; margin: 0;">
-                            {lo_name} - <a href="mailto:{lo_email}" style="color: #218D8D;">{lo_email}</a>
+                            {safe_lo_name} - <a href="mailto:{safe_lo_email}" style="color: #218D8D;">{safe_lo_email}</a>
                         </p>
                     </div>
 
@@ -544,11 +564,17 @@ class NotificationService:
 
         formatted_time = appointment_time.strftime("%A, %B %d, %Y at %I:%M %p")
 
+        safe_borrower_name = html.escape(borrower_name or '')
+        safe_appointment_type = html.escape(appointment_type or '')
+        safe_lo_name = html.escape(lo_name or '')
+        safe_meeting_link = html.escape(meeting_link or '') if meeting_link else ''
+        safe_phone_number = html.escape(phone_number or '') if phone_number else ''
+
         meeting_info = ""
         if meeting_link:
             meeting_info = f'''
             <div style="text-align: center; margin: 24px 0;">
-                <a href="{meeting_link}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                <a href="{safe_meeting_link}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                     Join Video Call
                 </a>
             </div>
@@ -556,11 +582,11 @@ class NotificationService:
         elif phone_number:
             meeting_info = f'''
             <p style="color: #374151; font-size: 16px; text-align: center;">
-                We'll call you at: <strong>{phone_number}</strong>
+                We'll call you at: <strong>{safe_phone_number}</strong>
             </p>
             '''
 
-        subject = f"Appointment Confirmed: {appointment_type}"
+        subject = f"Appointment Confirmed: {html.escape(appointment_type or '')}"
 
         html_content = f"""
         <!DOCTYPE html>
@@ -579,11 +605,11 @@ class NotificationService:
                     </div>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        Hi {borrower_name},
+                        Hi {safe_borrower_name},
                     </p>
 
                     <p style="color: #374151; font-size: 16px; line-height: 1.6;">
-                        Your {appointment_type} with {lo_name} has been confirmed.
+                        Your {safe_appointment_type} with {safe_lo_name} has been confirmed.
                     </p>
 
                     <div style="background: #f3f4f6; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
@@ -596,7 +622,7 @@ class NotificationService:
                     {meeting_info}
 
                     <p style="color: #6b7280; font-size: 14px; text-align: center; margin-top: 32px;">
-                        Need to reschedule? Reply to this email or contact {lo_name}.
+                        Need to reschedule? Reply to this email or contact {safe_lo_name}.
                     </p>
 
                 </div>
@@ -651,7 +677,13 @@ class NotificationService:
     ) -> Dict[str, Any]:
         """Send new application alert to loan officer."""
 
-        subject = f"New Application: {borrower_name}"
+        safe_borrower_name = html.escape(borrower_name or '')
+        safe_borrower_email = html.escape(borrower_email or '')
+        safe_borrower_phone = html.escape(borrower_phone or '') if borrower_phone else 'Not provided'
+        safe_loan_purpose = html.escape(loan_purpose.replace('_', ' ').title() if loan_purpose else '')
+        safe_application_id = html.escape(application_id or '')
+
+        subject = f"New Application: {safe_borrower_name}"
 
         html_content = f"""
         <!DOCTYPE html>
@@ -668,25 +700,25 @@ class NotificationService:
                         <h1 style="margin: 0; font-size: 20px;">🎉 New Application Received</h1>
                     </div>
 
-                    <h2 style="color: #111827; font-size: 24px; margin: 0 0 24px;">{borrower_name}</h2>
+                    <h2 style="color: #111827; font-size: 24px; margin: 0 0 24px;">{safe_borrower_name}</h2>
 
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Email</td>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
-                                <a href="mailto:{borrower_email}" style="color: #218D8D;">{borrower_email}</a>
+                                <a href="mailto:{safe_borrower_email}" style="color: #218D8D;">{safe_borrower_email}</a>
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Phone</td>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
-                                {borrower_phone or 'Not provided'}
+                                {safe_borrower_phone}
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Purpose</td>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
-                                {loan_purpose.replace('_', ' ').title()}
+                                {safe_loan_purpose}
                             </td>
                         </tr>
                         <tr>
@@ -698,7 +730,7 @@ class NotificationService:
                     </table>
 
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="{FRONTEND_URL}/applications/{application_id}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                        <a href="{FRONTEND_URL}/applications/{safe_application_id}" style="display: inline-block; background: #218D8D; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
                             View Application
                         </a>
                     </div>
@@ -729,8 +761,17 @@ class NotificationService:
     ) -> Dict[str, Any]:
         """Send new lead alert to loan officer from microsite or other sources."""
 
-        subject = f"🔔 New Lead: {lead_name}"
+        safe_lead_name = html.escape(lead_name or '')
+        safe_lead_email = html.escape(lead_email or '')
+        safe_lead_phone = html.escape(lead_phone or '') if lead_phone else 'Not provided'
+        safe_lead_source = html.escape(lead_source or '')
+        safe_lo_name = html.escape(lo_name or '')
+        safe_lo_first = html.escape(lo_name.split()[0] if lo_name else 'there')
         intent_display = (intent_type or "General Inquiry").replace("_", " ").title()
+        safe_intent_display = html.escape(intent_display)
+        safe_microsite_name = html.escape(microsite_name or '') if microsite_name else safe_lead_source
+
+        subject = f"🔔 New Lead: {safe_lead_name}"
 
         html_content = f"""
         <!DOCTYPE html>
@@ -744,37 +785,37 @@ class NotificationService:
                 <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px;">
 
                     <div style="background: #218D8D; color: white; padding: 16px 24px; margin: -40px -40px 32px; border-radius: 16px 16px 0 0;">
-                        <h1 style="margin: 0; font-size: 20px;">🔔 New Lead from {lead_source}</h1>
+                        <h1 style="margin: 0; font-size: 20px;">🔔 New Lead from {safe_lead_source}</h1>
                     </div>
 
-                    <p style="color: #6b7280; margin: 0 0 8px;">Hi {lo_name.split()[0] if lo_name else 'there'},</p>
+                    <p style="color: #6b7280; margin: 0 0 8px;">Hi {safe_lo_first},</p>
                     <p style="color: #111827; margin: 0 0 24px;">You have a new lead! Here are the details:</p>
 
-                    <h2 style="color: #111827; font-size: 24px; margin: 0 0 24px;">{lead_name}</h2>
+                    <h2 style="color: #111827; font-size: 24px; margin: 0 0 24px;">{safe_lead_name}</h2>
 
                     <table style="width: 100%; border-collapse: collapse;">
                         <tr>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Email</td>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
-                                <a href="mailto:{lead_email}" style="color: #218D8D;">{lead_email}</a>
+                                <a href="mailto:{safe_lead_email}" style="color: #218D8D;">{safe_lead_email}</a>
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Phone</td>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
-                                {lead_phone or 'Not provided'}
+                                {safe_lead_phone}
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #6b7280;">Interest</td>
                             <td style="padding: 12px 0; border-bottom: 1px solid #e5e7eb; color: #111827; text-align: right;">
-                                {intent_display}
+                                {safe_intent_display}
                             </td>
                         </tr>
                         <tr>
                             <td style="padding: 12px 0; color: #6b7280;">Source</td>
                             <td style="padding: 12px 0; color: #111827; text-align: right;">
-                                {microsite_name or lead_source}
+                                {safe_microsite_name}
                             </td>
                         </tr>
                     </table>
@@ -847,7 +888,8 @@ class NotificationService:
                     logger.info("SMS to %s blocked by TCPA consent: %s", self._mask_phone(to_phone), reason)
                     return {"success": False, "error": f"TCPA consent blocked: {reason}"}
             except ImportError:
-                pass  # Module may not exist yet - allow sending
+                logger.error("TCPA consent module import failed — blocking SMS for TCPA safety")
+                return {"success": False, "error": "TCPA consent check unavailable — SMS blocked"}
             except Exception as e:
                 logger.error("TCPA consent check error, blocking SMS: %s", e)
                 return {"success": False, "error": "consent check failed"}
@@ -975,6 +1017,10 @@ class NotificationService:
         application_id = data.get("application_id", "")
         lo_name = data.get("lo_name", "your loan officer")
 
+        safe_first_name = html.escape(first_name)
+        safe_application_id = html.escape(application_id)
+        safe_lo_name = html.escape(lo_name)
+
         subject = "Welcome to Your Mortgage Application"
 
         body = f"""Hi {first_name},
@@ -995,14 +1041,14 @@ The Perennia Team"""
 
         html_body = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #218D8D;">Welcome, {first_name}!</h1>
+            <h1 style="color: #218D8D;">Welcome, {safe_first_name}!</h1>
             <p>Thank you for starting your mortgage application with us! We're excited to help you on your journey to homeownership.</p>
-            <p><strong>Application Reference:</strong> {application_id}</p>
+            <p><strong>Application Reference:</strong> {safe_application_id}</p>
             <h2>Next Steps:</h2>
             <ol>
                 <li>Complete your application if you haven't already</li>
                 <li>Upload any required documents</li>
-                <li>{lo_name} will review and reach out within 24 hours</li>
+                <li>{safe_lo_name} will review and reach out within 24 hours</li>
             </ol>
             <p>We're here to make this process as smooth as possible.</p>
         </div>
@@ -1030,7 +1076,12 @@ The Perennia Team"""
         document_name = data.get("document_name", "your document")
         remaining = data.get("remaining_documents", [])
 
-        subject = f"Document Received: {document_type.replace('_', ' ').title()}"
+        safe_first_name = html.escape(first_name)
+        safe_document_type = html.escape(document_type.replace('_', ' '))
+        safe_document_type_title = html.escape(document_type.replace('_', ' ').title())
+        safe_document_name = html.escape(document_name)
+
+        subject = f"Document Received: {safe_document_type_title}"
 
         remaining_text = ""
         if remaining:
@@ -1050,10 +1101,10 @@ The Perennia Team"""
         html_body = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #10b981;">✓ Document Received</h1>
-            <p>Hi {first_name},</p>
-            <p>We've received your <strong>{document_type.replace('_', ' ')}</strong>: {document_name}</p>
+            <p>Hi {safe_first_name},</p>
+            <p>We've received your <strong>{safe_document_type}</strong>: {safe_document_name}</p>
             <p>Thank you for submitting this document. Our team will review it shortly.</p>
-            {"<h3>Still needed:</h3><ul>" + "".join(f"<li>{doc}</li>" for doc in remaining) + "</ul>" if remaining else "<p style='color: #10b981;'><strong>All required documents have been received!</strong></p>" if remaining is not None else ""}
+            {"<h3>Still needed:</h3><ul>" + "".join(f"<li>{html.escape(doc)}</li>" for doc in remaining) + "</ul>" if remaining else "<p style='color: #10b981;'><strong>All required documents have been received!</strong></p>" if remaining is not None else ""}
         </div>
         """
 
@@ -1080,6 +1131,10 @@ The Perennia Team"""
         resume_link = data.get("resume_link", FRONTEND_URL)
         missing = data.get("missing_sections", [])
 
+        safe_first_name = html.escape(first_name)
+        safe_completion = int(completion) if isinstance(completion, (int, float)) else 0
+        safe_resume_link = html.escape(resume_link)
+
         subject = "Continue Your Mortgage Application"
 
         missing_text = ""
@@ -1101,18 +1156,18 @@ The Perennia Team"""
 
         html_body = f"""
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #218D8D;">You're {completion}% There!</h1>
-            <p>Hi {first_name},</p>
+            <h1 style="color: #218D8D;">You're {safe_completion}% There!</h1>
+            <p>Hi {safe_first_name},</p>
             <p>Your mortgage application is almost complete. Just a few more steps!</p>
             <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <div style="background: #e5e7eb; border-radius: 9999px; height: 10px;">
-                    <div style="background: #218D8D; height: 10px; width: {completion}%; border-radius: 9999px;"></div>
+                    <div style="background: #218D8D; height: 10px; width: {safe_completion}%; border-radius: 9999px;"></div>
                 </div>
-                <p style="text-align: center; margin-top: 10px;"><strong>{completion}% Complete</strong></p>
+                <p style="text-align: center; margin-top: 10px;"><strong>{safe_completion}% Complete</strong></p>
             </div>
-            {"<h3>Sections to complete:</h3><ul>" + "".join(f"<li>{s}</li>" for s in missing) + "</ul>" if missing else ""}
+            {"<h3>Sections to complete:</h3><ul>" + "".join(f"<li>{html.escape(s)}</li>" for s in missing) + "</ul>" if missing else ""}
             <p style="text-align: center;">
-                <a href="{resume_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Continue Application</a>
+                <a href="{safe_resume_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Continue Application</a>
             </p>
         </div>
         """
@@ -1140,6 +1195,11 @@ The Perennia Team"""
         submission_date = data.get("submission_date", datetime.now())
         review_days = data.get("estimated_review_days", 1)
         lo_name = data.get("lo_name", "Your loan officer")
+
+        safe_first_name = html.escape(first_name)
+        safe_app_id = html.escape(app_id)
+        safe_lo_name = html.escape(lo_name)
+        safe_review_days = int(review_days) if isinstance(review_days, (int, float)) else 1
 
         if isinstance(submission_date, datetime):
             date_str = submission_date.strftime("%B %d, %Y")
@@ -1173,15 +1233,15 @@ The Perennia Team"""
                 </div>
             </div>
             <h1 style="color: #111827; text-align: center;">Application Submitted!</h1>
-            <p>Hi {first_name},</p>
+            <p>Hi {safe_first_name},</p>
             <p>Congratulations! Your mortgage application has been successfully submitted.</p>
             <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
                 <p style="margin: 0; color: #6b7280;">Application Reference</p>
-                <p style="margin: 8px 0 0; font-size: 20px; font-weight: bold; color: #111827;">{app_id}</p>
+                <p style="margin: 8px 0 0; font-size: 20px; font-weight: bold; color: #111827;">{safe_app_id}</p>
             </div>
             <h3>What happens next:</h3>
             <ul>
-                <li>{lo_name} will review your application within {review_days} business day(s)</li>
+                <li>{safe_lo_name} will review your application within {safe_review_days} business day(s)</li>
                 <li>You'll receive updates as your application progresses</li>
                 <li>We may reach out if we need any additional information</li>
             </ul>
@@ -1216,19 +1276,22 @@ The Perennia Team"""
         credit_score = data.get("estimated_credit_score", "")
         property_type = data.get("property_type", "")
 
-        subject = f"New Application: {borrower_name}"
+        safe_borrower_name = html.escape(borrower_name)
+        safe_dashboard_link = html.escape(dashboard_link)
+
+        subject = f"New Application: {safe_borrower_name}"
 
         details = []
         if loan_purpose:
-            details.append(f"- Purpose: {loan_purpose.replace('_', ' ').title()}")
+            details.append(f"- Purpose: {html.escape(loan_purpose.replace('_', ' ').title())}")
         if loan_amount:
             details.append(f"- Loan Amount: ${loan_amount:,.0f}")
         if property_type:
-            details.append(f"- Property Type: {property_type}")
+            details.append(f"- Property Type: {html.escape(str(property_type))}")
         if property_address:
-            details.append(f"- Property: {property_address}")
+            details.append(f"- Property: {html.escape(str(property_address))}")
         if credit_score:
-            details.append(f"- Est. Credit Score: {credit_score}")
+            details.append(f"- Est. Credit Score: {html.escape(str(credit_score))}")
 
         details_text = "\n".join(details) if details else "Details in dashboard"
 
@@ -1246,12 +1309,12 @@ View application: {dashboard_link}"""
                 <h1 style="margin: 0; font-size: 18px;">🎉 New Application Received</h1>
             </div>
             <div style="border: 1px solid #e5e7eb; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
-                <h2 style="margin: 0 0 16px; color: #111827;">{borrower_name}</h2>
+                <h2 style="margin: 0 0 16px; color: #111827;">{safe_borrower_name}</h2>
                 <table style="width: 100%;">
-                    {"".join(f'<tr><td style="padding: 8px 0; color: #6b7280;">{d.split(":")[0].replace("- ", "")}</td><td style="padding: 8px 0; text-align: right; color: #111827;">{d.split(":")[1].strip() if ":" in d else ""}</td></tr>' for d in details)}
+                    {"".join(f'<tr><td style="padding: 8px 0; color: #6b7280;">{html.escape(d.split(":")[0].replace("- ", ""))}</td><td style="padding: 8px 0; text-align: right; color: #111827;">{html.escape(d.split(":")[1].strip() if ":" in d else "")}</td></tr>' for d in details)}
                 </table>
                 <p style="text-align: center; margin-top: 24px;">
-                    <a href="{dashboard_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Application</a>
+                    <a href="{safe_dashboard_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">View Application</a>
                 </p>
             </div>
         </div>
@@ -1279,23 +1342,27 @@ View application: {dashboard_link}"""
         cta_text = data.get("cta_text", "")
         cta_link = data.get("cta_link", "")
 
+        safe_subject = html.escape(subject)
+        safe_cta_text = html.escape(cta_text)
+        safe_cta_link = html.escape(cta_link)
+
         cta_html = ""
         if cta_text and cta_link:
             cta_html = f'''
             <p style="text-align: center; margin: 24px 0;">
-                <a href="{cta_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">{cta_text}</a>
+                <a href="{safe_cta_link}" style="background: #218D8D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">{safe_cta_text}</a>
             </p>
             '''
 
         # Convert body newlines to HTML paragraphs
-        body_html = "".join(f"<p>{line}</p>" for line in body.split("\n\n") if line.strip())
+        body_html = "".join(f"<p>{html.escape(line)}</p>" for line in body.split("\n\n") if line.strip())
 
         return f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{subject}</title>
+    <title>{safe_subject}</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
     <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">

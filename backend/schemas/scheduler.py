@@ -42,6 +42,28 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, EmailStr, Field, validator
 
 
+# =============================================================================
+# SHARED VALIDATORS
+# =============================================================================
+
+_RESERVED_SLUGS = {
+    "api", "admin", "static", "reports", "public", "health", "metrics",
+    "settings", "login", "logout", "register", "sitemap", "robots",
+    "favicon", "calendar", "appointments", "book", "embed",
+}
+
+
+def _validate_timezone_string(v: str) -> str:
+    """Validate that a timezone string is a recognized IANA timezone."""
+    if v:
+        try:
+            from zoneinfo import ZoneInfo
+            ZoneInfo(v)
+        except (KeyError, Exception):
+            raise ValueError(f"Invalid timezone: '{v}'")
+    return v
+
+
 # #############################################################################
 # A. INPUT / REQUEST SCHEMAS
 #    (Consolidated from scheduler_models.py)
@@ -90,6 +112,8 @@ class SchedulerConfigCreate(BaseModel):
     routing_strategy: Optional[str] = "relationship"
     ai_scheduling_enabled: bool = True
 
+    _validate_tz = validator('timezone', allow_reuse=True)(_validate_timezone_string)
+
 
 class SchedulerConfigUpdate(BaseModel):
     config_name: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -107,6 +131,8 @@ class SchedulerConfigUpdate(BaseModel):
     auto_reschedule_enabled: Optional[bool] = None
     smart_reminders_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
+
+    _validate_tz = validator('timezone', allow_reuse=True, pre=True)(_validate_timezone_string)
 
 
 # =============================================================================
@@ -291,6 +317,8 @@ class AppointmentCreate(BaseModel):
     booked_by_ai: bool = False
     ai_booking_context: Optional[Dict] = None
 
+    _validate_tz = validator('timezone', allow_reuse=True)(_validate_timezone_string)
+
 
 class AppointmentUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=500)
@@ -358,7 +386,13 @@ class BookingLinkCreate(BaseModel):
     @validator('slug', pre=True)
     def lowercase_slug(cls, v):
         if isinstance(v, str):
-            return v.lower()
+            v = v.lower()
+        return v
+
+    @validator('slug')
+    def validate_slug_not_reserved(cls, v):
+        if v and v.strip() in _RESERVED_SLUGS:
+            raise ValueError(f"Slug '{v}' is reserved and cannot be used")
         return v
 
 
@@ -374,6 +408,8 @@ class AvailableSlotsRequest(BaseModel):
     end_date: date
     timezone: str = "America/Chicago"
     user_ids: Optional[List[int]] = None  # Filter to specific users
+
+    _validate_tz = validator('timezone', allow_reuse=True)(_validate_timezone_string)
 
     @validator('end_date')
     def end_date_after_start(cls, v, values):
