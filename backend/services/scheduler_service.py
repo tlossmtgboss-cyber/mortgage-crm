@@ -1414,7 +1414,7 @@ class SchedulerService:
 
                     with httpx.Client(timeout=10.0) as client:
                         resp = client.post(
-                            subscription.endpoint_url,
+                            subscription.url,
                             json=delivery.payload,
                             headers=headers,
                         )

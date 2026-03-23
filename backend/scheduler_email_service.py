@@ -152,26 +152,30 @@ def _get_email_throttle_redis():
     return _email_throttle_redis
 
 
-def _check_email_rate_limit(recipient_email: str, max_per_hour: int = 10) -> bool:
+def _check_email_rate_limit(recipient_email: str, max_per_hour: int = 10, org_id: int = None) -> bool:
     """
     Check whether sending another email to recipient_email is allowed.
 
     Returns True if under the limit, False if throttled.
     Never raises -- email delivery should degrade gracefully, not crash.
 
-    Uses Redis if REDIS_URL is set (key ``sched_email:{email}``, 1-hour TTL).
+    Uses Redis if REDIS_URL is set (key ``sched_email:{org}:{email}``, 1-hour TTL).
     Falls back to an in-memory dict with periodic cleanup otherwise.
+
+    Rate limits are scoped per-org to prevent one tenant's burst from blocking others.
     """
     if not recipient_email:
         return True
 
     email_lower = recipient_email.lower().strip()
+    # Scope rate limit key by org_id to isolate tenants
+    org_prefix = str(org_id) if org_id else "global"
 
     # Try Redis first
     r = _get_email_throttle_redis()
     if r is not None:
         try:
-            key = f"sched_email:{email_lower}"
+            key = f"sched_email:{org_prefix}:{email_lower}"
             current = r.incr(key)
             if current == 1:
                 r.expire(key, _EMAIL_THROTTLE_WINDOW)
@@ -203,16 +207,17 @@ def _check_email_rate_limit(recipient_email: str, max_per_hour: int = 10) -> boo
             for k in expired_keys:
                 del _email_throttle_store[k]
 
-        if email_lower in _email_throttle_store:
-            timestamps = _email_throttle_store[email_lower]
-            _email_throttle_store.move_to_end(email_lower)
+        throttle_key = f"{org_prefix}:{email_lower}"
+        if throttle_key in _email_throttle_store:
+            timestamps = _email_throttle_store[throttle_key]
+            _email_throttle_store.move_to_end(throttle_key)
         else:
             # Capacity check -- drop oldest if full (email throttle is less
             # security-critical than the IP rate limiter, so LRU eviction is OK)
             if len(_email_throttle_store) >= _EMAIL_THROTTLE_MAX_KEYS:
                 _email_throttle_store.popitem(last=False)
             timestamps = []
-            _email_throttle_store[email_lower] = timestamps
+            _email_throttle_store[throttle_key] = timestamps
 
         # Remove expired timestamps
         while timestamps and timestamps[0] < cutoff:
@@ -368,14 +373,15 @@ def send_appointment_confirmation_email(
     video_link: str = None,
     scheduled_start: datetime = None,
     duration_minutes: int = 30,
-    reschedule_url: str = None
+    reschedule_url: str = None,
+    organization_id: int = None,
 ):
     """Send appointment confirmation email with calendar invite using SendGrid"""
     if _is_email_suppressed(attendee_email):
         logger.info(f"Email suppressed (bounce/complaint): {_mask_email(attendee_email)}, skipping confirmation")
         return {"success": False, "error": "Email address suppressed"}
 
-    if not _check_email_rate_limit(attendee_email):
+    if not _check_email_rate_limit(attendee_email, org_id=organization_id):
         logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping confirmation email")
         return {"success": False, "error": "Rate limit exceeded"}
 
@@ -525,10 +531,11 @@ def send_appointment_update_email(
     duration_minutes: int = 30,
     old_date: str = None,
     old_time: str = None,
-    reschedule_url: str = None
+    reschedule_url: str = None,
+    organization_id: int = None,
 ):
     """Send appointment update/reschedule email with updated calendar invite using SendGrid"""
-    if not _check_email_rate_limit(attendee_email):
+    if not _check_email_rate_limit(attendee_email, org_id=organization_id):
         logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping update email")
         return {"success": False, "error": "Rate limit exceeded"}
 
@@ -799,10 +806,11 @@ def send_appointment_cancellation_email(
     appointment_date: str,
     appointment_time: str,
     team_member_name: str = None,
-    cancellation_reason: str = None
+    cancellation_reason: str = None,
+    organization_id: int = None,
 ):
     """Send appointment cancellation email to attendee"""
-    if not _check_email_rate_limit(attendee_email):
+    if not _check_email_rate_limit(attendee_email, org_id=organization_id):
         logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping cancellation email")
         return False
 
@@ -994,9 +1002,10 @@ def send_appointment_reminder_email(
     team_member_email: str = None,
     video_link: str = None,
     scheduled_start: datetime = None,
+    organization_id: int = None,
 ):
     """Send appointment reminder email with ICS calendar attachment."""
-    if not _check_email_rate_limit(attendee_email):
+    if not _check_email_rate_limit(attendee_email, org_id=organization_id):
         logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping reminder email")
         return {"success": False, "error": "Rate limit exceeded"}
 

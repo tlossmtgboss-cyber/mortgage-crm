@@ -304,15 +304,23 @@ async def dispatch_webhook(
 
     payload = _build_event_payload(event_type, appointment_data, organization_id)
 
-    # PERF-010: Deliver to all matching subscriptions concurrently
+    # PERF-010: Deliver to all matching subscriptions concurrently.
+    # Each coroutine gets its own DB session to avoid transaction corruption
+    # (SQLAlchemy sessions are not coroutine-safe).
     import asyncio
+    from db import SessionLocal
 
     async def _safe_deliver(sub):
+        session = SessionLocal()
         try:
-            return await _deliver_to_subscription(db, sub, payload)
+            # Re-load the subscription in the new session to avoid detached state
+            local_sub = session.merge(sub, load=False)
+            return await _deliver_to_subscription(session, local_sub, payload)
         except Exception as exc:
             logger.exception("Unexpected error dispatching to subscription=%s: %s", sub.id, exc)
             return None
+        finally:
+            session.close()
 
     results = await asyncio.gather(*[_safe_deliver(sub) for sub in matching])
     deliveries = [r for r in results if r is not None]

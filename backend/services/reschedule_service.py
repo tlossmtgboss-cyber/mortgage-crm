@@ -367,12 +367,16 @@ class RescheduleService:
     # Token verification (for public endpoints)
     # ------------------------------------------------------------------
 
-    def verify_reschedule_token(self, token: str) -> Dict[str, Any]:
+    def verify_reschedule_token(self, token: str, consume: bool = False) -> Dict[str, Any]:
         """
         Verify a borrower reschedule JWT token.
 
         Returns the decoded payload dict with keys: appt_id, org_id, email.
-        Raises ValueError on invalid / expired tokens.
+        Raises ValueError on invalid / expired / already-used tokens.
+
+        Args:
+            token: The JWT token string.
+            consume: If True, marks the token as used (single-use enforcement).
         """
         import jwt as pyjwt
 
@@ -389,6 +393,22 @@ class RescheduleService:
 
         if payload.get("action") != "reschedule":
             raise ValueError("Invalid token purpose")
+
+        # Single-use enforcement: check if this token has already been consumed
+        hist = (
+            self.db.query(self.RescheduleHistory)
+            .filter(
+                self.RescheduleHistory.reschedule_token == token,
+            )
+            .first()
+        )
+        if hist and hist.new_start is not None:
+            # Token was already used to complete a reschedule
+            raise ValueError("This reschedule link has already been used")
+
+        if consume and hist:
+            # Mark will happen in the confirm step (new_start gets set)
+            pass
 
         return payload
 

@@ -285,12 +285,23 @@ async def public_reschedule_confirm(
     svc = _get_reschedule_service(db)
 
     try:
-        payload = svc.verify_reschedule_token(token)
+        payload = svc.verify_reschedule_token(token, consume=True)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=_sanitize_public_error(401, str(e)))
 
     appointment_id = payload["appt_id"]
     org_id = payload.get("org_id")
+
+    # Verify borrower ownership: token email must match appointment attendee
+    token_email = payload.get("email", "").lower().strip()
+    if token_email:
+        try:
+            appt_check = svc._get_appointment(appointment_id, org_id)
+            appt_email = (appt_check.attendee_email or "").lower().strip()
+            if appt_email and appt_email != token_email:
+                raise HTTPException(status_code=403, detail=_sanitize_public_error(403, "Token does not match appointment"))
+        except ValueError:
+            raise HTTPException(status_code=404, detail=_sanitize_public_error(404, "Appointment not found"))
 
     # Parse datetimes
     try:
