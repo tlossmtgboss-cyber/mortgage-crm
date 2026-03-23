@@ -30,6 +30,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/calendar-settings", tags=["Calendar Settings"])
 
+
+def _is_missing_table_error(exc: Exception) -> bool:
+    """Check if a SQLAlchemy error is caused by a missing table (relation does not exist)."""
+    err_str = str(exc).lower()
+    if "relation" in err_str and "does not exist" in err_str:
+        return True
+    # Check the original DB-API exception wrapped by SQLAlchemy
+    orig = getattr(exc, 'orig', None)
+    if orig:
+        orig_str = str(orig).lower()
+        if "relation" in orig_str and "does not exist" in orig_str:
+            return True
+    return False
+
 # ============================================================================
 # DEPENDENCY INJECTION
 # ============================================================================
@@ -268,6 +282,28 @@ async def get_availability_settings(
         })
 
     except SQLAlchemyError as e:
+        db.rollback()
+        if _is_missing_table_error(e):
+            logger.warning(f"Scheduler tables not yet created: {e}")
+            return _success_response({
+                "timezone": "America/Chicago",
+                "business_hours": {
+                    "monday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "tuesday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "wednesday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "thursday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "friday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "saturday": {"start": "10:00", "end": "14:00", "enabled": False},
+                    "sunday": {"start": "10:00", "end": "14:00", "enabled": False},
+                },
+                "time_blocks": [],
+                "buffer_minutes": 5,
+                "min_booking_notice_hours": 2,
+                "max_advance_booking_days": 60,
+                "default_duration_minutes": 30,
+                "max_meetings_per_day": 8,
+                "is_default": True,
+            }, "Default availability (tables not yet created)")
         logger.error(f"Database error fetching availability: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve availability settings")
 
@@ -378,6 +414,9 @@ async def update_availability_settings(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            logger.warning(f"Scheduler tables not yet created, cannot save availability: {e}")
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Database error updating availability: {e}")
         raise HTTPException(status_code=500, detail="Failed to save availability settings")
 
@@ -427,6 +466,10 @@ async def get_appointment_types(
         return _success_response({"appointment_types": types, "count": len(types)})
 
     except SQLAlchemyError as e:
+        db.rollback()
+        if _is_missing_table_error(e):
+            logger.warning(f"Scheduler tables not yet created: {e}")
+            return _success_response({"appointment_types": [], "count": 0})
         logger.error(f"Error fetching appointment types: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve appointment types")
 
@@ -496,6 +539,8 @@ async def create_appointment_type(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error creating appointment type: {e}")
         raise HTTPException(status_code=500, detail="Failed to create appointment type")
 
@@ -560,6 +605,8 @@ async def update_appointment_type(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating appointment type: {e}")
         raise HTTPException(status_code=500, detail="Failed to update appointment type")
 
@@ -593,6 +640,8 @@ async def delete_appointment_type(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error deleting appointment type: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete appointment type")
 
@@ -624,6 +673,8 @@ async def reorder_appointment_types(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error reordering appointment types: {e}")
         raise HTTPException(status_code=500, detail="Failed to reorder appointment types")
 
@@ -678,6 +729,23 @@ async def get_notification_settings(
         return _success_response(merged)
 
     except SQLAlchemyError as e:
+        db.rollback()
+        if _is_missing_table_error(e):
+            logger.warning(f"Scheduler tables not yet created: {e}")
+            return _success_response({
+                "email_reminder_24h": True,
+                "email_reminder_2h": True,
+                "email_reminder_15m": False,
+                "sms_reminder_24h": False,
+                "sms_reminder_2h": True,
+                "sms_reminder_15m": False,
+                "quiet_hours_enabled": False,
+                "quiet_hours_start": "21:00",
+                "quiet_hours_end": "08:00",
+                "notify_on_booking": True,
+                "notify_on_cancellation": True,
+                "notify_on_reschedule": True,
+            })
         logger.error(f"Error fetching notification settings: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve notification settings")
 
@@ -724,6 +792,8 @@ async def update_notification_settings(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating notification settings: {e}")
         raise HTTPException(status_code=500, detail="Failed to save notification settings")
 
@@ -793,6 +863,21 @@ async def get_booking_page_settings(
         })
 
     except SQLAlchemyError as e:
+        db.rollback()
+        if _is_missing_table_error(e):
+            logger.warning(f"Scheduler tables not yet created: {e}")
+            return _success_response({
+                "branding": {
+                    "logo_url": None,
+                    "primary_color": "#218D8D",
+                    "secondary_color": "#e6f5f5",
+                    "tagline": "",
+                    "welcome_message": "Schedule a time to meet with us",
+                    "show_branding": True,
+                    "custom_css": None,
+                },
+                "booking_links": [],
+            })
         logger.error(f"Error fetching booking page settings: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve booking page settings")
 
@@ -838,6 +923,8 @@ async def update_booking_page_settings(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating booking page settings: {e}")
         raise HTTPException(status_code=500, detail="Failed to save booking page settings")
 
@@ -972,6 +1059,15 @@ async def get_team_settings(
         })
 
     except SQLAlchemyError as e:
+        db.rollback()
+        if _is_missing_table_error(e):
+            logger.warning(f"Scheduler tables not yet created: {e}")
+            return _success_response({
+                "assignment_strategy": "round_robin",
+                "auto_reassign_on_absence": True,
+                "members": [],
+                "total_members": 0,
+            })
         logger.error(f"Error fetching team settings: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve team settings")
 
@@ -1017,5 +1113,7 @@ async def update_team_settings(
 
     except SQLAlchemyError as e:
         db.rollback()
+        if _is_missing_table_error(e):
+            raise HTTPException(status_code=503, detail="Calendar tables are being set up. Please try again shortly.")
         logger.error(f"Error updating team settings: {e}")
         raise HTTPException(status_code=500, detail="Failed to save team settings")

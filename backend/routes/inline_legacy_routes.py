@@ -2485,6 +2485,13 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Calendar Settings routes (availability, appointment types, notifications, booking page, integrations, team)
     try:
+        # Ensure scheduler tables exist before loading routes that query them
+        try:
+            from services.smart_scheduler_service import ensure_scheduler_tables
+            ensure_scheduler_tables()
+        except Exception as tbl_err:
+            logger.warning(f"Could not ensure scheduler tables: {tbl_err}")
+
         from routes.calendar_settings_routes import router as calendar_settings_router, set_dependencies as set_cal_settings_deps
         set_cal_settings_deps(get_current_user)
         app.include_router(calendar_settings_router, tags=["Calendar Settings"])
