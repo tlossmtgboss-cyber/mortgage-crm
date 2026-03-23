@@ -1047,11 +1047,11 @@ export const calendarSettingsAPI = {
   },
   // Notifications
   getNotifications: async () => {
-    const response = await api.get('/api/v1/scheduler/settings/notifications');
+    const response = await api.get('/api/v1/calendar-settings/notifications');
     return response.data;
   },
   updateNotifications: async (data) => {
-    const response = await api.put('/api/v1/scheduler/settings/notifications', data);
+    const response = await api.put('/api/v1/calendar-settings/notifications', data);
     return response.data;
   },
   // Booking Page
@@ -1069,7 +1069,7 @@ export const calendarSettingsAPI = {
     return response.data;
   },
   updateIntegrations: async (data) => {
-    const response = await api.put('/api/v1/scheduler/settings', data);
+    const response = await api.put('/api/v1/scheduler/settings/integrations', data);
     return response.data;
   },
   // Cancellation Policy
@@ -1083,7 +1083,7 @@ export const calendarSettingsAPI = {
   },
   // Advanced Settings
   updateAdvancedSettings: async (data) => {
-    const response = await api.put('/api/v1/scheduler/settings', data);
+    const response = await api.put('/api/v1/scheduler/settings/advanced', data);
     return response.data;
   },
   // Team

@@ -71,23 +71,25 @@ def _success_response(data: Any, message: str = ""):
 # PYDANTIC MODELS
 # ============================================================================
 
-class LunchBreak(BaseModel):
+class TimeBlock(BaseModel):
+    id: str
+    label: str = ""
+    start: str = Field("12:00", description="Block start HH:MM")
+    end: str = Field("13:00", description="Block end HH:MM")
+    days: List[str] = Field(default_factory=lambda: ["monday", "tuesday", "wednesday", "thursday", "friday"])
     enabled: bool = True
-    start: str = Field("12:00", description="Lunch start HH:MM")
-    end: str = Field("13:00", description="Lunch end HH:MM")
 
 
 class AvailabilityDay(BaseModel):
     enabled: bool = True
     start: str = Field("09:00", description="Day start HH:MM")
     end: str = Field("17:00", description="Day end HH:MM")
-    lunch_break: Optional[LunchBreak] = None
 
 
 class AvailabilitySettings(BaseModel):
     timezone: Optional[str] = None
     business_hours: Optional[Dict[str, AvailabilityDay]] = None
-    lunch_break: Optional[LunchBreak] = None
+    time_blocks: Optional[List[TimeBlock]] = None
     buffer_minutes: Optional[int] = Field(None, ge=0, le=60)
     min_booking_notice_hours: Optional[int] = Field(None, ge=0, le=168)
     max_advance_booking_days: Optional[int] = Field(None, ge=1, le=365)
@@ -221,15 +223,15 @@ async def get_availability_settings(
             return _success_response({
                 "timezone": "America/Chicago",
                 "business_hours": {
-                    "monday": {"start": "09:00", "end": "17:00", "enabled": True, "lunch_break": None},
-                    "tuesday": {"start": "09:00", "end": "17:00", "enabled": True, "lunch_break": None},
-                    "wednesday": {"start": "09:00", "end": "17:00", "enabled": True, "lunch_break": None},
-                    "thursday": {"start": "09:00", "end": "17:00", "enabled": True, "lunch_break": None},
-                    "friday": {"start": "09:00", "end": "17:00", "enabled": True, "lunch_break": None},
-                    "saturday": {"start": "10:00", "end": "14:00", "enabled": False, "lunch_break": None},
-                    "sunday": {"start": "10:00", "end": "14:00", "enabled": False, "lunch_break": None},
+                    "monday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "tuesday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "wednesday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "thursday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "friday": {"start": "09:00", "end": "17:00", "enabled": True},
+                    "saturday": {"start": "10:00", "end": "14:00", "enabled": False},
+                    "sunday": {"start": "10:00", "end": "14:00", "enabled": False},
                 },
-                "lunch_break": {"enabled": True, "start": "12:00", "end": "13:00"},
+                "time_blocks": [],
                 "buffer_minutes": 5,
                 "min_booking_notice_hours": 2,
                 "max_advance_booking_days": 60,
@@ -239,16 +241,25 @@ async def get_availability_settings(
             }, "Default availability (no custom configuration)")
 
         working_hours = row.working_hours if row.working_hours else {}
-        # Extract lunch_break from working_hours JSON if stored there
-        lunch_break = working_hours.pop("_lunch_break", None) or {
-            "enabled": True, "start": "12:00", "end": "13:00"
-        }
+        # Extract time_blocks from working_hours JSON
+        time_blocks = working_hours.pop("_time_blocks", None) or []
+        # Migrate legacy _lunch_break → time_blocks if present
+        legacy_lunch = working_hours.pop("_lunch_break", None)
+        if legacy_lunch and not time_blocks and legacy_lunch.get("enabled"):
+            time_blocks = [{
+                "id": "migrated-lunch",
+                "label": "Lunch Break",
+                "start": legacy_lunch.get("start", "12:00"),
+                "end": legacy_lunch.get("end", "13:00"),
+                "days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+                "enabled": True,
+            }]
 
         return _success_response({
             "config_id": row.id,
             "timezone": row.timezone or "America/Chicago",
             "business_hours": working_hours,
-            "lunch_break": lunch_break,
+            "time_blocks": time_blocks,
             "buffer_minutes": row.buffer_before_minutes or 5,
             "min_booking_notice_hours": row.min_notice_hours or 2,
             "max_advance_booking_days": row.max_advance_days or 60,
@@ -288,12 +299,13 @@ async def update_availability_settings(
             update_fields.append("timezone = :timezone")
             params["timezone"] = settings.timezone
 
-        if settings.business_hours is not None:
+        if settings.business_hours is not None or settings.time_blocks is not None:
             wh = {}
-            for day, day_settings in settings.business_hours.items():
-                wh[day] = day_settings.dict()
-            if settings.lunch_break:
-                wh["_lunch_break"] = settings.lunch_break.dict()
+            if settings.business_hours is not None:
+                for day, day_settings in settings.business_hours.items():
+                    wh[day] = day_settings.dict()
+            if settings.time_blocks is not None:
+                wh["_time_blocks"] = [tb.dict() for tb in settings.time_blocks]
             update_fields.append("working_hours = :working_hours")
             params["working_hours"] = json.dumps(wh)
 
@@ -903,10 +915,10 @@ async def get_team_settings(
                 sc.max_meetings_per_day,
                 sc.is_active as scheduler_active,
                 (SELECT COUNT(*) FROM scheduler_appointments sa
-                 WHERE sa.loan_officer_id = u.id
+                 WHERE sa.assigned_user_id = u.id
                    AND sa.status NOT IN ('cancelled', 'no_show')
-                   AND sa.start_time >= CURRENT_DATE
-                   AND sa.start_time < CURRENT_DATE + INTERVAL '7 days'
+                   AND sa.scheduled_start >= CURRENT_DATE
+                   AND sa.scheduled_start < CURRENT_DATE + INTERVAL '7 days'
                 ) as upcoming_appointments
             FROM users u
             LEFT JOIN scheduler_configs sc ON sc.user_id = u.id AND sc.organization_id = :org_id
