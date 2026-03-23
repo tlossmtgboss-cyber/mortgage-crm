@@ -67,9 +67,9 @@ const EditAppointmentModal = React.memo(function EditAppointmentModal({
             <label>Meeting Type</label>
             <div className="meeting-mode-group">
               {[
-                { value: 'PHONE', label: 'Phone Call' },
-                { value: 'VIDEO', label: 'Video Call' },
-                { value: 'IN_PERSON', label: 'In Person' },
+                { value: 'phone', label: 'Phone Call' },
+                { value: 'video', label: 'Video Call' },
+                { value: 'in_person', label: 'In Person' },
               ].map(opt => (
                 <div className="meeting-mode-option" key={opt.value}>
                   <input

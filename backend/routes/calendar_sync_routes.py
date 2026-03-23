@@ -946,9 +946,11 @@ async def create_calendar_event(
     models = _get_models()
     CalendarEvent = models['CalendarEvent']
 
+    org_id = _get_org_id(current_user)
     db_event = CalendarEvent(
         **event.model_dump(exclude={'attendees'}),
         user_id=current_user.id,
+        organization_id=org_id,
         attendees=event.attendees if event.attendees else []
     )
 

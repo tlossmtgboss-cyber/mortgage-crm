@@ -41,12 +41,15 @@ const monthNames = [
 const DEFAULT_VIEW_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
 
 // Derive display hours from availability schedule (earliest start - 1hr to latest end)
+// Backend returns flat format: { monday: { start: "09:00", end: "17:00", enabled: true }, ... }
 function deriveViewHours(schedule) {
   if (!schedule || typeof schedule !== 'object') return DEFAULT_VIEW_HOURS;
   let earliest = 24, latest = 0;
   for (const day of Object.values(schedule)) {
-    if (!day?.enabled || !Array.isArray(day.blocks)) continue;
-    for (const block of day.blocks) {
+    if (!day?.enabled) continue;
+    // Support flat format (start/end directly on day) and blocks array format
+    const blocks = Array.isArray(day.blocks) ? day.blocks : (day.start && day.end ? [day] : []);
+    for (const block of blocks) {
       if (!block.start || !block.end) continue;
       const [sh] = block.start.split(':').map(Number);
       const [eh, em] = block.end.split(':').map(Number);
@@ -255,7 +258,7 @@ function Calendar() {
       attendee_name: event.attendee_name || '',
       attendee_email: event.attendee_email || '',
       attendee_phone: event.attendee_phone || '',
-      meeting_mode: event.meeting_mode || 'PHONE',
+      meeting_mode: (event.meeting_mode || 'phone').toLowerCase(),
       date: startDate.toISOString().split('T')[0],
       time: startDate.toTimeString().slice(0, 5),
       duration: String(durationMins),
@@ -279,15 +282,15 @@ function Calendar() {
       const endDateTime = new Date(startDateTime.getTime() + parseInt(editingAppointment.duration) * 60000);
 
       await schedulerAPI.updateAppointment(editingAppointment.id, {
-        title: editingAppointment.title,
-        attendee_name: editingAppointment.attendee_name,
-        attendee_email: editingAppointment.attendee_email,
-        attendee_phone: editingAppointment.attendee_phone,
-        meeting_mode: editingAppointment.meeting_mode,
+        title: editingAppointment.title || undefined,
+        attendee_name: editingAppointment.attendee_name || undefined,
+        attendee_email: editingAppointment.attendee_email || undefined,
+        attendee_phone: editingAppointment.attendee_phone || undefined,
+        meeting_mode: (editingAppointment.meeting_mode || 'phone').toLowerCase(),
         scheduled_start: startDateTime.toISOString(),
         scheduled_end: endDateTime.toISOString(),
         duration_minutes: parseInt(editingAppointment.duration),
-        attendee_notes: editingAppointment.description,
+        description: editingAppointment.description || undefined,
       });
 
       setShowEditModal(false);

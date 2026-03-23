@@ -155,9 +155,10 @@ class AdvancedUpdate(BaseModel):
     ai_can_cancel: Optional[bool] = None
     auto_reschedule_enabled: Optional[bool] = None
     smart_reminders_enabled: Optional[bool] = None
+    calendar_feed_enabled: Optional[bool] = None
     default_meeting_mode: Optional[str] = Field(None, max_length=50)
     preferred_meeting_modes: Optional[List[str]] = None
-    feature_toggles: Optional[Dict[str, bool]] = None
+    feature_toggles: Optional[Dict[str, Any]] = None
 
 
 class AISchedulingUpdate(BaseModel):
@@ -173,6 +174,12 @@ class AISchedulingUpdate(BaseModel):
     smart_scheduling: Optional[Dict[str, Any]] = None
     sms_triggers: Optional[Dict[str, Any]] = None
     ai_response_handling: Optional[Dict[str, Any]] = None
+
+
+class LabelsUpdate(BaseModel):
+    auto_assign_enabled: Optional[bool] = None
+    default_label_id: Optional[int] = None
+    label_mappings: Optional[Dict[str, Any]] = None
 
 
 class SetupStatusUpdate(BaseModel):
@@ -196,6 +203,7 @@ class SettingsImport(BaseModel):
 VALID_SECTIONS = {
     "availability", "notifications", "booking_page",
     "integrations", "team", "advanced", "ai_scheduling",
+    "labels",
 }
 
 SECTION_MODELS = {
@@ -206,6 +214,7 @@ SECTION_MODELS = {
     "team": TeamUpdate,
     "advanced": AdvancedUpdate,
     "ai_scheduling": AISchedulingUpdate,
+    "labels": LabelsUpdate,
 }
 
 
