@@ -408,7 +408,7 @@ export default function AvailabilitySection({
             <div>
               <h2>Time Blocks</h2>
               <p className="section-description">
-                Block off recurring time on your calendar. Appointments cannot be scheduled during blocked times.
+                Block off recurring time on your calendar for tasks, focus time, or personal activities. Appointments cannot be scheduled during blocked times.
                 {(availability.time_blocks || []).length > 0 && (
                   <span className="inline-count"> ({(availability.time_blocks || []).filter(b => b.enabled).length} active)</span>
                 )}
@@ -427,7 +427,7 @@ export default function AvailabilitySection({
           <div className="collapsible-body">
             {(availability.time_blocks || []).length === 0 ? (
               <p className="empty-hint">
-                No time blocks configured. Add one below to protect time on your calendar.
+                No time blocks yet. Add one below to block off time for tasks and activities on your calendar.
               </p>
             ) : (
               <div className="time-blocks-list">
@@ -445,7 +445,7 @@ export default function AvailabilitySection({
                           className="time-block-label-input"
                           value={block.label}
                           onChange={e => updateTimeBlock(block.id, 'label', e.target.value)}
-                          placeholder="Label (e.g., Lunch, Focus Time)"
+                          placeholder="Activity (e.g., Pipeline Review, Follow-ups, Lunch)"
                         />
                       </label>
                       <button

@@ -410,9 +410,7 @@ export default function WorkingHoursStep({ stepData = {}, onChange, allStepData 
   });
 
   const [activePreset, setActivePreset] = useState(stepData.activePreset || 'custom');
-  const [lunchBreakEnabled, setLunchBreakEnabled] = useState(stepData.lunchBreakEnabled || false);
-  const [lunchStart, setLunchStart] = useState(stepData.lunchStart || '12:00');
-  const [lunchEnd, setLunchEnd] = useState(stepData.lunchEnd || '13:00');
+  const [timeBlocks, setTimeBlocks] = useState(stepData.timeBlocks || []);
   const [bufferBefore, setBufferBefore] = useState(stepData.bufferBefore ?? 0);
   const [bufferAfter, setBufferAfter] = useState(stepData.bufferAfter ?? 0);
   const [dailyCap, setDailyCap] = useState(stepData.dailyCap ?? 0);
@@ -426,16 +424,14 @@ export default function WorkingHoursStep({ stepData = {}, onChange, allStepData 
       onChange({
         schedule,
         activePreset,
-        lunchBreakEnabled,
-        lunchStart,
-        lunchEnd,
+        timeBlocks,
         bufferBefore,
         bufferAfter,
         dailyCap,
         totalHoursPerWeek: totalHours,
       });
     }
-  }, [schedule, activePreset, lunchBreakEnabled, lunchStart, lunchEnd, bufferBefore, bufferAfter, dailyCap, totalHours, onChange]);
+  }, [schedule, activePreset, timeBlocks, bufferBefore, bufferAfter, dailyCap, totalHours, onChange]);
 
   // ------------------------------------------------------------------
   // Day toggle
@@ -516,67 +512,29 @@ export default function WorkingHoursStep({ stepData = {}, onChange, allStepData 
   }, []);
 
   // ------------------------------------------------------------------
-  // Lunch break toggle
+  // Time block handlers
   // ------------------------------------------------------------------
-  const handleLunchToggle = useCallback(() => {
-    setLunchBreakEnabled(prev => {
-      const newVal = !prev;
-      if (newVal) {
-        // Split each enabled day's blocks around the lunch period
-        setSchedule(prevSch => {
-          const updated = { ...prevSch };
-          DAYS_OF_WEEK.forEach(day => {
-            const dayData = updated[day.key];
-            if (!dayData.enabled) return;
-
-            const lunchStartMin = timeToMinutes(lunchStart);
-            const lunchEndMin = timeToMinutes(lunchEnd);
-
-            const newBlocks = [];
-            dayData.blocks.forEach(block => {
-              const bStart = timeToMinutes(block.start);
-              const bEnd = timeToMinutes(block.end);
-
-              // If block overlaps with lunch, split it
-              if (bStart < lunchStartMin && bEnd > lunchEndMin) {
-                // Block spans across lunch -- split into two
-                const lunchStartStr = lunchStart;
-                const lunchEndStr = lunchEnd;
-                newBlocks.push({ start: block.start, end: lunchStartStr });
-                newBlocks.push({ start: lunchEndStr, end: block.end });
-              } else if (bStart < lunchStartMin && bEnd > lunchStartMin && bEnd <= lunchEndMin) {
-                // Block ends during lunch -- trim end
-                newBlocks.push({ start: block.start, end: lunchStart });
-              } else if (bStart >= lunchStartMin && bStart < lunchEndMin && bEnd > lunchEndMin) {
-                // Block starts during lunch -- trim start
-                newBlocks.push({ start: lunchEnd, end: block.end });
-              } else if (bStart >= lunchStartMin && bEnd <= lunchEndMin) {
-                // Block entirely within lunch -- skip
-              } else {
-                // Block doesn't overlap -- keep as is
-                newBlocks.push(block);
-              }
-            });
-
-            updated[day.key] = {
-              ...dayData,
-              blocks: newBlocks.length ? newBlocks : [defaultBlock()],
-            };
-          });
-          return updated;
-        });
-      }
-      return newVal;
-    });
+  const addTimeBlock = useCallback(() => {
+    setTimeBlocks(prev => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        label: '',
+        start: '12:00',
+        end: '13:00',
+        days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+        enabled: true,
+      },
+    ]);
     setActivePreset('custom');
-  }, [lunchStart, lunchEnd]);
-
-  const handleLunchStartChange = useCallback((val) => {
-    setLunchStart(val);
   }, []);
 
-  const handleLunchEndChange = useCallback((val) => {
-    setLunchEnd(val);
+  const updateTimeBlock = useCallback((id, field, value) => {
+    setTimeBlocks(prev => prev.map(b => b.id === id ? { ...b, [field]: value } : b));
+  }, []);
+
+  const removeTimeBlock = useCallback((id) => {
+    setTimeBlocks(prev => prev.filter(b => b.id !== id));
   }, []);
 
   // ------------------------------------------------------------------
@@ -684,36 +642,47 @@ export default function WorkingHoursStep({ stepData = {}, onChange, allStepData 
         </div>
       </section>
 
-      {/* Lunch break */}
-      <section className="working-hours-step__lunch" aria-label="Lunch break settings">
+      {/* Time Blocks */}
+      <section className="working-hours-step__lunch" aria-label="Time block settings">
         <div className="working-hours-step__lunch-header">
           <div className="working-hours-step__lunch-label-group">
-            <i className="fas fa-utensils working-hours-step__lunch-icon" aria-hidden="true" />
+            <i className="fas fa-clock working-hours-step__lunch-icon" aria-hidden="true" />
             <div>
-              <h3 className="working-hours-step__section-title" style={{ margin: 0 }}>Lunch Break</h3>
+              <h3 className="working-hours-step__section-title" style={{ margin: 0 }}>Time Blocks</h3>
               <p className="working-hours-step__section-subtitle">
-                Automatically block off time for lunch across all enabled days
+                Block off recurring time for tasks and activities on your calendar
               </p>
             </div>
           </div>
-          <label className="working-hours-step__day-toggle">
-            <input
-              type="checkbox"
-              checked={lunchBreakEnabled}
-              onChange={handleLunchToggle}
-              aria-label={`${lunchBreakEnabled ? 'Disable' : 'Enable'} lunch break`}
-            />
-            <span className="working-hours-step__toggle-track" />
-          </label>
         </div>
-        {lunchBreakEnabled && (
-          <div className="working-hours-step__lunch-times">
-            <div className="working-hours-step__time-select-group">
+        <div style={{ marginTop: 12 }}>
+          {timeBlocks.map(block => (
+            <div key={block.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+              padding: '10px 14px', background: 'var(--cal-bg-secondary, #f8fafc)',
+              borderRadius: 8, border: '1px solid var(--cal-border, #e2e8f0)',
+            }}>
+              <input
+                type="checkbox"
+                checked={block.enabled}
+                onChange={e => updateTimeBlock(block.id, 'enabled', e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: 'var(--cal-primary, #4f46e5)' }}
+              />
+              <input
+                type="text"
+                value={block.label}
+                onChange={e => updateTimeBlock(block.id, 'label', e.target.value)}
+                placeholder="Activity (e.g., Pipeline Review, Follow-ups)"
+                style={{
+                  flex: 1, padding: '6px 10px', border: '1px solid var(--cal-border, #e2e8f0)',
+                  borderRadius: 6, fontSize: 14, minWidth: 0,
+                }}
+              />
               <select
-                value={lunchStart}
-                onChange={(e) => handleLunchStartChange(e.target.value)}
+                value={block.start}
+                onChange={e => updateTimeBlock(block.id, 'start', e.target.value)}
                 className="working-hours-step__time-select"
-                aria-label="Lunch start time"
+                disabled={!block.enabled}
               >
                 {TIME_SLOTS.map(slot => (
                   <option key={slot.value} value={slot.value}>{slot.label}</option>
@@ -721,25 +690,41 @@ export default function WorkingHoursStep({ stepData = {}, onChange, allStepData 
               </select>
               <span className="working-hours-step__time-separator">to</span>
               <select
-                value={lunchEnd}
-                onChange={(e) => handleLunchEndChange(e.target.value)}
+                value={block.end}
+                onChange={e => updateTimeBlock(block.id, 'end', e.target.value)}
                 className="working-hours-step__time-select"
-                aria-label="Lunch end time"
+                disabled={!block.enabled}
               >
                 {TIME_SLOTS.map(slot => (
                   <option key={slot.value} value={slot.value}>{slot.label}</option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => removeTimeBlock(block.id)}
+                style={{
+                  background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+                  padding: 4, fontSize: 16, lineHeight: 1,
+                }}
+                title="Remove time block"
+              >
+                <i className="fas fa-times" />
+              </button>
             </div>
-            <button
-              type="button"
-              className="working-hours-step__lunch-apply"
-              onClick={handleLunchToggle}
-            >
-              <i className="fas fa-magic" aria-hidden="true" /> Re-apply to schedule
-            </button>
-          </div>
-        )}
+          ))}
+          <button
+            type="button"
+            onClick={addTimeBlock}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '8px 16px', background: 'var(--cal-bg-secondary, #f8fafc)',
+              border: '1px dashed var(--cal-border, #cbd5e1)', borderRadius: 8,
+              color: 'var(--cal-primary, #4f46e5)', cursor: 'pointer', fontSize: 14,
+            }}
+          >
+            <i className="fas fa-plus" /> Add Time Block
+          </button>
+        </div>
       </section>
 
       {/* Buffer time and daily cap */}

@@ -39,7 +39,7 @@ class MicrosoftOutlookClient:
         self.tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")  # 'common' for multi-tenant
         self.redirect_uri = os.getenv(
             "MICROSOFT_REDIRECT_URI",
-            "https://app.perenniaai.com/api/v1/microsoft/callback"
+            "https://api.perenniaai.com/api/v1/microsoft/callback"
         )
 
         # Microsoft OAuth endpoints - using 'common' for multi-tenant support

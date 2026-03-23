@@ -63,9 +63,7 @@ export const DEFAULT_AVAILABILITY = {
     saturday: { start: '10:00', end: '14:00', enabled: false },
     sunday: { start: '10:00', end: '14:00', enabled: false },
   },
-  time_blocks: [
-    { id: '1', label: 'Lunch Break', start: '12:00', end: '13:00', days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'], enabled: true },
-  ],
+  time_blocks: [],
   buffer_minutes: 5,
   min_booking_notice_hours: 2,
   max_advance_booking_days: 60,
@@ -174,8 +172,9 @@ export const DEFAULT_TEAM = {
 
 export const DEFAULT_EXPANDED_SECTIONS = {
   'weekly-schedule': true, 'week-overview': true, 'schedule-templates': false,
-  'buffer-times': true, 'date-overrides': false, 'holidays': false,
-  'seasonal-hours': false, 'override-days': false, 'daily-limits': false,
+  'time-blocks': true, 'buffer-times': true, 'date-overrides': false,
+  'holidays': false, 'seasonal-hours': false, 'override-days': false,
+  'daily-limits': false,
 };
 
 // ============================================================================
