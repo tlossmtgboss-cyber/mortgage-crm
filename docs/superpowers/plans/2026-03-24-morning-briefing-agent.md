@@ -570,20 +570,20 @@ class MorningBriefingService:
         try:
             rows = db.execute(sa_text("""
                 SELECT
-                    id, attendee_name, appointment_type,
-                    scheduled_start AT TIME ZONE 'UTC' AT TIME ZONE :tz as local_start
-                FROM scheduler_appointments
-                WHERE assigned_user_id = :uid AND organization_id = :oid
-                  AND (scheduled_start AT TIME ZONE 'UTC' AT TIME ZONE :tz)::date = :today
-                  AND status NOT IN ('cancelled', 'no_show')
-                ORDER BY scheduled_start
+                    sa.id, sa.attendee_name, sa.title,
+                    sa.scheduled_start AT TIME ZONE 'UTC' AT TIME ZONE :tz as local_start
+                FROM scheduler_appointments sa
+                WHERE sa.assigned_user_id = :uid AND sa.organization_id = :oid
+                  AND (sa.scheduled_start AT TIME ZONE 'UTC' AT TIME ZONE :tz)::date = :today
+                  AND sa.status NOT IN ('cancelled', 'no_show')
+                ORDER BY sa.scheduled_start
             """), {"uid": user_id, "oid": org_id, "tz": user_tz, "today": today}).fetchall()
 
             return [
                 {
                     "id": r[0],
                     "attendee": r[1] or "Unknown",
-                    "type": r[2] or "Meeting",
+                    "type": r[2] or "Appointment",
                     "time": r[3].strftime("%-I:%M %p") if r[3] else "",
                 }
                 for r in rows
@@ -797,16 +797,23 @@ class MorningBriefingService:
         terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
 
         try:
-            # Org pipeline snapshot
+            # Org active pipeline snapshot (excludes terminal stages)
             org_snap = db.execute(sa_text(f"""
                 SELECT
                     COUNT(*) as total,
-                    COALESCE(SUM(amount), 0) as volume,
-                    COUNT(CASE WHEN funded_date >= :week_ago THEN 1 END) as funded_this_week,
-                    COUNT(CASE WHEN funded_date >= :two_weeks_ago AND funded_date < :week_ago THEN 1 END) as funded_last_week
+                    COALESCE(SUM(amount), 0) as volume
                 FROM loans
                 WHERE organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
+            """), {"oid": org_id}).fetchone()
+
+            # Funded counts (separate query — funded IS a terminal stage)
+            funded_snap = db.execute(sa_text("""
+                SELECT
+                    COUNT(CASE WHEN funded_date >= :week_ago THEN 1 END) as funded_this_week,
+                    COUNT(CASE WHEN funded_date >= :two_weeks_ago AND funded_date < :week_ago THEN 1 END) as funded_last_week
+                FROM loans
+                WHERE organization_id = :oid AND funded_date >= :two_weeks_ago
             """), {"oid": org_id, "week_ago": week_ago, "two_weeks_ago": two_weeks_ago}).fetchone()
 
             # Branch comparison
@@ -879,8 +886,8 @@ class MorningBriefingService:
                     "issue": issue,
                 })
 
-            funded_this_week = org_snap[2] or 0
-            funded_last_week = org_snap[3] or 0
+            funded_this_week = funded_snap[0] or 0
+            funded_last_week = funded_snap[1] or 0
 
             return {
                 "org_snapshot": {
@@ -1738,7 +1745,7 @@ def _send_briefing_email(
     level_labels = {"individual": f"{active} active loans", "manager": "team briefing", "leadership": f"${volume / 1_000_000:.1f}M pipeline"}
     subject = f"Your Morning Briefing — {short_date} — {level_labels.get(level, '')}"
 
-    from_email = os.getenv("SENDGRID_FROM_EMAIL", "sarah@reply.perenniaai.com")
+    from_email = os.getenv("BRIEFING_FROM_EMAIL", "briefing@perenniaai.com")
     from_name = os.getenv("SENDGRID_FROM_NAME", "Perennia AI")
 
     message = Mail(
@@ -1848,6 +1855,7 @@ from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -1881,17 +1889,29 @@ _get_db = None
 _get_current_user = None
 
 
-def set_dependencies(get_db, get_current_user):
+def set_dependencies(get_db_func, get_current_user_func):
     global _get_db, _get_current_user
-    _get_db = get_db
-    _get_current_user = get_current_user
+    _get_db = get_db_func
+    _get_current_user = get_current_user_func
+
+
+def get_db():
+    if _get_db is None:
+        raise RuntimeError("briefing_routes: dependencies not initialized")
+    return _get_db()
+
+
+def get_current_user():
+    if _get_current_user is None:
+        raise RuntimeError("briefing_routes: dependencies not initialized")
+    return _get_current_user()
 
 
 # --- Routes ---
 
 @router.get("/today")
-async def get_today_briefing(db: Session = Depends(lambda: _get_db()),
-                              current_user=Depends(lambda: _get_current_user())):
+async def get_today_briefing(db: Session = Depends(get_db),
+                              current_user=Depends(get_current_user)):
     """Get current user's briefing for today."""
     MorningBriefing, _ = _get_deps()
 
@@ -1909,7 +1929,7 @@ async def get_today_briefing(db: Session = Depends(lambda: _get_db()),
     ).first()
 
     if not briefing:
-        return None  # Frontend handles null = no briefing yet
+        return Response(status_code=204)  # No briefing yet today
 
     data = briefing.briefing_data or {}
     team = briefing.team_data
@@ -1936,8 +1956,8 @@ async def get_today_briefing(db: Session = Depends(lambda: _get_db()),
 async def get_briefing_history(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=30),
-    db: Session = Depends(lambda: _get_db()),
-    current_user=Depends(lambda: _get_current_user()),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Get paginated briefing history."""
     MorningBriefing, _ = _get_deps()
@@ -1972,8 +1992,8 @@ async def get_briefing_history(
 @router.post("/generate-now")
 async def generate_now(
     force: bool = Query(False),
-    db: Session = Depends(lambda: _get_db()),
-    current_user=Depends(lambda: _get_current_user()),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Manually trigger a briefing for current user."""
     MorningBriefing, _ = _get_deps()
@@ -2003,14 +2023,14 @@ async def generate_now(
     from tasks.morning_briefing_tasks import generate_user_briefing
     generate_user_briefing.apply_async(args=[current_user.id, today.isoformat(), level])
 
-    return {"status": "accepted", "message": "Briefing generation started"}
+    return JSONResponse(status_code=202, content={"status": "accepted", "message": "Briefing generation started"})
 
 
 @router.post("/{briefing_id}/viewed")
 async def mark_viewed(
     briefing_id: int,
-    db: Session = Depends(lambda: _get_db()),
-    current_user=Depends(lambda: _get_current_user()),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Mark a briefing as viewed in-app."""
     MorningBriefing, _ = _get_deps()
@@ -2033,8 +2053,8 @@ async def mark_viewed(
 
 @router.get("/preferences")
 async def get_preferences(
-    db: Session = Depends(lambda: _get_db()),
-    current_user=Depends(lambda: _get_current_user()),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Get briefing preferences."""
     return {
@@ -2047,8 +2067,8 @@ async def get_preferences(
 @router.put("/preferences")
 async def update_preferences(
     prefs: BriefingPreferences,
-    db: Session = Depends(lambda: _get_db()),
-    current_user=Depends(lambda: _get_current_user()),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Update briefing preferences."""
     current_user.briefing_enabled = prefs.briefing_enabled
@@ -2105,17 +2125,8 @@ Create `frontend/src/components/dashboard/MorningBriefingCard.js`:
 
 ```javascript
 import React, { useState, useEffect, useCallback } from 'react';
+import api from '../../services/api';
 import './MorningBriefingCard.css';
-
-const API_BASE = process.env.REACT_APP_API_URL || '';
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('token');
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
-}
 
 export default function MorningBriefingCard() {
   const [briefing, setBriefing] = useState(null);
@@ -2130,20 +2141,16 @@ export default function MorningBriefingCard() {
 
   const fetchBriefing = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/briefing/today`, {
-        headers: getAuthHeaders(),
+      const res = await api.get('/api/v1/briefing/today', {
+        validateStatus: (status) => status === 200 || status === 204,
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.status === 'delivered') {
-          setBriefing(data);
-          // Mark as viewed
-          if (!data.viewed_in_app) {
-            fetch(`${API_BASE}/api/v1/briefing/${data.id}/viewed`, {
-              method: 'POST',
-              headers: getAuthHeaders(),
-            }).catch(() => {});
-          }
+      if (res.status === 204) {
+        // No briefing yet — nothing to display
+      } else if (res.data && res.data.status === 'delivered') {
+        setBriefing(res.data);
+        // Mark as viewed
+        if (!res.data.viewed_in_app) {
+          api.post(`/api/v1/briefing/${res.data.id}/viewed`).catch(() => {});
         }
       }
     } catch (err) {
@@ -2534,8 +2541,8 @@ const MorningBriefingSettings = () => {
   useEffect(() => {
     const fetchPrefs = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/briefing/preferences`, { headers: getAuthHeaders() });
-        if (res.ok) setPrefs(await res.json());
+        const res = await api.get('/api/v1/briefing/preferences');
+        setPrefs(res.data);
       } catch (err) { console.error('Failed to fetch briefing preferences', err); }
       finally { setLoading(false); }
     };
@@ -2546,14 +2553,12 @@ const MorningBriefingSettings = () => {
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/briefing/preferences`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ briefing_enabled: prefs.briefing_enabled, briefing_hour: prefs.briefing_hour }),
+      await api.put('/api/v1/briefing/preferences', {
+        briefing_enabled: prefs.briefing_enabled,
+        briefing_hour: prefs.briefing_hour,
       });
-      if (res.ok) setMessage({ type: 'success', text: 'Briefing preferences saved' });
-      else setMessage({ type: 'error', text: 'Failed to save preferences' });
-    } catch (err) { setMessage({ type: 'error', text: 'Error saving preferences' }); }
+      setMessage({ type: 'success', text: 'Briefing preferences saved' });
+    } catch (err) { setMessage({ type: 'error', text: 'Failed to save preferences' }); }
     finally { setSaving(false); }
   };
 
@@ -2561,24 +2566,20 @@ const MorningBriefingSettings = () => {
     setGenerating(true);
     setMessage(null);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/briefing/generate-now?force=true`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) setMessage({ type: 'success', text: 'Briefing generation started — check your Dashboard in a minute' });
-      else {
-        const err = await res.json();
-        setMessage({ type: 'error', text: err.detail || 'Failed to generate briefing' });
-      }
-    } catch (err) { setMessage({ type: 'error', text: 'Error triggering briefing' }); }
+      await api.post('/api/v1/briefing/generate-now?force=true');
+      setMessage({ type: 'success', text: 'Briefing generation started — check your Dashboard in a minute' });
+    } catch (err) {
+      const detail = err?.response?.data?.detail || 'Failed to generate briefing';
+      setMessage({ type: 'error', text: detail });
+    }
     finally { setGenerating(false); }
   };
 
   if (loading) return <div className="settings-section"><h3>Morning Briefing</h3><p>Loading...</p></div>;
 
   const hourOptions = [];
-  for (let h = 5; h <= 10; h++) {
-    const label = h === 0 ? '12:00 AM' : h <= 11 ? `${h}:00 AM` : h === 12 ? '12:00 PM' : `${h - 12}:00 PM`;
+  for (let h = 5; h <= 11; h++) {
+    const label = `${h}:00 AM`;
     hourOptions.push(<option key={h} value={h}>{label}</option>);
   }
 
