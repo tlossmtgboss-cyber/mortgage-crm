@@ -616,6 +616,9 @@ from .compliance_log import ComplianceDecisionLog
 # SMS persistence models (campaign & scheduled job DB-backed state)
 from .sms_persistence import SMSCampaignRecord, ScheduledSMSJobRecord
 
+# Morning Briefing (daily AI-generated briefings per user)
+from .morning_briefing import MorningBriefing
+
 
 __all__ = [
     # =====================
@@ -1245,4 +1248,9 @@ __all__ = [
     # =====================
     "SMSCampaignRecord",
     "ScheduledSMSJobRecord",
+
+    # =====================
+    # Morning Briefing
+    # =====================
+    "MorningBriefing",
 ]
