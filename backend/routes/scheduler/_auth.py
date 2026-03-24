@@ -16,7 +16,10 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
         raise RuntimeError("Dependencies not set")
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    return await func(token=token, request=request, db=db)
+    user = await func(token=token, request=request, db=db)
+    if hasattr(user, 'is_active') and not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+    return user
 
 
 def _get_org_id(user) -> int:

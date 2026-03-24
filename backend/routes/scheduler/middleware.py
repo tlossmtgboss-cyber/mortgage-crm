@@ -2,10 +2,11 @@
 Scheduler middleware, exception classes, and standard response models.
 
 Contains:
-  - Request timing middleware (logs slow scheduler requests)
+  - Request timing middleware (logs slow scheduler requests with correlation IDs)
   - API version middleware (reads/writes X-API-Version header)
   - Deprecation decorator (adds Deprecation, Sunset, Link headers per RFC 8594)
   - Endpoint version registry
+  - Correlated logger factory for scheduler modules
   - Standard error/success response models for consistent API responses
   - Scheduler-specific exception hierarchy (inherits from PerenniaError)
   - Exception handler to convert SchedulerExceptions to HTTP responses
@@ -27,8 +28,62 @@ from starlette.responses import Response
 
 from exceptions import PerenniaError
 
+# Re-export correlation ID accessors from the platform-wide request context
+# middleware.  The RequestContextMiddleware (outermost middleware) sets these
+# contextvars on every request; scheduler code can import them from here
+# instead of reaching into middleware.request_context directly.
+from middleware.request_context import (
+    get_request_id,
+    get_user_id as _get_ctx_user_id,
+    get_org_id as _get_ctx_org_id,
+)
+
 logger = logging.getLogger("scheduler.performance")
 deprecation_logger = logging.getLogger("scheduler.deprecation")
+
+
+# ============================================================================
+# CORRELATED LOGGER
+# ============================================================================
+
+class _CorrelatedLoggerAdapter(logging.LoggerAdapter):
+    """LoggerAdapter that injects the current request_id into every log record.
+
+    Reads the correlation ID from the platform-wide contextvar set by
+    ``RequestContextMiddleware``.  The request_id appears both in the
+    ``extra`` dict (for structured logging / JSON formatters) and is
+    prepended to the message string (for plain-text formatters).
+
+    Usage::
+
+        from routes.scheduler.middleware import get_correlated_logger
+        logger = get_correlated_logger(__name__)
+        logger.info("Booking created for %s", borrower_email)
+        # => "[req=a1b2c3d4] Booking created for jane@example.com"
+    """
+
+    def process(self, msg, kwargs):
+        request_id = get_request_id() or "no-request-id"
+        extra = kwargs.get("extra", {})
+        extra["request_id"] = request_id
+        kwargs["extra"] = extra
+        return f"[req={request_id[:12]}] {msg}", kwargs
+
+
+def get_correlated_logger(name: str) -> _CorrelatedLoggerAdapter:
+    """Create a logger that automatically includes the request correlation ID.
+
+    This is the recommended way for scheduler modules to create loggers::
+
+        from routes.scheduler.middleware import get_correlated_logger
+        logger = get_correlated_logger(__name__)
+
+    The returned adapter wraps a standard ``logging.Logger`` so all normal
+    methods (info, warning, error, exception, debug) work as expected.  The
+    request_id is injected at call time from the contextvar, so it is always
+    correct even under concurrent async requests.
+    """
+    return _CorrelatedLoggerAdapter(logging.getLogger(name), {})
 
 
 # ============================================================================
@@ -43,6 +98,10 @@ class SchedulerTimingMiddleware(BaseHTTPMiddleware):
 
     Adds an X-Scheduler-Duration-Ms header to every response.
     Logs a warning for requests exceeding the slow threshold (default 1000ms).
+
+    Includes the platform-wide correlation ID (request_id) plus user_id and
+    organization_id (when available from auth middleware) in all log entries
+    for cross-referencing with the request context logs.
     """
 
     async def dispatch(self, request: StarletteRequest, call_next) -> Response:
@@ -51,11 +110,20 @@ class SchedulerTimingMiddleware(BaseHTTPMiddleware):
         duration_ms = (time.perf_counter() - start) * 1000
 
         if duration_ms > _SLOW_REQUEST_THRESHOLD_MS:
+            # Pull tracing context from the platform-wide contextvars
+            request_id = get_request_id() or "unknown"
+            user_id = _get_ctx_user_id()
+            org_id = _get_ctx_org_id()
+
             logger.warning(
-                "Slow scheduler request: %s %s took %.0fms",
+                "Slow scheduler request: %s %s took %.0fms "
+                "request_id=%s user_id=%s org_id=%s",
                 request.method,
                 request.url.path,
                 duration_ms,
+                request_id,
+                user_id or "-",
+                org_id or "-",
             )
 
         response.headers["X-Scheduler-Duration-Ms"] = f"{duration_ms:.0f}"
@@ -66,17 +134,27 @@ async def scheduler_timing_middleware(request: Request, call_next):
     """Functional middleware variant for use with app.middleware("http").
 
     Logs request duration for scheduler endpoints and sets a response header.
+    Includes correlation ID (request_id), user_id, and organization_id in
+    slow-request warnings.
     """
     start = time.perf_counter()
     response = await call_next(request)
     duration_ms = (time.perf_counter() - start) * 1000
 
     if duration_ms > _SLOW_REQUEST_THRESHOLD_MS:
+        request_id = get_request_id() or "unknown"
+        user_id = _get_ctx_user_id()
+        org_id = _get_ctx_org_id()
+
         logger.warning(
-            "Slow scheduler request: %s %s took %.0fms",
+            "Slow scheduler request: %s %s took %.0fms "
+            "request_id=%s user_id=%s org_id=%s",
             request.method,
             request.url.path,
             duration_ms,
+            request_id,
+            user_id or "-",
+            org_id or "-",
         )
 
     response.headers["X-Scheduler-Duration-Ms"] = f"{duration_ms:.0f}"
@@ -396,14 +474,19 @@ class CalendarConflictError(SchedulerException):
 async def scheduler_exception_handler(request: Request, exc: SchedulerException) -> JSONResponse:
     """Convert a SchedulerException into a structured JSON error response.
 
+    Includes the correlation ID so that clients can reference it in support
+    tickets and engineers can grep logs by request_id.
+
     Register with FastAPI via:
         app.add_exception_handler(SchedulerException, scheduler_exception_handler)
     """
+    request_id = get_request_id()
     return JSONResponse(
         status_code=exc.status_code,
         content=SchedulerErrorResponse(
             error=exc.message,
             code=exc.code,
+            request_id=request_id,
         ).dict(),
     )
 
@@ -425,6 +508,9 @@ __all__ = [
     "ENDPOINT_VERSIONS",
     # Deprecation decorator
     "deprecated_endpoint",
+    # Correlation / request tracing
+    "get_request_id",
+    "get_correlated_logger",
     # Response models
     "SchedulerErrorDetail",
     "SchedulerErrorResponse",

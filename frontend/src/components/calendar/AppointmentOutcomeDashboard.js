@@ -3,16 +3,14 @@
  * Shows whether AI-scheduled appointments lead to funded loans.
  * Provides the feedback loop missing from the scheduling intelligence system.
  */
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
-export default function AppointmentOutcomeDashboard() {
+function AppointmentOutcomeDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(90);
 
-  useEffect(() => { loadData(); }, [period]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [outcomes, typeEffectiveness] = await Promise.all([
@@ -25,18 +23,35 @@ export default function AppointmentOutcomeDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [period]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handlePeriodChange = useCallback((e) => {
+    setPeriod(Number(e.target.value));
+  }, []);
+
+  const o = data?.outcomes;
+
+  const roiMetrics = useMemo(() => {
+    if (!o) return null;
+    return {
+      additionalFunded: o.ai_scheduled?.funded || 0,
+      fundedVolume: ((o.ai_scheduled?.funded_volume || 0) / 1000000).toFixed(1),
+      daysFaster: Math.max(0, (o.manually_scheduled?.avg_days_to_fund || 0) - (o.ai_scheduled?.avg_days_to_fund || 0)).toFixed(0),
+    };
+  }, [o]);
+
+  const typeEffectivenessTypes = useMemo(() => data?.typeEffectiveness?.types || [], [data?.typeEffectiveness]);
 
   if (loading) return <div style={{ padding: 20 }}>Loading outcome data...</div>;
-  if (!data?.outcomes) return <div style={{ padding: 20, color: '#94a3b8' }}>No outcome data available yet.</div>;
-
-  const o = data.outcomes;
+  if (!o) return <div style={{ padding: 20, color: '#94a3b8' }}>No outcome data available yet.</div>;
 
   return (
     <div className="outcome-dashboard">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h2 style={{ margin: 0 }}>Scheduling ROI</h2>
-        <select value={period} onChange={e => setPeriod(Number(e.target.value))}
+        <select value={period} onChange={handlePeriodChange}
           style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
           <option value={30}>Last 30 days</option>
           <option value={90}>Last 90 days</option>
@@ -75,26 +90,26 @@ export default function AppointmentOutcomeDashboard() {
           <div>
             <div style={{ fontSize: '0.8rem', color: '#6366f1' }}>Additional Funded Loans</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4338ca' }}>
-              {o.ai_scheduled?.funded || 0}
+              {roiMetrics.additionalFunded}
             </div>
           </div>
           <div>
             <div style={{ fontSize: '0.8rem', color: '#6366f1' }}>Funded Volume (AI)</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4338ca' }}>
-              ${((o.ai_scheduled?.funded_volume || 0) / 1000000).toFixed(1)}M
+              ${roiMetrics.fundedVolume}M
             </div>
           </div>
           <div>
             <div style={{ fontSize: '0.8rem', color: '#6366f1' }}>Days Faster to Fund</div>
             <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#4338ca' }}>
-              {Math.max(0, (o.manually_scheduled?.avg_days_to_fund || 0) - (o.ai_scheduled?.avg_days_to_fund || 0)).toFixed(0)}
+              {roiMetrics.daysFaster}
             </div>
           </div>
         </div>
       </div>
 
       {/* Type Effectiveness */}
-      {data.typeEffectiveness?.types && (
+      {typeEffectivenessTypes.length > 0 && (
         <div style={{ background: '#f8fafc', borderRadius: 12, padding: 20 }}>
           <h3 style={{ margin: '0 0 12px' }}>Effectiveness by Appointment Type</h3>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -107,8 +122,8 @@ export default function AppointmentOutcomeDashboard() {
               </tr>
             </thead>
             <tbody>
-              {data.typeEffectiveness.types.map((t, i) => (
-                <tr key={i}>
+              {typeEffectivenessTypes.map((t) => (
+                <tr key={t.type_id || t.name}>
                   <td style={{ padding: 8, borderBottom: '1px solid #f1f5f9' }}>{t.name}</td>
                   <td style={{ padding: 8, borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>{t.count}</td>
                   <td style={{ padding: 8, borderBottom: '1px solid #f1f5f9', textAlign: 'right', color: t.conversion > 30 ? '#22c55e' : '#64748b' }}>{t.conversion}%</td>
@@ -123,7 +138,7 @@ export default function AppointmentOutcomeDashboard() {
   );
 }
 
-function ComparisonCard({ title, appointments, funded, conversionRate, noShowRate, avgDaysToFund, highlight }) {
+const ComparisonCard = React.memo(function ComparisonCard({ title, appointments, funded, conversionRate, noShowRate, avgDaysToFund, highlight }) {
   return (
     <div style={{
       background: highlight ? '#eef2ff' : '#f8fafc',
@@ -141,4 +156,6 @@ function ComparisonCard({ title, appointments, funded, conversionRate, noShowRat
       </div>
     </div>
   );
-}
+});
+
+export default React.memo(AppointmentOutcomeDashboard);

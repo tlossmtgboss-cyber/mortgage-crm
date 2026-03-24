@@ -345,45 +345,61 @@ async def get_available_slots(
     org_id = _get_org_id(user)
     user_ids = slot_request.user_ids if slot_request.user_ids else [user.id]
 
-    # Validate that all requested user_ids belong to the same organization
-    other_user_ids = [uid for uid in user_ids if uid != user.id]
-    if other_user_ids:
-        _models = get_models()
-        User = _models.get('User')
-        if User:
-            valid_count = db.query(User).filter(
-                User.id.in_(other_user_ids),
-                User.organization_id == org_id
-            ).count()
-            if valid_count != len(other_user_ids):
-                raise HTTPException(
-                    status_code=403,
-                    detail="One or more user IDs not found in your organization"
-                )
+    try:
+        # Validate that all requested user_ids belong to the same organization
+        other_user_ids = [uid for uid in user_ids if uid != user.id]
+        if other_user_ids:
+            _models = get_models()
+            User = _models.get('User')
+            if User:
+                valid_count = db.query(User).filter(
+                    User.id.in_(other_user_ids),
+                    User.organization_id == org_id
+                ).count()
+                if valid_count != len(other_user_ids):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="One or more user IDs not found in your organization"
+                    )
 
-    available_slots = _generate_available_slots(
-        db=db,
-        user_ids=user_ids,
-        start_date=slot_request.start_date,
-        end_date=slot_request.end_date,
-        duration_minutes=slot_request.duration_minutes,
-        org_id=org_id,
-        max_per_day=8,  # Default max per day for authenticated endpoint
-        check_cross_source=True,
-        include_user_id=True,
-        include_day_name=True,
-    )
+        available_slots = _generate_available_slots(
+            db=db,
+            user_ids=user_ids,
+            start_date=slot_request.start_date,
+            end_date=slot_request.end_date,
+            duration_minutes=slot_request.duration_minutes,
+            org_id=org_id,
+            max_per_day=8,  # Default max per day for authenticated endpoint
+            check_cross_source=True,
+            include_user_id=True,
+            include_day_name=True,
+        )
 
-    return {
-        "available_slots": available_slots,
-        "total_slots": len(available_slots),
-        "request": {
-            "start_date": slot_request.start_date.isoformat(),
-            "end_date": slot_request.end_date.isoformat(),
-            "duration_minutes": slot_request.duration_minutes,
-            "user_ids": user_ids
+        return {
+            "available_slots": available_slots,
+            "total_slots": len(available_slots),
+            "request": {
+                "start_date": slot_request.start_date.isoformat(),
+                "end_date": slot_request.end_date.isoformat(),
+                "duration_minutes": slot_request.duration_minutes,
+                "user_ids": user_ids
+            }
         }
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Scheduler tables not available for available-slots query: {e}")
+        return {
+            "available_slots": [],
+            "total_slots": 0,
+            "request": {
+                "start_date": slot_request.start_date.isoformat(),
+                "end_date": slot_request.end_date.isoformat(),
+                "duration_minutes": slot_request.duration_minutes,
+                "user_ids": user_ids
+            },
+            "error": "Scheduler tables not available"
+        }
 
 
 # ============================================================================

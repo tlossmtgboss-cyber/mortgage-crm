@@ -20,7 +20,12 @@ import logging
 
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id, _check_rate_limit,
-    _sanitize_text, _sanitize_public_error, _audit_log,
+    _sanitize_text, _audit_log,
+)
+from routes.scheduler.error_responses import (
+    validation_error, not_found_error, conflict_error,
+    forbidden_error, unauthorized_error, internal_error,
+    scheduler_error,
 )
 from services.scheduler_audit_logger import scheduler_audit
 from db import get_db
@@ -57,7 +62,7 @@ def _get_reschedule_service(db: Session):
     from services.reschedule_service import RescheduleService
     models = get_models()
     if not models:
-        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+        internal_error("Scheduler not initialized")
     return RescheduleService(db, models)
 
 
@@ -229,7 +234,7 @@ async def public_reschedule_slots(
     try:
         payload = svc.verify_reschedule_token(token)
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=_sanitize_public_error(401, str(e)))
+        unauthorized_error(str(e))
 
     appointment_id = payload["appt_id"]
     org_id = payload.get("org_id")
@@ -240,12 +245,12 @@ async def public_reschedule_slots(
         try:
             parsed_date = date.fromisoformat(target_date)
         except ValueError:
-            raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid date format"))
+            validation_error("Invalid date format")
 
     try:
         appt = svc._get_appointment(appointment_id, org_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=_sanitize_public_error(404, str(e)))
+        not_found_error(str(e))
 
     try:
         slots = svc.get_available_slots(
@@ -254,7 +259,7 @@ async def public_reschedule_slots(
             org_id=org_id,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, str(e)))
+        validation_error(str(e))
 
     return {
         "appointment_id": appointment_id,
@@ -287,7 +292,7 @@ async def public_reschedule_confirm(
     try:
         payload = svc.verify_reschedule_token(token, consume=True)
     except ValueError as e:
-        raise HTTPException(status_code=401, detail=_sanitize_public_error(401, str(e)))
+        unauthorized_error(str(e))
 
     appointment_id = payload["appt_id"]
     org_id = payload.get("org_id")
@@ -299,16 +304,16 @@ async def public_reschedule_confirm(
             appt_check = svc._get_appointment(appointment_id, org_id)
             appt_email = (appt_check.attendee_email or "").lower().strip()
             if appt_email and appt_email != token_email:
-                raise HTTPException(status_code=403, detail=_sanitize_public_error(403, "Token does not match appointment"))
+                forbidden_error("Token does not match appointment")
         except ValueError:
-            raise HTTPException(status_code=404, detail=_sanitize_public_error(404, "Appointment not found"))
+            not_found_error("Appointment not found")
 
     # Parse datetimes
     try:
         new_start = datetime.fromisoformat(body.new_start.replace("Z", "+00:00"))
         new_end = datetime.fromisoformat(body.new_end.replace("Z", "+00:00"))
     except (ValueError, AttributeError):
-        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid datetime format"))
+        validation_error("Invalid datetime format")
 
     # Normalize to UTC naive (consistent with DB storage)
     if new_start.tzinfo is not None:
@@ -320,10 +325,10 @@ async def public_reschedule_confirm(
 
     # Basic validation (compare naive UTC to naive UTC)
     if new_end <= new_start:
-        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "End time must be after start time"))
+        validation_error("End time must be after start time")
     now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
     if new_start < now_utc_naive:
-        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Cannot reschedule to a past time"))
+        validation_error("Cannot reschedule to a past time")
 
     # Capture old time before the reschedule for audit logging
     try:
@@ -344,10 +349,12 @@ async def public_reschedule_confirm(
             confirmed_by="borrower",
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=_sanitize_public_error(400, str(e)))
+        validation_error(str(e))
     except HTTPException as e:
         # Conflict from _check_appointment_conflict bubbles up as 409
-        raise HTTPException(status_code=e.status_code, detail=_sanitize_public_error(e.status_code, str(e.detail)))
+        if e.status_code == 409:
+            conflict_error(str(e.detail) if isinstance(e.detail, str) else "This time slot has already been booked. Please select another time.")
+        raise
 
     db.commit()
 

@@ -27,6 +27,64 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# CIRCUIT BREAKER FOR EXTERNAL CALENDAR SOURCES
+# ============================================================================
+# Simple circuit breaker: after CIRCUIT_BREAKER_THRESHOLD consecutive failures
+# for a provider, skip checks for CIRCUIT_BREAKER_TIMEOUT_SECONDS.
+# When the timeout expires, allow one probe request through.
+
+CIRCUIT_BREAKER_THRESHOLD = 5
+CIRCUIT_BREAKER_TIMEOUT_SECONDS = 60
+
+# Module-level state: provider -> {"failure_count": int, "open_until": datetime|None}
+_circuit_breaker_state: dict = {}
+
+
+def _cb_record_success(provider: str):
+    """Record a successful call — resets the circuit breaker for this provider."""
+    state = _circuit_breaker_state.get(provider)
+    if state and (state["failure_count"] > 0 or state["open_until"] is not None):
+        logger.info(f"Circuit breaker CLOSED for {provider} after successful call")
+    _circuit_breaker_state[provider] = {"failure_count": 0, "open_until": None}
+
+
+def _cb_record_failure(provider: str):
+    """Record a failed call — may open the circuit breaker."""
+    if provider not in _circuit_breaker_state:
+        _circuit_breaker_state[provider] = {"failure_count": 0, "open_until": None}
+    state = _circuit_breaker_state[provider]
+    state["failure_count"] += 1
+    if state["failure_count"] >= CIRCUIT_BREAKER_THRESHOLD:
+        open_until = datetime.now(timezone.utc) + timedelta(seconds=CIRCUIT_BREAKER_TIMEOUT_SECONDS)
+        state["open_until"] = open_until
+        logger.warning(
+            f"Circuit breaker OPEN for {provider} after {state['failure_count']} consecutive failures. "
+            f"Skipping checks until {open_until.isoformat()}"
+        )
+
+
+def _cb_should_skip(provider: str) -> bool:
+    """Check if the circuit breaker is open and the call should be skipped.
+
+    Returns True if the provider should be skipped (circuit open and timeout
+    not yet expired). When the timeout has expired, allows one probe request
+    through (returns False) and resets the failure count so the next failure
+    will re-open the circuit quickly.
+    """
+    state = _circuit_breaker_state.get(provider)
+    if not state or state["open_until"] is None:
+        return False
+    now = datetime.now(timezone.utc)
+    if now >= state["open_until"]:
+        # Timeout expired — allow a probe request through
+        logger.info(f"Circuit breaker for {provider} timeout expired, allowing probe request")
+        state["failure_count"] = CIRCUIT_BREAKER_THRESHOLD - 1  # one more failure re-opens
+        state["open_until"] = None
+        return False
+    return True
+
+
+# ============================================================================
 # TIMEZONE HELPERS
 # ============================================================================
 
@@ -130,48 +188,60 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             conflicts.append((start_dt, end_dt))
 
     # Source 2: CalendarEvent (manual calendar entries)
-    try:
-        from database.models.communication import CalendarEvent
-        cal_query = db.query(CalendarEvent).filter(
-            CalendarEvent.user_id == target_user_id,
-            CalendarEvent.status != "cancelled",
-            CalendarEvent.start_time >= start_dt,
-            CalendarEvent.start_time <= end_dt
-        )
-        cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
-        cal_events = cal_query.all()
-        for e in cal_events:
-            if e.start_time and e.end_time:
-                conflicts.append((e.start_time, e.end_time))
-    except Exception as ex:
-        if isinstance(ex, ImportError):
-            logger.debug(f"CalendarEvent cross-source check skipped (not installed): {ex}")
-        else:
-            logger.error(f"CalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
-            degraded_sources.append("calendar_event")
-            conflicts.append((start_dt, end_dt))
+    if _cb_should_skip("calendar_event"):
+        logger.debug(f"CalendarEvent check skipped for user {target_user_id} — circuit breaker open")
+        degraded_sources.append("calendar_event")
+    else:
+        try:
+            from database.models.communication import CalendarEvent
+            cal_query = db.query(CalendarEvent).filter(
+                CalendarEvent.user_id == target_user_id,
+                CalendarEvent.status != "cancelled",
+                CalendarEvent.start_time >= start_dt,
+                CalendarEvent.start_time <= end_dt
+            )
+            cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
+            cal_events = cal_query.all()
+            for e in cal_events:
+                if e.start_time and e.end_time:
+                    conflicts.append((e.start_time, e.end_time))
+            _cb_record_success("calendar_event")
+        except Exception as ex:
+            if isinstance(ex, ImportError):
+                logger.debug(f"CalendarEvent cross-source check skipped (not installed): {ex}")
+            else:
+                logger.error(f"CalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
+                _cb_record_failure("calendar_event")
+                degraded_sources.append("calendar_event")
+                conflicts.append((start_dt, end_dt))
 
     # Source 3: CRMCalendarEvent (Salesforce-synced events)
-    try:
-        from models.calendar_sync_models import CRMCalendarEvent
-        crm_query = db.query(CRMCalendarEvent).filter(
-            CRMCalendarEvent.owner_user_id == target_user_id,
-            CRMCalendarEvent.status != "canceled",
-            CRMCalendarEvent.start_at >= start_dt,
-            CRMCalendarEvent.start_at <= end_dt
-        )
-        crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
-        crm_events = crm_query.all()
-        for e in crm_events:
-            if e.start_at and e.end_at:
-                conflicts.append((e.start_at, e.end_at))
-    except Exception as ex:
-        if isinstance(ex, ImportError):
-            logger.debug(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
-        else:
-            logger.error(f"CRMCalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
-            degraded_sources.append("crm_calendar_event")
-            conflicts.append((start_dt, end_dt))
+    if _cb_should_skip("crm_calendar_event"):
+        logger.debug(f"CRMCalendarEvent check skipped for user {target_user_id} — circuit breaker open")
+        degraded_sources.append("crm_calendar_event")
+    else:
+        try:
+            from models.calendar_sync_models import CRMCalendarEvent
+            crm_query = db.query(CRMCalendarEvent).filter(
+                CRMCalendarEvent.owner_user_id == target_user_id,
+                CRMCalendarEvent.status != "canceled",
+                CRMCalendarEvent.start_at >= start_dt,
+                CRMCalendarEvent.start_at <= end_dt
+            )
+            crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
+            crm_events = crm_query.all()
+            for e in crm_events:
+                if e.start_at and e.end_at:
+                    conflicts.append((e.start_at, e.end_at))
+            _cb_record_success("crm_calendar_event")
+        except Exception as ex:
+            if isinstance(ex, ImportError):
+                logger.debug(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
+            else:
+                logger.error(f"CRMCalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
+                _cb_record_failure("crm_calendar_event")
+                degraded_sources.append("crm_calendar_event")
+                conflicts.append((start_dt, end_dt))
 
     return conflicts, degraded_sources
 
@@ -255,48 +325,60 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
             _fail_closed_all_users("legacy_appointment")
 
     # Source 2: CalendarEvent (manual calendar entries)
-    try:
-        from database.models.communication import CalendarEvent
-        cal_query = db.query(CalendarEvent).filter(
-            CalendarEvent.user_id.in_(user_ids),
-            CalendarEvent.status != "cancelled",
-            CalendarEvent.start_time >= start_dt,
-            CalendarEvent.start_time <= end_dt
-        )
-        cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
-        for e in cal_query.all():
-            if e.start_time and e.end_time:
-                conflicts_by_user[e.user_id].append(
-                    (e.start_time, e.end_time)
-                )
-    except Exception as ex:
-        if isinstance(ex, ImportError):
-            logger.debug(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
-        else:
-            logger.error(f"CalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
-            _fail_closed_all_users("calendar_event")
+    if _cb_should_skip("calendar_event"):
+        logger.debug("CalendarEvent batch check skipped — circuit breaker open")
+        degraded_sources.append("calendar_event")
+    else:
+        try:
+            from database.models.communication import CalendarEvent
+            cal_query = db.query(CalendarEvent).filter(
+                CalendarEvent.user_id.in_(user_ids),
+                CalendarEvent.status != "cancelled",
+                CalendarEvent.start_time >= start_dt,
+                CalendarEvent.start_time <= end_dt
+            )
+            cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
+            for e in cal_query.all():
+                if e.start_time and e.end_time:
+                    conflicts_by_user[e.user_id].append(
+                        (e.start_time, e.end_time)
+                    )
+            _cb_record_success("calendar_event")
+        except Exception as ex:
+            if isinstance(ex, ImportError):
+                logger.debug(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
+            else:
+                logger.error(f"CalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
+                _cb_record_failure("calendar_event")
+                _fail_closed_all_users("calendar_event")
 
     # Source 3: CRMCalendarEvent (Salesforce-synced events)
-    try:
-        from models.calendar_sync_models import CRMCalendarEvent
-        crm_query = db.query(CRMCalendarEvent).filter(
-            CRMCalendarEvent.owner_user_id.in_(user_ids),
-            CRMCalendarEvent.status != "canceled",
-            CRMCalendarEvent.start_at >= start_dt,
-            CRMCalendarEvent.start_at <= end_dt
-        )
-        crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
-        for e in crm_query.all():
-            if e.start_at and e.end_at:
-                conflicts_by_user[e.owner_user_id].append(
-                    (e.start_at, e.end_at)
-                )
-    except Exception as ex:
-        if isinstance(ex, ImportError):
-            logger.debug(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
-        else:
-            logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
-            _fail_closed_all_users("crm_calendar_event")
+    if _cb_should_skip("crm_calendar_event"):
+        logger.debug("CRMCalendarEvent batch check skipped — circuit breaker open")
+        degraded_sources.append("crm_calendar_event")
+    else:
+        try:
+            from models.calendar_sync_models import CRMCalendarEvent
+            crm_query = db.query(CRMCalendarEvent).filter(
+                CRMCalendarEvent.owner_user_id.in_(user_ids),
+                CRMCalendarEvent.status != "canceled",
+                CRMCalendarEvent.start_at >= start_dt,
+                CRMCalendarEvent.start_at <= end_dt
+            )
+            crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
+            for e in crm_query.all():
+                if e.start_at and e.end_at:
+                    conflicts_by_user[e.owner_user_id].append(
+                        (e.start_at, e.end_at)
+                    )
+            _cb_record_success("crm_calendar_event")
+        except Exception as ex:
+            if isinstance(ex, ImportError):
+                logger.debug(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
+            else:
+                logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
+                _cb_record_failure("crm_calendar_event")
+                _fail_closed_all_users("crm_calendar_event")
 
     return conflicts_by_user, degraded_sources
 
@@ -469,9 +551,54 @@ def _generate_available_slots(
             _ra_check = _ra_service.get_weekly_schedule(uid, org_id)
             if _ra_check:
                 _users_with_recurring.add(uid)
+                # C4 fix: Log when both availability sources have data
+                uid_config = config_by_user.get(uid)
+                if uid_config and getattr(uid_config, 'working_hours', None):
+                    json_wh = uid_config.working_hours
+                    has_json_data = any(
+                        v.get("enabled", False) for v in json_wh.values()
+                        if isinstance(v, dict)
+                    ) if isinstance(json_wh, dict) else False
+                    if has_json_data:
+                        logger.info(
+                            f"User {uid}: Both RecurringAvailability rows and "
+                            f"SchedulerConfig.working_hours JSON contain data. "
+                            f"Using RecurringAvailability as the availability source "
+                            f"(JSON working_hours is ignored for slot generation)."
+                        )
     except Exception as e:
         logger.debug(f"RecurringAvailability not available, using JSON working_hours: {e}")
         _ra_service = None
+
+    # C4 fix: Track which availability source is active per user
+    availability_source_by_user = {}
+    for uid in user_ids:
+        if uid in _users_with_recurring:
+            availability_source_by_user[uid] = "recurring_availability"
+        else:
+            availability_source_by_user[uid] = "scheduler_config_json"
+
+    # H7 fix: Batch-load all AvailabilityException rows for users with recurring
+    # availability, covering the entire date range. This replaces the per-date
+    # query inside get_effective_schedule() (N+1 -> 1 query).
+    _exceptions_by_user_date = {}  # (user_id, date) -> [exception, ...]
+    if _ra_service and _users_with_recurring:
+        try:
+            from database.models.recurring_availability import AvailabilityException
+            exc_query = db.query(AvailabilityException).filter(
+                AvailabilityException.user_id.in_(list(_users_with_recurring)),
+                AvailabilityException.organization_id == org_id,
+                AvailabilityException.date >= start_date,
+                AvailabilityException.date <= end_date,
+            )
+            for exc in exc_query.all():
+                key = (exc.user_id, exc.date)
+                if key not in _exceptions_by_user_date:
+                    _exceptions_by_user_date[key] = []
+                _exceptions_by_user_date[key].append(exc)
+        except Exception as e:
+            logger.debug(f"Failed to batch-load AvailabilityExceptions, falling back to per-date queries: {e}")
+            _exceptions_by_user_date = None  # Signal to skip preloading
 
     # ---------------------------------------------------------------
     # PER-USER LOOP: Use pre-loaded data instead of individual queries
@@ -507,7 +634,13 @@ def _generate_available_slots(
 
             # If recurring availability is configured, use it instead of JSON working_hours
             if _recurring_schedule:
-                effective_blocks = _recurring_schedule.get_effective_schedule(user_id, org_id, current_date)
+                # H7 fix: Pass preloaded exceptions to avoid per-date DB query
+                _preloaded = None
+                if _exceptions_by_user_date is not None:
+                    _preloaded = _exceptions_by_user_date.get((user_id, current_date), [])
+                effective_blocks = _recurring_schedule.get_effective_schedule(
+                    user_id, org_id, current_date, preloaded_exceptions=_preloaded
+                )
                 if not effective_blocks:
                     current_date += timedelta(days=1)
                     continue
@@ -608,6 +741,8 @@ def _generate_available_slots(
                             "end": slot_end.isoformat(),
                             "date": current_date.isoformat(),
                         }
+                    # C4 fix: Include which availability source produced this slot
+                    slot["availability_source"] = availability_source_by_user.get(user_id, "scheduler_config_json")
                     if include_user_id:
                         slot["user_id"] = user_id
                     if include_day_name:

@@ -163,7 +163,17 @@ async def submit_survey_response(
     if not token or len(token) < 20:
         raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid survey token"))
 
+    # Duplicate submission guard: reject if this survey was already completed.
+    # This is checked again inside submit_response() under a row lock, but
+    # doing it here avoids unnecessary processing for obvious duplicates.
     service = AppointmentSurveyService(db)
+    existing = service.get_survey_by_token(token)
+    if existing and existing.get("completed"):
+        return {
+            "success": True,
+            "message": "Survey response already recorded. Thank you for your feedback!",
+        }
+
     result = service.submit_response(
         token=token,
         overall_rating=body.overall_rating,

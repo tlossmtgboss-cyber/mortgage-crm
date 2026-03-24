@@ -389,9 +389,7 @@ async def expire_stale_offers(
         forbidden_error("Admin access required")
 
     service = _get_waitlist_service(db)
-    # Note: expire_offers() does not currently accept org_id for tenant scoping.
-    # The service expires all stale offers globally; org_id filtering is a future improvement.
-    count = service.expire_offers()
+    count = service.expire_offers(org_id=org_id)
     db.commit()
 
     return {
@@ -480,10 +478,19 @@ async def public_accept_offer(
     if (body.email or "").strip().lower() != (token_email or "").strip().lower():
         raise HTTPException(status_code=403, detail="Email does not match waitlist entry")
 
+    # Resolve org_id from the waitlist entry for tenant isolation
+    models = get_models()
+    WaitlistEntry = models.get("WaitlistEntry")
+    resolved_org_id = None
+    if WaitlistEntry:
+        entry_row = db.query(WaitlistEntry).filter(WaitlistEntry.id == entry_id).first()
+        if entry_row:
+            resolved_org_id = getattr(entry_row, "organization_id", None)
+
     service = _get_waitlist_service(db)
 
     try:
-        result = service.accept_offer(entry_id)
+        result = service.accept_offer(entry_id, org_id=resolved_org_id)
         db.commit()
 
         return {

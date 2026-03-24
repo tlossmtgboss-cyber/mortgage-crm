@@ -468,11 +468,23 @@ async def unassign_labels(
     if not appt:
         not_found_error("Appointment not found")
 
+    # Verify labels belong to this org (defense-in-depth tenant isolation)
+    from database.models.calendar_label import CalendarLabel
+    valid_label_ids = {
+        row[0] for row in
+        db.query(CalendarLabel.id)
+        .filter(
+            CalendarLabel.organization_id == org_id,
+            CalendarLabel.id.in_(label_ids),
+        )
+        .all()
+    }
+
     deleted = (
         db.query(AppointmentLabel)
         .filter(
             AppointmentLabel.appointment_id == appointment_id,
-            AppointmentLabel.label_id.in_(label_ids),
+            AppointmentLabel.label_id.in_(valid_label_ids),
         )
         .delete(synchronize_session="fetch")
     )

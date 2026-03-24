@@ -2,17 +2,15 @@
  * Webhook Health Dashboard
  * Shows the status of all webhook subscriptions with retry controls.
  */
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../../services/api';
 
-export default function WebhookHealthDashboard() {
+function WebhookHealthDashboard() {
   const [webhooks, setWebhooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState(null);
 
-  useEffect(() => { loadWebhooks(); }, []);
-
-  const loadWebhooks = async () => {
+  const loadWebhooks = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/api/v1/scheduler/webhooks/health`, {
@@ -27,9 +25,11 @@ export default function WebhookHealthDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const retryFailed = async (deliveryId) => {
+  useEffect(() => { loadWebhooks(); }, [loadWebhooks]);
+
+  const retryFailed = useCallback(async (deliveryId) => {
     setRetrying(deliveryId);
     try {
       const token = localStorage.getItem('token');
@@ -43,7 +43,7 @@ export default function WebhookHealthDashboard() {
     } finally {
       setRetrying(null);
     }
-  };
+  }, [loadWebhooks]);
 
   if (loading) return <div style={{ padding: 20, color: '#94a3b8' }}>Loading webhook status...</div>;
   if (webhooks.length === 0) return <div style={{ padding: 20, color: '#94a3b8' }}>No webhook subscriptions configured.</div>;
@@ -52,7 +52,7 @@ export default function WebhookHealthDashboard() {
     <div className="webhook-health-dashboard">
       <h3 style={{ marginBottom: 16 }}>Webhook Health</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {webhooks.map((wh, i) => {
+        {webhooks.map((wh) => {
           const statusColor = wh.status === 'healthy' ? '#22c55e' : wh.status === 'degraded' ? '#f59e0b' : '#ef4444';
           let hostname = 'Webhook';
           try {
@@ -61,7 +61,7 @@ export default function WebhookHealthDashboard() {
             // target_url may not be a valid URL
           }
           return (
-            <div key={wh.subscription_id || i} style={{
+            <div key={wh.subscription_id || wh.target_url || hostname} style={{
               background: '#f8fafc',
               border: `1px solid ${wh.status === 'unhealthy' ? '#fecaca' : '#e2e8f0'}`,
               borderRadius: 8,
@@ -117,3 +117,5 @@ export default function WebhookHealthDashboard() {
     </div>
   );
 }
+
+export default React.memo(WebhookHealthDashboard);

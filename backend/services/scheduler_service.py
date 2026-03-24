@@ -225,17 +225,21 @@ class SchedulerService:
         )
 
         # =================================================================
-        # SLOT HOLD CLEANUP JOBS
+        # SLOT HOLD MAINTENANCE JOBS
         # =================================================================
 
-        # Expired SlotHold cleanup - runs every 6 hours at :47
-        # Deletes expired/released SlotHold records with 1-hour grace period
-        # to prevent table bloat and keep slot queries fast.
+        # SlotHold maintenance - runs every 5 minutes at :02, :07, ..., :57
+        # Two-step process:
+        #   1. Expire stale active holds (active -> expired when past TTL)
+        #   2. Delete old expired/released records (>1 hour old)
+        # Frequency matches the 5-minute default hold TTL so phantom blocks
+        # are resolved within one cycle even if no booking query triggers
+        # inline cleanup.
         self.scheduler.add_job(
             func=self.cleanup_slot_holds,
-            trigger=CronTrigger(minute=47, hour="0,6,12,18"),
+            trigger=IntervalTrigger(minutes=5),
             id="slot_hold_cleanup",
-            name="Cleanup Expired Slot Holds",
+            name="Expire & Cleanup Slot Holds",
             replace_existing=True,
         )
 
@@ -1285,25 +1289,34 @@ class SchedulerService:
     # =========================================================================
 
     def cleanup_slot_holds(self):
-        """Delete expired/released SlotHold records to prevent table bloat.
+        """Expire stale active holds and delete old expired/released records.
 
-        Delegates to the standalone ``cleanup_expired_slot_holds()`` function
-        in ``routes/scheduler/maintenance.py`` which handles the actual query.
+        Two-step process:
+        1. Transition active holds past their TTL to 'expired' status
+        2. Delete expired/released records older than 1 hour
+
+        Delegates to ``run_hold_maintenance()`` in
+        ``routes/scheduler/maintenance.py``.
         """
-        logger.info("Running slot hold cleanup job")
-
         session = get_db_session()
 
         try:
-            from routes.scheduler.maintenance import cleanup_expired_slot_holds
+            from routes.scheduler.maintenance import run_hold_maintenance
 
-            deleted = cleanup_expired_slot_holds(session, grace_period_hours=1)
+            result = run_hold_maintenance(session)
             session.commit()
-            logger.info(f"Slot hold cleanup complete: {deleted} records deleted")
+
+            # Only log when something actually happened to avoid noise
+            if result["expired_count"] > 0 or result["deleted_count"] > 0:
+                logger.info(
+                    "Slot hold maintenance: expired %d, deleted %d",
+                    result["expired_count"],
+                    result["deleted_count"],
+                )
 
         except Exception as e:
             session.rollback()
-            logger.error(f"Slot hold cleanup job failed: {e}", exc_info=True)
+            logger.error(f"Slot hold maintenance job failed: {e}", exc_info=True)
         finally:
             session.close()
 
@@ -1314,31 +1327,33 @@ class SchedulerService:
     def cleanup_audit_logs(self):
         """Purge audit log entries older than the configured retention period.
 
-        Default retention: 2 years (730 days). Override via AUDIT_RETENTION_DAYS env var.
+        Delegates to ``archive_old_audit_logs()`` in ``routes/scheduler/_audit.py``
+        which deletes in batches of 1,000 to avoid long-running transactions.
+
+        Default retention: configurable via AUDIT_RETENTION_DAYS env var (default 365).
         Compliance note: most mortgage regulations require 3-7 year retention.
         Set AUDIT_RETENTION_DAYS accordingly for your jurisdiction.
         """
-        retention_days = int(os.getenv("AUDIT_RETENTION_DAYS", "730"))
-        logger.info(f"Running audit log retention cleanup (>{retention_days} days)")
-
         session = get_db_session()
 
         try:
-            # Delete old audit log entries beyond the retention window
-            result = session.execute(text("""
-                DELETE FROM scheduler_audit_log
-                WHERE created_at < NOW() - :retention_days * INTERVAL '1 day'
-                RETURNING id
-            """), {"retention_days": retention_days})
+            from routes.scheduler._audit import archive_old_audit_logs, AUDIT_RETENTION_DAYS
 
-            deleted_rows = result.fetchall()
+            logger.info("Running audit log retention cleanup (>%d days)", AUDIT_RETENTION_DAYS)
+            result = archive_old_audit_logs(session, retention_days=AUDIT_RETENTION_DAYS)
             session.commit()
-            logger.info(f"Audit log retention cleanup: {len(deleted_rows)} old entries purged")
+
+            if result["deleted_count"] > 0:
+                logger.info(
+                    "Audit log retention cleanup: %d entries purged, oldest remaining: %s",
+                    result["deleted_count"],
+                    result["oldest_remaining"],
+                )
 
         except Exception as e:
             session.rollback()
             # Table may not exist yet — this is not a critical failure
-            logger.warning(f"Audit log retention cleanup skipped: {e}")
+            logger.warning("Audit log retention cleanup skipped: %s", e)
         finally:
             session.close()
 

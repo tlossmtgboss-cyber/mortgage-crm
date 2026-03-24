@@ -44,10 +44,15 @@ def _log_appointment_activity(db, org_id: int, user_id: int, lead_id: int,
 
 def _ensure_lead_for_booking(db, attendee_email: str, attendee_name: str,
                               attendee_phone: str, assigned_user_id: int,
-                              org_id: int) -> Optional[int]:
+                              org_id: int,
+                              nmls_verification_note: str = None) -> Optional[int]:
     """
     Find or create a Lead record for a booking attendee.
     Dedup: Match on email + organization_id. Returns lead_id or None.
+
+    If ``nmls_verification_note`` is provided, it is appended to the lead's
+    notes field so compliance reviewers can see that NMLS verification was
+    not completed at booking time.
     """
     if not attendee_email:
         return None
@@ -66,6 +71,9 @@ def _ensure_lead_for_booking(db, attendee_email: str, attendee_name: str,
 
         if existing:
             existing.last_contact = datetime.now(timezone.utc)
+            if nmls_verification_note:
+                prev = existing.notes or ""
+                existing.notes = f"{prev}\n{nmls_verification_note}".strip()
             logger.info(f"Linked booking to existing lead {existing.id} ({_mask_email(attendee_email)})")
             return existing.id
 
@@ -86,6 +94,7 @@ def _ensure_lead_for_booking(db, attendee_email: str, attendee_name: str,
             owner_id=assigned_user_id,
             last_contact=datetime.now(timezone.utc),
             lead_received_date=datetime.now(timezone.utc),
+            notes=nmls_verification_note,
         )
         db.add(new_lead)
         db.flush()  # Get the ID without committing
@@ -151,7 +160,8 @@ class NMLSBlockingError(Exception):
 
 
 def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: int = None,
-                        enforce: bool = True) -> Optional[str]:
+                        enforce: bool = True,
+                        appointment_id: int = None) -> Optional[str]:
     """
     C3: Verify LO has NMLS number on file.
 
@@ -160,16 +170,25 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
     Returns a warning string for non-regulated states or when
     ``enforce=False``. Returns None if OK.
 
+    When the lookup itself fails (DB error, import error), returns a
+    warning string describing the failure rather than silently returning
+    None, so callers can flag the lead for compliance review.
+
     Scoped by org_id to prevent cross-tenant user enumeration.
     """
     if not attendee_state:
         return None
 
+    appt_ctx = f" (appointment_id={appointment_id})" if appointment_id else ""
+
     try:
         from database.models.core import User
         from routes.scheduler.constants import NMLS_REGULATED_STATES
     except ImportError:
-        return None
+        msg = (f"NMLS_VERIFY_SKIP: Could not import licensing models for "
+               f"user_id={assigned_user_id}, state={attendee_state}{appt_ctx}")
+        logger.warning(msg)
+        return f"Warning: NMLS verification pending - licensing modules unavailable"
 
     try:
         lo_query = db.query(User).filter(User.id == assigned_user_id)
@@ -199,5 +218,10 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
     except NMLSBlockingError:
         raise
     except Exception as e:
-        logger.warning(f"LO licensing check failed: {e}")
-        return None
+        logger.warning(
+            f"NMLS_VERIFY_FAILED: LO licensing lookup error for "
+            f"user_id={assigned_user_id}, org_id={org_id}, "
+            f"state={attendee_state}{appt_ctx}: {e}"
+        )
+        return (f"Warning: NMLS verification pending - lookup failed for "
+                f"LO user_id={assigned_user_id} in state {attendee_state}")

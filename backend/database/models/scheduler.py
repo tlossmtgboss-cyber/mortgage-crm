@@ -187,6 +187,7 @@ class SchedulerConfig(Base):
     ai_can_cancel = Column(Boolean, default=False)
     auto_reschedule_enabled = Column(Boolean, default=True)
     smart_reminders_enabled = Column(Boolean, default=True)
+    ai_scheduling_config = Column(JSON, default=dict)  # Extended AI scheduling preferences
 
     # Landing page customization settings (JSON)
     landing_page_settings = Column(JSON, default=dict)
@@ -455,6 +456,11 @@ class Appointment(Base):
     # Consent tracking
     communication_consent_at = Column(DateTime, nullable=True)
     communication_consent_source = Column(String(50), nullable=True)
+
+    # UTM / attribution tracking (populated from public booking links)
+    # Format: {"utm_source": "...", "utm_medium": "...", "utm_campaign": "...",
+    #          "utm_term": "...", "utm_content": "...", "referrer": "..."}
+    booking_attribution = Column(JSON, nullable=True)
 
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -743,6 +749,7 @@ class SchedulerAuditLog(Base):
     __table_args__ = (
         Index('idx_scheduler_audit_org_ts', 'organization_id', 'created_at'),
         Index('idx_scheduler_audit_entity', 'entity_type', 'entity_id'),
+        Index('ix_audit_org_entity_created', 'organization_id', 'entity_type', 'created_at'),
         {'extend_existing': True}
     )
 

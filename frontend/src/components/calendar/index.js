@@ -32,6 +32,8 @@ export { default as CalendarAnalyticsDashboard } from './CalendarAnalyticsDashbo
 export { default as AppointmentOutcomeDashboard } from './AppointmentOutcomeDashboard';
 export { default as NoShowRecoveryDashboard } from './NoShowRecoveryDashboard';
 export { default as WebhookHealthDashboard } from './WebhookHealthDashboard';
+export { default as CalendarMainView } from './CalendarMainView';
+export { default as CalendarModals } from './CalendarModals';
 export {
   normalizeUTCDate,
   formatDateForAPI,

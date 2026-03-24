@@ -5,8 +5,11 @@ public error masking, and Cloudflare Turnstile CAPTCHA verification.
 
 from fastapi import HTTPException
 from typing import Optional
+import hashlib
 import logging
 import os
+import time
+import threading
 
 try:
     import nh3
@@ -147,19 +150,98 @@ if _IS_PRODUCTION and not _TURNSTILE_SECRET_KEY:
 _turnstile_client = None
 
 # Turnstile token replay prevention
-_used_turnstile_tokens: set = set()
+# Tokens are hashed (SHA-256) before storage to avoid holding raw CAPTCHA tokens in memory.
+_TURNSTILE_TOKEN_TTL_SECONDS = 300  # Turnstile tokens are valid for ~5 minutes
 _TURNSTILE_TOKEN_MAX_CACHE = 10000
+
+# --- Redis-backed replay cache (cross-worker safe) ---
+_redis_client = None
+_redis_available = False
+
+try:
+    import redis as _redis_module
+    _redis_url = os.getenv("REDIS_URL")
+    if _redis_url:
+        _redis_client = _redis_module.from_url(
+            _redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        # Verify connectivity at import time with a lightweight ping
+        _redis_client.ping()
+        _redis_available = True
+        logger.info("Turnstile replay cache: using Redis (cross-worker)")
+except Exception as _redis_err:
+    _redis_available = False
+    _redis_client = None
+    logger.info(f"Turnstile replay cache: Redis unavailable ({_redis_err}), using in-memory fallback")
+
+
+# --- In-memory TTL dict fallback (single-worker only) ---
+# LIMITATION: This fallback only prevents replays within the same process.
+# In multi-worker deployments without Redis, a token validated by worker A
+# can still be replayed against worker B. Use Redis for production.
+_used_turnstile_tokens: dict = {}  # {token_hash: expiry_timestamp}
+_turnstile_lock = threading.Lock()
+
+
+def _hash_token(token: str) -> str:
+    """Hash a Turnstile token so we never store the raw value."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _evict_expired_tokens() -> None:
+    """Remove expired entries from the in-memory cache. Caller must hold _turnstile_lock."""
+    now = time.monotonic()
+    expired_keys = [k for k, exp in _used_turnstile_tokens.items() if exp <= now]
+    for k in expired_keys:
+        del _used_turnstile_tokens[k]
+
+
+def _evict_lru_if_full() -> None:
+    """If cache exceeds max size after expiry eviction, drop oldest entries. Caller must hold _turnstile_lock."""
+    if len(_used_turnstile_tokens) >= _TURNSTILE_TOKEN_MAX_CACHE:
+        # Sort by expiry (earliest first) and drop the oldest 20%
+        sorted_keys = sorted(_used_turnstile_tokens, key=lambda k: _used_turnstile_tokens[k])
+        drop_count = max(1, len(sorted_keys) // 5)
+        for k in sorted_keys[:drop_count]:
+            del _used_turnstile_tokens[k]
 
 
 def _check_turnstile_replay(token: str) -> bool:
-    """Check if a Turnstile token has already been used. Returns False if replay detected."""
-    if token in _used_turnstile_tokens:
-        return False  # Replay detected
-    _used_turnstile_tokens.add(token)
-    # Cleanup if cache grows too large
-    if len(_used_turnstile_tokens) > _TURNSTILE_TOKEN_MAX_CACHE:
-        _used_turnstile_tokens.clear()
-    return True
+    """
+    Check if a Turnstile token has already been used. Returns False if replay detected.
+    Uses Redis with SETNX + TTL when available; falls back to an in-memory TTL dict.
+    """
+    token_hash = _hash_token(token)
+
+    # --- Redis path ---
+    if _redis_available and _redis_client is not None:
+        try:
+            cache_key = f"turnstile:replay:{token_hash}"
+            # SETNX returns True only if the key was newly set (first use)
+            was_set = _redis_client.set(
+                cache_key, "1", nx=True, ex=_TURNSTILE_TOKEN_TTL_SECONDS
+            )
+            if not was_set:
+                return False  # Key already existed — replay
+            return True
+        except Exception as e:
+            # Redis failure: fall through to in-memory as a safety net
+            logger.warning(f"Redis replay check failed, falling back to in-memory: {e}")
+
+    # --- In-memory fallback path ---
+    now = time.monotonic()
+    with _turnstile_lock:
+        _evict_expired_tokens()
+
+        if token_hash in _used_turnstile_tokens:
+            return False  # Replay detected
+
+        _evict_lru_if_full()
+        _used_turnstile_tokens[token_hash] = now + _TURNSTILE_TOKEN_TTL_SECONDS
+        return True
 
 
 def _get_turnstile_client():

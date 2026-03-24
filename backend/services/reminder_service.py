@@ -25,7 +25,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, text
 from sqlalchemy.orm import Session
 
 from routes.scheduler.constants import DEFAULT_TIMEZONE
@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 
 # Maximum reminders that may be sent per appointment (across all templates)
 MAX_REMINDERS_PER_APPOINTMENT = 3
+
+# Idempotency window: skip sending if a reminder with the same
+# (appointment_id, template_id, channel) was already sent within this period.
+# Prevents duplicate sends when the cron job overlaps or restarts.
+DEDUP_WINDOW_HOURS = 1
 
 # Frontend base URL for building cancel / reschedule links
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -270,6 +275,9 @@ class ReminderService:
         Find reminders whose ``scheduled_for`` is now or in the past and
         whose status is still PENDING.
 
+        Uses ``FOR UPDATE SKIP LOCKED`` so that concurrent batch runs
+        (e.g. overlapping cron invocations) do not pick up the same rows.
+
         Limits to *batch_size* rows (oldest first) to keep each processing
         cycle bounded.
 
@@ -289,6 +297,7 @@ class ReminderService:
             )
             .order_by(AppointmentReminder.scheduled_for.asc())
             .limit(batch_size)
+            .with_for_update(skip_locked=True)
             .all()
         )
 
@@ -308,6 +317,31 @@ class ReminderService:
             .scalar()
         ) or 0
         return sent_count < MAX_REMINDERS_PER_APPOINTMENT
+
+    def _is_duplicate_send(
+        self, appointment_id: int, template_id: int, channel: str
+    ) -> bool:
+        """
+        Return True if a reminder with the same (appointment, template, channel)
+        was already successfully sent within the dedup window.
+
+        This prevents duplicate sends when the cron job overlaps or restarts
+        before the previous batch commits.
+        """
+        _, ReminderLog = self._get_reminder_models()
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=DEDUP_WINDOW_HOURS)
+        existing = (
+            self.db.query(ReminderLog.id)
+            .filter(
+                ReminderLog.appointment_id == appointment_id,
+                ReminderLog.template_id == template_id,
+                ReminderLog.channel == channel,
+                ReminderLog.status == "sent",
+                ReminderLog.sent_at >= cutoff,
+            )
+            .first()
+        )
+        return existing is not None
 
     def _check_sms_consent(self, phone: str, organization_id: int) -> bool:
         """
@@ -426,6 +460,14 @@ class ReminderService:
     ) -> Dict[str, Any]:
         """Send via a single channel and log the result."""
         _, ReminderLog = self._get_reminder_models()
+
+        # --- Idempotency guard ---
+        if self._is_duplicate_send(appointment.id, template.id, channel):
+            logger.info(
+                "Reminder already sent for appointment %s template %s channel %s within last %dh, skipping",
+                appointment.id, template.id, channel, DEDUP_WINDOW_HOURS,
+            )
+            return {"success": True, "channel": channel, "skipped_duplicate": True}
 
         rendered_body = self.render_template(template.body_template, variables)
         rendered_subject = self.render_template(template.subject_template or "", variables)

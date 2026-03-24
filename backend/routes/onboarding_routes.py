@@ -44,17 +44,25 @@ def get_current_user_dep():
 
 
 def get_models():
-    """Get models at runtime to avoid circular imports"""
+    """Get models at runtime to avoid circular imports.
+
+    ProcessRole, ProcessMilestone, ProcessTask, and ImpersonationSession are
+    optional — the team members and work-hours endpoints only need User.
+    """
     import main
-    return {
+    models = {
         'User': main.User,
         'OnboardingStep': main.OnboardingStep,
         'OnboardingProgress': main.OnboardingProgress,
-        'ProcessRole': main.ProcessRole,
-        'ProcessMilestone': main.ProcessMilestone,
-        'ProcessTask': main.ProcessTask,
-        'ImpersonationSession': main.ImpersonationSession,
     }
+    # Optional models — may not be available if not yet imported/registered in main
+    for model_name in ('ProcessRole', 'ProcessMilestone', 'ProcessTask', 'ImpersonationSession'):
+        try:
+            models[model_name] = getattr(main, model_name)
+        except AttributeError:
+            logger.warning(f"Model {model_name} not available from main — some features will be limited")
+            models[model_name] = None
+    return models
 
 
 def get_schemas():
@@ -785,8 +793,8 @@ async def get_team_members(
     """
     models = get_models()
     User = models['User']
-    ProcessRole = models['ProcessRole']
-    ProcessTask = models['ProcessTask']
+    ProcessRole = models.get('ProcessRole')
+    ProcessTask = models.get('ProcessTask')
 
     import main
     current_user = await main.get_current_user(_extract_token(request), request, db)
@@ -804,12 +812,6 @@ async def get_team_members(
             query = query.filter(User.organization_id == current_user.organization_id)
 
         all_users = query.all()
-
-        # Get all process roles for the current user (the admin who completed onboarding)
-        process_roles = db.query(ProcessRole).filter(
-            ProcessRole.user_id == current_user.id,
-            ProcessRole.is_active == True
-        ).all()
 
         # Get tasks count for each role
         team_members = []
@@ -857,29 +859,41 @@ async def get_team_members(
 
         team_members.insert(0, current_member)
 
-        # Get role assignments and task counts
+        # Get role assignments and task counts (optional — not needed for scheduling modal)
         roles_data = []
-        for role in process_roles:
-            tasks_count = db.query(ProcessTask).filter(
-                ProcessTask.role_id == role.id,
-                ProcessTask.is_active == True
-            ).count()
+        if ProcessRole is not None and ProcessTask is not None:
+            try:
+                process_roles = db.query(ProcessRole).filter(
+                    ProcessRole.user_id == current_user.id,
+                    ProcessRole.is_active == True
+                ).all()
 
-            roles_data.append({
-                "id": role.id,
-                "role_name": role.role_name,
-                "role_title": role.role_title,
-                "responsibilities": role.responsibilities,
-                "skills_required": role.skills_required,
-                "key_activities": role.key_activities,
-                "tasks_count": tasks_count
-            })
+                for role in process_roles:
+                    tasks_count = db.query(ProcessTask).filter(
+                        ProcessTask.role_id == role.id,
+                        ProcessTask.is_active == True
+                    ).count()
+
+                    roles_data.append({
+                        "id": role.id,
+                        "role_name": role.role_name,
+                        "role_title": role.role_title,
+                        "responsibilities": role.responsibilities,
+                        "skills_required": role.skills_required,
+                        "key_activities": role.key_activities,
+                        "tasks_count": tasks_count
+                    })
+            except Exception as e:
+                logger.warning(f"Could not fetch ProcessRole/ProcessTask data (non-critical): {e}")
+                roles_data = []
 
         return {
             "team_members": team_members,
             "available_roles": roles_data
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get team members error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -978,16 +992,17 @@ async def get_team_member_work_hours(
     import main
     current_user = await main.get_current_user(_extract_token(request), request, db)
 
+    default_work_hours = {
+        "work_hours_start": "09:00",
+        "work_hours_end": "17:00",
+        "work_days": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    }
+
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             # Return default work hours for non-existent users
-            return {
-                "user_id": user_id,
-                "work_hours_start": "09:00",
-                "work_hours_end": "17:00",
-                "work_days": ["monday", "tuesday", "wednesday", "thursday", "friday"]
-            }
+            return {"user_id": user_id, **default_work_hours}
 
         # Verify organization isolation
         current_org = getattr(current_user, 'organization_id', None) or getattr(current_user, 'tenant_account_id', None)
@@ -995,8 +1010,14 @@ async def get_team_member_work_hours(
         if current_org and target_org and str(current_org) != str(target_org):
             raise HTTPException(status_code=403, detail="Not authorized to view this user")
 
-        # Parse business_hours JSON if it exists
-        business_hours = getattr(user, 'business_hours', None) or {}
+        # Parse business_hours JSON if it exists — may not be present on all User models
+        try:
+            business_hours = getattr(user, 'business_hours', None) or {}
+            if isinstance(business_hours, str):
+                import json as _json
+                business_hours = _json.loads(business_hours)
+        except Exception:
+            business_hours = {}
 
         return {
             "user_id": user.id,
@@ -1006,9 +1027,11 @@ async def get_team_member_work_hours(
             "work_days": business_hours.get('days', ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']) if business_hours else ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Get team member work hours error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.warning(f"Get team member work hours error (returning defaults): {e}")
+        return {"user_id": user_id, **default_work_hours}
 
 
 @team_router.post("/members")

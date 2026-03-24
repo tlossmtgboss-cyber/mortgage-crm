@@ -329,9 +329,12 @@ export function isSameDayInUserTimezone(utcDateString, localDate) {
 
 /**
  * Get a short timezone abbreviation for display (e.g., "CT", "ET", "PT").
+ *
+ * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
+ * @returns {string} e.g. "EST", "CDT", "PST"
  */
-export function getTimezoneAbbreviation() {
-  const tz = getUserTimezone();
+export function getTimezoneAbbreviation(timezone = null) {
+  const tz = timezone || getUserTimezone();
   try {
     const formatted = new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
@@ -343,4 +346,117 @@ export function getTimezoneAbbreviation() {
   } catch {
     return '';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Standardized public API for calendar components
+// ---------------------------------------------------------------------------
+
+/**
+ * Get the user's browser timezone (always returns the browser's own timezone,
+ * ignoring any configured/cached scheduler timezone).
+ *
+ * @returns {string} IANA timezone identifier, e.g. "America/New_York"
+ */
+export function getBrowserTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
+ * Format a UTC ISO string to a localized display time in the given timezone.
+ * Includes the full date and time but no timezone abbreviation.
+ *
+ * @param {string} isoString - UTC ISO datetime string from the backend
+ * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
+ * @returns {string} e.g. "Monday, March 9, 2:30 PM"
+ */
+export function formatLocalTime(isoString, timezone = null) {
+  if (!isoString) return '';
+  const d = new Date(normalizeUTCDate(isoString));
+  const tz = timezone || getUserTimezone();
+  return d.toLocaleString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: tz,
+  });
+}
+
+/**
+ * Format a date for display with an explicit timezone abbreviation appended.
+ *
+ * @param {string} isoString - UTC ISO datetime string from the backend
+ * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
+ * @returns {string} e.g. "10:00 AM EST"
+ */
+export function formatTimeWithZone(isoString, timezone = null) {
+  if (!isoString) return '';
+  const d = new Date(normalizeUTCDate(isoString));
+  const tz = timezone || getUserTimezone();
+  return d.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: tz,
+    timeZoneName: 'short',
+  });
+}
+
+/**
+ * Convert a local date string and time string (as selected by a user in their
+ * timezone) into a UTC ISO string suitable for API submission.
+ *
+ * @param {string} dateStr - Date in "YYYY-MM-DD" format
+ * @param {string} timeStr - Time in "HH:MM" (24-hour) format
+ * @param {string} [timezone] - IANA timezone the date/time are expressed in.
+ *   Defaults to the user's configured timezone.
+ * @returns {string} UTC ISO 8601 string, e.g. "2026-03-09T20:00:00.000Z"
+ */
+export function localToUTC(dateStr, timeStr, timezone = null) {
+  if (!dateStr || !timeStr) return '';
+  const tz = timezone || getUserTimezone();
+  // Parse the combined string as a naive local datetime, then convert using
+  // the target timezone. We call convertNaiveToTimezone directly so that an
+  // explicit timezone parameter is honored (fromUserTimezone always uses
+  // getUserTimezone).
+  const naive = new Date(`${dateStr}T${timeStr}`);
+  if (isNaN(naive.getTime())) return '';
+  return convertNaiveToTimezone(naive, tz).toISOString();
+}
+
+/**
+ * Format a start/end time range with a single timezone abbreviation.
+ *
+ * @param {string} startISO - UTC ISO datetime string for range start
+ * @param {string} endISO   - UTC ISO datetime string for range end
+ * @param {string} [timezone] - IANA timezone. Defaults to user's configured timezone.
+ * @returns {string} e.g. "10:00 AM - 10:30 AM EST"
+ */
+export function formatTimeRange(startISO, endISO, timezone = null) {
+  if (!startISO || !endISO) return '';
+  const tz = timezone || getUserTimezone();
+  const startDate = new Date(normalizeUTCDate(startISO));
+  const endDate = new Date(normalizeUTCDate(endISO));
+
+  // Format start time without timezone name
+  const startStr = startDate.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: tz,
+  });
+
+  // Format end time with timezone abbreviation
+  const endStr = endDate.toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: tz,
+    timeZoneName: 'short',
+  });
+
+  return `${startStr} - ${endStr}`;
 }

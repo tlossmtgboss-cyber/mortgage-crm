@@ -748,9 +748,12 @@ class AppointmentSurveyService:
         """
         AppointmentSurvey = self._get_survey_model()
 
+        # Use FOR UPDATE to lock the row and prevent concurrent duplicate
+        # submissions from racing past the completed_at check.
         survey = (
             self.db.query(AppointmentSurvey)
             .filter(AppointmentSurvey.token == token)
+            .with_for_update()
             .first()
         )
         if not survey:

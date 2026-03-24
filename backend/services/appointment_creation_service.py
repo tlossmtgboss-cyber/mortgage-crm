@@ -838,7 +838,12 @@ async def create_appointment(
         )
 
     # -------------------------------------------------------------------------
-    # 10. Commit the transaction (unless caller manages its own)
+    # 10. Schedule reminders for the appointment
+    # -------------------------------------------------------------------------
+    _schedule_reminders(db, appointment, organization_id)
+
+    # -------------------------------------------------------------------------
+    # 11. Commit the transaction (unless caller manages its own)
     # -------------------------------------------------------------------------
     if auto_commit:
         db.commit()
@@ -852,6 +857,85 @@ async def create_appointment(
         video_link=video_link,
         warnings=warnings,
     )
+
+
+# =============================================================================
+# REMINDER SCHEDULING
+# =============================================================================
+
+def _schedule_reminders(
+    db: Session,
+    appointment,
+    organization_id: int,
+) -> None:
+    """Schedule default reminders (24h and 1h before) for a newly created appointment.
+
+    Creates AppointmentReminder records that the reminder service will pick up
+    and send at the scheduled times. Non-fatal: failures are logged but do not
+    block appointment creation.
+    """
+    try:
+        from services.appointment._models import get_model
+        AppointmentReminder = get_model("AppointmentReminder")
+        if not AppointmentReminder:
+            logger.debug("AppointmentReminder model not available, skipping reminder scheduling")
+            return
+
+        from datetime import timezone as _tz
+
+        # Determine reminder schedule: use appointment type's schedule or default [24, 1]
+        reminder_hours = [24, 1]
+        if appointment.appointment_type_id:
+            try:
+                AppointmentType = get_model("SchedulerAppointmentType")
+                if AppointmentType:
+                    appt_type = db.query(AppointmentType).filter(
+                        AppointmentType.id == appointment.appointment_type_id,
+                    ).first()
+                    if appt_type and getattr(appt_type, "reminder_schedule", None):
+                        reminder_hours = appt_type.reminder_schedule
+            except Exception:
+                pass  # Use default
+
+        scheduled_start = appointment.scheduled_start
+        if not scheduled_start:
+            return
+
+        for hours_before in reminder_hours:
+            remind_at = scheduled_start - timedelta(hours=hours_before)
+            # Don't schedule reminders in the past
+            now = datetime.now(_tz.utc)
+            if remind_at <= now:
+                continue
+
+            reminder = AppointmentReminder(
+                appointment_id=appointment.id,
+                organization_id=organization_id,
+                channel="email",
+                scheduled_at=remind_at,
+                status="pending",
+                hours_before=hours_before,
+            )
+            db.add(reminder)
+
+            # Also schedule SMS reminder if attendee has a phone number
+            if appointment.attendee_phone:
+                sms_reminder = AppointmentReminder(
+                    appointment_id=appointment.id,
+                    organization_id=organization_id,
+                    channel="sms",
+                    scheduled_at=remind_at,
+                    status="pending",
+                    hours_before=hours_before,
+                )
+                db.add(sms_reminder)
+
+        logger.info(
+            f"Scheduled reminders for appointment {appointment.id}: "
+            f"{reminder_hours} hours before"
+        )
+    except Exception as e:
+        logger.error(f"Failed to schedule reminders for appointment: {e}")
 
 
 # =============================================================================

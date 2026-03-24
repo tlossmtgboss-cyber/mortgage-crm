@@ -243,7 +243,7 @@ async def _deliver_to_subscription(
                 delivery.delivered_at = datetime.now(timezone.utc)
                 subscription.success_count = (subscription.success_count or 0) + 1
                 subscription.last_triggered_at = datetime.now(timezone.utc)
-                db.commit()
+                db.flush()
                 logger.info(
                     "Webhook delivered: subscription=%s event=%s attempt=%d status=%d ms=%d",
                     subscription.id, event_type, attempt, response.status_code, elapsed_ms,
@@ -287,7 +287,7 @@ async def _deliver_to_subscription(
     delivery.dead_letter_at = datetime.now(timezone.utc)
     subscription.failure_count = (subscription.failure_count or 0) + 1
     subscription.last_triggered_at = datetime.now(timezone.utc)
-    db.commit()
+    db.flush()
 
     logger.warning(
         "Webhook dead-lettered: subscription_id=%s subscription_name=%s "
@@ -325,12 +325,17 @@ async def dispatch_webhook(
 ) -> List[WebhookDeliveryLog]:
     """Dispatch a webhook event to all active subscriptions for the given org.
 
+    Uses the caller's session for all DB operations (flush only, no commit).
+    The caller is responsible for committing the transaction after dispatch.
+    This ensures the webhook delivery records are visible within the same
+    transaction as the appointment that triggered the event.
+
     Args:
         event_type: The lifecycle event (e.g. WebhookEvent.APPOINTMENT_CREATED).
         appointment_data: Dict with appointment_id, loan_id, borrower info,
                           LO info, schedule details, status, etc.
         organization_id: Tenant org scope.
-        db: SQLAlchemy session.
+        db: Request-scoped SQLAlchemy session (from FastAPI Depends(get_db)).
 
     Returns:
         List of WebhookDeliveryLog entries (one per matching subscription).
@@ -360,26 +365,17 @@ async def dispatch_webhook(
 
     payload = _build_event_payload(event_type, appointment_data, organization_id)
 
-    # PERF-010: Deliver to all matching subscriptions concurrently.
-    # Each coroutine gets its own DB session to avoid transaction corruption
-    # (SQLAlchemy sessions are not coroutine-safe).
-    import asyncio
-    from db import SessionLocal
-
-    async def _safe_deliver(sub):
-        session = SessionLocal()
+    # Deliver to all matching subscriptions sequentially using the caller's
+    # session.  This ensures the deliveries can see any uncommitted data
+    # from the request transaction (e.g. a just-created appointment).
+    # The caller is responsible for committing the session after dispatch.
+    deliveries: List[WebhookDeliveryLog] = []
+    for sub in matching:
         try:
-            # Re-load the subscription in the new session to avoid detached state
-            local_sub = session.merge(sub, load=False)
-            return await _deliver_to_subscription(session, local_sub, payload)
+            delivery = await _deliver_to_subscription(db, sub, payload)
+            deliveries.append(delivery)
         except Exception as exc:
             logger.exception("Unexpected error dispatching to subscription=%s: %s", sub.id, exc)
-            return None
-        finally:
-            session.close()
-
-    results = await asyncio.gather(*[_safe_deliver(sub) for sub in matching])
-    deliveries = [r for r in results if r is not None]
 
     return deliveries
 
@@ -436,7 +432,7 @@ async def register_webhook(
         failure_count=0,
     )
     db.add(subscription)
-    db.commit()
+    db.flush()
     db.refresh(subscription)
 
     logger.info(
@@ -568,7 +564,7 @@ def _create_dead_letter_notification(
             )
             db.add(notification)
 
-        db.commit()
+        db.flush()
 
         logger.info(
             "Dead-letter notifications created for %d admin(s) in org=%s",
@@ -580,11 +576,8 @@ def _create_dead_letter_notification(
             "Failed to create dead-letter notification for delivery=%s: %s",
             delivery.id, e,
         )
-        # Don't let notification failure break the main flow
-        try:
-            db.rollback()
-        except Exception:
-            pass
+        # Don't let notification failure break the main flow;
+        # caller controls the transaction boundary.
 
 
 # ============================================================================
@@ -687,7 +680,7 @@ async def retry_failed_webhook(
     if result.id != delivery.id:
         db.delete(result)
 
-    db.commit()
+    db.flush()
 
     return delivery
 

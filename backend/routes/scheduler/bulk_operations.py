@@ -6,6 +6,8 @@ Endpoints:
   - POST /appointments/bulk-cancel       Cancel multiple appointments
   - POST /appointments/bulk-reschedule   Reschedule multiple appointments
   - POST /appointments/bulk-assign       Reassign appointments to different LOs
+  - POST /bulk/appointments              Batch booking with pre-validation (admin, rate-limited)
+  - POST /bulk/hold-slots                Batch slot holds (admin, rate-limited)
 
 All endpoints use savepoints so partial failures still commit the successful items.
 Max 50 items per request. Requires authentication and tenant isolation (organization_id).
@@ -39,6 +41,12 @@ from routes.scheduler._helpers import (
     _check_appointment_conflict, _check_duplicate_booking,
     _ensure_lead_for_booking, _log_appointment_activity, _create_followup_task,
     _audit_log,
+    _check_rate_limit,
+)
+from services.slot_hold_service import (
+    create_hold as create_slot_hold,
+    SlotHoldError,
+    DEFAULT_HOLD_TTL_SECONDS,
 )
 from routes.scheduler.public_booking import _sanitize_ai_context
 from routes.scheduler.constants import (
@@ -1067,3 +1075,448 @@ def _send_assign_notification(db, UserModel, info, org_id):
             )
         except Exception as e:
             logger.warning(f"Failed to notify attendee for reassigned appointment {info['appointment_id']}: {e}")
+
+
+# ============================================================================
+# BATCH BOOKING — POST /bulk/appointments
+# ============================================================================
+
+BULK_BATCH_RATE_LIMIT = 5  # 5 requests per minute
+
+
+class BatchAppointmentItem(BaseModel):
+    """A single appointment in a batch booking request.
+
+    Minimal required fields: appointment_type_id, scheduled_start,
+    attendee_name, attendee_email. Optional fields mirror
+    BulkAppointmentItem but with sensible defaults for batch use.
+    """
+    appointment_type_id: int = Field(..., description="ID of the appointment type")
+    scheduled_start: datetime = Field(..., description="Appointment start time (ISO 8601)")
+    attendee_name: str = Field(..., min_length=1, max_length=200)
+    attendee_email: EmailStr = Field(..., description="Attendee email address")
+    attendee_phone: Optional[str] = Field(None, max_length=20)
+    attendee_notes: Optional[str] = Field(None, max_length=2000)
+    duration_minutes: int = Field(
+        DEFAULT_APPOINTMENT_DURATION_MINUTES,
+        ge=MIN_APPOINTMENT_DURATION_MINUTES,
+        le=MAX_APPOINTMENT_DURATION_MINUTES,
+    )
+    # Optional overrides
+    title: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=5000)
+    meeting_mode: str = "video"
+    timezone: str = DEFAULT_TIMEZONE
+    assigned_user_id: Optional[int] = None
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    contact_id: Optional[int] = None
+
+
+class BatchBookingRequest(BaseModel):
+    """Request body for POST /bulk/appointments."""
+    appointments: List[BatchAppointmentItem] = Field(
+        ..., min_length=1, max_length=MAX_BULK_SIZE,
+        description=f"Array of appointments to create (max {MAX_BULK_SIZE})",
+    )
+    send_notifications: bool = Field(True, description="Send confirmation emails for created appointments")
+
+
+class BatchBookingResultItem(BaseModel):
+    """Per-item result in a batch booking response."""
+    index: int = Field(..., description="Zero-based index in the input array")
+    success: bool
+    appointment_id: Optional[int] = None
+    scheduled_start: Optional[str] = None
+    scheduled_end: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BatchBookingResponse(BaseModel):
+    """Response for POST /bulk/appointments."""
+    success: bool = Field(..., description="True if at least one appointment was created")
+    total: int = Field(..., description="Total items submitted")
+    created: List[BatchBookingResultItem] = Field(default_factory=list)
+    errors: List[BatchBookingResultItem] = Field(default_factory=list)
+
+
+@router.post("/bulk/appointments", response_model=BatchBookingResponse)
+async def batch_book_appointments(
+    payload: BatchBookingRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create multiple appointments in a single transaction with pre-validation.
+
+    Unlike bulk-create, this endpoint validates ALL items first (checking for
+    conflicts, missing fields, duplicate emails within the batch) before
+    creating any. Items with conflicts are skipped individually and reported
+    in the ``errors`` array; valid items are created atomically.
+
+    Requires admin role. Rate-limited to 5 requests per minute.
+    """
+    # Rate limiting: 5 requests per minute
+    await _check_rate_limit(request, max_requests=BULK_BATCH_RATE_LIMIT)
+
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    if not _is_scheduler_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Batch booking requires admin privileges",
+        )
+
+    _models = get_models()
+    Appointment = _models['Appointment']
+
+    # -----------------------------------------------------------------------
+    # Phase 1: Pre-validation — check every item without touching the DB
+    # -----------------------------------------------------------------------
+    validation_errors: Dict[int, str] = {}
+
+    # Detect duplicates within the batch (same email + start time)
+    seen_pairs: set = set()
+    for idx, item in enumerate(payload.appointments):
+        pair_key = (item.attendee_email.lower(), item.scheduled_start.isoformat())
+        if pair_key in seen_pairs:
+            validation_errors[idx] = (
+                "Duplicate: same attendee email and start time appears earlier in this batch"
+            )
+        else:
+            seen_pairs.add(pair_key)
+
+        # Ensure scheduled_start is not in the past
+        if item.scheduled_start < datetime.now(timezone.utc) - timedelta(minutes=1):
+            validation_errors.setdefault(idx, "Scheduled start is in the past")
+
+        # Duration sanity check (Pydantic ge/le catches extremes, but double-check)
+        if item.duration_minutes < MIN_APPOINTMENT_DURATION_MINUTES:
+            validation_errors.setdefault(
+                idx, f"Duration must be at least {MIN_APPOINTMENT_DURATION_MINUTES} minutes"
+            )
+
+    # Check for scheduling conflicts and duplicate bookings against existing data
+    for idx, item in enumerate(payload.appointments):
+        if idx in validation_errors:
+            continue  # already marked as invalid
+
+        scheduled_end = item.scheduled_start + timedelta(minutes=item.duration_minutes)
+        assigned_user = item.assigned_user_id or user.id
+
+        try:
+            _check_appointment_conflict(
+                db, assigned_user, item.scheduled_start, scheduled_end, org_id=org_id,
+            )
+        except HTTPException:
+            validation_errors[idx] = "Scheduling conflict: LO already has a booking at this time"
+            continue
+
+        try:
+            _check_duplicate_booking(
+                db, item.attendee_email, assigned_user, item.scheduled_start, org_id=org_id,
+            )
+        except HTTPException:
+            validation_errors[idx] = (
+                "Duplicate booking: attendee already has a booking at this time"
+            )
+
+    # -----------------------------------------------------------------------
+    # Phase 2: Create valid appointments in a single transaction
+    # -----------------------------------------------------------------------
+    created: List[BatchBookingResultItem] = []
+    errors: List[BatchBookingResultItem] = []
+    created_appointments = []  # For post-commit notifications
+
+    # Report pre-validation errors first
+    for idx in sorted(validation_errors.keys()):
+        errors.append(BatchBookingResultItem(
+            index=idx, success=False, error=validation_errors[idx],
+        ))
+
+    for idx, item in enumerate(payload.appointments):
+        if idx in validation_errors:
+            continue  # Already in errors
+
+        savepoint = db.begin_nested()
+        try:
+            assigned_user = item.assigned_user_id or user.id
+            scheduled_end = item.scheduled_start + timedelta(minutes=item.duration_minutes)
+
+            # Re-check conflict inside savepoint (another request may have
+            # inserted since pre-validation)
+            _check_appointment_conflict(
+                db, assigned_user, item.scheduled_start, scheduled_end, org_id=org_id,
+            )
+            _check_duplicate_booking(
+                db, item.attendee_email, assigned_user, item.scheduled_start, org_id=org_id,
+            )
+
+            # Parse meeting mode enum
+            meeting_mode = MeetingMode.VIDEO
+            if item.meeting_mode:
+                try:
+                    meeting_mode = MeetingMode(item.meeting_mode)
+                except ValueError:
+                    pass
+
+            title = item.title or f"Appointment with {item.attendee_name}"
+
+            appointment = Appointment(
+                organization_id=org_id,
+                appointment_type_id=item.appointment_type_id,
+                assigned_user_id=assigned_user,
+                created_by_user_id=user.id,
+                lead_id=item.lead_id,
+                loan_id=item.loan_id,
+                contact_id=item.contact_id,
+                title=title,
+                description=item.description,
+                meeting_type=MeetingType.CUSTOM,
+                meeting_mode=meeting_mode,
+                scheduled_start=item.scheduled_start,
+                scheduled_end=scheduled_end,
+                duration_minutes=item.duration_minutes,
+                timezone=item.timezone,
+                attendee_name=item.attendee_name,
+                attendee_email=item.attendee_email,
+                attendee_phone=item.attendee_phone,
+                attendee_notes=item.attendee_notes,
+                status=AppointmentStatus.BOOKED,
+                status_changed_at=datetime.now(timezone.utc),
+            )
+
+            db.add(appointment)
+            db.flush()  # Get appointment.id
+
+            # CRM: Link or create lead
+            if not appointment.lead_id and item.attendee_email:
+                lead_id = _ensure_lead_for_booking(
+                    db, item.attendee_email, item.attendee_name,
+                    item.attendee_phone, assigned_user, org_id,
+                )
+                if lead_id:
+                    appointment.lead_id = lead_id
+
+            # CRM: Log activity
+            _log_appointment_activity(
+                db, org_id, user.id, appointment.lead_id, appointment.loan_id,
+                f"Appointment scheduled (batch): {appointment.title} on "
+                f"{appointment.scheduled_start.strftime('%m/%d/%Y %I:%M %p') if appointment.scheduled_start else 'TBD'}",
+            )
+
+            # CRM: Create follow-up task
+            if appointment.scheduled_end:
+                _create_followup_task(
+                    db, org_id, assigned_user,
+                    appointment.lead_id, appointment.loan_id,
+                    title=f"Follow up after: {appointment.title}"[:255],
+                    description=(
+                        f"Follow up with {item.attendee_name} after "
+                        f"meeting on {appointment.scheduled_start.strftime('%m/%d/%Y') if appointment.scheduled_start else 'TBD'}"
+                    ),
+                    due_date=appointment.scheduled_end + timedelta(days=1),
+                )
+
+            # Audit
+            _audit_log(db, org_id, user.id, 'batch_created', 'appointment',
+                       entity_id=appointment.id, changes={
+                           'title': title,
+                           'attendee_email': item.attendee_email,
+                           'scheduled_start': item.scheduled_start.isoformat(),
+                       }, request=request)
+
+            savepoint.commit()
+            db.flush()  # Ensure visibility for subsequent conflict checks
+
+            created.append(BatchBookingResultItem(
+                index=idx, success=True, appointment_id=appointment.id,
+                scheduled_start=appointment.scheduled_start.isoformat(),
+                scheduled_end=appointment.scheduled_end.isoformat(),
+            ))
+            created_appointments.append({
+                'appointment': appointment,
+                'item': item,
+            })
+
+        except HTTPException:
+            savepoint.rollback()
+            errors.append(BatchBookingResultItem(
+                index=idx, success=False,
+                error="Conflict detected during creation",
+            ))
+        except Exception as exc:
+            savepoint.rollback()
+            logger.error(f"Batch booking item {idx} failed: {exc}", exc_info=True)
+            errors.append(BatchBookingResultItem(
+                index=idx, success=False,
+                error="Failed to create appointment",
+            ))
+
+    # Commit all successful savepoints
+    db.commit()
+
+    logger.info(
+        f"Batch booking: {len(created)}/{len(payload.appointments)} succeeded "
+        f"by user {user.id} in org {org_id}"
+    )
+
+    # Post-commit: send confirmation emails (best-effort, non-blocking)
+    if payload.send_notifications:
+        for entry in created_appointments:
+            try:
+                appt = entry['appointment']
+                item = entry['item']
+                db.refresh(appt)
+                if item.attendee_email:
+                    _send_create_notification(db, _models, appt, item, org_id)
+            except Exception as e:
+                logger.warning(
+                    f"Batch booking notification failed for appointment "
+                    f"{getattr(entry.get('appointment'), 'id', '?')}: {e}"
+                )
+
+    return BatchBookingResponse(
+        success=len(created) > 0,
+        total=len(payload.appointments),
+        created=created,
+        errors=errors,
+    )
+
+
+# ============================================================================
+# BATCH HOLD SLOTS — POST /bulk/hold-slots
+# ============================================================================
+
+class BatchHoldSlotItem(BaseModel):
+    """A single slot to hold in a batch hold request."""
+    lo_id: int = Field(..., description="Loan officer ID whose calendar is being held")
+    start_time: datetime = Field(..., description="Slot start time (ISO 8601)")
+    end_time: datetime = Field(..., description="Slot end time (ISO 8601)")
+    held_by: str = Field("manual", description="Hold source: 'ai_conversation', 'public_booking', 'manual'")
+    ttl_seconds: int = Field(DEFAULT_HOLD_TTL_SECONDS, ge=30, le=900, description="Hold TTL in seconds (30-900)")
+    held_for_name: Optional[str] = Field(None, max_length=200)
+    held_for_phone: Optional[str] = Field(None, max_length=30)
+    held_for_email: Optional[EmailStr] = None
+    conversation_id: Optional[str] = Field(None, max_length=100)
+
+
+class BatchHoldSlotsRequest(BaseModel):
+    """Request body for POST /bulk/hold-slots."""
+    holds: List[BatchHoldSlotItem] = Field(
+        ..., min_length=1, max_length=MAX_BULK_SIZE,
+        description=f"Array of slot holds to create (max {MAX_BULK_SIZE})",
+    )
+
+
+class BatchHoldResultItem(BaseModel):
+    """Per-item result in a batch hold response."""
+    index: int = Field(..., description="Zero-based index in the input array")
+    success: bool
+    hold_id: Optional[int] = None
+    expires_at: Optional[str] = None
+    error: Optional[str] = None
+
+
+class BatchHoldSlotsResponse(BaseModel):
+    """Response for POST /bulk/hold-slots."""
+    success: bool = Field(..., description="True if at least one hold was created")
+    total: int = Field(..., description="Total items submitted")
+    created: List[BatchHoldResultItem] = Field(default_factory=list)
+    errors: List[BatchHoldResultItem] = Field(default_factory=list)
+
+
+@router.post("/bulk/hold-slots", response_model=BatchHoldSlotsResponse)
+async def batch_hold_slots(
+    payload: BatchHoldSlotsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create multiple slot holds in a single request.
+
+    Each hold is created independently via the slot_hold_service. If one
+    fails (e.g. conflict, past slot, max holds exceeded), the others still
+    proceed. Returns per-item success/failure with hold IDs and expiry times.
+
+    Requires admin role. Rate-limited to 5 requests per minute.
+    """
+    # Rate limiting: 5 requests per minute
+    await _check_rate_limit(request, max_requests=BULK_BATCH_RATE_LIMIT)
+
+    user = await get_current_user(request, db)
+    org_id = _get_org_id(user)
+
+    if not _is_scheduler_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Batch hold slots requires admin privileges",
+        )
+
+    _models_dict = get_models()
+
+    created: List[BatchHoldResultItem] = []
+    errors: List[BatchHoldResultItem] = []
+
+    for idx, item in enumerate(payload.holds):
+        try:
+            result = await create_slot_hold(
+                lo_id=item.lo_id,
+                start_time=item.start_time,
+                end_time=item.end_time,
+                held_by=item.held_by,
+                organization_id=org_id,
+                db=db,
+                models=_models_dict,
+                ttl_seconds=item.ttl_seconds,
+                held_for_name=item.held_for_name,
+                held_for_phone=item.held_for_phone,
+                held_for_email=item.held_for_email,
+                conversation_id=item.conversation_id,
+            )
+            # Flush so subsequent holds in the batch see this one
+            db.flush()
+
+            hold_id = result.get('id')
+            expires_at = result.get('expires_at')
+
+            created.append(BatchHoldResultItem(
+                index=idx, success=True,
+                hold_id=hold_id,
+                expires_at=expires_at,
+            ))
+
+            # Audit
+            _audit_log(db, org_id, user.id, 'batch_hold_created', 'slot_hold',
+                       entity_id=hold_id, changes={
+                           'lo_id': item.lo_id,
+                           'start_time': item.start_time.isoformat(),
+                           'end_time': item.end_time.isoformat(),
+                           'held_by': item.held_by,
+                           'ttl_seconds': item.ttl_seconds,
+                       }, request=request)
+
+        except SlotHoldError as exc:
+            logger.warning(f"Batch hold item {idx} failed: {exc.message} ({exc.code})")
+            errors.append(BatchHoldResultItem(
+                index=idx, success=False, error=exc.message,
+            ))
+        except Exception as exc:
+            logger.error(f"Batch hold item {idx} failed unexpectedly: {exc}", exc_info=True)
+            errors.append(BatchHoldResultItem(
+                index=idx, success=False, error="Failed to create slot hold",
+            ))
+
+    # Commit all successful holds
+    db.commit()
+
+    logger.info(
+        f"Batch hold slots: {len(created)}/{len(payload.holds)} succeeded "
+        f"by user {user.id} in org {org_id}"
+    )
+
+    return BatchHoldSlotsResponse(
+        success=len(created) > 0,
+        total=len(payload.holds),
+        created=created,
+        errors=errors,
+    )

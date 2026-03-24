@@ -1,3 +1,5 @@
+@import '../../styles/calendar-design-tokens.css';
+
 /* BorrowerAppointmentView.css - Borrower-facing appointment list */
 
 /* =============================================================================
@@ -7,12 +9,12 @@
 .bav-container {
   max-width: 680px;
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--cal-space-9);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .bav-container.bav-compact {
-  padding: 12px 0;
+  padding: var(--cal-space-5) 0;
   max-width: 100%;
 }
 
@@ -22,21 +24,21 @@
 
 .bav-heading {
   margin: 0 0 20px 0;
-  font-size: 20px;
+  font-size: var(--cal-font-3xl);
   font-weight: 700;
-  color: #1e293b;
+  color: var(--cal-text-primary);
 }
 
 .bav-compact .bav-heading {
-  font-size: 16px;
+  font-size: var(--cal-font-xl);
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: var(--cal-space-5);
 }
 
 .bav-heading-past {
-  margin-top: 32px;
-  color: #64748b;
-  font-size: 16px;
+  margin-top: var(--cal-space-11);
+  color: var(--cal-text-secondary);
+  font-size: var(--cal-font-xl);
 }
 
 /* =============================================================================
@@ -54,10 +56,10 @@
 }
 
 .bav-group-label {
-  margin: 0 0 8px 0;
-  font-size: 13px;
+  margin: 0 0 var(--cal-space-3) 0;
+  font-size: var(--cal-font-base);
   font-weight: 600;
-  color: #64748b;
+  color: var(--cal-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -68,18 +70,18 @@
 
 .bav-card {
   display: flex;
-  gap: 16px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 8px;
+  gap: var(--cal-space-7);
+  background: var(--cal-bg);
+  border: 1px solid var(--cal-border);
+  border-radius: var(--cal-radius-xl);
+  padding: var(--cal-space-7);
+  margin-bottom: var(--cal-space-3);
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .bav-card:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-color: var(--cal-border-hover);
+  box-shadow: var(--cal-shadow-hover);
 }
 
 .bav-card[role='button'] {
@@ -87,7 +89,7 @@
 }
 
 .bav-card[role='button']:focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--cal-tour-primary);
   outline-offset: 2px;
 }
 
@@ -103,15 +105,15 @@
 }
 
 .bav-card-time-value {
-  font-size: 14px;
+  font-size: var(--cal-font-md);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--cal-text-primary);
   white-space: nowrap;
 }
 
 .bav-card-time-duration {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: var(--cal-font-xs);
+  color: var(--cal-text-muted);
   margin-top: 2px;
 }
 
@@ -124,15 +126,15 @@
 .bav-card-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: var(--cal-space-3);
+  margin-bottom: var(--cal-space-2);
   flex-wrap: wrap;
 }
 
 .bav-card-title {
-  font-size: 15px;
+  font-size: var(--cal-font-lg);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--cal-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -141,37 +143,37 @@
 .bav-card-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  color: #64748b;
-  margin-bottom: 4px;
+  gap: var(--cal-space-5);
+  font-size: var(--cal-font-base);
+  color: var(--cal-text-secondary);
+  margin-bottom: var(--cal-space-1);
 }
 
 .bav-card-mode {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--cal-space-1);
 }
 
 .bav-card-lo {
-  color: #475569;
+  color: var(--cal-text-body);
 }
 
 .bav-card-location {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #64748b;
-  margin-bottom: 4px;
+  gap: var(--cal-space-1);
+  font-size: var(--cal-font-base);
+  color: var(--cal-text-secondary);
+  margin-bottom: var(--cal-space-1);
 }
 
 /* Card actions */
 .bav-card-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--cal-space-3);
+  margin-top: var(--cal-space-3);
 }
 
 /* =============================================================================
@@ -183,8 +185,8 @@
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--cal-radius-md);
+  font-size: var(--cal-font-base);
   font-weight: 500;
   text-decoration: none;
   border: none;
@@ -194,22 +196,22 @@
 }
 
 .bav-btn-primary {
-  background: #6366f1;
-  color: #ffffff;
+  background: var(--cal-tour-primary);
+  color: var(--cal-bg);
 }
 
 .bav-btn-primary:hover {
-  background: #4f46e5;
+  background: var(--cal-tour-primary-dark);
 }
 
 .bav-btn-secondary {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--cal-bg-tertiary);
+  color: var(--cal-text-body);
 }
 
 .bav-btn-secondary:hover {
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--cal-border);
+  color: var(--cal-text-dark);
 }
 
 /* =============================================================================
@@ -228,14 +230,14 @@
 
 .bav-empty {
   text-align: center;
-  padding: 48px 24px;
+  padding: 48px var(--cal-space-9);
 }
 
 .bav-empty-icon {
   width: 48px;
   height: 48px;
-  margin: 0 auto 16px;
-  color: #94a3b8;
+  margin: 0 auto var(--cal-space-7);
+  color: var(--cal-text-muted);
 }
 
 .bav-empty-icon .bav-icon {
@@ -244,16 +246,16 @@
 }
 
 .bav-empty-title {
-  margin: 0 0 8px 0;
-  font-size: 16px;
+  margin: 0 0 var(--cal-space-3) 0;
+  font-size: var(--cal-font-xl);
   font-weight: 600;
-  color: #475569;
+  color: var(--cal-text-body);
 }
 
 .bav-empty-text {
   margin: 0;
-  font-size: 14px;
-  color: #94a3b8;
+  font-size: var(--cal-font-md);
+  color: var(--cal-text-muted);
   max-width: 320px;
   margin-left: auto;
   margin-right: auto;
@@ -265,28 +267,58 @@
 
 .bav-error {
   text-align: center;
-  padding: 48px 24px;
+  padding: 48px var(--cal-space-9);
 }
 
 .bav-error-icon {
   width: 40px;
   height: 40px;
-  margin: 0 auto 12px;
-  color: #ef4444;
+  margin: 0 auto var(--cal-space-5);
+  color: var(--cal-error);
   display: block;
 }
 
 .bav-error-title {
-  margin: 0 0 8px 0;
-  font-size: 16px;
+  margin: 0 0 var(--cal-space-3) 0;
+  font-size: var(--cal-font-xl);
   font-weight: 600;
-  color: #1e293b;
+  color: var(--cal-text-primary);
 }
 
 .bav-error-text {
-  margin: 0 0 16px 0;
-  font-size: 14px;
-  color: #64748b;
+  margin: 0 0 var(--cal-space-7) 0;
+  font-size: var(--cal-font-md);
+  color: var(--cal-text-secondary);
+}
+
+/* =============================================================================
+   SCREEN READER ONLY (visually hidden, accessible to assistive tech)
+   ============================================================================= */
+
+.bav-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* =============================================================================
+   FOCUS STYLES (WCAG 2.1 AA)
+   ============================================================================= */
+
+.bav-btn:focus-visible {
+  outline: 2px solid var(--cal-tour-primary);
+  outline-offset: 2px;
+}
+
+.bav-btn-secondary:focus-visible {
+  outline: 2px solid var(--cal-text-body);
+  outline-offset: 2px;
 }
 
 /* =============================================================================
@@ -295,12 +327,12 @@
 
 .bav-skeleton-card {
   display: flex;
-  gap: 16px;
-  padding: 16px;
-  margin-bottom: 8px;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #f1f5f9;
+  gap: var(--cal-space-7);
+  padding: var(--cal-space-7);
+  margin-bottom: var(--cal-space-3);
+  border-radius: var(--cal-radius-xl);
+  background: var(--cal-bg-secondary);
+  border: 1px solid var(--cal-border-light);
 }
 
 .bav-skeleton-time {
@@ -316,12 +348,12 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--cal-space-3);
 }
 
 .bav-skeleton-line {
-  border-radius: 4px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  border-radius: var(--cal-radius-sm);
+  background: linear-gradient(90deg, var(--cal-border) 25%, var(--cal-border-light) 50%, var(--cal-border) 75%);
   background-size: 200% 100%;
   animation: bav-shimmer 1.5s infinite;
 }
@@ -341,18 +373,18 @@
 
 @media (max-width: 480px) {
   .bav-container {
-    padding: 16px;
+    padding: var(--cal-space-7);
   }
 
   .bav-card {
     flex-direction: column;
-    gap: 8px;
+    gap: var(--cal-space-3);
   }
 
   .bav-card-time {
     width: auto;
     flex-direction: row;
-    gap: 8px;
+    gap: var(--cal-space-3);
     align-items: center;
   }
 

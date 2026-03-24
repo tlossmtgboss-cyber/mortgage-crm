@@ -333,60 +333,64 @@ async def list_appointment_types(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
-    SchedulerConfig = _models['SchedulerConfig']
-    AppointmentType = _models['AppointmentType']
+    try:
+        SchedulerConfig = _models['SchedulerConfig']
+        AppointmentType = _models['AppointmentType']
 
-    # Get user's config
-    config = db.query(SchedulerConfig).filter(
-        SchedulerConfig.user_id == user.id,
-        SchedulerConfig.organization_id == org_id
-    ).first()
+        # Get user's config
+        config = db.query(SchedulerConfig).filter(
+            SchedulerConfig.user_id == user.id,
+            SchedulerConfig.organization_id == org_id
+        ).first()
 
-    if not config:
-        # Return default types
+        if not config:
+            # Return default types
+            return {"appointment_types": DEFAULT_APPOINTMENT_TYPES, "source": "defaults"}
+
+        query = db.query(AppointmentType).filter(
+            AppointmentType.config_id == config.id,
+            AppointmentType.organization_id == org_id
+        )
+
+        if not include_inactive:
+            query = query.filter(AppointmentType.is_active == True)
+
+        types = query.order_by(AppointmentType.display_order).all()
+
+        return {
+            "appointment_types": [
+                {
+                    "id": t.id,
+                    "type_key": t.type_key,
+                    "type_name": t.type_name,
+                    "description": t.description,
+                    "meeting_type": t.meeting_type.value if t.meeting_type else "custom",
+                    "default_duration_minutes": t.default_duration_minutes,
+                    "allowed_durations": t.allowed_durations,
+                    "allowed_modes": t.allowed_modes,
+                    "default_mode": t.default_mode.value if t.default_mode else (t.allowed_modes[0] if t.allowed_modes else "video"),
+                    "buffer_before": getattr(t, 'min_notice_hours', 0) or 0,
+                    "buffer_after": 0,
+                    "max_per_day": t.max_per_day,
+                    "requires_loan_id": t.requires_loan_id,
+                    "requires_lead_id": t.requires_lead_id,
+                    "requires_intake": bool(t.intake_questions),
+                    "intake_questions": t.intake_questions,
+                    "color": t.color,
+                    "icon": t.icon,
+                    "is_public": t.is_public,
+                    "public_slug": t.public_slug,
+                    "display_order": t.display_order,
+                    "is_active": t.is_active,
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                }
+                for t in types
+            ],
+            "source": "database"
+        }
+    except Exception as e:
+        logger.warning(f"Scheduler tables not available for appointment types query: {e}")
         return {"appointment_types": DEFAULT_APPOINTMENT_TYPES, "source": "defaults"}
-
-    query = db.query(AppointmentType).filter(
-        AppointmentType.config_id == config.id,
-        AppointmentType.organization_id == org_id
-    )
-
-    if not include_inactive:
-        query = query.filter(AppointmentType.is_active == True)
-
-    types = query.order_by(AppointmentType.display_order).all()
-
-    return {
-        "appointment_types": [
-            {
-                "id": t.id,
-                "type_key": t.type_key,
-                "type_name": t.type_name,
-                "description": t.description,
-                "meeting_type": t.meeting_type.value if t.meeting_type else "custom",
-                "default_duration_minutes": t.default_duration_minutes,
-                "allowed_durations": t.allowed_durations,
-                "allowed_modes": t.allowed_modes,
-                "default_mode": t.default_mode.value if t.default_mode else (t.allowed_modes[0] if t.allowed_modes else "video"),
-                "buffer_before": getattr(t, 'min_notice_hours', 0) or 0,
-                "buffer_after": 0,
-                "max_per_day": t.max_per_day,
-                "requires_loan_id": t.requires_loan_id,
-                "requires_lead_id": t.requires_lead_id,
-                "requires_intake": bool(t.intake_questions),
-                "intake_questions": t.intake_questions,
-                "color": t.color,
-                "icon": t.icon,
-                "is_public": t.is_public,
-                "public_slug": t.public_slug,
-                "display_order": t.display_order,
-                "is_active": t.is_active,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
-            }
-            for t in types
-        ],
-        "source": "database"
-    }
 
 
 @router.post("/appointment-types")

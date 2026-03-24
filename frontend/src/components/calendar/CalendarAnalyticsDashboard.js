@@ -13,7 +13,7 @@
  *   - Appointment outcome conversion rates
  *   - No-show rate tracking with conditional coloring
  */
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { calendarAnalyticsAPI } from '../../services/api';
 import { toast } from 'react-toastify';
 
@@ -23,7 +23,7 @@ const PERIODS = [
   { value: 90, label: 'Last 90 days', code: '90d' },
 ];
 
-export default function CalendarAnalyticsDashboard() {
+function CalendarAnalyticsDashboard() {
   const [overview, setOverview] = useState(null);
   const [byType, setByType] = useState(null);
   const [byLO, setByLO] = useState(null);
@@ -62,6 +62,20 @@ export default function CalendarAnalyticsDashboard() {
     loadMetrics();
   }, [loadMetrics]);
 
+  const noShowRate = useMemo(() => {
+    if (!overview || !overview.total_appointments) return 0;
+    return ((overview.no_shows / overview.total_appointments) * 100).toFixed(1);
+  }, [overview]);
+
+  const avgDailyBookings = useMemo(() => {
+    if (!overview) return '0.0';
+    const periodObj = PERIODS.find(p => p.code === period);
+    const days = periodObj ? periodObj.value : 30;
+    return days > 0 ? (overview.total_appointments / days).toFixed(1) : '0.0';
+  }, [overview, period]);
+
+  const types = useMemo(() => byType?.types || [], [byType]);
+
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
@@ -84,18 +98,6 @@ export default function CalendarAnalyticsDashboard() {
       </div>
     );
   }
-
-  const noShowRate = overview.total_appointments > 0
-    ? ((overview.no_shows / overview.total_appointments) * 100).toFixed(1)
-    : 0;
-
-  const avgDailyBookings = (() => {
-    const periodObj = PERIODS.find(p => p.code === period);
-    const days = periodObj ? periodObj.value : 30;
-    return days > 0 ? (overview.total_appointments / days).toFixed(1) : '0.0';
-  })();
-
-  const types = byType?.types || [];
 
   return (
     <div className="calendar-analytics-dashboard">
@@ -289,7 +291,7 @@ export default function CalendarAnalyticsDashboard() {
 // MetricCard sub-component
 // =============================================================================
 
-function MetricCard({ label, value, color, subtext }) {
+const MetricCard = React.memo(function MetricCard({ label, value, color, subtext }) {
   return (
     <div style={{
       background: '#fff',
@@ -321,7 +323,7 @@ function MetricCard({ label, value, color, subtext }) {
       )}
     </div>
   );
-}
+});
 
 
 // =============================================================================
@@ -345,3 +347,5 @@ const tdStyle = {
   fontSize: 14,
   color: '#374151',
 };
+
+export default React.memo(CalendarAnalyticsDashboard);

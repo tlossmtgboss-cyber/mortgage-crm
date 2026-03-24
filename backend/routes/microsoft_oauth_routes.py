@@ -194,7 +194,7 @@ async def get_microsoft_auth_url(
             raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Please configure in Settings > Outlook Email.")
 
         # Build the authorization URL
-        scopes = "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
+        scopes = "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.ReadWrite offline_access"
         auth_url = (
             f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
             f"?client_id={client_id}"
@@ -268,7 +268,7 @@ async def connect_microsoft365(
             "code": auth_data.authorization_code,
             "redirect_uri": auth_data.redirect_uri,
             "grant_type": "authorization_code",
-            "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
+            "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.ReadWrite offline_access"
         }
 
         response = await _async_post(token_url, data=data)
@@ -375,21 +375,46 @@ async def get_microsoft_status(
             main.MicrosoftOAuthToken.user_id == current_user.id
         ).first()
 
-        if not oauth_record:
+        if oauth_record:
             return {
-                "connected": False,
-                "email_address": None,
-                "sync_enabled": False,
-                "last_sync_at": None
+                "connected": True,
+                "email_address": oauth_record.email_address,
+                "sync_enabled": oauth_record.sync_enabled,
+                "last_sync_at": oauth_record.last_sync_at,
+                "sync_folder": oauth_record.sync_folder,
+                "sync_frequency_minutes": oauth_record.sync_frequency_minutes
             }
 
+        # Also check user_integrations table (microsoft_routes.py stores tokens here)
+        try:
+            ui_row = db.execute(
+                text("""
+                    SELECT email, expires_at, updated_at
+                    FROM user_integrations
+                    WHERE user_id = :user_id
+                      AND provider IN ('outlook_calendar', 'outlook_email', 'microsoft', 'outlook')
+                      AND access_token IS NOT NULL
+                    LIMIT 1
+                """),
+                {"user_id": current_user.id}
+            ).fetchone()
+
+            if ui_row:
+                return {
+                    "connected": True,
+                    "email_address": ui_row[0],
+                    "sync_enabled": True,
+                    "last_sync_at": None,
+                    "connected_at": ui_row[2].isoformat() if ui_row[2] else None
+                }
+        except Exception as e:
+            logger.warning(f"Could not check user_integrations: {e}")
+
         return {
-            "connected": True,
-            "email_address": oauth_record.email_address,
-            "sync_enabled": oauth_record.sync_enabled,
-            "last_sync_at": oauth_record.last_sync_at,
-            "sync_folder": oauth_record.sync_folder,
-            "sync_frequency_minutes": oauth_record.sync_frequency_minutes
+            "connected": False,
+            "email_address": None,
+            "sync_enabled": False,
+            "last_sync_at": None
         }
 
     except Exception as e:
@@ -419,8 +444,26 @@ async def disconnect_microsoft365(
             main.MicrosoftOAuthToken.user_id == current_user.id
         ).first()
 
+        # Also clean up user_integrations table (tokens stored by microsoft_routes.py)
+        try:
+            db.execute(
+                text("""
+                    DELETE FROM user_integrations
+                    WHERE user_id = :user_id
+                      AND provider IN ('outlook_calendar', 'outlook_email', 'microsoft', 'outlook')
+                """),
+                {"user_id": current_user.id}
+            )
+        except Exception as e:
+            logger.warning(f"Could not clean user_integrations: {e}")
+
         if not oauth_record:
-            raise HTTPException(status_code=404, detail="No Microsoft 365 connection found")
+            # Check if user_integrations had tokens (disconnect should succeed if any tokens existed)
+            db.commit()
+            return {
+                "status": "success",
+                "message": "Microsoft 365 disconnected successfully"
+            }
 
         db.delete(oauth_record)
         db.commit()
@@ -886,6 +929,87 @@ async def force_email_sync(
     except Exception as e:
         logger.error(f"Force sync error: {e}")
         db.rollback()
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        db.close()
+
+
+# =============================================================================
+# Sync Aliases (match frontend endpoint names)
+# =============================================================================
+
+@router.post("/sync-now")
+async def sync_now(request: Request):
+    """Alias for /force-sync — frontend calls this endpoint name."""
+    return await force_email_sync(request)
+
+
+@router.post("/sync-calendar")
+async def sync_calendar(request: Request):
+    """Sync Outlook calendar events to Smart Calendar via outbound sync orchestrator."""
+    main = get_main_imports()
+    from db import get_db
+
+    db = next(get_db())
+    try:
+        current_user = await main.get_current_user(
+            token=request.headers.get("Authorization", "").replace("Bearer ", ""),
+            request=request,
+            db=db
+        )
+
+        oauth_record = db.query(main.MicrosoftOAuthToken).filter(
+            main.MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            raise HTTPException(status_code=404, detail="Microsoft 365 not connected. Please connect in Settings.")
+
+        # Fetch Outlook calendar events and ensure they are reflected in availability
+        from integrations.microsoft_outlook_service import microsoft_outlook_client
+        from datetime import timedelta
+
+        # Decrypt the access token
+        access_token = main.decrypt_token(oauth_record.access_token) if oauth_record.access_token else None
+        if not access_token:
+            raise HTTPException(status_code=401, detail="Invalid access token. Please reconnect Microsoft 365.")
+
+        # Check expiration and refresh if needed
+        if oauth_record.token_expires_at and oauth_record.token_expires_at < datetime.now(timezone.utc):
+            refresh_token = main.decrypt_token(oauth_record.refresh_token) if oauth_record.refresh_token else None
+            if refresh_token:
+                token_data = microsoft_outlook_client.refresh_access_token(refresh_token)
+                if token_data:
+                    access_token = token_data["access_token"]
+                    oauth_record.access_token = main.encrypt_token(token_data["access_token"])
+                    oauth_record.refresh_token = main.encrypt_token(token_data["refresh_token"])
+                    oauth_record.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data.get("expires_in", 3600))
+                    db.commit()
+                else:
+                    raise HTTPException(status_code=401, detail="Token expired and refresh failed. Please reconnect.")
+            else:
+                raise HTTPException(status_code=401, detail="Token expired. Please reconnect Microsoft 365.")
+
+        start_time = datetime.now(timezone.utc)
+        end_time = start_time + timedelta(days=30)
+
+        events = microsoft_outlook_client.list_events(access_token, start_time=start_time, end_time=end_time)
+
+        if events is None:
+            raise HTTPException(status_code=500, detail="Failed to fetch calendar events from Outlook")
+
+        event_list = events.get("value", [])
+
+        return {
+            "success": True,
+            "total_events": len(event_list),
+            "message": f"Found {len(event_list)} calendar events from Outlook (next 30 days)"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Calendar sync error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         db.close()

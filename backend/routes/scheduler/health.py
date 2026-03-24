@@ -314,6 +314,94 @@ def _check_webhook_health(db: Session, org_id: int) -> dict:
     }
 
 
+def _check_calendar_providers(db: Session, org_id: int) -> dict:
+    """Check external calendar provider health (Google, Outlook) across all synced calendars."""
+    enhanced = get_enhanced_models()
+    CalendarSync = enhanced.get("CalendarSync") if enhanced else None
+
+    if CalendarSync is None:
+        return {"status": "ok", "providers": [], "note": "CalendarSync model not loaded"}
+
+    now = datetime.now(timezone.utc)
+    stale_threshold = now - timedelta(minutes=30)
+    token_expiry_threshold = now + timedelta(hours=1)
+
+    # Query all enabled calendar syncs for this org, grouped by provider
+    syncs = (
+        db.query(CalendarSync)
+        .filter(
+            CalendarSync.organization_id == org_id,
+            CalendarSync.sync_enabled == True,
+        )
+        .all()
+    )
+
+    if not syncs:
+        return {"status": "ok", "providers": [], "note": "No synced calendars"}
+
+    # Group by provider
+    by_provider: Dict[str, list] = {}
+    for sync in syncs:
+        provider = sync.provider or "unknown"
+        by_provider.setdefault(provider, []).append(sync)
+
+    providers = []
+    any_majority_stale = False
+
+    for provider, records in by_provider.items():
+        total = len(records)
+        stale = 0
+        errored = 0
+        tokens_expiring = 0
+
+        for rec in records:
+            # Check staleness: last_sync older than 30 minutes
+            if rec.last_sync_at is not None:
+                last_sync = rec.last_sync_at
+                if last_sync.tzinfo is None:
+                    last_sync = last_sync.replace(tzinfo=timezone.utc)
+                if last_sync < stale_threshold:
+                    stale += 1
+            else:
+                # Never synced counts as stale
+                stale += 1
+
+            # Check for sync errors
+            if rec.last_sync_status == "error" or rec.sync_error:
+                errored += 1
+
+            # Check token expiry (expired or expiring within 1 hour)
+            if rec.token_expires_at is not None:
+                expires = rec.token_expires_at
+                if expires.tzinfo is None:
+                    expires = expires.replace(tzinfo=timezone.utc)
+                if expires <= token_expiry_threshold:
+                    tokens_expiring += 1
+            else:
+                # No expiry recorded -- flag as expiring to be safe
+                tokens_expiring += 1
+
+        healthy = total - max(stale, errored)
+        if healthy < 0:
+            healthy = 0
+
+        providers.append({
+            "provider": provider,
+            "total": total,
+            "healthy": healthy,
+            "stale": stale,
+            "errored": errored,
+            "tokens_expiring": tokens_expiring,
+        })
+
+        # Flag degraded if >50% stale for any provider
+        if total > 0 and stale > total / 2:
+            any_majority_stale = True
+
+    status = "warning" if any_majority_stale else "ok"
+    return {"status": status, "providers": providers}
+
+
 def _check_scheduler_jobs() -> dict:
     """Check APScheduler background job status."""
     from services.scheduler_service import scheduler_service
@@ -455,6 +543,15 @@ async def scheduler_health(
     except Exception as e:
         logger.debug(f"Health check: webhooks skipped: {e}")
         checks["webhooks"] = {"status": "ok", "note": "Webhook system not initialized"}
+
+    # --- calendar_providers ---
+    try:
+        checks["calendar_providers"] = _check_calendar_providers(db, org_id)
+        if checks["calendar_providers"]["status"] == "warning":
+            any_degraded = True
+    except Exception as e:
+        logger.debug(f"Health check: calendar_providers skipped: {e}")
+        checks["calendar_providers"] = {"status": "ok", "providers": [], "note": "Check unavailable"}
 
     # --- scheduler_jobs ---
     try:

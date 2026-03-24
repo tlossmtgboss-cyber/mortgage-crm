@@ -300,9 +300,10 @@ async def get_booking_link_analytics(
                     "booked_at": row.created_at.isoformat() if row.created_at else None,
                 })
 
-    # Appointment outcome breakdown (if we can correlate)
+    # Appointment outcome breakdown and UTM source breakdown (if we can correlate)
     Appointment = _models.get('Appointment')
     outcome_breakdown = {}
+    utm_source_breakdown = {}
     if Appointment and recent_bookings:
         appt_ids = [b["appointment_id"] for b in recent_bookings if b["appointment_id"]]
         if appt_ids:
@@ -318,6 +319,28 @@ async def get_booking_link_analytics(
             for status_val, count in outcomes:
                 status_str = status_val.value if hasattr(status_val, 'value') else str(status_val)
                 outcome_breakdown[status_str] = count
+
+            # UTM source breakdown from booking_attribution JSON column
+            try:
+                attribution_rows = (
+                    db.query(Appointment.booking_attribution)
+                    .filter(
+                        Appointment.id.in_(appt_ids),
+                        Appointment.booking_attribution.isnot(None),
+                    )
+                    .all()
+                )
+                for (attr_data,) in attribution_rows:
+                    if isinstance(attr_data, dict):
+                        src = attr_data.get("utm_source", "direct")
+                    else:
+                        src = "direct"
+                    utm_source_breakdown[src] = utm_source_breakdown.get(src, 0) + 1
+            except Exception as attr_err:
+                logger.debug(f"Could not aggregate UTM sources: {attr_err}")
+
+    # Sort UTM sources by count descending
+    top_sources = sorted(utm_source_breakdown.items(), key=lambda x: x[1], reverse=True)
 
     return {
         "link_id": link.id,
@@ -337,6 +360,7 @@ async def get_booking_link_analytics(
         },
         "recent_bookings": recent_bookings[:20],
         "outcome_breakdown": outcome_breakdown,
+        "top_sources": [{"source": src, "count": cnt} for src, cnt in top_sources],
         "period_days": days,
     }
 

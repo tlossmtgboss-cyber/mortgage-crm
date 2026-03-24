@@ -63,13 +63,17 @@ from routes.scheduler.constants import (
     DEMO_CREATE_RATE_LIMIT,
     PUBLIC_BOOKING_RATE_LIMIT,
 )
+from routes.scheduler.error_responses import (
+    scheduler_error, validation_error, not_found_error,
+    conflict_error, rate_limit_error, internal_error,
+    forbidden_error, SLOT_UNAVAILABLE,
+)
 
 # Import shared utilities from _helpers.py (single source of truth)
 from routes.scheduler._helpers import (
     _sanitize_text,
     _mask_email,
     _validate_phone,
-    _sanitize_public_error,
     _verify_turnstile_token,
     _get_client_ip,
     _get_rate_limit_redis,
@@ -166,11 +170,7 @@ async def _check_booking_ip_rate_limit(request: Request):
     r = _get_rate_limit_redis()
     if r is None:
         if not await _check_memory_rate_limit(key, _BOOKING_MAX_PER_IP, _BOOKING_RATE_LIMIT_WINDOW):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many bookings. Please try again later.",
-                headers={"Retry-After": str(_BOOKING_RATE_LIMIT_WINDOW)}
-            )
+            rate_limit_error("Too many bookings. Please try again later.")
         return
 
     try:
@@ -178,22 +178,13 @@ async def _check_booking_ip_rate_limit(request: Request):
         if current == 1:
             r.expire(key, _BOOKING_RATE_LIMIT_WINDOW)
         if current > _BOOKING_MAX_PER_IP:
-            ttl = r.ttl(key)
-            raise HTTPException(
-                status_code=429,
-                detail="Too many bookings. Please try again later.",
-                headers={"Retry-After": str(max(ttl, 1))}
-            )
+            rate_limit_error("Too many bookings. Please try again later.")
     except HTTPException:
         raise
     except Exception as e:
         logger.warning(f"Booking IP rate limit Redis error, using memory fallback: {e}")
         if not await _check_memory_rate_limit(key, _BOOKING_MAX_PER_IP, _BOOKING_RATE_LIMIT_WINDOW):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many bookings. Please try again later.",
-                headers={"Retry-After": str(_BOOKING_RATE_LIMIT_WINDOW)}
-            )
+            rate_limit_error("Too many bookings. Please try again later.")
 
 
 def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: int = None):
@@ -224,11 +215,7 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: in
             f"Email booking rate limit exceeded: {_mask_email(attendee_email)} "
             f"has {count} bookings in the last hour"
         )
-        raise HTTPException(
-            status_code=429,
-            detail="Too many bookings. Please try again later.",
-            headers={"Retry-After": str(_BOOKING_RATE_LIMIT_WINDOW)}
-        )
+        rate_limit_error("Too many bookings. Please try again later.")
 
 
 # Helper functions (_check_appointment_conflict, _check_duplicate_booking,
@@ -245,9 +232,18 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: in
 async def get_public_booking_page(
     slug: str,
     request: Request,
-    db: Session = Depends(get_db)
+    utm_source: Optional[str] = Query(None, max_length=200),
+    utm_medium: Optional[str] = Query(None, max_length=200),
+    utm_campaign: Optional[str] = Query(None, max_length=200),
+    utm_term: Optional[str] = Query(None, max_length=200),
+    utm_content: Optional[str] = Query(None, max_length=200),
+    db: Session = Depends(get_db),
 ):
-    """Get public booking page data"""
+    """Get public booking page data.
+
+    Captures UTM query parameters and the Referer header so the frontend can
+    pass them back during booking confirmation for attribution tracking.
+    """
     try:
         await _check_rate_limit(request)
         BookingLink = get_models()['BookingLink']
@@ -265,7 +261,7 @@ async def get_public_booking_page(
         # Auto-create booking link only for the "demo" slug to prevent user enumeration
         if not link:
             if slug != "demo":
-                raise HTTPException(status_code=404, detail="Booking page not found")
+                not_found_error("Booking page not found")
 
             # Tighter rate limit for demo auto-creation to prevent spam
             await _check_rate_limit(request, max_requests=DEMO_CREATE_RATE_LIMIT, custom_key=f"sched_demo_create:{_get_client_ip(request)}")
@@ -282,7 +278,7 @@ async def get_public_booking_page(
                     ).first()
                     if not target_user:
                         # No user with scheduler config; demo not available
-                        raise HTTPException(status_code=404, detail="Booking page not found")
+                        not_found_error("Booking page not found")
 
                     if target_user:
                         demo_org_id = getattr(target_user, 'organization_id', None)
@@ -380,17 +376,14 @@ async def get_public_booking_page(
             except Exception as e:
                 logger.exception(f"Error auto-creating booking link for {slug}")
                 # Creation was attempted but failed — return 500, not 404
-                raise HTTPException(status_code=500, detail="Unable to create booking page")
+                internal_error("Unable to create booking page")
 
         if not link:
-            raise HTTPException(status_code=404, detail="Booking page not found")
+            not_found_error("Booking page not found")
 
         # Check if the booking link has expired
         if link.expires_at and link.expires_at < datetime.now(timezone.utc):
-            raise HTTPException(
-                status_code=410,
-                detail="This booking link has expired. Please request a new one."
-            )
+            scheduler_error(410, SLOT_UNAVAILABLE, "This booking link has expired. Please request a new one.")
 
         # H8: Atomic view count increment to prevent lost updates under concurrency
         db.query(BookingLink).filter(BookingLink.id == link.id).update(
@@ -442,27 +435,44 @@ async def get_public_booking_page(
                     "color": t.color
                 })
 
+        # Build attribution from UTM query params, booking link defaults, and Referer header
+        attribution = {}
+        referer = request.headers.get("referer") or request.headers.get("Referer")
+        if utm_source:
+            attribution["utm_source"] = utm_source
+        elif link.default_utm_source:
+            attribution["utm_source"] = link.default_utm_source
+        if utm_medium:
+            attribution["utm_medium"] = utm_medium
+        elif link.default_utm_medium:
+            attribution["utm_medium"] = link.default_utm_medium
+        if utm_campaign:
+            attribution["utm_campaign"] = utm_campaign
+        elif link.default_utm_campaign:
+            attribution["utm_campaign"] = link.default_utm_campaign
+        if utm_term:
+            attribution["utm_term"] = utm_term
+        if utm_content:
+            attribution["utm_content"] = utm_content
+        if referer:
+            attribution["referrer"] = referer[:2000]
+
         return {
             "booking_page": {
                 "title": link.custom_title or link.link_name,
                 "description": link.custom_description or link.description,
                 "logo_url": link.custom_logo_url,
                 "color": link.custom_color,
-                "appointment_types": appointment_types
-            }
+                "appointment_types": appointment_types,
+            },
+            # The frontend should store this and send it back in the confirm request
+            "attribution": attribution if attribution else None,
         }
-    except HTTPException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
-            headers=getattr(exc, 'headers', None)
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Unexpected error in public booking page for slug '{slug}': {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=_sanitize_public_error(500, "")
-        )
+        internal_error("Something went wrong. Please try again later.")
 
 
 @router.get("/public/book/{slug}/slots")
@@ -501,10 +511,7 @@ async def get_public_available_slots(
             query_start = date
             query_end = date
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Please provide a date or date range."
-            )
+            validation_error("Please provide a date or date range.")
 
         BookingLink = get_models()['BookingLink']
         link = db.query(BookingLink).filter(
@@ -514,14 +521,11 @@ async def get_public_available_slots(
         ).first()
 
         if not link:
-            raise HTTPException(status_code=404, detail="Booking page not found")
+            not_found_error("Booking page not found")
 
         # Check if the booking link has expired
         if link.expires_at and link.expires_at < datetime.now(timezone.utc):
-            raise HTTPException(
-                status_code=410,
-                detail="This booking link has expired. Please request a new one."
-            )
+            scheduler_error(410, SLOT_UNAVAILABLE, "This booking link has expired. Please request a new one.")
 
         user_ids = link.assigned_users if link.assigned_users else [link.user_id]
         link_org_id = getattr(link, 'organization_id', None)
@@ -547,18 +551,11 @@ async def get_public_available_slots(
             response["message"] = f"Results limited to {_PUBLIC_SLOT_CAP} slots. Narrow your date range for complete results."
 
         return response
-    except HTTPException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
-            headers=getattr(exc, 'headers', None)
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Unexpected error in public slots for slug '{slug}': {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=_sanitize_public_error(500, "")
-        )
+        internal_error("Something went wrong. Please try again later.")
 
 
 @router.post("/public/book/{slug}/confirm")
@@ -594,11 +591,11 @@ async def confirm_public_booking(
         # (rejects in production, allows in dev/test)
         if not booking_data.cf_turnstile_token:
             if _TURNSTILE_SECRET_KEY or _IS_PRODUCTION:
-                raise HTTPException(status_code=403, detail="Bot verification required")
+                forbidden_error("Bot verification required")
         else:
             is_human = await _verify_turnstile_token(booking_data.cf_turnstile_token)
             if not is_human:
-                raise HTTPException(status_code=403, detail="Bot verification failed. Please try again.")
+                forbidden_error("Bot verification failed. Please try again.")
 
         # Extract and sanitize data from request body
         appointment_type_id = booking_data.appointment_type_id
@@ -621,18 +618,18 @@ async def confirm_public_booking(
         ).first()
 
         if not link:
-            raise HTTPException(status_code=404, detail="Booking page not found")
+            not_found_error("Booking page not found")
 
         # H5: Enforce booking link limits
         now_utc = datetime.now(timezone.utc)
         if link.expires_at and link.expires_at < now_utc:
-            raise HTTPException(status_code=410, detail="This booking link has expired. Please request a new one.")
+            scheduler_error(410, SLOT_UNAVAILABLE, "This booking link has expired. Please request a new one.")
         if link.available_from and link.available_from > now_utc:
-            raise HTTPException(status_code=410, detail="This booking link is not yet active")
+            scheduler_error(410, SLOT_UNAVAILABLE, "This booking link is not yet active")
         if link.available_until and link.available_until < now_utc:
-            raise HTTPException(status_code=410, detail="This booking link is no longer available")
+            scheduler_error(410, SLOT_UNAVAILABLE, "This booking link is no longer available")
         if link.max_bookings is not None and (link.booking_count or 0) >= link.max_bookings:
-            raise HTTPException(status_code=410, detail="This booking link has reached its maximum number of bookings")
+            scheduler_error(410, SLOT_UNAVAILABLE, "This booking link has reached its maximum number of bookings")
 
         # Derive org_id from the booking link for tenant isolation
         link_org_id = getattr(link, 'organization_id', None)
@@ -647,7 +644,7 @@ async def confirm_public_booking(
                 max_per_query = max_per_query.filter(Appointment.organization_id == link_org_id)
             existing_count = max_per_query.count()
             if existing_count >= link.max_per_person:
-                raise HTTPException(status_code=429, detail="You have reached the maximum number of bookings allowed")
+                rate_limit_error("You have reached the maximum number of bookings allowed")
 
         appt_type_query = db.query(AppointmentType).filter(
             AppointmentType.id == appointment_type_id,
@@ -658,7 +655,96 @@ async def confirm_public_booking(
         appt_type = appt_type_query.first()
 
         if not appt_type:
-            raise HTTPException(status_code=400, detail="Invalid booking request")
+            validation_error("Invalid booking request")
+
+        # ==================================================================
+        # M12: Booking dedup window — idempotent response for double-clicks
+        # ==================================================================
+        from sqlalchemy import text as _sql_text
+        _dedup_row = db.execute(
+            _sql_text(
+                "SELECT id, scheduled_start, scheduled_end "
+                "FROM scheduler_appointments "
+                "WHERE LOWER(attendee_email) = :email "
+                "AND scheduled_start = :start "
+                "AND created_at > NOW() - INTERVAL '60 seconds' "
+                "AND status NOT IN ('cancelled', 'rescheduled') "
+                "ORDER BY created_at DESC LIMIT 1"
+            ),
+            {"email": attendee_email.strip().lower(), "start": slot_start},
+        ).fetchone()
+        if _dedup_row:
+            logger.info(f"Dedup hit: returning existing appointment {_dedup_row.id} for {_mask_email(attendee_email)}")
+            return {
+                "message": "Appointment booked successfully",
+                "appointment_id": _dedup_row.id,
+                "scheduled_start": _dedup_row.scheduled_start.isoformat() if _dedup_row.scheduled_start else slot_start.isoformat(),
+                "scheduled_end": _dedup_row.scheduled_end.isoformat() if _dedup_row.scheduled_end else (slot_start + timedelta(minutes=duration_minutes)).isoformat(),
+                "deduplicated": True,
+            }
+
+        # ==================================================================
+        # M9: Enforce max_per_day / max_per_week capacity limits
+        # ==================================================================
+        _excluded_statuses = [AppointmentStatus.CANCELLED.value, AppointmentStatus.NO_SHOW.value, AppointmentStatus.RESCHEDULED.value]
+
+        if appt_type.max_per_day is not None:
+            _day_start = datetime.combine(slot_start.date(), time.min).replace(tzinfo=slot_start.tzinfo)
+            _day_end = _day_start + timedelta(days=1)
+            _day_params = {
+                "user_id": link.user_id,
+                "type_id": appointment_type_id,
+                "day_start": _day_start,
+                "day_end": _day_end,
+                "s1": _excluded_statuses[0],
+                "s2": _excluded_statuses[1],
+                "s3": _excluded_statuses[2],
+            }
+            if link_org_id:
+                _day_params["org_id"] = link_org_id
+            _day_count_row = db.execute(
+                _sql_text(
+                    "SELECT COUNT(*) AS cnt FROM scheduler_appointments "
+                    "WHERE assigned_user_id = :user_id "
+                    "AND appointment_type_id = :type_id "
+                    "AND scheduled_start >= :day_start AND scheduled_start < :day_end "
+                    "AND status NOT IN (:s1, :s2, :s3)"
+                    + (" AND organization_id = :org_id" if link_org_id else "")
+                ),
+                _day_params,
+            ).fetchone()
+            if _day_count_row and _day_count_row.cnt >= appt_type.max_per_day:
+                conflict_error("No more appointments available for this day")
+
+        if appt_type.max_per_week is not None:
+            # ISO week: Monday=0 .. Sunday=6
+            _slot_date = slot_start.date() if hasattr(slot_start, 'date') else slot_start
+            _week_start = datetime.combine(_slot_date - timedelta(days=_slot_date.weekday()), time.min).replace(tzinfo=slot_start.tzinfo)
+            _week_end = _week_start + timedelta(days=7)
+            _week_params = {
+                "user_id": link.user_id,
+                "type_id": appointment_type_id,
+                "week_start": _week_start,
+                "week_end": _week_end,
+                "s1": _excluded_statuses[0],
+                "s2": _excluded_statuses[1],
+                "s3": _excluded_statuses[2],
+            }
+            if link_org_id:
+                _week_params["org_id"] = link_org_id
+            _week_count_row = db.execute(
+                _sql_text(
+                    "SELECT COUNT(*) AS cnt FROM scheduler_appointments "
+                    "WHERE assigned_user_id = :user_id "
+                    "AND appointment_type_id = :type_id "
+                    "AND scheduled_start >= :week_start AND scheduled_start < :week_end "
+                    "AND status NOT IN (:s1, :s2, :s3)"
+                    + (" AND organization_id = :org_id" if link_org_id else "")
+                ),
+                _week_params,
+            ).fetchone()
+            if _week_count_row and _week_count_row.cnt >= appt_type.max_per_week:
+                conflict_error("No more appointments available this week")
 
         # RT1: Determine assigned user via routing strategy
         if booking_data.team_member_id:
@@ -669,10 +755,7 @@ async def confirm_public_booking(
                 _UserModel.organization_id == link_org_id,
             ).first()
             if not _team_member:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid team member selection",
-                )
+                validation_error("Invalid team member selection")
             assigned_user_id = booking_data.team_member_id
         else:
             try:
@@ -737,7 +820,7 @@ async def confirm_public_booking(
 
         # Translate service failure to HTTP error
         if not result.success:
-            raise HTTPException(status_code=409, detail=result.error)
+            conflict_error(result.error)
 
         # ==================================================================
         # H8: Increment booking count AFTER successful appointment creation
@@ -755,6 +838,52 @@ async def confirm_public_booking(
 
         appointment = result.appointment
         video_link = result.video_link
+
+        # ==================================================================
+        # Store UTM / attribution data on the appointment and linked lead
+        # ==================================================================
+        _attribution = {}
+        for _utm_field in ("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "referrer"):
+            _val = getattr(booking_data, _utm_field, None)
+            if _val:
+                _attribution[_utm_field] = _val[:200] if _utm_field != "referrer" else _val[:2000]
+        # Fall back to booking link defaults if the request didn't carry UTM params
+        if not _attribution.get("utm_source") and link.default_utm_source:
+            _attribution["utm_source"] = link.default_utm_source
+        if not _attribution.get("utm_medium") and link.default_utm_medium:
+            _attribution["utm_medium"] = link.default_utm_medium
+        if not _attribution.get("utm_campaign") and link.default_utm_campaign:
+            _attribution["utm_campaign"] = link.default_utm_campaign
+        # Capture Referer header as fallback if not in the request body
+        if not _attribution.get("referrer"):
+            _req_referer = request.headers.get("referer") or request.headers.get("Referer")
+            if _req_referer:
+                _attribution["referrer"] = _req_referer[:2000]
+
+        if _attribution:
+            try:
+                appointment.booking_attribution = _attribution
+                db.flush()
+            except Exception as _attr_err:
+                logger.warning(f"Could not store booking attribution: {_attr_err}")
+
+            # Also store attribution on the linked lead (if one was created/linked)
+            if result.lead_id:
+                try:
+                    from database.models.lead_loan import Lead as _LeadModel
+                    _lead = db.query(_LeadModel).filter(_LeadModel.id == result.lead_id).first()
+                    if _lead:
+                        # Enrich the lead source with UTM source when available
+                        if _attribution.get("utm_source") and (_lead.source or "scheduler") == "scheduler":
+                            _lead.source = f"scheduler:{_attribution['utm_source']}"
+                        # Append attribution summary to lead notes for audit trail
+                        _attr_summary = ", ".join(f"{k}={v}" for k, v in _attribution.items() if k != "referrer")
+                        if _attr_summary:
+                            _ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                            _note = f"[{_ts}] Booking attribution: {_attr_summary}"
+                            _lead.notes = f"{_lead.notes}\n{_note}".strip() if _lead.notes else _note
+                except Exception as _lead_attr_err:
+                    logger.warning(f"Could not store lead attribution for lead {result.lead_id}: {_lead_attr_err}")
 
         # Fallback room code for video meetings
         room_code = None
@@ -798,9 +927,24 @@ async def confirm_public_booking(
         attendee_state = None
         if intake_responses:
             attendee_state = intake_responses.get("state") or intake_responses.get("property_state")
-        licensing_warning = _check_lo_licensing(db, assigned_user_id, attendee_state, org_id=link_org_id)
+        licensing_warning = _check_lo_licensing(
+            db, assigned_user_id, attendee_state,
+            org_id=link_org_id, appointment_id=appointment.id,
+        )
         if licensing_warning:
             logger.warning(f"Appointment {appointment.id}: {licensing_warning}")
+            # Flag the linked lead so compliance reviewers can see NMLS was not verified
+            if result.lead_id:
+                try:
+                    from database.models.lead_loan import Lead
+                    lead = db.query(Lead).filter(Lead.id == result.lead_id).first()
+                    if lead:
+                        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                        note = f"[{timestamp}] NMLS verification pending - {licensing_warning}"
+                        prev = lead.notes or ""
+                        lead.notes = f"{prev}\n{note}".strip()
+                except Exception as e:
+                    logger.error(f"Failed to flag lead {result.lead_id} with NMLS warning: {e}")
 
         # Prepare confirmation details
         appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
@@ -949,18 +1093,11 @@ async def confirm_public_booking(
                 "calendar_event_created": calendar_event_created
             }
         }
-    except HTTPException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
-            headers=getattr(exc, 'headers', None)
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Unexpected error in public booking confirmation for slug '{slug}': {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=_sanitize_public_error(500, "")
-        )
+        internal_error("Something went wrong. Please try again later.")
 
 
 # ============================================================================
@@ -1057,18 +1194,11 @@ async def get_website_demo_available_slots(
             "message": "No available times found. Please try again later.",
             "configured": False
         }
-    except HTTPException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
-            headers=getattr(exc, 'headers', None)
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Unexpected error in public available-slots: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=_sanitize_public_error(500, "")
-        )
+        internal_error("Something went wrong. Please try again later.")
 
 
 async def _generate_slots_for_users(
@@ -1165,10 +1295,7 @@ async def confirm_website_demo_booking(
 
         if not assignment_result or not assignment_result.assigned_user_id:
             logger.warning("Website demo calendar not configured - no assignment found")
-            raise HTTPException(
-                status_code=400,
-                detail="Demo scheduling is not available right now. Please try again later."
-            )
+            validation_error("Demo scheduling is not available right now. Please try again later.")
 
         assigned_user_id = assignment_result.assigned_user_id
         user_name = assignment_result.user_name or "Team Member"
@@ -1186,7 +1313,7 @@ async def confirm_website_demo_booking(
             if start_time.tzinfo is None:
                 start_time = start_time.replace(tzinfo=pytz.UTC)
         except Exception as e:
-            raise HTTPException(status_code=400, detail="Invalid booking request. Please check your information and try again.")
+            validation_error("Invalid booking request. Please check your information and try again.")
 
         end_time = start_time + timedelta(minutes=request.duration_minutes)
 
@@ -1234,7 +1361,7 @@ async def confirm_website_demo_booking(
 
         # Translate service failure to HTTP error
         if not result.success:
-            raise HTTPException(status_code=409, detail=result.error)
+            conflict_error(result.error)
 
         new_appointment = result.appointment
 
@@ -1307,15 +1434,8 @@ async def confirm_website_demo_booking(
             },
             "message": f"Demo scheduled with {user_name}"
         }
-    except HTTPException as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail=_sanitize_public_error(exc.status_code, str(exc.detail)),
-            headers=getattr(exc, 'headers', None)
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Unexpected error in website demo booking: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=_sanitize_public_error(500, "")
-        )
+        internal_error("Something went wrong. Please try again later.")

@@ -2413,6 +2413,22 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Microsoft Outlook routes not loaded: {e}")
 
+    # Microsoft OAuth routes (frontend-driven popup flow, status, sync, config)
+    try:
+        from routes.microsoft_oauth_routes import router as microsoft_oauth_router
+        app.include_router(microsoft_oauth_router, tags=["Microsoft 365 OAuth"])
+        logger.info("✅ Microsoft OAuth routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Microsoft OAuth routes not loaded: {e}")
+
+    # Register calendar providers (Google, Outlook) for outbound sync
+    try:
+        from services.calendar_providers import register_default_providers
+        register_default_providers()
+        logger.info("✅ Calendar providers registered")
+    except Exception as e:
+        logger.warning(f"⚠️ Calendar providers not registered: {e}")
+
     # Listing Agent Portal routes (Transaction updates for listing agents)
     try:
         from routes.listing_portal_routes import router as listing_portal_router, set_dependencies as set_listing_portal_deps

@@ -62,7 +62,10 @@ URL Prefix Map (all under /api/v1/scheduler):
   /settings/all                 Get all scheduler settings                  (settings.py)
   /settings/{section}           Update settings by section (PUT, admin)     (settings.py)
   /maintenance/cleanup-holds    Delete expired SlotHold records (admin)     (maintenance.py)
-  /sitemap.xml                  XML sitemap for search engines              (sitemap.py)
+  /maintenance/archive-audit-logs  Archive old audit log entries (admin)   (maintenance.py)
+  /maintenance/audit-log-stats     Audit log aggregate statistics (admin)  (maintenance.py)
+  /sitemap.xml                  Sitemap index (or single sitemap if small)  (sitemap.py)
+  /sitemap-{page}.xml           Paginated sitemap (10K URLs per page)       (sitemap.py)
   /robots.txt                   Robots.txt for crawler control              (sitemap.py)
 
 Active modules (32):
@@ -155,6 +158,7 @@ from .webhooks import router as webhooks_router
 from .widget_config import router as widget_config_router
 from .maintenance import router as maintenance_router
 from .calendar_sync_inbound import router as calendar_sync_inbound_router
+from .confirmation import router as confirmation_router
 from .settings import router as settings_router
 from .email_events import router as email_events_router
 from .error_responses import (  # noqa: F401 — re-export for other modules
@@ -224,6 +228,7 @@ scheduler_router.include_router(webhooks_router)
 scheduler_router.include_router(widget_config_router)
 scheduler_router.include_router(maintenance_router)
 scheduler_router.include_router(calendar_sync_inbound_router)
+scheduler_router.include_router(confirmation_router)
 scheduler_router.include_router(settings_router)
 scheduler_router.include_router(email_events_router)
 scheduler_router.include_router(_api_versions_router)

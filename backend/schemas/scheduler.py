@@ -452,6 +452,13 @@ class PublicBookingConfirmRequest(BaseModel):
     team_member_id: Optional[int] = None
     team_member_name: Optional[str] = Field(None, max_length=200)
     cf_turnstile_token: Optional[str] = Field(None, max_length=4096)  # Cloudflare Turnstile bot protection
+    # UTM attribution (passed from frontend after capturing query params on page load)
+    utm_source: Optional[str] = Field(None, max_length=200)
+    utm_medium: Optional[str] = Field(None, max_length=200)
+    utm_campaign: Optional[str] = Field(None, max_length=200)
+    utm_term: Optional[str] = Field(None, max_length=200)
+    utm_content: Optional[str] = Field(None, max_length=200)
+    referrer: Optional[str] = Field(None, max_length=2000)
 
 
 class WebsiteDemoBookingRequest(BaseModel):

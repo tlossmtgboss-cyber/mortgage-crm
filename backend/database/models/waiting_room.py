@@ -44,6 +44,7 @@ class WaitlistEntry(Base):
     __tablename__ = "waitlist_entries"
     __table_args__ = (
         Index("ix_waitlist_org_type_status", "organization_id", "appointment_type_id", "status"),
+        Index("ix_waitlist_org_status_type", "organization_id", "status", "appointment_type_id"),
         Index("ix_waitlist_org_position", "organization_id", "appointment_type_id", "position"),
         Index("ix_waitlist_status", "status"),
         Index("ix_waitlist_email", "email"),

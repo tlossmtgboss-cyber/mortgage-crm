@@ -469,18 +469,25 @@ class WaitlistService:
     # EXPIRATION
     # ========================================================================
 
-    def expire_offers(self) -> int:
+    def expire_offers(self, org_id: int = None) -> int:
         """Expire all offers that have passed their expiration time.
+
+        Args:
+            org_id: If provided, only expire offers for this organization.
 
         Returns:
             Number of expired offers.
         """
         now = datetime.now(timezone.utc)
 
-        expired_entries = self.db.query(WaitlistEntry).filter(
+        filters = [
             WaitlistEntry.status == WaitlistStatus.OFFERED,
             WaitlistEntry.expires_at < now,
-        ).all()
+        ]
+        if org_id is not None:
+            filters.append(WaitlistEntry.organization_id == org_id)
+
+        expired_entries = self.db.query(WaitlistEntry).filter(*filters).all()
 
         count = 0
         org_type_pairs = set()

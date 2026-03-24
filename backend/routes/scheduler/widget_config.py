@@ -13,15 +13,69 @@ component when it initializes on a third-party website.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Tuple
+from collections import OrderedDict
+import hashlib
+import json
 import logging
+import threading
+import time
 
 from db import get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ============================================================================
+# IN-MEMORY TTL + LRU CACHE
+# ============================================================================
+
+_CACHE_TTL_SECONDS = 300  # 5 minutes
+_CACHE_MAX_SIZE = 1000
+
+_cache_lock = threading.Lock()
+# OrderedDict for LRU eviction: most recently used at the end
+_cache: OrderedDict[Tuple[str, Optional[str]], Tuple[float, dict]] = OrderedDict()
+
+
+def _cache_get(org_slug: str, lo_slug: Optional[str]) -> Optional[dict]:
+    """Return cached response dict if present and not expired, else None."""
+    key = (org_slug, lo_slug)
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return None
+        ts, data = entry
+        if time.monotonic() - ts > _CACHE_TTL_SECONDS:
+            # Expired -- remove
+            _cache.pop(key, None)
+            return None
+        # Move to end (most recently used)
+        _cache.move_to_end(key)
+        return data
+
+
+def _cache_set(org_slug: str, lo_slug: Optional[str], data: dict) -> None:
+    """Store response dict in cache, evicting oldest if over max size."""
+    key = (org_slug, lo_slug)
+    with _cache_lock:
+        if key in _cache:
+            _cache.move_to_end(key)
+        _cache[key] = (time.monotonic(), data)
+        # Evict oldest entries if over max size
+        while len(_cache) > _CACHE_MAX_SIZE:
+            _cache.popitem(last=False)
+
+
+def _compute_etag(data: dict) -> str:
+    """Compute a weak ETag from the response body."""
+    raw = json.dumps(data, sort_keys=True, default=str).encode()
+    digest = hashlib.md5(raw).hexdigest()
+    return f'W/"{digest}"'
 
 
 # ============================================================================
@@ -40,7 +94,7 @@ async def get_widget_config(
     Public endpoint, no auth required. Returns org branding, available
     appointment types, and the booking slug needed to fetch slots / confirm.
     """
-    return await _get_widget_config_impl(org_slug, None, db)
+    return await _cached_widget_config(org_slug, None, request, db)
 
 
 @router.get("/widget/config/{org_slug}/{lo_slug}")
@@ -56,7 +110,40 @@ async def get_widget_config_with_lo(
     Public endpoint, no auth required. Returns org branding, LO info,
     appointment types filtered to this LO, and their booking slug.
     """
-    return await _get_widget_config_impl(org_slug, lo_slug, db)
+    return await _cached_widget_config(org_slug, lo_slug, request, db)
+
+
+async def _cached_widget_config(
+    org_slug: str,
+    lo_slug: Optional[str],
+    request: Request,
+    db: Session,
+) -> JSONResponse:
+    """Serve widget config with in-memory cache, ETag, and Cache-Control."""
+    # 1. Check in-memory cache
+    cached = _cache_get(org_slug, lo_slug)
+
+    if cached is None:
+        # Cache miss -- query DB
+        data = await _get_widget_config_impl(org_slug, lo_slug, db)
+        _cache_set(org_slug, lo_slug, data)
+        cached = data
+
+    # 2. ETag: check If-None-Match
+    etag = _compute_etag(cached)
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match and if_none_match.strip() == etag:
+        return JSONResponse(
+            status_code=304,
+            content=None,
+            headers={"ETag": etag, "Cache-Control": "public, max-age=300"},
+        )
+
+    # 3. Return full response with caching headers
+    return JSONResponse(
+        content=cached,
+        headers={"ETag": etag, "Cache-Control": "public, max-age=300"},
+    )
 
 
 async def _get_widget_config_impl(

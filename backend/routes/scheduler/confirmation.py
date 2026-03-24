@@ -12,6 +12,7 @@ All endpoints use appointment-specific JWT tokens (no login required).
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -31,6 +32,7 @@ from services.ics_generator import generate_ics_content
 from scheduler_email_service import generate_reschedule_url
 from routes.scheduler._helpers import (
     get_models, _check_rate_limit, _sanitize_text,
+    _check_appointment_conflict, _convert_utc_to_user_tz, _audit_log,
 )
 from routes.scheduler.constants import DEFAULT_TIMEZONE
 from db import get_db
@@ -50,6 +52,24 @@ _ICS_DESCRIPTION_MAX_LENGTH = 2000
 
 # Regex to strip HTML tags
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+# Statuses from which an appointment can be cancelled or rescheduled by a borrower
+_ACTIONABLE_STATUSES = {"booked", "confirmed", "reminded", "scheduled"}
+
+
+# ============================================================================
+# PYDANTIC REQUEST MODELS
+# ============================================================================
+
+class ConfirmationCancelRequest(BaseModel):
+    """Request body for cancelling an appointment via confirmation token."""
+    reason: Optional[str] = Field(None, max_length=1000, description="Optional cancellation reason")
+
+
+class ConfirmationRescheduleRequest(BaseModel):
+    """Request body for rescheduling an appointment via confirmation token."""
+    slot_time: str = Field(..., description="New appointment start time in ISO 8601 format")
+    reason: Optional[str] = Field(None, max_length=1000, description="Optional reschedule reason")
 
 
 # ============================================================================
@@ -559,6 +579,412 @@ async def download_ics_file(
             "Content-Disposition": f'attachment; filename="appointment-{appointment_id}.ics"',
         },
     )
+
+
+# ============================================================================
+# CANCEL (public, borrower self-service via confirmation token)
+# ============================================================================
+
+@router.post("/public/confirm/{appointment_id}/cancel")
+async def public_cancel_appointment(
+    request: Request,
+    appointment_id: int,
+    body: Optional[ConfirmationCancelRequest] = None,
+    token: str = Query(..., description="Appointment-specific JWT token"),
+    db: Session = Depends(get_db),
+):
+    """
+    Cancel an appointment using the confirmation token.
+
+    The borrower can cancel directly from the confirmation page without logging in.
+    Rate-limited to 10 requests per window to prevent abuse.
+    """
+    await _check_rate_limit(request, max_requests=10)
+
+    models = get_models()
+    if not models:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    Appointment = models.get("Appointment")
+    if not Appointment:
+        raise HTTPException(status_code=500, detail="Appointment model unavailable")
+
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id
+    ).first()
+
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    # Resolve status string
+    appt_status = appointment.status.value if hasattr(appointment.status, 'value') else str(appointment.status)
+
+    # Verify token (also rejects cancelled/no-show appointments)
+    payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
+
+    # SEC-001: Verify token email matches appointment attendee
+    token_email = (payload.get("email") or "").strip().lower()
+    appt_email = (appointment.attendee_email or "").strip().lower()
+    if token_email and appt_email and token_email != appt_email:
+        raise HTTPException(status_code=403, detail="Token does not match this appointment")
+
+    # Check the appointment is still in a cancellable state
+    if appt_status not in _ACTIONABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot cancel an appointment with status: {appt_status}",
+        )
+
+    # Check the appointment is not in the past
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    if appointment.scheduled_start and appointment.scheduled_start < now_utc:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot cancel an appointment that has already started or passed",
+        )
+
+    # Extract cancellation reason
+    reason = _sanitize_text(body.reason) if body and body.reason else None
+
+    # Store details for email before mutating the record
+    attendee_email_raw = appointment.attendee_email
+    attendee_name = appointment.attendee_name or "Valued Client"
+    appointment_title = appointment.title or "Appointment"
+    org_id = appointment.organization_id
+
+    # Format date/time for the cancellation email
+    if appointment.scheduled_start and appointment.assigned_user_id:
+        try:
+            local_start = _convert_utc_to_user_tz(
+                appointment.scheduled_start, appointment.assigned_user_id, db, org_id=org_id
+            )
+            appointment_date = local_start.strftime('%B %d, %Y')
+            appointment_time = local_start.strftime('%I:%M %p %Z')
+        except Exception as e:
+            logger.warning("Timezone conversion failed for cancellation email (appointment %s): %s", appointment.id, e)
+            appointment_date = appointment.scheduled_start.strftime('%B %d, %Y')
+            appointment_time = appointment.scheduled_start.strftime('%I:%M %p UTC')
+    elif appointment.scheduled_start:
+        appointment_date = appointment.scheduled_start.strftime('%B %d, %Y')
+        appointment_time = appointment.scheduled_start.strftime('%I:%M %p UTC')
+    else:
+        appointment_date = "TBD"
+        appointment_time = "TBD"
+
+    # Get LO name for email
+    team_member_name = None
+    if appointment.assigned_user_id:
+        try:
+            from database.models.core import User
+            lo = db.query(User).filter(User.id == appointment.assigned_user_id).first()
+            if lo:
+                team_member_name = f"{getattr(lo, 'first_name', '') or ''} {getattr(lo, 'last_name', '') or ''}".strip()
+        except Exception as e:
+            logger.error("Could not load LO details for cancellation email: %s", e, exc_info=True)
+
+    # Perform the cancellation
+    appointment.status = AppointmentStatus.CANCELLED
+    appointment.cancelled_at = datetime.now(timezone.utc)
+    appointment.cancellation_reason = reason
+    appointment.status_changed_at = datetime.now(timezone.utc)
+    appointment.updated_at = datetime.now(timezone.utc)
+
+    # Record status history
+    AppointmentStatusHistory = models.get("AppointmentStatusHistory")
+    if AppointmentStatusHistory:
+        try:
+            status_history = AppointmentStatusHistory(
+                organization_id=org_id,
+                appointment_id=appointment_id,
+                previous_status=appt_status,
+                new_status=AppointmentStatus.CANCELLED.value,
+                change_source="borrower_confirmation_page",
+                notes=reason,
+            )
+            db.add(status_history)
+        except Exception as e:
+            logger.error("Failed to record status history for cancellation: %s", e, exc_info=True)
+
+    # Audit log
+    try:
+        _audit_log(
+            db, org_id, None, "cancelled", "appointment",
+            entity_id=appointment_id,
+            changes={"reason": reason, "cancelled_by": "borrower"},
+            request=request,
+            booking_source="public_confirmation",
+        )
+    except Exception as e:
+        logger.error("Failed to write audit log for cancellation: %s", e, exc_info=True)
+
+    db.commit()
+
+    # Enterprise audit (best-effort, non-blocking)
+    try:
+        from services.scheduler_audit_logger import scheduler_audit
+
+        class _BorrowerProxy:
+            """Minimal proxy to satisfy scheduler_audit.log_appointment_cancelled user param."""
+            id = None
+            first_name = attendee_name
+            last_name = ""
+
+        scheduler_audit.log_appointment_cancelled(
+            appointment, _BorrowerProxy(), reason=reason, request=request,
+            booking_source="public_confirmation",
+        )
+    except Exception as e:
+        logger.debug("Could not write scheduler audit for borrower cancellation: %s", e)
+
+    # Send cancellation email (best-effort, non-blocking)
+    if attendee_email_raw:
+        try:
+            from scheduler_email_service import send_appointment_cancellation_email
+            send_appointment_cancellation_email(
+                attendee_email=attendee_email_raw,
+                attendee_name=attendee_name,
+                appointment_title=appointment_title,
+                appointment_date=appointment_date,
+                appointment_time=appointment_time,
+                team_member_name=team_member_name,
+                cancellation_reason=reason,
+                organization_id=org_id,
+            )
+        except Exception as e:
+            logger.error("Failed to send cancellation email for appointment %s: %s", appointment_id, e, exc_info=True)
+
+    return {
+        "status": "ok",
+        "message": "Appointment cancelled successfully",
+        "appointment_id": appointment_id,
+        "cancelled_at": appointment.cancelled_at.isoformat() if appointment.cancelled_at else None,
+    }
+
+
+# ============================================================================
+# RESCHEDULE (public, borrower self-service via confirmation token)
+# ============================================================================
+
+@router.post("/public/confirm/{appointment_id}/reschedule")
+async def public_reschedule_appointment(
+    request: Request,
+    appointment_id: int,
+    body: ConfirmationRescheduleRequest,
+    token: str = Query(..., description="Appointment-specific JWT token"),
+    db: Session = Depends(get_db),
+):
+    """
+    Reschedule an appointment using the confirmation token.
+
+    The borrower provides a new `slot_time` (ISO 8601) and the appointment is
+    moved to that time.  The duration is preserved from the original appointment.
+    Rate-limited to 10 requests per window to prevent abuse.
+    """
+    await _check_rate_limit(request, max_requests=10)
+
+    models = get_models()
+    if not models:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    Appointment = models.get("Appointment")
+    if not Appointment:
+        raise HTTPException(status_code=500, detail="Appointment model unavailable")
+
+    appointment = db.query(Appointment).filter(
+        Appointment.id == appointment_id
+    ).first()
+
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    # Resolve status string
+    appt_status = appointment.status.value if hasattr(appointment.status, 'value') else str(appointment.status)
+
+    # Verify token (also rejects cancelled/no-show appointments)
+    payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
+
+    # SEC-001: Verify token email matches appointment attendee
+    token_email = (payload.get("email") or "").strip().lower()
+    appt_email = (appointment.attendee_email or "").strip().lower()
+    if token_email and appt_email and token_email != appt_email:
+        raise HTTPException(status_code=403, detail="Token does not match this appointment")
+
+    # Check the appointment is still in a reschedulable state
+    if appt_status not in _ACTIONABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot reschedule an appointment with status: {appt_status}",
+        )
+
+    # Check the appointment is not in the past
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    if appointment.scheduled_start and appointment.scheduled_start < now_utc:
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot reschedule an appointment that has already started or passed",
+        )
+
+    # Parse the new slot_time
+    try:
+        new_start = datetime.fromisoformat(body.slot_time.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid datetime format for slot_time. Use ISO 8601.")
+
+    # Normalize to UTC naive (consistent with DB storage)
+    if new_start.tzinfo is not None:
+        new_start = new_start.astimezone(timezone.utc).replace(tzinfo=None)
+
+    # Calculate new end based on original duration
+    duration_minutes = appointment.duration_minutes or 30
+    new_end = new_start + timedelta(minutes=duration_minutes)
+
+    # Validate the new time is in the future
+    if new_start < now_utc:
+        raise HTTPException(status_code=400, detail="Cannot reschedule to a past time")
+
+    # Validate new_start != current start (no-op reschedule)
+    if appointment.scheduled_start and new_start == appointment.scheduled_start:
+        raise HTTPException(status_code=400, detail="New time is the same as the current appointment time")
+
+    org_id = appointment.organization_id
+    reason = _sanitize_text(body.reason) if body.reason else None
+
+    # Check for conflicts at the new time
+    if appointment.assigned_user_id:
+        await _check_appointment_conflict(
+            db,
+            appointment.assigned_user_id,
+            new_start,
+            new_end,
+            org_id=org_id,
+            exclude_appointment_id=appointment_id,
+        )
+
+    # Capture old times for audit
+    old_start = appointment.scheduled_start
+    old_end = appointment.scheduled_end
+
+    # Move the appointment
+    appointment.scheduled_start = new_start
+    appointment.scheduled_end = new_end
+    appointment.status = AppointmentStatus.RESCHEDULED
+    appointment.status_changed_at = datetime.now(timezone.utc)
+    appointment.reschedule_count = (appointment.reschedule_count or 0) + 1
+    appointment.updated_at = datetime.now(timezone.utc)
+
+    # Record status history
+    AppointmentStatusHistory = models.get("AppointmentStatusHistory")
+    if AppointmentStatusHistory:
+        try:
+            status_history = AppointmentStatusHistory(
+                organization_id=org_id,
+                appointment_id=appointment_id,
+                previous_status=appt_status,
+                new_status=AppointmentStatus.RESCHEDULED.value,
+                change_source="borrower_confirmation_page",
+                notes=reason,
+            )
+            db.add(status_history)
+        except Exception as e:
+            logger.error("Failed to record status history for reschedule: %s", e, exc_info=True)
+
+    # Audit log
+    try:
+        _audit_log(
+            db, org_id, None, "rescheduled", "appointment",
+            entity_id=appointment_id,
+            changes={
+                "reason": reason,
+                "rescheduled_by": "borrower",
+                "old_start": old_start.isoformat() if old_start else None,
+                "new_start": new_start.isoformat(),
+                "old_end": old_end.isoformat() if old_end else None,
+                "new_end": new_end.isoformat(),
+            },
+            request=request,
+            booking_source="public_confirmation",
+        )
+    except Exception as e:
+        logger.error("Failed to write audit log for reschedule: %s", e, exc_info=True)
+
+    db.commit()
+
+    # Enterprise audit (best-effort)
+    try:
+        from services.scheduler_audit_logger import scheduler_audit
+        scheduler_audit.log_borrower_reschedule_confirmed(
+            appointment,
+            old_start=old_start,
+            new_start=new_start,
+            old_end=old_end,
+            new_end=new_end,
+            request=request,
+        )
+    except Exception as e:
+        logger.debug("Could not write scheduler audit for borrower reschedule: %s", e)
+
+    # Sync rescheduled time to external calendars (Google, Outlook) - best-effort
+    try:
+        from services.calendar_outbound_sync import push_appointment_updated
+        if appointment.assigned_user_id:
+            User = models.get("User")
+            if User:
+                sync_user = db.query(User).filter(User.id == appointment.assigned_user_id).first()
+                if sync_user:
+                    await push_appointment_updated(db, appointment, sync_user)
+    except Exception as cal_err:
+        logger.error("Outbound calendar sync (reschedule) failed for appointment %s: %s", appointment_id, cal_err)
+
+    # Send reschedule confirmation email (best-effort)
+    if appointment.attendee_email:
+        try:
+            from scheduler_email_service import send_appointment_update_email
+            if appointment.assigned_user_id:
+                try:
+                    local_new_start = _convert_utc_to_user_tz(
+                        new_start, appointment.assigned_user_id, db, org_id=org_id
+                    )
+                    new_date_str = local_new_start.strftime('%B %d, %Y')
+                    new_time_str = local_new_start.strftime('%I:%M %p %Z')
+                except Exception as e:
+                    logger.warning("Timezone conversion failed for reschedule email (appointment %s): %s", appointment_id, e)
+                    new_date_str = new_start.strftime('%B %d, %Y')
+                    new_time_str = new_start.strftime('%I:%M %p UTC')
+            else:
+                new_date_str = new_start.strftime('%B %d, %Y')
+                new_time_str = new_start.strftime('%I:%M %p UTC')
+
+            # Build meeting mode label
+            meeting_mode_str = "Meeting"
+            if appointment.meeting_mode:
+                mm_val = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode)
+                mode_labels = {"video": "Video Call", "phone": "Phone Call", "in_person": "In-Person", "screen_share": "Screen Share"}
+                meeting_mode_str = mode_labels.get(mm_val, "Meeting")
+
+            send_appointment_update_email(
+                attendee_email=appointment.attendee_email,
+                attendee_name=appointment.attendee_name or "Valued Client",
+                appointment_title=appointment.title or "Appointment",
+                appointment_date=new_date_str,
+                appointment_time=new_time_str,
+                duration=f"{duration_minutes} minutes",
+                meeting_mode=meeting_mode_str,
+                scheduled_start=new_start,
+                duration_minutes=duration_minutes,
+                organization_id=org_id,
+            )
+        except Exception as e:
+            logger.error("Failed to send reschedule email for appointment %s: %s", appointment_id, e, exc_info=True)
+
+    return {
+        "status": "ok",
+        "message": "Appointment rescheduled successfully",
+        "appointment_id": appointment_id,
+        "scheduled_start": new_start.isoformat(),
+        "scheduled_end": new_end.isoformat(),
+        "duration_minutes": duration_minutes,
+        "reschedule_count": appointment.reschedule_count,
+    }
 
 
 # ============================================================================

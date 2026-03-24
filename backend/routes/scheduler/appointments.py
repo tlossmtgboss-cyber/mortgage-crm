@@ -666,242 +666,248 @@ async def create_appointment_endpoint(
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
-    _models = get_models()
-
-    # Calculate end time
-    scheduled_end = appt_data.scheduled_start + timedelta(minutes=appt_data.duration_minutes)
-    assigned_user = appt_data.assigned_user_id or user.id
-
-    # Validate assigned_user_id belongs to the same org (prevent cross-tenant assignment)
-    if appt_data.assigned_user_id and appt_data.assigned_user_id != user.id:
-        User = _models.get('User')
-        if User:
-            target = db.query(User).filter(
-                User.id == appt_data.assigned_user_id,
-                User.organization_id == org_id,
-            ).first()
-            if not target:
-                scheduler_error(403, FORBIDDEN, "Assigned user not found in your organization")
-
-    # --- Delegate to shared service ---
-    result = await create_appointment_service(
-        db=db,
-        organization_id=org_id,
-        assigned_user_id=assigned_user,
-        created_by_user_id=user.id,
-        source="authenticated",
-        # Appointment fields
-        title=appt_data.title,
-        scheduled_start=appt_data.scheduled_start,
-        scheduled_end=scheduled_end,
-        duration_minutes=appt_data.duration_minutes,
-        timezone=appt_data.timezone,
-        attendee_name=appt_data.attendee_name,
-        attendee_email=appt_data.attendee_email,
-        attendee_phone=appt_data.attendee_phone,
-        # Optional fields
-        appointment_type_id=appt_data.appointment_type_id,
-        lead_id=appt_data.lead_id,
-        loan_id=appt_data.loan_id,
-        contact_id=appt_data.contact_id,
-        description=appt_data.description,
-        meeting_type=appt_data.meeting_type,
-        meeting_mode=appt_data.meeting_mode,
-        intake_responses=appt_data.intake_responses,
-        attendee_notes=appt_data.attendee_notes,
-        booked_by_ai=appt_data.booked_by_ai,
-        ai_booking_context=_sanitize_ai_context(appt_data.ai_booking_context),
-        # Control flags
-        check_conflicts=True,
-        check_cross_source=True,
-        generate_meeting_link=True,
-        create_lead_if_missing=True,
-    )
-
-    if not result.success:
-        raise HTTPException(status_code=409, detail=result.error)
-
-    appointment = result.appointment
-
-    # Surface non-fatal warnings from the shared service (e.g. meeting link failure)
-    for warning in result.warnings:
-        logger.warning(f"Appointment {appointment.id} creation warning: {warning}")
-
-    # Enterprise audit: structured log for compliance
-    scheduler_audit.log_appointment_created(
-        appointment, user, request=request,
-        booking_source="authenticated",
-    )
-
-    # Send confirmation email if attendee email is provided
-    email_sent = False
-    email_error = None
-    if appt_data.attendee_email:
-        try:
-            # Format date and time for email
-            appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
-            appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
-            duration_str = f"{appointment.duration_minutes} minutes"
-
-            # Get meeting mode display name
-            meeting_mode_str = "Phone Call"
-            if appointment.meeting_mode:
-                mode_display = {
-                    "video": "Video Call",
-                    "phone": "Phone Call",
-                    "in_person": "In Person",
-                    "screen_share": "Screen Share",
-                }
-                raw_mode = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode)
-                meeting_mode_str = mode_display.get(raw_mode.lower(), "Phone Call")
-
-            # Get team member info
-            team_member_name = None
-            team_member_email = None
-            User = _models.get('User')
-            if appointment.assigned_user_id and User:
-                assigned_user_obj = db.query(User).filter(User.id == appointment.assigned_user_id).first()
-                if assigned_user_obj:
-                    team_member_name = assigned_user_obj.first_name
-                    if assigned_user_obj.last_name:
-                        team_member_name += f" {assigned_user_obj.last_name}"
-                    team_member_email = assigned_user_obj.email
-
-            # Get video link if this is a video call
-            video_link = appointment.video_link if appointment.video_link else None
-
-            logger.info(f"Sending confirmation email to {_mask_email(appt_data.attendee_email)}")
-            # Send confirmation email to attendee (borrower) with calendar invite
-            reschedule_url = generate_reschedule_url(appointment.id, appt_data.attendee_email)
-            email_result = send_appointment_confirmation_email(
-                attendee_email=appt_data.attendee_email,
-                attendee_name=appt_data.attendee_name or "there",
-                appointment_title=appointment.title,
-                appointment_date=appointment_date,
-                appointment_time=appointment_time,
-                duration=duration_str,
-                meeting_mode=meeting_mode_str,
-                team_member_name=team_member_name,
-                team_member_email=team_member_email,
-                video_link=video_link,
-                scheduled_start=appointment.scheduled_start,
-                duration_minutes=appointment.duration_minutes,
-                reschedule_url=reschedule_url
-            )
-
-            email_sent = email_result.get("success", False)
-            if not email_sent:
-                email_error = email_result.get("error", "Unknown email error")
-                logger.warning(f"Email send failed for {appt_data.attendee_email}: {email_error}")
-
-                # Fallback: try sending via Salesforce if SendGrid failed
-                try:
-                    from services.salesforce.email_sync_service import SalesforceEmailSyncService
-                    from salesforce_integration_models import IntegrationProfile
-                    sf_email_service = SalesforceEmailSyncService()
-                    # Find user's active SF integration
-                    sf_profile = db.query(IntegrationProfile).filter(
-                        IntegrationProfile.user_id == user.id,
-                        IntegrationProfile.provider == "salesforce",
-                        IntegrationProfile.is_active == True
-                    ).first()
-                    if sf_profile:
-                        sf_html = (
-                            f"<p>Hi {html.escape(appt_data.attendee_name or 'there')},</p>"
-                            f"<p>Your appointment has been confirmed!</p>"
-                            f"<p><strong>Date:</strong> {html.escape(appointment_date)}<br>"
-                            f"<strong>Time:</strong> {html.escape(appointment_time)}<br>"
-                            f"<strong>Duration:</strong> {html.escape(duration_str)}<br>"
-                            f"<strong>Meeting Type:</strong> {html.escape(meeting_mode_str or '')}</p>"
-                            + (f"<p><strong>With:</strong> {html.escape(team_member_name)}</p>" if team_member_name else "")
-                            + (f"<p><a href='{html.escape(video_link)}'>Join Video Call</a></p>" if video_link else "")
-                            + "<p>We'll send you a reminder before your appointment.</p>"
-                        )
-                        sf_result = await sf_email_service.send_email_via_salesforce(
-                            db=db,
-                            integration_profile_id=sf_profile.id,
-                            to_email=appt_data.attendee_email,
-                            subject=f"Appointment Confirmed: {appointment.title}",
-                            html_body=sf_html
-                        )
-                        if sf_result.get("success"):
-                            email_sent = True
-                            email_error = None
-                            logger.info(f"Appointment email sent via Salesforce to {_mask_email(appt_data.attendee_email)}")
-                        else:
-                            logger.warning(f"Salesforce email fallback also failed: {sf_result.get('message')}")
-                    else:
-                        logger.info("No active Salesforce integration for appointment email fallback")
-                except Exception as sf_err:
-                    logger.warning(f"Salesforce email fallback error: {sf_err}")
-
-            # Send notification email to team member (loan officer) with calendar invite
-            if team_member_email:
-                try:
-                    team_result = send_team_member_notification_email(
-                        team_member_email=team_member_email,
-                        team_member_name=team_member_name or "Team Member",
-                        attendee_name=appt_data.attendee_name or "Client",
-                        attendee_email=appt_data.attendee_email or "",
-                        attendee_phone=appt_data.attendee_phone or "",
-                        appointment_title=appointment.title,
-                        appointment_date=appointment_date,
-                        appointment_time=appointment_time,
-                        duration=duration_str,
-                        meeting_mode=meeting_mode_str,
-                        video_link=video_link,
-                        scheduled_start=appointment.scheduled_start,
-                        duration_minutes=appointment.duration_minutes
-                    )
-                    if not (team_result.get("success") if isinstance(team_result, dict) else team_result):
-                        logger.warning(f"Failed to send team member notification via SendGrid")
-                        # Fallback: try Salesforce for team member notification too
-                        try:
-                            from services.salesforce.email_sync_service import SalesforceEmailSyncService
-                            from salesforce_integration_models import IntegrationProfile
-                            sf_svc = SalesforceEmailSyncService()
-                            sf_prof = db.query(IntegrationProfile).filter(
-                                IntegrationProfile.user_id == user.id,
-                                IntegrationProfile.provider == "salesforce",
-                                IntegrationProfile.is_active == True
-                            ).first()
-                            if sf_prof:
-                                tm_subject = f"New Appointment: {appointment.title}"
-                                tm_body = f"<p>New appointment with {html.escape(appt_data.attendee_name or 'Client')} on {html.escape(appointment_date)} at {html.escape(appointment_time)} ({html.escape(duration_str)}).</p>"
-                                sf_tm_result = await sf_svc.send_email_via_salesforce(
-                                    db=db, integration_profile_id=sf_prof.id,
-                                    to_email=team_member_email, subject=tm_subject, html_body=tm_body
-                                )
-                                if sf_tm_result.get("success"):
-                                    logger.info(f"Team member notification sent via Salesforce to {team_member_email}")
-                        except Exception as sf_tm_err:
-                            logger.warning(f"SF fallback for team member email failed: {sf_tm_err}")
-                    else:
-                        logger.info(f"Team member notification sent to {team_member_email}")
-                except Exception as team_email_error:
-                    logger.error(f"Error sending team member notification: {team_email_error}")
-        except Exception as e:
-            email_error = str(e)
-            logger.error(f"Error sending confirmation email: {e}")
-
-    # Sync to external calendars (Google Calendar, Outlook) via provider system
-    calendar_event_created = False
     try:
-        from services.calendar_outbound_sync import push_appointment_created
-        await push_appointment_created(db, appointment, user)
-        calendar_event_created = True
-    except Exception as cal_error:
-        logger.error(f"Outbound calendar sync failed for appointment {appointment.id}: {cal_error}")
+        _models = get_models()
 
-    return {
-        "message": "Appointment created",
-        "appointment_id": appointment.id,
-        "scheduled_start": appointment.scheduled_start.isoformat(),
-        "scheduled_end": appointment.scheduled_end.isoformat(),
-        "email_sent": email_sent,
-        "email_error": email_error,
-        "calendar_event_created": calendar_event_created,
-    }
+        # Calculate end time
+        scheduled_end = appt_data.scheduled_start + timedelta(minutes=appt_data.duration_minutes)
+        assigned_user = appt_data.assigned_user_id or user.id
+
+        # Validate assigned_user_id belongs to the same org (prevent cross-tenant assignment)
+        if appt_data.assigned_user_id and appt_data.assigned_user_id != user.id:
+            User = _models.get('User')
+            if User:
+                target = db.query(User).filter(
+                    User.id == appt_data.assigned_user_id,
+                    User.organization_id == org_id,
+                ).first()
+                if not target:
+                    scheduler_error(403, FORBIDDEN, "Assigned user not found in your organization")
+
+        # --- Delegate to shared service ---
+        result = await create_appointment_service(
+            db=db,
+            organization_id=org_id,
+            assigned_user_id=assigned_user,
+            created_by_user_id=user.id,
+            source="authenticated",
+            # Appointment fields
+            title=appt_data.title,
+            scheduled_start=appt_data.scheduled_start,
+            scheduled_end=scheduled_end,
+            duration_minutes=appt_data.duration_minutes,
+            timezone=appt_data.timezone,
+            attendee_name=appt_data.attendee_name,
+            attendee_email=appt_data.attendee_email,
+            attendee_phone=appt_data.attendee_phone,
+            # Optional fields
+            appointment_type_id=appt_data.appointment_type_id,
+            lead_id=appt_data.lead_id,
+            loan_id=appt_data.loan_id,
+            contact_id=appt_data.contact_id,
+            description=appt_data.description,
+            meeting_type=appt_data.meeting_type,
+            meeting_mode=appt_data.meeting_mode,
+            intake_responses=appt_data.intake_responses,
+            attendee_notes=appt_data.attendee_notes,
+            booked_by_ai=appt_data.booked_by_ai,
+            ai_booking_context=_sanitize_ai_context(appt_data.ai_booking_context),
+            # Control flags
+            check_conflicts=True,
+            check_cross_source=True,
+            generate_meeting_link=True,
+            create_lead_if_missing=True,
+        )
+
+        if not result.success:
+            raise HTTPException(status_code=409, detail=result.error)
+
+        appointment = result.appointment
+
+        # Surface non-fatal warnings from the shared service (e.g. meeting link failure)
+        for warning in result.warnings:
+            logger.warning(f"Appointment {appointment.id} creation warning: {warning}")
+
+        # Enterprise audit: structured log for compliance
+        scheduler_audit.log_appointment_created(
+            appointment, user, request=request,
+            booking_source="authenticated",
+        )
+
+        # Send confirmation email if attendee email is provided
+        email_sent = False
+        email_error = None
+        if appt_data.attendee_email:
+            try:
+                # Format date and time for email
+                appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
+                appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
+                duration_str = f"{appointment.duration_minutes} minutes"
+
+                # Get meeting mode display name
+                meeting_mode_str = "Phone Call"
+                if appointment.meeting_mode:
+                    mode_display = {
+                        "video": "Video Call",
+                        "phone": "Phone Call",
+                        "in_person": "In Person",
+                        "screen_share": "Screen Share",
+                    }
+                    raw_mode = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode)
+                    meeting_mode_str = mode_display.get(raw_mode.lower(), "Phone Call")
+
+                # Get team member info
+                team_member_name = None
+                team_member_email = None
+                User = _models.get('User')
+                if appointment.assigned_user_id and User:
+                    assigned_user_obj = db.query(User).filter(User.id == appointment.assigned_user_id).first()
+                    if assigned_user_obj:
+                        team_member_name = assigned_user_obj.first_name
+                        if assigned_user_obj.last_name:
+                            team_member_name += f" {assigned_user_obj.last_name}"
+                        team_member_email = assigned_user_obj.email
+
+                # Get video link if this is a video call
+                video_link = appointment.video_link if appointment.video_link else None
+
+                logger.info(f"Sending confirmation email to {_mask_email(appt_data.attendee_email)}")
+                # Send confirmation email to attendee (borrower) with calendar invite
+                reschedule_url = generate_reschedule_url(appointment.id, appt_data.attendee_email)
+                email_result = send_appointment_confirmation_email(
+                    attendee_email=appt_data.attendee_email,
+                    attendee_name=appt_data.attendee_name or "there",
+                    appointment_title=appointment.title,
+                    appointment_date=appointment_date,
+                    appointment_time=appointment_time,
+                    duration=duration_str,
+                    meeting_mode=meeting_mode_str,
+                    team_member_name=team_member_name,
+                    team_member_email=team_member_email,
+                    video_link=video_link,
+                    scheduled_start=appointment.scheduled_start,
+                    duration_minutes=appointment.duration_minutes,
+                    reschedule_url=reschedule_url
+                )
+
+                email_sent = email_result.get("success", False)
+                if not email_sent:
+                    email_error = email_result.get("error", "Unknown email error")
+                    logger.warning(f"Email send failed for {appt_data.attendee_email}: {email_error}")
+
+                    # Fallback: try sending via Salesforce if SendGrid failed
+                    try:
+                        from services.salesforce.email_sync_service import SalesforceEmailSyncService
+                        from salesforce_integration_models import IntegrationProfile
+                        sf_email_service = SalesforceEmailSyncService()
+                        # Find user's active SF integration
+                        sf_profile = db.query(IntegrationProfile).filter(
+                            IntegrationProfile.user_id == user.id,
+                            IntegrationProfile.provider == "salesforce",
+                            IntegrationProfile.is_active == True
+                        ).first()
+                        if sf_profile:
+                            sf_html = (
+                                f"<p>Hi {html.escape(appt_data.attendee_name or 'there')},</p>"
+                                f"<p>Your appointment has been confirmed!</p>"
+                                f"<p><strong>Date:</strong> {html.escape(appointment_date)}<br>"
+                                f"<strong>Time:</strong> {html.escape(appointment_time)}<br>"
+                                f"<strong>Duration:</strong> {html.escape(duration_str)}<br>"
+                                f"<strong>Meeting Type:</strong> {html.escape(meeting_mode_str or '')}</p>"
+                                + (f"<p><strong>With:</strong> {html.escape(team_member_name)}</p>" if team_member_name else "")
+                                + (f"<p><a href='{html.escape(video_link)}'>Join Video Call</a></p>" if video_link else "")
+                                + "<p>We'll send you a reminder before your appointment.</p>"
+                            )
+                            sf_result = await sf_email_service.send_email_via_salesforce(
+                                db=db,
+                                integration_profile_id=sf_profile.id,
+                                to_email=appt_data.attendee_email,
+                                subject=f"Appointment Confirmed: {appointment.title}",
+                                html_body=sf_html
+                            )
+                            if sf_result.get("success"):
+                                email_sent = True
+                                email_error = None
+                                logger.info(f"Appointment email sent via Salesforce to {_mask_email(appt_data.attendee_email)}")
+                            else:
+                                logger.warning(f"Salesforce email fallback also failed: {sf_result.get('message')}")
+                        else:
+                            logger.info("No active Salesforce integration for appointment email fallback")
+                    except Exception as sf_err:
+                        logger.warning(f"Salesforce email fallback error: {sf_err}")
+
+                # Send notification email to team member (loan officer) with calendar invite
+                if team_member_email:
+                    try:
+                        team_result = send_team_member_notification_email(
+                            team_member_email=team_member_email,
+                            team_member_name=team_member_name or "Team Member",
+                            attendee_name=appt_data.attendee_name or "Client",
+                            attendee_email=appt_data.attendee_email or "",
+                            attendee_phone=appt_data.attendee_phone or "",
+                            appointment_title=appointment.title,
+                            appointment_date=appointment_date,
+                            appointment_time=appointment_time,
+                            duration=duration_str,
+                            meeting_mode=meeting_mode_str,
+                            video_link=video_link,
+                            scheduled_start=appointment.scheduled_start,
+                            duration_minutes=appointment.duration_minutes
+                        )
+                        if not (team_result.get("success") if isinstance(team_result, dict) else team_result):
+                            logger.warning(f"Failed to send team member notification via SendGrid")
+                            # Fallback: try Salesforce for team member notification too
+                            try:
+                                from services.salesforce.email_sync_service import SalesforceEmailSyncService
+                                from salesforce_integration_models import IntegrationProfile
+                                sf_svc = SalesforceEmailSyncService()
+                                sf_prof = db.query(IntegrationProfile).filter(
+                                    IntegrationProfile.user_id == user.id,
+                                    IntegrationProfile.provider == "salesforce",
+                                    IntegrationProfile.is_active == True
+                                ).first()
+                                if sf_prof:
+                                    tm_subject = f"New Appointment: {appointment.title}"
+                                    tm_body = f"<p>New appointment with {html.escape(appt_data.attendee_name or 'Client')} on {html.escape(appointment_date)} at {html.escape(appointment_time)} ({html.escape(duration_str)}).</p>"
+                                    sf_tm_result = await sf_svc.send_email_via_salesforce(
+                                        db=db, integration_profile_id=sf_prof.id,
+                                        to_email=team_member_email, subject=tm_subject, html_body=tm_body
+                                    )
+                                    if sf_tm_result.get("success"):
+                                        logger.info(f"Team member notification sent via Salesforce to {team_member_email}")
+                            except Exception as sf_tm_err:
+                                logger.warning(f"SF fallback for team member email failed: {sf_tm_err}")
+                        else:
+                            logger.info(f"Team member notification sent to {team_member_email}")
+                    except Exception as team_email_error:
+                        logger.error(f"Error sending team member notification: {team_email_error}")
+            except Exception as e:
+                email_error = str(e)
+                logger.error(f"Error sending confirmation email: {e}")
+
+        # Sync to external calendars (Google Calendar, Outlook) via provider system
+        calendar_event_created = False
+        try:
+            from services.calendar_outbound_sync import push_appointment_created
+            await push_appointment_created(db, appointment, user)
+            calendar_event_created = True
+        except Exception as cal_error:
+            logger.error(f"Outbound calendar sync failed for appointment {appointment.id}: {cal_error}")
+
+        return {
+            "message": "Appointment created",
+            "appointment_id": appointment.id,
+            "scheduled_start": appointment.scheduled_start.isoformat(),
+            "scheduled_end": appointment.scheduled_end.isoformat(),
+            "email_sent": email_sent,
+            "email_error": email_error,
+            "calendar_event_created": calendar_event_created,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Scheduler tables not available for appointment creation: {e}")
+        raise HTTPException(status_code=503, detail="Scheduler service temporarily unavailable")
 
 
 # ============================================================================
@@ -977,13 +983,21 @@ async def update_appointment(
             update_fields["status_changed_at"] = datetime.now(timezone.utc)
             update_fields["status_changed_by"] = user.id
 
+            # Block direct cancellation via PUT — must use the dedicated
+            # cancel endpoint so the org's cancellation policy is enforced
+            # (minimum notice period, late-cancel fees, per-borrower limits).
+            if new_status == AppointmentStatus.CANCELLED:
+                scheduler_error(
+                    400, VALIDATION_ERROR,
+                    "Cannot cancel via update endpoint. "
+                    "Use POST /scheduler/cancel/{appointment_id} to cancel appointments "
+                    "(cancellation policy applies).",
+                )
+
             if new_status == AppointmentStatus.COMPLETED:
                 update_fields["completed_at"] = datetime.now(timezone.utc)
             elif new_status == AppointmentStatus.NO_SHOW:
                 update_fields["no_show_at"] = datetime.now(timezone.utc)
-            elif new_status == AppointmentStatus.CANCELLED:
-                update_fields["cancelled_at"] = datetime.now(timezone.utc)
-                is_cancellation = True
         except ValueError:
             valid_statuses = [s.value for s in AppointmentStatus]
             scheduler_error(

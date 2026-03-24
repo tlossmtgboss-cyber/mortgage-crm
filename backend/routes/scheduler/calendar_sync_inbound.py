@@ -29,11 +29,13 @@ Sync helper functions:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
 import os
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -44,8 +46,57 @@ from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
+from routes.scheduler._rate_limiting import _check_rate_limit
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# WEBHOOK RATE LIMITING & DEDUPLICATION
+# ============================================================================
+
+# Per-provider rate limiting: 100 requests/minute per provider (google, outlook).
+_WEBHOOK_RATE_LIMIT_PER_PROVIDER = int(
+    os.getenv("CALENDAR_WEBHOOK_RATE_LIMIT", "100")
+)
+
+# Deduplication: skip re-processing the same notification ID within this window.
+_WEBHOOK_DEDUP_WINDOW_SECONDS = int(
+    os.getenv("CALENDAR_WEBHOOK_DEDUP_WINDOW", "5")
+)
+
+# In-memory dedup cache: notification_key -> timestamp of first seen.
+# Bounded to prevent unbounded memory growth.
+_dedup_cache: OrderedDict[str, float] = OrderedDict()
+_dedup_lock = asyncio.Lock()
+_MAX_DEDUP_ENTRIES = 5000
+
+
+async def _check_webhook_dedup(notification_key: str) -> bool:
+    """Check if a webhook notification was already seen within the dedup window.
+
+    Returns True if this is a duplicate (should be skipped), False if it is new.
+    """
+    now = time.time()
+    async with _dedup_lock:
+        # Purge expired entries periodically (every call is cheap with OrderedDict)
+        while _dedup_cache:
+            oldest_key, oldest_ts = next(iter(_dedup_cache.items()))
+            if now - oldest_ts > _WEBHOOK_DEDUP_WINDOW_SECONDS:
+                _dedup_cache.pop(oldest_key)
+            else:
+                break
+
+        if notification_key in _dedup_cache:
+            # Already seen within the dedup window
+            return True
+
+        # Evict oldest if at capacity
+        if len(_dedup_cache) >= _MAX_DEDUP_ENTRIES:
+            _dedup_cache.popitem(last=False)
+
+        _dedup_cache[notification_key] = now
+        return False
 
 router = APIRouter(tags=["Calendar Sync Inbound"])
 
@@ -167,6 +218,14 @@ async def google_calendar_webhook(request: Request, db: Session = Depends(get_db
 
     See: https://developers.google.com/calendar/api/guides/push
     """
+    # Rate limit: 100 req/min per provider to prevent webhook storms from
+    # exhausting the DB connection pool.
+    await _check_rate_limit(
+        request,
+        max_requests=_WEBHOOK_RATE_LIMIT_PER_PROVIDER,
+        custom_key="cal_sync_rl:google",
+    )
+
     channel_id = request.headers.get("X-Goog-Channel-ID")
     resource_id = request.headers.get("X-Goog-Resource-ID")
     resource_state = request.headers.get("X-Goog-Resource-State")
@@ -185,6 +244,17 @@ async def google_calendar_webhook(request: Request, db: Session = Depends(get_db
             channel_id, resource_id,
         )
         return {"status": "sync_confirmed"}
+
+    # Deduplication: if the same X-Goog-Resource-ID arrives within 5 seconds,
+    # acknowledge it but skip re-processing to avoid redundant DB work.
+    if resource_id:
+        dedup_key = f"google:{resource_id}:{message_number or ''}"
+        if await _check_webhook_dedup(dedup_key):
+            logger.debug(
+                "Google Calendar webhook deduplicated: resource=%s msg=%s",
+                resource_id, message_number,
+            )
+            return {"status": "deduplicated"}
 
     # Verify the HMAC-signed channel token to prevent spoofed requests.
     # Format: "org_id:user_id:hmac_signature" (set when registering the watch channel).
@@ -252,7 +322,8 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
 
     See: https://learn.microsoft.com/en-us/graph/webhooks
     """
-    # Handle validation request (Microsoft sends this when creating a subscription)
+    # Handle validation request BEFORE rate limiting -- Microsoft requires
+    # an immediate 200 response to validate the subscription endpoint.
     validation_token = request.query_params.get("validationToken")
     if validation_token:
         logger.info("Outlook webhook validation request received")
@@ -261,6 +332,14 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
             media_type="text/plain",
             status_code=200,
         )
+
+    # Rate limit: 100 req/min per provider to prevent webhook storms from
+    # exhausting the DB connection pool.
+    await _check_rate_limit(
+        request,
+        max_requests=_WEBHOOK_RATE_LIMIT_PER_PROVIDER,
+        custom_key="cal_sync_rl:outlook",
+    )
 
     # Parse the change notification body
     try:
@@ -276,12 +355,25 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
 
     total_processed = 0
     total_errors = 0
+    total_deduplicated = 0
 
     for notification in notifications:
         resource = notification.get("resource", "")
         change_type = notification.get("changeType", "")
         subscription_id = notification.get("subscriptionId", "")
         client_state = notification.get("clientState", "")
+
+        # Deduplication: if the same subscription+resource arrives within 5
+        # seconds, skip re-processing to avoid redundant DB work.
+        notif_id = notification.get("id", "")
+        dedup_key = f"outlook:{subscription_id}:{notif_id or resource}"
+        if await _check_webhook_dedup(dedup_key):
+            logger.debug(
+                "Outlook webhook deduplicated: subscription=%s resource=%s",
+                subscription_id, resource,
+            )
+            total_deduplicated += 1
+            continue
 
         # Verify the client state HMAC signature and extract org/user IDs
         verified_org_id, verified_user_id, state_valid = _verify_channel_token(client_state)
@@ -317,11 +409,14 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
             )
             total_errors += 1
 
-    return {
+    response = {
         "status": "processed",
         "events_processed": total_processed,
         "errors": total_errors,
     }
+    if total_deduplicated:
+        response["deduplicated"] = total_deduplicated
+    return response
 
 
 # ============================================================================
@@ -834,12 +929,13 @@ async def _sync_external_event_to_local(
     from database.models.calendar_event_map import CalendarEventMap
     from database.models.scheduler import Appointment, AppointmentStatus, AppointmentStatusHistory
 
-    # Look up existing mapping
+    # Look up existing mapping (scoped to org for tenant isolation)
     existing_map = (
         db.query(CalendarEventMap)
         .filter(
             CalendarEventMap.provider == provider,
             CalendarEventMap.external_id == external_id,
+            CalendarEventMap.organization_id == organization_id,
         )
         .first()
     )

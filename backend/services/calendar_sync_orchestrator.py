@@ -287,11 +287,15 @@ class CalendarSyncOrchestrator:
     ) -> List[Tuple[str, Dict[str, Any]]]:
         """Get all calendar providers and credentials for a user.
 
-        This queries the integration_credentials / user_integrations tables
-        to find which external calendars the user has connected.
+        Checks three possible credential stores in order:
+        1. user_integrations (microsoft_routes.py stores plaintext tokens here)
+        2. integration_credentials (legacy table, some routes use it)
+        3. microsoft_oauth_tokens (microsoft_oauth_routes.py stores encrypted tokens here)
 
         Returns list of (provider_name, credentials_dict) tuples.
         """
+        from sqlalchemy import text as sa_text
+
         providers: List[Tuple[str, Dict[str, Any]]] = []
         user_id = getattr(user, "id", None)
         if not user_id:
@@ -303,14 +307,41 @@ class CalendarSyncOrchestrator:
             "google": "google",
             "microsoft": "outlook",
             "outlook": "outlook",
+            "outlook_calendar": "outlook",
+            "outlook_email": "outlook",
         }
 
+        # 1. Check user_integrations table (microsoft_routes.py stores tokens here)
         try:
-            # Check IntegrationCredential table (used by some routes)
             rows = db.execute(
-                db.bind.dialect.name != "invalid_placeholder" and  # type: ignore
-                __import__("sqlalchemy").text("""
-                    SELECT provider, access_token, refresh_token, expires_at, metadata
+                sa_text("""
+                    SELECT provider, access_token, refresh_token, expires_at
+                    FROM user_integrations
+                    WHERE user_id = :user_id
+                      AND access_token IS NOT NULL
+                      AND provider IN ('google_calendar', 'google', 'microsoft', 'outlook',
+                                       'outlook_calendar', 'outlook_email')
+                """),
+                {"user_id": user_id},
+            ).fetchall()
+        except Exception:
+            rows = []
+
+        for row in rows:
+            cal_provider = provider_mapping.get(row[0])
+            if cal_provider and CalendarProviderRegistry.is_registered(cal_provider):
+                if not any(p[0] == cal_provider for p in providers):
+                    providers.append((cal_provider, {
+                        "access_token": row[1],
+                        "refresh_token": row[2],
+                        "expires_at": row[3].isoformat() if row[3] else None,
+                    }))
+
+        # 2. Check integration_credentials table (legacy)
+        try:
+            rows = db.execute(
+                sa_text("""
+                    SELECT provider, access_token, refresh_token, expires_at
                     FROM integration_credentials
                     WHERE user_id = :user_id
                       AND access_token IS NOT NULL
@@ -324,32 +355,43 @@ class CalendarSyncOrchestrator:
         for row in rows:
             cal_provider = provider_mapping.get(row[0])
             if cal_provider and CalendarProviderRegistry.is_registered(cal_provider):
-                credentials = {
-                    "access_token": row[1],
-                    "refresh_token": row[2],
-                    "expires_at": row[3].isoformat() if row[3] else None,
-                }
-                providers.append((cal_provider, credentials))
+                if not any(p[0] == cal_provider for p in providers):
+                    providers.append((cal_provider, {
+                        "access_token": row[1],
+                        "refresh_token": row[2],
+                        "expires_at": row[3].isoformat() if row[3] else None,
+                    }))
 
-        # Also check MicrosoftToken / MicrosoftOAuthToken tables for Outlook
+        # 3. Check microsoft_oauth_tokens table (microsoft_oauth_routes.py stores encrypted tokens here)
         if not any(p[0] == "outlook" for p in providers):
             try:
                 ms_row = db.execute(
-                    __import__("sqlalchemy").text("""
-                        SELECT access_token, refresh_token, expires_at
+                    sa_text("""
+                        SELECT access_token, refresh_token, token_expires_at
                         FROM microsoft_oauth_tokens
                         WHERE user_id = :user_id
                           AND access_token IS NOT NULL
-                        ORDER BY created_at DESC
+                        ORDER BY updated_at DESC NULLS LAST
                         LIMIT 1
                     """),
                     {"user_id": user_id},
                 ).fetchone()
 
                 if ms_row and CalendarProviderRegistry.is_registered("outlook"):
+                    # Tokens in this table are encrypted — decrypt them
+                    access_token = ms_row[0]
+                    refresh_token = ms_row[1]
+                    try:
+                        from main import decrypt_token
+                        access_token = decrypt_token(access_token)
+                        if refresh_token:
+                            refresh_token = decrypt_token(refresh_token)
+                    except Exception:
+                        logger.warning("Could not decrypt microsoft_oauth_tokens; using raw values")
+
                     providers.append(("outlook", {
-                        "access_token": ms_row[0],
-                        "refresh_token": ms_row[1],
+                        "access_token": access_token,
+                        "refresh_token": refresh_token,
                         "expires_at": ms_row[2].isoformat() if ms_row[2] else None,
                     }))
             except Exception:

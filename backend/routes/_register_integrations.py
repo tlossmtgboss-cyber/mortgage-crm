@@ -104,7 +104,7 @@ def register_integration_routes(app, get_db, get_current_user, get_current_user_
     except Exception as e:
         logger.warning(f"DocuSign routes not loaded: {e}")
 
-    # Microsoft Outlook Integration routes
+    # Microsoft Outlook Integration routes (Graph API operations)
     try:
         from routes.microsoft_routes import router as microsoft_router, set_dependencies as set_microsoft_deps
         set_microsoft_deps(get_db, get_current_user)
@@ -120,6 +120,22 @@ def register_integration_routes(app, get_db, get_current_user, get_current_user_
         logger.info("Microsoft Outlook routes loaded")
     except Exception as e:
         logger.warning(f"Microsoft Outlook routes not loaded: {e}")
+
+    # Microsoft OAuth routes (frontend-driven popup flow, status, sync, config)
+    try:
+        from routes.microsoft_oauth_routes import router as microsoft_oauth_router
+        app.include_router(microsoft_oauth_router, tags=["Microsoft 365 OAuth"])
+        logger.info("Microsoft OAuth routes loaded")
+    except Exception as e:
+        logger.warning(f"Microsoft OAuth routes not loaded: {e}")
+
+    # Register calendar providers (Google, Outlook) for outbound sync
+    try:
+        from services.calendar_providers import register_default_providers
+        register_default_providers()
+        logger.info("Calendar providers registered")
+    except Exception as e:
+        logger.warning(f"Calendar providers not registered: {e}")
 
     # Gmail Integration routes
     try:

@@ -2201,7 +2201,14 @@ const API_BASE_URL = isProduction
 
       if (response.ok) {
         const data = await response.json();
-        setMicrosoftStatus(data);
+        // Map backend field names to frontend state shape
+        setMicrosoftStatus({
+          connected: data.connected || false,
+          email: data.email_address || data.email || null,
+          sync_enabled: data.sync_enabled || false,
+          last_sync_at: data.last_sync_at || null,
+          connected_at: data.connected_at || null,
+        });
 
         const newConnected = new Set(connectedIntegrations);
         if (data.connected) {

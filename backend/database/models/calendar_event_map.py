@@ -53,6 +53,12 @@ class CalendarEventMap(Base):
             "external_id",
         ),
         Index(
+            "ix_calendar_map_provider_ext_org",
+            "provider",
+            "external_id",
+            "organization_id",
+        ),
+        Index(
             "ix_calendar_event_map_org",
             "organization_id",
         ),

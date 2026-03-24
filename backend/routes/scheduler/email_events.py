@@ -37,6 +37,26 @@ router = APIRouter()
 _SENDGRID_WEBHOOK_KEY = os.getenv("SENDGRID_WEBHOOK_VERIFICATION_KEY")
 
 
+def _resolve_org_id_for_email(email: str, db: Session) -> Optional[int]:
+    """Resolve organization_id from the most recent appointment matching this attendee email.
+
+    Used when processing public-facing events (SendGrid webhooks, unsubscribe)
+    where we have no authenticated user context. Returns None if no match found.
+    """
+    if not email:
+        return None
+    try:
+        from database.models.scheduler import Appointment
+        row = db.query(Appointment.organization_id).filter(
+            Appointment.attendee_email == email.lower().strip()
+        ).order_by(Appointment.created_at.desc()).first()
+        if row:
+            return row.organization_id
+    except Exception as e:
+        logger.warning("Could not resolve org_id for email event: %s", e)
+    return None
+
+
 # ============================================================================
 # DB-BACKED EMAIL SUPPRESSION MODEL
 # ============================================================================
@@ -279,10 +299,15 @@ async def sendgrid_event_webhook(request: Request, db: Session = Depends(get_db)
 
         if event_type in suppression_events and email:
             reason = event.get("reason", "") or event.get("response", "") or event_type
+            org_id = _resolve_org_id_for_email(email, db)
+            if org_id is None:
+                logger.warning("Could not resolve org_id for SendGrid %s event (email: %s)",
+                               event_type, email[:3] + "***")
             add_email_suppression(
                 email=email,
                 reason=reason[:500],
                 event_type=event_type,
+                org_id=org_id,
                 db=db,
             )
             processed += 1
@@ -311,10 +336,15 @@ async def unsubscribe_post(token: str, request: Request, db: Session = Depends(g
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid unsubscribe token")
 
+    org_id = _resolve_org_id_for_email(email, db)
+    if org_id is None:
+        logger.warning("Could not resolve org_id for List-Unsubscribe event (email: %s)",
+                        email[:3] + "***")
     add_email_suppression(
         email=email,
         reason="User unsubscribed via List-Unsubscribe",
         event_type="unsubscribe",
+        org_id=org_id,
         db=db,
     )
 
@@ -335,10 +365,15 @@ async def unsubscribe_page(token: str, request: Request, db: Session = Depends(g
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid unsubscribe token")
 
+    org_id = _resolve_org_id_for_email(email, db)
+    if org_id is None:
+        logger.warning("Could not resolve org_id for browser unsubscribe event (email: %s)",
+                        email[:3] + "***")
     add_email_suppression(
         email=email,
         reason="User unsubscribed via browser link",
         event_type="unsubscribe",
+        org_id=org_id,
         db=db,
     )
 

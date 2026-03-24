@@ -8,7 +8,7 @@
  *   Step 3 (24 hours): Reschedule offer SMS
  *   Step 4 (72 hours): Final outreach email
  */
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -74,7 +74,7 @@ function timeSince(d) {
 // SUB-COMPONENTS
 // ============================================================================
 
-const RecoveryProgressBar = ({ step, optedOut }) => (
+const RecoveryProgressBar = React.memo(({ step, optedOut }) => (
   <div style={{ marginTop: 12 }}>
     <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
       {[1, 2, 3, 4].map(s => (
@@ -109,9 +109,9 @@ const RecoveryProgressBar = ({ step, optedOut }) => (
       )}
     </div>
   </div>
-);
+));
 
-const StepBadge = ({ step }) => {
+const StepBadge = React.memo(({ step }) => {
   const isComplete = step >= 4;
   return (
     <span style={{
@@ -126,9 +126,9 @@ const StepBadge = ({ step }) => {
       Step {step}/4
     </span>
   );
-};
+});
 
-const SummaryCard = ({ label, value, color }) => (
+const SummaryCard = React.memo(({ label, value, color }) => (
   <div style={{
     flex: 1, minWidth: 100, padding: '14px 16px',
     background: '#f8fafc', borderRadius: 8, textAlign: 'center',
@@ -140,14 +140,14 @@ const SummaryCard = ({ label, value, color }) => (
       {label}
     </div>
   </div>
-);
+));
 
 
 // ============================================================================
 // MAIN DASHBOARD
 // ============================================================================
 
-export default function NoShowRecoveryDashboard({ token }) {
+function NoShowRecoveryDashboard({ token }) {
   const [noShows, setNoShows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -156,10 +156,10 @@ export default function NoShowRecoveryDashboard({ token }) {
 
   const authToken = token || localStorage.getItem('token');
 
-  const headers = {
+  const headers = useMemo(() => ({
     'Content-Type': 'application/json',
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-  };
+  }), [authToken]);
 
   const loadNoShows = useCallback(async () => {
     setLoading(true);
@@ -231,7 +231,7 @@ export default function NoShowRecoveryDashboard({ token }) {
     loadNoShows();
   }, [loadNoShows]);
 
-  const manualRecover = async (appointmentId, nextStep) => {
+  const manualRecover = useCallback(async (appointmentId, nextStep) => {
     setActionLoading(appointmentId);
     try {
       // Use the PATCH endpoint to update the appointment status, triggering
@@ -258,13 +258,15 @@ export default function NoShowRecoveryDashboard({ token }) {
     } finally {
       setActionLoading(null);
     }
-  };
+  }, [headers, loadNoShows]);
 
   // Summary stats
-  const totalNoShows = noShows.length;
-  const activeRecoveries = noShows.filter(a => a.recovery_step > 0 && a.recovery_step < 4 && !a.opted_out).length;
-  const completedSequences = noShows.filter(a => a.recovery_step >= 4).length;
-  const optedOutCount = noShows.filter(a => a.opted_out).length;
+  const { totalNoShows, activeRecoveries, completedSequences, optedOutCount } = useMemo(() => ({
+    totalNoShows: noShows.length,
+    activeRecoveries: noShows.filter(a => a.recovery_step > 0 && a.recovery_step < 4 && !a.opted_out).length,
+    completedSequences: noShows.filter(a => a.recovery_step >= 4).length,
+    optedOutCount: noShows.filter(a => a.opted_out).length,
+  }), [noShows]);
 
   return (
     <div className="no-show-recovery-dashboard" style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -454,3 +456,5 @@ export default function NoShowRecoveryDashboard({ token }) {
     </div>
   );
 }
+
+export default React.memo(NoShowRecoveryDashboard);

@@ -59,7 +59,7 @@ async def _check_appointment_conflict(db, assigned_user_id: int, start_time, end
     except HTTPException:
         raise  # Re-raise our 409 — don't swallow it
     except Exception as e:
-        logger.debug("Advisory lock failed (non-blocking): %s", e)
+        logger.warning("Advisory lock acquisition failed for key %s: %s — proceeding with SELECT FOR UPDATE only", lock_key, e)
 
     _models = get_models()
     Appointment = _models['Appointment']

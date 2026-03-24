@@ -228,6 +228,8 @@ async def create_webhook(
         request=request,
     )
 
+    db.commit()
+
     return {
         "status": "ok",
         "message": "Webhook registered successfully",
@@ -381,6 +383,8 @@ async def test_webhook(
         organization_id=org_id,
         db=db,
     )
+
+    db.commit()
 
     # Find the delivery for this specific subscription
     delivery = next((d for d in deliveries if d.subscription_id == subscription.id), None)

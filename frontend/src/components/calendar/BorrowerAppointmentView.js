@@ -21,7 +21,12 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StatusBadge from './StatusBadge';
-import { normalizeUTCDate } from './calendarUtils';
+import {
+  normalizeUTCDate,
+  formatTimeWithZone,
+  formatInUserTimezone,
+  toUserTimezone,
+} from '../../utils/timezone';
 import './BorrowerAppointmentView.css';
 
 const API_BASE =
@@ -71,8 +76,7 @@ const LocationIcon = () => (
 
 function formatFullDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(normalizeUTCDate(dateStr));
-  return d.toLocaleDateString('en-US', {
+  return formatInUserTimezone(dateStr, {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -81,12 +85,7 @@ function formatFullDate(dateStr) {
 
 function formatTime(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(normalizeUTCDate(dateStr));
-  return d.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatTimeWithZone(dateStr);
 }
 
 function formatDurationMinutes(minutes) {
@@ -118,11 +117,11 @@ function getMeetingModeIcon(mode) {
 }
 
 /**
- * Determine if a date is today.
+ * Determine if a date is today in the user's configured timezone.
  */
 function isToday(dateStr) {
   if (!dateStr) return false;
-  const d = new Date(normalizeUTCDate(dateStr));
+  const d = toUserTimezone(dateStr);
   const now = new Date();
   return (
     d.getFullYear() === now.getFullYear() &&
@@ -132,11 +131,11 @@ function isToday(dateStr) {
 }
 
 /**
- * Determine if a date is tomorrow.
+ * Determine if a date is tomorrow in the user's configured timezone.
  */
 function isTomorrow(dateStr) {
   if (!dateStr) return false;
-  const d = new Date(normalizeUTCDate(dateStr));
+  const d = toUserTimezone(dateStr);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   return (
@@ -162,7 +161,7 @@ function groupByDay(appointments) {
   const groups = [];
   const map = new Map();
   for (const appt of appointments) {
-    const key = new Date(normalizeUTCDate(appt.scheduled_start)).toDateString();
+    const key = toUserTimezone(appt.scheduled_start).toDateString();
     if (!map.has(key)) {
       const group = { label: getDayLabel(appt.scheduled_start), appointments: [] };
       map.set(key, group);
@@ -179,6 +178,10 @@ function groupByDay(appointments) {
 
 const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
   const isVirtual = ['video', 'screen_share'].includes((appt.meeting_mode || '').toLowerCase());
+  const apptTitle = appt.title || appt.appointment_type_name || 'Appointment';
+  const apptDateStr = formatFullDate(appt.scheduled_start);
+  const apptTimeStr = formatTime(appt.scheduled_start);
+  const statusLabel = (appt.status || 'unknown').charAt(0).toUpperCase() + (appt.status || 'unknown').slice(1);
 
   const handleClick = useCallback(() => {
     if (onClick) onClick(appt);
@@ -188,30 +191,34 @@ const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
     <div
       className="bav-card"
       onClick={handleClick}
-      role={onClick ? 'button' : undefined}
+      role={onClick ? 'button' : 'article'}
       tabIndex={onClick ? 0 : undefined}
-      aria-label={onClick ? `View details for ${appt.title || appt.appointment_type_name || 'appointment'} on ${formatFullDate(appt.scheduled_start)} at ${formatTime(appt.scheduled_start)}` : undefined}
+      aria-label={
+        onClick
+          ? `View details for ${apptTitle} on ${apptDateStr} at ${apptTimeStr}`
+          : `${apptTitle}, ${apptDateStr} at ${apptTimeStr}, status: ${statusLabel}`
+      }
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } } : undefined}
     >
       {/* Time column */}
       <div className="bav-card-time">
-        <span className="bav-card-time-value">{formatTime(appt.scheduled_start)}</span>
+        <span className="bav-card-time-value">{apptTimeStr}</span>
         <span className="bav-card-time-duration">{formatDurationMinutes(appt.duration_minutes)}</span>
       </div>
 
       {/* Details column */}
       <div className="bav-card-details">
         <div className="bav-card-title-row">
-          <span className="bav-card-title">{appt.title || appt.appointment_type_name || 'Appointment'}</span>
-          <span role="status" aria-label={`Appointment status: ${appt.status}`}>
+          <span className="bav-card-title">{apptTitle}</span>
+          <span aria-label={`Status: ${statusLabel}`}>
             <StatusBadge status={appt.status} size="sm" />
           </span>
         </div>
 
         {/* Meeting mode + LO */}
         <div className="bav-card-meta">
-          <span className="bav-card-mode">
-            {getMeetingModeIcon(appt.meeting_mode)}
+          <span className="bav-card-mode" aria-label={getMeetingModeLabel(appt.meeting_mode)}>
+            <span aria-hidden="true">{getMeetingModeIcon(appt.meeting_mode)}</span>
             {getMeetingModeLabel(appt.meeting_mode)}
           </span>
           {appt.lo_name && (
@@ -224,20 +231,20 @@ const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
         {/* Location or meeting link */}
         {appt.location && !isVirtual && (
           <div className="bav-card-location">
-            <LocationIcon />
+            <span aria-hidden="true"><LocationIcon /></span>
             <span>{appt.location}</span>
           </div>
         )}
 
         {/* Actions */}
-        <div className="bav-card-actions">
+        <div className="bav-card-actions" role="group" aria-label="Appointment actions">
           {isVirtual && appt.meeting_link && (
             <a
               href={appt.meeting_link}
               target="_blank"
               rel="noopener noreferrer"
               className="bav-btn bav-btn-primary"
-              aria-label={`Join meeting for ${appt.title || appt.appointment_type_name || 'appointment'}`}
+              aria-label={`Join video meeting for ${apptTitle} on ${apptDateStr}`}
               onClick={(e) => e.stopPropagation()}
             >
               Join Meeting
@@ -247,10 +254,20 @@ const AppointmentCard = React.memo(function AppointmentCard({ appt, onClick }) {
             <a
               href={appt.reschedule_url}
               className="bav-btn bav-btn-secondary"
-              aria-label={`Reschedule appointment: ${appt.title || appt.appointment_type_name || 'appointment'}`}
+              aria-label={`Reschedule ${apptTitle} on ${apptDateStr}`}
               onClick={(e) => e.stopPropagation()}
             >
               Reschedule
+            </a>
+          )}
+          {appt.cancel_url && (
+            <a
+              href={appt.cancel_url}
+              className="bav-btn bav-btn-secondary"
+              aria-label={`Cancel ${apptTitle} on ${apptDateStr}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Cancel
             </a>
           )}
         </div>
@@ -272,9 +289,10 @@ const EmptyState = () => (
 );
 
 const LoadingSkeleton = () => (
-  <div className="bav-skeleton" aria-busy="true" aria-label="Loading appointments">
+  <div className="bav-skeleton" aria-busy="true" role="status" aria-label="Loading appointments">
+    <span className="bav-sr-only">Loading your appointments, please wait.</span>
     {[1, 2, 3].map((i) => (
-      <div key={i} className="bav-skeleton-card">
+      <div key={i} className="bav-skeleton-card" aria-hidden="true">
         <div className="bav-skeleton-time">
           <div className="bav-skeleton-line" style={{ width: '60px', height: '16px' }} />
           <div className="bav-skeleton-line" style={{ width: '40px', height: '12px' }} />
@@ -282,6 +300,7 @@ const LoadingSkeleton = () => (
         <div className="bav-skeleton-details">
           <div className="bav-skeleton-line" style={{ width: '70%', height: '16px' }} />
           <div className="bav-skeleton-line" style={{ width: '50%', height: '12px' }} />
+          <div className="bav-skeleton-line" style={{ width: '40%', height: '12px' }} />
         </div>
       </div>
     ))}
@@ -369,7 +388,8 @@ export default function BorrowerAppointmentView({
     }
   }, [borrowerEmail, borrowerToken, loadAppointments]);
 
-  // Separate upcoming vs past
+  // Separate upcoming vs past (comparison uses raw UTC timestamps which is correct
+  // for determining past vs future -- no timezone conversion needed for ordering)
   const { upcoming, past } = useMemo(() => {
     const now = new Date();
     const up = [];
@@ -395,7 +415,7 @@ export default function BorrowerAppointmentView({
   // Loading state
   if (loading) {
     return (
-      <div className={`bav-container${compact ? ' bav-compact' : ''}`}>
+      <div className={`bav-container${compact ? ' bav-compact' : ''}`} aria-busy="true">
         <h2 className="bav-heading">Your Appointments</h2>
         <LoadingSkeleton />
       </div>
@@ -423,34 +443,37 @@ export default function BorrowerAppointmentView({
   }
 
   return (
-    <div className={`bav-container${compact ? ' bav-compact' : ''}`}>
-      <h2 className="bav-heading">Your Upcoming Appointments</h2>
+    <div className={`bav-container${compact ? ' bav-compact' : ''}`} aria-busy="false">
+      <h2 className="bav-heading" id="bav-upcoming-heading">Your Upcoming Appointments</h2>
 
-      {/* Upcoming appointments grouped by day */}
-      {upcomingGroups.length > 0 ? (
-        <div className="bav-groups" aria-live="polite">
-          {upcomingGroups.map((group) => (
-            <div key={group.label} className="bav-group">
-              <h3 className="bav-group-label">{group.label}</h3>
-              {group.appointments.map((appt) => (
-                <AppointmentCard
-                  key={appt.id}
-                  appt={appt}
-                  onClick={onAppointmentClick}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState />
-      )}
+      {/* Live region wraps dynamic appointment content */}
+      <div aria-live="polite" aria-relevant="additions removals">
+        {/* Upcoming appointments grouped by day */}
+        {upcomingGroups.length > 0 ? (
+          <div className="bav-groups" role="region" aria-labelledby="bav-upcoming-heading">
+            {upcomingGroups.map((group) => (
+              <div key={group.label} className="bav-group">
+                <h3 className="bav-group-label">{group.label}</h3>
+                {group.appointments.map((appt) => (
+                  <AppointmentCard
+                    key={appt.id}
+                    appt={appt}
+                    onClick={onAppointmentClick}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState />
+        )}
+      </div>
 
       {/* Past appointments */}
       {showPast && pastGroups.length > 0 && (
         <>
-          <h2 className="bav-heading bav-heading-past">Past Appointments</h2>
-          <div className="bav-groups bav-groups-past" aria-live="polite">
+          <h2 className="bav-heading bav-heading-past" id="bav-past-heading">Past Appointments</h2>
+          <div className="bav-groups bav-groups-past" role="region" aria-labelledby="bav-past-heading">
             {pastGroups.map((group) => (
               <div key={group.label} className="bav-group">
                 <h3 className="bav-group-label">{group.label}</h3>

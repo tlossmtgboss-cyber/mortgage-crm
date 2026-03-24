@@ -55,6 +55,9 @@ class CalendarFeedToken(Base):
         Boolean, default=True, nullable=False,
     )  # False = show only busy/free blocks (no titles, descriptions, attendees)
 
+    # Expiration — tokens auto-expire after a set period (default 90 days)
+    expires_at = Column(DateTime, nullable=True)  # NULL = legacy token (treat as expired)
+
     # Access tracking
     access_count = Column(Integer, default=0, nullable=False)
     last_accessed_at = Column(DateTime, nullable=True)

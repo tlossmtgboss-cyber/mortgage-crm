@@ -387,7 +387,13 @@ class RecurringAvailabilityService:
     # EFFECTIVE SCHEDULE & SLOT COMPUTATION
     # ==================================================================
 
-    def get_effective_schedule(self, user_id: int, org_id: int, target_date: date) -> List[dict]:
+    def get_effective_schedule(
+        self,
+        user_id: int,
+        org_id: int,
+        target_date: date,
+        preloaded_exceptions: Optional[list] = None,
+    ) -> List[dict]:
         """
         Get the effective availability schedule for a specific date.
 
@@ -396,6 +402,12 @@ class RecurringAvailabilityService:
         2. Apply full-day blocks (remove all recurring if blocked)
         3. Apply time-range blocks (subtract blocked ranges)
         4. Add extra availability blocks
+
+        Args:
+            preloaded_exceptions: If provided, use these exception objects instead
+                of querying the DB. Caller is responsible for filtering to the
+                correct user_id/org_id/date. This avoids N+1 queries when calling
+                get_effective_schedule() in a loop over many dates.
 
         Returns list of available time ranges:
         [{"start": "09:00", "end": "12:00"}, {"start": "14:00", "end": "17:00"}]
@@ -431,15 +443,18 @@ class RecurringAvailabilityService:
         ]
 
         # Step 2: Get exceptions for this date
-        exceptions = (
-            self.db.query(AvailabilityException)
-            .filter(
-                AvailabilityException.user_id == user_id,
-                AvailabilityException.organization_id == org_id,
-                AvailabilityException.date == target_date,
+        if preloaded_exceptions is not None:
+            exceptions = preloaded_exceptions
+        else:
+            exceptions = (
+                self.db.query(AvailabilityException)
+                .filter(
+                    AvailabilityException.user_id == user_id,
+                    AvailabilityException.organization_id == org_id,
+                    AvailabilityException.date == target_date,
+                )
+                .all()
             )
-            .all()
-        )
 
         # Process exceptions
         for exc in exceptions:

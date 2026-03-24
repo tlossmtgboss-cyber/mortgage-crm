@@ -16,6 +16,7 @@ import React, { useState, useEffect } from 'react';
  * @param {Function} props.onAdd - Callback(eventData) to create a calendar event
  * @param {Function} props.onAddAppointment - Callback(appointmentData) to create a scheduled appointment
  * @param {Array<{id: number, full_name: string, email: string}>} props.teamMembers - Team members for the "Assign To" dropdown
+ * @param {boolean} [props.saving] - Whether a booking operation is in progress (disables submit button)
  * @returns {React.ReactElement}
  *
  * @example
@@ -28,7 +29,7 @@ import React, { useState, useEffect } from 'react';
  *   teamMembers={team}
  * />
  */
-function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppointment, teamMembers }) {
+function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppointment, teamMembers, saving }) {
   const defaultStart = selectedDate || new Date();
   // If a specific hour was selected (from Day/Week view), use it
   if (selectedTime != null) {
@@ -64,6 +65,7 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppoin
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (saving) return;
     if (mode === 'appointment') {
       const startTime = new Date(formData.start_time);
       onAddAppointment({
@@ -273,9 +275,11 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppoin
             />
           </div>
           <div className="form-actions">
-            <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary">
-              {mode === 'event' ? 'Add Event' : 'Add Appointment'}
+            <button type="button" onClick={onClose} disabled={saving}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={saving}>
+              {saving
+                ? (mode === 'event' ? 'Adding...' : 'Booking...')
+                : (mode === 'event' ? 'Add Event' : 'Add Appointment')}
             </button>
           </div>
         </form>
