@@ -614,3 +614,154 @@ class MorningBriefingService:
             ctx.team = self.gather_leadership_data(db, org_id, briefing_date)
 
         return ctx
+
+    # ------------------------------------------------------------------
+    # AI narrative generation
+    # ------------------------------------------------------------------
+
+    INDIVIDUAL_SYSTEM_PROMPT = (
+        "You are a senior mortgage pipeline advisor. Given the loan officer's "
+        "current pipeline data, write exactly 3 prioritized actions for today. "
+        "Each priority should name a specific loan/lead, explain WHY it's urgent, "
+        "and state the ONE action to take. Be direct — no pleasantries, no hedging. "
+        "Write in second person (\"You should...\"). Keep total response under 200 words."
+    )
+
+    MANAGER_SYSTEM_PROMPT = (
+        "You are a senior mortgage operations advisor. Given a manager's personal "
+        "pipeline and their team's performance data, write exactly 3 priorities. "
+        "Priority 1 should address the most urgent team issue (a subordinate with "
+        "at-risk loans or neglected leads). Priorities 2-3 can be personal pipeline "
+        "items or team items — pick whichever is most urgent. Name specific people "
+        "and loans. Write in second person. Keep total response under 250 words."
+    )
+
+    LEADERSHIP_SYSTEM_PROMPT = (
+        "You are a chief strategy advisor for a mortgage lending operation. Given "
+        "the organization's pipeline data and branch performance, write exactly 3 "
+        "strategic priorities. Focus on trends, branch performance gaps, and "
+        "org-wide risks. Name specific branches and top-risk loans. Do not drill "
+        "into individual LO performance — that's for their managers. Write in "
+        "second person. Keep total response under 250 words."
+    )
+
+    def generate_narrative(self, ctx: BriefingContext) -> Optional[str]:
+        """Generate AI narrative using Anthropic Haiku."""
+        try:
+            import anthropic
+        except ImportError:
+            logger.warning("anthropic package not installed; skipping AI narrative")
+            return None
+
+        system_prompt = {
+            "individual": self.INDIVIDUAL_SYSTEM_PROMPT,
+            "manager": self.MANAGER_SYSTEM_PROMPT,
+            "leadership": self.LEADERSHIP_SYSTEM_PROMPT,
+        }.get(ctx.level, self.INDIVIDUAL_SYSTEM_PROMPT)
+
+        user_prompt = self._format_context_for_ai(ctx)
+
+        try:
+            import os
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                logger.warning("ANTHROPIC_API_KEY not set; skipping AI narrative")
+                return None
+
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=350,
+                temperature=0.3,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            return response.content[0].text
+        except Exception as e:
+            logger.error("AI narrative generation failed: %s", e)
+            return None
+
+    def _format_context_for_ai(self, ctx: BriefingContext) -> str:
+        """Format BriefingContext as structured text for the AI prompt."""
+        lines = [f"Briefing for {ctx.user_name} on {ctx.briefing_date.isoformat()}"]
+        lines.append("")
+
+        # Pipeline
+        p = ctx.pipeline
+        lines.append(f"PIPELINE: {p.get('active_count', 0)} active loans, "
+                      f"${p.get('total_volume', 0):,.0f} volume, "
+                      f"{p.get('closing_soon', 0)} closing this week")
+        if p.get("by_stage"):
+            for stage, cnt in p["by_stage"].items():
+                lines.append(f"  {stage}: {cnt} loans")
+
+        # At-risk
+        if ctx.at_risk:
+            lines.append("")
+            lines.append("AT-RISK LOANS:")
+            for loan in ctx.at_risk:
+                lines.append(f"  - {loan['borrower']} ({loan['loan_number']}): {loan['reason']}")
+
+        # Stale leads
+        if ctx.stale_leads:
+            lines.append("")
+            lines.append("STALE LEADS:")
+            for lead in ctx.stale_leads:
+                lines.append(f"  - {lead['name']} (score {lead['score']}): {lead['days_silent']:.0f} days silent")
+
+        # Appointments
+        if ctx.appointments:
+            lines.append("")
+            lines.append("TODAY'S APPOINTMENTS:")
+            for appt in ctx.appointments:
+                lines.append(f"  - {appt['time']} — {appt['attendee']}, {appt['type']}")
+
+        # Conditions
+        if ctx.conditions:
+            lines.append("")
+            lines.append("PENDING CONDITIONS:")
+            for cond in ctx.conditions:
+                pd = " (PAST DUE)" if cond.get("past_due") else ""
+                lines.append(f"  - {cond['title']} on {cond['loan_number']}{pd}")
+
+        # Yesterday
+        y = ctx.yesterday
+        if any(y.get(k, 0) > 0 for k in ("funded", "new_loans", "conversions")):
+            lines.append("")
+            lines.append(f"YESTERDAY: {y.get('funded', 0)} funded, "
+                          f"{y.get('new_loans', 0)} new pipeline, "
+                          f"{y.get('conversions', 0)} lead conversions")
+
+        # Team data (manager)
+        if ctx.level == "manager" and ctx.team:
+            lines.append("")
+            lines.append("TEAM STATUS:")
+            for m in ctx.team.get("members", []):
+                lines.append(f"  - {m['name']}: {m['loan_count']} loans, "
+                              f"${m['volume']:,.0f}, health: {m['health']}, "
+                              f"{m['at_risk_count']} at-risk")
+            if ctx.team.get("attention_items"):
+                lines.append("TEAM ATTENTION NEEDED:")
+                for item in ctx.team["attention_items"]:
+                    lines.append(f"  - {item['user_name']}: {item['issue']}")
+
+        # Org data (leadership)
+        if ctx.level == "leadership" and ctx.team:
+            snap = ctx.team.get("org_snapshot", {})
+            lines.append("")
+            lines.append(f"ORG OVERVIEW: {snap.get('active_count', 0)} active loans, "
+                          f"${snap.get('total_volume', 0):,.0f} pipeline, "
+                          f"{snap.get('funded_this_week', 0)} funded this week "
+                          f"({'↑' if snap.get('funded_trend') == 'up' else '↓' if snap.get('funded_trend') == 'down' else '→'} "
+                          f"vs {snap.get('funded_last_week', 0)} last week)")
+            if ctx.team.get("branches"):
+                lines.append("BRANCHES:")
+                for b in ctx.team["branches"]:
+                    lines.append(f"  - {b['name']}: {b['loan_count']} loans, "
+                                  f"${b['volume']:,.0f}, health: {b['health']}")
+            if ctx.team.get("top_risks"):
+                lines.append("TOP ORG RISKS:")
+                for r in ctx.team["top_risks"]:
+                    lines.append(f"  - {r['borrower']} ({r['branch']}, LO: {r['lo_name']}): {r['issue']}")
+
+        return "\n".join(lines)
