@@ -2,9 +2,50 @@
 
 ## Overview
 
-A scheduled autonomous agent that generates personalized morning briefings for every active loan officer before they open the app. Each briefing contains an AI-narrated "Top 3 Priorities" section plus structured pipeline data, delivered via email and displayed in-app on the Dashboard.
+A scheduled autonomous agent that generates personalized, role-aware morning briefings for every active user before they open the app. Each briefing contains an AI-narrated priorities section plus structured data, tailored to the user's level in the organizational hierarchy:
 
-This is the first autonomous agent loop in the platform — the system acts on behalf of the LO without being asked.
+- **Individual contributors** (LOs, processors) get their personal pipeline and action items.
+- **Managers** get their own work plus a subordinate roll-up showing team health, at-risk loans, and who needs attention.
+- **Leadership** gets an org-wide briefing with branch comparisons, top risks, and velocity trends.
+
+This is the first autonomous agent loop in the platform — the system acts on behalf of users without being asked.
+
+## Organizational Hierarchy
+
+### New column on `users` table: `manager_id`
+
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| manager_id | Integer FK (self-referential) | NULL | References `users.id`. NULL = no manager (top of chain). |
+
+**Relationship on User model:**
+```python
+manager_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+manager = relationship("User", remote_side=[id], foreign_keys=[manager_id], backref="direct_reports")
+```
+
+This enables:
+- `user.manager` — get this user's manager
+- `user.direct_reports` — get all users who report to this user
+- Walking the tree at any depth for roll-up briefings
+
+### Briefing Levels
+
+The system determines briefing level from `permission_role` + whether the user has `direct_reports`:
+
+| Level | Condition | Briefing Content |
+|-------|-----------|-----------------|
+| **Individual** | No direct reports | Personal pipeline, leads, appointments, conditions |
+| **Manager** | Has direct reports AND `permission_role` in (management, branch_manager, regional_manager) | Personal work + subordinate roll-up |
+| **Leadership** | `permission_role` in (leadership, admin, site_admin) | Personal work (if any) + org-wide roll-up with branch breakdown |
+
+A user always receives their personal section first. Manager and leadership sections are additive — they don't replace the personal briefing.
+
+### Hierarchy Traversal
+
+For **manager briefings**, the query is simple: `SELECT * FROM users WHERE manager_id = :user_id AND is_active = True`. Only direct reports — no recursive tree walking needed.
+
+For **leadership briefings**, the query is org-wide: all active users in the organization, grouped by branch. No manager_id traversal — leadership sees everything.
 
 ## Data Model
 
@@ -14,11 +55,13 @@ This is the first autonomous agent loop in the platform — the system acts on b
 |--------|------|-------|
 | id | Integer PK | Auto-increment |
 | organization_id | Integer FK | Tenant isolation |
-| user_id | Integer FK | The LO |
-| briefing_date | Date | One per LO per day (in user's local timezone) |
+| user_id | Integer FK | The recipient |
+| briefing_date | Date | One per user per day (in user's local timezone) |
+| briefing_level | String | individual, manager, leadership |
 | status | String | pending, generating, delivered, failed |
-| briefing_data | JSONB | Pipeline numbers (6 query results, borrower names included — same PII classification as loans table) |
-| ai_narrative | Text | "Top 3 Priorities" paragraph from Haiku |
+| briefing_data | JSONB | Personal pipeline numbers (6 query results) |
+| team_data | JSONB | Nullable. Subordinate/org roll-up data (manager/leadership only) |
+| ai_narrative | Text | Priorities paragraph from Haiku |
 | html_content | Text | Rendered email HTML, cached |
 | email_sent_at | Timestamp | Nullable, set on send |
 | email_message_id | String | Nullable, provider message ID |
@@ -26,25 +69,27 @@ This is the first autonomous agent loop in the platform — the system acts on b
 | created_at | Timestamp | Default now() |
 | updated_at | Timestamp | Default now(), updated on every status change |
 
-**Unique constraint:** `(user_id, briefing_date)` — one briefing per LO per day.
+**Unique constraint:** `(user_id, briefing_date)` — one briefing per user per day.
 
 **Indexes:**
 - `(user_id, briefing_date)` — unique constraint provides this
-- `(briefing_date, status)` — for monitoring queries ("how many failed today?")
+- `(briefing_date, status)` — for monitoring queries
 - `(organization_id, briefing_date)` — for org-level reporting
 
 ### New columns on `users` table
 
 | Column | Type | Default | Notes |
 |--------|------|---------|-------|
+| manager_id | Integer FK | NULL | Self-referential to `users.id` |
 | briefing_enabled | Boolean | True | Auto-enrolled, opt-out |
 | briefing_hour | Integer | 7 | 0-23 in user's timezone |
 
 ### Model Registration
 
-The new `MorningBriefing` model must be:
-1. Imported in `backend/database/models/__init__.py` (required for `configure_mappers()`)
+New models must be:
+1. `MorningBriefing` imported in `backend/database/models/__init__.py` (required for `configure_mappers()`)
 2. Re-exported so `from database.models import MorningBriefing` works
+3. `manager_id` column and relationship added to existing User model in `backend/database/models/core.py`
 
 ### Data Retention
 
@@ -85,103 +130,112 @@ Add routing rule: `"tasks.morning_briefing_tasks.*": {"queue": "ai_tasks"}`.
 Each 15-minute run:
 
 1. Get current UTC time.
-2. Query all active users where `briefing_enabled = True` (no RLS context in Celery tasks — query uses explicit `users.is_active = True` filter, NOT request-scoped RLS).
-3. For each user, convert UTC to their `users.timezone` using `pytz` / `zoneinfo`.
-4. Compute `local_date = now_in_user_tz.date()` — this is the briefing date for this user.
-5. If local hour matches `briefing_hour` AND no `morning_briefings` row exists for `(user_id, local_date)` → enqueue `generate_lo_briefing(user_id, local_date_str)`.
-6. The DB check before enqueuing prevents queueing the same task 4 times within the same hour (at :00, :15, :30, :45). The unique constraint is a secondary safety net.
+2. Query all active users where `briefing_enabled = True` (no RLS context in Celery tasks — query uses explicit `users.is_active = True` filter).
+3. For each user, convert UTC to their `users.timezone` using `zoneinfo`.
+4. Compute `local_date = now_in_user_tz.date()`.
+5. Determine briefing level based on `permission_role` + whether the user has direct reports.
+6. If local hour matches `briefing_hour` AND no `morning_briefings` row exists for `(user_id, local_date)` → enqueue `generate_user_briefing(user_id, local_date_str, briefing_level)`.
+7. The DB check before enqueuing prevents queueing the same task 4 times within the same hour. The unique constraint is a secondary safety net.
+
+### Ordering: Individual Briefings Before Manager Briefings
+
+Manager briefings reference subordinate data. To avoid querying loan data twice, **individual briefings are enqueued first** (countdown=0), and **manager/leadership briefings are enqueued with a 5-minute delay** (countdown=300). This gives individual briefings time to populate `morning_briefings` rows that manager briefings can optionally reference for subordinate summaries. However, manager briefings do NOT depend on individual briefings existing — they gather data independently via SQL. The delay is an optimization, not a dependency.
 
 ### DST Handling
 
-DST transitions are handled naturally by the timezone conversion:
-- **Spring forward:** If 7 AM doesn't exist (clocks jump 2 AM → 3 AM), `briefing_hour = 2` would never match. This only affects LOs with `briefing_hour` in the 2-3 AM range (effectively none — delivery hours are 5-10 AM).
-- **Fall back:** If 1 AM occurs twice, the first occurrence triggers the briefing. The unique constraint prevents a second send during the repeated hour.
+- **Spring forward:** Briefing hours in the 2-3 AM range (effectively unused) may be skipped. No impact on 5-10 AM delivery hours.
+- **Fall back:** First occurrence of the repeated hour triggers the briefing. The unique constraint prevents a second send.
 
 ### Concurrency Control
 
-For large organizations (100+ LOs with the same `briefing_hour`):
-
-- Dispatch enqueues individual tasks with a **stagger delay**: `generate_lo_briefing.apply_async(args=[user_id, date_str], countdown=idx * 2)` where `idx` is the user's position in the batch. This spreads 100 LOs over ~200 seconds instead of a burst.
-- Maximum concurrent AI calls: capped at **10** via a Celery worker `--concurrency=10` on the `ai_tasks` queue (or a Redis semaphore if shared workers are used).
-- At 2 seconds per briefing (6 queries + 1 API call), 100 LOs complete in ~20 seconds with concurrency 10.
+- Dispatch enqueues with stagger delay: `countdown=idx * 2` for individuals, `countdown=300 + idx * 2` for managers/leadership.
+- Maximum concurrent AI calls: 10 (via `ai_tasks` queue worker concurrency).
+- At 2-4 seconds per briefing, 100 users complete in ~20-40 seconds with concurrency 10.
 
 ### Individual Briefing Task
 
 ```python
 @celery_app.task(
-    name="tasks.morning_briefing_tasks.generate_lo_briefing",
+    name="tasks.morning_briefing_tasks.generate_user_briefing",
     bind=True,
     max_retries=2,
     default_retry_delay=300,
     queue="ai_tasks",
 )
-def generate_lo_briefing(self, user_id: int, briefing_date_str: str):
+def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_level: str):
     ...
 ```
 
-The task receives `briefing_date_str` (ISO format) from the dispatcher, not computed internally. This ensures the date is consistent with the dispatch decision.
-
 ## Data Gathering
 
-Six parameterized SQL queries per LO. Each query explicitly includes `organization_id` in the WHERE clause (no RLS in Celery context).
+### Level 1: Individual (same for all users)
+
+Six parameterized SQL queries, all with explicit `organization_id` in the WHERE clause (no RLS in Celery context).
 
 **Column mapping per table:**
 - `loans` → `loan_officer_id`, `organization_id`
 - `leads` → `owner_id`, `organization_id`
 - `scheduler_appointments` → `assigned_user_id`, `organization_id`
-- `compliance_alerts` → join via `compliance_alerts.loan_id → loans.loan_officer_id`
+- `compliance_alerts` → join via `compliance_alerts.loan_id → loans.id` where `loans.loan_officer_id = :user_id`
 
-### 1. Pipeline Snapshot
+**Queries:**
 
-- Active loans count and total volume (excluding terminal stages: FUNDED, CANCELLED, DENIED, DEAD, WITHDRAWN, DOES_NOT_QUALIFY).
-- Breakdown by stage with count per stage.
-- Loans with `closing_date` in the next 7 days.
-- Scoped: `loans.loan_officer_id = :user_id AND loans.organization_id = :org_id`
+1. **Pipeline Snapshot** — Active loans count, volume, stage breakdown, closing in 7 days.
+2. **At-Risk Loans** — SLA breaches, lock expirations in 3 days, stagnant 10+ days.
+3. **Stale Leads** — `leads.owner_id = :user_id`, `last_contact` > 7 days. Hot leads (score >= 70) going cold (> 3 days).
+4. **Today's Appointments** — `scheduler_appointments.assigned_user_id = :user_id`, `scheduled_start` within today in user's timezone. Fields: `attendee_name`, type, `scheduled_start`.
+5. **Pending Conditions** — Open `compliance_alerts` on this user's loans. Past-due conditions.
+6. **Yesterday's Activity** — Funded loans, new pipeline additions, lead conversions.
 
-### 2. At-Risk Loans
+**Target:** < 500ms total per user.
 
-- Loans exceeding SLA targets for their current stage transition (using `SLA_TARGETS` dict).
-- Loans with `lock_expiration_date` in next 3 days.
-- Loans with `stage_changed_at` older than 10 days.
-- Scoped: same as Pipeline Snapshot.
+Results stored in `morning_briefings.briefing_data` JSONB.
 
-### 3. Stale Leads
+### Level 2: Manager (additional queries)
 
-- Leads with `leads.owner_id = :user_id` and `last_contact` > 7 days ago.
-- Leads with `ai_score >= 70` and `last_contact` > 3 days ago (hot leads going cold).
-- Scoped: `leads.owner_id = :user_id AND leads.organization_id = :org_id`
+Four additional queries for the subordinate roll-up. Scoped to direct reports: `users.manager_id = :user_id AND users.is_active = True`.
 
-### 4. Today's Appointments
+7. **Team Pipeline Summary** — For each direct report: name, active loan count, total volume, avg days in stage, number at-risk. One row per subordinate.
 
-- From `scheduler_appointments` where `scheduled_start` (DateTime, stored as UTC) falls within today in the LO's timezone.
-- Fields: `attendee_name`, appointment type, `scheduled_start`.
-- Scoped: `scheduler_appointments.assigned_user_id = :user_id AND scheduler_appointments.organization_id = :org_id`
+8. **Team At-Risk Roll-Up** — All loans across direct reports that exceed SLA targets or have expiring locks. Grouped by subordinate name. This answers: "Which of my people have problems?"
 
-### 5. Pending Conditions
+9. **Team Lead Health** — For each direct report: total lead count, leads with `last_contact` > 7 days, hot leads going cold. Identifies which subordinates are neglecting their leads.
 
-- Open compliance alerts (`compliance_alerts.status = 'open'`) on this LO's loans.
-- Past-due conditions (`deadline_date < today`).
-- Scoped: join `compliance_alerts.loan_id → loans.id` where `loans.loan_officer_id = :user_id AND loans.organization_id = :org_id`
+10. **Team Activity Summary** — Per subordinate: loans funded this week, appointments today, tasks overdue. High-level scoreboard.
 
-### 6. Yesterday's Activity
+**Implementation:** These queries use `loans.loan_officer_id IN (SELECT id FROM users WHERE manager_id = :user_id)` — a single subquery, not N+1. Same pattern for leads via `leads.owner_id IN (...)`.
 
-- Loans funded yesterday (wins to celebrate).
-- New loans added to pipeline yesterday.
-- Leads converted to applications yesterday.
-- Scoped: same as Pipeline Snapshot / Stale Leads.
+**Target:** < 800ms total (individual queries + team queries).
 
-**Target:** < 500ms total per LO (6 simple indexed queries).
+Results stored in `morning_briefings.team_data` JSONB.
 
-All results are stored in `morning_briefings.briefing_data` as JSONB for reuse by the email template and in-app card.
+### Level 3: Leadership (additional queries)
+
+Four additional queries for the org-wide roll-up. Scoped to entire organization.
+
+11. **Org Pipeline Snapshot** — Org-wide active loans, total volume, velocity (funded last 30 days), stage breakdown.
+
+12. **Branch Comparison** — For each branch: active loan count, volume, avg days in stage, at-risk count, funded this month. Sorted by volume descending. Answers: "Which branches are performing?"
+
+13. **Org Top Risks** — Top 10 at-risk loans across the entire org (worst SLA breaches, nearest lock expirations). Includes LO name and branch.
+
+14. **Org Activity Trends** — Funded count this week vs last week, new pipeline this week vs last week, lead conversion rate trend. Directional arrows (up/down).
+
+**Implementation:** Queries filter on `loans.organization_id = :org_id` (no LO filter). Branch comparison groups by `users.branch_id` joined to `branches.name`.
+
+**Target:** < 1 second total (individual + org queries).
+
+Results stored in `morning_briefings.team_data` JSONB (same column, different structure based on `briefing_level`).
 
 ## AI Narrative Generation
 
 ### Model
 
-`claude-haiku-4-5-20251001` — fast, cheap (~$0.001/briefing at ~2,000 input tokens + 300 output tokens), sufficient for structured prioritization over known data.
+`claude-haiku-4-5-20251001` — fast, cheap, sufficient for structured prioritization.
 
-### System Prompt
+### Level-Specific System Prompts
 
+**Individual:**
 ```
 You are a senior mortgage pipeline advisor. Given the loan officer's
 current pipeline data, write exactly 3 prioritized actions for today.
@@ -190,60 +244,113 @@ and state the ONE action to take. Be direct — no pleasantries, no hedging.
 Write in second person ("You should..."). Keep total response under 200 words.
 ```
 
-### User Prompt
+**Manager:**
+```
+You are a senior mortgage operations advisor. Given a manager's personal
+pipeline and their team's performance data, write exactly 3 priorities.
+Priority 1 should address the most urgent team issue (a subordinate with
+at-risk loans or neglected leads). Priorities 2-3 can be personal pipeline
+items or team items — pick whichever is most urgent. Name specific people
+and loans. Write in second person. Keep total response under 250 words.
+```
 
-The serialized `BriefingContext` — all 6 query results formatted as structured text. Raw data, not pre-analyzed. The AI does the reasoning.
+**Leadership:**
+```
+You are a chief strategy advisor for a mortgage lending operation. Given
+the organization's pipeline data and branch performance, write exactly 3
+strategic priorities. Focus on trends, branch performance gaps, and
+org-wide risks. Name specific branches and top-risk loans. Do not drill
+into individual LO performance — that's for their managers. Write in
+second person. Keep total response under 250 words.
+```
 
 ### Parameters
 
-- Max tokens: 300
+- Max tokens: 350 (slightly higher for manager/leadership narratives)
 - Temperature: 0.3
-- No streaming (batch context)
-
-### Async-in-Sync Bridge
-
-The Anthropic Python client supports synchronous calls via `anthropic.Anthropic()` (not `AsyncAnthropic`). The Celery task uses the sync client directly — no `asyncio.run()` needed.
+- Sync Anthropic client (no async needed in Celery)
 
 ### Graceful Degradation
 
-If the Anthropic API call fails after retries, the briefing still sends with all data sections intact and a note in place of the narrative: "AI priorities unavailable today — here's your pipeline data." The `morning_briefings` row is saved with `ai_narrative = NULL` and `status = 'delivered'`.
+If the API call fails, the briefing sends with data sections only and a note: "AI priorities unavailable today — here's your data."
 
-### Guardrails
+## Email Template
 
-- Borrower names appear only in the per-request user prompt, never in the system prompt.
-- AI narrative is cached in `morning_briefings.ai_narrative` — never regenerated for the same day.
-- No tool calls, no function calling — pure text completion.
+### Structure by Level
 
-## Email Delivery
-
-### Template Structure
-
+**All levels share:**
 ```
-Subject: "Your Morning Briefing — [March 24] — 3 priorities, 12 active loans"
+Subject line format:
+  Individual: "Your Morning Briefing — [date] — 3 priorities, N active loans"
+  Manager:    "Team Briefing — [date] — 3 priorities, N team members"
+  Leadership: "Org Briefing — [date] — 3 priorities, $NM pipeline"
 
-Body:
-  1. Greeting: "Good morning, [First Name]"
-  2. TOP 3 PRIORITIES — AI narrative (3 numbered items)
-  3. Divider
-  4. PIPELINE SNAPSHOT — active loans, volume, stage breakdown table
-  5. AT-RISK — loans exceeding SLA or with expiring locks
-  6. LEADS GOING COLD — high-score leads with no recent contact
-  7. TODAY'S APPOINTMENTS — time, attendee, type
-  8. Divider
-  9. CTA button: "Open Perennia" → deep link to dashboard
+Body header:
+  "Good morning, [First Name]"
+  TOP 3 PRIORITIES — AI narrative
+  ─────────────────
 ```
 
-HTML with inline CSS only (email-client compatible). No external stylesheets, no JavaScript. Responsive for mobile (single-column, 600px max-width).
+**Individual sections:**
+```
+  PIPELINE SNAPSHOT — count, volume, stage table
+  AT-RISK — loans exceeding SLA / expiring locks
+  LEADS GOING COLD — high-score leads with no contact
+  TODAY'S APPOINTMENTS — time, attendee, type
+```
+
+**Manager sections (appended after personal sections):**
+```
+  ─────────────────
+  YOUR TEAM
+  ┌──────────────┬───────┬──────────┬─────────┐
+  │ Name         │ Loans │ Volume   │ Health  │
+  ├──────────────┼───────┼──────────┼─────────┤
+  │ Jane Smith   │  8    │ $2.1M    │ 🟢      │
+  │ Mike Jones   │  5    │ $1.4M    │ 🟡 2 at-risk │
+  │ Sara Lee     │  3    │ $890K    │ 🔴 SLA breach │
+  └──────────────┴───────┴──────────┴─────────┘
+
+  TEAM ATTENTION NEEDED
+  · Mike Jones — Johnson loan lock expires tomorrow
+  · Sara Lee — 3 leads with no contact in 10+ days
+```
+
+**Leadership sections (appended after personal sections, if any):**
+```
+  ─────────────────
+  ORGANIZATION OVERVIEW
+  $42M pipeline · 127 active loans · 12 funded this week (↑ vs 9 last week)
+
+  BRANCH PERFORMANCE
+  ┌──────────────┬───────┬──────────┬─────────┐
+  │ Branch       │ Loans │ Volume   │ Health  │
+  ├──────────────┼───────┼──────────┼─────────┤
+  │ Main St.     │  45   │ $18M     │ 🟢      │
+  │ Downtown     │  38   │ $14M     │ 🟡      │
+  │ Westside     │  22   │ $6M      │ 🔴      │
+  └──────────────┴───────┴──────────┴─────────┘
+
+  TOP RISKS (org-wide)
+  · Johnson file (Main St., LO: Jane Smith) — lock expires tomorrow
+  · Davis file (Westside, LO: Sara Lee) — 15 days in UW, SLA target: 5
+```
+
+### Health Indicator Logic
+
+- 🟢 Green: no at-risk loans, no stale leads, avg days in stage < SLA target
+- 🟡 Yellow: 1-2 at-risk loans OR some stale leads
+- 🔴 Red: 3+ at-risk loans OR SLA breach OR lock expiring today
 
 ### Email Classification
 
-These are internal product emails to authenticated employees, not marketing. CAN-SPAM does not apply. However, the opt-out mechanism (briefing_enabled toggle in Settings) serves the same purpose. No List-Unsubscribe header required, but the email footer includes: "You can adjust or disable morning briefings in Settings."
+Internal product emails to authenticated employees, not marketing. CAN-SPAM does not apply. Footer includes: "Adjust or disable morning briefings in Settings."
 
 ### Sending
 
-Via `EmailDeliveryService` — but since it's an `async` service and Celery tasks are sync, the task uses the simpler sync `NotificationService` (SendGrid via `sendgrid` package) which already exists at `backend/services/notification_service.py`. The `from_email` is configurable per org or defaults to `briefing@perenniaai.com`.
+Via sync `NotificationService` (SendGrid). The `from_email` defaults to `briefing@perenniaai.com`.
 
-The rendered HTML is cached in `morning_briefings.html_content` so the in-app card can reference it.
+Rendered HTML cached in `morning_briefings.html_content`.
 
 ## In-App Delivery
 
@@ -253,92 +360,88 @@ Positioned at the top of the Dashboard, above existing content. On page load:
 
 1. Calls `GET /api/v1/briefing/today`.
 2. Response states:
-   - `200` with `status: "delivered"` → render the card with AI narrative + data sections.
-   - `200` with `status: "generating"` → show skeleton/loading state: "Your morning briefing is being prepared..."
-   - `200` with `status: "failed"` → show nothing (silent failure).
-   - `204` → no briefing exists yet (before briefing hour) → show nothing.
-3. Card uses a "Mark viewed" button or auto-fires `POST /api/v1/briefing/{id}/viewed` on first render (see API section).
+   - `200` with `status: "delivered"` → render card with level-appropriate sections.
+   - `200` with `status: "generating"` → skeleton: "Your morning briefing is being prepared..."
+   - `200` with `status: "failed"` → show nothing (silent).
+   - `204` → no briefing yet → show nothing.
+3. Auto-fires `POST /api/v1/briefing/{id}/viewed` on first render.
 
 The card is:
-- Collapsible (click to expand/collapse, remembers state in localStorage).
-- Dismissible for the day (hides until tomorrow, stored in localStorage).
-- Styled consistently with existing Dashboard cards.
-- Interactive: loan/lead names are clickable links to their detail pages.
-
-### Data Flow
-
-The card renders from `morning_briefings.briefing_data` (JSONB) and `morning_briefings.ai_narrative` (text), not from the cached HTML. This allows the in-app version to be interactive while the email version uses static HTML.
+- Collapsible with sections (personal data collapsed by default for managers, team section expanded).
+- Dismissible for the day (localStorage).
+- Interactive: loan/lead/user names are clickable links.
+- Level-aware: individual users see personal sections only; managers see team table; leadership sees branch table.
 
 ### Error State
 
-If `GET /api/v1/briefing/today` fails (network error, 500), the card is not shown. No error toast — briefings are supplementary, not critical path.
+If `GET /api/v1/briefing/today` fails, the card is not shown. Briefings are supplementary, not critical path.
 
 ## API Endpoints
 
-All endpoints require authentication via `get_current_user`. Scoped to `current_user` — no cross-user access. Any authenticated user can access briefing endpoints (not restricted to `role = 'loan_officer'` — processors and managers may also find briefings useful).
+All endpoints require authentication via `get_current_user`. Scoped to `current_user`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/api/v1/briefing/today` | Get current user's briefing for today |
 | GET | `/api/v1/briefing/history?page=1&per_page=10` | Paginated history, default 30 days |
-| POST | `/api/v1/briefing/generate-now` | Manually trigger briefing (enqueues Celery task) |
+| POST | `/api/v1/briefing/generate-now?force=false` | Manually trigger briefing |
 | POST | `/api/v1/briefing/{id}/viewed` | Mark briefing as viewed in-app |
 | GET | `/api/v1/briefing/preferences` | Get briefing_enabled, briefing_hour |
 | PUT | `/api/v1/briefing/preferences` | Update briefing_enabled, briefing_hour |
 
 ### `GET /api/v1/briefing/today`
 
-Pure read, no side effects. Returns `200` with briefing or `204` if none exists.
+Pure read, no side effects. Returns `200` or `204`.
 
 **Response schema (200):**
 ```json
 {
   "id": 1234,
   "briefing_date": "2026-03-24",
+  "briefing_level": "manager",
   "status": "delivered",
-  "ai_narrative": "1. You should call...",
-  "pipeline": { "active_count": 12, "total_volume": 4200000, "by_stage": {...} },
+  "ai_narrative": "1. Check in with Sara Lee...",
+  "pipeline": { "active_count": 12, "total_volume": 4200000, "by_stage": {} },
   "at_risk": [ { "loan_number": "...", "borrower": "...", "reason": "..." } ],
   "stale_leads": [ { "name": "...", "score": 82, "days_silent": 5 } ],
   "appointments": [ { "time": "10:00 AM", "attendee": "...", "type": "..." } ],
   "conditions": [ { "title": "...", "severity": "...", "loan_number": "..." } ],
   "yesterday": { "funded": 1, "new_loans": 2, "conversions": 0 },
+  "team": {
+    "members": [
+      { "name": "Jane Smith", "loan_count": 8, "volume": 2100000, "health": "green", "at_risk_count": 0 },
+      { "name": "Mike Jones", "loan_count": 5, "volume": 1400000, "health": "yellow", "at_risk_count": 2 }
+    ],
+    "attention_items": [
+      { "user_name": "Mike Jones", "issue": "Johnson loan lock expires tomorrow", "severity": "high" }
+    ]
+  },
   "viewed_in_app": false,
   "created_at": "2026-03-24T11:00:00Z"
 }
 ```
 
-The response unpacks `briefing_data` JSONB into named top-level fields for frontend convenience.
+The `team` field is null for individual-level briefings. For leadership, `team` contains `branches` array instead of `members`.
+
+### `POST /api/v1/briefing/generate-now?force=false`
+
+Enqueues `generate_user_briefing(user_id, today_str, level)`. Returns `202`. With `force=true`, deletes existing briefing and regenerates. Without `force`, returns `409` if exists.
 
 ### `POST /api/v1/briefing/{id}/viewed`
 
-Sets `viewed_in_app_at = now()` if not already set. Returns `200`. Separating the view-tracking from the GET keeps the read endpoint idempotent and cacheable.
-
-### `POST /api/v1/briefing/generate-now`
-
-Enqueues `generate_lo_briefing(user_id, today_str)`. Returns `202 Accepted`. If a briefing already exists for today, accepts a `force=true` query parameter to delete the existing briefing and regenerate (for cases where the pipeline changed significantly). Without `force`, returns `409 Conflict` if a briefing exists.
-
-### `GET /api/v1/briefing/history`
-
-**Query parameters:** `page` (default 1), `per_page` (default 10, max 30).
-
-Returns paginated list of briefings ordered by `briefing_date DESC`. Each item includes `briefing_date`, `status`, `ai_narrative` (truncated to 200 chars), `viewed_in_app` boolean.
+Sets `viewed_in_app_at = now()` if not already set. Returns `200`.
 
 ### `PUT /api/v1/briefing/preferences`
 
-Request body:
 ```json
-{
-  "briefing_enabled": true,
-  "briefing_hour": 7
-}
+{ "briefing_enabled": true, "briefing_hour": 7 }
 ```
 
-Validates `briefing_hour` is 0-23. Returns updated preferences.
+Validates `briefing_hour` 0-23.
 
 ## Settings UI
 
-In the existing Settings page (`frontend/src/pages/Settings.js`), add a "Morning Briefing" section:
+In Settings page, "Morning Briefing" section:
 
 ```
 Morning Briefing
@@ -348,36 +451,37 @@ Morning Briefing
   [ Generate Now ]
 ```
 
-- Toggle calls `PUT /api/v1/briefing/preferences`.
-- Dropdown offers hourly options from 5 AM to 10 AM.
-- Timezone is read-only from user profile.
-- "Generate Now" calls `POST /api/v1/briefing/generate-now`.
+No level-selection UI — the level is determined automatically from the user's role and direct reports.
 
 ## Migration
 
 Single migration script: `backend/migrations/add_morning_briefings.py`
 
-1. Create `morning_briefings` table with all columns and indexes.
+1. Add `manager_id` (Integer FK, nullable) to `users` with index.
 2. Add `briefing_enabled` (Boolean, default True) to `users`.
 3. Add `briefing_hour` (Integer, default 7) to `users`.
-4. Uses `ALTER TABLE ADD COLUMN IF NOT EXISTS` pattern for safety.
-5. Runs at startup via the existing migration registration pattern.
+4. Create `morning_briefings` table with all columns and indexes.
+5. Uses `ALTER TABLE ADD COLUMN IF NOT EXISTS` pattern.
+6. Runs at startup via existing migration pattern.
+
+Note: `manager_id` will be NULL for all existing users. Admins populate it via a future org-chart UI or bulk import. Until populated, all users receive individual-level briefings (the system checks `direct_reports` count, which is 0 when no one has `manager_id` pointing to them).
 
 ## File Structure
 
 ```
 backend/
   database/models/morning_briefing.py    — MorningBriefing SQLAlchemy model
+  database/models/core.py                — Add manager_id + relationship to User
   database/models/__init__.py            — Add import + re-export of MorningBriefing
   tasks/morning_briefing_tasks.py        — Celery tasks (dispatch + generate + cleanup)
   tasks/celery_app.py                    — Add to include list + beat_schedule + routing
-  services/morning_briefing_service.py   — Data gathering, AI call, email rendering
+  services/morning_briefing_service.py   — Data gathering, level detection, AI call, rendering
   routes/briefing_routes.py              — API endpoints
   migrations/add_morning_briefings.py    — DB migration
-  templates/morning_briefing_email.py    — HTML email template builder
+  templates/morning_briefing_email.py    — HTML email template builder (level-aware)
 
 frontend/
-  src/components/dashboard/MorningBriefingCard.js   — Dashboard card component
+  src/components/dashboard/MorningBriefingCard.js   — Dashboard card (level-aware)
   src/components/dashboard/MorningBriefingCard.css   — Card styles
 ```
 
@@ -389,34 +493,36 @@ frontend/
 | Anthropic API fails | Send data-only briefing without AI narrative |
 | Email send fails | Mark status "failed", retry task |
 | All retries exhausted | Log error, mark status "failed", do not send |
-| Duplicate briefing attempt | DB check in dispatch prevents enqueuing; unique constraint is safety net |
+| Duplicate briefing attempt | DB check prevents enqueuing; unique constraint is safety net |
 | User timezone invalid | Default to America/New_York, log warning |
+| manager_id cycle (A→B→A) | Not validated at DB level; briefing generation only queries direct reports (1 level deep), never recurses. Cycles are harmless. |
+| User has no loans/leads | Briefing still generates with empty sections + AI narrative says "No active pipeline items — great time to prospect." |
 
 ## Monitoring
 
-Log these metrics for operational visibility:
+Log these metrics:
 
-- `briefing.dispatch.count` — number of LOs enqueued per dispatch run
-- `briefing.generate.duration_ms` — time to generate one briefing (target < 3s)
-- `briefing.generate.ai_duration_ms` — Anthropic API call latency
-- `briefing.generate.success` / `briefing.generate.failure` — counts
+- `briefing.dispatch.count` — users enqueued per dispatch run (by level)
+- `briefing.generate.duration_ms` — time per briefing (target: < 3s individual, < 5s manager, < 7s leadership)
+- `briefing.generate.ai_duration_ms` — Anthropic API latency
+- `briefing.generate.success` / `briefing.generate.failure` — counts by level
 - `briefing.email.sent` / `briefing.email.failed` — counts
-- `briefing.viewed_in_app` — count of in-app views per day
+- `briefing.viewed_in_app` — in-app views per day
 
-All logged via `logger.info()` with structured fields for Railway log aggregation.
+All logged via `logger.info()` with structured fields.
 
 ## Cost Estimate
 
-At scale of 100 LOs:
-- Haiku API: ~$0.10/day ($3/month) at ~$0.001/briefing
-- Email (SendGrid): ~100 emails/day, well within free tier
-- Celery worker: already running for existing tasks
-- DB: 6 queries x 100 LOs = 600 queries per morning (~2 seconds total)
-- Storage: ~90KB/briefing x 100/day x 90 days retention = ~810MB
+At scale of 100 users (80 individual, 15 managers, 5 leadership):
+- Haiku API: ~$0.12/day ($3.60/month) — managers/leadership use slightly more tokens
+- Email (SendGrid): ~100 emails/day, free tier
+- DB: individual 6 queries, manager +4 queries, leadership +4 queries = ~700 total (~3s)
+- Storage: ~100KB/briefing avg x 100/day x 90 days = ~900MB
 
 ## Success Metrics
 
-- **Delivery rate:** % of enabled LOs who receive briefing by their configured hour
+- **Delivery rate:** % of enabled users who receive briefing by their configured hour
 - **Open rate:** % of emails opened (via SendGrid tracking)
 - **In-app engagement:** % of briefings viewed in-app (`viewed_in_app_at` not null)
+- **Manager engagement:** % of manager briefings where the team section is expanded (tracked via card interaction events)
 - **Target:** 95% delivery rate, 60%+ open rate within first month
