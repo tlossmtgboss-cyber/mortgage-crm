@@ -8,6 +8,7 @@ import ProductionPredictor from '../components/ProductionPredictor';
 import DealAlerts from '../components/DealAlerts';
 import api from '../services/api';
 import './Dashboard.css';
+import MorningBriefingCard from '../components/dashboard/MorningBriefingCard';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -1079,6 +1080,8 @@ function Dashboard() {
           </button>
         </div>
       )}
+
+      <MorningBriefingCard />
 
       <div className="dashboard-header-compact">
         <h1>Today's Command Center</h1>
