@@ -1,9 +1,169 @@
 /* Aria Voice App - Full Screen Voice Interface */
 
 .aria-app {
+  /* White-label theme variables — override per tenant */
+  --aria-color-primary: #111827;
+  --aria-color-primary-hover: #374151;
+  --aria-color-bg: #ffffff;
+  --aria-color-bg-secondary: #f9fafb;
+  --aria-color-bg-tertiary: #f3f4f6;
+  --aria-color-border: #e5e7eb;
+  --aria-color-border-light: #d1d5db;
+  --aria-color-text-primary: #111827;
+  --aria-color-text-secondary: #374151;
+  --aria-color-text-tertiary: #6b7280;
+  --aria-color-text-muted: #9ca3af;
+  --aria-color-accent: #1a73e8;
+  --aria-color-accent-light: rgba(26, 115, 232, 0.15);
+  --aria-color-success: #059669;
+  --aria-color-warning: #d97706;
+  --aria-color-error: #dc2626;
+  --aria-color-error-light: #fef2f2;
+  --aria-color-error-border: #fecaca;
+
+  /* Workflow status colors */
+  --aria-workflow-active-bg: #f0fdf4;
+  --aria-workflow-active-border: #bbf7d0;
+  --aria-workflow-failed-bg: #fef2f2;
+  --aria-workflow-failed-border: #fecaca;
+  --aria-workflow-expired-opacity: 0.6;
+
+  /* Touch targets */
+  --aria-touch-target-min: 44px;
+
+  /* Border radius */
+  --aria-radius-sm: 8px;
+  --aria-radius-md: 10px;
+  --aria-radius-lg: 12px;
+  --aria-radius-xl: 16px;
+
+  /* Voice-app dark theme tokens */
+  --aria-voice-bg-gradient-start: #0a0a1a;
+  --aria-voice-bg-gradient-mid: #1a1a3a;
+  --aria-voice-bg-gradient-end: #0a0a1a;
+  --aria-voice-text: #fff;
+  --aria-voice-text-dim: #94a3b8;
+  --aria-voice-text-body: #e2e8f0;
+  --aria-voice-text-footer: #64748b;
+  --aria-voice-surface: rgba(255, 255, 255, 0.1);
+  --aria-voice-surface-subtle: rgba(255, 255, 255, 0.06);
+  --aria-voice-surface-hover: rgba(255, 255, 255, 0.08);
+  --aria-voice-surface-focus: rgba(255, 255, 255, 0.12);
+  --aria-voice-border-subtle: rgba(255, 255, 255, 0.1);
+  --aria-voice-border-input: rgba(255, 255, 255, 0.15);
+  --aria-voice-scrollbar: rgba(255, 255, 255, 0.2);
+
+  /* Orb gradients */
+  --aria-orb-idle-start: #1e293b;
+  --aria-orb-idle-end: #334155;
+  --aria-orb-idle-glow: rgba(96, 165, 250, 0.2);
+  --aria-orb-idle-glow-hover: rgba(96, 165, 250, 0.4);
+  --aria-orb-connect-start: #1e40af;
+  --aria-orb-connect-end: #3b82f6;
+  --aria-orb-connect-glow: rgba(59, 130, 246, 0.5);
+  --aria-orb-listen-start: #059669;
+  --aria-orb-listen-end: #10b981;
+  --aria-orb-listen-glow: rgba(16, 185, 129, 0.6);
+  --aria-orb-listen-ring: rgba(16, 185, 129, 0.4);
+  --aria-orb-process-start: #d97706;
+  --aria-orb-process-end: #f59e0b;
+  --aria-orb-process-glow: rgba(245, 158, 11, 0.5);
+  --aria-orb-speak-start: #7c3aed;
+  --aria-orb-speak-end: #a78bfa;
+  --aria-orb-speak-glow: rgba(167, 139, 250, 0.6);
+  --aria-orb-speak-ring: rgba(167, 139, 250, 0.4);
+  --aria-orb-error-start: #dc2626;
+  --aria-orb-error-end: #ef4444;
+  --aria-orb-error-glow: rgba(239, 68, 68, 0.5);
+
+  /* Accent gradients */
+  --aria-gradient-brand-start: #60a5fa;
+  --aria-gradient-brand-mid: #a78bfa;
+  --aria-gradient-brand-end: #f472b6;
+  --aria-gradient-cta-start: #3b82f6;
+  --aria-gradient-cta-end: #8b5cf6;
+  --aria-gradient-cta-glow: rgba(139, 92, 246, 0.5);
+  --aria-gradient-send-start: #7c3aed;
+  --aria-gradient-send-end: #a78bfa;
+  --aria-gradient-input-focus: rgba(167, 139, 250, 0.5);
+
+  /* Message bubbles */
+  --aria-msg-user-bg: rgba(96, 165, 250, 0.2);
+  --aria-msg-assistant-bg: rgba(167, 139, 250, 0.2);
+  --aria-msg-role-color: #94a3b8;
+
+  /* Action card status */
+  --aria-action-success-border: rgba(16, 185, 129, 0.3);
+  --aria-action-success-bg: rgba(16, 185, 129, 0.08);
+  --aria-action-error-border: rgba(239, 68, 68, 0.3);
+  --aria-action-error-bg: rgba(239, 68, 68, 0.08);
+  --aria-action-pending-border: rgba(245, 158, 11, 0.3);
+  --aria-action-pending-bg: rgba(245, 158, 11, 0.05);
+  --aria-action-spinner-track: rgba(245, 158, 11, 0.3);
+  --aria-action-spinner-active: #f59e0b;
+
+  /* Stop button */
+  --aria-stop-bg: rgba(239, 68, 68, 0.2);
+  --aria-stop-bg-hover: rgba(239, 68, 68, 0.3);
+  --aria-stop-border: rgba(239, 68, 68, 0.5);
+  --aria-stop-text: #fca5a5;
+
+  /* Workflow cards */
+  --aria-wf-bg: rgba(139, 92, 246, 0.08);
+  --aria-wf-border: rgba(139, 92, 246, 0.2);
+  --aria-wf-title: #e5e7eb;
+  --aria-wf-state: #a78bfa;
+  --aria-wf-state-booked: #34d399;
+  --aria-wf-state-failed: #f87171;
+  --aria-wf-spinner-track: rgba(139, 92, 246, 0.3);
+  --aria-wf-spinner-active: #a78bfa;
+  --aria-wf-time: #6b7280;
+  --aria-wf-detail: #9ca3af;
+  --aria-wf-failed-border: #ef4444;
+  --aria-wf-failed-bg: rgba(239, 68, 68, 0.08);
+  --aria-wf-failed-border-color: rgba(239, 68, 68, 0.3);
+  --aria-wf-expired-border: #9ca3af;
+  --aria-wf-expired-bg: rgba(156, 163, 175, 0.06);
+  --aria-wf-expired-border-color: rgba(156, 163, 175, 0.2);
+  --aria-wf-cancel-text: #9ca3af;
+  --aria-wf-cancel-hover-bg: rgba(255, 255, 255, 0.1);
+  --aria-wf-cancel-hover-text: #f87171;
+  --aria-wf-cancel-active-bg: rgba(243, 244, 246, 0.15);
+  --aria-wf-cancel-active-text: #ef4444;
+  --aria-wf-retry-border: #ef4444;
+  --aria-wf-retry-text: #ef4444;
+  --aria-wf-retry-hover-bg: rgba(239, 68, 68, 0.1);
+
+  /* Fallback dashboard */
+  --aria-fb-title-color: #94a3b8;
+  --aria-fb-pill-count: #e2e8f0;
+  --aria-fb-pill-label: #94a3b8;
+  --aria-fb-row-border: rgba(255, 255, 255, 0.05);
+  --aria-fb-row-text: #e2e8f0;
+  --aria-fb-priority-high: #ef4444;
+  --aria-fb-priority-medium: #f59e0b;
+  --aria-fb-priority-low: #10b981;
+  --aria-fb-badge-bg: rgba(167, 139, 250, 0.2);
+  --aria-fb-badge-text: #a78bfa;
+  --aria-fb-empty: #64748b;
+
+  /* Additional surface tokens */
+  --aria-voice-pulse-bg: rgba(255, 255, 255, 0.3);
+  --aria-voice-section-bg: rgba(255, 255, 255, 0.05);
+  --aria-voice-shimmer-edge: rgba(255, 255, 255, 0.04);
+
+  /* Offline banner */
+  --aria-offline-bg: rgba(245, 158, 11, 0.15);
+  --aria-offline-border: rgba(245, 158, 11, 0.4);
+  --aria-offline-text: #fbbf24;
+
+  /* Spinner (generic) */
+  --aria-spinner-track: rgba(255, 255, 255, 0.2);
+  --aria-spinner-active: #fff;
+
   min-height: 100vh;
   min-height: -webkit-fill-available;
-  background: linear-gradient(180deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a1a 100%);
+  background: linear-gradient(180deg, var(--aria-voice-bg-gradient-start) 0%, var(--aria-voice-bg-gradient-mid) 50%, var(--aria-voice-bg-gradient-end) 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -12,7 +172,7 @@
   padding-top: env(safe-area-inset-top, 20px);
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 20px));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #fff;
+  color: var(--aria-voice-text);
   overflow: auto;
 }
 
@@ -35,7 +195,7 @@
   font-size: 42px;
   font-weight: 700;
   margin: 0;
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+  background: linear-gradient(135deg, var(--aria-gradient-brand-start) 0%, var(--aria-gradient-brand-mid) 50%, var(--aria-gradient-brand-end) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -43,7 +203,7 @@
 
 .aria-subtitle {
   font-size: 16px;
-  color: #94a3b8;
+  color: var(--aria-voice-text-dim);
   margin: 8px 0 0 0;
 }
 
@@ -60,7 +220,7 @@
 .aria-logo .aria-icon {
   font-size: 48px;
   font-weight: 700;
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+  background: linear-gradient(135deg, var(--aria-gradient-brand-start) 0%, var(--aria-gradient-brand-mid) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -95,42 +255,46 @@
 
 /* Orb States */
 .aria-orb-idle {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-  box-shadow: 0 0 40px rgba(96, 165, 250, 0.2);
+  background: linear-gradient(135deg, var(--aria-orb-idle-start) 0%, var(--aria-orb-idle-end) 100%);
+  box-shadow: 0 0 40px var(--aria-orb-idle-glow);
 }
 
 .aria-orb-idle:hover {
   transform: scale(1.05);
-  box-shadow: 0 0 60px rgba(96, 165, 250, 0.4);
+  box-shadow: 0 0 60px var(--aria-orb-idle-glow-hover);
 }
 
 .aria-orb-connecting {
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-  box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+  background: linear-gradient(135deg, var(--aria-orb-connect-start) 0%, var(--aria-orb-connect-end) 100%);
+  box-shadow: 0 0 40px var(--aria-orb-connect-glow);
   animation: pulse-connect 1.5s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .aria-orb-listening {
-  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-  box-shadow: 0 0 60px rgba(16, 185, 129, 0.6);
+  background: linear-gradient(135deg, var(--aria-orb-listen-start) 0%, var(--aria-orb-listen-end) 100%);
+  box-shadow: 0 0 60px var(--aria-orb-listen-glow);
   animation: pulse-listen 2s ease-in-out infinite;
+  will-change: transform;
 }
 
 .aria-orb-processing {
-  background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
-  box-shadow: 0 0 40px rgba(245, 158, 11, 0.5);
+  background: linear-gradient(135deg, var(--aria-orb-process-start) 0%, var(--aria-orb-process-end) 100%);
+  box-shadow: 0 0 40px var(--aria-orb-process-glow);
   animation: pulse-process 1s ease-in-out infinite;
+  will-change: transform;
 }
 
 .aria-orb-speaking {
-  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
-  box-shadow: 0 0 60px rgba(167, 139, 250, 0.6);
+  background: linear-gradient(135deg, var(--aria-orb-speak-start) 0%, var(--aria-orb-speak-end) 100%);
+  box-shadow: 0 0 60px var(--aria-orb-speak-glow);
   animation: pulse-speak 0.8s ease-in-out infinite;
+  will-change: transform;
 }
 
 .aria-orb-error {
-  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-  box-shadow: 0 0 40px rgba(239, 68, 68, 0.5);
+  background: linear-gradient(135deg, var(--aria-orb-error-start) 0%, var(--aria-orb-error-end) 100%);
+  box-shadow: 0 0 40px var(--aria-orb-error-glow);
 }
 
 /* Ring around orb */
@@ -148,13 +312,15 @@
 }
 
 .aria-ring-listening {
-  border-color: rgba(16, 185, 129, 0.4);
+  border-color: var(--aria-orb-listen-ring);
   animation: ring-pulse 2s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .aria-ring-speaking {
-  border-color: rgba(167, 139, 250, 0.4);
+  border-color: var(--aria-orb-speak-ring);
   animation: ring-pulse 1s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 /* Icons */
@@ -170,8 +336,8 @@
 .aria-spinner {
   width: 60px;
   height: 60px;
-  border: 4px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #fff;
+  border: 4px solid var(--aria-spinner-track);
+  border-top-color: var(--aria-spinner-active);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -196,7 +362,7 @@
 .aria-waves::after {
   width: 6px;
   height: 30px;
-  background: #fff;
+  background: var(--aria-voice-text);
   border-radius: 3px;
   animation: wave 1s ease-in-out infinite;
 }
@@ -220,7 +386,7 @@
   content: '';
   width: 16px;
   height: 16px;
-  background: #fff;
+  background: var(--aria-voice-text);
   border-radius: 50%;
   animation: dot-bounce 1.4s ease-in-out infinite;
 }
@@ -237,24 +403,25 @@
 .aria-pulse {
   width: 60px;
   height: 60px;
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--aria-voice-pulse-bg);
   border-radius: 50%;
   animation: pulse-inner 0.8s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 /* Status Text */
 .aria-status {
   font-size: 18px;
-  color: #94a3b8;
+  color: var(--aria-voice-text-dim);
   text-align: center;
   min-height: 24px;
 }
 
 /* Live Transcript */
 .aria-transcript {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--aria-voice-surface);
   padding: 16px 24px;
-  border-radius: 16px;
+  border-radius: var(--aria-radius-xl);
   width: 100%;
   text-align: center;
 }
@@ -262,7 +429,7 @@
 .aria-transcript p {
   margin: 0;
   font-size: 16px;
-  color: #e2e8f0;
+  color: var(--aria-voice-text-body);
   font-style: italic;
 }
 
@@ -279,25 +446,25 @@
 
 .aria-message {
   padding: 12px 16px;
-  border-radius: 16px;
+  border-radius: var(--aria-radius-xl);
   max-width: 90%;
 }
 
 .aria-message-user {
-  background: rgba(96, 165, 250, 0.2);
+  background: var(--aria-msg-user-bg);
   align-self: flex-end;
   border-bottom-right-radius: 4px;
 }
 
 .aria-message-assistant {
-  background: rgba(167, 139, 250, 0.2);
+  background: var(--aria-msg-assistant-bg);
   align-self: flex-start;
   border-bottom-left-radius: 4px;
 }
 
 .aria-message-role {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--aria-msg-role-color);
   display: block;
   margin-bottom: 4px;
 }
@@ -316,9 +483,9 @@
 }
 
 .aria-stop-btn {
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid rgba(239, 68, 68, 0.5);
-  color: #fca5a5;
+  background: var(--aria-stop-bg);
+  border: 1px solid var(--aria-stop-border);
+  color: var(--aria-stop-text);
   padding: 12px 32px;
   border-radius: 24px;
   font-size: 16px;
@@ -328,14 +495,14 @@
 }
 
 .aria-stop-btn:hover {
-  background: rgba(239, 68, 68, 0.3);
+  background: var(--aria-stop-bg-hover);
 }
 
 /* Login Button */
 .aria-login-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, var(--aria-gradient-cta-start) 0%, var(--aria-gradient-cta-end) 100%);
   border: none;
-  color: #fff;
+  color: var(--aria-voice-text);
   padding: 16px 48px;
   border-radius: 28px;
   font-size: 18px;
@@ -347,7 +514,7 @@
 
 .aria-login-btn:hover {
   transform: scale(1.05);
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+  box-shadow: 0 0 30px var(--aria-gradient-cta-glow);
 }
 
 /* Footer */
@@ -359,7 +526,7 @@
 .aria-footer p {
   margin: 0;
   font-size: 12px;
-  color: #64748b;
+  color: var(--aria-voice-text-footer);
 }
 
 /* Animations */
@@ -417,7 +584,7 @@
 }
 
 .aria-conversation::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--aria-voice-scrollbar);
   border-radius: 2px;
 }
 
@@ -431,11 +598,11 @@
 
 .aria-text-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--aria-voice-surface-hover);
+  border: 1px solid var(--aria-voice-border-input);
   border-radius: 24px;
   padding: 12px 20px;
-  color: #e2e8f0;
+  color: var(--aria-voice-text-body);
   font-size: 15px;
   font-family: inherit;
   outline: none;
@@ -443,17 +610,17 @@
 }
 
 .aria-text-input:focus {
-  border-color: rgba(167, 139, 250, 0.5);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--aria-gradient-input-focus);
+  background: var(--aria-voice-surface-focus);
 }
 
-.aria-text-input::placeholder { color: #64748b; }
+.aria-text-input::placeholder { color: var(--aria-voice-text-footer); }
 
 .aria-text-send {
-  width: 44px;
-  height: 44px;
+  width: var(--aria-touch-target-min);
+  height: var(--aria-touch-target-min);
   border-radius: 50%;
-  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  background: linear-gradient(135deg, var(--aria-gradient-send-start), var(--aria-gradient-send-end));
   border: none;
   color: white;
   font-size: 18px;
@@ -472,28 +639,28 @@
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--aria-radius-lg);
+  background: var(--aria-voice-surface-subtle);
+  border: 1px solid var(--aria-voice-border-subtle);
   animation: aria-card-in 0.3s ease-out;
 }
-.aria-action-success { border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.08); }
-.aria-action-error   { border-color: rgba(239, 68, 68, 0.3);  background: rgba(239, 68, 68, 0.08);  }
-.aria-action-pending { border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); }
+.aria-action-success { border-color: var(--aria-action-success-border); background: var(--aria-action-success-bg); }
+.aria-action-error   { border-color: var(--aria-action-error-border);  background: var(--aria-action-error-bg);  }
+.aria-action-pending { border-color: var(--aria-action-pending-border); background: var(--aria-action-pending-bg); }
 
 .aria-action-icon {
   width: 32px; height: 32px;
-  border-radius: 8px; border: 2px solid;
+  border-radius: var(--aria-radius-sm); border: 2px solid;
   display: flex; align-items: center; justify-content: center;
   font-size: 16px; flex-shrink: 0;
 }
 .aria-action-body { flex: 1; min-width: 0; }
-.aria-action-label { font-size: 13px; font-weight: 600; color: #e2e8f0; }
-.aria-action-detail { font-size: 12px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aria-action-label { font-size: 13px; font-weight: 600; color: var(--aria-voice-text-body); }
+.aria-action-detail { font-size: 12px; color: var(--aria-voice-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aria-action-status { flex-shrink: 0; font-size: 12px; font-weight: 600; }
 .aria-action-spinner {
   display: inline-block; width: 14px; height: 14px;
-  border: 2px solid rgba(245,158,11,0.3); border-top-color: #f59e0b;
+  border: 2px solid var(--aria-action-spinner-track); border-top-color: var(--aria-action-spinner-active);
   border-radius: 50%; animation: spin 0.8s linear infinite;
 }
 
@@ -515,7 +682,7 @@
   width: 100%;
   padding: 12px;
   border-radius: 24px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  background: linear-gradient(135deg, var(--aria-gradient-cta-start), var(--aria-gradient-cta-end));
   border: none;
   color: white;
   font-size: 15px;
@@ -524,15 +691,15 @@
 }
 
 .aria-fallback-section {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
+  background: var(--aria-voice-section-bg);
+  border-radius: var(--aria-radius-lg);
   padding: 12px 16px;
 }
 
 .aria-fallback-title {
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--aria-fb-title-color);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 10px;
@@ -552,45 +719,45 @@
   align-items: center;
   min-width: 60px;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  background: var(--aria-voice-surface-subtle);
+  border-radius: var(--aria-radius-md);
   flex-shrink: 0;
 }
 
-.aria-fallback-pill-count { font-size: 20px; font-weight: 700; color: #e2e8f0; }
-.aria-fallback-pill-label { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 2px; }
+.aria-fallback-pill-count { font-size: 20px; font-weight: 700; color: var(--aria-fb-pill-count); }
+.aria-fallback-pill-label { font-size: 10px; color: var(--aria-fb-pill-label); text-align: center; margin-top: 2px; }
 
 .aria-fallback-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--aria-fb-row-border);
 }
 .aria-fallback-row:last-child { border-bottom: none; }
 
 .aria-fallback-row-text {
-  flex: 1; font-size: 13px; color: #e2e8f0;
+  flex: 1; font-size: 13px; color: var(--aria-fb-row-text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .aria-fallback-priority {
   width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
-.aria-fallback-priority.high   { background: #ef4444; }
-.aria-fallback-priority.medium { background: #f59e0b; }
-.aria-fallback-priority.low    { background: #10b981; }
+.aria-fallback-priority.high   { background: var(--aria-fb-priority-high); }
+.aria-fallback-priority.medium { background: var(--aria-fb-priority-medium); }
+.aria-fallback-priority.low    { background: var(--aria-fb-priority-low); }
 
 .aria-fallback-badge {
-  font-size: 11px; padding: 2px 8px; border-radius: 10px;
-  background: rgba(167, 139, 250, 0.2); color: #a78bfa; flex-shrink: 0;
+  font-size: 11px; padding: 2px 8px; border-radius: var(--aria-radius-md);
+  background: var(--aria-fb-badge-bg); color: var(--aria-fb-badge-text); flex-shrink: 0;
 }
 
-.aria-fallback-empty { font-size: 13px; color: #64748b; }
+.aria-fallback-empty { font-size: 13px; color: var(--aria-fb-empty); }
 
 .aria-fallback-shimmer {
-  height: 48px; border-radius: 8px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  height: 48px; border-radius: var(--aria-radius-sm);
+  background: linear-gradient(90deg, var(--aria-voice-shimmer-edge) 25%, var(--aria-voice-surface-hover) 50%, var(--aria-voice-shimmer-edge) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
 }
@@ -600,10 +767,316 @@
   100% { background-position: -200% 0; }
 }
 
+/* Voice Workflow Cards */
+.aria-workflows-section {
+  padding: 8px 16px;
+}
+.aria-workflow-card {
+  background: var(--aria-wf-bg);
+  border: 1px solid var(--aria-wf-border);
+  border-radius: var(--aria-radius-lg);
+  padding: 12px 16px;
+  margin-bottom: 8px;
+}
+.aria-workflow--done {
+  opacity: var(--aria-workflow-expired-opacity);
+}
+.aria-workflow-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.aria-workflow-icon {
+  font-size: 16px;
+}
+.aria-workflow-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--aria-wf-title);
+}
+.aria-workflow-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.aria-workflow-state {
+  color: var(--aria-wf-state);
+  font-weight: 500;
+}
+.aria-workflow-state--appointment_booked {
+  color: var(--aria-wf-state-booked);
+}
+.aria-workflow-state--failed,
+.aria-workflow-state--expired,
+.aria-workflow-state--cancelled {
+  color: var(--aria-wf-state-failed);
+}
+.aria-workflow-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--aria-wf-spinner-track);
+  border-top-color: var(--aria-wf-spinner-active);
+  border-radius: 50%;
+  animation: aria-wf-spin 0.8s linear infinite;
+}
+@keyframes aria-wf-spin {
+  to { transform: rotate(360deg); }
+}
+.aria-workflow-time {
+  color: var(--aria-wf-time);
+  font-size: 12px;
+}
+.aria-workflow-detail {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--aria-wf-detail);
+}
+
+/* Workflow card state variants */
+.aria-workflow--failed {
+  border-left: 3px solid var(--aria-wf-failed-border);
+  background: var(--aria-wf-failed-bg);
+  border-color: var(--aria-wf-failed-border-color);
+  opacity: 1;
+}
+.aria-workflow--expired {
+  opacity: var(--aria-workflow-expired-opacity);
+  border-left: 3px solid var(--aria-wf-expired-border);
+  background: var(--aria-wf-expired-bg);
+  border-color: var(--aria-wf-expired-border-color);
+}
+.aria-workflow--cancelled {
+  opacity: 0.5;
+}
+.aria-workflow--cancelled .aria-workflow-title {
+  text-decoration: line-through;
+}
+
+/* Cancel button on active workflow cards */
+.aria-workflow-cancel-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  min-height: var(--aria-touch-target-min);
+  min-width: var(--aria-touch-target-min);
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--aria-wf-cancel-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.aria-workflow-cancel-btn:hover {
+  background: var(--aria-wf-cancel-hover-bg);
+  color: var(--aria-wf-cancel-hover-text);
+}
+.aria-workflow-cancel-btn:active {
+  background: var(--aria-wf-cancel-active-bg);
+  color: var(--aria-wf-cancel-active-text);
+}
+
+/* Retry button for failed workflows */
+.aria-workflow-retry-btn {
+  margin-top: 8px;
+  padding: 6px 16px;
+  min-height: var(--aria-touch-target-min);
+  min-width: var(--aria-touch-target-min);
+  border: 1px solid var(--aria-wf-retry-border);
+  border-radius: var(--aria-radius-sm);
+  background: transparent;
+  color: var(--aria-wf-retry-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.aria-workflow-retry-btn:hover {
+  background: var(--aria-wf-retry-hover-bg);
+}
+
 /* Safe area for notched devices */
 @supports (padding-top: env(safe-area-inset-top)) {
   .aria-app {
     padding-top: max(20px, env(safe-area-inset-top));
     padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+
+/* H-10: Offline banner */
+.aria-offline-banner {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: var(--aria-radius-md);
+  background: var(--aria-offline-bg);
+  border: 1px solid var(--aria-offline-border);
+  color: var(--aria-offline-text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* H-8: WCAG 2.1 AA — Focus-visible styles for interactive elements */
+.aria-orb-container:focus-visible,
+.aria-action-btn:focus-visible,
+.aria-stop-btn:focus-visible,
+.aria-login-btn:focus-visible,
+.aria-text-send:focus-visible,
+.aria-text-input:focus-visible,
+.aria-fallback-retry:focus-visible,
+.aria-workflow-cancel-btn:focus-visible,
+.aria-workflow-retry-btn:focus-visible {
+  outline: 2px solid var(--aria-color-accent);
+  outline-offset: 2px;
+}
+
+/* H-8: WCAG 2.1 AA — Reduced motion: disable ALL animations */
+@media (prefers-reduced-motion: reduce) {
+  .aria-orb,
+  .aria-orb-idle:hover,
+  .aria-orb-connecting,
+  .aria-orb-listening,
+  .aria-orb-processing,
+  .aria-orb-speaking,
+  .aria-ring,
+  .aria-ring-listening,
+  .aria-ring-speaking,
+  .aria-spinner,
+  .aria-waves::before,
+  .aria-waves::after,
+  .aria-dots::before,
+  .aria-dots::after,
+  .aria-pulse,
+  .aria-action-spinner,
+  .aria-workflow-spinner,
+  .aria-action-card,
+  .aria-fallback,
+  .aria-fallback-shimmer,
+  .aria-login-btn:hover,
+  .aria-stop-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ============================================================================
+   CALL INTELLIGENCE INTEGRATION
+   ============================================================================ */
+
+/* CI Button Container — positioned below the voice orb */
+.aria-ci-button-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  will-change: transform;
+}
+
+/* "View Results" button below CI button */
+.aria-ci-results-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: var(--aria-voice-text, #fff);
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: var(--aria-touch-target-min, 44px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aria-ci-results-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.aria-ci-results-btn:active {
+  transform: scale(0.96);
+}
+
+/* CI Recording indicator in header */
+.aria-ci-recording-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 600;
+  animation: aria-ci-fade-in 0.3s ease;
+}
+
+.aria-ci-recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: aria-ci-dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes aria-ci-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+@keyframes aria-ci-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* CI Artifact notification badge animation */
+@keyframes aria-ci-badge-pop {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.aria-ci-badge-new {
+  animation: aria-ci-badge-pop 0.3s ease;
+}
+
+/* CI Panel slide-up overlay — prevents body scroll when open */
+body.aria-ci-panel-open {
+  overflow: hidden;
+}
+
+/* Mobile optimizations for CI components */
+@media (max-width: 480px) {
+  .aria-ci-button-container {
+    margin-top: 12px;
+  }
+
+  .aria-ci-results-btn {
+    font-size: 11px;
+    padding: 4px 12px;
+  }
+}
+
+/* Landscape mode — compact CI button */
+@media (max-height: 500px) and (orientation: landscape) {
+  .aria-ci-button-container {
+    margin-top: 8px;
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .aria-ci-button-container {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
