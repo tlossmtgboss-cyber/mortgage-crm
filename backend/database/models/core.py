@@ -16,6 +16,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
     Text, ForeignKey, JSON, UniqueConstraint, Index
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 # Import Base from the db module (renamed from database.py)
@@ -125,6 +126,7 @@ class User(Base):
     # Briefing preferences
     briefing_enabled = Column(Boolean, default=True)
     briefing_hour = Column(Integer, default=7)  # 0-23 in user's timezone
+    briefing_preferences = Column(JSONB, nullable=True)  # Section toggles, thresholds, AI tone (NULL = all defaults)
     email_verified = Column(Boolean, default=False)
     onboarding_completed = Column(Boolean, default=False)
     user_metadata = Column(JSON)

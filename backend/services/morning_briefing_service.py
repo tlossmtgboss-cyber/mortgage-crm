@@ -7,6 +7,7 @@ for individual contributors, managers, and leadership.
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -36,6 +37,68 @@ TERMINAL_STAGES = (
 
 LEADERSHIP_ROLES = ("leadership", "admin", "site_admin", "platform_admin")
 MANAGER_ROLES = ("management", "branch_manager", "regional_manager")
+
+# Default preferences (applied when user.briefing_preferences is NULL or keys are missing)
+_DEFAULT_SECTIONS = {
+    "pipeline": True, "at_risk": True, "stale_leads": True,
+    "appointments": True, "conditions": True, "yesterday": True,
+}
+_DEFAULT_THRESHOLDS = {
+    "at_risk_days": 10, "stale_lead_days": 7, "stale_lead_high_score_days": 3,
+    "lock_expiring_days": 3, "max_at_risk_items": 10, "max_stale_lead_items": 10,
+}
+_DEFAULT_AI_TONE = "balanced"
+
+# ------------------------------------------------------------------
+# Briefing preferences (user-customizable)
+# ------------------------------------------------------------------
+
+VALID_AI_TONES = ("concise", "balanced", "detailed")
+
+DEFAULT_BRIEFING_PREFERENCES = {
+    "sections": {
+        "pipeline": True,
+        "at_risk": True,
+        "stale_leads": True,
+        "appointments": True,
+        "conditions": True,
+        "yesterday": True,
+    },
+    "thresholds": {
+        "at_risk_days": 10,
+        "stale_lead_days": 7,
+        "stale_lead_high_score_days": 3,
+        "lock_expiring_days": 3,
+        "max_at_risk_items": 10,
+        "max_stale_lead_items": 10,
+    },
+    "ai_tone": "balanced",
+}
+
+
+@dataclass
+class BriefingPreferences:
+    """Per-user customization for morning briefings."""
+    sections: Dict[str, bool] = field(default_factory=lambda: dict(_DEFAULT_SECTIONS))
+    thresholds: Dict[str, int] = field(default_factory=lambda: dict(_DEFAULT_THRESHOLDS))
+    ai_tone: str = "balanced"  # concise, balanced, detailed
+
+    @classmethod
+    def load(cls, user: Any) -> "BriefingPreferences":
+        """Load preferences from user.briefing_preferences JSONB, merging with defaults."""
+        raw = getattr(user, "briefing_preferences", None) or {}
+
+        sections = dict(_DEFAULT_SECTIONS)
+        sections.update(raw.get("sections") or {})
+
+        thresholds = dict(_DEFAULT_THRESHOLDS)
+        thresholds.update(raw.get("thresholds") or {})
+
+        tone = raw.get("ai_tone", _DEFAULT_AI_TONE)
+        if tone not in ("concise", "balanced", "detailed"):
+            tone = _DEFAULT_AI_TONE
+
+        return cls(sections=sections, thresholds=thresholds, ai_tone=tone)
 
 
 @dataclass
@@ -89,25 +152,70 @@ class MorningBriefingService:
             return "yellow"
         return "green"
 
+    @staticmethod
+    def load_preferences(user: Any) -> "BriefingPreferences":
+        """Load and merge user briefing preferences with defaults.
+
+        Reads user.briefing_preferences (JSONB). Deep-merges with defaults
+        for any missing keys. Returns BriefingPreferences with all fields
+        populated. If NULL, returns all defaults.
+        """
+        raw = getattr(user, "briefing_preferences", None)
+        if not raw or not isinstance(raw, dict):
+            return BriefingPreferences()
+
+        defaults = deepcopy(DEFAULT_BRIEFING_PREFERENCES)
+
+        # Merge sections — only keep known keys
+        merged_sections = dict(defaults["sections"])
+        raw_sections = raw.get("sections")
+        if isinstance(raw_sections, dict):
+            for key in merged_sections:
+                if key in raw_sections and isinstance(raw_sections[key], bool):
+                    merged_sections[key] = raw_sections[key]
+
+        # Merge thresholds — only keep known keys
+        merged_thresholds = dict(defaults["thresholds"])
+        raw_thresholds = raw.get("thresholds")
+        if isinstance(raw_thresholds, dict):
+            for key in merged_thresholds:
+                if key in raw_thresholds and isinstance(raw_thresholds[key], int):
+                    merged_thresholds[key] = raw_thresholds[key]
+
+        # AI tone — validate against allowed values
+        ai_tone = raw.get("ai_tone", "balanced")
+        if ai_tone not in VALID_AI_TONES:
+            ai_tone = "balanced"
+
+        return BriefingPreferences(
+            sections=merged_sections,
+            thresholds=merged_thresholds,
+            ai_tone=ai_tone,
+        )
+
     # ------------------------------------------------------------------
     # Individual data gathering (Level 1)
     # ------------------------------------------------------------------
 
     def gather_individual_data(
         self, db: Session, user_id: int, org_id: int, briefing_date: date, user_tz: str,
+        prefs: Optional[BriefingPreferences] = None,
     ) -> Dict[str, Any]:
-        """Run 6 queries for individual-level briefing data."""
+        """Run queries for individual-level briefing data, respecting section toggles."""
+        if prefs is None:
+            prefs = BriefingPreferences()
+
         today = briefing_date
         yesterday = today - timedelta(days=1)
         week_ahead = today + timedelta(days=7)
-        three_days = today + timedelta(days=3)
+        lock_days = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
 
-        pipeline = self._query_pipeline_snapshot(db, user_id, org_id, week_ahead)
-        at_risk = self._query_at_risk_loans(db, user_id, org_id, three_days)
-        stale_leads = self._query_stale_leads(db, user_id, org_id, today)
-        appointments = self._query_todays_appointments(db, user_id, org_id, today, user_tz)
-        conditions = self._query_pending_conditions(db, user_id, org_id, today)
-        yesterday_activity = self._query_yesterday_activity(db, user_id, org_id, yesterday)
+        pipeline = self._query_pipeline_snapshot(db, user_id, org_id, week_ahead) if prefs.sections.get("pipeline", True) else {"active_count": 0, "total_volume": 0, "closing_soon": 0, "by_stage": {}}
+        at_risk = self._query_at_risk_loans(db, user_id, org_id, lock_days, prefs.thresholds["at_risk_days"], prefs.thresholds["max_at_risk_items"]) if prefs.sections.get("at_risk", True) else []
+        stale_leads = self._query_stale_leads(db, user_id, org_id, today, prefs.thresholds["stale_lead_days"], prefs.thresholds["stale_lead_high_score_days"], prefs.thresholds["max_stale_lead_items"]) if prefs.sections.get("stale_leads", True) else []
+        appointments = self._query_todays_appointments(db, user_id, org_id, today, user_tz) if prefs.sections.get("appointments", True) else []
+        conditions = self._query_pending_conditions(db, user_id, org_id, today) if prefs.sections.get("conditions", True) else []
+        yesterday_activity = self._query_yesterday_activity(db, user_id, org_id, yesterday) if prefs.sections.get("yesterday", True) else {"funded": 0, "new_loans": 0, "conversions": 0}
 
         return {
             "pipeline": pipeline,
@@ -151,7 +259,10 @@ class MorningBriefingService:
             logger.error("Pipeline snapshot query failed: %s", e)
             return {"active_count": 0, "total_volume": 0, "closing_soon": 0, "by_stage": {}}
 
-    def _query_at_risk_loans(self, db: Session, user_id: int, org_id: int, three_days: date) -> List[Dict]:
+    def _query_at_risk_loans(
+        self, db: Session, user_id: int, org_id: int, lock_deadline: date,
+        stage_days: int = 10, limit: int = 10,
+    ) -> List[Dict]:
         """Loans with SLA breaches, expiring locks, or stagnation."""
         terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
         try:
@@ -164,14 +275,14 @@ class MorningBriefingService:
                 WHERE loan_officer_id = :uid AND organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
                   AND (
-                    lock_expiration_date <= :three_days
-                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 > 10
+                    lock_expiration_date <= :lock_deadline
+                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 > :stage_days
                   )
                 ORDER BY
-                    CASE WHEN lock_expiration_date <= :three_days THEN 0 ELSE 1 END,
+                    CASE WHEN lock_expiration_date <= :lock_deadline THEN 0 ELSE 1 END,
                     days_in_stage DESC
-                LIMIT 10
-            """), {"uid": user_id, "oid": org_id, "three_days": three_days}).fetchall()
+                LIMIT :max_items
+            """), {"uid": user_id, "oid": org_id, "lock_deadline": lock_deadline, "stage_days": stage_days, "max_items": limit}).fetchall()
 
             results = []
             for r in rows:
@@ -179,11 +290,11 @@ class MorningBriefingService:
                 days = float(r[6] or 0)
                 sla_target = SLA_TARGETS.get(stage, 7)
                 reason = []
-                if r[5] and r[5] <= three_days:
+                if r[5] and r[5] <= lock_deadline:
                     reason.append(f"Lock expires {r[5].strftime('%m/%d') if hasattr(r[5], 'strftime') else r[5]}")
                 if days > sla_target:
                     reason.append(f"{days:.0f} days in {stage} (SLA: {sla_target})")
-                if days > 10 and not reason:
+                if days > stage_days and not reason:
                     reason.append(f"No movement in {days:.0f} days")
 
                 results.append({
@@ -199,7 +310,10 @@ class MorningBriefingService:
             logger.error("At-risk query failed: %s", e)
             return []
 
-    def _query_stale_leads(self, db: Session, user_id: int, org_id: int, today: date) -> List[Dict]:
+    def _query_stale_leads(
+        self, db: Session, user_id: int, org_id: int, today: date,
+        lead_days: int = 7, high_score_days: int = 3, limit: int = 10,
+    ) -> List[Dict]:
         """Leads with no recent contact, prioritizing high-score leads."""
         try:
             rows = db.execute(sa_text("""
@@ -210,12 +324,12 @@ class MorningBriefingService:
                 WHERE owner_id = :uid AND organization_id = :oid
                   AND last_contact IS NOT NULL
                   AND (
-                    (ai_score >= 70 AND last_contact < CURRENT_DATE - INTERVAL '3 days')
-                    OR last_contact < CURRENT_DATE - INTERVAL '7 days'
+                    (ai_score >= 70 AND last_contact < CURRENT_DATE - make_interval(days => :high_score_days))
+                    OR last_contact < CURRENT_DATE - make_interval(days => :lead_days)
                   )
                 ORDER BY ai_score DESC NULLS LAST, days_silent DESC
-                LIMIT 10
-            """), {"uid": user_id, "oid": org_id}).fetchall()
+                LIMIT :max_items
+            """), {"uid": user_id, "oid": org_id, "high_score_days": high_score_days, "lead_days": lead_days, "max_items": limit}).fetchall()
 
             return [
                 {
@@ -318,10 +432,17 @@ class MorningBriefingService:
     # Manager data gathering (Level 2)
     # ------------------------------------------------------------------
 
-    def gather_manager_data(self, db: Session, user_id: int, org_id: int, briefing_date: date) -> Dict:
+    def gather_manager_data(
+        self, db: Session, user_id: int, org_id: int, briefing_date: date,
+        prefs: Optional[BriefingPreferences] = None,
+    ) -> Dict:
         """Gather subordinate roll-up data for manager briefing."""
+        if prefs is None:
+            prefs = BriefingPreferences()
         today = briefing_date
-        three_days = today + timedelta(days=3)
+        lock_cutoff = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
+        at_risk_days = prefs.thresholds["at_risk_days"]
+        lead_days = prefs.thresholds["stale_lead_days"]
 
         try:
             # Get direct reports
@@ -369,11 +490,11 @@ class MorningBriefingService:
                 WHERE loan_officer_id IN ({id_list}) AND organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
                   AND (
-                    lock_expiration_date <= :three_days
-                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 > 10
+                    lock_expiration_date <= :lock_cutoff
+                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 > :at_risk_days
                   )
                 GROUP BY loan_officer_id
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             risk_map = {r[0]: {"count": r[1], "sla_breach": bool(r[2])} for r in at_risk_counts}
 
@@ -383,9 +504,9 @@ class MorningBriefingService:
                 FROM leads
                 WHERE owner_id IN ({id_list}) AND organization_id = :oid
                   AND last_contact IS NOT NULL
-                  AND last_contact < CURRENT_DATE - INTERVAL '7 days'
+                  AND last_contact < CURRENT_DATE - make_interval(days => :lead_days)
                 GROUP BY owner_id
-            """), {"oid": org_id}).fetchall()
+            """), {"oid": org_id, "lead_days": lead_days}).fetchall()
 
             stale_map = {r[0]: r[1] for r in stale_counts}
 
@@ -420,29 +541,29 @@ class MorningBriefingService:
                 WHERE l.loan_officer_id IN ({id_list}) AND l.organization_id = :oid
                   AND (l.stage IS NULL OR UPPER(l.stage) NOT IN ({terminal}))
                   AND (
-                    l.lock_expiration_date <= :three_days
-                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > 10
+                    l.lock_expiration_date <= :lock_cutoff
+                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > :at_risk_days
                   )
                 ORDER BY
-                    CASE WHEN l.lock_expiration_date <= :three_days THEN 0 ELSE 1 END,
+                    CASE WHEN l.lock_expiration_date <= :lock_cutoff THEN 0 ELSE 1 END,
                     days DESC
                 LIMIT 5
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             attention_items = []
             for r in attention:
                 lo_name = report_names.get(r[0], "Unknown")
                 issue_parts = []
-                if r[4] and r[4] <= three_days:
+                if r[4] and r[4] <= lock_cutoff:
                     issue_parts.append(f"{r[2] or 'Unknown'} loan lock expires soon")
-                elif float(r[5] or 0) > 10:
+                elif float(r[5] or 0) > at_risk_days:
                     issue_parts.append(f"{r[2] or 'Unknown'} loan stalled {float(r[5]):.0f} days in {r[3]}")
 
                 attention_items.append({
                     "user_name": lo_name,
                     "loan_number": r[1],
                     "issue": "; ".join(issue_parts) if issue_parts else f"{r[2]} loan needs attention",
-                    "severity": "high" if r[4] and r[4] <= three_days else "medium",
+                    "severity": "high" if r[4] and r[4] <= lock_cutoff else "medium",
                 })
 
             return {"members": members, "attention_items": attention_items}
@@ -455,10 +576,16 @@ class MorningBriefingService:
     # Leadership data gathering (Level 3)
     # ------------------------------------------------------------------
 
-    def gather_leadership_data(self, db: Session, org_id: int, briefing_date: date) -> Dict:
+    def gather_leadership_data(
+        self, db: Session, org_id: int, briefing_date: date,
+        prefs: Optional[BriefingPreferences] = None,
+    ) -> Dict:
         """Gather org-wide roll-up for leadership briefing."""
+        if prefs is None:
+            prefs = BriefingPreferences()
         today = briefing_date
-        three_days = today + timedelta(days=3)
+        lock_cutoff = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
+        at_risk_days = prefs.thresholds["at_risk_days"]
         week_ago = today - timedelta(days=7)
         two_weeks_ago = today - timedelta(days=14)
         terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
@@ -490,8 +617,8 @@ class MorningBriefingService:
                     COUNT(l.id) as loan_count,
                     COALESCE(SUM(l.amount), 0) as volume,
                     AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) as avg_days,
-                    COUNT(CASE WHEN l.lock_expiration_date <= :three_days
-                        OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > 10
+                    COUNT(CASE WHEN l.lock_expiration_date <= :lock_cutoff
+                        OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > :at_risk_days
                         THEN 1 END) as at_risk
                 FROM loans l
                 JOIN users u ON u.id = l.loan_officer_id
@@ -500,7 +627,7 @@ class MorningBriefingService:
                   AND (l.stage IS NULL OR UPPER(l.stage) NOT IN ({terminal}))
                 GROUP BY b.name
                 ORDER BY volume DESC
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             branch_list = []
             for r in branches:
@@ -512,7 +639,7 @@ class MorningBriefingService:
                     "volume": float(r[2] or 0),
                     "avg_days_in_stage": round(avg_days, 1),
                     "at_risk_count": at_risk,
-                    "health": self.compute_health(at_risk=at_risk, stale_leads=0, sla_breach=avg_days > 10),
+                    "health": self.compute_health(at_risk=at_risk, stale_leads=0, sla_breach=avg_days > at_risk_days),
                 })
 
             # Top org risks
@@ -529,19 +656,19 @@ class MorningBriefingService:
                 WHERE l.organization_id = :oid
                   AND (l.stage IS NULL OR UPPER(l.stage) NOT IN ({terminal}))
                   AND (
-                    l.lock_expiration_date <= :three_days
-                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > 10
+                    l.lock_expiration_date <= :lock_cutoff
+                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > :at_risk_days
                   )
                 ORDER BY
-                    CASE WHEN l.lock_expiration_date <= :three_days THEN 0 ELSE 1 END,
+                    CASE WHEN l.lock_expiration_date <= :lock_cutoff THEN 0 ELSE 1 END,
                     days DESC
                 LIMIT 10
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             risks = []
             for r in top_risks:
                 issue = ""
-                if r[3] and r[3] <= three_days:
+                if r[3] and r[3] <= lock_cutoff:
                     issue = f"Lock expires {r[3].strftime('%m/%d') if hasattr(r[3], 'strftime') else r[3]}"
                 else:
                     issue = f"{float(r[4]):.0f} days in {r[2]}"
@@ -580,11 +707,15 @@ class MorningBriefingService:
 
     def build_context(
         self, db: Session, user: Any, briefing_date: date,
+        prefs: Optional[BriefingPreferences] = None,
     ) -> BriefingContext:
         """Build complete BriefingContext for a user."""
+        if prefs is None:
+            prefs = BriefingPreferences.load(user)
+
         user_id = user.id
         org_id = user.organization_id
-        user_tz = getattr(user, "timezone", None) or "America/New_York"
+        user_tz = getattr(user, "timezone", None) or "America/Chicago"
         user_name = getattr(user, "full_name", None) or f"{user.first_name or ''} {user.last_name or ''}".strip()
         level = self.determine_level(user)
 
@@ -597,7 +728,7 @@ class MorningBriefingService:
         )
 
         # Individual data (all levels get this)
-        individual = self.gather_individual_data(db, user_id, org_id, briefing_date, user_tz)
+        individual = self.gather_individual_data(db, user_id, org_id, briefing_date, user_tz, prefs)
         ctx.pipeline = individual["pipeline"]
         ctx.at_risk = individual["at_risk"]
         ctx.stale_leads = individual["stale_leads"]
@@ -607,17 +738,19 @@ class MorningBriefingService:
 
         # Manager roll-up
         if level == "manager":
-            ctx.team = self.gather_manager_data(db, user_id, org_id, briefing_date)
+            ctx.team = self.gather_manager_data(db, user_id, org_id, briefing_date, prefs)
 
         # Leadership roll-up
         if level == "leadership":
-            ctx.team = self.gather_leadership_data(db, org_id, briefing_date)
+            ctx.team = self.gather_leadership_data(db, org_id, briefing_date, prefs)
 
         return ctx
 
     # ------------------------------------------------------------------
     # AI narrative generation
     # ------------------------------------------------------------------
+
+    # --- Level-specific base system prompts (balanced / default tone) ---
 
     INDIVIDUAL_SYSTEM_PROMPT = (
         "You are a senior mortgage pipeline advisor. Given the loan officer's "
@@ -645,7 +778,20 @@ class MorningBriefingService:
         "second person. Keep total response under 250 words."
     )
 
-    def generate_narrative(self, ctx: BriefingContext) -> Optional[str]:
+    # --- Tone modifier prompts (appended to level base prompts) ---
+
+    TONE_PROMPTS = {
+        "concise": (
+            "FORMAT OVERRIDE: Respond in exactly 3 bullet points. "
+            "Lead with numbers. No filler, no encouragement."
+        ),
+        "detailed": (
+            "FORMAT OVERRIDE: Write 2-3 short paragraphs covering "
+            "priorities, risks, and suggested next actions. Be specific with names and numbers."
+        ),
+    }
+
+    def generate_narrative(self, ctx: BriefingContext, ai_tone: str = "balanced", prefs: Optional[BriefingPreferences] = None) -> Optional[str]:
         """Generate AI narrative using Anthropic Haiku."""
         try:
             import anthropic
@@ -653,13 +799,21 @@ class MorningBriefingService:
             logger.warning("anthropic package not installed; skipping AI narrative")
             return None
 
+        if ai_tone not in ("concise", "balanced", "detailed"):
+            ai_tone = "balanced"
+
+        # Select base prompt by level
         system_prompt = {
             "individual": self.INDIVIDUAL_SYSTEM_PROMPT,
             "manager": self.MANAGER_SYSTEM_PROMPT,
             "leadership": self.LEADERSHIP_SYSTEM_PROMPT,
         }.get(ctx.level, self.INDIVIDUAL_SYSTEM_PROMPT)
 
-        user_prompt = self._format_context_for_ai(ctx)
+        # Append tone modifier (preserves level-specific context guidance)
+        if ai_tone in self.TONE_PROMPTS:
+            system_prompt = system_prompt + "\n\n" + self.TONE_PROMPTS[ai_tone]
+
+        user_prompt = self._format_context_for_ai(ctx, prefs)
 
         try:
             import os
@@ -681,43 +835,51 @@ class MorningBriefingService:
             logger.error("AI narrative generation failed: %s", e)
             return None
 
-    def _format_context_for_ai(self, ctx: BriefingContext) -> str:
-        """Format BriefingContext as structured text for the AI prompt."""
+    def _format_context_for_ai(self, ctx: BriefingContext, prefs: Optional[BriefingPreferences] = None) -> str:
+        """Format BriefingContext as structured text for the AI prompt.
+
+        Sections with empty data or toggled off via preferences are omitted.
+        """
+        if prefs is None:
+            prefs = BriefingPreferences()
+
         lines = [f"Briefing for {ctx.user_name} on {ctx.briefing_date.isoformat()}"]
         lines.append("")
 
         # Pipeline
-        p = ctx.pipeline
-        lines.append(f"PIPELINE: {p.get('active_count', 0)} active loans, "
-                      f"${p.get('total_volume', 0):,.0f} volume, "
-                      f"{p.get('closing_soon', 0)} closing this week")
-        if p.get("by_stage"):
-            for stage, cnt in p["by_stage"].items():
-                lines.append(f"  {stage}: {cnt} loans")
+        if prefs.sections.get("pipeline", True):
+            p = ctx.pipeline
+            if p.get("active_count", 0) > 0 or p.get("total_volume", 0) > 0:
+                lines.append(f"PIPELINE: {p.get('active_count', 0)} active loans, "
+                              f"${p.get('total_volume', 0):,.0f} volume, "
+                              f"{p.get('closing_soon', 0)} closing this week")
+                if p.get("by_stage"):
+                    for stage, cnt in p["by_stage"].items():
+                        lines.append(f"  {stage}: {cnt} loans")
 
         # At-risk
-        if ctx.at_risk:
+        if prefs.sections.get("at_risk", True) and ctx.at_risk:
             lines.append("")
             lines.append("AT-RISK LOANS:")
             for loan in ctx.at_risk:
                 lines.append(f"  - {loan['borrower']} ({loan['loan_number']}): {loan['reason']}")
 
         # Stale leads
-        if ctx.stale_leads:
+        if prefs.sections.get("stale_leads", True) and ctx.stale_leads:
             lines.append("")
             lines.append("STALE LEADS:")
             for lead in ctx.stale_leads:
                 lines.append(f"  - {lead['name']} (score {lead['score']}): {lead['days_silent']:.0f} days silent")
 
         # Appointments
-        if ctx.appointments:
+        if prefs.sections.get("appointments", True) and ctx.appointments:
             lines.append("")
             lines.append("TODAY'S APPOINTMENTS:")
             for appt in ctx.appointments:
                 lines.append(f"  - {appt['time']} — {appt['attendee']}, {appt['type']}")
 
         # Conditions
-        if ctx.conditions:
+        if prefs.sections.get("conditions", True) and ctx.conditions:
             lines.append("")
             lines.append("PENDING CONDITIONS:")
             for cond in ctx.conditions:
@@ -725,12 +887,13 @@ class MorningBriefingService:
                 lines.append(f"  - {cond['title']} on {cond['loan_number']}{pd}")
 
         # Yesterday
-        y = ctx.yesterday
-        if any(y.get(k, 0) > 0 for k in ("funded", "new_loans", "conversions")):
-            lines.append("")
-            lines.append(f"YESTERDAY: {y.get('funded', 0)} funded, "
-                          f"{y.get('new_loans', 0)} new pipeline, "
-                          f"{y.get('conversions', 0)} lead conversions")
+        if prefs.sections.get("yesterday", True):
+            y = ctx.yesterday
+            if any(y.get(k, 0) > 0 for k in ("funded", "new_loans", "conversions")):
+                lines.append("")
+                lines.append(f"YESTERDAY: {y.get('funded', 0)} funded, "
+                              f"{y.get('new_loans', 0)} new pipeline, "
+                              f"{y.get('conversions', 0)} lead conversions")
 
         # Team data (manager)
         if ctx.level == "manager" and ctx.team:
