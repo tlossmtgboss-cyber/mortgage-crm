@@ -180,7 +180,16 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
             status="generating",
         )
         db.add(briefing)
-        db.flush()
+        try:
+            db.flush()
+        except Exception as flush_exc:
+            db.rollback()
+            # UniqueConstraint violation means another worker already created it
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(flush_exc, IntegrityError):
+                logger.info("Briefing already exists (concurrent) for user %d on %s", user_id, briefing_date_str)
+                return {"status": "already_exists"}
+            raise
 
         # Gather data
         service = MorningBriefingService()
@@ -250,8 +259,8 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
             self.retry(exc=e)
         except self.MaxRetriesExceededError:
             # Mark as failed after all retries
+            fail_db = _get_db_session()
             try:
-                fail_db = _get_db_session()
                 fail_briefing = fail_db.query(MorningBriefing).filter(
                     MorningBriefing.user_id == user_id,
                     MorningBriefing.briefing_date == briefing_date,
@@ -260,9 +269,10 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
                     fail_briefing.status = "failed"
                     fail_briefing.updated_at = datetime.now(timezone.utc)
                     fail_db.commit()
+            except Exception as mark_err:
+                logger.error("Failed to mark briefing as failed for user %d: %s", user_id, mark_err)
+            finally:
                 fail_db.close()
-            except Exception:
-                pass
             return {"error": str(e)}
     finally:
         db.close()
